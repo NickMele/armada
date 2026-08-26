@@ -72,6 +72,21 @@
   --w-tooltip: 340px;
   --w-toast: 420px;
 
+  /* The order floating layers stack in. It already existed — 40, 60, 70, 80, 90
+     hand-typed across six components, coherent by luck rather than by rule —
+     and it took a split button's menu moving to `position: fixed` to expose
+     that: it carried a 1 that meant "above my sibling" and, once in the root
+     stacking context, meant "under every other layer".
+
+     The order is the order a person meets them. A tooltip explains the thing a
+     menu is over; a dialog interrupts both; a toast reports on the dialog you
+     just dismissed; the palette is the way out of anything. */
+  --z-menu: 40;
+  --z-tooltip: 60;
+  --z-modal: 70;
+  --z-toast: 80;
+  --z-palette: 90;
+
   /* An active tab's underline. Both 2px accent shorthands already in
      semantic.css mean focus — a resting mark that borrowed one would say
      "you are here" in the vocabulary reserved for "your cursor is here". */

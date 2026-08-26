@@ -4,13 +4,9 @@
  * declares none for a popover. --radius-lg on a dropdown and --radius-sm on a
  * tooltip leaves a popover unclaimed between them; reported.
  *
- * MISSING TOKEN on the line below.
- * --armada-hairline: no border-width token exists in packages/tokens.
+ * The local hairline alias this file opened with is gone: --border-width was
+ * added to packages/tokens after it was written.
  */
-.armada-popover {
-  --armada-hairline: var(--border-width);
-}
-
 .armada-popover {
   position: relative;
   display: inline-flex;
@@ -23,13 +19,13 @@
 .armada-popover__panel {
   position: absolute;
   top: calc(100% + var(--space-1));
-  z-index: 40;
+  z-index: var(--z-menu);
   min-width: var(--sidebar-default);
   max-width: var(--palette-width);
   padding: var(--space-3);
   border-radius: var(--radius-lg);
   background: var(--bg-overlay);
-  border: var(--armada-hairline) solid var(--border-default);
+  border: var(--border-width) solid var(--border-default);
   box-shadow: var(--shadow-overlay);
   color: var(--fg-default);
   font-size: var(--text-sm);
@@ -50,7 +46,7 @@
 .armada-popover__button {
   height: var(--h-control);
   padding: 0 var(--space-3);
-  border: var(--armada-hairline) solid var(--border-strong);
+  border: var(--border-width) solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--bg-sunken);
   color: var(--fg-default);
@@ -63,4 +59,64 @@
 
 .armada-popover__button:hover {
   background: var(--bg-hover);
+}
+
+/* Edge detection. The argument is written once, on DropdownMenu.css — CSS
+ * anchor positioning, present in the Chromium Electron 40 carries, with the
+ * @supports rule as both the check and the fallback to the placement above.
+ *
+ * A popover differs from a menu in one thing only: its preferred alignment is
+ * a prop rather than a constant, so the area is set per variant and the
+ * fallbacks are shared. */
+@supports (anchor-name: --a) {
+  .armada-popover {
+    anchor-scope: --armada-popover-trigger;
+  }
+
+  .armada-popover__trigger {
+    anchor-name: --armada-popover-trigger;
+  }
+
+  .armada-popover__panel {
+    position: fixed;
+    position-anchor: --armada-popover-trigger;
+    position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
+    margin-block-start: var(--space-1);
+  }
+
+  /* Leading edges aligned — what `left: 0` drew. */
+  .armada-popover__panel--start {
+    position-area: block-end span-inline-end;
+    inset: auto;
+  }
+
+  /* Trailing edges aligned — what `right: 0` drew. */
+  .armada-popover__panel--end {
+    position-area: block-end span-inline-start;
+    inset: auto;
+  }
+}
+
+/* The frame the placement stories use, and nothing else. `contain: layout`
+ * makes the frame the panel's containing block, so the frame's edges are the
+ * ones the fallbacks are tested against. It does not clip. */
+.armada-popover-frame {
+  contain: layout;
+  display: flex;
+  /* The trigger keeps its own height. A stretched flex item would make the
+   * trigger as tall as the frame and there would be no edge to flip against. */
+  align-items: flex-start;
+  min-height: var(--palette-max-height);
+}
+
+.armada-popover-frame--left {
+  justify-content: flex-start;
+}
+
+.armada-popover-frame--right {
+  justify-content: flex-end;
+}
+
+.armada-popover-frame--bottom {
+  align-items: flex-end;
 }

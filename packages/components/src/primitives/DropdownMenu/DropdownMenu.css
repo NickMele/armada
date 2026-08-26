@@ -8,16 +8,10 @@
  * The component sheet draws the item padding one step wider. The contract is
  * the direct specification here, so the contract wins; reported.
  *
- * MISSING TOKENS on the line below.
- * --armada-hairline: no border-width token exists in packages/tokens.
- * --armada-menu-width: the sheet draws the row menu at a fixed width and no
- *   token carries it.
+ * The two local aliases this file opened with are gone. --border-width and
+ * --w-menu were added to packages/tokens after it was written, and an alias
+ * that points at a token is a second name for one value.
  */
-.armada-dropdown-menu {
-  --armada-hairline: var(--border-width);
-  --armada-menu-width: var(--w-menu);
-}
-
 .armada-dropdown-menu {
   position: relative;
   display: inline-flex;
@@ -27,7 +21,7 @@
 .armada-dropdown-menu__trigger {
   height: var(--h-control-sm);
   padding: 0 var(--space-3);
-  border: var(--armada-hairline) solid var(--border-strong);
+  border: var(--border-width) solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--bg-sunken);
   color: var(--fg-default);
@@ -47,12 +41,12 @@
   position: absolute;
   top: calc(100% + var(--space-1));
   right: 0;
-  z-index: 40;
-  width: var(--armada-menu-width);
+  z-index: var(--z-menu);
+  width: var(--w-menu);
   padding: var(--space-1) 0;
   border-radius: var(--radius-lg);
   background: var(--bg-overlay);
-  border: var(--armada-hairline) solid var(--border-default);
+  border: var(--border-width) solid var(--border-default);
   box-shadow: var(--shadow-overlay);
 }
 
@@ -96,7 +90,7 @@
 }
 
 .armada-dropdown-menu__separator {
-  height: var(--armada-hairline);
+  height: var(--border-width);
   margin: var(--space-1) 0;
   background: var(--border-subtle);
 }
@@ -122,10 +116,89 @@
   height: var(--h-kbd);
   padding: 0 var(--space-1);
   border-radius: var(--radius-sm);
-  border: var(--armada-hairline) solid var(--border-subtle);
+  border: var(--border-width) solid var(--border-subtle);
   background: var(--bg-sunken);
   color: var(--fg-muted);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
+}
+
+/* Edge detection.
+ *
+ * The placement above is right-aligned and nothing else, so a trigger near the
+ * window's left edge opened a menu that ran off the screen. The flip is CSS
+ * anchor positioning: anchor-name on the trigger, position-area for the
+ * preferred side, position-try-fallbacks for the ones to try when it does not
+ * fit. No positioning library, and no measuring in JavaScript.
+ *
+ * Bridge's renderer is one known Chromium, not the open web. Electron 40
+ * carries Chromium 144; anchor-name, position-anchor and position-area shipped
+ * in 125 and position-try-fallbacks in 128, so every part of this is present.
+ *
+ * The @supports rule is the capability check and the fallback in one. A
+ * renderer without anchor positioning never enters this block and keeps the
+ * absolute placement above — the placement that shipped, not an unpositioned
+ * block.
+ *
+ * position: fixed, because the edge the menu must not cross is the window's.
+ * The panel's containing block becomes the viewport, which is what the
+ * fallbacks are tested against.
+ *
+ * The order of the fallbacks is the reading: keep the side and the alignment,
+ * then change the alignment, then open upwards. The first one that does not
+ * overflow wins, so the trigger's own alignment stays the preference and only
+ * the viewport overrides it.
+ *
+ * No transition. Placement resolves before the panel paints, so nothing shifts
+ * on open, and the motion section forbids an entrance on a data surface. */
+@supports (anchor-name: --a) {
+  .armada-dropdown-menu {
+    anchor-scope: --armada-dropdown-trigger;
+  }
+
+  .armada-dropdown-menu__trigger {
+    anchor-name: --armada-dropdown-trigger;
+  }
+
+  .armada-dropdown-menu__panel {
+    position: fixed;
+    position-anchor: --armada-dropdown-trigger;
+    /* Below the trigger, the panel's inline-end edge on the trigger's — the
+     * same placement `right: 0` drew. */
+    position-area: block-end span-inline-start;
+    position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
+    /* The fallback's insets are physical and would fight the area. */
+    inset: auto;
+    /* Logical, so flip-block moves the gap to the other side with the panel. */
+    margin-block-start: var(--space-1);
+  }
+}
+
+/* The frame the placement stories use, and nothing else.
+ *
+ * A flip is only visible against an edge, so a story has to put the trigger on
+ * one. `contain: layout` makes the frame the panel's containing block, so the
+ * frame's edges are the ones the fallbacks are tested against and the story
+ * reads the same in Storybook and in the gallery. It does not clip: containing
+ * where a layer resolves and cutting off what escapes are different things. */
+.armada-dropdown-menu-frame {
+  contain: layout;
+  display: flex;
+  /* The trigger keeps its own height. A stretched flex item would make the
+   * trigger as tall as the frame and there would be no edge to flip against. */
+  align-items: flex-start;
+  min-height: var(--palette-max-height);
+}
+
+.armada-dropdown-menu-frame--left {
+  justify-content: flex-start;
+}
+
+.armada-dropdown-menu-frame--right {
+  justify-content: flex-end;
+}
+
+.armada-dropdown-menu-frame--bottom {
+  align-items: flex-end;
 }

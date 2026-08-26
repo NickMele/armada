@@ -22,7 +22,7 @@
 .armada-palette-layer {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: var(--z-palette);
   display: flex;
   justify-content: center;
   /* Top-anchored, never centered. A centered dialog shifts vertically as the

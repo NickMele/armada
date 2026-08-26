@@ -130,6 +130,7 @@ pub const THEME: &[(&str, Slot)] = &[
     ("--edge-", Slot::NsFull("color")),
     // Everything sized. One namespace, by v4's design.
     ("--w-", Slot::Ns("spacing")),
+    ("--z-", Slot::CssOnly("a stacking order, not a scale value")),
     ("--dot", Slot::Named("spacing", "dot")),
     ("--edge-active", Slot::CssOnly("a border width read beside --edge-* colours")),
     ("--space-", Slot::Ns("spacing")),

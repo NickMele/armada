@@ -74,9 +74,13 @@ export const EscalatedRow: Story = {
   ),
 };
 
-/** A 2px `--accent` ring, on whichever segment holds focus. `data-preview-focus`
- *  selects the same declarations as `:focus-visible`, which a static story
- *  cannot reach. */
+/** The ring goes round whichever segment holds focus — the whole segment, not
+ *  the seam between the two. It rounds on the outer corners and stays square on
+ *  the joined edge, sits at `--focus-ring-offset` so it differs from the resting
+ *  edge in position as well as colour and width, and draws over its neighbour
+ *  rather than under it. Neither segment changes size, so the group stays one
+ *  height. `data-preview-focus` selects the same declarations as
+ *  `:focus-visible`, which a static story cannot reach. */
 export const Focused: Story = {
   render: () => (
     <div style={{ display: "flex", gap: "var(--space-4)" }}>
@@ -144,6 +148,29 @@ export const Light: Story = {
           Approve
         </SplitButton>
       </Row>
+    </div>
+  ),
+};
+
+/**
+ * Focus on the accent fill. The ring clears the control rather than sitting on
+ * it, which is the only thing separating it from the resting edge here — on
+ * `primary` both are `--accent`, so colour and width say nothing and position
+ * carries the reading alone. See the report.
+ */
+export const FocusedOnPrimary: Story = {
+  render: () => (
+    <div className="armada-split-button-focus-row">
+      <div data-preview-focus="action">
+        <SplitButton items={reviewActions} variant="primary">
+          Approve
+        </SplitButton>
+      </div>
+      <div data-preview-focus="caret">
+        <SplitButton items={reviewActions} variant="primary">
+          Approve
+        </SplitButton>
+      </div>
     </div>
   ),
 };

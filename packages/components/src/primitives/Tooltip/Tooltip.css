@@ -4,38 +4,36 @@
  *   timing   --tooltip-delay in, --duration-fast
  * A floating layer, so the shadow is legal and there is no blur.
  *
- * MISSING TOKENS on the line below.
- * --armada-hairline: no border-width token exists in packages/tokens.
- * --armada-tooltip-max: the sheet caps the bubble so a long path wraps rather
- *   than running the window's width. No token carries that measure.
+ * The two local aliases this file opened with are gone. --border-width and
+ * --w-tooltip were added to packages/tokens after it was written, and
+ * --w-tooltip is the same measure the alias named — the cap that makes a long
+ * path wrap rather than run the window's width — so this is a rename, not a
+ * change of value.
  */
-.armada-tooltip {
-  --armada-hairline: var(--border-width);
-  --armada-tooltip-max: var(--w-tooltip);
-}
-
 .armada-tooltip {
   position: relative;
   display: inline-flex;
 }
 
-/* Below the trigger, with no collision handling. The contract specifies the
- * tooltip's surface, type and timing and says nothing about placement; flipping
- * against a window edge needs a positioning engine, which is a dependency
- * decision rather than a component one. Reported. */
+/* Below the trigger, leading edges aligned. This is now the fallback: the
+ * placement a renderer without CSS anchor positioning gets. The flip is at the
+ * foot of this file.
+ *
+ * The contract still specifies the tooltip's surface, type and timing and says
+ * nothing about its placement. Reported. */
 .armada-tooltip__bubble {
   position: absolute;
   top: calc(100% + var(--space-1));
   left: 0;
-  z-index: 60;
+  z-index: var(--z-tooltip);
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  max-width: var(--armada-tooltip-max);
+  max-width: var(--w-tooltip);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
   background: var(--bg-overlay);
-  border: var(--armada-hairline) solid var(--border-subtle);
+  border: var(--border-width) solid var(--border-subtle);
   box-shadow: var(--shadow-overlay);
   color: var(--fg-default);
   font-size: var(--text-xs);
@@ -57,7 +55,7 @@
   height: var(--h-kbd);
   padding: 0 var(--space-1);
   border-radius: var(--radius-sm);
-  border: var(--armada-hairline) solid var(--border-subtle);
+  border: var(--border-width) solid var(--border-subtle);
   background: var(--bg-sunken);
   color: var(--fg-muted);
   font-family: var(--font-mono);
@@ -88,7 +86,7 @@
 .armada-tooltip__action {
   height: var(--h-control-sm);
   padding: 0 var(--space-2);
-  border: var(--armada-hairline) solid transparent;
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--fg-muted);
@@ -102,4 +100,53 @@
 .armada-tooltip__action:hover {
   background: var(--bg-hover);
   color: var(--fg-default);
+}
+
+/* Edge detection. The argument is written once, on DropdownMenu.css — CSS
+ * anchor positioning, present in the Chromium Electron 40 carries, with the
+ * @supports rule as both the check and the fallback to the placement above.
+ * This is the positioning engine that comment asked for, and it is not a
+ * dependency.
+ *
+ * The whole wrapper is the anchor rather than a trigger element, because a
+ * tooltip wraps the thing it describes instead of sitting beside it. */
+@supports (anchor-name: --a) {
+  .armada-tooltip {
+    anchor-name: --armada-tooltip-anchor;
+    anchor-scope: --armada-tooltip-anchor;
+  }
+
+  .armada-tooltip__bubble {
+    position: fixed;
+    position-anchor: --armada-tooltip-anchor;
+    /* Below, leading edges aligned — what `left: 0` drew. */
+    position-area: block-end span-inline-end;
+    position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
+    inset: auto;
+    margin-block-start: var(--space-1);
+  }
+}
+
+/* The frame the placement stories use, and nothing else. `contain: layout`
+ * makes the frame the bubble's containing block, so the frame's edges are the
+ * ones the fallbacks are tested against. It does not clip. */
+.armada-tooltip-frame {
+  contain: layout;
+  display: flex;
+  /* The trigger keeps its own height. A stretched flex item would make the
+   * trigger as tall as the frame and there would be no edge to flip against. */
+  align-items: flex-start;
+  min-height: var(--palette-max-height);
+}
+
+.armada-tooltip-frame--left {
+  justify-content: flex-start;
+}
+
+.armada-tooltip-frame--right {
+  justify-content: flex-end;
+}
+
+.armada-tooltip-frame--bottom {
+  align-items: flex-end;
 }

@@ -10,10 +10,13 @@
  * The caret segment is one control minus one step (28px). The sheet states
  * 28px outright and no token carries it.
  *
- * The container must not clip. The menu is a floating layer, so the wrapper
- * takes no overflow: a menu opening from the last row of a list would be cut
- * by the boundary. The control itself clips, which is what rounds the two
- * segments against one shared edge.
+ * Nothing here clips, wrapper or control. The menu is a floating layer and
+ * resolves against the window, not against the group, so no overflow value is
+ * load-bearing for it. The control's own `overflow: hidden` was there to round
+ * the two segments against one shared edge — and it also cut the focus ring
+ * down to the sliver on that edge, which is the whole bug. Each segment now
+ * carries its own outer corners, so the rounding survives and the ring is
+ * drawn whole.
  */
 
 .armada-split-button {
@@ -34,7 +37,6 @@
   border-width: var(--border-width);
   border-color: var(--border-default);
   background: var(--bg-sunken);
-  overflow: hidden;
 }
 
 /* A secondary is filled one surface step from its ground. On a sunken or
@@ -60,10 +62,15 @@
 
 /* The label commits. It is the act the state calls for, so it changes with
  * the Job, and it never repeats inside the menu. */
+/* The outer corners the control's clip used to draw. One border-width inside
+ * the control's radius, which is exactly where the clip fell — the padding box
+ * of a rounded border box. The joined edge stays square. */
 .armada-split-button__action {
   padding: 0 var(--space-3);
   color: var(--fg-default);
   white-space: nowrap;
+  border-start-start-radius: calc(var(--radius-sm) - var(--border-width));
+  border-end-start-radius: calc(var(--radius-sm) - var(--border-width));
 }
 
 .armada-split-button__action:hover,
@@ -88,6 +95,8 @@
   border-inline-start-width: var(--border-width);
   border-inline-start-color: var(--border-default);
   color: var(--fg-muted);
+  border-start-end-radius: calc(var(--radius-sm) - var(--border-width));
+  border-end-end-radius: calc(var(--radius-sm) - var(--border-width));
 }
 
 .armada-split-button__caret:hover,
@@ -102,10 +111,19 @@
 [data-preview-focus="action"] .armada-split-button__action,
 [data-preview-focus="caret"] .armada-split-button__caret {
   outline: var(--focus-ring);
-  /* No offset: the segments share one clipped edge, so an offset ring would
- * be cut by the control it sits inside. The ring still differs from every
- * resting edge in colour and width. */
-  outline-offset: 0;
+  /* A split button is two controls, so the ring goes round whichever half has
+   * focus, not round the pair. The offset is the token every other control
+   * uses: a resting edge and a focus ring must differ in colour, width and
+   * position, and a zero offset gave up the third.
+   *
+   * The ring follows the segment's own corners, so it rounds outside and stays
+   * square on the joined edge. On that edge it is drawn over the neighbour
+   * rather than under it, which is what the stacking below is for. An outline
+   * takes no space, so neither segment changes size and the group stays one
+   * height. */
+  outline-offset: var(--focus-ring-offset);
+  position: relative;
+  z-index: 1;
 }
 
 /* On job detail there is one Job and one primary, so the same control may
@@ -152,15 +170,18 @@
 /* The menu is a floating layer, so it takes --bg-overlay and a shadow — one
  * of the few places a shadow is legal, and it is positioned out of flow. A
  * menu that pushed layout would move every row beneath the one being acted
- * on. Its container must not clip: a menu opening from the last row of a list
- * would be cut by the boundary, so rows carry the corner radius, never the
- * list. */
+ * on. Rows carry the corner radius, never the list.
+ *
+ * This placement is the fallback. The flip is at the foot of the file. */
 .armada-split-button__menu {
   position: absolute;
   top: 100%;
   inset-inline-start: 0;
-  z-index: 1;
-  margin-top: var(--space-2);
+  /* A menu, so it stacks with menus. The 1 it carried meant "above my sibling"
+     and was correct while it resolved against the group; once it resolves
+     against the viewport that same 1 means "under every other floating layer". */
+  z-index: var(--z-menu);
+  margin-block-start: var(--space-2);
   width: fit-content;
   min-width: var(--sidebar-default);
   padding: var(--space-1) 0;
@@ -215,4 +236,41 @@
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
+}
+
+/* Edge detection. The argument is written once, on DropdownMenu.css — CSS
+ * anchor positioning, present in the Chromium Electron 40 carries, with the
+ * @supports rule as both the check and the fallback to the placement above.
+ *
+ * The control is the anchor, not the caret that opens the menu: the menu's
+ * edges line up with the button's, which is what the sheet draws. */
+@supports (anchor-name: --a) {
+  .armada-split-button {
+    anchor-scope: --armada-split-button-control;
+  }
+
+  .armada-split-button__control {
+    anchor-name: --armada-split-button-control;
+  }
+
+  .armada-split-button__menu {
+    position: fixed;
+    position-anchor: --armada-split-button-control;
+    /* Below, leading edges aligned — what `inset-inline-start: 0` drew. */
+    position-area: block-end span-inline-end;
+    position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
+    inset: auto;
+  }
+}
+
+/* The row the focus stories use, and nothing else. Two controls side by side,
+ * one focused on each segment, with room for a ring that now sits outside the
+ * control it belongs to. */
+.armada-split-button-focus-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+  padding: var(--pad-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
 }

@@ -869,9 +869,31 @@ const WithSectionLabels = {
     ]
   }
 };
+const rowActions = [
+  { kind: "item", id: "worktree", label: "Open the worktree" },
+  { kind: "item", id: "copy", label: "Copy job ID", shortcut: "⌘C" },
+  { kind: "item", id: "board", label: "Send back to the Job Board" },
+  { kind: "separator", id: "rule" },
+  { kind: "item", id: "kill", label: "Kill job", shortcut: "x", danger: true }
+];
+function Frame$2({ edge, children }) {
+  return /* @__PURE__ */ jsx("div", { className: `armada-dropdown-menu-frame armada-dropdown-menu-frame--${edge}`, children });
+}
+const AtTheLeftEdge$2 = {
+  render: () => /* @__PURE__ */ jsx(Frame$2, { edge: "left", children: /* @__PURE__ */ jsx(DropdownMenu, { defaultOpen: true, triggerLabel: "More", entries: rowActions }) })
+};
+const AtTheRightEdge$2 = {
+  render: () => /* @__PURE__ */ jsx(Frame$2, { edge: "right", children: /* @__PURE__ */ jsx(DropdownMenu, { defaultOpen: true, triggerLabel: "More", entries: rowActions }) })
+};
+const WithNoRoomBelow$2 = {
+  render: () => /* @__PURE__ */ jsx(Frame$2, { edge: "bottom", children: /* @__PURE__ */ jsx(DropdownMenu, { defaultOpen: true, triggerLabel: "More", entries: rowActions }) })
+};
 const __vite_glob_0_7 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  AtTheLeftEdge: AtTheLeftEdge$2,
+  AtTheRightEdge: AtTheRightEdge$2,
   RowMenu,
+  WithNoRoomBelow: WithNoRoomBelow$2,
   WithSectionLabels,
   default: meta$g
 }, Symbol.toStringTag, { value: "Module" }));
@@ -1056,10 +1078,30 @@ const AlignedToTheEnd = {
     ] })
   }
 };
+const body = /* @__PURE__ */ jsxs("span", { children: [
+  "Spend follows the active billing mode. This machine gates on the quota floor, so the row shows ",
+  /* @__PURE__ */ jsx("span", { className: "mono", children: "68% quota" }),
+  " left."
+] });
+function Frame$1({ edge, children }) {
+  return /* @__PURE__ */ jsx("div", { className: `armada-popover-frame armada-popover-frame--${edge}`, children });
+}
+const AtTheLeftEdge$1 = {
+  render: () => /* @__PURE__ */ jsx(Frame$1, { edge: "left", children: /* @__PURE__ */ jsx(Popover, { defaultOpen: true, align: "end", trigger, children: body }) })
+};
+const AtTheRightEdge$1 = {
+  render: () => /* @__PURE__ */ jsx(Frame$1, { edge: "right", children: /* @__PURE__ */ jsx(Popover, { defaultOpen: true, align: "start", trigger, children: body }) })
+};
+const WithNoRoomBelow$1 = {
+  render: () => /* @__PURE__ */ jsx(Frame$1, { edge: "bottom", children: /* @__PURE__ */ jsx(Popover, { defaultOpen: true, trigger, children: body }) })
+};
 const __vite_glob_0_10 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AlignedToTheEnd,
+  AtTheLeftEdge: AtTheLeftEdge$1,
+  AtTheRightEdge: AtTheRightEdge$1,
   Open: Open$1,
+  WithNoRoomBelow: WithNoRoomBelow$1,
   default: meta$d
 }, Symbol.toStringTag, { value: "Module" }));
 function Radio({ children, ...rest }) {
@@ -1677,12 +1719,19 @@ const PrimaryOnJobDetail = {
 const Light$1 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Row, { children: /* @__PURE__ */ jsx(SplitButton, { items: reviewActions, ground: "sunken", children: "Approve" }) }) })
 };
+const FocusedOnPrimary = {
+  render: () => /* @__PURE__ */ jsxs("div", { className: "armada-split-button-focus-row", children: [
+    /* @__PURE__ */ jsx("div", { "data-preview-focus": "action", children: /* @__PURE__ */ jsx(SplitButton, { items: reviewActions, variant: "primary", children: "Approve" }) }),
+    /* @__PURE__ */ jsx("div", { "data-preview-focus": "caret", children: /* @__PURE__ */ jsx(SplitButton, { items: reviewActions, variant: "primary", children: "Approve" }) })
+  ] })
+};
 const __vite_glob_0_17 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Closed,
   Disabled: Disabled$1,
   EscalatedRow,
   Focused: Focused$1,
+  FocusedOnPrimary,
   Light: Light$1,
   Open,
   PrimaryOnJobDetail,
@@ -2108,10 +2157,26 @@ const Resting = {
     children: /* @__PURE__ */ jsx("span", { className: "armada-tooltip__truncated", children: "crates/api/src/session/refresh_coalescing.rs" })
   }
 };
+const longPath = "crates/api/src/session/refresh_coalescing.rs";
+function Frame({ edge, children }) {
+  return /* @__PURE__ */ jsx("div", { className: `armada-tooltip-frame armada-tooltip-frame--${edge}`, children });
+}
+const AtTheLeftEdge = {
+  render: () => /* @__PURE__ */ jsx(Frame, { edge: "left", children: /* @__PURE__ */ jsx(Tooltip, { defaultOpen: true, label: longPath, children: /* @__PURE__ */ jsx("span", { className: "armada-tooltip__truncated", children: longPath }) }) })
+};
+const AtTheRightEdge = {
+  render: () => /* @__PURE__ */ jsx(Frame, { edge: "right", children: /* @__PURE__ */ jsx(Tooltip, { defaultOpen: true, label: longPath, children: /* @__PURE__ */ jsx("span", { className: "armada-tooltip__truncated", children: longPath }) }) })
+};
+const WithNoRoomBelow = {
+  render: () => /* @__PURE__ */ jsx(Frame, { edge: "bottom", children: /* @__PURE__ */ jsx(Tooltip, { defaultOpen: true, label: longPath, children: /* @__PURE__ */ jsx("span", { className: "armada-tooltip__truncated", children: longPath }) }) })
+};
 const __vite_glob_0_23 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  AtTheLeftEdge,
+  AtTheRightEdge,
   Resting,
   TruncatedValue,
+  WithNoRoomBelow,
   WithShortcut,
   default: meta
 }, Symbol.toStringTag, { value: "Module" }));
