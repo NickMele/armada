@@ -376,6 +376,7 @@
   size = "16px"
   status = "Specified"
   notes = "The one place triangle-alert lives, plus generic warnings in toasts."
+  reserved = "Reserved to Doctor. A release on the grounds that Doctor draws no glyphs was withdrawn 25 Aug 2026 — the reservation holds whether or not the health grid draws it. No other surface may adopt it as its own mark."
 
 [icons.unplug]
   means = "A plug and socket with a visible gap between the two fragments"

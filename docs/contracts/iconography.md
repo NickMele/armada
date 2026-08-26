@@ -333,10 +333,17 @@ mistaken for a Job badge.
 were rejected and stay rejected — a health grid rendering green, amber and
 red in values nobody else uses makes a problem harder to spot, not easier.
 
-**`triangle-alert` is released.** It was reserved to Doctor and Doctor now
-draws no glyphs, so it is free for generic warnings — which is what
-`octagon-alert` was kept out of them to protect. Full reasoning is on the
-Doctor document.
+**`triangle-alert` stays reserved to Doctor.** It was released on the
+reasoning that Doctor draws no glyphs and so had no use for it; that release is
+withdrawn. The glyph means *a check warns*, and Doctor is the only surface that
+can say that. It remains available for a generic warning in a toast, which is
+what `octagon-alert` was kept out of them to protect — but the reservation
+means no other surface may adopt it as its own mark.
+
+This leaves one thing unsettled, and it is written below rather than assumed:
+the three reasons for a wordless health grid were argued against `circle-check`
+and `circle-x`, which belong to the Judge. None of them is an argument against
+`triangle-alert`, which nobody else owns.
 
 ### DAG / graph view
 
@@ -480,6 +487,18 @@ System](design-system.md) on 20 Aug 2026.
 ---
 
 ## Open questions
+
+- **[doctor-warn-glyph]** Does Doctor's `warn` row draw `triangle-alert`, or
+  does the grid stay wordless with the glyph merely reserved to it?
+  What decides it: the wordless grid rested on three arguments — the glyphs
+  were already taken, a column of words scans in one movement, and a word
+  survives greyscale. The first does not apply to `triangle-alert`, which no
+  other surface owns. The second and third still do, and a grid where one row
+  of three carries a mark is the inconsistency the rule was avoiding. So the
+  live choice is a glyph on every row or none, not a glyph on `warn` alone —
+  and `pass` and `fail` have no glyph available, because the Judge holds
+  `circle-check` and `circle-x`.
+
 Step-level and criterion-verdict glyphs are settled as of 2026-08-21 — see
 Step activity above. `packages/icons/icons.toml` currently lists
 `circle-check` as Proposed and `circle-x`/`shield-minus` as Specified; its
