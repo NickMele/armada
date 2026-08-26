@@ -43,7 +43,7 @@ pub use envelope::{
     env_keys, Actor, AuditLine, Component, Envelope, FieldValue, Level, Timestamp, Ulid,
 };
 pub use job::{
-    AcceptanceCriterion, BlankTitle, CriteriaOwed, CriterionId, CriterionSource,
+    AcceptanceCriterion, BlankModel, BlankTitle, CriteriaOwed, CriterionId, CriterionSource,
     DependencyDirection, DependencyEdge, DispatchOrigin, DroneId, Edge, EscalationTrigger, Facts,
     GateManifest, GateOutcome, IllegalStepTransition, IllegalTransition, Job, JobEvent, JobId,
     JobStatus, JobStep, ManifestId, ModelName, NewJob, NotRunDisposition, NotRunReason, Origin,

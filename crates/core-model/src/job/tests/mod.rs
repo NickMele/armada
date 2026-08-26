@@ -37,7 +37,7 @@ fn draft() -> NewJob {
         owner_manifest_id: ManifestId::carried(id("01J0000000000000000000MAN0")),
         urgency: Urgency::Normal,
         atomic: false,
-        model: ModelName::new("the-configured-model"),
+        model: ModelName::new("the-configured-model").expect("a model name"),
         acceptance_criteria: vec![AcceptanceCriterion {
             criterion_id: CriterionId::new("c1"),
             text: "the reported symptom no longer occurs".into(),

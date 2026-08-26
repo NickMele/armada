@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./favicon.svg": "./web/favicon.svg",
+    "./AppIcon.icns": "./macos/AppIcon.icns",
     "./mark.svg": "./svg/armada-mark.svg"
   },
   "dependencies": {

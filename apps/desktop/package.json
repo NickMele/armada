@@ -24,6 +24,7 @@
     "vite": "^7.0.0"
   },
   "dependencies": {
+    "@armada/brand": "workspace:*",
     "@armada/components": "workspace:*",
     "@armada/tokens": "workspace:*",
     "lucide-react": "^0.550.0",

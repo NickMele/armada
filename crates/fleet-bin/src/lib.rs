@@ -13,13 +13,18 @@
 //! worth testing without starting a process, and [`setup`](mod@setup) is the
 //! first of them: reading a repository's `armada.yml` and its one workflow, and
 //! resolving the second against the first, is the part of starting Fleet that
-//! can be wrong on disk. Everything after it needs a port, a store and a
-//! process, and reads better where it runs than behind a function that exists
-//! to be called once.
+//! can be wrong on disk. [`agent`](mod@agent) is the second, and the same
+//! shape: what a Drone is started as — which binary, and which model — is a
+//! question about a machine, and answering the first wrongly is a refusal that
+//! belongs before the bind. Everything
+//! after those needs a port, a store and a process, and reads better where it
+//! runs than behind a function that exists to be called once.
 
+pub mod agent;
 pub mod setup;
 
 #[cfg(test)]
 mod tests;
 
+pub use agent::{agent_binary, model_choices, NoSuchAgent, AGENT_BINARY, MODEL};
 pub use setup::{Setup, SetupRefused};

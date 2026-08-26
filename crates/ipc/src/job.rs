@@ -156,7 +156,19 @@ pub struct ProposeJob {
     pub origin: TopLevelOrigin,
     pub urgency: Urgency,
     pub atomic: bool,
-    pub model: String,
+    /// Which model the Drone is spawned as. **Optional, and absent is the
+    /// ordinary case** — Fleet fills it from configuration, so a caller that
+    /// has no opinion sends nothing rather than sending `""`.
+    ///
+    /// A `String` and not a `ModelName`: the newtype's guarantee is that it
+    /// cannot be constructed blank, and a DTO is deserialised rather than
+    /// constructed. `""` therefore decodes here, and is refused at the Fleet
+    /// boundary where text becomes a Job — the same division `title` draws.
+    ///
+    /// It was required and non-optional, and the empty string it invited was
+    /// accepted, stored, shown on the board and refused at spawn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     #[serde(default)]
     pub acceptance_criteria: Vec<ProposedCriterion>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

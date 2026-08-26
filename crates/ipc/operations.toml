@@ -117,11 +117,48 @@ transport = "HTTP"
 helm_access = "Yes"
 description = "Jobs with state and reason"
 
+[operations.list_manifests]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "The Manifests Fleet holds, with the repository each was read from"
+notes = """
+Added because nothing joined a Job's `owner_manifest_id` to a Manifest. A proposal could name any ULID and it was stored, and Bridge could only render the ULID back. Fleet now refuses a proposal naming a Manifest it does not hold, and this is how a composer offers the one it does.
+
+There is no name here because `armada.yml` declares none — `version`, `id`, `checks` and `commands` are the whole schema `crates/config` reads, and every other key is refused. The repository directory is carried instead, which is a fact rather than an invention. What a Manifest should be called is a schema decision and is open.
+
+One Manifest at M1, and the row is still a list: Reach scopes the Board per Manifest, and a query that answered with one would have to be replaced rather than extended.
+"""
+
+[operations.list_models]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "The models a Job may name, and the one it gets when it names none"
+notes = """
+Added with the model picker. `crates/config/settings.toml` carries two rows that should answer this — `kit-level-allowed-default-models-list` and `default-model-per-job-type` — and neither has a `default` value, so nothing configured names a model. The values served are the adapter's, which is the boundary allowed to know a vendor's spellings; that is a stand-in and the settings rows are the answer.
+
+Helm may reach it for the same reason it may reach the other queries: knowing what a model may be named is not choosing one.
+"""
+
 [operations.list_reviews]
 kind = "query"
 transport = "HTTP"
 helm_access = "Yes"
 description = "Jobs awaiting sign-off"
+
+[operations.list_workflows]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "The workflows Fleet holds, with their steps and the Manifest they resolved against"
+notes = """
+Added because nothing joined a Job's `workflow_id` to a workflow. `ResolvedWorkflow` carried a name and a version and no id, a proposal named one anyway, and the id was written onto the record unverified — so a Job could sit on the board claiming a workflow that does not exist. The refusal at creation is the fix; this is what lets a composer name a workflow that will not be refused.
+
+It also makes the row readable. Bridge showed a ULID where it should have said `bug`, and resolving the id here is why the Job row does not have to carry a denormalised name.
+
+One workflow at M1 — `Fittings` holds exactly one — and the row is still a list, because the reason there is one is that nothing could look a second one up, and that reason has now gone.
+"""
 
 
 [operations.approve_command]
@@ -278,6 +315,19 @@ kind = "event"
 transport = "WebSocket"
 helm_access = "Bridge only"
 description = "An Evidence MCP call lands"
+
+[operations."job.created"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A Job exists that did not before, carrying the row whole"
+notes = """
+Added because a Job proposed while a client was connected never reached it: creation published nothing, so nothing woke Bridge.
+
+A kind of its own rather than a `job.state_changed` on creation. That message has a `from` and a `to` and a created Job has no `from` — the honest fields would name a transition from a status the Job was never in, which the edge table does not contain and which every client folding the stream would apply as a move that did not happen. A row appearing and a row moving are different messages.
+
+It carries the whole summary, so a Board inserts the row rather than fetching the one it was just told about.
+"""
 
 [operations."job.state_changed"]
 kind = "event"

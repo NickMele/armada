@@ -114,10 +114,10 @@ impl Setup {
 /// The one definition in `.armada/workflows/`, or why there is not one.
 ///
 /// **Exactly one, refused otherwise.** `Fittings` holds a single workflow at
-/// M1 — `ResolvedWorkflow` carries a name and a version and no id, and a
-/// proposal names a `workflow_id`, so there is nothing to look a second one up
-/// by. A daemon that picked the alphabetically first of three would be making
-/// that choice silently and on no stated rule.
+/// M1. A definition now carries its own `workflow_id`, so a second one *could*
+/// be looked up — what is still missing is a rule for which of several a Fleet
+/// holds and how they are keyed, and a daemon that picked the alphabetically
+/// first of three would be making that choice silently.
 fn one_definition(root: &Path) -> Result<PathBuf, SetupRefused> {
     let dir = root.join(WORKFLOWS);
     let entries = std::fs::read_dir(&dir).map_err(|cause| {

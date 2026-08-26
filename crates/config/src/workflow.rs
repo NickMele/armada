@@ -36,14 +36,14 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use core_model::StepId;
+use core_model::{StepId, Ulid, WorkflowId};
 use serde_yaml_ng::Value;
 
 use crate::error::{Fault, LoadError, Refusal};
 use crate::yaml::{self, Table};
 
 /// The keys M1 reads at the top level of a WorkflowDef.
-const TOP_LEVEL: &[&str] = &["version", "name", "structure", "steps"];
+const TOP_LEVEL: &[&str] = &["version", "workflow_id", "name", "structure", "steps"];
 /// The keys M1 reads inside a step.
 const STEP_KEYS: &[&str] = &[
     "id",
@@ -202,6 +202,7 @@ impl Step {
 #[derive(Debug, Clone)]
 pub struct WorkflowDef {
     path: PathBuf,
+    id: WorkflowId,
     version: u32,
     name: String,
     structure: Structure,
@@ -239,6 +240,23 @@ impl WorkflowDef {
         &self.path
     }
 
+    /// The definition's own id — **`workflow_id`, the sixth key.**
+    ///
+    /// Added because a proposal names a `workflow_id` and until this key
+    /// existed there was nothing to join that id to: a Job could be proposed
+    /// against a workflow invented at the keyboard, stored, and shown on the
+    /// board claiming a workflow Fleet had never heard of.
+    ///
+    /// **Not a new spelling.** `domain/workflow-samples/bug.json` — the
+    /// designed definition, which is the authority on the schema — already
+    /// carries `workflow_id` at the top level, valued with the slug `bug`. M1's
+    /// reduced form simply did not read it. So this reads the key the schema
+    /// has, with the value that schema gives it, rather than minting an id
+    /// nothing else would agree with.
+    pub fn id(&self) -> &WorkflowId {
+        &self.id
+    }
+
     pub fn version(&self) -> u32 {
         self.version
     }
@@ -265,6 +283,9 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<WorkflowDef
     let version = top
         .required("version", out)
         .and_then(|value| yaml::positive("version", value, out));
+    let id = top
+        .required("workflow_id", out)
+        .and_then(|value| yaml::text("workflow_id", value, out));
     let name = top
         .required("name", out)
         .and_then(|value| yaml::text("name", value, out));
@@ -316,6 +337,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<WorkflowDef
 
     Some(WorkflowDef {
         path: path.to_path_buf(),
+        id: WorkflowId::carried(Ulid::carried(id?)),
         version: version?,
         name: name?,
         structure: structure?,

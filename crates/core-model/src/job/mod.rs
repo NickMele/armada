@@ -56,8 +56,8 @@ pub use fields::{
     ScopeRevisionOutcome, Subject, TopLevelOrigin, Urgency, WriteTargets,
 };
 pub use ids::{
-    BlankTitle, CriterionId, DroneId, JobId, ManifestId, ModelName, RepoPath, StepId, Title,
-    WorkflowId,
+    BlankModel, BlankTitle, CriterionId, DroneId, JobId, ManifestId, ModelName, RepoPath, StepId,
+    Title, WorkflowId,
 };
 pub use record::{Job, NewJob, StepTransitioned, Transitioned};
 pub use status::{JobStatus, StepState};

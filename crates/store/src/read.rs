@@ -176,7 +176,13 @@ impl Store {
                 &string(row, "urgency")?,
             )?,
             atomic: row.get("atomic").map_err(column("jobs", "atomic"))?,
-            model: ModelName::new(string(row, "model")?),
+            model: ModelName::new(&string(row, "model")?).map_err(|blank| {
+                RowError::MalformedColumn {
+                    table: "jobs",
+                    column: "model",
+                    detail: blank.to_string(),
+                }
+            })?,
             acceptance_criteria: columns::read_acceptance_criteria(&string(
                 row,
                 "acceptance_criteria",

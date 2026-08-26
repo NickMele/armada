@@ -1,4 +1,4 @@
-//! The six operations, over the router, with no socket.
+//! Every operation, over the router, with no socket.
 //!
 //! `tower::ServiceExt::oneshot` calls the router directly — it is a `Service`,
 //! and a `Service` does not need a port to be called. What this proves is the
@@ -74,7 +74,7 @@ async fn every_operation_the_table_names_is_routed() {
 /// One Job, through every operation M1 serves, watched on the stream — and not
 /// a byte of it goes near a network.
 #[tokio::test]
-async fn the_six_operations_run_with_no_network() {
+async fn every_operation_runs_with_no_network() {
     let events = Broadcaster::new();
     let mut watching: Subscription = events.subscribe();
     let daemon = FakeDaemon::new(events.clone());
@@ -112,12 +112,30 @@ async fn the_six_operations_run_with_no_network() {
     let approved: JobSummary = ipc::decode("job summary", &body).expect("a summary");
     assert_eq!(approved.status.as_wire(), "queued");
 
-    // The transition reached the stream, once, in order.
+    // The creation reached the stream, first and whole. **This is the bug that
+    // was here**: proposing published nothing, so a client connected at the
+    // time was never told the row existed.
+    let Some(Next::Send(delivered)) = watching.next().await else {
+        panic!("the proposal published nothing");
+    };
+    assert_eq!(delivered.cursor.position(), 0);
+    let ipc::Event::JobCreated(created) = delivered.event else {
+        panic!("a creation, not a move");
+    };
+    assert_eq!(
+        created.job.id, proposed.id,
+        "the row travels whole, so a Board inserts it rather than re-reading"
+    );
+    assert_eq!(created.job.status.as_wire(), "awaiting_approval");
+
+    // The transition reached it next, in order.
     let Some(Next::Send(delivered)) = watching.next().await else {
         panic!("the approval published nothing");
     };
-    assert_eq!(delivered.cursor.position(), 0);
-    let ipc::Event::JobStateChanged(moved) = delivered.event;
+    assert_eq!(delivered.cursor.position(), 1);
+    let ipc::Event::JobStateChanged(moved) = delivered.event else {
+        panic!("a move, not a creation");
+    };
     assert_eq!(moved.from.as_wire(), "awaiting_approval");
     assert_eq!(moved.to.as_wire(), "queued");
     assert_eq!(moved.actor.as_wire(), "human");
@@ -169,7 +187,9 @@ async fn a_job_with_no_drone_is_still_killable() {
     let Some(Next::Send(delivered)) = watching.next().await else {
         panic!("the kill published nothing");
     };
-    let ipc::Event::JobStateChanged(moved) = delivered.event;
+    let ipc::Event::JobStateChanged(moved) = delivered.event else {
+        panic!("a move, not a creation");
+    };
     assert_eq!(moved.from.as_wire(), "awaiting_approval");
     assert_eq!(moved.to.as_wire(), "killed");
     assert_eq!(moved.actor.as_wire(), "human");

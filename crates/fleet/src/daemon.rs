@@ -1,5 +1,5 @@
 //! The daemon core: what Fleet is made of, the one slot it works in, and the
-//! five things it can be asked.
+//! things it can be asked.
 //!
 //! Two neighbours carry what this file deliberately does not.
 //! [`working`](mod@crate::working) is the slot's contents — a type with an
@@ -93,15 +93,26 @@ pub struct Fittings<H, V, W> {
     pub work: W,
     pub clock: Arc<dyn Clock>,
     pub mint: Arc<dyn Mint>,
-    /// The workflow every Job runs. **One, at M1**: `ResolvedWorkflow` carries
-    /// a name and a version and no id, and `ProposeJob` names a `workflow_id`,
-    /// so there is nothing to look one up by.
+    /// The workflow every Job runs. **One, at M1** — Fleet is pointed at a
+    /// repository and `.armada/workflows/` holds one definition.
+    ///
+    /// It now carries an id, read from the definition's `workflow_id`, so a
+    /// proposal naming a workflow this Fleet does not hold is refused at
+    /// creation instead of written onto the record unverified.
     pub workflow: ResolvedWorkflow,
     /// The `armada.yml` that workflow resolved against. Held because a Drone's
     /// toolbelt is built from the commands it declares.
     pub manifest: Manifest,
     pub host: Host,
     pub budget: CheckBudget,
+    /// The models a Job may name, and the one it gets when it names none.
+    ///
+    /// **Resolved by the composition root, like every other input here.**
+    /// Nothing below reads configuration, which is what lets a test plant a
+    /// roster and assert on what a proposal with no model was given. Where the
+    /// default is blank, a proposal that names no model is refused at creation
+    /// rather than at spawn.
+    pub models: ipc::ModelChoices,
     pub events: api::Broadcaster,
 }
 
@@ -144,6 +155,7 @@ pub struct Fleet<H, V, W> {
     manifest: Manifest,
     host: Host,
     budget: CheckBudget,
+    models: ipc::ModelChoices,
     events: api::Broadcaster,
     inbox: EvidenceInbox,
     working: Mutex<Option<Working>>,
@@ -177,6 +189,7 @@ where
             manifest: fittings.manifest,
             host: fittings.host,
             budget: fittings.budget,
+            models: fittings.models,
             events: fittings.events,
             inbox: EvidenceInbox::new(),
             working: Mutex::new(None),
@@ -236,6 +249,15 @@ where
 
     /// A Job drafted onto the approval gate. **The gate is unchanged** — what
     /// comes back is at `awaiting_approval`, not a running Job.
+    /// **And it publishes.** A Job created while a client was connected never
+    /// reached it: `ipc::Event` carried one kind, `job.state_changed`, and
+    /// creating a Job is not a state change — so nothing was published and
+    /// nothing woke Bridge. `job.created` is the kind that says a row appeared,
+    /// and it carries the row whole so a Board inserts it rather than re-reading.
+    ///
+    /// The actor is **human**. A proposal is a person's act or Helm's; Fleet
+    /// creates no Job of its own accord at M1, and the log envelope's actor
+    /// vocabulary has no fourth value to distinguish the two with.
     pub async fn propose(&self, proposal: ipc::ProposeJob) -> Result<Job, Adrift> {
         let at = self.now();
         let (new, origin) = self.drafted(proposal)?;
@@ -245,6 +267,14 @@ where
             .await
             .insert_job(&job, &at)
             .map_err(Adrift::Writing)?;
+        // After the write, never before: a client told about a row the store
+        // then refused would hold a Job that does not exist, and a resync would
+        // silently remove it.
+        self.publish(ipc::Event::JobCreated(ipc::JobCreated {
+            job: ipc::JobSummary::from(&job),
+            actor: Actor::Human.into(),
+            at: (&at).into(),
+        }));
         Ok(job)
     }
 
@@ -407,6 +437,11 @@ where
     }
     pub(crate) fn budget(&self) -> CheckBudget {
         self.budget
+    }
+    /// The models a Job may name. Read at creation and served by
+    /// `list_models`; nothing else consults it.
+    pub(crate) fn models(&self) -> &ipc::ModelChoices {
+        &self.models
     }
     pub(crate) fn mint(&self) -> &Arc<dyn Mint> {
         &self.mint

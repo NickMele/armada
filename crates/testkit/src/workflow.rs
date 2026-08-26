@@ -65,7 +65,9 @@ pub fn resolved(steps: &[Sketch<'_>]) -> ResolvedWorkflow {
 }
 
 fn workflow_text(steps: &[Sketch<'_>]) -> String {
-    let mut text = String::from("version: 1\nname: fixture\nstructure: linear\nsteps:\n");
+    let mut text = String::from(
+        "version: 1\nworkflow_id: fixture-workflow\nname: fixture\nstructure: linear\nsteps:\n",
+    );
     for step in steps {
         text.push_str(&format!(
             "  - id: {}\n    label: \"{}\"\n    advance_gate: auto\n",

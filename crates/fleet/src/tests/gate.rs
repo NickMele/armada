@@ -46,7 +46,7 @@ fn running_job() -> Job {
             owner_manifest_id: ManifestId::carried(Ulid::carried("01J0000000000000000000MAN0")),
             urgency: Urgency::Normal,
             atomic: false,
-            model: ModelName::new("the-configured-model"),
+            model: ModelName::new("the-configured-model").expect("a model name"),
             acceptance_criteria: vec![AcceptanceCriterion {
                 criterion_id: CriterionId::new("c1"),
                 text: "the suite passes".into(),

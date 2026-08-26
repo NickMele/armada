@@ -59,7 +59,12 @@ export type ProposeJob = {
   origin: string;
   urgency: string;
   atomic: boolean;
-  model: string;
+  /**
+   * Optional, and absent is the ordinary case: Fleet fills it from
+   * configuration. It used to be required, and the `""` that invited was
+   * accepted, stored, drawn on the board and refused at spawn.
+   */
+  model?: string;
   acceptance_criteria?: ProposedCriterion[];
   subject?: { kind: string; reference: string };
   /** Context the Job needs to run. Append-only once the Job exists. */
@@ -90,7 +95,23 @@ export type Delivered = {
 /** The bound was reached and the oldest were dropped. Always followed by a resync. */
 export type Missed = { dropped: number };
 
-export type Event = { kind: "job.state_changed" } & JobStateChanged;
+export type Event =
+  | ({ kind: "job.created" } & JobCreated)
+  | ({ kind: "job.state_changed" } & JobStateChanged);
+
+/**
+ * A Job exists that did not before, carrying the row whole.
+ *
+ * **Not a state change.** A created Job has no status it moved from, so a
+ * `job.state_changed` here would name a transition the edge table does not
+ * have. The summary travels with it, so the list inserts the row rather than
+ * re-reading everything to learn one.
+ */
+export type JobCreated = {
+  job: JobSummary;
+  actor: string;
+  at: string;
+};
 
 export type JobStateChanged = {
   job_id: string;
@@ -99,6 +120,39 @@ export type JobStateChanged = {
   reason?: Reason;
   actor: string;
   at: string;
+};
+
+/** One workflow Fleet holds. `crates/ipc/src/setup.rs`. */
+export type WorkflowSummary = {
+  /** What a proposal's `workflow_id` must name. Anything else is refused. */
+  id: string;
+  /** What a person reads. `bug`, where the id is what a Job points at. */
+  name: string;
+  version: number;
+  /** The steps, in order. Order is the semantics. */
+  steps: string[];
+  manifest_id: string;
+};
+
+/** One Manifest Fleet holds. */
+export type ManifestSummary = {
+  id: string;
+  /**
+   * The repository the Manifest was read from. **Not a name it declares** —
+   * `armada.yml` has no key for one, so this is the directory, which is a fact
+   * rather than an invention.
+   */
+  repository: string;
+  path: string;
+  version: number;
+  checks: string[];
+};
+
+/** The models a Job may name, and the one it gets when it names none. */
+export type ModelChoices = {
+  models: string[];
+  /** Always a member of `models`, so a picker selects it without a lookup. */
+  default: string;
 };
 
 /** A failure, flattened for the wire. `docs/contracts/error-contract.md`. */

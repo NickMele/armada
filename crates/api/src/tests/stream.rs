@@ -75,7 +75,9 @@ async fn a_connection_opens_with_a_resync_and_then_carries_events() {
         panic!("an event follows the resync");
     };
     assert_eq!(delivered.cursor, cursor);
-    let ipc::Event::JobStateChanged(moved) = delivered.event;
+    let ipc::Event::JobStateChanged(moved) = delivered.event else {
+        panic!("a move, not a creation");
+    };
     assert_eq!(moved.to.as_wire(), "running");
 }
 

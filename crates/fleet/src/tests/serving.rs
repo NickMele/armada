@@ -1,4 +1,4 @@
-//! The five operations, over the real router, answered by a real Fleet.
+//! The served operations, over the real router, answered by a real Fleet.
 //!
 //! `api`'s own suite proves the same routes against a fake daemon. This one
 //! proves the claim that fake was standing in for: **the operations answer from
@@ -10,6 +10,9 @@
 //! typed value outside `store` and the assertion that the redaction at the
 //! boundary produced something a Bridge could read.
 
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use axum::Router;
@@ -18,7 +21,7 @@ use ipc::{JobList, JobSummary, RunId};
 use testkit::FakeWorkProduct;
 use tower::ServiceExt;
 
-use crate::tests::daemon::{a_fleet, a_proposal, worktree_directory};
+use crate::tests::daemon::{a_fleet, a_proposal, diff_evidence, note_evidence, worktree_directory};
 use crate::tests::tmp::TempDir;
 
 async fn call(app: &Router, method: &str, uri: &str, body: &str) -> (StatusCode, Vec<u8>) {
@@ -46,7 +49,7 @@ async fn call(app: &Router, method: &str, uri: &str, body: &str) -> (StatusCode,
 
 const A_PROPOSAL: &str = r#"{
     "title": "fix the off-by-one in the log reader",
-    "workflow_id": "01WF",
+    "workflow_id": "fixture-workflow",
     "owner_manifest_id": "01FIXTUREMANIFEST",
     "origin": "manual",
     "urgency": "normal",
@@ -102,6 +105,112 @@ async fn the_operations_answer_from_a_real_fleet() {
     );
 }
 
+/// The one Job on the Board, read back the way Bridge reads it.
+async fn only_job(app: &Router) -> JobSummary {
+    let (status, body) = call(app, "GET", "/jobs", "").await;
+    assert_eq!(status, StatusCode::OK);
+    let listed: JobList = ipc::decode("the Job list", &body).expect("a JobList");
+    assert_eq!(listed.jobs.len(), 1, "one Job, and it is this one");
+    listed
+        .jobs
+        .into_iter()
+        .next()
+        .expect("the Job just counted")
+}
+
+/// Poll the Board until it says so. **Nothing here turns the Fleet** — that is
+/// the loop's, and waiting is how a test says it is somebody else's.
+async fn until(app: &Router, what: &str, ready: impl Fn(&JobSummary) -> bool) -> JobSummary {
+    for _ in 0..400 {
+        let job = only_job(app).await;
+        if ready(&job) {
+            return job;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the Job never {what} — four seconds of turns and it stood still");
+}
+
+/// **The property this whole shape exists for.** A Job proposed and approved
+/// over the served API reaches a terminal state, with nobody calling
+/// `Fleet::turn` by hand.
+///
+/// Every call below goes through the router, and every advance is the loop's.
+/// The two submissions stand in for the Drone's Evidence tool, which is the one
+/// part with no server in front of it yet — the Fleet they are submitted to is
+/// the same one the router answers from, which is exactly what the second `Arc`
+/// buys and what the shape before it could not express.
+#[tokio::test]
+async fn a_job_approved_over_the_api_reaches_a_terminal_state() {
+    let home = TempDir::new();
+    let fleet = Arc::new(a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"])));
+    let events = fleet.events();
+
+    // Collected rather than printed: a turn that failed is asserted on at the
+    // end, so a Job that reached terminal *through* a fault cannot pass.
+    let adrift: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let carried = Arc::clone(&adrift);
+    let turning = crate::keep_turning(Arc::clone(&fleet), Duration::from_millis(5), move |why| {
+        carried
+            .lock()
+            .expect("nothing panicked holding this")
+            .push(why.to_string());
+    });
+
+    let app = api::router(api::Served::sharing(
+        Arc::clone(&fleet),
+        RunId::carried("01RUN"),
+        events,
+    ));
+
+    let (status, body) = call(&app, "POST", "/jobs", A_PROPOSAL).await;
+    assert_eq!(status, StatusCode::CREATED);
+    let proposed: JobSummary = ipc::decode("a proposed Job", &body).expect("a JobSummary");
+    worktree_directory(&home, &proposed.id.to_domain());
+
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!("/jobs/{}/approve_dispatch", proposed.id.as_str()),
+        "",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "approval released it");
+
+    // The Drone's first submission. Before this change it would have sat in the
+    // inbox for the life of the process.
+    fleet
+        .submit_evidence(diff_evidence())
+        .await
+        .expect("the working Job's Drone submits");
+    let midway = until(&app, "advanced past its first step", |job| {
+        job.current_step_id.as_ref().map(|id| id.as_str()) == Some("summarise")
+    })
+    .await;
+    assert_eq!(
+        midway.status.as_wire(),
+        "running",
+        "a step advanced, and a step is the inner machine"
+    );
+
+    fleet
+        .submit_evidence(note_evidence())
+        .await
+        .expect("the same Drone, on the second step");
+    let ended = until(&app, "reached a terminal state", |job| {
+        job.status.domain().is_terminal()
+    })
+    .await;
+    assert_eq!(ended.status.as_wire(), "completed_success");
+
+    turning.stopped().await;
+    assert_eq!(
+        adrift.lock().expect("nothing panicked holding this").len(),
+        0,
+        "no turn failed on the way there"
+    );
+}
+
 /// A Job that is not there is a 404, and the code is decided from the typed
 /// error rather than from a message.
 #[tokio::test]
@@ -136,3 +245,205 @@ async fn a_move_the_machine_refuses_is_a_conflict() {
         "`running -> queued` is not an edge, and 409 is what that is"
     );
 }
+
+// ------------------------------------------------- what the first run found
+
+/// **A Job created while a client is connected reaches that client.**
+///
+/// This is the bug, stated as an assertion. A Job proposed over the API while
+/// Bridge was connected never appeared: creation published nothing, because
+/// `ipc::Event` carried one kind and creating a Job is not a state change.
+///
+/// The subscription is taken **before** the proposal, which is the order the
+/// listener itself takes — subscribe, then snapshot — so nothing that lands in
+/// between is lost.
+#[tokio::test]
+async fn a_job_created_while_a_client_is_connected_reaches_that_client() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let events = fleet.events();
+    let mut watching = events.subscribe();
+    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+
+    let (status, _) = call(&app, "POST", "/jobs", A_PROPOSAL).await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let Some(api::Next::Send(delivered)) = watching.next().await else {
+        panic!("the proposal published nothing — the bug, exactly");
+    };
+    let ipc::Event::JobCreated(created) = delivered.event else {
+        panic!("a creation is not a move: `job.created`, not `job.state_changed`");
+    };
+    assert_eq!(created.job.title, "fix the off-by-one in the log reader");
+    assert_eq!(
+        created.job.status.as_wire(),
+        "awaiting_approval",
+        "the row travels whole, so a Board draws it without a second call"
+    );
+    assert_eq!(created.actor.as_wire(), "human");
+}
+
+/// **A client that reconnects sees every Job that exists.**
+///
+/// The worse half of the same bug: reloading did not recover the missing Job.
+/// A fresh connection resyncs to current state regardless of what it missed, so
+/// what a client saw on the stream cannot decide what it ends up holding.
+#[tokio::test]
+async fn a_client_that_connects_late_is_resynced_to_every_job_that_exists() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let events = fleet.events();
+    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+
+    // Created before anything is watching. Nothing heard the event.
+    let (status, _) = call(&app, "POST", "/jobs", A_PROPOSAL).await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    // What a connection opens with is `list_jobs`, which is what the resync
+    // carries — asserted through the same route the listener calls.
+    let (status, body) = call(&app, "GET", "/jobs", "").await;
+    assert_eq!(status, StatusCode::OK);
+    let listed: JobList = ipc::decode("the Job list", &body).expect("a JobList");
+    assert_eq!(
+        listed.jobs.len(),
+        1,
+        "a client that missed the creation still gets the Job"
+    );
+}
+
+/// **A proposal that names no model gets the configured one**, rather than
+/// being stored blank and dying at dispatch as "no model was named".
+#[tokio::test]
+async fn a_proposal_with_no_model_is_given_the_configured_one() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let events = fleet.events();
+    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+
+    for body in [MODELLESS, BLANK_MODEL] {
+        let (status, body) = call(&app, "POST", "/jobs", body).await;
+        assert_eq!(status, StatusCode::CREATED);
+        let proposed: JobSummary = ipc::decode("a proposed Job", &body).expect("a JobSummary");
+        assert_eq!(
+            proposed.model, "a-model",
+            "the fitted default, filled in at creation"
+        );
+    }
+}
+
+/// A proposal naming a workflow or a Manifest Fleet does not hold is refused
+/// **where it enters**, with the id in the message and the one Fleet holds
+/// named. 422: the request is well-formed and the values in it are not.
+#[tokio::test]
+async fn a_proposal_naming_something_fleet_does_not_hold_is_refused_at_the_door() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let events = fleet.events();
+    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+
+    for (proposal, invented, held) in [
+        (
+            INVENTED_WORKFLOW,
+            "01M0ZNVRJNC89ECG0PV1T8W08Z",
+            "fixture-workflow",
+        ),
+        (
+            INVENTED_MANIFEST,
+            "01M0ZNVRJNC89ECG0PV1T8W08Y",
+            "01FIXTUREMANIFEST",
+        ),
+    ] {
+        let (status, body) = call(&app, "POST", "/jobs", proposal).await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "not a 500: retrying it would fail identically forever"
+        );
+        let refusal: ipc::WireError = ipc::decode("a refusal", &body).expect("a WireError");
+        assert!(refusal.message.contains(invented), "{}", refusal.message);
+        assert!(refusal.message.contains(held), "{}", refusal.message);
+    }
+
+    let (_, body) = call(&app, "GET", "/jobs", "").await;
+    let listed: JobList = ipc::decode("the Job list", &body).expect("a JobList");
+    assert!(
+        listed.jobs.is_empty(),
+        "nothing was created, so nothing sits on the board looking approvable"
+    );
+}
+
+/// What Fleet holds, served — so a composer offers values that will not be
+/// refused rather than a text field for a pasted id.
+#[tokio::test]
+async fn what_fleet_holds_is_what_a_proposal_may_name() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let events = fleet.events();
+    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+
+    let (status, body) = call(&app, "GET", "/workflows", "").await;
+    assert_eq!(status, StatusCode::OK);
+    let workflows: Vec<ipc::WorkflowSummary> =
+        ipc::decode("the workflows", &body).expect("a workflow list");
+    assert_eq!(workflows[0].id.as_str(), "fixture-workflow");
+    assert_eq!(workflows[0].name, "fixture", "the name, not the id");
+    assert_eq!(workflows[0].steps.len(), 2);
+
+    let (status, body) = call(&app, "GET", "/manifests", "").await;
+    assert_eq!(status, StatusCode::OK);
+    let manifests: Vec<ipc::ManifestSummary> =
+        ipc::decode("the Manifests", &body).expect("a Manifest list");
+    assert_eq!(manifests[0].id.as_str(), "01FIXTUREMANIFEST");
+
+    let (status, body) = call(&app, "GET", "/models", "").await;
+    assert_eq!(status, StatusCode::OK);
+    let models: ipc::ModelChoices = ipc::decode("the models", &body).expect("the model choices");
+    assert!(
+        models.models.contains(&models.default),
+        "the default is a member, so a picker can select it without a lookup that misses"
+    );
+}
+
+/// A proposal with the `model` key absent altogether. **The ordinary case** —
+/// Bridge sends no model when a person has no opinion about one.
+const MODELLESS: &str = r#"{
+    "title": "fix the off-by-one in the log reader",
+    "workflow_id": "fixture-workflow",
+    "owner_manifest_id": "01FIXTUREMANIFEST",
+    "origin": "manual",
+    "urgency": "normal",
+    "atomic": false
+}"#;
+
+/// The same thing said the other way. An empty box in a form is a caller with
+/// no opinion, not a caller naming a model called "".
+const BLANK_MODEL: &str = r#"{
+    "title": "fix the off-by-one in the log reader",
+    "workflow_id": "fixture-workflow",
+    "owner_manifest_id": "01FIXTUREMANIFEST",
+    "origin": "manual",
+    "urgency": "normal",
+    "atomic": false,
+    "model": "   "
+}"#;
+
+/// A workflow id typed at a keyboard. It resolves to nothing, and used to be
+/// stored anyway.
+const INVENTED_WORKFLOW: &str = r#"{
+    "title": "fix the off-by-one in the log reader",
+    "workflow_id": "01M0ZNVRJNC89ECG0PV1T8W08Z",
+    "owner_manifest_id": "01FIXTUREMANIFEST",
+    "origin": "manual",
+    "urgency": "normal",
+    "atomic": false
+}"#;
+
+/// The same, for the other id.
+const INVENTED_MANIFEST: &str = r#"{
+    "title": "fix the off-by-one in the log reader",
+    "workflow_id": "fixture-workflow",
+    "owner_manifest_id": "01M0ZNVRJNC89ECG0PV1T8W08Y",
+    "origin": "manual",
+    "urgency": "normal",
+    "atomic": false
+}"#;

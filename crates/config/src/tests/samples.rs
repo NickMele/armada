@@ -147,8 +147,12 @@ fn every_sample_step_is_missing_only_its_label() {
 fn the_samples_top_level_keys_that_m1_defers_are_named_one_by_one() {
     // Not "this file is wrong" — every deferred section by name, so the diff
     // between the full schema and the M1 slice is readable off the refusal.
+    // `workflow_id` is no longer among them: M1 reads it now, because nothing
+    // else joined a proposal's `workflow_id` to a workflow and a Job could be
+    // proposed against one that does not exist. The sample already carried the
+    // key; what changed is that the parser stopped deferring it.
     let refusals = load("bug.json");
-    for key in ["workflow_id", "default_gate_policy"] {
+    for key in ["default_gate_policy"] {
         assert!(
             refusals
                 .iter()

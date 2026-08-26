@@ -59,6 +59,21 @@ pub const SERVED: &[Route] = &[
         path: "/jobs",
     },
     Route {
+        operation: "list_workflows",
+        method: "GET",
+        path: "/workflows",
+    },
+    Route {
+        operation: "list_manifests",
+        method: "GET",
+        path: "/manifests",
+    },
+    Route {
+        operation: "list_models",
+        method: "GET",
+        path: "/models",
+    },
+    Route {
         operation: "propose_job",
         method: "POST",
         path: "/jobs",
@@ -77,6 +92,14 @@ pub const SERVED: &[Route] = &[
         operation: "kill_job",
         method: "POST",
         path: "/jobs/:job_id/kill_job",
+    },
+    // Both event kinds are served on the one socket, and both are named:
+    // `SERVED` is what a rule compares to the inventory, so a kind published
+    // and not listed here is a kind no rule can see.
+    Route {
+        operation: "job.created",
+        method: "GET",
+        path: "/events",
     },
     Route {
         operation: "job.state_changed",
@@ -106,9 +129,30 @@ pub struct Served<D> {
 }
 
 impl<D> Served<D> {
+    /// The daemon this listener answers from, handed over.
+    ///
+    /// The transport is the only holder. For a caller that also has to *drive*
+    /// the daemon — anything calling a turn on an interval — see
+    /// [`Served::sharing`].
     pub fn by(daemon: D, run_id: RunId, events: Broadcaster) -> Served<D> {
+        Served::sharing(Arc::new(daemon), run_id, events)
+    }
+
+    /// The same daemon the caller keeps a reference to.
+    ///
+    /// **This is what lets a Job advance.** Serving is one of two things a
+    /// process does with a daemon and driving it is the other, so a
+    /// constructor that consumed it left nothing in the process able to call
+    /// `turn` — a Job dispatched on approval and then never settled. The state
+    /// was already an `Arc` for cloning per request; this only stops that
+    /// `Arc` being made where nobody else can reach it.
+    ///
+    /// No `Daemon` implementation for `Arc<D>` is needed for this and none is
+    /// stated: the handlers reach the daemon through the state's own `Arc`, so
+    /// `D` stays the concrete daemon and one indirection stays one.
+    pub fn sharing(daemon: Arc<D>, run_id: RunId, events: Broadcaster) -> Served<D> {
         Served {
-            daemon: Arc::new(daemon),
+            daemon,
             run_id,
             events,
         }
@@ -134,6 +178,9 @@ impl<D> Clone for Served<D> {
 pub fn router<D: Daemon>(served: Served<D>) -> Router {
     Router::new()
         .route("/jobs", get(list_jobs::<D>).post(propose_job::<D>))
+        .route("/workflows", get(list_workflows::<D>))
+        .route("/manifests", get(list_manifests::<D>))
+        .route("/models", get(list_models::<D>))
         .route(
             "/jobs/:job_id/approve_dispatch",
             post(approve_dispatch::<D>),
@@ -149,6 +196,29 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
 async fn list_jobs<D: Daemon>(State(served): State<Served<D>>) -> Response {
     match served.daemon.list_jobs().await {
         Ok(jobs) => answer(StatusCode::OK, &jobs, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// The workflows a proposal may name. **The set Fleet will accept**, which is
+/// why it is served rather than left to a caller to know.
+async fn list_workflows<D: Daemon>(State(served): State<Served<D>>) -> Response {
+    match served.daemon.list_workflows().await {
+        Ok(workflows) => answer(StatusCode::OK, &workflows, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+async fn list_manifests<D: Daemon>(State(served): State<Served<D>>) -> Response {
+    match served.daemon.list_manifests().await {
+        Ok(manifests) => answer(StatusCode::OK, &manifests, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+async fn list_models<D: Daemon>(State(served): State<Served<D>>) -> Response {
+    match served.daemon.list_models().await {
+        Ok(models) => answer(StatusCode::OK, &models, &served.run_id),
         Err(refusal) => refused(refusal),
     }
 }

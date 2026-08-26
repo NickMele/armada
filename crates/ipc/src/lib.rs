@@ -51,6 +51,7 @@ mod error;
 mod event;
 mod ids;
 mod job;
+mod setup;
 
 #[cfg(test)]
 mod tests;
@@ -58,6 +59,9 @@ mod tests;
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use enums::{Actor, CriterionSource, JobStatus, Origin, TopLevelOrigin, Urgency};
 pub use error::{RunId, WireError, WireValue};
-pub use event::{Cursor, Delivered, Event, JobStateChanged, Missed, Reason, Resync, StreamMessage};
+pub use event::{
+    Cursor, Delivered, Event, JobCreated, JobStateChanged, Missed, Reason, Resync, StreamMessage,
+};
 pub use ids::{CriterionId, DroneId, Instant, JobId, ManifestId, StepId, WorkflowId};
 pub use job::{JobList, JobSummary, ProposeJob, ProposedCriterion, Subject, UnreadableJob};
+pub use setup::{ManifestSummary, ModelChoices, WorkflowSummary};

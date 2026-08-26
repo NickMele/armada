@@ -12,8 +12,16 @@
 import WebSocket from "ws";
 
 import { PROTOCOL_VERSION } from "../shared/generated/protocol-version";
-import type { BridgeState, Connection, Draft, Outcome } from "../shared/bridge";
-import type { JobSummary, ProposeJob, StreamMessage, WireError } from "../shared/protocol";
+import type { BridgeState, Connection, Draft, Holdings, Outcome } from "../shared/bridge";
+import type {
+  JobSummary,
+  ManifestSummary,
+  ModelChoices,
+  ProposeJob,
+  StreamMessage,
+  WireError,
+  WorkflowSummary,
+} from "../shared/protocol";
 import { HOST, machinePath, read } from "./runtime-file";
 
 /** How long to wait before reading the runtime file again. */
@@ -30,6 +38,8 @@ export type Wiring = {
   now: Clock;
 };
 
+const NOTHING_HELD: Holdings = { workflows: [], manifests: [], models: null };
+
 const EMPTY: BridgeState = {
   connection: { state: "reading" },
   jobs: [],
@@ -37,6 +47,7 @@ const EMPTY: BridgeState = {
   missed: 0,
   readAt: null,
   approving: [],
+  holds: NOTHING_HELD,
 };
 
 export class FleetConnection {
@@ -52,7 +63,27 @@ export class FleetConnection {
     this.wiring = wiring;
   }
 
-  state(): BridgeState {
+  /**
+   * What Bridge holds, brought current first.
+   *
+   * **This is the reload fix.** A renderer that reloads re-runs its own initial
+   * fetch, but that fetch reads what main already has — and main only learns
+   * anything when the socket says so. The socket does not resync on a window
+   * reload, because the window is not the client: main is, and its connection
+   * never dropped. So a Job created before the connection existed, or missed
+   * for any other reason, stayed missing however many times the window was
+   * reloaded.
+   *
+   * A fresh reader gets current state regardless of what it missed, which is
+   * the same promise the resync makes on the wire. It costs one `GET /jobs` per
+   * window load.
+   */
+  async state(): Promise<BridgeState> {
+    const fleet = this.connected();
+    if (fleet !== null) {
+      await this.reread(fleet);
+      await this.readHoldings(fleet);
+    }
     return this.current;
   }
 
@@ -188,6 +219,9 @@ export class FleetConnection {
         unreadable: message.jobs.unreadable ?? [],
         readAt: this.wiring.now(),
       });
+      // What a proposal may name. Not on the stream — it changes when Fleet
+      // restarts, not when a Job moves — so it is read once per connection.
+      void this.readHoldings(fleet);
       return;
     }
 
@@ -199,18 +233,29 @@ export class FleetConnection {
     }
 
     const event = message.event;
+    const connection: Connection = { state: "connected", fleet, cursor: message.cursor };
+
+    if (event.kind === "job.created") {
+      // The row travels whole, so the list gains it without a round trip. This
+      // is the event that did not exist: a Job proposed over the API while
+      // Bridge was connected published nothing and never appeared.
+      this.publish({ connection });
+      this.fold(event.job);
+      return;
+    }
+
     const held = this.current.jobs.find((job) => job.id === event.job_id);
     if (held === undefined) {
-      // A Job Bridge has never seen. The event vocabulary has no `job.created`,
-      // so there is nothing here to build a row from — the list is re-read
-      // rather than left one Job short.
-      this.publish({ connection: { state: "connected", fleet, cursor: message.cursor } });
+      // A move about a Job this window has never seen. `job.created` covers the
+      // ordinary case now, so reaching here means a message was missed rather
+      // than that the vocabulary is short — and a re-read is what repairs that.
+      this.publish({ connection });
       void this.reread(fleet);
       return;
     }
     const moved: JobSummary = { ...held, status: event.to, reason: event.reason };
     this.publish({
-      connection: { state: "connected", fleet, cursor: message.cursor },
+      connection,
       jobs: this.current.jobs.map((job) => (job.id === moved.id ? moved : job)),
       readAt: this.wiring.now(),
     });
@@ -227,6 +272,30 @@ export class FleetConnection {
     });
   }
 
+  /**
+   * The workflows, the Manifests and the models Fleet holds.
+   *
+   * Three calls rather than one, because they are three operations in the
+   * inventory and a combined one would be a name nothing else agrees with. A
+   * call that fails leaves what is held unchanged: the composer offering a
+   * stale roster is better than one offering none, and Fleet refuses anything
+   * that has since gone.
+   */
+  private async readHoldings(fleet: BridgeStateFleet): Promise<void> {
+    const [workflows, manifests, models] = await Promise.all([
+      this.request(fleet.port, "GET", "/workflows"),
+      this.request(fleet.port, "GET", "/manifests"),
+      this.request(fleet.port, "GET", "/models"),
+    ]);
+    this.publish({
+      holds: {
+        workflows: workflows.ok === true ? (workflows.body as WorkflowSummary[]) : this.current.holds.workflows,
+        manifests: manifests.ok === true ? (manifests.body as ManifestSummary[]) : this.current.holds.manifests,
+        models: models.ok === true ? (models.body as ModelChoices) : this.current.holds.models,
+      },
+    });
+  }
+
   // ---------------------------------------------------------------- commands
 
   /**
@@ -238,6 +307,10 @@ export class FleetConnection {
     // the form: the renderer's check is a courtesy, this one is the rule.
     if (draft.title.trim() === "") return { ok: false, why: "empty_title" };
     if (draft.brief.trim() === "") return { ok: false, why: "empty_brief" };
+    // Both are ids Fleet holds and refuses anything else for, so an empty one
+    // is a form that was never filled in rather than a value to send.
+    if (draft.workflowId === "") return { ok: false, why: "no_workflow" };
+    if (draft.manifestId === "") return { ok: false, why: "no_manifest" };
     const fleet = this.connected();
     if (fleet === null) return { ok: false, why: "not_connected" };
 
@@ -251,7 +324,10 @@ export class FleetConnection {
       origin: draft.origin,
       urgency: draft.urgency,
       atomic: draft.atomic,
-      model: draft.model,
+      // Omitted rather than sent empty. The field is optional on the wire and
+      // Fleet fills it from configuration; `""` would say the same thing in a
+      // way that reads like a value.
+      ...(draft.model === "" ? {} : { model: draft.model }),
       facts: draft.brief,
     };
     const answer = await this.request(fleet.port, "POST", "/jobs", proposal);

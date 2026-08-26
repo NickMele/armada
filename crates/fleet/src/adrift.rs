@@ -84,6 +84,23 @@ pub enum Adrift {
     NotReaped { job: JobId, cause: io::Error },
     /// A proposal carried a title nothing could be picked out of a list by.
     Unnameable,
+    /// A proposal named a workflow this Fleet does not hold.
+    ///
+    /// **Nothing checked this until now.** `ResolvedWorkflow` carried no id, so
+    /// the proposal's was written onto the record unverified and the Job sat on
+    /// the board claiming a workflow Fleet had never heard of — the same class
+    /// as the blank model, a value that cannot work accepted where it enters.
+    NoSuchWorkflow { named: String, held: String },
+    /// A proposal named a Manifest this Fleet does not hold. The same fault as
+    /// [`Adrift::NoSuchWorkflow`], for the other id a proposal carries.
+    NoSuchManifest { named: String, held: String },
+    /// A proposal named no model and nothing configured supplies one.
+    ///
+    /// Refused **at creation**, which is the whole point: the same value used
+    /// to be accepted, stored, shown on the board looking approvable, and
+    /// refused at spawn as "no model was named". The message names the settings
+    /// row to set rather than the layer that failed.
+    Modelless,
 }
 
 impl fmt::Display for Adrift {
@@ -141,6 +158,21 @@ impl fmt::Display for Adrift {
                 job.as_str()
             ),
             Adrift::Unnameable => out.write_str("a Job needs a title somebody can read"),
+            Adrift::NoSuchWorkflow { named, held } => write!(
+                out,
+                "no workflow is named `{named}`. This Fleet holds `{held}` — a proposal may name \
+                 that one, or none at all, and `list_workflows` says what is there"
+            ),
+            Adrift::NoSuchManifest { named, held } => write!(
+                out,
+                "no Manifest is named `{named}`. This Fleet holds `{held}`, the one declared by \
+                 the `armada.yml` it was started against, and `list_manifests` says where"
+            ),
+            Adrift::Modelless => out.write_str(
+                "a Job needs a model, and neither the proposal nor configuration named one. \
+                 Set `default-model-per-job-type` in crates/config/settings.toml, or name a \
+                 model on the proposal — `list_models` says which are available",
+            ),
         }
     }
 }
@@ -160,7 +192,10 @@ impl Error for Adrift {
             Adrift::Unworkable { .. }
             | Adrift::NotConfigurable { .. }
             | Adrift::NoSuchStep { .. }
-            | Adrift::Unnameable => None,
+            | Adrift::Unnameable
+            | Adrift::NoSuchWorkflow { .. }
+            | Adrift::NoSuchManifest { .. }
+            | Adrift::Modelless => None,
         }
     }
 }

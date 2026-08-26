@@ -5,7 +5,14 @@
 // process — the preload is a wire and not an import path, and this file is the
 // shape of what crosses it.
 
-import type { JobSummary, UnreadableJob, WireError } from "./protocol";
+import type {
+  JobSummary,
+  ManifestSummary,
+  ModelChoices,
+  UnreadableJob,
+  WireError,
+  WorkflowSummary,
+} from "./protocol";
 
 /** Fleet, as its runtime file names it. Loopback plus `port` is the address. */
 export type FleetIdentity = {
@@ -62,6 +69,24 @@ export type BridgeState = {
   readAt: number | null;
   /** Jobs with an approval in flight. What stops a second dispatch. */
   approving: string[];
+  /**
+   * What Fleet holds, and therefore what a proposal may name.
+   *
+   * Read over the one connection like everything else here. The composer used
+   * to offer a text field for a pasted id, because nothing served these — and a
+   * pasted id was accepted by Fleet unchecked. Both halves of that are fixed:
+   * Fleet refuses an id it does not hold, and this is what the form offers so
+   * nobody has to guess at one.
+   */
+  holds: Holdings;
+};
+
+/** The values a proposal may name. Empty until the connection answers. */
+export type Holdings = {
+  workflows: WorkflowSummary[];
+  manifests: ManifestSummary[];
+  /** `null` until read: an empty roster and an unread one are not the same. */
+  models: ModelChoices | null;
 };
 
 /** What a command answered. A refusal names itself; it never renders as silence. */
@@ -70,6 +95,8 @@ export type Outcome =
   | { ok: false; why: "not_connected" }
   | { ok: false; why: "empty_brief" }
   | { ok: false; why: "empty_title" }
+  | { ok: false; why: "no_workflow" }
+  | { ok: false; why: "no_manifest" }
   | { ok: false; why: "already_approving" }
   | { ok: false; why: "refused"; error: WireError }
   | { ok: false; why: "transport"; detail: string };
@@ -82,6 +109,11 @@ export type Draft = {
   manifestId: string;
   origin: string;
   urgency: string;
+  /**
+   * Which model the Drone is spawned as. The picker starts on the configured
+   * default, so the common path is one click and this is rarely empty — and
+   * empty is still legal on the wire, where Fleet fills it in.
+   */
   model: string;
   atomic: boolean;
   /** Free text. Refused empty before the Job is created. */

@@ -23,7 +23,7 @@ fn a_job() -> Job {
             owner_manifest_id: ManifestId::carried(Ulid::carried("01MF")),
             urgency: Urgency::Normal,
             atomic: false,
-            model: ModelName::new("a-model"),
+            model: ModelName::new("a-model").expect("a model name"),
             acceptance_criteria: vec![AcceptanceCriterion {
                 criterion_id: CriterionId::new("c1"),
                 text: "the log reader stops one line later".into(),

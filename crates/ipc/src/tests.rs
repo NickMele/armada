@@ -27,7 +27,7 @@ fn job() -> Job {
             owner_manifest_id: ManifestId::carried(Ulid::carried("01MF")),
             urgency: Urgency::Normal,
             atomic: false,
-            model: ModelName::new("a-model"),
+            model: ModelName::new("a-model").expect("a model name"),
             acceptance_criteria: Vec::new(),
             steps: vec![StepSeed {
                 step_id: StepId::new("repro"),
@@ -170,8 +170,21 @@ fn an_unknown_field_parses_and_is_ignored() {
     let body = br#"{"title":"fix the parser","workflow_id":"01WF","owner_manifest_id":"01MF","origin":"manual",
         "urgency":"normal","atomic":false,"model":"a-model","dispatch_budget":12}"#;
     let proposal = decode::<ProposeJob>("proposal", body).expect("unknown fields are ignored");
-    assert_eq!(proposal.model, "a-model");
+    assert_eq!(proposal.model.as_deref(), Some("a-model"));
     assert!(proposal.acceptance_criteria.is_empty());
+}
+
+/// **Absent is the ordinary case.** A caller with no opinion about the model
+/// sends nothing, and Fleet fills the value in from configuration — which is
+/// why the field is optional rather than required-and-emptyable. The empty
+/// string still decodes, because a DTO is deserialised rather than constructed;
+/// it is refused where text becomes a Job.
+#[test]
+fn a_proposal_may_name_no_model_at_all() {
+    let body = br#"{"title":"fix the parser","workflow_id":"01WF","owner_manifest_id":"01MF",
+        "origin":"manual","urgency":"normal","atomic":false}"#;
+    let proposal = decode::<ProposeJob>("proposal", body).expect("a model is optional");
+    assert_eq!(proposal.model, None);
 }
 
 #[test]
@@ -188,7 +201,7 @@ fn the_summary_of_a_sub_dispatched_job_says_so() {
             owner_manifest_id: ManifestId::carried(Ulid::carried("01MF")),
             urgency: Urgency::Incident,
             atomic: true,
-            model: ModelName::new("a-model"),
+            model: ModelName::new("a-model").expect("a model name"),
             acceptance_criteria: Vec::new(),
             steps: Vec::new(),
             dependencies: Vec::new(),

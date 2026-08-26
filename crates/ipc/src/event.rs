@@ -27,20 +27,37 @@
 //! and would need a subscribe message, an unsubscribe message and a rule for
 //! what a resync means when the set changes mid-stream.
 //!
-//! # Only one event kind is produced at M1
+//! # Two event kinds are produced at M1
 //!
-//! `operations.toml` names eight. Seven of them — the Drone lifecycle pair,
+//! `operations.toml` names nine. Seven of them — the Drone lifecycle pair,
 //! `job.step_advanced`, `alert.raised`, `review.ready`, `evidence.submitted`
 //! and `usage.threshold` — describe records this workspace has no type for yet;
 //! the inner step machine has no edge table, and there is no Alert, Evidence or
-//! usage type to carry. They are named here and **not stubbed**: an event kind
+//! usage type to carry. They are named there and **not stubbed**: an event kind
 //! that exists and never fires reads as a stream that is working.
+//!
+//! # `job.created` is a kind and not a state change, and that is why it exists
+//!
+//! A Job proposed while a client was connected never reached it: creation
+//! publishes nothing, so nothing woke Bridge, and the row appeared only when
+//! something else forced a re-read.
+//!
+//! The alternative was publishing a [`JobStateChanged`] on creation. It was
+//! rejected on what that message would have to say: the type has a `from` and
+//! a `to`, and a created Job has no `from` — the honest fields would be
+//! `from: awaiting_approval, to: awaiting_approval`, a transition the edge
+//! table does not contain, from a status the Job was never in. Every client
+//! folding the stream would apply a move that did not happen. A creation is a
+//! row appearing, not a row moving, and the two are different messages.
+//!
+//! It carries the whole [`JobSummary`] for the same reason: a kind that only
+//! named an id would make every client fetch the row it was just told about.
 
 use serde::{Deserialize, Serialize};
 
 use crate::enums::{Actor, JobStatus};
 use crate::ids::{CriterionId, Instant, JobId};
-use crate::job::JobList;
+use crate::job::{JobList, JobSummary};
 
 /// A position in the stream. Monotonic, assigned by Fleet, never reused.
 ///
@@ -104,8 +121,25 @@ pub struct Missed {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind")]
 pub enum Event {
+    #[serde(rename = "job.created")]
+    JobCreated(JobCreated),
     #[serde(rename = "job.state_changed")]
     JobStateChanged(JobStateChanged),
+}
+
+/// A Job exists that did not before, whole enough to draw.
+///
+/// **The row, not a pointer to it.** A client is told what appeared rather than
+/// that something appeared, so a Board can insert the row without a round trip
+/// — which is what a Job proposed over the API and never seen in Bridge was
+/// missing.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobCreated {
+    pub job: JobSummary,
+    /// Who created it. A proposal is a human or Helm act; nothing here is Fleet
+    /// deciding on its own.
+    pub actor: Actor,
+    pub at: Instant,
 }
 
 /// A Job moved. The one event the Job record can produce.

@@ -10,6 +10,7 @@ use crate::workflow::{AdvanceGate, EvidenceType, MechanicalCheck, Structure, Wor
 /// The `bug` workflow as the milestone step writes it, verbatim.
 const BUG: &str = r#"
 version: 1
+workflow_id: bug
 name: bug
 structure: linear
 steps:
@@ -128,7 +129,7 @@ fn a_step_needs_both_an_id_and_a_label() {
     // `id` is stable and everything routes on it; `label` is display only. Both
     // are required, so a workflow cannot be authored with one doing both jobs.
     let refused = refusals(parse(
-        "version: 1\nname: bug\nstructure: linear\nsteps:\n  - id: plan\n    advance_gate: auto\n  - label: Implement\n    advance_gate: auto\n",
+        "version: 1\nworkflow_id: fixture\nname: bug\nstructure: linear\nsteps:\n  - id: plan\n    advance_gate: auto\n  - label: Implement\n    advance_gate: auto\n",
     ));
     assert_eq!(fault_at(&refused, "steps[0].label"), &Fault::Missing);
     assert_eq!(fault_at(&refused, "steps[1].id"), &Fault::Missing);
@@ -137,7 +138,7 @@ fn a_step_needs_both_an_id_and_a_label() {
 #[test]
 fn structure_loop_is_outside_m1_and_says_so() {
     let refused = refusals(parse(
-        "version: 1\nname: design_plan\nstructure: loop\nsteps:\n  - id: draft\n    label: Draft\n    advance_gate: auto\n",
+        "version: 1\nworkflow_id: fixture\nname: design_plan\nstructure: loop\nsteps:\n  - id: draft\n    label: Draft\n    advance_gate: auto\n",
     ));
     assert_eq!(
         fault_at(&refused, "structure"),
@@ -354,7 +355,7 @@ fn every_unresolved_name_is_reported_not_only_the_first() {
 #[test]
 fn a_step_with_no_checks_needs_nothing_from_the_manifest() {
     let def = parse(
-        "version: 1\nname: prototype\nstructure: linear\nsteps:\n  - id: frame\n    label: Frame\n    evidence_type: facts_note\n    advance_gate: auto\n",
+        "version: 1\nworkflow_id: fixture\nname: prototype\nstructure: linear\nsteps:\n  - id: frame\n    label: Frame\n    evidence_type: facts_note\n    advance_gate: auto\n",
     )
     .expect("well formed");
     let bare = Manifest::parse(&named("armada.yml"), "version: 1\nid: tooling\n").expect("bare");
@@ -365,7 +366,7 @@ fn a_step_with_no_checks_needs_nothing_from_the_manifest() {
 #[test]
 fn an_empty_steps_list_is_refused() {
     let refused = refusals(parse(
-        "version: 1\nname: bug\nstructure: linear\nsteps: []\n",
+        "version: 1\nworkflow_id: fixture\nname: bug\nstructure: linear\nsteps: []\n",
     ));
     assert_eq!(fault_at(&refused, "steps"), &Fault::Empty);
     assert!(!refused_names_a_step(&refused));

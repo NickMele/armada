@@ -58,13 +58,11 @@
 //! names either file, so two Fleets over one repository cannot disagree about
 //! it.
 //!
-//! The Job-shape classifier and a second working slot are later milestones, and
-//! neither is stubbed here. **Nor is anything calling [`Fleet::turn`] on an
-//! interval.** `api::Served::by` takes the daemon by value and hands back no
-//! handle, so a composition root that has passed a Fleet to the router has
-//! nothing left to drive it with — a second reference needs `api` to state
-//! `Daemon` for `Arc<D>`, and that is `api`'s to decide rather than something
-//! to work around from here.
+//! [`turning`](mod@turning) calls [`Fleet::turn`], which is why a Job approved
+//! from Bridge advances rather than sitting dispatched: the router and the loop
+//! hold one `Arc` each, so serving a Fleet and driving it stopped being two
+//! claims on one owner. The Job-shape classifier and a second working slot are
+//! later milestones, and neither is stubbed here.
 //!
 //! [`Fleet::turn`]: crate::Fleet::turn
 
@@ -83,6 +81,7 @@ pub mod process;
 pub mod runtime;
 pub mod serving;
 pub mod session;
+pub mod turning;
 pub mod watch;
 pub mod working;
 
@@ -105,4 +104,5 @@ pub use runtime::{
     Staleness, Vacancy, FILE_NAME, PROVISIONAL_PORT,
 };
 pub use session::{DroneSession, LiveSession, Turn};
+pub use turning::{keep_turning, Turning};
 pub use watch::Watching;

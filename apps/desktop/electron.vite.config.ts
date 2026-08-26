@@ -1,6 +1,40 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+
+// The app tile, emitted beside the main bundle.
+//
+// `packages/brand/macos/AppIcon.icns` is the built icon and its README says it
+// is ready to drop into the bundle. Nothing was dropping it, so the running app
+// and its dock tile carried Electron's own mark.
+//
+// It is emitted rather than imported because the main process is a Node bundle
+// and needs a path on disk, not a module — so the build writes the file next to
+// `index.js` and `src/main/index.ts` resolves it from `__dirname`. That works
+// the same in `dev`, `build` and `preview`, which a path reaching back into
+// `packages/` through a workspace symlink would not.
+//
+// **The accent-filled variant is what this file carries, and the app tile is
+// the only place it is allowed.** `packages/icons/icons.toml` states it on the
+// `armada-mark` row: "Accent fill permitted on the macOS app tile alone."
+const APP_ICON = 'AppIcon.icns'
+
+function appIcon(): Plugin {
+  const require = createRequire(import.meta.url)
+  return {
+    name: 'armada-app-icon',
+    generateBundle() {
+      // Resolved through the package's own `exports`, so `packages/brand` says
+      // the tile is part of its surface rather than this build reaching into
+      // its directory layout.
+      const icns = require.resolve('@armada/brand/AppIcon.icns')
+      this.emitFile({ type: 'asset', fileName: APP_ICON, source: readFileSync(icns) })
+    },
+  }
+}
 
 // Three builds from one config: the main process, the preload bridge, and the
 // renderer. The preload is the only thing that crosses between them, which is
@@ -13,7 +47,7 @@ export default defineConfig({
   // resolution of a JSON file through a workspace symlink.
   main: {
     build: { lib: { entry: 'src/main/index.ts' } },
-    plugins: [externalizeDepsPlugin({ exclude: ['@armada/tokens'] })],
+    plugins: [externalizeDepsPlugin({ exclude: ['@armada/tokens'] }), appIcon()],
   },
   preload: { build: { lib: { entry: 'src/preload/index.ts' } } },
   // Tailwind v4 has no JS config: the theme is packages/tokens/tokens.theme.css,

@@ -144,6 +144,13 @@ fn fitted_with(
             mcp_config: "/etc/armada/mcp.json".to_string(),
         },
         budget: CheckBudget::of(Duration::from_secs(5)),
+        // Planted, not read. The composition root resolves these from the
+        // environment and the adapter; a test that read the same sources would
+        // be asserting against a machine rather than against Fleet.
+        models: ipc::ModelChoices {
+            models: vec!["a-model".to_string(), "another-model".to_string()],
+            default: "a-model".to_string(),
+        },
         events: api::Broadcaster::new(),
     }
 }
@@ -173,12 +180,14 @@ fn a_fleet_whose_drone_leaves(
 pub fn a_proposal(title: &str) -> ipc::ProposeJob {
     ipc::ProposeJob {
         title: title.to_string(),
-        workflow_id: ipc::WorkflowId::carried("01WF"),
+        // The values the fixture Fleet actually holds. Naming anything else is
+        // refused at creation now, which is the point.
+        workflow_id: ipc::WorkflowId::carried("fixture-workflow"),
         owner_manifest_id: ipc::ManifestId::carried("01FIXTUREMANIFEST"),
         origin: ipc::TopLevelOrigin::from_wire("manual").expect("an origin"),
         urgency: ipc::Urgency::from_wire("normal").expect("an urgency"),
         atomic: false,
-        model: "a-model".to_string(),
+        model: Some("a-model".to_string()),
         acceptance_criteria: vec![ipc::ProposedCriterion {
             text: "the symptom is gone".to_string(),
             source: ipc::CriterionSource::from_wire("check").expect("a source"),
@@ -196,7 +205,7 @@ pub fn worktree_directory(home: &TempDir, job: &core_model::JobId) {
     std::fs::create_dir_all(spec.worktree_path()).expect("a directory for the Drone to run in");
 }
 
-fn diff_evidence() -> Call<'static> {
+pub fn diff_evidence() -> Call<'static> {
     Call {
         evidence_type: EvidenceType::Diff,
         claimed: Claimed("The reader stops one line later."),
@@ -206,7 +215,7 @@ fn diff_evidence() -> Call<'static> {
     }
 }
 
-fn note_evidence() -> Call<'static> {
+pub fn note_evidence() -> Call<'static> {
     Call {
         evidence_type: EvidenceType::FactsNote,
         claimed: Claimed("The cause was an inclusive bound."),

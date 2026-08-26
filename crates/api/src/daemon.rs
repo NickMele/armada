@@ -24,9 +24,12 @@
 
 use std::future::Future;
 
-use ipc::{JobId, JobList, JobSummary, ProposeJob, WireError};
+use ipc::{
+    JobId, JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, WireError,
+    WorkflowSummary,
+};
 
-/// The five request-response operations M1 serves.
+/// The eight request-response operations M1 serves.
 ///
 /// **What M1 needs, not what the seam carries.** The inventory in
 /// `crates/ipc/operations.toml` is
@@ -43,6 +46,24 @@ use ipc::{JobId, JobList, JobSummary, ProposeJob, WireError};
 pub trait Daemon: Send + Sync + 'static {
     /// `list_jobs` — Jobs with state and reason.
     fn list_jobs(&self) -> impl Future<Output = Result<JobList, Refusal>> + Send;
+
+    /// `list_workflows` — the workflows Fleet holds, with their steps.
+    ///
+    /// **What makes a `workflow_id` checkable.** Nothing joined one to a
+    /// workflow before this, so a proposal naming an invented id was stored and
+    /// the Job sat on the board claiming a workflow Fleet had never heard of.
+    /// The refusal at creation is the fix; this is what lets a caller name one
+    /// that will not be refused.
+    fn list_workflows(&self) -> impl Future<Output = Result<Vec<WorkflowSummary>, Refusal>> + Send;
+
+    /// `list_manifests` — the Manifests Fleet holds, and the repository each
+    /// was read from. The counterpart to [`Daemon::list_workflows`], for the
+    /// other id a proposal names.
+    fn list_manifests(&self) -> impl Future<Output = Result<Vec<ManifestSummary>, Refusal>> + Send;
+
+    /// `list_models` — what a Job may be spawned as, and what it gets when it
+    /// names nothing.
+    fn list_models(&self) -> impl Future<Output = Result<ModelChoices, Refusal>> + Send;
 
     /// `propose_job` — drafts a Job onto the approval gate. **The gate is
     /// unchanged:** what comes back is a Job at `awaiting_approval`, not a
@@ -77,7 +98,7 @@ pub trait Daemon: Send + Sync + 'static {
 
 /// A request the daemon would not serve.
 ///
-/// Three variants because a caller has three different things to do about them,
+/// Four variants because a caller has four different things to do about them,
 /// and "the request failed" is not an answer anybody can act on. The status is
 /// derived here rather than carried on [`WireError`]: an HTTP code is the
 /// transport's, and putting one on the wire type would give the lifeboat's job
@@ -89,6 +110,16 @@ pub enum Refusal {
     /// The Job exists and the machine does not admit the move — approving one
     /// already running, killing one already terminal.
     IllegalMove(WireError),
+    /// **The request decoded and names something that cannot work.** A proposal
+    /// naming a workflow or a Manifest Fleet does not hold, or carrying a blank
+    /// model where nothing configured supplies one.
+    ///
+    /// The fourth variant, added because those three had nowhere honest to go.
+    /// A 400 belongs to the transport and means the bytes did not become a
+    /// request; a 500 says the daemon broke, which sends the caller to retry
+    /// something that will fail identically forever. This says: the request is
+    /// well-formed, the values in it are not, and the message names them.
+    Unacceptable(WireError),
     /// Something under the daemon failed. Not the caller's doing, and retrying
     /// the same request is reasonable.
     Fault(WireError),
@@ -100,15 +131,17 @@ impl Refusal {
         match self {
             Refusal::NoSuchJob(_) => 404,
             Refusal::IllegalMove(_) => 409,
+            Refusal::Unacceptable(_) => 422,
             Refusal::Fault(_) => 500,
         }
     }
 
     pub fn error(&self) -> &WireError {
         match self {
-            Refusal::NoSuchJob(error) | Refusal::IllegalMove(error) | Refusal::Fault(error) => {
-                error
-            }
+            Refusal::NoSuchJob(error)
+            | Refusal::IllegalMove(error)
+            | Refusal::Unacceptable(error)
+            | Refusal::Fault(error) => error,
         }
     }
 }

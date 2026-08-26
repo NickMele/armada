@@ -6,7 +6,7 @@
 // Fleet has not confirmed — a Job whose real state is not what the screen says
 // is the failure that matters.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Button, Separator } from "@armada/components";
 
 import type { BridgeState, Draft, Outcome } from "../../shared/bridge";
@@ -24,6 +24,7 @@ const WAITING: BridgeState = {
   missed: 0,
   readAt: null,
   approving: [],
+  holds: { workflows: [], manifests: [], models: null },
 };
 
 export function App() {
@@ -46,13 +47,6 @@ export function App() {
 
   const live = state.connection.state === "connected";
   const statement = statementOf(state.connection, now, state.readAt);
-
-  // The ids Fleet has already minted, which are the only ones Bridge can offer.
-  const workflows = useMemo(() => unique(state.jobs.map((job) => job.workflow_id)), [state.jobs]);
-  const manifests = useMemo(
-    () => unique(state.jobs.map((job) => job.owner_manifest_id)),
-    [state.jobs],
-  );
 
   async function propose(draft: Draft): Promise<void> {
     setOutcome(await window.armada.proposeJob(draft));
@@ -103,9 +97,13 @@ export function App() {
           </Alert>
         )}
 
+        {/* What Fleet holds, read over the one connection. Not scraped off the
+            Jobs already on the board, which is what this offered before
+            `list_workflows` and `list_manifests` existed. */}
         <Composer
-          workflows={workflows}
-          manifests={manifests}
+          workflows={state.holds.workflows}
+          manifests={state.holds.manifests}
+          models={state.holds.models}
           disabled={!live}
           onPropose={(draft) => void propose(draft)}
         />
@@ -117,6 +115,9 @@ export function App() {
           unreadable={state.unreadable}
           approving={state.approving}
           stale={!live}
+          workflows={state.holds.workflows}
+          manifests={state.holds.manifests}
+          disconnected={live ? null : statement.headline}
           onApprove={(jobId) => void approve(jobId)}
         />
       </main>
@@ -134,6 +135,10 @@ function said(outcome: Outcome): string {
       return "A job needs a title. Nothing was created.";
     case "empty_brief":
       return "A job needs a brief. Nothing was created.";
+    case "no_workflow":
+      return "A job needs a workflow Fleet holds. Nothing was sent.";
+    case "no_manifest":
+      return "A job needs a manifest Fleet holds. Nothing was sent.";
     case "not_connected":
       return "Fleet is not connected. Nothing was sent.";
     case "already_approving":
@@ -143,8 +148,4 @@ function said(outcome: Outcome): string {
     case "transport":
       return `Fleet did not answer: ${outcome.detail}`;
   }
-}
-
-function unique(values: readonly string[]): string[] {
-  return [...new Set(values)].sort();
 }

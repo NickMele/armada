@@ -16,11 +16,13 @@
 //!
 //! # Where the refusals come from
 //!
-//! [`Refusal`] has three variants because a caller has three different things
-//! to do about them, and every mapping below is decided by which *typed* leaf
+//! [`Refusal`] has four variants because a caller has four different things to
+//! do about them, and every mapping below is decided by which *typed* leaf
 //! error came back rather than by reading a message. `Adrift::IllegalMove` is a
 //! 409 because the machine refused; a store fault is a 500 because it was not
-//! the caller's doing; a Job that is not there is a 404. Nothing here parses
+//! the caller's doing; a Job that is not there is a 404; and a proposal naming
+//! a workflow, a Manifest or a model that cannot work is a 422, because the
+//! request is well-formed and the values in it are not. Nothing here parses
 //! prose to decide.
 //!
 //! # The reason costs a second read, and is not derived
@@ -35,7 +37,10 @@
 use adapter_traits::{AgentHarness, Vcs, WorkProduct};
 use api::{Daemon, Refusal};
 use core_model::Job;
-use ipc::{JobId, JobList, JobSummary, ProposeJob, RunId, WireError};
+use ipc::{
+    JobId, JobList, JobSummary, ManifestId, ManifestSummary, ModelChoices, ProposeJob, RunId,
+    StepId, WireError, WorkflowId, WorkflowSummary,
+};
 use store::{LoadJobError, WriteError};
 
 use crate::adrift::Adrift;
@@ -48,6 +53,8 @@ use crate::daemon::Fleet;
 const NO_SUCH_JOB: &str = "fleet.no_such_job";
 const ILLEGAL_MOVE: &str = "fleet.illegal_move";
 const FAULT: &str = "fleet.fault";
+/// A proposal that decoded and names something that cannot produce a Drone.
+const UNACCEPTABLE: &str = "fleet.unacceptable_proposal";
 
 impl<H, V, W> Daemon for Fleet<H, V, W>
 where
@@ -81,8 +88,60 @@ where
         })
     }
 
-    /// Draft a Job onto the approval gate. Creation is not a transition, so
-    /// nothing is published for it.
+    /// The one workflow this Fleet holds, so a caller can name one that will
+    /// not be refused.
+    ///
+    /// **A list over a set of one.** The reason there was one is that nothing
+    /// could look a second up — `ResolvedWorkflow` carried no id — and that
+    /// reason has gone, so a query that answered with a single object would
+    /// have to be replaced rather than extended.
+    async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {
+        let workflow = self.workflow();
+        Ok(vec![WorkflowSummary {
+            id: WorkflowId::from(workflow.id()),
+            name: workflow.name().to_string(),
+            version: workflow.version(),
+            steps: workflow
+                .steps()
+                .iter()
+                .map(|s| StepId::from(s.id()))
+                .collect(),
+            manifest_id: ManifestId::from(self.manifest().id()),
+        }])
+    }
+
+    /// The one Manifest this Fleet was started against.
+    ///
+    /// **`repository` is not a name the Manifest declares.** `armada.yml` has
+    /// no key for one — `version`, `id`, `checks` and `commands` are the whole
+    /// schema — so what is carried is the directory the file was read from,
+    /// which is a fact rather than an invention. A person reading a Job wants
+    /// to know which project it runs against, and a ULID does not say.
+    async fn list_manifests(&self) -> Result<Vec<ManifestSummary>, Refusal> {
+        let manifest = self.manifest();
+        let path = manifest.path();
+        Ok(vec![ManifestSummary {
+            id: ManifestId::from(manifest.id()),
+            repository: path
+                .parent()
+                .and_then(|dir| dir.file_name())
+                .map(|name| name.to_string_lossy().to_string())
+                // A Manifest at the filesystem root has no directory to name.
+                // Its own path is the next most useful true thing.
+                .unwrap_or_else(|| path.to_string_lossy().to_string()),
+            path: path.to_string_lossy().to_string(),
+            version: manifest.version(),
+            checks: manifest.check_names(),
+        }])
+    }
+
+    /// What a Job may be spawned as, resolved once by the composition root.
+    async fn list_models(&self) -> Result<ModelChoices, Refusal> {
+        Ok(self.models().clone())
+    }
+
+    /// Draft a Job onto the approval gate. **Creation publishes `job.created`**
+    /// — not a state change, because a created Job has no status it moved from.
     async fn propose_job(&self, proposal: ProposeJob) -> Result<JobSummary, Refusal> {
         let job = self
             .propose(proposal)
@@ -151,6 +210,15 @@ where
             // killing one already over — and 409 is the answer to that.
             Adrift::IllegalMove(_) | Adrift::IllegalStepMove(_) => {
                 Refusal::IllegalMove(WireError::raised(ILLEGAL_MOVE, said, self.run_id()))
+            }
+            // The request is well-formed and the values in it cannot work. Not
+            // a 500: retrying it will fail identically forever, and the message
+            // names what to send instead.
+            Adrift::Unnameable
+            | Adrift::NoSuchWorkflow { .. }
+            | Adrift::NoSuchManifest { .. }
+            | Adrift::Modelless => {
+                Refusal::Unacceptable(WireError::raised(UNACCEPTABLE, said, self.run_id()))
             }
             _ => Refusal::Fault(WireError::raised(FAULT, said, self.run_id())),
         }

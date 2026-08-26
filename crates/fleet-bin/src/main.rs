@@ -59,15 +59,15 @@
 //! asked for is the state that already holds. v1's `start` was idempotent for
 //! the same reason and carried a test by that name.
 //!
-//! # What is served, and what is not turned
+//! # What is served, and what turns it
 //!
 //! `api::router` over the bound listener, with a real Fleet: the five
-//! operations answer from Jobs rather than from a fake. **Nothing calls
-//! `Fleet::turn` on an interval**, so a Job dispatches and does not advance —
-//! `api::Served::by` takes the daemon by value and hands back no handle, so
-//! there is nothing in this process left holding the Fleet to drive it. That is
-//! reported rather than worked around: a second `Arc` over the same Fleet needs
-//! a `Daemon` implementation for `Arc<D>`, which is `api`'s to state.
+//! operations answer from Jobs rather than from a fake. **And the same Fleet is
+//! turned** — the router and `fleet::keep_turning` hold one `Arc` each, so a
+//! Job approved from Bridge is settled rather than left dispatched. The loop
+//! starts before the listener, because reconciliation can admit a queued Job on
+//! the way out and that Job needs turning whether or not anything ever
+//! connects.
 
 use std::error::Error;
 use std::path::PathBuf;
@@ -78,19 +78,9 @@ use std::time::Duration;
 use adapters::{GitVcs, HeadlessAgent};
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{CheckBudget, Fittings, Fleet, Host, Mint, SystemClock, UlidMint};
-use fleet_bin::Setup;
+use fleet_bin::{agent_binary, model_choices, Setup, AGENT_BINARY, MODEL};
 use ipc::PROTOCOL_VERSION;
 use store::Store;
-
-/// The environment variable naming the headless agent CLI.
-///
-/// **Read here and nowhere else.** `settings.toml` classifies the harness
-/// binary path as Machine scope, resolved at daemon start, and there is no
-/// settings reader yet — so the composition root reads it from the environment
-/// the way it already reads `HOME`, rather than a call site somewhere below
-/// hardcoding a program name. The name of that program is a vendor's, and the
-/// adapter boundary is the only place allowed to know it.
-const AGENT_BINARY: &str = "ARMADA_AGENT_BINARY";
 
 /// The store, beside the runtime file rather than inside the repository.
 ///
@@ -127,6 +117,16 @@ const PROVISIONAL_DRONE_PATH: &[&str] = &[
 /// be.
 const PROVISIONAL_CHECK_BUDGET: Duration = Duration::from_secs(900);
 
+/// How often Fleet is turned. **Provisional**, and nothing has measured it.
+///
+/// It is the latency of a *ruling* rather than of a start — `approve` and each
+/// turn both dispatch inline — so what a quarter of a second buys is a Drone
+/// hearing the gate's answer promptly after it submits. What it costs is one
+/// store read per tick while nothing is being worked, which `fleet::turning`
+/// names as the reason a later milestone should wake this loop rather than poll
+/// it.
+const PROVISIONAL_TURN_INTERVAL: Duration = Duration::from_millis(250);
+
 #[tokio::main]
 async fn main() -> ExitCode {
     match run().await {
@@ -160,11 +160,13 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let repository = repository()?;
     let setup = Setup::at(&repository)?;
     println!(
-        "{} — workflow `{}`, {} step(s), Checks {}",
+        "{} — workflow `{}` ({}), {} step(s), Checks {} — model {}",
         setup.root().display(),
         setup.workflow().name(),
+        setup.workflow().id().as_str(),
         setup.workflow().steps().len(),
-        setup.manifest().check_names().join(", ")
+        setup.manifest().check_names().join(", "),
+        machine_facts.models.default
     );
 
     let vacancy = presence
@@ -199,7 +201,10 @@ async fn run() -> Result<(), Box<dyn Error>> {
         .parent()
         .expect("the runtime file has a directory")
         .to_path_buf();
-    let fleet = assemble(&machine, setup, bound.port(), machine_facts)?;
+    // Two things need this Fleet and both get it. The router serves it and the
+    // loop below turns it; a Fleet only one of them could hold would be either
+    // unserved or — as it was — dispatched and never settled.
+    let fleet = Arc::new(assemble(&machine, setup, bound.port(), machine_facts)?);
 
     // **Nothing runs until this has.** A Job the store says was running has no
     // Drone, because a Drone is held in memory by the Fleet that spawned it and
@@ -221,14 +226,32 @@ async fn run() -> Result<(), Box<dyn Error>> {
         eprintln!("  a row would not rebuild: {unreadable}");
     }
 
+    // **Started before the listener, not after.** Reconciliation admitted a
+    // queued Job on the way out, and that Job is already dispatched — it needs
+    // turning whether or not anything ever connects.
+    let turning = fleet::keep_turning(Arc::clone(&fleet), PROVISIONAL_TURN_INTERVAL, |why| {
+        // Carried out on its own line, and the loop keeps going: one turn
+        // having failed is not a reason for every later Job to stop advancing
+        // silently.
+        eprintln!("a turn did not complete: {why}");
+    });
+    println!("turning every {}ms", PROVISIONAL_TURN_INTERVAL.as_millis());
+
     let events = fleet.events();
     let run_id = ipc::RunId::carried(UlidMint::new().ulid().as_str());
-    let app = api::router(api::Served::by(fleet, run_id, events));
+    let app = api::router(api::Served::sharing(fleet, run_id, events));
     println!("serving {} on {bound}", api::SERVED.len());
 
     axum::serve(listener, app)
         .with_graceful_shutdown(stop_requested())
         .await?;
+
+    // Between turns, letting the one in flight finish. A stop that returned
+    // mid-turn could leave a step moved and its Job not — so this waits, and
+    // says it is waiting, because a turn running a Check can hold it for the
+    // whole Check budget and a terminal that has gone quiet reads as a wedge.
+    println!("stopping: letting the turn in flight finish");
+    turning.stopped().await;
 
     // Dropping it removes the file, which is what makes this a clean exit. An
     // exit that skips the drop leaves the file stale, and the next start
@@ -250,7 +273,7 @@ fn repository() -> Result<PathBuf, Box<dyn Error>> {
     }
 }
 
-/// The two things Fleet reads out of its own environment.
+/// The three things Fleet reads out of its own environment.
 ///
 /// **Read before the bind**, with the repository's setup, so that a machine
 /// that is not set up refuses without having taken a port or published a
@@ -260,21 +283,36 @@ struct MachineFacts {
     /// The operator's home. The agent CLI reads its credentials from it, which
     /// is the confinement's known floor — see `fleet::HostPaths`.
     home: String,
-    /// The headless agent CLI.
-    agent: String,
+    /// What a Drone's `PATH` is set to. Assembled here, and handed both to the
+    /// Drone and to the probe below, so the `PATH` a named binary is looked for
+    /// on is the `PATH` it will be run from.
+    path: String,
+    /// The headless agent CLI. The settings default unless
+    /// [`AGENT_BINARY`] names one — **an override, not a requirement.**
+    agent: HeadlessAgent,
+    /// The models a Job may name, and the one it gets when it names none. The
+    /// same shape as `agent`, and the second half of the same missing piece:
+    /// until this was read, a proposal with no model was stored and died at
+    /// dispatch as "no model was named".
+    models: ipc::ModelChoices,
 }
 
 fn machine_facts() -> Result<MachineFacts, Box<dyn Error>> {
+    let home = std::env::var("HOME")?;
+    let path = drone_path(&home);
+    // Unset is the ordinary case and the adapter's default answers it. Set and
+    // wrong is somebody having tried to point Fleet at something, and is
+    // refused here — before the port, before the runtime file.
+    let agent = agent_binary(std::env::var(AGENT_BINARY).ok(), &path)?;
+    // Not probed. Whether a model name is one this account may use is a
+    // question only the vendor answers, and asking it would put a network call
+    // before the bind.
+    let models = model_choices(std::env::var(MODEL).ok());
     Ok(MachineFacts {
-        home: std::env::var("HOME")?,
-        agent: std::env::var(AGENT_BINARY).map_err(|_| {
-            format!(
-                "{AGENT_BINARY} is not set. It names the headless agent CLI, which \
-                 `crates/config/settings.toml` classifies as Machine scope resolved \
-                 at daemon start — and a Fleet that started without it would fail at \
-                 the first Drone instead of here"
-            )
-        })?,
+        home,
+        path,
+        agent,
+        models,
     })
 }
 
@@ -290,7 +328,12 @@ fn assemble(
     port: u16,
     facts: MachineFacts,
 ) -> Result<Fleet<HeadlessAgent, GitVcs, GitVcs>, Box<dyn Error>> {
-    let MachineFacts { home, agent } = facts;
+    let MachineFacts {
+        home,
+        path,
+        agent,
+        models,
+    } = facts;
 
     std::fs::create_dir_all(machine)?;
 
@@ -306,7 +349,7 @@ fn assemble(
 
     Ok(Fleet::assembled(Fittings {
         store: Store::open(&machine.join(STORE_FILE))?,
-        harness: HeadlessAgent::at(agent),
+        harness: agent,
         vcs: GitVcs::new(),
         work: GitVcs::new(),
         clock: Arc::new(SystemClock::new()),
@@ -315,11 +358,12 @@ fn assemble(
         manifest,
         host: Host {
             repo_root: root.canonicalize()?.to_string_lossy().to_string(),
-            path: drone_path(&home),
+            path,
             home,
             mcp_config: mcp_config.to_string_lossy().to_string(),
         },
         budget: CheckBudget::of(PROVISIONAL_CHECK_BUDGET),
+        models,
         events: api::Broadcaster::new(),
     }))
 }

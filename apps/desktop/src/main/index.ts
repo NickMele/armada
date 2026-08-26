@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, nativeImage } from "electron";
 import { join } from "node:path";
 
 import tokens from "@armada/tokens/tokens.json";
@@ -11,6 +11,32 @@ import { FleetConnection } from "./connection";
 // Bridge and Fleet have independent lifetimes: Jobs keep progressing with the
 // window closed, and opening it reconnects to whatever Fleet is already running
 // rather than starting one. Nothing here spawns Fleet.
+
+/**
+ * The Countersign mark, as the macOS app tile.
+ *
+ * Emitted beside this bundle by `electron.vite.config.ts` — see the note there
+ * for why it is a file on disk rather than an import. **The accent-filled
+ * variant is sanctioned for the app tile and nowhere else**, which is what this
+ * `.icns` carries and why nothing in the renderer may reach for it.
+ */
+const APP_ICON = join(__dirname, "AppIcon.icns");
+
+/**
+ * Wear the mark. **Runtime, not packaging** — `BrowserWindow`'s `icon` option
+ * is ignored on macOS, and there is no packager in this workspace yet, so an
+ * `electron-builder` `icon` key would be configuration nothing reads. This is
+ * what makes the dock tile right for the app as it is actually run today; a
+ * packaged bundle will take the same file through its own `Info.plist`.
+ *
+ * A failed read leaves Electron's own icon rather than stopping the app: a
+ * window that will not open because of a picture is the wrong trade.
+ */
+function wearTheMark(): void {
+  if (process.platform !== "darwin" || app.dock === undefined) return;
+  const icon = nativeImage.createFromPath(APP_ICON);
+  if (!icon.isEmpty()) app.dock.setIcon(icon);
+}
 
 /** The hard window floor, from the token that exists to be read here. */
 function floor(name: string): number {
@@ -49,6 +75,8 @@ function publish(state: BridgeState): void {
 }
 
 void app.whenReady().then(() => {
+  wearTheMark();
+
   connection = new FleetConnection({
     home: process.env["HOME"],
     publish,
@@ -57,6 +85,9 @@ void app.whenReady().then(() => {
 
   // The renderer initiates exactly these three things. There is no
   // arbitrary-channel invoke, which is what keeps the surface readable.
+  // Awaited, because `state()` brings the connection current first — a window
+  // reload is a fresh reader and gets what exists rather than what main last
+  // heard about. See `FleetConnection.state`.
   ipcMain.handle(CHANNELS.state, () => connection?.state());
   ipcMain.handle(CHANNELS.proposeJob, (_event, draft: Draft) => connection?.proposeJob(draft));
   ipcMain.handle(CHANNELS.approveDispatch, (_event, jobId: string) =>

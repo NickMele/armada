@@ -24,7 +24,7 @@
 
 use std::path::PathBuf;
 
-use core_model::StepId;
+use core_model::{StepId, WorkflowId};
 
 use crate::error::{ResolveError, UnknownCheck};
 use crate::manifest::Manifest;
@@ -85,6 +85,7 @@ impl ResolvedStep {
 pub struct ResolvedWorkflow {
     workflow: PathBuf,
     manifest: PathBuf,
+    id: WorkflowId,
     name: String,
     version: u32,
     steps: Vec<ResolvedStep>,
@@ -118,6 +119,7 @@ impl ResolvedWorkflow {
         Ok(ResolvedWorkflow {
             workflow: def.path().to_path_buf(),
             manifest: manifest.path().to_path_buf(),
+            id: def.id().clone(),
             name: def.name().to_string(),
             version: def.version(),
             steps,
@@ -132,6 +134,12 @@ impl ResolvedWorkflow {
     /// The `armada.yml` its Checks resolved against.
     pub fn manifest_path(&self) -> &PathBuf {
         &self.manifest
+    }
+
+    /// The definition's own id — what a proposal's `workflow_id` must name.
+    /// See [`crate::WorkflowDef::id`] for why the key exists.
+    pub fn id(&self) -> &WorkflowId {
+        &self.id
     }
 
     pub fn name(&self) -> &str {

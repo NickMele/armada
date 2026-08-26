@@ -207,7 +207,7 @@ impl Bench {
             owner_manifest_id: ManifestId::carried(Ulid::carried("01FIXTUREMANIFEST")),
             urgency: Urgency::Normal,
             atomic: false,
-            model: ModelName::new("a-model"),
+            model: ModelName::new("a-model").expect("a model name"),
             acceptance_criteria: criteria(),
             steps: self
                 .workflow

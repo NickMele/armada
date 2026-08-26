@@ -67,7 +67,7 @@ pub fn full_new_job(id: &str) -> NewJob {
         owner_manifest_id: ManifestId::carried(ulid("01OWNERMANIFEST")),
         urgency: Urgency::Incident,
         atomic: true,
-        model: ModelName::new("a-model-name"),
+        model: ModelName::new("a-model-name").expect("a model name"),
         acceptance_criteria: vec![
             AcceptanceCriterion {
                 criterion_id: CriterionId::new("c1"),

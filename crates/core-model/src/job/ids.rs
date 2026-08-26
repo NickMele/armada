@@ -116,22 +116,55 @@ impl RepoPath {
     }
 }
 
-/// Which model the assigned Drone is using.
+/// Which model the assigned Drone is using. **Never blank.**
 ///
 /// A string on purpose: the adapter passes one on every spawn, and naming a
-/// closed set here would put a vendor's vocabulary under every crate.
+/// closed set here would put a vendor's vocabulary under every crate. But the
+/// set being open is not the same as the empty string being in it — a blank
+/// model is the one value that cannot produce a Drone, and `Model::named`
+/// refuses it three layers further in, after a Job exists, sits on the board
+/// and looks approvable.
+///
+/// So this is the second string on the record that refuses, for a different
+/// reason than [`Title`] does: a title is refused because a person has to read
+/// it, and this is refused because a machine has to spawn on it.
+///
+/// The value is stored trimmed, for the reason a title is: `" sonnet "` and
+/// `"sonnet"` name one model, and the padding reaches an argument list.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ModelName(String);
 
 impl ModelName {
-    pub fn new(name: impl Into<String>) -> Self {
-        ModelName(name.into())
+    /// A model name, or the refusal. Trims first, then refuses what is left.
+    pub fn new(name: &str) -> Result<ModelName, BlankModel> {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return Err(BlankModel);
+        }
+        Ok(ModelName(String::from(trimmed)))
     }
 
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
+
+/// A model name that was blank, or was nothing but whitespace.
+///
+/// One variant, for [`BlankTitle`]'s reason: the field names the thing a Drone
+/// is spawned as, and the only thing that is not a name is the absence of one.
+/// Which names are *legal* is the adapter's question and not this crate's —
+/// naming a closed set here would put a vendor's vocabulary under every crate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BlankModel;
+
+impl fmt::Display for BlankModel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("a model is what a Drone is spawned as, and blank spawns nothing")
+    }
+}
+
+impl core::error::Error for BlankModel {}
 
 /// The name a person reads in a list row. **Never blank.**
 ///
@@ -141,10 +174,12 @@ impl ModelName {
 /// the write path — is a check every new caller has to remember, and `""` is a
 /// title to the type system and not one to a reader.
 ///
-/// Not [`StepId`] or [`ModelName`]: those name something a machine matches on
-/// and a blank one is merely wrong. This is the only string on the record whose
-/// whole purpose is being read by a person, which is why it is the only one
-/// that refuses.
+/// Not [`StepId`]: that names something a machine matches on within a frozen
+/// workflow, and a blank one cannot arrive from outside. [`ModelName`] refuses
+/// too, and did not when this paragraph was first written — a blank model was
+/// accepted at the API, stored, shown on the board and refused at spawn. The
+/// two refuse for different reasons: this one because a person reads it, that
+/// one because a Drone is spawned on it.
 ///
 /// The value is stored trimmed. `"  fix the parser  "` and `"fix the parser"`
 /// are the same name, and a list cell that begins with three spaces is noise no

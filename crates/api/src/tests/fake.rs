@@ -10,8 +10,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use ipc::{
-    Actor, Event, Instant, JobId, JobList, JobStateChanged, JobStatus, JobSummary, ManifestId,
-    Origin, ProposeJob, RunId, UnreadableJob, Urgency, WorkflowId,
+    Actor, Event, Instant, JobCreated, JobId, JobList, JobStateChanged, JobStatus, JobSummary,
+    ManifestId, ManifestSummary, ModelChoices, Origin, ProposeJob, RunId, StepId, UnreadableJob,
+    Urgency, WorkflowId, WorkflowSummary,
 };
 
 use crate::{Broadcaster, Daemon, Refusal};
@@ -115,13 +116,52 @@ impl Daemon for FakeDaemon {
         })
     }
 
+    /// The one workflow this fake holds. A list, because the operation is one.
+    async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {
+        if *self.mute.lock().expect("not poisoned") {
+            return Err(self.fault("the fake was told not to answer"));
+        }
+        Ok(vec![WorkflowSummary {
+            id: WorkflowId::carried("01WF"),
+            name: "a-workflow".to_string(),
+            version: 1,
+            steps: vec![StepId::carried("implement"), StepId::carried("summarise")],
+            manifest_id: ManifestId::carried("01MF"),
+        }])
+    }
+
+    async fn list_manifests(&self) -> Result<Vec<ManifestSummary>, Refusal> {
+        if *self.mute.lock().expect("not poisoned") {
+            return Err(self.fault("the fake was told not to answer"));
+        }
+        Ok(vec![ManifestSummary {
+            id: ManifestId::carried("01MF"),
+            repository: "a-repository".to_string(),
+            path: "/a-repository/armada.yml".to_string(),
+            version: 1,
+            checks: vec!["build".to_string()],
+        }])
+    }
+
+    async fn list_models(&self) -> Result<ModelChoices, Refusal> {
+        if *self.mute.lock().expect("not poisoned") {
+            return Err(self.fault("the fake was told not to answer"));
+        }
+        Ok(ModelChoices {
+            models: vec!["a-model".to_string(), "another-model".to_string()],
+            default: "a-model".to_string(),
+        })
+    }
+
     async fn propose_job(&self, proposal: ProposeJob) -> Result<JobSummary, Refusal> {
         let minted = self.minted.fetch_add(1, Ordering::SeqCst);
         let job = JobSummary {
             id: JobId::carried(format!("01JOB{minted}")),
             title: proposal.title,
             // The entry status of a top-level Job. Creation is not a
-            // transition, so nothing is published for it.
+            // transition, and `job.created` is what carries it — a
+            // `job.state_changed` here would name a move from a status the Job
+            // was never in.
             status: status("awaiting_approval"),
             reason: None,
             workflow_id: proposal.workflow_id,
@@ -129,11 +169,18 @@ impl Daemon for FakeDaemon {
             origin: Origin::from_wire(proposal.origin.as_wire()).expect("a top-level origin"),
             urgency: proposal.urgency,
             atomic: proposal.atomic,
-            model: proposal.model,
+            // Absent is the ordinary case: Fleet fills it from configuration.
+            // The fake has none, so it names what the fixture names.
+            model: proposal.model.unwrap_or_else(|| "a-model".to_string()),
             current_step_id: None,
             assigned_drone: None,
         };
         self.jobs.lock().expect("not poisoned").push(job.clone());
+        self.events.publish(Event::JobCreated(JobCreated {
+            job: job.clone(),
+            actor: Actor::from_wire("human").expect("an actor the envelope has"),
+            at: Instant::carried("2026-08-26T09:00:00.000Z"),
+        }));
         Ok(job)
     }
 

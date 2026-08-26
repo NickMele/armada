@@ -56,6 +56,36 @@ use crate::transcript;
 /// because a list is something a caller can build empty.
 const EVIDENCE_TOOL: &str = "mcp__armada__submit_evidence";
 
+/// The program name `crates/config/settings.toml` gives as the default for the
+/// AgentHarness binary path: `claude (on PATH)`.
+///
+/// **The vendor's spelling, and this file is where it is allowed to be.** A
+/// composition root that carried its own default would be the boundary having
+/// leaked — which is why `fleet-bin` calls [`HeadlessAgent::on_path`] rather
+/// than passing a string it wrote down.
+const ON_PATH: &str = "claude";
+
+/// The models a Job may name, in the order a picker offers them.
+///
+/// **`crates/config/settings.toml` names none.** Two rows bear on this —
+/// `kit-level-allowed-default-models-list`, which is "the set that Default
+/// model per Job type and Judge model select from", and
+/// `default-model-per-job-type` — and *neither carries a `default` value*,
+/// unlike the AgentHarness binary row above it which carries one. So there is
+/// no configured roster to read, and the roster has to come from somewhere or
+/// the picker has no source.
+///
+/// It comes from here, for [`ON_PATH`]'s reason: these are the aliases this
+/// vendor's CLI accepts on `--model`, so they are the adapter's knowledge and
+/// nowhere else's. **That is a stand-in, not the answer** — the settings rows
+/// are the answer, and until they carry values this list is the adapter
+/// stating what its own binary will take.
+const MODELS: &[&str] = &["opus", "sonnet", "haiku"];
+
+/// The model a Job gets when nothing names one. The middle of [`MODELS`]:
+/// capable enough to run a workflow and not the one that empties a budget.
+const DEFAULT_MODEL: &str = "sonnet";
+
 /// The headless agent CLI, at a path somebody configured.
 ///
 /// The path is a value rather than a constant so that Doctor can probe a
@@ -73,6 +103,36 @@ impl HeadlessAgent {
         HeadlessAgent {
             program: program.into(),
         }
+    }
+
+    /// The CLI as installed: the settings default, resolved by the `PATH` the
+    /// Drone is given rather than by an absolute path Fleet invented.
+    ///
+    /// **This is what makes the binary an override rather than a requirement.**
+    /// A machine with the CLI installed the ordinary way needs no environment
+    /// variable, and a machine that put it somewhere unusual names it — and is
+    /// refused before the bind if that name is wrong.
+    pub fn on_path() -> HeadlessAgent {
+        HeadlessAgent::at(ON_PATH)
+    }
+
+    /// The models a Job may name, for the composer's picker.
+    ///
+    /// Stated here rather than read from configuration because configuration
+    /// states none — see [`MODELS`]. The caller passes it up the seam; nothing
+    /// below the adapter boundary learns the spellings.
+    pub fn models() -> &'static [&'static str] {
+        MODELS
+    }
+
+    /// The model a proposal that names none is given.
+    ///
+    /// **This is what stops a Job dying at dispatch.** A proposal with no model
+    /// used to be accepted, stored and shown on the board, and refused at spawn
+    /// with "no model was named". Fleet now fills the value in at creation, and
+    /// refuses there when it cannot.
+    pub fn default_model() -> &'static str {
+        DEFAULT_MODEL
     }
 }
 
