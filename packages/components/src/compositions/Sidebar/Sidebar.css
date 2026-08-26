@@ -1,0 +1,138 @@
+/* Sidebar — the rail that never disappears.
+
+   Widths are all tokens: --sidebar-default, --sidebar-min, --sidebar-max and
+   --sidebar-rail. Persistence of the resting width and the collapsed state is
+   the app's, not this component's. */
+.armada-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: none;
+  min-width: var(--sidebar-rail);
+  max-width: var(--sidebar-max);
+  padding: var(--space-3);
+  background: var(--bg-raised);
+  border-right: var(--border-width) solid var(--border-subtle);
+}
+
+/* The drag region. Frameless `hiddenInset` chrome insets the macOS traffic
+   lights over this area, and the sidebar header is what a person drags the
+   window by — interactive elements inside a drag region are not draggable, so
+   nothing interactive belongs here.
+
+   NO TOKEN FOR THE INSET. The traffic lights want roughly 28px of clearance
+   and nothing spells it, so the height comes from the app name's own line box
+   plus the row padding. Reported. */
+.armada-sidebar__chrome {
+  padding: 0 var(--space-2) var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+  -webkit-app-region: drag;
+}
+
+.armada-sidebar__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* The section label. Sentence case — the one legal ALL CAPS is a table header,
+   and this is not one. The M1 drawing uppercases it; the contract does not
+   permit that, so the contract wins. Reported. */
+.armada-sidebar__section {
+  padding: var(--space-4) var(--space-2) var(--space-1);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-sidebar__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--border-width);
+  min-width: 0;
+}
+
+/* A nav item. 28px — one step under the menu-item height, because a rail item
+   is quieter than a menu row and the drawing sizes it there. No token spells
+   28px. Reported. */
+.armada-sidebar__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: calc(var(--h-menu-item) - var(--space-1));
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.armada-sidebar__item > svg {
+  flex: none;
+}
+
+.armada-sidebar__item:hover {
+  background: var(--bg-hover);
+  color: var(--fg-default);
+}
+
+/* Active takes --accent-muted, the contract's fill for a selected row, and
+   --fg-default text — --accent on --accent-muted measures 4.06:1 and would not
+   clear as body text. The glyph goes to --fg-default with it, never to a
+   status colour. */
+.armada-sidebar__item[data-active] {
+  background: var(--accent-muted);
+  color: var(--fg-default);
+}
+
+.armada-sidebar__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A count. Mono, because it is machine-derived, and never an escalation or an
+   approval count — the status bar carries both, and two places to check is two
+   chances to disagree. */
+.armada-sidebar__count {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+/* Two levels, rendered structurally: the rule is what makes Helm a sibling of
+   the group rather than one more peer inside it. The separator carries no
+   margin of its own, so the spacing belongs here. */
+.armada-sidebar__rule {
+  margin: var(--space-2) 0;
+}
+
+/* Collapsed: the 48px icon rail. Labels go, the glyphs centre, and the rule
+   stays — the hierarchy survives the collapse. */
+.armada-sidebar[data-collapsed] {
+  padding: var(--space-2);
+}
+
+.armada-sidebar[data-collapsed] .armada-sidebar__item {
+  justify-content: center;
+  padding: 0;
+}

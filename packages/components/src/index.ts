@@ -27,3 +27,14 @@ export * from "./primitives/TabsWithCounts/TabsWithCounts";
 export * from "./primitives/Textarea/Textarea";
 export * from "./primitives/Toast/Toast";
 export * from "./primitives/Tooltip/Tooltip";
+
+// Compositions — what M1 composes its screens from.
+export * from "./compositions/ActiveJobsList/ActiveJobsList";
+export * from "./compositions/EvidenceTrail/EvidenceTrail";
+export * from "./compositions/JobLogReference/JobLogReference";
+export * from "./compositions/JobRowStacked/JobRowStacked";
+export * from "./compositions/Sidebar/Sidebar";
+export * from "./compositions/StatusBar/StatusBar";
+export * from "./compositions/StepActivityMark/StepActivityMark";
+export * from "./compositions/StepBar/StepBar";
+export * from "./compositions/WorkflowRail/WorkflowRail";

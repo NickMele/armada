@@ -1,0 +1,201 @@
+/* Job row (stacked) — one shape at every width.
+
+   TRACK WIDTHS WITH NO TOKEN. The badge column and the five field tracks are
+   sized by the M1 drawing and no token spells any of them. They are composed
+   from the spacing scale here, so the drawn value is reproduced exactly and
+   there is one place to change when the tokens land. Reported. */
+.armada-job-row {
+  /* 132px: the badge column. Fixed on every row, which is what lets the badge
+     — and the pulse it carries — sit in one predictable place down the list
+     rather than moving with the headline's length. */
+  --armada-track-badge: calc(var(--space-12) * 2 + var(--space-8) + var(--space-1));
+  /* 168px: the branch or the workflow. The widest of the five, because a
+     branch name is the longest machine value in the run. */
+  --armada-track-origin: calc(var(--space-12) * 3 + var(--space-6));
+  /* 72px: the step bar. */
+  --armada-track-bar: calc(var(--space-12) + var(--space-6));
+  /* 108px: the step's name, in sans. */
+  --armada-track-step: calc(var(--space-12) * 2 + var(--space-3));
+  /* 76px: elapsed. */
+  --armada-track-time: calc(var(--space-12) + var(--space-6) + var(--space-1));
+  /* 68px: spend. Sized for both billing modes — `68% quota` and `~$2.40` — not
+     for whichever appears first, because neither mode is the default. */
+  --armada-track-spend: calc(var(--space-12) + var(--space-4) + var(--space-1));
+
+  display: grid;
+  grid-template-columns: var(--armada-track-badge) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  /* --h-row-stacked is a FLOOR, not a cap: a row whose title wraps grows past
+     it rather than clipping, and the floor is what keeps rows aligned down a
+     column across the Board, Alerts, Reviews and Active jobs. */
+  min-height: var(--h-row-stacked);
+  padding: var(--pad-row-stacked) var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+  /* The left edge is --row-focus-bar with its colour dropped to transparent at
+     rest, so focus adds no width and no row shifts when the cursor lands. */
+  border-left: var(--row-focus-bar);
+  border-left-color: transparent;
+  background: var(--bg-raised);
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease);
+}
+
+/* The list draws the frame, so its last row draws no rule of its own. */
+.armada-job-row:last-child {
+  border-bottom-color: transparent;
+}
+
+.armada-job-row:hover {
+  background: var(--bg-hover);
+}
+
+/* Focused and selected are different states and coexist. A 1px ring around a
+   full-width row is nearly invisible, so the row does something stronger. */
+.armada-job-row[data-focused] {
+  background: var(--bg-hover);
+  border-left-color: var(--accent);
+}
+
+/* Selected rows keep --fg-default text: --accent on --accent-muted measures
+   4.06:1 and would not clear as body text. */
+.armada-job-row[data-selected] {
+  background: var(--accent-muted);
+}
+
+/* Dimming is a token, not an alpha. */
+.armada-job-row[data-dimmed] .armada-job-row__title,
+.armada-job-row[data-dimmed] .armada-job-row__field {
+  color: var(--fg-subtle);
+}
+
+.armada-job-row[data-dimmed] {
+  border-bottom-color: var(--border-subtle);
+}
+
+/* Status appears as a badge in its own column, never as a row-background
+   tint — eight tinted rows in a list is unreadable, and the tint would fight
+   --accent-muted on selection. */
+.armada-job-row__badge {
+  min-width: 0;
+}
+
+.armada-job-row__body {
+  display: flex;
+  flex-direction: column;
+  /* 2px: the headline and its field run are one block, so the gap between them
+     is smaller than the base unit. No token spells it. Reported. */
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+/* Line one: the headline sentence, with the job id set back beside it. */
+.armada-job-row__headline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-job-row__title {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The job id is metadata and machine-derived: set back, and mono. */
+.armada-job-row__id {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+/* Line two: the labelled field run, on fixed tracks so the list reads down as
+   well as across. No field is dropped at any width. */
+.armada-job-row__fields {
+  display: grid;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+/* Secondary values truncate with a tooltip carrying the full string; they do
+   not vanish. Narrow changes the row's shape, never its content. */
+.armada-job-row__field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.armada-job-row__field > svg {
+  flex: none;
+}
+
+.armada-job-row__field-label {
+  flex: none;
+  color: var(--fg-muted);
+}
+
+.armada-job-row__field-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Mono means machine-derived. It cannot run one step smaller than the sans
+   beside it here: --text-2xs is the bottom of the ladder and there is no step
+   below it. Reported. */
+.armada-job-row__field[data-mono] .armada-job-row__field-value {
+  font-family: var(--font-mono);
+  color: var(--fg-default);
+}
+
+/* The fact the row is currently about — the step it is on. */
+.armada-job-row__field[data-emphasis] .armada-job-row__field-value {
+  color: var(--fg-default);
+}
+
+/* A timestamp, or a field that does not apply to this state yet. */
+.armada-job-row__field[data-quiet] .armada-job-row__field-value {
+  color: var(--fg-subtle);
+}
+
+/* A machine value copies on click and goes to --accent on hover. It carries no
+   `copy` glyph: the affordance token is the affordance. A toast confirms,
+   because a clipboard write is silent by nature. */
+.armada-job-row__id[data-copies],
+.armada-job-row__field-value[data-copies="true"] {
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-job-row__id[data-copies]:hover,
+.armada-job-row__field-value[data-copies="true"]:hover {
+  color: var(--accent);
+}
+
+/* The one control. Never a fill: fourteen rows offering a decision would be
+   fourteen accent blocks, which is the same failure as fourteen pulses. */
+.armada-job-row__action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+}

@@ -28,3 +28,14 @@
 @import "./primitives/Toast/Toast.css";
 @import "./primitives/Tooltip/Tooltip.css";
 @import "./primitives/Textarea/Textarea.css";
+
+/* Compositions. Same rule: a component owns its own file. */
+@import "./compositions/StepActivityMark/StepActivityMark.css";
+@import "./compositions/StepBar/StepBar.css";
+@import "./compositions/WorkflowRail/WorkflowRail.css";
+@import "./compositions/JobRowStacked/JobRowStacked.css";
+@import "./compositions/ActiveJobsList/ActiveJobsList.css";
+@import "./compositions/Sidebar/Sidebar.css";
+@import "./compositions/StatusBar/StatusBar.css";
+@import "./compositions/JobLogReference/JobLogReference.css";
+@import "./compositions/EvidenceTrail/EvidenceTrail.css";

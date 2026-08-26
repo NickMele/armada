@@ -1,0 +1,95 @@
+/* Status bar — present on every surface, so a component rather than a screen
+   element. Full width, spanning beneath the sidebar. */
+.armada-status-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  height: var(--h-status-bar);
+  padding: 0 var(--space-4);
+  border-top: var(--border-width) solid var(--border-subtle);
+  background: var(--bg-raised);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+/* Fleet's own claim reads at full contrast: a healthy state says so out loud,
+   because an empty bar reads the same whether Fleet is healthy, loading or
+   dead, and Fleet outlives Bridge. */
+.armada-status-bar__fleet {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  white-space: nowrap;
+  color: var(--fg-default);
+}
+
+/* The one hue in the bar besides the two counts. A 6px dot, off the 4px grid
+   deliberately: a 4px dot disappears at desk distance and an 8px one reads as
+   a badge that lost its label. Not a glyph, so "the bar carries no icons"
+   holds. */
+.armada-status-bar__dot {
+  width: var(--dot);
+  height: var(--dot);
+  flex: none;
+  border-radius: 50%;
+  background: var(--fg-muted);
+}
+
+.armada-status-bar[data-fleet="running"] .armada-status-bar__dot {
+  background: var(--status-completed-success);
+}
+
+/* A missing runtime file: Fleet is not there. */
+.armada-status-bar[data-fleet="not-running"] .armada-status-bar__dot {
+  background: var(--status-completed-failed);
+}
+
+/* A live pid that does not answer: Fleet is wedged. */
+.armada-status-bar[data-fleet="unreachable"] .armada-status-bar__dot {
+  background: var(--status-awaiting-review);
+}
+
+/* Machine-derived facts: a pid, a port, a path, a drone count. */
+.armada-status-bar__mono {
+  flex: none;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+/* What to do, or how stale the reading is. A sentence, so sans. */
+.armada-status-bar__advice,
+.armada-status-bar__item {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* The two counts are the only status colour in the bar besides the dot.
+   Everything else stays --fg-muted, or the bar becomes a second alert surface
+   and the escalations-interrupt / approvals-queue distinction collapses. */
+.armada-status-bar__count {
+  flex: none;
+  white-space: nowrap;
+  font-weight: var(--weight-medium);
+}
+
+.armada-status-bar__count[data-kind="escalated"] {
+  color: var(--status-escalated);
+}
+
+.armada-status-bar__count[data-kind="awaiting-review"] {
+  color: var(--status-awaiting-review);
+}
+
+/* Spend sits at the trailing edge. The segment is sized by its content and the
+   window, not by a track: `68% quota left` and `~$2.40 of $20` are very
+   different strings and neither mode is the default. */
+.armada-status-bar__spend {
+  flex: none;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}

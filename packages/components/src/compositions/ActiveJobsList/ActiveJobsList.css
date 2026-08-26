@@ -1,0 +1,62 @@
+/* Active jobs list — a header, then the framed run of rows.
+
+   Elevation is surface, not shadow: --bg-raised with a --border-default edge
+   and no blur. */
+.armada-active-jobs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-active-jobs__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.armada-active-jobs__titles {
+  display: flex;
+  flex-direction: column;
+  /* 2px: the name and its count sentence are one block. No token spells it. */
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+/* Panel heading step. Sentence case, and countable things stay lowercase —
+   "Active jobs", not "Active Jobs". */
+.armada-active-jobs__heading {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+}
+
+/* The count, and how many need you. An empty screen is where a person has the
+   least information, so this line goes to orientation. */
+.armada-active-jobs__summary {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-active-jobs__action {
+  flex: none;
+}
+
+/* The frame owns the edge and the radius, so a row inside it draws neither.
+   The rows' own rules separate them, and the last row's is suppressed. */
+.armada-active-jobs__frame {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--border-default);
+  background: var(--bg-raised);
+  overflow: hidden;
+}
