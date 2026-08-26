@@ -1,4 +1,4 @@
-# Journey 10 — Guild Setup & Configuration
+# Guild Setup & Configuration
 
 **What it is:** Two related but distinct moments — setting a new machine up for the first time, and coming back later to change a default.
 
@@ -52,3 +52,5 @@ Also covers Import/Export (Git-repo or file-based, for moving one Kit config acr
 ## Related
 
 Kit, Machine — the two concept pages this journey's four functional groups split across. First-Run Onboarding — the hard-gated sequence this journey's Section 1 is step one of.
+
+This journey has no number because the design project has not drawn it. A number in a filename here means a `Journey N` drawing exists to match it; inventing one would assert a correspondence that does not.

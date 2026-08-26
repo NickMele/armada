@@ -1,4 +1,4 @@
-# Journey 16 — Read the work and merge by hand
+# Read the work and merge by hand
 
 **What it is:** What happens at the end of a successful M1 Job, when there is no auto-merge, no PR, and no push, and the last act of the Job is a person reading the branch and merging it by hand.
 
@@ -6,7 +6,6 @@ Design fidelity: M1 only.
 
 ---
 
-*Numbering note: the design project has not yet drawn this journey as its own `Journey N - ...` file — it exists so far only as a block inside the M1 milestone drawing. Numbered here only to give the file set a stable order, placed after the other provisionally-numbered journeys since it was added to the Journeys database later (23 Aug 2026) than any of them — see the note on Guild Setup & Configuration for how that sequence was assigned.*
 
 **Trigger:** A Job reaches `completed_success` and its branch is waiting.
 
@@ -44,3 +43,5 @@ Produced one new component row: **Evidence trail** in Armada Components.
 ## Related
 
 Read a failed Job — the unsuccessful counterpart to this journey, for a Job that reaches a terminal failed state instead.
+
+This journey has no number because the design project has not drawn it. A number in a filename here means a `Journey N` drawing exists to match it; inventing one would assert a correspondence that does not.

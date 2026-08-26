@@ -1,4 +1,4 @@
-# Journey 12 — Set Up a Project (Manifest)
+# Set Up a Project (Manifest)
 
 **What it is:** "I'm onboarding a new repo" — turn an unconfigured codebase into a working Manifest Armada can dispatch Jobs against.
 
@@ -74,9 +74,10 @@ Design fidelity: not set. Analysis: Complete. UI/UX design: Not started.
 - **[setup-batch-at-scale]** How does a batch of twenty proposals read?
   Scan finds every workspace in one pass and proposals are shown together; a real monorepo could be twenty, and "together" stops being a screen at some size.
 
-- **[drone-secrets-handling]** How are secrets handled for Drones?
-  Shared with Guild Setup & Configuration, where the full item is recorded. Established principle: a Drone never holds secrets directly — Fleet brokers. Unresolved is the concrete mechanism, including unattended 1Password auth.
+This journey also shares `drone-secrets-handling` with Guild Setup & Configuration, where the full item is recorded: how secrets are handled for Drones, given the established principle that a Drone never holds secrets directly and Fleet brokers, with the concrete mechanism — including unattended 1Password auth — still unresolved.
 
 ## Related
 
 Manifest (full Setup/Verify/Update mechanics) · Kit (Skills/Agents/allowlist defaults a new Manifest inherits) · Job Board (where the result surfaces) · Run and edit a Manifest (drift detection and the live dry-run, once a Manifest already exists) · Consult Helm (where the proposal conversation happens).
+
+This journey has no number because the design project has not drawn it. A number in a filename here means a `Journey N` drawing exists to match it; inventing one would assert a correspondence that does not.

@@ -78,6 +78,12 @@ approximations.
 - [`instructions/claude-design.md`](instructions/claude-design.md) — the design
   project's session contract.
 
+## Journeys
+
+- [`journeys/`](journeys/) — how a person moves through Armada, one document
+  per journey, indexed in its own `INDEX.md`. A numbered filename means the
+  design project has drawn it; an unnumbered one has not been drawn yet.
+
 ## Measured
 
 - [`spikes/003-does-headless-output-parse.md`](spikes/003-does-headless-output-parse.md)

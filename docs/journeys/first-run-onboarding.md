@@ -1,4 +1,4 @@
-# Journey 13 — First-Run Onboarding
+# First-Run Onboarding
 
 **What it is:** "I'm brand new to the whole app" — the first walkthrough after installing Armada, chaining four already-designed journeys into one hard-gated sequence.
 
@@ -121,13 +121,10 @@ Onboarding is complete once one Job has been successfully approved and dispatche
 - **[safety-group-inline-editors]** Are the command allowlist and destructive-op list edited inline during onboarding, or linked out to elsewhere?
   Recorded under "The four settings groups" above, alongside Push and Passive escalation triggers as toggles with plain-language labels.
 
-Three further open items bear on this journey and are recorded, not duplicated, where each is the citable home:
-
-- **[kit-machine-setup-surface-naming]**, in Guild Setup & Configuration — what the Kit and Machine setup surfaces are called, and whether first-run setup is one journey and one gated step or two.
-- **[kit-import-missing-files]**, in Guild Setup & Configuration — what happens on the Import path when the imported Kit references Claude files that do not exist on this machine.
-- **[status-bar-onboarding]**, in `../contracts/design-system.md` — whether the status bar reads the same three runtime states during the gated sequence as everywhere else, or gets its own reading before Fleet is reachable.
-- **[kit-file-icons]**, in `../contracts/iconography.md` — whether the three Kit-file states (in Kit / drifted / not in Kit) get icons, or stay label-only.
+Four further open items bear on this journey and are recorded, not duplicated, where each is the citable home. `kit-machine-setup-surface-naming` and `kit-import-missing-files`, both above on Guild Setup & Configuration, cover respectively what the Kit and Machine setup surfaces are called and whether first-run setup is one journey and one gated step or two, and what happens on the Import path when the imported Kit references Claude files that do not exist on this machine. `status-bar-onboarding`, in `../contracts/design-system.md`, covers whether the status bar reads the same three runtime states during the gated sequence as everywhere else, or gets its own reading before Fleet is reachable. `kit-file-icons`, in `../contracts/iconography.md`, covers whether the three Kit-file states (in Kit / drifted / not in Kit) get icons, or stay label-only.
 
 ## Related
 
 Guild Setup & Configuration · Set Up a Project (Manifest) · Check System Health · Dispatch a Job.
+
+This journey has no number because the design project has not drawn it. A number in a filename here means a `Journey N` drawing exists to match it; inventing one would assert a correspondence that does not.

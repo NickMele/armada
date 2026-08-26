@@ -1,4 +1,4 @@
-# Journey 11 — Consult Helm
+# Consult Helm
 
 **What it is:** "I need to reason across the Fleet" — cross-Job pattern analysis, natural-language control, or planning help.
 
@@ -32,3 +32,5 @@ Full design detail — action authority, audit trail, session model, budget trea
 ## Related
 
 Helm — the concept page carrying the full design: action authority, audit trail, session model, budget treatment.
+
+This journey has no number because the design project has not drawn it. A number in a filename here means a `Journey N` drawing exists to match it; inventing one would assert a correspondence that does not.

@@ -14,13 +14,13 @@ Read the journey that covers what you are about to design or build, before you b
 | [3.5 — Respond to a Push Alert](3.5-respond-to-a-push-alert.md) | Design or build the reactive single-item Debug view, the Intervention Ladder, or the Alert Levels a push notification carries |
 | [4 — Monitor Active Work](4-monitor-active-work.md) | Design or build the Active Jobs list or the job detail rail — the M1 monitoring subset, and what the full surface defers |
 | [9 — Run and edit a Manifest](9-run-and-edit-a-manifest.md) | Design or build Bridge's Manifest surface — running a Check or Command on demand, editing a manifest, or Verify's drift-plus-dry-run |
-| [10 — Guild Setup & Configuration](10-guild-setup-and-configuration.md) | Design or build the Kit/Machine settings surface — first-time init or an ongoing settings edit |
-| [11 — Consult Helm](11-consult-helm.md) | Design or build Helm's entry point — starting a session, or what it can read |
-| [12 — Set Up a Project (Manifest)](12-set-up-a-project-manifest.md) | Design or build onboarding a new repo — Locate, Scan, Proposal, Write, Verify |
-| [13 — First-Run Onboarding](13-first-run-onboarding.md) | Design or build the hard-gated first-launch sequence that chains Guild Setup, Set Up a Project, Check System Health and Dispatch a Job together |
-| [14 — Take Over a Job](14-take-over-a-job.md) | Design or build Pilot's confirmation modal, or the flow for taking a stuck Job away from its Drone |
-| [15 — Read a failed Job](15-read-a-failed-job.md) | Design or build what M1 shows when a Job reaches a terminal failed state |
-| [16 — Read the work and merge by hand](16-read-the-work-and-merge-by-hand.md) | Design or build what M1 shows when a Job reaches `completed_success` and there is still no auto-merge, no PR, and no push |
+| [10 — Guild Setup & Configuration](guild-setup-and-configuration.md) | Design or build the Kit/Machine settings surface — first-time init or an ongoing settings edit |
+| [11 — Consult Helm](consult-helm.md) | Design or build Helm's entry point — starting a session, or what it can read |
+| [12 — Set Up a Project (Manifest)](set-up-a-project-manifest.md) | Design or build onboarding a new repo — Locate, Scan, Proposal, Write, Verify |
+| [13 — First-Run Onboarding](first-run-onboarding.md) | Design or build the hard-gated first-launch sequence that chains Guild Setup, Set Up a Project, Check System Health and Dispatch a Job together |
+| [14 — Take Over a Job](take-over-a-job.md) | Design or build Pilot's confirmation modal, or the flow for taking a stuck Job away from its Drone |
+| [15 — Read a failed Job](read-a-failed-job.md) | Design or build what M1 shows when a Job reaches a terminal failed state |
+| [16 — Read the work and merge by hand](read-the-work-and-merge-by-hand.md) | Design or build what M1 shows when a Job reaches `completed_success` and there is still no auto-merge, no PR, and no push |
 
 ## On the numbering
 

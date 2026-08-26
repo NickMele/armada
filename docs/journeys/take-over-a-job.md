@@ -1,4 +1,4 @@
-# Journey 14 — Take Over a Job
+# Take Over a Job
 
 **What it is:** The flow for taking a Job away from its Drone and finishing it by hand.
 
@@ -64,3 +64,5 @@ The session runs at a Guild-level unrestricted toolset. The narrow Drone toolset
 ## Related
 
 Pilot — the concept page carrying the mechanism this journey's flow only names: the `escape_hatch` tool, the handoff bundle, the toolset and secrets rules, and the Evidence position.
+
+This journey has no number because the design project has not drawn it. A number in a filename here means a `Journey N` drawing exists to match it; inventing one would assert a correspondence that does not.
