@@ -315,7 +315,7 @@ Code Review's `files_read` is its exact mirror: where `scope_diff_check` verifie
 Filed under `evidence_scope` rather than `steps[]`, and that is unresolved: the Evidence Scope Object defines it as a field of that object, while Workflow's drift-check paragraph describes it as a property of the step ("for steps with `scope_diff_check: true`") — different places in the schema. See the open question on this row.
 """
 
-[fields.step_id]
+[fields.id]
 type = "string"
 concern = "Structure"
 parent = "steps[]"
@@ -325,13 +325,32 @@ notes = """
 
 Duplicate step names are rejected at config load.
 
+Spelled `id` on the step. `step_id` remains the name of the *type* — what
+`verdict_routing`, `on_fail` and `on_gaming_flag` hold is a reference to one of
+these — and it is what the column is called wherever a step is named from
+outside the definition, on Job and in an escalation payload.
+
 Because per-step counters are keyed to it, a re-resolve that renames or removes a step can delete the step a running Job is standing on — which is one of the reasons the resolved WorkflowDef is frozen at Job creation.
+"""
+
+[fields.label]
+type = "string"
+concern = "Structure"
+parent = "steps[]"
+purpose = "What a person reads for this step. Display only."
+notes = """
+Separate from `id` because `id` is stable and everything counts against it —
+Evidence carries it, events name it, `current_step` holds it, and per-step
+counters are keyed to it. A name that can be reworded without renaming what the
+system routes on is the whole reason there are two fields rather than one.
+
+No sample carries one yet.
 """
 
 [fields."steps[]"]
 type = "array[step]"
 concern = "Structure"
-sub_items = ["step_id", "mechanical_checks", "judge_checks", "evidence_scope", "evidence_type", "advance_gate", "retry_limit", "verdict_routing", "iteration_cap", "hard_prerequisite", "on_fail", "on_gaming_flag", "declare_plan_at"]
+sub_items = ["id", "label", "mechanical_checks", "judge_checks", "evidence_scope", "evidence_type", "advance_gate", "retry_limit", "verdict_routing", "iteration_cap", "hard_prerequisite", "on_fail", "on_gaming_flag", "declare_plan_at"]
 purpose = "The ordered set of steps. Everything nested under this row is a field of a step, not of the WorkflowDef."
 notes = """
 Ordered, and loop-capable: `structure: "loop"` means a step returns to an earlier one by `verdict_routing`, not that the array is unordered.

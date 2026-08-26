@@ -17,7 +17,7 @@
   },
   "steps": [
     {
-      "step_id": "revert",
+      "id": "revert",
       "order": 1,
       "required": true,
       "evidence_type": "diff",
@@ -62,7 +62,7 @@
       "advance_gate": "auto_if_judge_passes"
     },
     {
-      "step_id": "regression_verify",
+      "id": "regression_verify",
       "order": 2,
       "required": true,
       "evidence_type": "test_suite_run",
@@ -82,7 +82,7 @@
       "on_fail": "retry:revert"
     },
     {
-      "step_id": "review",
+      "id": "review",
       "order": 3,
       "required": true,
       "evidence_type": "bundle",
@@ -108,13 +108,13 @@
       }
     },
     {
-      "step_id": "merge",
+      "id": "merge",
       "order": 4,
       "required": true,
       "advance_gate": "manifest_rule:auto_merge"
     },
     {
-      "step_id": "close",
+      "id": "close",
       "order": 5,
       "required": true,
       "mechanical_checks": [

@@ -17,7 +17,7 @@
   },
   "steps": [
     {
-      "step_id": "scope",
+      "id": "scope",
       "order": 1,
       "required": true,
       "evidence_type": "facts_note",
@@ -49,7 +49,7 @@
       "advance_gate": "auto_if_judge_passes"
     },
     {
-      "step_id": "implement",
+      "id": "implement",
       "order": 2,
       "required": true,
       "evidence_type": "diff",
@@ -84,7 +84,7 @@
       "advance_gate": "auto_if_judge_passes"
     },
     {
-      "step_id": "tests",
+      "id": "tests",
       "order": 3,
       "required": true,
       "evidence_type": "diff",
@@ -129,7 +129,7 @@
       "on_gaming_flag": "escalate:evidence_suspect"
     },
     {
-      "step_id": "regression_verify",
+      "id": "regression_verify",
       "order": 4,
       "required": true,
       "evidence_type": "test_suite_run",
@@ -165,7 +165,7 @@
       "on_fail": "retry:implement"
     },
     {
-      "step_id": "review",
+      "id": "review",
       "order": 5,
       "required": true,
       "evidence_type": "bundle",
@@ -192,13 +192,13 @@
       }
     },
     {
-      "step_id": "merge",
+      "id": "merge",
       "order": 6,
       "required": true,
       "advance_gate": "manifest_rule:auto_merge"
     },
     {
-      "step_id": "close",
+      "id": "close",
       "order": 7,
       "required": true,
       "mechanical_checks": [

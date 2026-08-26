@@ -130,23 +130,22 @@ fn the_loop_sample_is_refused_for_its_structure_and_not_for_its_routing() {
 }
 
 #[test]
-fn the_samples_name_their_steps_step_id_where_m1_reads_id() {
-    // The registry's field catalogue has a `step_id` row and no `id` or `label`
-    // row; this milestone step's worked example writes `id` and `label`. They
-    // disagree, and this test records which spelling the parser took so that
-    // whoever settles it can find every consequence in one place.
+fn every_sample_step_is_missing_only_its_label() {
+    // `id` was settled in the registry's favour on spelling and against it on
+    // existence: the field row was renamed from `step_id` to `id` and a `label`
+    // row was added, because `id` is what everything counts against and a name
+    // that can be reworded without renaming what the system routes on is the
+    // reason there are two fields rather than one.
+    //
+    // No sample carries a label yet, and that is the only thing left for a
+    // sample's steps to be short of. This test is what will fail when somebody
+    // writes them.
     let refusals = load("bug.json");
     assert!(
-        refusals
+        !refusals
             .iter()
-            .any(|r| r.key == "steps[0].step_id" && matches!(r.fault, Fault::Unknown { .. })),
-        "{refusals:?}"
-    );
-    assert!(
-        refusals
-            .iter()
-            .any(|r| r.key == "steps[0].id" && r.fault == Fault::Missing),
-        "{refusals:?}"
+            .any(|r| r.key.ends_with(".step_id") || r.key.ends_with(".id")),
+        "id is spelled the same in the registry, the samples and the parser now: {refusals:?}"
     );
     assert!(
         refusals

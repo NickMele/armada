@@ -17,7 +17,7 @@
   },
   "steps": [
     {
-      "step_id": "draft",
+      "id": "draft",
       "order": 1,
       "required": true,
       "evidence_type": "document",
@@ -38,7 +38,7 @@
       "advance_gate": "auto"
     },
     {
-      "step_id": "present",
+      "id": "present",
       "order": 2,
       "required": true,
       "evidence_type": "document",
