@@ -57,7 +57,13 @@ pub struct Question {
 /// failure the walk exists to prevent, produced by the walk itself.
 pub fn near_miss_headings(root: &Path) -> Vec<(String, usize, String)> {
     let mut out = Vec::new();
-    for path in files_with_ext(root, &root.join("docs"), &["md"]) {
+    let mut paths = files_with_ext(root, &root.join("docs"), &["md"]);
+    paths.extend(
+        files_with_ext(root, &root.join("crates"), &["md"])
+            .into_iter()
+            .filter(|p| p.ends_with("/README.md")),
+    );
+    for path in paths {
         if SKIP.iter().any(|s| path.starts_with(s)) {
             continue;
         }
@@ -81,10 +87,20 @@ pub fn near_miss_headings(root: &Path) -> Vec<(String, usize, String)> {
     out
 }
 
-/// Every open question in `docs/`, in file order.
+/// Every open question, in file order.
+///
+/// `docs/` plus any `README.md` under `crates/`. A question about the domain
+/// data blocks the crate that will read it, not a document about it, and the
+/// rule everywhere else here is that a question lives with the thing it blocks.
 pub fn read(root: &Path) -> Vec<Question> {
     let mut out = Vec::new();
-    for path in files_with_ext(root, &root.join("docs"), &["md"]) {
+    let mut paths = files_with_ext(root, &root.join("docs"), &["md"]);
+    paths.extend(
+        files_with_ext(root, &root.join("crates"), &["md"])
+            .into_iter()
+            .filter(|p| p.ends_with("/README.md")),
+    );
+    for path in paths {
         if SKIP.iter().any(|s| path.starts_with(s)) {
             continue;
         }

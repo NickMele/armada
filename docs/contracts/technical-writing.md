@@ -50,13 +50,22 @@ Meaning is at most twelve words. No commentary between rows.
 
 **Lead with the shortest correct statement.** Detail is a link, not a clause.
 
-## Open questions
+## What this binds
 
-- **[writing-rules-retrofit]** Do the documents written before this contract
-  get reduced to it, or does it bind new writing only?
-  What decides it: several documents already here break these rules —
-  `ARCHITECTURE.md` uses adversative moves, the contracts carried out of the
-  design workspace carry rejected alternatives inline, and `SECURITY.md` leads
-  with explanation rather than the shortest correct statement. A contract
-  nothing already satisfies is either a plan or a dead letter, and which one it
-  is has not been decided.
+**New writing, and any document being edited for another reason.** A document
+nobody is touching is left as it is until somebody touches it.
+
+The concept pages are reduced to this contract as they land. Everything else —
+`ARCHITECTURE.md`, the contracts carried out of the design workspace, the
+practices, the journeys — is reduced when it is next edited, not in a sweep. A
+reduction pass over a document nobody is reading spends attention and risks the
+loss it is meant to prevent.
+
+**Prose in a data file is governed too.** A `notes` key in
+`crates/core-model/domain/`, `crates/config/settings.toml` or
+`packages/icons/icons.toml` is a document in a field, and the same rules apply
+to it — one mode, no decision history, no date stamps, a table when it grows.
+
+**`docs/instructions/` is not exempt.** Those files are pasted into the desktop
+app and the design project, so reducing them means re-pasting both. They are
+documents here and the contract governs them.
