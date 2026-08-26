@@ -15,9 +15,15 @@
 
 version: 1
 
-# Minted once, and stable. The Manifest carries its own identity so this
-# workspace can move on disk without dangling the Jobs that ran against it.
-id: 01M0ZNVRJNC89ECG0PV1T8W08Y
+# The project's name, and its identity. A Job stores this on
+# `owner_manifest_id`, Bridge shows it on every row, and both want a word rather
+# than a number — the workflow beside it is `bug` for the same reason.
+#
+# Stable, and stable by being written here: moving or renaming the directory
+# does not touch it, so the Jobs that ran against this project keep pointing at
+# it. What it cannot survive is being edited, which is the trade a readable key
+# makes and a minted one does not.
+id: armada
 
 # Checks gate advancement. A step's `mechanical_checks` names one of these by
 # name; a name a step asks for and this file does not declare is refused before
