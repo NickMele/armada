@@ -120,6 +120,14 @@ export const FinishedJob: Story = {
               <Button ground="sunken">Open the log</Button>
             </div>
           </div>
+          {/* Operator copy, not commentary. It sits in the drawing's note voice
+              and outside every data-component, which is why it was cut with the
+              whiteboard — but it is addressed to the person using the app and
+              it states the one thing this screen exists to say. */}
+          <p className="armada-screen__handover">
+            The branch is unpushed and unmerged. Armada does not push and has no
+            merge action — read the diff in your own tools and land it yourself.
+          </p>
         </div>
 
         <div className="armada-screen__col">

@@ -3884,7 +3884,8 @@ const FinishedJob = {
         /* @__PURE__ */ jsx("span", { className: "armada-screen__log-path", children: ".armada/logs/job_4f10.jsonl" }),
         /* @__PURE__ */ jsx("span", { className: "armada-screen__tag", children: "204 lines · 0 error" }),
         /* @__PURE__ */ jsx("div", { className: "armada-screen__push-right", children: /* @__PURE__ */ jsx(Button, { ground: "sunken", children: "Open the log" }) })
-      ] })
+      ] }),
+      /* @__PURE__ */ jsx("p", { className: "armada-screen__handover", children: "The branch is unpushed and unmerged. Armada does not push and has no merge action — read the diff in your own tools and land it yourself." })
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
       /* @__PURE__ */ jsxs("div", { className: "armada-screen__head-row", children: [
