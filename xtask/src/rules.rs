@@ -531,7 +531,9 @@ pub fn no_comment_block_too_long(root: &Path) -> Report {
 
     for source_root in SOURCE_ROOTS {
         for path in files_with_ext(root, &root.join(source_root), &["rs"]) {
-            let Ok(text) = fs::read_to_string(root.join(&path)) else { continue };
+            let Ok(text) = fs::read_to_string(root.join(&path)) else {
+                continue;
+            };
             let (mut run, mut started) = (0usize, 0usize);
             let mut worst = (0usize, 0usize);
             for (n, line) in text.lines().enumerate() {
@@ -552,7 +554,7 @@ pub fn no_comment_block_too_long(root: &Path) -> Report {
                 report.fail(format!(
                     "{path}:{} — {} lines of comment in one block, over {CAP}. \
                      Reduce it first; file it only if it cannot shorten without \
-                     losing a fact",
+                     losing a fact. `.claude/skills/comments/SKILL.md`",
                     worst.1, worst.0
                 ));
             }

@@ -130,3 +130,20 @@ Raw transcripts sit beside each record. A negative result is a result and stays.
 - [`OPEN.md`](OPEN.md) — every open question, collected from the document that
   blocks on it. Written by `cargo xtask verify-docs --write`. Editing it by hand
   fails the gate.
+
+## Not documents — procedures an agent loads
+
+Under `.claude/skills/`, not here, because they are read before doing a kind of
+work rather than looked up. Listed so somebody browsing what is written down
+can find them.
+
+| Before | Skill |
+|---|---|
+| Writing any comment, module doc or header | `comments` |
+| Adding a command, script or task | `runnable-things` |
+| Working a milestone step end to end | `milestone-step` |
+| Adding or editing a document | `armada-documents` |
+| Filing, citing or answering an open question | `armada-open-questions` |
+| Building or changing a component | `armada-components` |
+| Writing a commit message | `commit-message` |
+| Writing anything a person reads on a surface | `armada-voice` |

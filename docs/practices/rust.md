@@ -19,6 +19,10 @@ green before the milestone it's checking is finished is the failure mode it
 exists to prevent — see the module comment in `xtask/src/main.rs`. Don't chase
 green; read what each failing rule says is missing.
 
+**Comments are governed by `.claude/skills/comments/SKILL.md`.** A comment says
+why in a line or two; a block over twenty-five lines fails the gate, and the
+first move is to shorten it rather than to file it as a document.
+
 ## 1. Crate boundaries
 
 | Crate | Status | May depend on | Checked by |
