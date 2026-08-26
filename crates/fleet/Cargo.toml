@@ -24,8 +24,15 @@ ipc = { path = "../ipc" }
 verification = { path = "../verification" }
 checks-runner = { path = "../checks-runner" }
 adapters = { path = "../adapters" }
+# Fleet implements `api::Daemon`. The direction is one-way and checked:
+# `cargo tree -p api` names no `fleet`, and a dependency the other way would
+# put the transport under the thing it serves.
+api = { path = "../api" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "signal", "sync", "time"] }
 libc = "0.2"
+# The random half of a ULID. Fleet is the sole authority for the ids that name
+# records, so this is the one crate that needs it.
+rand = "0.8"
 # Derives only, on this crate's own types. The runtime file is written and read
 # through `ipc`'s codec, which is why no `serde_json` appears here.
 serde = { version = "1", features = ["derive"] }
@@ -33,4 +40,12 @@ serde = { version = "1", features = ["derive"] }
 [dev-dependencies]
 # Fixtures and fakes. `testkit` never ships and nothing that ships depends on it.
 testkit = { path = "../testkit" }
+# One test calls `api::router` over a real Fleet, with no socket at all: a
+# router is a `Service`, and a `Service` does not need a port to be called.
+# That the five operations answer from a Fleet rather than a fake is the whole
+# claim of this milestone step, and it is worth proving through the transport
+# rather than by calling the trait by hand.
+axum = "0.7"
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }

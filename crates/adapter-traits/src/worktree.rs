@@ -56,6 +56,33 @@ pub enum WorktreeSpecRefused {
     JobIdNotPortable { job_id: String, found: char },
 }
 
+impl WorktreeSpecRefused {
+    /// A sentence for a person, built here rather than by each caller — the
+    /// same shape [`SpawnConfigRefused`](crate::SpawnConfigRefused) takes, and
+    /// for the same reason: the words belong beside the variant that raised
+    /// them, not in whichever crate happened to catch it.
+    pub fn said(&self) -> String {
+        match self {
+            WorktreeSpecRefused::RepoRootEmpty => "no repository root was given".into(),
+            WorktreeSpecRefused::RepoRootNotAbsolute { given } => {
+                let mut said = String::from("the repository root `");
+                said.push_str(given);
+                said.push_str("` is relative, so the derived path would move with the caller");
+                said
+            }
+            WorktreeSpecRefused::JobIdEmpty => "no job id was given".into(),
+            WorktreeSpecRefused::JobIdNotPortable { job_id, found } => {
+                let mut said = String::from("the job id `");
+                said.push_str(job_id);
+                said.push_str("` holds `");
+                said.push(*found);
+                said.push_str("`, which names no directory and no branch");
+                said
+            }
+        }
+    }
+}
+
 /// What a worktree is to be made from: one repository, one Job.
 ///
 /// Everything else about it — the directory, the branch, the name git

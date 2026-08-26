@@ -23,10 +23,10 @@
 //! It is **not** faithful about the filesystem: nothing is created, so a test
 //! that wants to read a file out of a worktree wants the real one.
 
-use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt;
+use std::sync::Mutex;
 
 use adapter_traits::{Vcs, Worktree, WorktreeSpec};
 
@@ -60,11 +60,17 @@ impl fmt::Display for FakeVcsError {
 impl Error for FakeVcsError {}
 
 /// Version control that remembers what it was asked for and creates nothing.
+///
+/// **`Mutex` rather than `RefCell`, and that is not a style choice.** A Fleet
+/// implements `api::Daemon`, which is `Send + Sync`, so every seam it holds has
+/// to be `Sync` too — and a fake that is not cannot stand in for the real
+/// adapter at the one boundary the acceptance test drives. The three fakes in
+/// this crate each carry the same note.
 #[derive(Debug, Default)]
 pub struct FakeVcs {
-    branches: RefCell<BTreeSet<String>>,
-    created: RefCell<Vec<Worktree>>,
-    refuse_next: RefCell<Option<&'static str>>,
+    branches: Mutex<BTreeSet<String>>,
+    created: Mutex<Vec<Worktree>>,
+    refuse_next: Mutex<Option<&'static str>>,
 }
 
 impl FakeVcs {
@@ -75,7 +81,10 @@ impl FakeVcs {
     /// Seed a branch somebody else already made, so a collision can be
     /// exercised without a repository.
     pub fn with_existing_branch(self, branch: impl Into<String>) -> FakeVcs {
-        self.branches.borrow_mut().insert(branch.into());
+        self.branches
+            .lock()
+            .expect("not poisoned")
+            .insert(branch.into());
         self
     }
 
@@ -85,13 +94,13 @@ impl FakeVcs {
     /// at the call site rather than a message assembled from data — a fake's
     /// failure is a script, not a diagnosis.
     pub fn refuse_next(&self, standing_in_for: &'static str) {
-        *self.refuse_next.borrow_mut() = Some(standing_in_for);
+        *self.refuse_next.lock().expect("not poisoned") = Some(standing_in_for);
     }
 
     /// Every worktree this fake said it made, in order. **Nothing removes an
     /// entry**, for the same reason nothing removes a worktree.
     pub fn created(&self) -> Vec<Worktree> {
-        self.created.borrow().clone()
+        self.created.lock().expect("not poisoned").clone()
     }
 }
 
@@ -99,15 +108,23 @@ impl Vcs for FakeVcs {
     type Error = FakeVcsError;
 
     fn create_worktree(&self, spec: &WorktreeSpec) -> Result<Worktree, Self::Error> {
-        if let Some(standing_in_for) = self.refuse_next.borrow_mut().take() {
+        if let Some(standing_in_for) = self.refuse_next.lock().expect("not poisoned").take() {
             return Err(FakeVcsError::Refused { standing_in_for });
         }
         let branch = spec.branch();
-        if !self.branches.borrow_mut().insert(branch.clone()) {
+        if !self
+            .branches
+            .lock()
+            .expect("not poisoned")
+            .insert(branch.clone())
+        {
             return Err(FakeVcsError::BranchExists { branch });
         }
         let made = Worktree::at(spec.worktree_path(), branch);
-        self.created.borrow_mut().push(made.clone());
+        self.created
+            .lock()
+            .expect("not poisoned")
+            .push(made.clone());
         Ok(made)
     }
 }

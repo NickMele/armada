@@ -36,21 +36,24 @@
 //! program that produces it. A test asserting what happens when a Drone dies
 //! before it is told anything should say that, not `/usr/bin/true`.
 
-use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
+use std::sync::Mutex;
 
 use adapter_traits::{AgentHarness, DroneEvent, DroneSpawnConfig, Launch};
 
 /// A harness that renders a harmless program.
+///
+/// `Mutex` rather than `RefCell` for the reason `FakeVcs` gives: a Fleet is
+/// `Sync`, so the seams it holds have to be.
 #[derive(Debug)]
 pub struct FakeHarness {
     program: String,
     args: Vec<String>,
     refusing: Option<&'static str>,
     scripted: BTreeMap<String, Vec<DroneEvent>>,
-    rendered: RefCell<Vec<Launch>>,
+    rendered: Mutex<Vec<Launch>>,
 }
 
 impl FakeHarness {
@@ -110,7 +113,7 @@ impl FakeHarness {
             args: args.iter().map(|a| String::from(*a)).collect(),
             refusing: None,
             scripted: BTreeMap::new(),
-            rendered: RefCell::new(Vec::new()),
+            rendered: Mutex::new(Vec::new()),
         }
     }
 
@@ -133,7 +136,7 @@ impl FakeHarness {
     /// fake**: a test asserts on what Fleet asked for rather than on what a
     /// process did.
     pub fn rendered(&self) -> Vec<Launch> {
-        self.rendered.borrow().clone()
+        self.rendered.lock().expect("not poisoned").clone()
     }
 }
 
@@ -145,7 +148,10 @@ impl AgentHarness for FakeHarness {
             return Err(FakeHarnessRefused { standing_in_for });
         }
         let launch = Launch::rendered(config, &self.program, self.args.clone());
-        self.rendered.borrow_mut().push(launch.clone());
+        self.rendered
+            .lock()
+            .expect("not poisoned")
+            .push(launch.clone());
         Ok(launch)
     }
 

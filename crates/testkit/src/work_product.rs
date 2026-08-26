@@ -10,9 +10,9 @@
 //! two are the pair the gate must never confuse: a reading that failed is not a
 //! diff that was empty.
 
-use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
+use std::sync::Mutex;
 
 use adapter_traits::{Changed, WorkProduct, Worktree};
 
@@ -34,11 +34,14 @@ impl fmt::Display for FakeDiffRefused {
 impl Error for FakeDiffRefused {}
 
 /// A work product that is whatever the test said it is.
+///
+/// `Mutex` rather than `RefCell` for the reason `FakeVcs` gives: a Fleet is
+/// `Sync`, so the seams it holds have to be.
 #[derive(Debug, Default)]
 pub struct FakeWorkProduct {
     changed: Vec<String>,
-    refuse: RefCell<Option<&'static str>>,
-    asked: RefCell<Vec<String>>,
+    refuse: Mutex<Option<&'static str>>,
+    asked: Mutex<Vec<String>>,
 }
 
 impl FakeWorkProduct {
@@ -53,8 +56,8 @@ impl FakeWorkProduct {
     pub fn changed(paths: &[&str]) -> FakeWorkProduct {
         FakeWorkProduct {
             changed: paths.iter().map(|path| path.to_string()).collect(),
-            refuse: RefCell::new(None),
-            asked: RefCell::new(Vec::new()),
+            refuse: Mutex::new(None),
+            asked: Mutex::new(Vec::new()),
         }
     }
 
@@ -62,15 +65,15 @@ impl FakeWorkProduct {
     pub fn refusing(standing_in_for: &'static str) -> FakeWorkProduct {
         FakeWorkProduct {
             changed: Vec::new(),
-            refuse: RefCell::new(Some(standing_in_for)),
-            asked: RefCell::new(Vec::new()),
+            refuse: Mutex::new(Some(standing_in_for)),
+            asked: Mutex::new(Vec::new()),
         }
     }
 
     /// Every worktree path this fake was asked about, in order. A gate that
     /// never asked is a gate that decided `diff_nonempty` without looking.
     pub fn asked(&self) -> Vec<String> {
-        self.asked.borrow().clone()
+        self.asked.lock().expect("not poisoned").clone()
     }
 }
 
@@ -78,8 +81,11 @@ impl WorkProduct for FakeWorkProduct {
     type Error = FakeDiffRefused;
 
     fn changed_files(&self, worktree: &Worktree) -> Result<Changed, Self::Error> {
-        self.asked.borrow_mut().push(worktree.path().to_string());
-        if let Some(standing_in_for) = *self.refuse.borrow() {
+        self.asked
+            .lock()
+            .expect("not poisoned")
+            .push(worktree.path().to_string());
+        if let Some(standing_in_for) = *self.refuse.lock().expect("not poisoned") {
             return Err(FakeDiffRefused { standing_in_for });
         }
         Ok(Changed::of(self.changed.clone()))

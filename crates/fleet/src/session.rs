@@ -144,6 +144,27 @@ impl DroneSession {
         self.pid
     }
 
+    /// Whether the Drone has exited, **and reap it if it has**.
+    ///
+    /// The two halves are one call on purpose. `try_wait` is the thing that
+    /// collects a finished child, and a child nobody collects is a zombie that
+    /// still holds its pid — so a caller that asked without reaping would be
+    /// told "still there" forever, by the very state its asking was meant to
+    /// detect.
+    ///
+    /// This is why the aftermath does **not** go through
+    /// [`holder_of`](crate::holder_of): that answers about a pid this process
+    /// does not own, which is the runtime file's question and not this one's.
+    /// For a child Fleet is holding, the operating system has an exact answer
+    /// and it is here.
+    pub(crate) async fn exited(&self) -> Result<bool, io::Error> {
+        self.child
+            .lock()
+            .await
+            .try_wait()
+            .map(|status| status.is_some())
+    }
+
     /// Write one turn, whole, and flush it.
     ///
     /// Returns the `io::Error` rather than a wrapped one because every caller

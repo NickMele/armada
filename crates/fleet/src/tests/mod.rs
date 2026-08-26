@@ -20,11 +20,22 @@
 //! answer are questions about an operating system rather than about a value.
 //! **Nothing here starts an agent.** What a Drone is confined to is a rendering
 //! and is asserted in `adapters`, where no process is involved at all.
+//!
+//! `daemon` and `serving` are the sixth, and they are the first that are about
+//! the whole: a Job driven from created to completed against fakes, read back
+//! out of a reopened store, and the same five operations answered over the
+//! router that ships. `briefing` and `host` are the two seams that arrived with
+//! them — what a Drone is told, and the one place a clock is read and an id is
+//! invented.
 
+mod briefing;
+mod daemon;
 mod detach;
 mod drone;
 mod gate;
+mod host;
 mod process;
 mod runtime;
+mod serving;
 mod session;
 mod tmp;
