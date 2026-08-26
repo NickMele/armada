@@ -237,8 +237,22 @@ fn every_top_level_origin_narrows_back_to_itself() {
     assert!(Origin::SubDispatched.top_level().is_none());
 }
 
+/// A tripwire on the enums' own size, and **not** a cross-check against the
+/// registries.
+///
+/// It was named for one and never performed one: it asserted thirteen against
+/// `EscalationTrigger::ALL` while `escalation-triggers.toml` went to fourteen
+/// keys, and passed, because nothing here reads the file. `core-model` has zero
+/// dependencies and cannot parse TOML, so nothing here ever will — the
+/// comparison lives in `cargo xtask verify-foundations`, which reads both sides
+/// and fails on either missing the other.
+///
+/// What this is worth on its own is the tripwire: a variant added or dropped
+/// changes a number here, so it cannot be done without touching a line whose
+/// only purpose is to be noticed. That is a prompt to go and check the
+/// registry, not evidence that anyone did.
 #[test]
-fn the_registrys_counts_are_what_the_enums_hold() {
+fn each_enums_size_is_pinned_here_and_compared_to_no_registry() {
     assert_eq!(JobStatus::ALL.len(), 12);
     assert_eq!(StepState::ALL.len(), 6);
     assert_eq!(EscalationTrigger::ALL.len(), 13);
