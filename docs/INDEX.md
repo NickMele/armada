@@ -109,6 +109,9 @@ approximations.
 - [`spikes/007-will-a-drone-take-the-escape-hatch.md`](spikes/007-will-a-drone-take-the-escape-hatch.md)
   — whether a Drone hands a hopeless task back rather than guessing, and
   whether the word the option is offered through changes it.
+- [`spikes/008-does-v1s-detach-leave-the-secrets-pipe-open.md`](spikes/008-does-v1s-detach-leave-the-secrets-pipe-open.md)
+  — whether `setsid` leaves v1's piped-stdin secret handoff readable, and what
+  a Drone spawn actually carried. Read rather than measured.
 
 Raw transcripts sit beside each record. A negative result is a result and stays.
 
