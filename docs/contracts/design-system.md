@@ -498,6 +498,85 @@ the row does not reshape.
 
 ---
 
+## Floating layers
+
+Where a layer opens, which edge it aligns to, and what happens when it does
+not fit. Anchored layers open against a trigger; framed layers open against
+the window. Flip and alignment apply to the anchored family only.
+
+**Placement is CSS anchor positioning.** The trigger carries an `anchor-name`,
+the layer names a preferred area and an ordered list of fallbacks. Bridge's
+renderer is one known Chromium, so this costs no positioning library and no
+measuring in JavaScript.
+
+### Anchored layers
+
+| Layer | Opens | Preferred alignment |
+| --- | --- | --- |
+| Dropdown menu | Below the trigger | Trailing edges flush |
+| Popover | Below the trigger | Leading edges flush, caller may set trailing |
+| Tooltip | Below the element it wraps | Leading edges flush |
+| Split-button menu | Below the whole control, not the caret | Leading edges flush |
+
+**Alignment is a preference, not a rule.** The trigger's edge is what the
+layer tries first; the window's edge is what overrides it.
+
+### Collision
+
+**A layer that does not fit flips. It never squashes.** Width and height come
+from tokens, so a narrow gap is not a reason to reflow what is inside.
+
+**Fallbacks are tried in order and the first that does not overflow wins.**
+
+| Order | Try | Gives up |
+| --- | --- | --- |
+| 1 | Preferred side, preferred alignment | Nothing |
+| 2 | Preferred side, opposite alignment | The trigger's edge |
+| 3 | Opposite side, preferred alignment | The side |
+| 4 | Opposite side, opposite alignment | Both |
+
+Overflow is measured against the window, never against the layer's parent. A
+menu that fits inside its card and runs off the screen has not fitted.
+
+### Framed layers
+
+These have no trigger, so flip and alignment do not apply to them.
+
+| Layer | Opens |
+| --- | --- |
+| Dialog | Centred in the window on both axes |
+| Sheet | Full height, flush to one side edge, trailing by default |
+| Toast | Bottom trailing corner, inset `--space-6` |
+| Command palette | Horizontally centred, top-anchored |
+
+The palette's offset, and why it is not centred, are under Command palette.
+
+### Stacking
+
+**A floating layer takes a stacking token and never a written number.** The
+order is the order a person meets them.
+
+| Token | Layer | Why it sits here |
+| --- | --- | --- |
+| `--z-menu` | Dropdown, popover, split-button menu | Opens over the surface |
+| `--z-tooltip` | Tooltip | Explains the thing a menu is over |
+| `--z-modal` | Dialog, sheet | Interrupts both |
+| `--z-toast` | Toast | Reports on the dialog just dismissed |
+| `--z-palette` | Command palette | The way out of anything |
+
+A number meaning "above my sibling" means "under every other layer" the moment
+its layer resolves against the window rather than its parent.
+
+### Placement resolves before paint
+
+**Nothing animates into place.** Motion forbids an entrance animation on a
+data surface, and a floating layer is one as soon as it carries content.
+
+Hover, focus and dismissal still transition on `--duration-fast`. What is
+forbidden is the layer arriving, not what it does once it is there.
+
+---
+
 ## Keyboard and command palette
 
 Foundational rather than additive. Both change the component inventory
@@ -766,6 +845,8 @@ label      --text-2xs · --fg-subtle
 ```
 
 Sheet and dialog use the same surface treatment at `--radius-lg`.
+Where it opens, which edge it aligns to and what it does when it does not
+fit are under Floating layers.
 
 ### Tooltip
 
@@ -778,6 +859,8 @@ timing   400ms delay in, --duration-fast
 Tooltips carry the full value of anything truncated in a row — a path,
 a branch name, a full timestamp. They never carry an explanation the
 row should have made plain, per the briefing-register rule.
+
+Placement, alignment and collision are under Floating layers.
 
 ### Status bar
 
