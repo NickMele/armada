@@ -167,6 +167,22 @@
     group = "Git and config"
     size = "12px"
 
+[icons.file]
+  means = "A log — the plain page outline"
+  group = "Evidence"
+  size = "12px"
+  status = "Specified"
+  reserved = "The log row, and nothing else. It is the file-* family's unmarked member."
+  notes = "`docs/concepts/log-envelope.md` states the rule this row carries out: the file-* family is reserved to evidence, so the log row takes the plain page outline rather than a new glyph. The row was missing while three screens rendered a log line, so each left its mark channel empty rather than borrowing a glyph that means something else."
+
+[icons.file-check]
+  means = "A page outline with a check — one submitted piece of evidence"
+  group = "Evidence"
+  size = "12px"
+  status = "Specified"
+  reserved = "A submission that landed. Never a Check result, which is the shield-* family."
+  notes = "The check marks that evidence was submitted, not that anything passed — a submission returns a receipt and the verdict arrives later. Distinguishing those two is why this is not `shield-check`."
+
 [icons.file-question-mark]
   means = "A page outline with a question mark"
   group = "Escalation reason"
