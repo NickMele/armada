@@ -32,7 +32,9 @@ not override, **spec** is a designed artifact, **reference** is lookup material.
 
 - [`contracts/system-architecture.md`](contracts/system-architecture.md) —
   *reference.* Topology, trust boundaries and the component taxonomy. The map
-  with the why attached; `ARCHITECTURE.md` is the map with the where.
+  with the why attached; `ARCHITECTURE.md` is the map with the where. The
+  operation inventory behind its protocol surface is
+  `crates/ipc/operations.toml`.
 - [`contracts/technical-writing.md`](contracts/technical-writing.md) —
   *contract.* The shape of every document here: one mode per page, how a rule
   is phrased, when prose becomes a table. Read before writing in `docs/`.

@@ -1,0 +1,321 @@
+# The word, the glyph and the colour each enum variant renders as. The
+# vocabulary Bridge's generated TypeScript module is built from: codegen joins
+# `core-model`'s enum names to this file and emits one module the renderer
+# imports, so no surface holds a verb list, a badge map or a copy of the enum
+# of its own.
+#
+# Authored here. This file is the authority on how a variant reads; a page in
+# the design workspace that disagrees with it is stale, not right.
+#
+# Tables nest one level: `[verbs.<enum>.<variant>]`. The inner table key is the
+# wire value, so a rule can compare a set here against the Rust enum without a
+# mapping in between, and the outer key names which enum that is. A flat map
+# could not — `evidence_suspect` is a variant of two enums at once, on two
+# different axes, and it is the one collision the nesting exists to hold.
+#
+# The seven enums:
+#   job_status                 - where a Job is. Keys match job-statuses.toml
+#   queued_reason              - why a queued Job has not started
+#   escalation_reason          - why a Job stopped and asked. Keys match
+#                                escalation-triggers.toml
+#   step_verdict               - the outcome of one workflow step
+#   criterion_verdict_check    - one criterion, as a mechanical Check saw it
+#   criterion_verdict_judge    - one criterion, as the Judge saw it
+#   criterion_verdict_attested - one criterion, as a person attested it
+#
+# Fields:
+#   verb         - what a person reads. Never the enum name
+#   icon         - the lucide glyph, keyed to packages/icons/icons.toml
+#   status_token - the CSS custom property, defined in packages/tokens/src
+#   vocabulary   - the enum this variant belongs to, as the source names it.
+#                  Redundant against the outer table key and carried anyway,
+#                  for the reason `transitions_in` is: declared intent checked
+#                  against what was wired
+#   in_code      - whether an implementation exists, as the source recorded it.
+#                  Provenance, not fact: it describes v1, which is deleted, so
+#                  every "In code" here is false as a claim about this
+#                  workspace
+#   notes        - the reasoning the row carried
+#   verb_and_icon_from
+#                - names the enum a variant borrows both from, where it has
+#                  neither of its own
+#
+# An empty `verb`, `icon` or `status_token` is a gap, not a default. The build
+# fails where a variant lacks one; the gaps are carried so they are countable.
+#
+# `verb_and_icon_from` is how a deliberate blank says so. `escalated` renders
+# its reason rather than its own name, and declaring that here keeps the
+# codegen rule exceptionless — an exception living inside the generator is
+# invisible to whoever adds the next variant.
+
+[verbs.job_status.awaiting_approval]
+verb = "needs approval"
+icon = "user-check"
+status_token = "--status-awaiting-approval"
+vocabulary = "Job status"
+in_code = ""
+notes = "Carried over from needs_approval when the approval axis became a status. The verb did not move to awaiting approval for symmetry with awaiting review: the badge means a person must act, not that time is passing, and needs is the word that says so."
+
+[verbs.job_status.awaiting_attestation]
+verb = "awaiting attestation"
+icon = "stamp"
+status_token = "--status-awaiting-attestation"
+vocabulary = "Job status"
+in_code = ""
+notes = "Reads as the act the person owes. Grounded once the third verification source was named Attestation — the status and the source use the same word because they are the same thing at two moments, one waiting for it and one recording it."
+
+[verbs.job_status.awaiting_review]
+verb = "awaiting review"
+icon = "eye"
+status_token = "--status-awaiting-review"
+vocabulary = "Job status"
+in_code = ""
+
+[verbs.job_status.completed_failed]
+verb = "failed"
+icon = "x"
+status_token = "--status-completed-failed"
+vocabulary = "Job status"
+in_code = ""
+
+[verbs.job_status.completed_success]
+verb = "done"
+icon = "check"
+status_token = "--status-completed-success"
+vocabulary = "Job status"
+in_code = ""
+
+[verbs.job_status.escalated]
+verb = ""
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Job status"
+in_code = ""
+notes = "Renders its reason, never its own name — nobody says a Job escalated at step 3. The verb and the glyph both come from whichever Escalation reason row is set, which is why this row carries neither."
+
+[verbs.job_status.killed]
+verb = "killed"
+icon = "power"
+status_token = "--status-killed"
+vocabulary = "Job status"
+in_code = ""
+
+[verbs.job_status.piloted]
+verb = "piloted"
+icon = "terminal"
+status_token = "--status-piloted"
+vocabulary = "Job status"
+in_code = ""
+
+[verbs.job_status.queued]
+verb = "queued"
+icon = "clock"
+status_token = "--status-not-started"
+vocabulary = "Job status"
+in_code = ""
+notes = "Carried over from pre_approved. Where a reason is set, the reason's verb and glyph replace these."
+
+[verbs.job_status.rejected]
+verb = "rejected"
+icon = "ban"
+status_token = "--status-rejected"
+vocabulary = "Job status"
+in_code = ""
+
+[verbs.job_status.running]
+verb = "running"
+icon = "circle-dot"
+status_token = "--status-running"
+vocabulary = "Job status"
+in_code = ""
+
+[verbs.job_status.superseded]
+verb = "superseded"
+icon = "archive"
+status_token = "--status-superseded"
+vocabulary = "Job status"
+in_code = ""
+
+[verbs.queued_reason.blocked_by_dependency]
+verb = "blocked"
+icon = "link"
+status_token = "--status-not-started"
+vocabulary = "Queued reason"
+in_code = ""
+
+[verbs.queued_reason.waiting_on_resources]
+verb = "waiting on resources"
+icon = "cpu"
+status_token = "--status-not-started"
+vocabulary = "Queued reason"
+in_code = ""
+notes = "A pre-approved Job out of headroom reads waiting on resources rather than falling through unrendered, which is what the old two-axis field did."
+
+[verbs.escalation_reason.blocked_by_policy]
+verb = "blocked by policy"
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "Not yet"
+notes = "Names the thing to change rather than what went wrong, because nothing went wrong with the work — the Drone was refused something it needed. The payload carries the refused commands and their inputs, since the fix is a configuration change and the reader needs to know which line to edit. No glyph."
+
+[verbs.escalation_reason.check_timeout]
+verb = "a check timed out"
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "Not yet"
+notes = "No glyph. The shield-* family is reserved to gates and checks, so the natural candidate sits there."
+
+[verbs.escalation_reason.dependency_failed]
+verb = ""
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "Not yet"
+notes = "Filed as a trigger Aug 2026 with neither a verb nor a glyph. Both are owed."
+
+[verbs.escalation_reason.evidence_suspect]
+verb = "evidence disputed"
+icon = "file-question"
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "In code"
+notes = "Judge goes in the source field, which keeps attribution out of the headline. Avoid \"Judge rejected the evidence\" — rejected is already a Job status."
+
+[verbs.escalation_reason.evidence_too_large]
+verb = "evidence too large"
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "Not yet"
+notes = "No glyph. The file-* family is reserved to evidence, so the natural candidate sits there."
+
+[verbs.escalation_reason.fan_out]
+verb = "hit the sub-dispatch cap"
+icon = "split"
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "In code"
+notes = "One of two verbs not guessable back to its enum name, which is why the raw enum sits in the detail view header."
+
+[verbs.escalation_reason.gate_failure]
+verb = "failed a check"
+icon = "shield-x"
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "In code"
+
+[verbs.escalation_reason.interrupted]
+verb = "interrupted"
+icon = "unplug"
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "In code"
+
+[verbs.escalation_reason.loop_cap]
+verb = "hit the iteration cap"
+icon = "arrow-up-to-line"
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "Not yet"
+
+[verbs.escalation_reason.resource_exhausted]
+verb = "ran out of resources"
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "Not yet"
+notes = "No glyph. Iconography names an icon for every escalation reason it lists, and this trigger is not among them."
+
+[verbs.escalation_reason.silent]
+verb = "stalled"
+icon = "octagon-alert"
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = ""
+notes = "Takes no verb of its own. A sub-kind of stalled: the difference is entirely in the suggested action on the payload, rephrase and redispatch rather than plain redispatch. A badge distinguishing them would imply the Job behaves differently, and it does not."
+
+[verbs.escalation_reason.stalled]
+verb = "stalled"
+icon = "octagon-alert"
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "In code"
+
+[verbs.escalation_reason.thrashing]
+verb = "churning"
+icon = "refresh-cw"
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "In code"
+notes = "The enum name is OS jargon. What has to survive is busy-but-going-nowhere against silent, and stalled already owns silent."
+
+[verbs.step_verdict.evidence_suspect]
+verb = "evidence disputed"
+icon = ""
+status_token = ""
+vocabulary = "Step verdict"
+in_code = ""
+notes = "Same words as the escalation reason of this name, on a different axis — the step verdict, not why the Job stopped."
+
+[verbs.step_verdict.pass]
+verb = "Step N of M verified"
+icon = ""
+status_token = ""
+vocabulary = "Step verdict"
+in_code = ""
+notes = "Names the step rather than the Judge, so attribution stays out of the headline and the reader learns where they are in the workflow. Avoid \"Judge passed\", which breaks both rules at once."
+
+[verbs.criterion_verdict_check.failed]
+verb = "failed"
+icon = ""
+status_token = ""
+vocabulary = "Criterion verdict — Check"
+in_code = ""
+
+[verbs.criterion_verdict_check.not_reached]
+verb = "not reached"
+icon = "shield-minus"
+status_token = ""
+vocabulary = "Criterion verdict — Check"
+in_code = ""
+notes = "Moved off circle-minus when the circle-* family was reserved to Judge verdicts. shield-minus completes the check family rather than damaging it."
+
+[verbs.criterion_verdict_check.passed]
+verb = "passed"
+icon = ""
+status_token = ""
+vocabulary = "Criterion verdict — Check"
+in_code = ""
+
+[verbs.criterion_verdict_judge.met]
+verb = "no objection"
+icon = "circle-check"
+status_token = ""
+vocabulary = "Criterion verdict — Judge"
+in_code = ""
+notes = "Not \"accepted\". The Judge declines to refuse; it never grants."
+
+[verbs.criterion_verdict_judge.not_met]
+verb = "refused"
+icon = "circle-x"
+status_token = ""
+vocabulary = "Criterion verdict — Judge"
+in_code = ""
+
+[verbs.criterion_verdict_attested.confirmed]
+verb = "confirmed"
+icon = ""
+status_token = ""
+vocabulary = "Criterion verdict — attested"
+in_code = ""
+notes = "Affirmative, where the Judge's vocabulary is not. A person may grant; the Judge may only decline to refuse. No glyph — the three verdict families are reserved to the other two sources."
+
+[verbs.criterion_verdict_attested.withheld]
+verb = "withheld"
+icon = ""
+status_token = ""
+vocabulary = "Criterion verdict — attested"
+in_code = ""
+notes = "A person looked and would not put their name to it. Not failed, which is an exit code, and not refused, which is the Judge's veto. No glyph, for the reason confirmed has none."

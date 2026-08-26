@@ -1,0 +1,370 @@
+# packages/components/components.toml
+#
+# The Armada component registry. AUTHORED HERE, not generated — this file is
+# the authority on which components exist, and nothing beyond that. Notion's
+# "Armada Components" database is retired to history; a page there that
+# disagrees with this file is stale, not right.
+#
+# One [components."<Name>"] table per component, keyed by the name the design
+# project draws it under. Bridge builds from this roster: a surface composes
+# components named here, and a component absent from it does not exist yet.
+#
+# How a component is drawn, and why, lives in the component sheet in the design
+# project, beside the drawing it explains. No geometry, no reasoning and no
+# notes belong in this file.
+#
+# Fields:
+#   group    - the family the component belongs to: Bridge surface, Core,
+#              Data, Forms, Navigation, Overlay
+#   kind     - shadcn primitive | non-shadcn primitive | Composition |
+#              Undecided
+#   status   - In the kit | Proposed | Missing | Needs a contract decision
+#   icons    - the glyphs it renders, each an entry in
+#              packages/icons/icons.toml (absent where it renders none)
+#   tokens   - the tokens it names, each defined in packages/tokens/src
+#              (absent where none are recorded)
+#   journeys - the journeys it appears in, each a document in docs/journeys
+#              (absent where none are recorded)
+
+[components."Active jobs list"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Monitor Active Work"]
+
+[components.Alert]
+  group = "Overlay"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components."Approval card"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "Missing"
+  journeys = ["Dispatch a Job"]
+
+[components.Badge]
+  group = "Data"
+  kind = "shadcn primitive"
+  status = "In the kit"
+  icons = ["circle-dot", "eye", "check", "x", "ban", "power", "cpu", "link", "user-check", "clock", "refresh-cw", "shield-x", "octagon-alert", "split", "unplug", "file-question"]
+
+[components."Board empty state"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "Missing"
+  journeys = ["Dispatch a Job"]
+
+[components.Button]
+  group = "Forms"
+  kind = "shadcn primitive"
+  status = "In the kit"
+  icons = ["check", "ban", "power", "send", "corner-up-right", "rotate-cw", "terminal", "pause"]
+
+[components.Card]
+  group = "Data"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components.Checkbox]
+  group = "Forms"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components.CommandPalette]
+  group = "Overlay"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components."Criteria editor"]
+  group = "Forms"
+  kind = "Composition"
+  status = "Missing"
+  journeys = ["Dispatch a Job"]
+
+[components."Criterion row"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "Needs a contract decision"
+
+[components."Criterion verdict row"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  icons = ["circle-check", "circle-x"]
+  journeys = ["Monitor Active Work"]
+
+[components."DAG graph view"]
+  group = "Bridge surface"
+  kind = "Undecided"
+  status = "Missing"
+  journeys = ["Dispatch a Job"]
+
+[components.Dialog]
+  group = "Overlay"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components."Doctor condition strip"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Triage Queue"]
+
+[components.DropdownMenu]
+  group = "Overlay"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components."Escalation payload"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Monitor Active Work"]
+
+[components."Evidence card"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Triage Queue"]
+
+[components."Evidence trail"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Read the work and merge by hand"]
+
+[components."Filter and sort bar"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "Missing"
+  journeys = ["Dispatch a Job"]
+
+[components."Group and sub-group heading"]
+  group = "Data"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Triage Queue"]
+
+[components."Hard prerequisite lock"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  icons = ["lock", "flag"]
+  journeys = ["Monitor Active Work"]
+
+[components.Icon]
+  group = "Core"
+  kind = "Composition"
+  status = "In the kit"
+
+[components.Input]
+  group = "Forms"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components."Job composer"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "Proposed"
+  journeys = ["Dispatch a Job"]
+
+[components."Job detail header actions"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Monitor Active Work"]
+
+[components."Job log reference"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Read a failed Job"]
+
+[components."Job row (stacked)"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+
+[components."Judge panel row"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Monitor Active Work"]
+
+[components.kbd]
+  group = "Core"
+  kind = "non-shadcn primitive"
+  status = "In the kit"
+
+[components."Kill & Redispatch dialog"]
+  group = "Overlay"
+  kind = "shadcn primitive"
+  status = "Needs a contract decision"
+  journeys = ["Respond to a Push Alert"]
+
+[components."List / graph toggle"]
+  group = "Navigation"
+  kind = "non-shadcn primitive"
+  status = "Needs a contract decision"
+  journeys = ["Dispatch a Job"]
+
+[components."Manifest edit form"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Run and edit a Manifest"]
+
+[components."Manifest scope picker"]
+  group = "Navigation"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Dispatch a Job"]
+
+[components."Origin tag"]
+  group = "Data"
+  kind = "Composition"
+  status = "Missing"
+  journeys = ["Dispatch a Job"]
+
+[components."Pilot confirmation modal"]
+  group = "Overlay"
+  kind = "shadcn primitive"
+  status = "Missing"
+  journeys = ["Take Over a Job"]
+
+[components.Popover]
+  group = "Overlay"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components."Proposal surface"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "Missing"
+  journeys = ["Dispatch a Job"]
+
+[components.Radio]
+  group = "Forms"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components."Redirect composer"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Respond to a Push Alert"]
+
+[components."Registry list — Checks and Commands"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Run and edit a Manifest"]
+
+[components."Run result panel"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Run and edit a Manifest"]
+
+[components.ScrollArea]
+  group = "Data"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components.Select]
+  group = "Forms"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components.Separator]
+  group = "Data"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components.Sheet]
+  group = "Overlay"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components.Sidebar]
+  group = "Navigation"
+  kind = "Composition"
+  status = "In the kit"
+  icons = ["eye", "activity", "clipboard-list", "bell", "scroll-text", "message-square", "stethoscope"]
+
+[components.Skeleton]
+  group = "Data"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components."Split button"]
+  group = "Core"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Monitor Active Work"]
+
+[components.StatusBar]
+  group = "Navigation"
+  kind = "Composition"
+  status = "In the kit"
+
+[components."Step activity mark"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Monitor Active Work"]
+
+[components."Step bar"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Monitor Active Work"]
+
+[components.Switch]
+  group = "Forms"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components.Table]
+  group = "Data"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components.Tabs]
+  group = "Navigation"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components."Tabs with counts"]
+  group = "Navigation"
+  kind = "shadcn primitive"
+  status = "In the kit"
+  journeys = ["Triage Queue"]
+
+[components.Toast]
+  group = "Overlay"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components.Tooltip]
+  group = "Overlay"
+  kind = "shadcn primitive"
+  status = "In the kit"
+
+[components."Verify panel"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Run and edit a Manifest"]
+
+[components."Workflow graph"]
+  group = "Bridge surface"
+  kind = "Undecided"
+  status = "Proposed"
+
+[components."Workflow rail"]
+  group = "Bridge surface"
+  kind = "Composition"
+  status = "In the kit"
+  journeys = ["Monitor Active Work"]

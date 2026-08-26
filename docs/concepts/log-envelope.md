@@ -34,9 +34,13 @@ Identical key names across all three emitters. A key is either present with a va
 
 **Fleet is the sole authority for `job_id` and `drone_id`.** Bridge and Drones never mint either; they echo what they were handed, which makes the join reliable rather than best-effort. Why: an id invented by something that does not own the record joins to nothing.
 
+### `run_id` names the emitter
+
 **`run_id` is the exception, because it names the emitter rather than a record.** Each process mints its own at start: Fleet's changes on every restart, which is what makes a restart visible in the log, and Bridge's and a Drone's identify theirs.
 
 A Drone outlives a Fleet restart under `setsid`, and Bridge runs before it has reached Fleet at all, so a single Fleet-owned `run_id` could not describe either. Reading it is per emitter: a Fleet restart is Fleet's `run_id` changing, not any `run_id` changing.
+
+### Each emitter is handed the spine
 
 **IDs reach a Drone as environment variables** — `ARMADA_JOB_ID`, `ARMADA_DRONE_ID`, `ARMADA_STEP_ID` — set in `DroneSpawnConfig`. Hooks and transcripts then carry the spine without anything parsing a prompt.
 
@@ -44,7 +48,11 @@ A Drone outlives a Fleet restart under `setsid`, and Bridge runs before it has r
 
 **Fleet uses spans, not arguments.** `job`, `step` and `drone` spans mean `tracing` propagates the fields automatically, so no function signature grows an `id` parameter for logging's sake.
 
+### Lexicographic sort is chronological
+
 **ULIDs, not UUIDv4.** Why: lexicographic sort is chronological, so merging three emitters' lines into one ordered view costs a string sort.
+
+### Nothing greps `msg`
 
 **IDs are fields only.** Any query or `jq` filter targets a field; nothing greps `msg` text. This is the same discipline as `store` being the only crate that deserializes: the structured path is the only path.
 

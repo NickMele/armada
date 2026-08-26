@@ -14,31 +14,47 @@ A Convoy is **one Job**: one [Drone](drone.md), one worktree spanning a declared
 
 One combined human approval over the combined diff. One PR touching all declared Workspace paths.
 
+### Derived, not stored
+
 **Convoy is a derived shape, not a stored value.** Nothing on [Job](job.md) says "convoy". A Job **is** a Convoy when it has several `write_targets` and `atomic` set — several places to write, which must land as one unit.
 
 `write_targets` holds paths; the declared set of Workspaces a Convoy spans is what those paths resolve to under nearest-ancestor ownership, not a second list. The name stays as vocabulary for people and for this document; the record carries the properties instead.
 
 Several write targets **without** `atomic` is the wide-and-uncoupled case and is not a Convoy. **Counting Manifests does not identify a Convoy** — a root change gated by twelve Workspaces would count as one.
 
-It exists for changes with **no valid intermediate state** — tightly coupled Workspaces that must land in a single commit. A parser/generator pair, coupled sibling packages, tightly coupled services. Confirmed as a real pattern from a live work monorepo, not a hypothetical.
+### No valid intermediate state
+
+A Convoy exists for changes with **no valid intermediate state** — tightly coupled Workspaces that must land in a single commit. A parser/generator pair, coupled sibling packages, tightly coupled services. Confirmed as a real pattern from a live work monorepo, not a hypothetical.
+
+### One root `armada.yml`
 
 **Root-Manifest-scoped.** Every declared Workspace must descend from a single root `armada.yml`. A Convoy does not span repos, or two independent roots inside one repo — neither half of the definition is constructible there, since one worktree cannot span two repos and one PR cannot touch two.
 
 Stated as one root rather than one repo because Armada knows roots and Workspaces, not repositories. Cross-root coupling falls to linked-DAG sub-Jobs. A dedicated multi-repo Job shape is tracked separately and is not designed.
 
+### Revising the declared set
+
 **The declared set is not fixed at dispatch.** It may be revised mid-Job by rescope-and-respawn: [Fleet](fleet.md) terminates the [Drone](drone.md), re-resolves configuration against the new Manifest set, and spawns a fresh Drone on the same worktree and branch. **A narrowing proceeds unchallenged; a widening returns to the dispatch approval gate first.**
 
-**This bites hardest on a Convoy.** Permissions intersect across the gating Manifests, and intersection is monotone — widening a Convoy can only remove capability, so the respawned Drone may be less capable than the one that asked to widen. The revision must also stay inside the root bound above.
+**A revision bites hardest on a Convoy.** Permissions intersect across the gating Manifests, and intersection is monotone — widening a Convoy can only remove capability, so the respawned Drone may be less capable than the one that asked to widen. The revision must also stay inside the root bound above.
+
+### A revision can change the shape
 
 A revision can change the shape itself: dropping to one `write_target`, or clearing `atomic`, means the Job stops being a Convoy mid-flight. A revision records the change to `atomic` alongside the paths added and removed, so a Job's earlier shape stays reconstructable.
+
+### Overlap with concurrent work
 
 **A Convoy overlaps more concurrent work than a single-workspace Job, by construction.** Its declared scope is wider, so its `write_targets` intersect more of what else is running, and the approval card will name a collision more often for one.
 
 The alternative to one Job spanning coupled Workspaces is several Jobs touching the same set, which collides identically and lands in pieces. Overlap is surfaced and never serialised; see [Fleet](fleet.md), Scheduling and gating.
 
+### No children, a peer in the DAG
+
 **A Convoy has no children.** It is a single Job with several `write_targets`, not a parent that decomposes into sub-Jobs. A Convoy **does not decompose** — with no children, nothing hangs below it.
 
 **It may still be a peer node in Job's `dependencies` DAG:** `depends_on` / `blocks` sequence *peer* Jobs, not children, so having no children never ruled this out. A Convoy landing a coupled types/API pair with a UI Job downstream is the common feature shape, and it works because a Convoy completes as one unit — a dependent Job never observes a half-landed upstream.
+
+### The fields a Job carries
 
 **A Job carries `owner_manifest_id`** (exactly one, and the [Job Board](job-board.md)'s scoping key), **`gate_manifest_ids[]`** (may be empty) and **`write_targets[]`**. These replaced a single `manifest_ids` field, which answered four questions at once and whose entry count doubled as the shape discriminator.
 

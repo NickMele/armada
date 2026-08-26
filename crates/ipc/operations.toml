@@ -1,0 +1,282 @@
+# Every operation the Fleet/Bridge seam carries, with who may reach it.
+#
+# Authored here. This file is the authority on the operation set: which calls
+# exist, which of them Helm may reach, and which travel the socket rather than
+# HTTP. A page in the design workspace that disagrees with this file is stale,
+# not right.
+#
+# It sits beside `ipc` because that is the crate the wire vocabulary lives in,
+# and both readers of the seam read it. Fleet's hand-written route table is the
+# HTTP half; the codegen step that emits Bridge's TypeScript is the other. The
+# route table being hand-written is the accepted cost this file is the check
+# against — a route that exists here and nowhere in the router is a runtime 500,
+# and only a rule reading both catches it.
+#
+# The table key is the operation name as it appears on the wire, so a rule can
+# compare this set against the routes and the event kinds without a mapping in
+# between. An event's key carries the dotted form it is published under.
+#
+# `kind` decides `transport` and the source states both: who initiates is the
+# whole rule, so a query and a command are alike request-response over HTTP and
+# only an unsolicited push needs the socket. Both are carried, and a rule reads
+# both and fails where they disagree.
+#
+# Fields:
+#   kind        - query | command | event
+#   transport   - HTTP | WebSocket
+#   helm_access - Yes | No | Bridge only | Drafts only. What Helm may reach
+#                 directly, which on a command is the Intervention Ladder rung
+#   description - what the operation returns or does, in one line
+#   notes       - the reasoning the row carried, where it carried any
+
+
+[operations.get_activity_feed]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "Completed Jobs, chronological"
+
+[operations.get_drone]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "One Drone, turn history, declared file plan"
+
+[operations.get_events_since]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "A count plus one line per event kind since the cursor, not the events themselves"
+notes = """
+Helm's substitute for the event stream, called at the start of each turn; Bridge does not use it, having the socket. Helm fetches detail through the other queries only where it bears on what was asked — the query is cheap, the tokens are not, and every returned event stays in the session for its remainder. Fleet waking the session was rejected: it would make Helm a second notification channel alongside Alerts.
+"""
+
+[operations.get_evidence]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "Per-step Evidence bundles"
+
+[operations.get_health]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "All Doctor probes"
+notes = """
+The one call that must work when Fleet is down. The probe count is not stated here; it is Doctor's, in docs/concepts/doctor.md.
+"""
+
+[operations.get_job]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "One Job in full, including Facts and shape"
+
+[operations.get_job_events]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "Audit trail, 3-way actor separated"
+
+[operations.get_manifest]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "Resolved config for a Manifest"
+notes = """
+The resolution chain across Kit, Machine and Manifest is not yet stated.
+"""
+
+[operations.get_usage]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "Spend or quota against the Machine gate"
+
+[operations.list_alerts]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "Alerts by level — Blocked, Waiting"
+
+[operations.list_drones]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "Live Drones with worktree and Job"
+
+[operations.list_job_board]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "The open queue — not-yet-started Jobs"
+
+[operations.list_jobs]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "Jobs with state and reason"
+
+[operations.list_reviews]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "Jobs awaiting sign-off"
+
+
+[operations.approve_command]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Confirm-before-destructive"
+
+[operations.approve_dispatch]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Releases a Job to spawn"
+notes = """
+The primary autonomy control.
+"""
+
+[operations.approve_review]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Advances past a human gate"
+
+[operations.deny_dispatch]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Rejects a dispatch, feeds pattern learning"
+
+[operations.kill_drone]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Kills a Drone, captures learnings, holds the worktree"
+notes = """
+Intervention Ladder rung 2.
+"""
+
+[operations.propose_job]
+kind = "command"
+transport = "HTTP"
+helm_access = "Drafts only"
+description = "Drafts a Job onto the approval gate"
+notes = """
+The gate is unchanged.
+"""
+
+[operations.pause_job]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Holds a healthy Drone with its worktree intact"
+notes = """
+Not on the Intervention Ladder, and not yet built. Pause only means something
+on a healthy Drone: anything escalated is already held, because Fleet never
+auto-kills.
+
+Bridge offers it beside Redirect and Kill on a healthy Drone. Helm does not
+reach it directly, because Helm access on a command is the ladder rung and
+pause has none.
+"""
+
+[operations.redirect_drone]
+kind = "command"
+transport = "HTTP"
+helm_access = "Yes"
+description = "Structured instruction to a running Drone"
+notes = """
+Intervention Ladder rung 1. The one command Helm gets directly.
+"""
+
+[operations.redispatch_job]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Fresh Drone with corrective context"
+notes = """
+Intervention Ladder rung 2.
+"""
+
+[operations.reject_job]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Hard stop"
+notes = """
+Reserved for hard stops only.
+"""
+
+[operations.request_changes]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Design Plan feedback loop"
+
+[operations.restart_fleet]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Restarts the daemon"
+notes = """
+An API command, not a recovery path. It cannot serve the case it is named for — a dead Fleet cannot restart itself, and that path is Bridge calling `launchctl kickstart -k` directly. It exists for the reachable case: Fleet is alive and answering, and something wants a clean restart.
+"""
+
+[operations.resume_interrupted_job]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Restarts a Job after a Fleet crash"
+
+
+[operations."alert.raised"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "An Alert is raised, carrying its Alert Level"
+
+[operations."drone.exited"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A Drone exits, clean or otherwise"
+
+[operations."drone.spawned"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A Drone starts against a worktree"
+
+[operations."evidence.submitted"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "An Evidence MCP call lands"
+
+[operations."job.state_changed"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "Any of the Job states transitions"
+
+[operations."job.step_advanced"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A workflow step passes its gate"
+
+[operations."review.ready"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A Job reaches a human gate"
+
+[operations."usage.threshold"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "Spend or quota crosses the Machine gate"

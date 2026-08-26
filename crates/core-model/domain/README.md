@@ -20,6 +20,7 @@ files, a rule can — and the rule is the point.
 | `job-transitions.toml` | Every legal edge of the status machine, what fires it, and the escalation trigger it belongs to |
 | `job-fields.toml` | What a Job record holds — the `jobs` row, the `job_steps` row, and the three things stored elsewhere |
 | `escalation-triggers.toml` | Why a Job stopped and a person is being asked |
+| `enum-verbs.toml` | The word, the glyph and the colour each variant of the seven enums renders as |
 | `workflowdef-fields.toml` | What a WorkflowDef declares: a step's gates, its evidence scope, the def-level defaults |
 | `workflows.toml` | The workflows Armada runs, and the ones it has decided not to design yet |
 | `workflow-samples/*.json` | The WorkflowDefs themselves, verbatim. One per workflow whose row says it has one |

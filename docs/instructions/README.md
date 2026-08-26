@@ -27,5 +27,5 @@ next person cannot find.
 | What is being built and in what order | GitHub issues and milestones |
 | Mockups, the component sheet, the canvas | The design project |
 
-**The design workspace is no longer a working surface.** Armada Components is
-the exception: the design project still writes to it.
+**The design workspace is no longer a working surface**, and nothing sits
+between the repository and the design project.

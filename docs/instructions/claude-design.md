@@ -19,10 +19,15 @@ The repository's own gate refuses a document that is not in that index.
 **The journeys are files now**, at `docs/journeys/`, one per journey. They are
 no longer a database. Each carries its own `## Open questions` section.
 
-**Armada Components stays a database**, and this project writes to it. It
-carries which components exist and their status, and nothing else — no notes, no
-reasoning, no geometry. The component sheet is the source of truth for how one
-is drawn and why.
+**The component registry is a file in the repository**,
+`packages/components/components.toml` — which components exist, their group,
+their kind and their status, and nothing else. No notes, no reasoning, no
+geometry. The component sheet here is the source of truth for how one is drawn
+and why.
+
+**Nothing sits between this project and the repository.** When a component is
+added or its status changes, propose the row as a diff, the same way a token is
+proposed.
 
 **The values moved.** Every token is `packages/tokens/src/*.css` in the
 repository, and the icon set is `packages/icons/icons.toml`. The `tokens/*.css`
@@ -100,10 +105,9 @@ Claude Code.
 **The bar is three things at once**, and one of them is that a person deferred
 it. You may propose a question; you may not file one on your own judgement.
 
-**Writing to a database:** propose, wait for an explicit yes, then write. Never
-paraphrase a proposal. Give the page title, the field name, whether anything has
-been written yet, the field's current value in full, and the proposed value. One
-page per proposal.
+**Propose, wait for an explicit yes, then write.** Never paraphrase a proposal.
+Give the file, the row, its current value in full, and the proposed value. One
+row per proposal.
 
 ## What is tracked where
 
@@ -111,7 +115,7 @@ page per proposal.
 |---|---|
 | Contracts, concepts, journeys, open questions, tokens, icons | The repository, `NickMele/armada` |
 | Milestones, capabilities and steps | GitHub issues |
-| Which components exist, and their status | Armada Components |
+| Which components exist, and their status | `packages/components/components.toml` |
 | How a component is drawn, and why | The component sheet here |
 
 **Never write an address into the design workspace anywhere that could reach the
@@ -126,7 +130,7 @@ where design drift comes from.
 
 - **Design System** owns tokens, the status grammar, voice and the lexicon.
   **Iconography** owns which glyph means what. `packages/tokens`,
-  `packages/icons` and **Armada Components** are the rosters.
+  `packages/icons` and `packages/components` are the rosters.
 - **A roster is never enumerated in prose.** An entry is an address; a list
   written into a document body goes stale and then gets copied onward. Both the
   Design System and this file have had an enumeration go stale more than once.
@@ -169,7 +173,7 @@ resolve. Only the token set is spellable, and an arbitrary value like
 
 Mockups in this project are single-file HTML for review speed. They are not the
 app's source. Keep them translatable: same token names, same component names,
-same prop names as the Armada Components database. A Claude Code agent should be
+same prop names as the component registry. A Claude Code agent should be
 able to read a mockup and map it onto shadcn primitives without interpretation.
 
 ## Hard rules
@@ -352,5 +356,6 @@ Body, above that block:
 - Present options as options — side by side, with stable ids I can point at —
   not as a replacement for what exists.
 - You cannot generate images. Say so rather than drawing an SVG substitute.
-- When a journey turns up a component we do not have, add it to Armada Components
-  with a status and an open question rather than inventing one on the spot.
+- When a journey turns up a component we do not have, propose a row
+  for it with a status, and an open question, rather than inventing one on the
+  spot.

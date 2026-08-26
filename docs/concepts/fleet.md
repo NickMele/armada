@@ -49,11 +49,17 @@ The Configuration setting *Fleet self-restart attempt limit/backoff* describes a
 
 Neither reaches into the other, so make-a-group and kill-a-group is a utility both use rather than a service one owns.
 
+#### `checks-runner` takes no live handle
+
 **`checks-runner` takes injected data, never a live handle into Fleet.** It is a separate crate precisely for that, and a group handle is a live handle wearing a different name, so Fleet does not spawn on its behalf. Why: that coupling is what made v1's runner unportable.
+
+#### The group id is persisted
 
 **The group id is persisted against the Job**, alongside the port claim and the Drone PID. A live handle cannot be the only record: if `checks-runner` dies with children still running, the group outlives its owner and nothing holds it. With the id stored, Fleet's restart reconciliation of dead processes against live Jobs can kill an orphaned group in the pass it already runs.
 
 If Fleet stays up while `checks-runner` dies, nothing sweeps until the next restart. Whether that sweep runs at start, on a timer, or both is open (see Open questions).
+
+#### Where the platform difference belongs
 
 Process-group semantics differ across platforms, and where that difference belongs is tracked in `../contracts/adapters.md`.
 
@@ -177,13 +183,19 @@ A group kill cannot reach containers: `docker compose up -d` returns immediately
 
 The exhaustion message names how many spans interrupted Jobs hold and points at Alerts. **Spans accumulate rather than run concurrently**, so headroom against slow accumulation is the headroom that matters.
 
+#### Answering the escalation is what releases it
+
 **What ends the hold is the Job reaching a terminal.** A claim's lifetime is its worktree's lifetime, an interrupted Job sits at `escalated`, and its worktree is not swept while it stays there. A person answering that escalation — kill, redispatch or Pilot — takes the Job terminal; retention then sweeps the worktree and the span goes with it.
 
 The act is answering an escalation rather than anything about ports, so no surface, state or timer exists for this and none is needed. The bind-and-connect probe still gates the re-issue, which is what makes the release safe where a `setsid` Drone outlived its Fleet.
 
+#### Surfacing a held span
+
 **A held span stops being silent before exhaustion.** Past the held-span reminder threshold Fleet surfaces the hold. It releases nothing and changes no state — the alternative is learning about slow accumulation only when the range runs out.
 
 Where it renders is open — see Open questions — and the Doctor precedent argues for a health strip rather than an Alerts row, since a held span is a standing condition and not a queued decision.
+
+#### A timer would decide the Job is over
 
 **No timer releases a span.** Why: a timer would put Fleet in the business of deciding an interrupted Job is over, which is the person's call and the reason `escalated` halts autonomous action at all.
 
