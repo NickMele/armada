@@ -2,8 +2,8 @@
 //!
 //! It holds Jobs in a `Vec` and moves them on request. **It asserts nothing
 //! about the status machine** — that machine is `core-model`'s and is tested
-//! there, against the edge table. This exists to answer the four operations so
-//! the transport can be exercised, and it is written without `core-model` on
+//! there, against the edge table. This exists to answer the operations M1 serves
+//! so the transport can be exercised, and it is written without `core-model` on
 //! purpose: if a fake daemon can be built out of `ipc` alone, so can a Bridge.
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -131,16 +131,65 @@ impl Daemon for FakeDaemon {
         self.move_to(&job_id, "awaiting_approval", "queued", "human")
     }
 
+    /// The process, not the unit of work. The Job is handed back where it
+    /// stood, with no Drone on it: `assigned_drone` is presence rather than
+    /// state, and **the registry names no edge a killed Drone fires**, so a
+    /// transition invented here would be the fake asserting something about a
+    /// machine it does not own.
     async fn kill_drone(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
-        self.move_to(&job_id, "running", "killed", "human")
+        let mut jobs = self.jobs.lock().expect("not poisoned");
+        let Some(job) = jobs.iter_mut().find(|job| job.id == job_id) else {
+            return Err(self.no_such_job(&job_id));
+        };
+        // The one status this fake knows carries a live Drone. Nothing else
+        // does: a Job at the approval gate or in the queue has no process.
+        if job.status.as_wire() != "running" {
+            return Err(Refusal::IllegalMove(ipc::WireError::raised(
+                "fake.no_drone",
+                format!("a Job at {} has no Drone to kill", job.status.as_wire()),
+                run_id(),
+            )));
+        }
+        job.assigned_drone = None;
+        Ok(job.clone())
+    }
+
+    /// The unit of work, not the process. Legal from wherever the Job is, so
+    /// long as it is not already over — including the statuses `kill_drone`
+    /// refuses, which is the whole reason the two are separate operations.
+    async fn kill_job(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let from = {
+            let jobs = self.jobs.lock().expect("not poisoned");
+            let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+                return Err(self.no_such_job(&job_id));
+            };
+            // Terminality is the domain's, read through the DTO rather than
+            // restated: a second list of which statuses are over is a second
+            // vocabulary.
+            if job.status.domain().is_terminal() {
+                return Err(Refusal::IllegalMove(ipc::WireError::raised(
+                    "fake.illegal_move",
+                    format!("a Job at {} is already over", job.status.as_wire()),
+                    run_id(),
+                )));
+            }
+            job.status.as_wire()
+        };
+        self.move_to(&job_id, from, "killed", "human")
     }
 }
 
-/// A Job already running, so the kill path has something to kill.
+/// A Job already running, so the Drone kill has something to kill.
 pub fn running(daemon: &FakeDaemon, id: &str) {
+    at(daemon, id, "running");
+}
+
+/// A Job parked at any status the registry has, without a transition to get it
+/// there. What a fake is for: the transport is the thing under test.
+pub fn at(daemon: &FakeDaemon, id: &str, spelling: &str) {
     daemon.jobs.lock().expect("not poisoned").push(JobSummary {
         id: JobId::carried(id),
-        status: status("running"),
+        status: status(spelling),
         reason: None,
         workflow_id: WorkflowId::carried("01WF"),
         owner_manifest_id: ManifestId::carried("01MF"),

@@ -1,4 +1,4 @@
-//! The five operations, over the router, with no socket.
+//! The six operations, over the router, with no socket.
 //!
 //! `tower::ServiceExt::oneshot` calls the router directly — it is a `Service`,
 //! and a `Service` does not need a port to be called. What this proves is the
@@ -12,7 +12,7 @@ use http_body_util::BodyExt;
 use ipc::{JobList, JobSummary, StreamMessage, WireError};
 use tower::ServiceExt;
 
-use crate::tests::fake::{running, run_id, FakeDaemon, A_PROPOSAL};
+use crate::tests::fake::{at, running, run_id, FakeDaemon, A_PROPOSAL};
 use crate::{router, Broadcaster, Next, Served, Subscription, SERVED};
 
 fn wired(daemon: FakeDaemon, events: Broadcaster) -> Router {
@@ -74,13 +74,13 @@ async fn every_operation_the_table_names_is_routed() {
 /// One Job, through every operation M1 serves, watched on the stream — and not
 /// a byte of it goes near a network.
 #[tokio::test]
-async fn the_five_operations_run_with_no_network() {
+async fn the_six_operations_run_with_no_network() {
     let events = Broadcaster::new();
     let mut watching: Subscription = events.subscribe();
     let daemon = FakeDaemon::new(events.clone());
-    // One Job already running, so the kill has something to kill. Nothing in
-    // M1 starts a Drone, and this test is about the transport, not the
-    // scheduler.
+    // One Job already running, so the Drone kill has something to kill.
+    // Nothing in M1 starts a Drone, and this test is about the transport, not
+    // the scheduler.
     running(&daemon, "01RUNNING");
     let app = wired(daemon, events);
 
@@ -118,9 +118,69 @@ async fn the_five_operations_run_with_no_network() {
     assert_eq!(moved.to.as_wire(), "queued");
     assert_eq!(moved.actor.as_wire(), "human");
 
-    // kill_drone, on a Job that is running. Nothing else ends a Job by hand.
-    let (status, _) = call(&app, "POST", "/jobs/01RUNNING/kill_drone", "").await;
+    // kill_drone, on a Job that is running. The process goes; the Job does not.
+    let (status, body) = call(&app, "POST", "/jobs/01RUNNING/kill_drone", "").await;
     assert_eq!(status, StatusCode::OK);
+    let survivor: JobSummary = ipc::decode("job summary", &body).expect("a summary");
+    assert_eq!(
+        survivor.status.as_wire(),
+        "running",
+        "killing a Drone does not end its Job"
+    );
+    assert!(survivor.assigned_drone.is_none(), "no process is on it now");
+
+    // kill_job, on the same Job. This is the one that ends it.
+    let (status, body) = call(&app, "POST", "/jobs/01RUNNING/kill_job", "").await;
+    assert_eq!(status, StatusCode::OK);
+    let ended: JobSummary = ipc::decode("job summary", &body).expect("a summary");
+    assert_eq!(ended.status.as_wire(), "killed");
+}
+
+/// **The case that proves the two operations are not one.** A Job at the
+/// approval gate has no Drone — nothing has spawned — and the registry still
+/// carries `awaiting_approval -> killed`, an operator act carrying no verdict.
+/// `kill_drone` cannot express it, and says so.
+#[tokio::test]
+async fn a_job_with_no_drone_is_still_killable() {
+    let events = Broadcaster::new();
+    let mut watching: Subscription = events.subscribe();
+    let daemon = FakeDaemon::new(events.clone());
+    at(&daemon, "01ATGATE", "awaiting_approval");
+    let app = wired(daemon, events);
+
+    // There is no Drone here, so rung 2 has nothing to act on.
+    let (status, _) = call(&app, "POST", "/jobs/01ATGATE/kill_drone", "").await;
+    assert_eq!(
+        status,
+        StatusCode::CONFLICT,
+        "no Drone exists at the approval gate"
+    );
+
+    // The Job ends anyway, which is the whole distinction.
+    let (status, body) = call(&app, "POST", "/jobs/01ATGATE/kill_job", "").await;
+    assert_eq!(status, StatusCode::OK);
+    let killed: JobSummary = ipc::decode("job summary", &body).expect("a summary");
+    assert_eq!(killed.status.as_wire(), "killed");
+
+    let Some(Next::Send(delivered)) = watching.next().await else {
+        panic!("the kill published nothing");
+    };
+    let ipc::Event::JobStateChanged(moved) = delivered.event;
+    assert_eq!(moved.from.as_wire(), "awaiting_approval");
+    assert_eq!(moved.to.as_wire(), "killed");
+    assert_eq!(moved.actor.as_wire(), "human");
+}
+
+/// A Job already over is not killed twice. The 409 is the machine refusing the
+/// move, not the id being unknown.
+#[tokio::test]
+async fn a_job_that_is_already_over_cannot_be_killed_again() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    at(&daemon, "01DONE", "completed_success");
+    let app = wired(daemon, events);
+    let (status, _) = call(&app, "POST", "/jobs/01DONE/kill_job", "").await;
+    assert_eq!(status, StatusCode::CONFLICT);
 }
 
 #[tokio::test]

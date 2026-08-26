@@ -160,6 +160,28 @@ notes = """
 Intervention Ladder rung 2.
 """
 
+[operations.kill_job]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Ends a Job at `killed`, terminal, from any non-terminal status"
+notes = """
+Not on the Intervention Ladder, and not `kill_drone`. The ladder orders what a
+person does about a Drone that is going wrong; this ends the unit of work
+itself, carries no verdict, and is legal from every non-terminal status —
+including the ones a Job reaches before anything spawns, where there is no Drone
+for the ladder to act on.
+
+`killed` is terminal, so the Drone goes with the Job where there was one. The
+worktree is still held, until retention sweeps it — removal is driven by Job
+retention and never by process exit, and a rephrase-and-redispatch may reuse it
+from a Job that ended here. `reject_job` is the neighbour that carries a
+verdict; this one says nothing about the work.
+
+Helm does not reach it directly, because Helm access on a command is the ladder
+rung and this has none.
+"""
+
 [operations.propose_job]
 kind = "command"
 transport = "HTTP"

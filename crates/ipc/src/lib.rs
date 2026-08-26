@@ -30,9 +30,10 @@
 //!
 //! # What this crate is not
 //!
-//! Not the full protocol surface. `operations.toml` inventories thirty-four
-//! operations; the types here serve the five M1 needs — `list_jobs`,
-//! `propose_job`, `approve_dispatch`, `kill_drone` and the event stream. The
+//! Not the full protocol surface. `operations.toml` inventories every
+//! operation; the types here serve the ones M1 needs — `list_jobs`,
+//! `propose_job`, `approve_dispatch`, `kill_drone`, `kill_job` and the event
+//! stream. Neither kill adds a type: both name a Job and answer with one. The
 //! `/v0` lifeboat and version-skew handling are the Ship milestone's, and are
 //! deliberately absent rather than stubbed: a lifeboat that shares a type with
 //! the protocol it is the lifeboat for is not one.

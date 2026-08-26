@@ -6,7 +6,7 @@
 //! the Jobs are. The dependency therefore points from `fleet` to `api` and never
 //! back, `cargo tree -p api` names no `fleet`, and the daemon core stays
 //! drivable in a test with **no socket, no port and no process** — a fake
-//! implements four methods and the same router serves it.
+//! implements the trait and the same router serves it.
 //!
 //! # It speaks DTOs, not Jobs
 //!
@@ -26,11 +26,20 @@ use std::future::Future;
 
 use ipc::{JobId, JobList, JobSummary, ProposeJob, WireError};
 
-/// The four request-response operations M1 serves.
+/// The five request-response operations M1 serves.
 ///
-/// **Four, not thirty-four.** The inventory in `crates/ipc/operations.toml` is
+/// **What M1 needs, not what the seam carries.** The inventory in
+/// `crates/ipc/operations.toml` is
 /// the authority on what exists; this is the subset M1 needs, named with that
 /// file's own keys so a rule reading both needs no mapping in between.
+///
+/// # Killing a Drone and killing a Job are two methods, not one
+///
+/// They are different acts on different things, and the registry is what says
+/// so: `awaiting_approval -> killed` and `queued -> killed` leave statuses no
+/// Drone has been spawned under, so a Job ends there with no process to
+/// terminate. One signature covering both would have to mean whichever the
+/// caller happened to be looking at.
 pub trait Daemon: Send + Sync + 'static {
     /// `list_jobs` — Jobs with state and reason.
     fn list_jobs(&self) -> impl Future<Output = Result<JobList, Refusal>> + Send;
@@ -51,9 +60,19 @@ pub trait Daemon: Send + Sync + 'static {
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `kill_drone` — kills a Drone, captures learnings, holds the worktree.
-    /// Intervention Ladder rung 2, and the only thing that ends a Job by hand:
-    /// **Fleet never auto-kills.**
+    /// Intervention Ladder rung 2. **The Job survives**: what comes back is the
+    /// Job the killed Drone was on, still open, with its worktree held for a
+    /// redispatch. Nothing here ends a Job.
     fn kill_drone(&self, job_id: JobId)
+        -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `kill_job` — ends the Job at `killed`, terminal, carrying no verdict.
+    /// Not on the Intervention Ladder, and the only thing that ends a Job by
+    /// hand: **Fleet never auto-kills.**
+    ///
+    /// Legal from every non-terminal status, including those with no Drone
+    /// under them, which is why it cannot be spelled as [`Daemon::kill_drone`].
+    fn kill_job(&self, job_id: JobId)
         -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 }
 

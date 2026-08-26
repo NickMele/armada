@@ -41,12 +41,17 @@ pub struct Route {
     pub path: &'static str,
 }
 
-/// The five operations M1 serves. **Five of thirty-four**, on purpose.
+/// The operations M1 serves — a deliberate subset of the inventory, not all of it.
 ///
 /// The rest of the inventory, the `/v0` lifeboat and version-skew handling are
 /// the Ship milestone's. Nothing here stubs them: a route that answers with a
 /// placeholder is worse than one that 404s, because a client cannot tell the
 /// difference between not built and not working.
+///
+/// Every path spells its operation's inventory key in its last segment, which
+/// is what lets a reader check a row against `operations.toml` by eye. The
+/// lifeboat's `POST /v0/jobs/:id/kill` is the same act as `kill_job` under a
+/// frozen prefix that shares nothing with this table, by design.
 pub const SERVED: &[Route] = &[
     Route {
         operation: "list_jobs",
@@ -67,6 +72,11 @@ pub const SERVED: &[Route] = &[
         operation: "kill_drone",
         method: "POST",
         path: "/jobs/:job_id/kill_drone",
+    },
+    Route {
+        operation: "kill_job",
+        method: "POST",
+        path: "/jobs/:job_id/kill_job",
     },
     Route {
         operation: "job.state_changed",
@@ -129,6 +139,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
             post(approve_dispatch::<D>),
         )
         .route("/jobs/:job_id/kill_drone", post(kill_drone::<D>))
+        .route("/jobs/:job_id/kill_job", post(kill_job::<D>))
         .route("/events", get(events::<D>))
         .with_state(served)
 }
@@ -175,11 +186,27 @@ async fn approve_dispatch<D: Daemon>(
     }
 }
 
+/// The process, not the unit of work. What comes back is the Job the Drone was
+/// on, which is still there.
 async fn kill_drone<D: Daemon>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
 ) -> Response {
     match served.daemon.kill_drone(JobId::carried(job_id)).await {
+        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// The unit of work, not the process. A separate operation from `kill_drone`
+/// because two of the edges into `killed` leave a status no
+/// Drone has ever existed under, and neither one can be spelled as killing a
+/// Drone.
+async fn kill_job<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served.daemon.kill_job(JobId::carried(job_id)).await {
         Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
         Err(refusal) => refused(refusal),
     }

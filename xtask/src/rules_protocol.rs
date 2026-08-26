@@ -7,8 +7,9 @@
 //! and not a compile error, and only a rule reading both files catches an
 //! operation that is served under a name the inventory does not have.
 //!
-//! It runs one way on purpose. The inventory names thirty-four operations and
-//! M1 serves five, so an operation with no route is *not yet built* rather than
+//! It runs one way on purpose. The inventory names every operation the seam
+//! will carry and M1 serves a subset, so one with no route is *not yet built*
+//! rather than
 //! wrong. What is wrong is the reverse: a route serving something the inventory
 //! never named, a `SERVED` row with no route under it, or a command answered on
 //! `GET`.
