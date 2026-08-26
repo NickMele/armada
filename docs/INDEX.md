@@ -78,6 +78,13 @@ approximations.
 - [`instructions/claude-design.md`](instructions/claude-design.md) — the design
   project's session contract.
 
+## Concepts
+
+- [`concepts/`](concepts/) — what each thing in Armada is: Job, Drone, Fleet,
+  Bridge, Kit, Machine, Manifest, Workflow, Judge, Doctor and the rest, indexed
+  in its own `INDEX.md`. The state machine and the schemas they describe are
+  data in `crates/core-model/domain/`.
+
 ## Journeys
 
 - [`journeys/`](journeys/) — how a person moves through Armada, one document

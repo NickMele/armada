@@ -1,0 +1,212 @@
+# Job
+
+**What it is:** The unit of work Fleet dispatches to a Drone against a WorkflowDef. Data, not an actor: it records which workflow it follows, its status, its per-step state, its Facts and Evidence, and which Drone is on it. Only Fleet writes a transition.
+
+---
+
+**Kind:** Entity.
+
+Formalizes Job — the unit of work Fleet dispatches to a Drone against a WorkflowDef. Companion to the main Armada brief and [Workflow](workflow.md).
+
+## What it is
+
+A Job is **data, not an actor**. It is the record of work to be accomplished — which WorkflowDef it follows, its current status, its accumulated Facts and Evidence, and which Drone (if any) is working it. [Fleet](fleet.md) is the only actor that drives transitions on a Job's state; a Drone's self-report is an input signal, never authoritative — at both the Job-status level and the nested step level.
+
+## Ownership split
+
+Each entity's own document owns the rest.
+
+| Entity | Role on a Job |
+| --- | --- |
+| WorkflowDef | The blueprint frozen into the Job at creation. Config, not state. Lives on [Workflow](workflow.md) |
+| Job | The record — holds both machines as data |
+| [Fleet](fleet.md) | The engine — owns every transition on both machines |
+| [Drone](drone.md) | Executes, reports a signal. Transitions nothing |
+
+## What carries state
+
+Configuration is frozen in at creation, state lives on the row and the rows beneath it, history accumulates and is never deleted, and the runtime hangs underneath because a process is not a record.
+
+```mermaid
+flowchart LR
+  subgraph CFG["Config - frozen in at creation"]
+    WD["WorkflowDef"]
+    MAN["manifests"]
+  end
+  subgraph ST["State"]
+    JOBS["jobs - status, reason, current_step_id, facts"]
+    STEPS["job_steps - one row per step"]
+    WT["job_write_targets - paths"]
+    GATE["job_manifests - gate list"]
+  end
+  subgraph HIST["History - append-only, never deleted"]
+    EV["job_events"]
+    EVID["evidence"]
+  end
+  subgraph RT["Runtime"]
+    RUNS["drone_runs"]
+    DRONE["Drone process - no state machine"]
+  end
+  WD -->|workflow_id| JOBS
+  MAN -->|owner 1, gate 0..N| JOBS
+  JOBS -->|one row per step| STEPS
+  JOBS -->|1..N| WT
+  JOBS -->|0..N| GATE
+  JOBS -->|every transition| EV
+  JOBS -->|1..N| EVID
+  JOBS -->|1..N over time, 0..1 alive| RUNS
+  RUNS -->|PID| DRONE
+  EVID -.->|keyed by step_id| STEPS
+  JOBS -.->|redispatched_from| JOBS
+```
+
+**Two machines sit on the same row, and one contains the other.** `status` answers who is acting and in what mode; `current_step_id` points into `job_steps`, which answers how far through the WorkflowDef the work got. They are not peers to be kept in agreement — the outer machine gates whether the inner one moves at all, and disagreement between what a rail shows and what a badge shows is the normal case rather than drift.
+
+**The Drone is not a third machine.** It has no independent state of its own, only presence: `assigned_drone` is a nullable pointer and `drone_runs` records spawns with an exit state. Which is why `escalated` holding a live, idle Drone is not a contradiction.
+
+How `status` itself is stored — a column cached over an authoritative log — is part of the Job schema in `crates/core-model/`.
+
+## Job status
+
+"Terminal" is a property some states have, not a state name itself.
+
+The full set of Job statuses — each with its meaning, its reason values and whether it is terminal — is in `crates/core-model/`.
+
+## Transitions
+
+A top-level Job enters at `awaiting_approval`. A sub-dispatched Job enters at `queued`, already approved as part of its parent.
+
+Two diagrams. The first answers *how a Job moves*; the second answers *how a Job ends*. Between them every legal edge appears exactly once.
+
+**How a Job moves** — every edge between non-terminal statuses. Colour is the band: grey is the approval gate, blue the Drone working, amber waiting on a person, violet a person working. Dotted is a return to the approval gate.
+
+```mermaid
+flowchart LR
+  classDef gate fill:#f4f4f5,stroke:#71717a,stroke-width:1.5px,color:#27272a
+  classDef drone fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#1e3a8a
+  classDef waited fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+  classDef worked fill:#ede9fe,stroke:#7c3aed,stroke-width:1.5px,color:#4c1d95
+
+  START(( )) -->|top-level| AA
+  START -->|sub-dispatched| Q
+
+  AA["awaiting_approval"] -->|approved| Q["queued"]
+  Q -->|Drone spawns| R["running"]
+
+  R -->|human gate| AR["awaiting_review"]
+  AR -->|"approve / request_changes"| R
+
+  R -->|criterion owed outside| AT["awaiting_attestation"]
+  AR -->|"approve, criterion owed"| AT
+
+  Q -->|dependency_failed| ESC["escalated"]
+  R -->|escalation trigger| ESC
+  AR -->|interrupted| ESC
+  ESC -->|redirect| R
+
+  R -->|escape_hatch| P["piloted"]
+  AR -->|escape_hatch| P
+  AT -->|escape_hatch| P
+  ESC -->|Pilot| P
+  P -->|submit for verification| R
+
+  Q -.->|widening| AA
+  R -.->|widening| AA
+
+  class AA gate
+  class Q,R drone
+  class AR,ESC,AT waited
+  class P worked
+```
+
+**How a Job ends** — every edge into a terminal.
+
+```mermaid
+flowchart LR
+  classDef gate fill:#f4f4f5,stroke:#71717a,stroke-width:1.5px,color:#27272a
+  classDef drone fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#1e3a8a
+  classDef waited fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+  classDef worked fill:#ede9fe,stroke:#7c3aed,stroke-width:1.5px,color:#4c1d95
+  classDef good fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+  classDef bad fill:#fee2e2,stroke:#dc2626,stroke-width:1.5px,color:#7f1d1d
+  classDef flat fill:#e4e4e7,stroke:#52525b,stroke-width:1.5px,color:#27272a
+
+  R["running"] -->|last step advanced| CS["completed_success"]
+  AR["awaiting_review"] -->|approve on final gate| CS
+  AT["awaiting_attestation"] -->|attested| CS
+  P["piloted"] -->|attest complete| CS
+
+  R -->|retries exhausted| CF["completed_failed"]
+  ESC["escalated"] -->|accept failure| CF
+  AT -->|cannot be done| CF
+
+  AA["awaiting_approval"] -->|denied| REJ["rejected"]
+  AR -->|reject| REJ
+
+  P -->|close as superseded| SUP["superseded"]
+
+  ANY["every non-terminal status"] -.->|cleared from the Board| K["killed"]
+
+  class AA gate
+  class R drone
+  class AR,ESC,AT waited
+  class P worked
+  class CS good
+  class CF,REJ bad
+  class SUP,K flat
+  class ANY gate
+```
+
+`killed` is drawn as one rule rather than an edge from each status. No terminal has an outbound edge, which is why nothing leaves the right-hand column.
+
+The full transition table — every legal edge, its trigger and its guard — is in `crates/core-model/`.
+
+## Step state
+
+**Step state is rows, not a field.** `job_steps` carries one row per `(job_id, step_id)`, written at Job creation from the frozen WorkflowDef — every step of the workflow, in order, all `not_started`. The state of steps that are *not* current is therefore recorded rather than inferred from position relative to the current step. Position-inference breaks on a loop workflow, where a step can have advanced and then be re-entered.
+
+Materialising the rows at creation is also what makes the freeze structural: a WorkflowDef edited in the repo mid-Job cannot reach a Job already running against it, because the Job runs against its rows.
+
+The full set of step states is in `crates/core-model/`.
+
+The columns of `job_steps` are part of the Job schema in `crates/core-model/`.
+
+**No [Convoy](convoy.md) shape here.** The rows are keyed per step, not per Workspace. A Convoy's shared `retry_count` and single combined approval gate are unaffected, consistent with Convoy recording that no `workflow_status` change is needed. Nothing in this map reads `write_targets` or `atomic`.
+
+## Facts vs. Evidence
+
+Both append-only, both distinct fields — not the same thing named twice. **Stored differently: Evidence is relational, Facts is text.** They stopped being the same kind of thing — Evidence acquired step attribution, per-criterion rows, a Manifest reference, per-Manifest outcomes and captured Check output, and Facts acquired none of it. Both are Title Case here and `snake_case` everywhere else in this schema.
+
+The `Facts` and `Evidence` fields are part of the Job schema in `crates/core-model/`.
+
+### What an Evidence entry holds
+
+Record kinds written against a step. Not all of them are Evidence.
+
+| Kind | Written by | Fields |
+| --- | --- | --- |
+| Work submission | Drone | `claimed` — what the work now does, as an observable. `shown_by` — the artifact demonstrating it: a named test, a command and its exit code, a rendered string. `not_claimed`. `what_changed` |
+| Judge record | Judge | One record per step, holding every judge's verdict. A refusal carries `expected`, `produced`, `consequence` |
+| Stuck narrative | Drone | **Not Evidence.** Evidence is proof tied to an advance gate; this states that no proof is coming. It lives in the handoff bundle — see [Pilot](pilot.md) |
+
+**Named fields, never a formatted string.** What reaches a live Drone is a projection of the record: `expected` — what should be seen, returned or recorded if the work is right, as the value itself — and `produced`, what will be seen instead, and nothing else. `consequence` is what that difference does to whoever consumes it, written for a person deciding whether to care, and is withheld along with every counter — `retry_count`, `iteration_count`, turn counts. A Drone is never told what the Checks are, because naming the bar hands it a target to satisfy rather than work to do; an attempt count is a bar, and a Drone one attempt from escalation has the strongest possible incentive to make the check pass rather than make the work right. Withholding is a field selection, which a formatted string cannot express. The refusal reprompt carries the projection.
+
+**`not_claimed` is required and may be empty.** It is everything the claim does not assert — both what the work does not do and what it does that nobody asked for. Empty and absent are different claims: a Drone saying it left nothing behind is not a Drone declining to answer. The Evidence MCP tool's schema refuses a submission without it, rather than a database constraint catching it later.
+
+**`what_changed` exists only on attempts after the first**, as a distinct variant of the record rather than a nullable field, so its absence on a first attempt cannot be read as a Drone omitting it. It is stored rather than derived: comparing consecutive attempts shows what differs, not what the Drone decided to do about the feedback, and a self-report cannot be synthesised.
+
+## Other fields
+
+The complete Job field list is in `crates/core-model/`.
+
+## Dependency model
+
+**Full DAG.** Jobs can branch and fan in. The links live on the `dependencies` field; this is the decision that the graph is a DAG rather than a chain.
+
+Scheduling over that graph belongs to [Fleet](fleet.md), which walks it in topological order on top of the approval and resource gates.
+
+**Consequence for the surface:** the [Job Board](job-board.md) needs a graph view, not only a flat list. Not yet designed — see [Convoy](convoy.md), Open questions.
+
+## Job scenarios
+
+Concrete change requests used to pressure-test this model and the Job proposer. Descriptive input, not analysis — cite them by `#`, which is fixed.

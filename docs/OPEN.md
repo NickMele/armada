@@ -11,6 +11,88 @@ design-lint opt-out, or from anything else that is waiting on it.
 Answering one means deleting its bullet, which breaks those citations
 on purpose and makes the gate name what was waiting.
 
+## crates/core-model/domain/README.md
+
+- **[retries-exhausted-destination]** "Retries exhausted" both transitions `running -> completed_failed` and raises the `gate_failure` escalation. One condition, two destinations. What decides it: the two say different things about what happened — a Job that failed, versus a Job that needs a person. The owner's lean is that this deserves a state of its own rather than a choice between the existing two, which would make the condition unambiguous at the cost of a status.
+- **[workflowdef-schema-gaps]** Five keys appear in the workflow samples with no row in the field catalogue: `workflow_id`, `version`, `order`, `required`, `manifest_rule_overrides`. The `structure` field's prose also cites an `id` row that does not exist. What decides it: the samples are the working shape and the catalogue is the schema, so either the catalogue is incomplete or the samples carry keys nothing reads. Only one can be true, and the answer decides what a parser accepts.
+- **[review-findings-evidence-type]** `review_findings`, used by the Code Review workflow, is not among `evidence_type`'s legal values. What decides it: the source flags this against itself. Either the value set grows or Code Review submits evidence under an existing type.
+- **[interrupted-transition-set]** `interrupted` is defined as a `running` Job whose process is gone, but the only edge naming it is `awaiting_review -> escalated`. What decides it: the definition and the edge disagree about which status a Job is in when it is interrupted. A definition nothing can reach is a state that never occurs.
+
+## docs/concepts/bridge.md
+
+- **[bridge-reconnect-trust]** What does Bridge show while it cannot reach Fleet, and what does it trust on reconnect? Closing Bridge does not stop Fleet, and reopening it reconnects rather than respawning, but the reconnect behavior itself is not yet designed.
+- **[bridge-notification-routing-path]** How does notification routing configuration actually reach Bridge? It is the one setting scoped to Bridge as a config target rather than to the concept it affects, and no dependency path currently carries config to Bridge — the Electron side reads its own copy or a hardcoded default instead of the resolved Kit/Machine value.
+
+## docs/concepts/convoy.md
+
+- **[convoy-dispatch-approval-surface]** What does the dispatch-approval surface for a Convoy actually look like? The structural question — that a Convoy proposal merges into the dispatch approval gate, with each Job still taking its own one-by-one dispatch approval — was settled Aug 2026. The surface itself is deliberately still open, since Dispatch a Job is design order 1. One of the two related Board questions is closed on the design side (Aug 21 2026): a Convoy row shows its **first write target and a `+2`**, keeping an identifier in the identifier column rather than a count where every other row names a place; a Convoy takes **no chip and no hue**, since a bordered pill is a Job state and nothing else, so shape reads as plain text in the identifier column.
+- **[convoy-board-graph-view]** Does the Job Board need a graph view for DAG dependencies, now that a Convoy may be a peer node in that graph? Related: the Board must **compute** the shape per row, since it is derived rather than stored.
+- **[convoy-multi-repo-job-shape]** Does Armada need a multi-repo Job shape, and what is its workflow DAG? Carried forward from the root-scoping decision, which left it open, and no scenario currently pressures it.
+- **[convoy-freeze-while-running]** What happens when a dispatch freeze lands on a Convoy that is already running? Named in the policy resolution above rather than filed as its own question until now: freeze is enforced live rather than only at dispatch, and the already-running case is not covered.
+
+## docs/concepts/doctor.md
+
+- **[doctor-icon-and-word]** Does a Doctor health row carry both an icon and a status word, or the icon alone? Blocked on the Doctor layout, which is not designed.
+- **[doctor-restart-fleet-placement]** Where does the "Restart Fleet" action render, and does it live in the Fleet module row?
+- **[doctor-denial-rollup-placement]** Where does the denial-frequency rollup sit relative to the module grid?
+
+## docs/concepts/drone.md
+
+- **[drone-builtin-tools-confinement]** How is a Drone's toolset actually confined, given that `--allowedTools` removes none of the built-in tools? `--strict-mcp-config` bounds MCP servers only, not the thirty built-in tools the CLI ships with.
+- **[drone-evidence-clarification-cap-scope]** What is the evidence clarification-round cap's field name, and what does it count against — per Job, per workflow step, or per loop iteration? Unlike its sibling `poke_limit`, it currently has neither a name nor a counting scope, and on a loop workflow a per-Job cap would exhaust inside the first iteration.
+
+## docs/concepts/fleet.md
+
+- **[fleet-checks-runner-sweep-timing]** Does the sweep for orphaned process groups left behind by a dead `checks-runner` run at Fleet start, on a timer, or both? If Fleet stays up while `checks-runner` dies, nothing sweeps until the next restart under the current design.
+- **[fleet-watch-merge-after-self-merge]** Should Fleet watch main after a merge it performed itself? Fleet's model of the world otherwise stops at the merge — nothing watches main afterwards, and a merge that breaks main is raised by a person today, with the response being a new Job pointing back through `subject`.
+- **[fleet-port-range-degradation-visibility]** How does a person learn the port range is losing spans? An undeclared supervisor-held process holds its port past release, the probe refuses that span, and the range loses it — nothing currently surfaces that degradation. Related: past the held-span reminder threshold Fleet surfaces a held span, but where that renders is also undecided; the Doctor precedent argues for a health strip rather than an Alerts row, since a held span is a standing condition and not a queued decision.
+- **[fleet-self-restart-limit-setting]** What happens to the *Fleet self-restart attempt limit/backoff* setting, given that launchd cannot implement a cap or a backoff curve? The setting describes behavior the supervisor does not offer.
+
+## docs/concepts/job-board.md
+
+- **[job-board-convoy-graph-rendering]** Given the graph view exists, how does a Convoy — which may be a peer node in the dependency graph but has no children of its own — actually render there? As an ordinary node, visually distinguished, or expanded into its declared Workspaces is unstated.
+- **[job-board-convoy-list-distinction]** How is a Convoy visually distinguished from a single-workspace Job in the default flat-list view? No origin value or shape field carries the distinction — the Board must compute it from `write_targets` and `atomic` rather than render a stored label, and no visual treatment exists yet.
+
+## docs/concepts/judge.md
+
+- **[judge-unresolved-verdict-state]** Should there be an unresolved third verdict state, alongside pass and refuse? The verdict is currently strictly binary — a refusal fails the step.
+- **[judge-model-default]** What is the fleet-wide default Judge model? Model is a deliberate per-step dial, but the config row carrying the default currently carries no value.
+- **[judge-cost-cap-per-check]** What is the Judge cost cap per check? Without it, verification bills against the Job budget and competes for spend with the work it verifies.
+- **[judge-triggers-removal-guard]** What now guards a Manifest from removing Judge triggers entirely? A Manifest could once add Judge triggers and never remove them — a repo that removes them can opt out of semantic verification while every other signal still reads green, and Judge is the only tier measuring correctness. That protection was the config direction rule, since withdrawn, and nothing has replaced it.
+- **[judge-confidence-threshold-disposal]** Is the Judge confidence threshold config row deleted or repurposed? It is superseded and currently awaiting disposal.
+- **[judge-gaming-baseline-ref-bug]** Is Bug's gaming-check baseline `root_cause.evidence` or `repro`'s failing assertion? Bug's sample schema sets `root_cause.evidence` while its own Compliance table still names `repro`'s failing assertion — the two catch different things.
+
+## docs/concepts/kit.md
+
+- **[kit-setup-surface-naming]** What is the Kit setup surface called, and is it its own journey? Whether First-Run Onboarding uses the step names above, and whether Kit Init and Machine Init are one step or two, is open.
+
+## docs/concepts/log-envelope.md
+
+- **[log-envelope-name]** Is "Log Envelope" admitted into the sanctioned lexicon as a proper noun, or is this document renamed to something the lexicon already allows? "Log Envelope" is descriptive and currently outside it.
+- **[log-envelope-bridge-ui-emitter]** Does `bridge-ui` emit log lines at all, or does it forward to `bridge-main`? A renderer writing to disk directly would be a second writer for one process class.
+- **[log-envelope-drone-transcript-shape]** How does a Drone's transcript relate to this envelope? Claude Code's `--output-format stream-json` is a different shape from this envelope. Whether it is wrapped per line or stored as a separate artifact keyed by `drone_id` is undecided.
+- **[log-envelope-error-count-source]** Are the error and warn counts shown on a job's log row computed per view, or carried on the job record?
+- **[log-envelope-pruned-log-row]** What does a job's log row say once the log has been pruned? Per-job logs are pruned on terminal status after the retention grace period, so a finished job older than that has a path pointing at nothing.
+
+## docs/concepts/machine.md
+
+- **[machine-voice-owning-tier]** Does Voice belong to Machine or to Kit? Voice is a Machine setting by the group mapping above, but `../contracts/agent-prompt.md` places it in prompt layer 2 beside Skills, the Agent file and Sub agent definitions — all of which are Kit. The two readings disagree about which concept owns it.
+- **[machine-manifest-budget-precedence]** Does a Manifest budget cap override the Machine cap, or are they independent single-layer caps? A Manifest budget cap exists as a Manifest-only row, which means budget demonstrably *does* have a project-level version — the one place the Kit/Machine test gives an unclear answer. Precedence between the two caps is separately open.
+
+## docs/concepts/manifest.md
+
+- **[manifest-root-lockfile-ownership]** Does the root `armada.yml` *own* a shared lockfile it can gate, as opposed to merely being able to gate it? The nearest-ancestor rule settles gating and not exclusivity.
+- **[manifest-check-timeout-raise-or-lower]** May a per-Check timeout field raise the configured bound, or may it only lower it?
+- **[manifest-kit-merge-rules]** What are the Kit→Manifest merge rules for Skills, MCP and Sub agents? No merge strategy exists in the Configuration Settings registry for any of the three, and Kit and Drone disagree on Sub agents outright — Kit describes them as layered on top, Drone's Convoy table puts them under intersection.
+
+## docs/concepts/pilot.md
+
+- **[pilot-ninth-status-name]** What is the name of the ninth Job status, and what is its full reason set? Decided Aug 21 2026 that a ninth status carries a Pilot-specific reason and also holds a Job that is done but owes a human an attestation — but the status's name and its reason set are not yet decided.
+
+## docs/concepts/workflow.md
+
+- **[workflow-thrashing-threshold-judgement]** What threshold of repetition counts as thrashing, and what counts as off-scope work? Headless output parses reliably and denials are visible, so this no longer rests on an unanswered spike about the data — what stays open is the judgement layer, not the data.
+
 ## docs/contracts/adapters.md
 
 - **[adapter-admission-test]** What test admits something as an Armada adapter? The compose decision added Docker as a fifth adapter, taken unscoped — "the boundary is left open and this decision records no limit" — with its own warning that four adapters was a chosen boundary and five is a precedent for six. Configuration still names four adapters, so the fifth is undocumented as well as unbounded. An adapter is the seam that keeps the daemon core testable with no network; a set that grows on precedent rather than on a test erodes that. A narrower, related question — whether an agent harness must support MCP to count as an adapter — tests one adapter kind, not the seam itself.
@@ -59,10 +141,6 @@ on purpose and makes the gate name what was waiting.
 - **[manifest-scanner-agent-or-model-call]** Is the Manifest Setup wizard's scan step a model call or a third Agent? The taxonomy test (section 9) is whether an invocation carries a toolset — Drone and Helm do, Judge, the Job proposer and Voice generation don't, and the scanner is the only one of the nine invocations left unclassified. If the wizard gathers repo facts mechanically and passes them as context, it's a model call living in `config` alongside scan/propose/select/verify. If it gets a read-only toolset and inspects the repo itself, it's a third Agent, needing toolset resolution, a model choice, a budget and a lifetime, and a new member in the Concepts `Kind` vocabulary. Blocked on the Manifest Setup wizard design — the Proposal phase is an iterative loop toward a satisfied `armada.yml`, which leans toward the scanner needing to look again between rounds, but that is an inference, not a decision.
 - **[kit-machine-manifest-resolution-chain]** What is the resolution chain across Kit, Machine and Manifest, and what does `get_manifest` return? `get_manifest` used to return "resolved config after Guild merge"; with Guild split into Kit and Machine, the merge order is unstated. Needs deciding: the tier resolution order and which tiers narrow versus define (the config-direction rule that config may only narrow was withdrawn, so narrowing is no longer the default assumption); whether Machine participates in the resolution `get_manifest` returns at all, or sits outside it as per-install settings a Manifest never sees; and whether a caller receives one merged object or the tiers separately so each value's source stays visible.
 - **[guild-row-concepts-split]** Does the Guild row in the Armada Concepts database become one row or two, now that Guild split into Kit and Machine? The Guild row is currently tagged Entity and named as one concept in section 9's "Filing the concepts" table; Kit already has its own concept page. Needs deciding: whether Machine earns its own Concepts row, or is a Shape/Policy on another entity rather than an entity itself; what happens to the existing Guild row and its inbound relations; and how the concept table's row count changes as a result. Also bearing on this document, and written where each belongs: `[adapter-admission-test]` in `adapters.md`; `[config-source-enum-values]` in `configuration.md`; `[platform-differences-layer]` in `adapters.md`. A question has one home — answering it in two places is how one of them goes stale.
-
-## docs/contracts/technical-writing.md
-
-- **[writing-rules-retrofit]** Do the documents written before this contract get reduced to it, or does it bind new writing only? What decides it: several documents already here break these rules — `ARCHITECTURE.md` uses adversative moves, the contracts carried out of the design workspace carry rejected alternatives inline, and `SECURITY.md` leads with explanation rather than the shortest correct statement. A contract nothing already satisfies is either a plan or a dead letter, and which one it is has not been decided.
 
 ## docs/contracts/testkit-fixtures.md
 
