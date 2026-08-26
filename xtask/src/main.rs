@@ -89,6 +89,7 @@ fn verify_foundations() -> ExitCode {
         rules::acceptance_test_exists_and_passes(&root),
         rules::every_failure_mode_has_a_fixture(&root),
         rules::no_file_too_long(&root),
+        rules::no_comment_block_too_long(&root),
         rules::every_source_file_is_in_the_manifest(&root),
         rules::no_untyped_json_outside_store_and_ipc(&root),
         rules::no_vendor_literal_outside_adapters(&root),
