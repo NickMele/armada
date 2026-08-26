@@ -18,7 +18,7 @@ on purpose and makes the gate name what was waiting.
 
 ## docs/contracts/agent-copy.md
 
-- **[copy-rubric-scoring]** Should generated text be scored against a rubric by a cheap model? Scoring against directness, density and specificity is named as the right eventual answer to queue-level sameness — invisible one message at a time, obvious across twenty — since a phrase blocklist can't catch a clause welded into a noun that generates a new string every time. Deferred on a stated trigger rather than rejected: it costs a model call per artifact, and comparing a PR description against the last thirty requires thirty to exist first. Revisit once the corpus does.
+- **[copy-rubric-scoring]** Should generated text be scored against a rubric by a cheap model? Scoring against directness, density and specificity is named as the right eventual answer to queue-level sameness — invisible one message at a time, obvious across twenty — since a phrase blocklist can't catch a clause welded into a noun that generates a new string every time. Deferred on a stated trigger rather than rejected: it costs a model call per artifact, and comparing a PR description against the last thirty requires thirty to exist first. Revisit once the corpus does. Also bearing on this document, and written where it belongs: `[copy-lint-surface-narrowing]` in `configuration.md` — whether a Manifest may narrow which surfaces this lint covers. It lives there because the answer turns on the config direction rule, which that document records as withdrawn.
 
 ## docs/contracts/agent-prompt.md
 
