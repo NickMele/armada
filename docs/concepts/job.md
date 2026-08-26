@@ -10,7 +10,9 @@ Formalizes Job — the unit of work Fleet dispatches to a Drone against a Workfl
 
 ## What it is
 
-A Job is **data, not an actor**. It is the record of work to be accomplished — which WorkflowDef it follows, its current status, its accumulated Facts and Evidence, and which Drone (if any) is working it. [Fleet](fleet.md) is the only actor that drives transitions on a Job's state; a Drone's self-report is an input signal, never authoritative — at both the Job-status level and the nested step level.
+A Job is **data, not an actor**. It is the record of work to be accomplished — which WorkflowDef it follows, its current status, its accumulated Facts and Evidence, and which Drone (if any) is working it.
+
+**[Fleet](fleet.md) is the only actor that drives transitions on a Job's state.** A Drone's self-report is an input signal, never authoritative — at both the Job-status level and the nested step level.
 
 ## Ownership split
 
@@ -18,10 +20,12 @@ Each entity's own document owns the rest.
 
 | Entity | Role on a Job |
 | --- | --- |
-| WorkflowDef | The blueprint frozen into the Job at creation. Config, not state. Lives on [Workflow](workflow.md) |
+| WorkflowDef | The blueprint frozen into the Job at creation. Config, not state |
 | Job | The record — holds both machines as data |
-| [Fleet](fleet.md) | The engine — owns every transition on both machines |
-| [Drone](drone.md) | Executes, reports a signal. Transitions nothing |
+| Fleet | The engine — owns every transition on both machines |
+| Drone | Executes, reports a signal. Transitions nothing |
+
+WorkflowDef lives on [Workflow](workflow.md); the others on [Fleet](fleet.md) and [Drone](drone.md).
 
 ## What carries state
 
@@ -64,13 +68,13 @@ flowchart LR
 
 **The Drone is not a third machine.** It has no independent state of its own, only presence: `assigned_drone` is a nullable pointer and `drone_runs` records spawns with an exit state. Which is why `escalated` holding a live, idle Drone is not a contradiction.
 
-How `status` itself is stored — a column cached over an authoritative log — is part of the Job schema in `crates/core-model/`.
+How `status` itself is stored — a column cached over an authoritative log — is part of the Job schema in `crates/core-model/domain/job-fields.toml`.
 
 ## Job status
 
 "Terminal" is a property some states have, not a state name itself.
 
-The full set of Job statuses — each with its meaning, its reason values and whether it is terminal — is in `crates/core-model/`.
+The full set of Job statuses — each with its meaning, its reason values and whether it is terminal — is in `crates/core-model/domain/job-statuses.toml`.
 
 ## Transitions
 
@@ -157,27 +161,27 @@ flowchart LR
   class ANY gate
 ```
 
-`killed` is drawn as one rule rather than an edge from each status. No terminal has an outbound edge, which is why nothing leaves the right-hand column.
+`killed` is drawn as one rule rather than an edge from each status. **No terminal has an outbound edge**, so nothing leaves the right-hand column.
 
-The full transition table — every legal edge, its trigger and its guard — is in `crates/core-model/`.
+The full transition table — every legal edge, its trigger and its guard — is in `crates/core-model/domain/job-transitions.toml`.
 
 ## Step state
 
 **Step state is rows, not a field.** `job_steps` carries one row per `(job_id, step_id)`, written at Job creation from the frozen WorkflowDef — every step of the workflow, in order, all `not_started`. The state of steps that are *not* current is therefore recorded rather than inferred from position relative to the current step. Position-inference breaks on a loop workflow, where a step can have advanced and then be re-entered.
 
-Materialising the rows at creation is also what makes the freeze structural: a WorkflowDef edited in the repo mid-Job cannot reach a Job already running against it, because the Job runs against its rows.
+**Materialising the rows at creation is what makes the freeze structural.** A WorkflowDef edited in the repo mid-Job cannot reach a Job already running against it, because the Job runs against its rows.
 
-The full set of step states is in `crates/core-model/`.
-
-The columns of `job_steps` are part of the Job schema in `crates/core-model/`.
+The full set of step states is in `crates/core-model/domain/step-states.toml`. The columns of `job_steps` are part of the Job schema in `crates/core-model/domain/job-fields.toml`.
 
 **No [Convoy](convoy.md) shape here.** The rows are keyed per step, not per Workspace. A Convoy's shared `retry_count` and single combined approval gate are unaffected, consistent with Convoy recording that no `workflow_status` change is needed. Nothing in this map reads `write_targets` or `atomic`.
 
 ## Facts vs. Evidence
 
-Both append-only, both distinct fields — not the same thing named twice. **Stored differently: Evidence is relational, Facts is text.** They stopped being the same kind of thing — Evidence acquired step attribution, per-criterion rows, a Manifest reference, per-Manifest outcomes and captured Check output, and Facts acquired none of it. Both are Title Case here and `snake_case` everywhere else in this schema.
+Both append-only, both distinct fields — not the same thing named twice. **Stored differently: Evidence is relational, Facts is text.**
 
-The `Facts` and `Evidence` fields are part of the Job schema in `crates/core-model/`.
+Evidence carries step attribution, per-criterion rows, a Manifest reference, per-Manifest outcomes and captured Check output. Facts carries none of it. Both are Title Case here and `snake_case` everywhere else in this schema.
+
+The `Facts` and `Evidence` fields are part of the Job schema in `crates/core-model/domain/job-fields.toml`.
 
 ### What an Evidence entry holds
 
@@ -185,19 +189,37 @@ Record kinds written against a step. Not all of them are Evidence.
 
 | Kind | Written by | Fields |
 | --- | --- | --- |
-| Work submission | Drone | `claimed` — what the work now does, as an observable. `shown_by` — the artifact demonstrating it: a named test, a command and its exit code, a rendered string. `not_claimed`. `what_changed` |
-| Judge record | Judge | One record per step, holding every judge's verdict. A refusal carries `expected`, `produced`, `consequence` |
-| Stuck narrative | Drone | **Not Evidence.** Evidence is proof tied to an advance gate; this states that no proof is coming. It lives in the handoff bundle — see [Pilot](pilot.md) |
+| Work submission | Drone | `claimed`, `shown_by`, `not_claimed`, `what_changed` |
+| Judge record | Judge | One record per step, holding every judge's verdict |
+| Stuck narrative | Drone | **Not Evidence.** Lives in the handoff bundle |
 
-**Named fields, never a formatted string.** What reaches a live Drone is a projection of the record: `expected` — what should be seen, returned or recorded if the work is right, as the value itself — and `produced`, what will be seen instead, and nothing else. `consequence` is what that difference does to whoever consumes it, written for a person deciding whether to care, and is withheld along with every counter — `retry_count`, `iteration_count`, turn counts. A Drone is never told what the Checks are, because naming the bar hands it a target to satisfy rather than work to do; an attempt count is a bar, and a Drone one attempt from escalation has the strongest possible incentive to make the check pass rather than make the work right. Withholding is a field selection, which a formatted string cannot express. The refusal reprompt carries the projection.
+- `claimed` — what the work now does, as an observable.
+- `shown_by` — the artifact demonstrating it: a named test, a command and its exit code, a rendered string.
+- A Judge refusal carries `expected`, `produced`, `consequence`.
+- The stuck narrative is not Evidence: Evidence is proof tied to an advance gate, and this states that no proof is coming. See [Pilot](pilot.md).
 
-**`not_claimed` is required and may be empty.** It is everything the claim does not assert — both what the work does not do and what it does that nobody asked for. Empty and absent are different claims: a Drone saying it left nothing behind is not a Drone declining to answer. The Evidence MCP tool's schema refuses a submission without it, rather than a database constraint catching it later.
+**Named fields, never a formatted string.** Withholding is a field selection, which a formatted string cannot express.
+
+What reaches a live Drone is a projection of the record, carried by the refusal reprompt:
+
+| Field | Reaches a live Drone | What it holds |
+| --- | --- | --- |
+| `expected` | Sent | What should be seen, returned or recorded if the work is right, as the value itself |
+| `produced` | Sent | What will be seen instead |
+| `consequence` | Withheld | What that difference does to whoever consumes it, written for a person deciding whether to care |
+| `retry_count`, `iteration_count`, turn counts | Withheld | Every counter |
+
+**A Drone is never told what the Checks are.** Naming the bar hands it a target to satisfy rather than work to do. An attempt count is a bar, and a Drone one attempt from escalation has the strongest possible incentive to make the check pass rather than make the work right.
+
+**`not_claimed` is required and may be empty.** It is everything the claim does not assert — both what the work does not do and what it does that nobody asked for.
+
+Empty and absent are different claims: a Drone saying it left nothing behind is not a Drone declining to answer. The Evidence MCP tool's schema refuses a submission without it, rather than a database constraint catching it later.
 
 **`what_changed` exists only on attempts after the first**, as a distinct variant of the record rather than a nullable field, so its absence on a first attempt cannot be read as a Drone omitting it. It is stored rather than derived: comparing consecutive attempts shows what differs, not what the Drone decided to do about the feedback, and a self-report cannot be synthesised.
 
 ## Other fields
 
-The complete Job field list is in `crates/core-model/`.
+The complete Job field list is in `crates/core-model/domain/job-fields.toml`.
 
 ## Dependency model
 

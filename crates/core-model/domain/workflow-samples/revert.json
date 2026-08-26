@@ -1,0 +1,128 @@
+{
+  "workflow_id": "revert",
+  "version": 1,
+  "structure": "linear",
+  "default_gate_policy": {
+    "retry_limit": 3,
+    "iteration_cap": 5,
+    "attempt_cap": 15,
+    "judge_call_cap": 12,
+    "fan_out_cap": 5,
+    "fan_out_rate": {
+      "count": 3,
+      "window_minutes": 10
+    },
+    "heartbeat_interval_minutes": 5,
+    "poke_limit": 2
+  },
+  "steps": [
+    {
+      "step_id": "revert",
+      "order": 1,
+      "required": true,
+      "evidence_type": "diff",
+      "mechanical_checks": [
+        {
+          "type": "diff_nonempty"
+        },
+        {
+          "type": "manifest_check",
+          "check": "build",
+          "expect_exit_code": 0
+        }
+      ],
+      "judge_checks": [
+        {
+          "enabled": true,
+          "model": "haiku",
+          "panel_size": 3,
+          "criteria": [
+            {
+              "criterion_id": "c1",
+              "source_ref": "job.acceptance_criteria[0]",
+              "question": "Does this diff undo the subject's change?"
+            },
+            {
+              "criterion_id": "c2",
+              "source_ref": "job.acceptance_criteria[1]",
+              "question": "Does this diff change anything the subject did not touch?"
+            }
+          ]
+        }
+      ],
+      "evidence_scope": {
+        "context_source": "drone_declared",
+        "reference_docs": [
+          "subject"
+        ],
+        "max_context_size": 30,
+        "scope_diff_check": true,
+        "declare_plan_at": "step_start"
+      },
+      "advance_gate": "auto_if_judge_passes"
+    },
+    {
+      "step_id": "regression_verify",
+      "order": 2,
+      "required": true,
+      "evidence_type": "test_suite_run",
+      "mechanical_checks": [
+        {
+          "type": "manifest_check",
+          "check": "test",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "lint",
+          "expect_exit_code": 0
+        }
+      ],
+      "advance_gate": "auto",
+      "on_fail": "retry:revert"
+    },
+    {
+      "step_id": "review",
+      "order": 3,
+      "required": true,
+      "evidence_type": "bundle",
+      "judge_checks": [
+        {
+          "enabled": true,
+          "model": "sonnet",
+          "prompt_key": "final_review_summary",
+          "question": "Summarize what this revert undoes, and anything a human reviewer should look at closely.",
+          "gates_advancement": false
+        }
+      ],
+      "evidence_scope": {
+        "context_source": "hybrid",
+        "reference_docs": [
+          "subject"
+        ],
+        "max_context_size": 40
+      },
+      "advance_gate": "human_always",
+      "verdict_routing": {
+        "request_changes": "revert"
+      }
+    },
+    {
+      "step_id": "merge",
+      "order": 4,
+      "required": true,
+      "advance_gate": "manifest_rule:auto_merge"
+    },
+    {
+      "step_id": "close",
+      "order": 5,
+      "required": true,
+      "mechanical_checks": [
+        {
+          "type": "pr_merged"
+        }
+      ],
+      "advance_gate": "auto"
+    }
+  ]
+}

@@ -1,0 +1,371 @@
+# What a Job record holds — the `jobs` row, the `job_steps` row beneath it,
+# and the three things that live in tables of their own.
+#
+# Authored here. Carried across from the design workspace's Job Fields
+# database, which is the record of the decision and the reasoning that
+# produced it, not the authority on the current set — a page there that
+# disagrees with this file is stale, not right.
+#
+# The table key is the field's own identifier, quoted where it is not a bare
+# TOML key. `(job_id, step_id)` is the composite key of `job_steps` rather
+# than a field, and is carried as the source wrote it.
+#
+# `storage` is the field that stops this being a schema: three rows are
+# derived and not stored at all, and the reason each is derived is on the row.
+#
+# Fields:
+#   type           - the value's shape, as the source typed it
+#   table          - jobs | job_steps | evidence | job_manifests | job_write_targets
+#   storage        - Column | Own table | Text on the Job row | Derived — not stored
+#   nullable       - whether null is legal, and where the source qualified it, how
+#   frozen_at      - Creation | Dispatch | Never | N/A. When the value stops moving
+#   purpose        - what the field answers
+#   in_code        - whether an implementation exists, as the source recorded it
+#   open_questions - questions the source left open against this row
+#   notes          - the reasoning the row's page carried, including the
+#                    instead-of / or-else / costs argument where it had one
+
+[fields."(job_id, step_id)"]
+type = "composite key"
+table = "job_steps"
+storage = "Column"
+nullable = "No"
+frozen_at = "Creation"
+purpose = "One row per step of the frozen WorkflowDef, written at Job creation, all not_started."
+in_code = "Not yet"
+notes = "`job_steps(job_id, step_id, ordinal, state, last_verdict, retry_count, iteration_count, entered_at, updated_at)`. Rows are written at Job creation, not at dispatch — including for Jobs never approved."
+why = "A Job can sit at `awaiting_approval` for days while the workflow file is edited; writing at creation is what lets \"what you approved is what runs\" hold through that window."
+
+[fields."acceptance_criteria[]"]
+type = "array<{criterion_id, text, source}>, designed for 1–6"
+table = "jobs"
+storage = "Column"
+nullable = "No"
+frozen_at = "Creation"
+purpose = "What the Job must satisfy to be done, in the requester's words. Each is judged independently; a criterion verdict never sums onto the step or the Job."
+in_code = "Not yet"
+open_questions = ["May acceptance criteria change when a Job's scope is revised?"]
+notes = "Frozen at creation; appendable only at an approved widening — you may raise the bar, not lower it. The Judge's call count is `criteria × panel_size`, and appending pushes both."
+why = "Judge citations reference a criterion by its frozen position (\"criterion 4\"), which editable or reorderable criteria would break."
+
+[fields.assigned_drone]
+type = "id"
+table = "jobs"
+storage = "Column"
+nullable = "Yes"
+frozen_at = "Never"
+purpose = "The Drone working this Job, null if not dispatched."
+in_code = "Not yet"
+notes = "Presence, not state. Null also suspends the liveness clock — see the `running` status row."
+
+[fields.atomic]
+type = "bool"
+table = "jobs"
+storage = "Column"
+nullable = "No"
+frozen_at = "Dispatch"
+purpose = "Whether the write targets must land as one unit."
+in_code = "Not yet"
+notes = "`core-model` derives a closed shape from this and `write_targets` rather than storing a shape name, so every branch on shape is compiler-enumerated. Settled before dispatch and never left unset — the approval gate's whole content is scope."
+why = "Storing a shape name instead would cost a schema migration, a protocol bump, and a Bridge fallback window for every new combination."
+
+[fields.current_step_id]
+type = "id"
+table = "jobs"
+storage = "Column"
+nullable = "Yes"
+frozen_at = "Never"
+purpose = "Names the job_steps row the Job is on."
+in_code = "Not yet"
+notes = "`current_step`, `step_activity`, `last_step_verdict` and `retry_count` are not separate fields — they are this row's projection from `job_steps`."
+why = "Storing them separately would risk four fields disagreeing with the row."
+
+[fields.dependencies]
+type = "array<edge>"
+table = "jobs"
+storage = "Column"
+nullable = "Yes"
+frozen_at = "Never"
+purpose = "DAG links — depends_on / blocks — sequencing peer Jobs."
+in_code = "Not yet"
+open_questions = ["Can a Convoy be a peer node in dependencies?"]
+notes = "Every edge gates identically on the upstream reaching a terminal status; edges carry no strength of their own, and what varies is carried by that outcome. A Convoy does not decompose but may be a peer here — it completes as one unit, so a dependent never observes a half-landed upstream. Linked-DAG membership is recorded here and only here, which is why the derived shape has no `linked_dag` value."
+
+[fields.dispatched_by]
+type = "{job_id, step_id}"
+table = "jobs"
+storage = "Column"
+nullable = "Yes"
+frozen_at = "Creation"
+purpose = "On a Job spawned by a step of another Job; null on a top-level Job."
+in_code = "Not yet"
+notes = "Records which step dispatched this Job, distinct from `dependencies` which sequences peers — so a step can render the Jobs it spawned. Also the discriminator for sub-dispatch approval (Workflow, Dispatch Approval). A Judge call is not a sub-dispatch and never produces one; Judge owns why."
+
+[fields."entered_at, updated_at"]
+type = "timestamp"
+table = "job_steps"
+storage = "Column"
+nullable = "No"
+frozen_at = "Never"
+purpose = "When this step was entered and last written."
+in_code = "Not yet"
+
+[fields.Evidence]
+type = "array<object>"
+table = "evidence"
+storage = "Own table"
+nullable = "Yes"
+frozen_at = "Never"
+purpose = "Proof tied to a step's Advance Gate — check results, Judge verdicts, diffs, test output. Append-only, one row per entry."
+in_code = "Not yet"
+open_questions = ["How does a Job record which Checks ran, and on whose behalf?", "Where does captured Check output live — inline in the Evidence row, or on disk?", "How are Facts and Evidence serialized?"]
+notes = """
+Indexed by step and by Manifest reference; scope is governed by the step's Evidence Scope Object (Workflow). Captured Check output goes to disk with a pointer in the row, captured whole rather than inlined.
+
+Every entry carries step attribution plus a Manifest reference naming which gating Manifest the result came from. Outcomes live on `gate_manifest_ids[]`.
+"""
+why = "A blob on the Job row would rewrite whole on every append, and inlined output would be parsed on every Job view — a failing suite's output can run to megabytes, and choosing which lines are the failure needs the whole capture anyway."
+
+[fields.Facts]
+type = "text"
+table = "jobs"
+storage = "Text on the Job row"
+nullable = "Yes"
+frozen_at = "Never"
+purpose = "Concrete context the Job needs to run and learns along the way. The Drone's knowledge base for the Job. Append-only."
+in_code = "Not yet"
+open_questions = ["How are Facts and Evidence serialized?"]
+notes = "Not its own table."
+why = "Nothing queries it, it has no keys worth indexing, and it is handed to a model whole — a table would add step attribution and per-entry rows to something whose order does not matter."
+
+[fields."gate_manifest_ids[]"]
+type = "array<id>"
+table = "job_manifests"
+storage = "Own table"
+nullable = "Yes"
+frozen_at = "Dispatch"
+purpose = "Manifests whose Checks must pass for this Job to advance. May be empty."
+in_code = "Not yet"
+open_questions = ["What are the reasons a gating Manifest's Checks did not run?", "Which Manifest's policy governs a Job gated by several — freeze, budget cap, auto-merge?"]
+notes = """
+If the Job's own work authors an `armada.yml`, that file gates from the next Job, not this one. Policy resolves across this list: freeze, `auto_merge` and `review_gate` take most-restrictive-wins; the budget cap follows `owner_manifest_id`, and Manifest owns the settings.
+
+Each entry carries an outcome — ran and passed, ran and failed, or did not run. A did-not-run carries a reason and a disposition, so a surface needs no reason-to-severity table of its own; see `not_run_disposition` below.
+"""
+why = "Keeping this list separate from the Job's own dispatched-work manifest keeps \"did this work\" and \"who gates this path\" separable."
+
+[fields."gate_manifest_ids[]".not_run_disposition]
+path_condition_unmet = "Expected"
+frozen = "Expected"
+not_declared = "Suspect"
+scope_narrowed = "Suspect"
+
+[fields.iteration_count]
+type = "int"
+table = "job_steps"
+storage = "Column"
+nullable = "No"
+frozen_at = "Never"
+purpose = "How many times this step has been redone as designed, via a loop return. Nothing went wrong. Arrives with retries, not at M1."
+in_code = "Not yet"
+notes = "Never consumes the retry budget and never trips an escalation. Increments on the step that emits the verdict, not the step the loop routes back to — the cap lives on the emitting step, since a target-step counter would conflate two loops sharing one target. A rail renders \"iteration 3 of 5\" against the gate row, not the draft row."
+
+[fields.judge_calls]
+type = "int"
+table = "job_steps"
+storage = "Derived — not stored"
+nullable = "No"
+frozen_at = "N/A"
+purpose = "How many Judge calls this step made. Summed from panel_size across the step's Judge records."
+in_code = "Not yet"
+notes = "Counting records would undercount: one record holds every judge's verdict, so a step judged twice by a panel of three would read as two calls rather than six. Kept separate from `spawned_jobs` — a Judge call is a call with a verdict, not a sub-dispatch."
+
+[fields.last_verdict]
+type = "enum"
+table = "job_steps"
+storage = "Column"
+nullable = "Yes"
+frozen_at = "Never"
+purpose = "Last verdict against this step — passed, failed(<escalation_reason>), or not_reached."
+in_code = "Not yet"
+notes = "Activity and verdict are separate fields, not one combined enum: a step retrying after an evidence-suspect flag is `running` (state) and `failed(evidence_suspect)` (last_verdict) at the same moment, which one enum cannot say. Workflow defines the escalation reasons and the three gate verdicts; only step-level triggers can appear here. `approve` and `request_changes` leave the Job `running`; `reject` is the only one writing a terminal status."
+why = "A combined enum would need a variant per activity/verdict combination, or would silently drop why a step is retrying — the failure where four competing vocabularies collapse into one, which splitting activity from verdict exists to prevent."
+
+[fields.model]
+type = "string"
+table = "jobs"
+storage = "Column"
+nullable = "No"
+frozen_at = "Never"
+purpose = "Which model the assigned Drone is using."
+in_code = "Not yet"
+open_questions = ["Does the agent harness accept a model per invocation, and report the one it actually used?"]
+notes = "The adapter passes a model string on every spawn, so `DroneSpawnConfig` carries it whether or not anything varies it. At M1 nothing varies it — no create-form field, no picker; the value comes from configuration. When a picker arrives, two homes need reconciling: `judge_check.model`, and `policy.model` in the deferred half of the `armada.yml` schema."
+
+[fields.ordinal]
+type = "int"
+table = "job_steps"
+storage = "Column"
+nullable = "No"
+frozen_at = "Creation"
+purpose = "The step's position in the WorkflowDef at freeze time."
+in_code = "Not yet"
+notes = "A rail renders past, current and future steps from one query without reading the WorkflowDef."
+
+[fields.origin]
+type = "enum"
+table = "jobs"
+storage = "Column"
+nullable = "No"
+frozen_at = "Creation"
+purpose = "auto_detected / manual / helm_drafted / sub_dispatched / workflow_triggered."
+in_code = "Not yet"
+notes = "A denormalized label, not an independent fact: written from `dispatched_by` at creation, and where they disagree, `dispatched_by` wins. Walking the `dispatched_by` chain recovers root provenance. `workflow_triggered` is the one value not written from `dispatched_by` — the Job that named it is over; it links back through `subject` and does not consume the fan-out cap."
+
+[fields.owner_manifest_id]
+type = "id"
+table = "jobs"
+storage = "Column"
+nullable = "No"
+frozen_at = "Creation"
+purpose = "Which project this Job belongs to, and the Job Board's scoping key. Exactly one, always present."
+in_code = "Not yet"
+open_questions = ["Does a Job record write scope and gate scope separately, and where does shape live?"]
+notes = "A Manifest's row outlives its `armada.yml`, so a historical Job keeps showing what it ran against. Work with no Manifest is not a Job: a dispatched Scan carries no worktree and no resolved toolset."
+why = "A single `manifest_id` / `manifest_ids` field is rejected: it answered ownership, gating, config resolution and Board scoping at once, and its entry count doubled as the shape discriminator. Ownership is this field; gating is `gate_manifest_ids[]`; shape is derived from `atomic` and `write_targets`."
+
+[fields.redispatched_from]
+type = "id"
+table = "jobs"
+storage = "Column"
+nullable = "Yes"
+frozen_at = "Creation"
+purpose = "The Job this one replaces."
+in_code = "Not yet"
+open_questions = ["Can rejected and completed_failed Jobs be redispatched?"]
+notes = "A redispatch is always a new Job carrying a reference back — it never reopens a terminal or escalated Job. Facts and Evidence carry forward reframed as corrective context, not as instructions for the new Drone."
+why = "A second failure under a new job id would otherwise read as a first failure every time, and repeat counts would mean nothing."
+
+[fields.retry_count]
+type = "int"
+table = "job_steps"
+storage = "Column"
+nullable = "No"
+frozen_at = "Never"
+purpose = "How many times this step failed and was retried. Arrives with retries, not at M1."
+in_code = "Not yet"
+open_questions = ["Is there an aggregate attempt bound on a looping step, given retry_count resets each iteration?"]
+notes = "Resets on a loop return — re-entry as designed is a fresh attempt budget, bounded by `iteration_cap` rather than the retry limit. The aggregate bound over all iterations lives on `default_gate_policy`, which Workflow owns; `unbounded` is legal there, making `completed_failed` unreachable on that step by deliberate per-workflow choice."
+
+[fields."scope_revisions[]"]
+type = "array<object>"
+table = "jobs"
+storage = "Column"
+nullable = "Yes"
+frozen_at = "Never"
+purpose = "Append-only scope history. Entry zero is the initial scope; later entries include revisions that did not take."
+in_code = "Not yet"
+open_questions = ["Is a Job's scope mutable after dispatch?"]
+notes = """
+`{at_step, paths_added, paths_removed, atomic_before, atomic_after, rationale, outcome, approved_by, at}`
+
+Records the source fields — paths and `atomic` — not the Manifest delta; the Manifest set follows from them. Permissions intersect across declared Manifests, so a widening can only remove capability: a respawned Drone may come back less capable than the one that asked. What Fleet does on a revision is Fleet's.
+"""
+why = "Recording the delta directly would leave a Job's shape unreconstructable at any point, since nothing else on the record names it."
+
+[fields.spawned_jobs]
+type = "array<id>"
+table = "job_steps"
+storage = "Derived — not stored"
+nullable = "No"
+frozen_at = "N/A"
+purpose = "The Jobs this step dispatched."
+in_code = "Not yet"
+notes = "The inverse of `dispatched_by`, answered by an index rather than stored as a column. Never contains a Judge call."
+why = "Storing it as a column would add a denormalisation needing its own source-wins rule, for no read it does not already serve."
+
+[fields.state]
+type = "enum"
+table = "job_steps"
+storage = "Column"
+nullable = "No"
+frozen_at = "Never"
+purpose = "Where this step is. One column — what the top level calls step_activity is this read for the current step."
+in_code = "Not yet"
+notes = "Stored explicitly rather than inferred from position relative to the current step. Colour is never stored: no colour field, no hue enum, no `display_state` — the schema owes a surface the state named precisely enough to map onto a mark, which mark is the Design System's. The values are `step-states.toml`."
+why = "Inferring from position breaks under a loop workflow, where a step can have advanced and then be re-entered."
+
+[fields.status]
+type = "enum"
+table = "jobs"
+storage = "Column"
+nullable = "No"
+frozen_at = "Never"
+purpose = "Which Job status the Job is at. job_events carries every transition with its reason, actor and time."
+in_code = "Not yet"
+notes = """
+The column is a cache of the fold over `job_events`, not recomputed on read — every surface that lists, sorts or filters Jobs reads it directly. The transition and its event must land in one SQLite transaction; Fleet re-folds non-terminal Jobs at boot and lets the log win, giving up free time-travel.
+
+`Job::transition` returns a new `Job` rather than mutating, so the fold exists either way — the column stores its result.
+"""
+why = "Folding from `job_events` on every read would mean paying for the full history on every Board render."
+
+[fields.subject]
+type = "{kind, ref}"
+table = "jobs"
+storage = "Column"
+nullable = "Yes"
+frozen_at = "Never"
+purpose = "What this Job is about. Neither sequencing nor provenance."
+in_code = "Not yet"
+notes = "A revert reads its subject's scope history rather than classifying afresh, which stops a linked-DAG revert of a Convoy leaving the intermediate state the Convoy existed to prevent. See the `completed_success` status row for how a wrong outcome is handled."
+why = "Without this field, a revert, a Code Review's PR, or a Design Plan's target would have nowhere to point — none of them is sequenced against or spawned by what it concerns."
+
+[fields.urgency]
+type = "enum{normal, incident}"
+table = "jobs"
+storage = "Column"
+nullable = "No"
+frozen_at = "Never"
+purpose = "incident carries a checkable test — something is currently broken for users. What happens if this waits, not how it feels."
+in_code = "Not yet"
+notes = "Not a scale: retry limits, escalation thresholds and heartbeat interval belong to the Production Support Incident workflow variant instead. This field exists for what a variant cannot carry — a security bump selects no different workflow at all. It is read by scheduling and notification routing, never by an approval gate."
+why = "A scale invites triage theatre, since every Job arrives feeling urgent; gating approval on it would mean the weakest supervision path gets taken exactly when judgement is worst."
+
+[fields.workflow_id]
+type = "id"
+table = "jobs"
+storage = "Column"
+nullable = "No"
+frozen_at = "Creation"
+purpose = "Which WorkflowDef this Job follows."
+in_code = "Not yet"
+open_questions = ["Which field names the WorkflowDef a Job follows — task_type or workflow_id?"]
+notes = "Not named `task_type`: `task` is a banned synonym for Job in the Design System lexicon, and every other reference on this record names the thing it points at."
+why = "\"Type\" would read as a closed set, where this is a pointer to a row."
+
+[fields.workflow_status]
+type = "object"
+table = "jobs"
+storage = "Derived — not stored"
+nullable = "No"
+frozen_at = "N/A"
+purpose = "The nested machine, read from the current job_steps row."
+in_code = "Not yet"
+notes = "Advances only while the Job is `running` or `awaiting_review`; frozen otherwise, never cleared, still rendered."
+
+[fields."write_targets[]"]
+type = "array<path>"
+table = "job_write_targets"
+storage = "Own table"
+nullable = "Yes — null is not empty"
+frozen_at = "Never"
+purpose = "The paths this Job intends to write. One row per path."
+in_code = "Not yet"
+open_questions = ["Who owns a path inside the root that no Workspace claims?"]
+notes = """
+The Workspace set derives from these paths by nearest-ancestor ownership; ownership is not exclusivity. The declaration does not bind — a Drone's worktree is a whole-repo checkout, and nothing binds writes to declared paths.
+
+Null is scope not yet determined; empty is determined to write nothing. Shape is underivable while null, rather than defaulting.
+"""
+why = "Binding the declaration as a lease would serialise the Jobs that declared honestly and miss the one that wrote outside what it named."

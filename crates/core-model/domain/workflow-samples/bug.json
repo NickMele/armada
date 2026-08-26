@@ -1,0 +1,198 @@
+{
+  "workflow_id": "bug",
+  "version": 2,
+  "structure": "linear",
+  "default_gate_policy": {
+    "retry_limit": 3,
+    "iteration_cap": 5,
+    "attempt_cap": 15,
+    "judge_call_cap": 12,
+    "fan_out_cap": 5,
+    "fan_out_rate": {
+      "count": 3,
+      "window_minutes": 10
+    },
+    "heartbeat_interval_minutes": 5,
+    "poke_limit": 2
+  },
+  "steps": [
+    {
+      "step_id": "repro",
+      "order": 1,
+      "required": true,
+      "hard_prerequisite": true,
+      "evidence_type": "failing_test",
+      "mechanical_checks": [
+        {
+          "type": "test_run",
+          "expect_exit_code": 1,
+          "expect_status": "red"
+        }
+      ],
+      "judge_checks": [
+        {
+          "enabled": true,
+          "model": "haiku",
+          "prompt_key": "repro_matches_report",
+          "question": "Does this failing test actually represent the reported bug?"
+        }
+      ],
+      "evidence_scope": {
+        "context_source": "drone_declared",
+        "reference_docs": [
+          "ticket"
+        ],
+        "exclude_paths": [
+          ".env",
+          "node_modules/"
+        ],
+        "max_context_size": 20,
+        "scope_diff_check": true
+      },
+      "advance_gate": "auto_if_judge_passes"
+    },
+    {
+      "step_id": "root_cause",
+      "order": 2,
+      "required": true,
+      "evidence_type": "facts_note",
+      "mechanical_checks": [
+        {
+          "type": "artifact_exists",
+          "target": "root_cause_note"
+        }
+      ],
+      "judge_checks": [
+        {
+          "enabled": true,
+          "model": "haiku",
+          "prompt_key": "root_cause_plausible",
+          "question": "Is this root-cause explanation plausible given the repro evidence?"
+        }
+      ],
+      "evidence_scope": {
+        "context_source": "drone_declared",
+        "reference_docs": [
+          "repro.evidence"
+        ],
+        "max_context_size": 20
+      },
+      "advance_gate": "auto_if_judge_passes"
+    },
+    {
+      "step_id": "fix",
+      "order": 3,
+      "required": true,
+      "evidence_type": "diff",
+      "mechanical_checks": [
+        {
+          "type": "diff_nonempty"
+        }
+      ],
+      "judge_checks": [
+        {
+          "enabled": true,
+          "model": "haiku",
+          "prompt_key": "fix_addresses_cause_not_symptom",
+          "question": "Does this diff address the stated root cause, not just the symptom?",
+          "panel_size": 3,
+          "gaming_check": {
+            "enabled": true,
+            "baseline_ref": "root_cause.evidence",
+            "flag_if": [
+              "assertion_weakened",
+              "test_scope_narrowed",
+              "tautological_test"
+            ]
+          }
+        }
+      ],
+      "evidence_scope": {
+        "context_source": "drone_declared",
+        "reference_docs": [
+          "root_cause.evidence"
+        ],
+        "max_context_size": 20,
+        "scope_diff_check": true,
+        "declare_plan_at": "step_start"
+      },
+      "advance_gate": "auto_if_judge_passes",
+      "on_gaming_flag": "escalate:evidence_suspect"
+    },
+    {
+      "step_id": "regression_verify",
+      "order": 4,
+      "required": true,
+      "evidence_type": "test_suite_run",
+      "mechanical_checks": [
+        {
+          "type": "manifest_check",
+          "check": "test",
+          "expect_exit_code": 0
+        }
+      ],
+      "judge_checks": [
+        {
+          "enabled": true,
+          "model": "haiku",
+          "prompt_key": "fix_changes_nothing_beyond_root_cause",
+          "question": "Does this diff change behaviour beyond the stated root cause?"
+        }
+      ],
+      "evidence_scope": {
+        "context_source": "hybrid",
+        "reference_docs": [
+          "root_cause.evidence",
+          "fix.evidence"
+        ],
+        "max_context_size": 40
+      },
+      "advance_gate": "auto_if_judge_passes",
+      "on_fail": "retry:fix"
+    },
+    {
+      "step_id": "review",
+      "order": 5,
+      "required": true,
+      "evidence_type": "bundle",
+      "judge_checks": [
+        {
+          "enabled": true,
+          "model": "sonnet",
+          "prompt_key": "final_review_summary",
+          "question": "Summarize what this diff does, whether it addresses the stated root cause, and anything a human reviewer should look at closely.",
+          "gates_advancement": false
+        }
+      ],
+      "evidence_scope": {
+        "context_source": "hybrid",
+        "reference_docs": [
+          "ticket",
+          "root_cause.evidence"
+        ],
+        "max_context_size": 40
+      },
+      "advance_gate": "manifest_rule:review_gate",
+      "verdict_routing": {
+        "request_changes": "fix"
+      }
+    },
+    {
+      "step_id": "merge",
+      "order": 6,
+      "required": true,
+      "advance_gate": "manifest_rule:auto_merge"
+    },
+    {
+      "step_id": "close",
+      "order": 7,
+      "required": true,
+      "mechanical_checks": [
+        {
+          "type": "pr_merged"
+        }
+      ],
+      "advance_gate": "auto"
+    }
+  ]
+}

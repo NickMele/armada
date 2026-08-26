@@ -1,0 +1,168 @@
+# Why a Job stopped and a person is being asked. The vocabulary the
+# `escalated` status stores its reason from, and the one `last_verdict`
+# draws its `failed(<reason>)` payload from.
+#
+# Authored here. Carried across from the design workspace's Escalation
+# Triggers database, which is the record of the decision and the reasoning
+# that produced it, not the authority on the current set — a page there that
+# disagrees with this file is stale, not right.
+#
+# The table key is the wire value, so a rule can compare this set against the
+# enum `core-model` will hold without a mapping in between.
+#
+# `kind` is what keeps this honest: a row here may be a sub-kind of another
+# rather than a trigger of its own, and the argument for why it is a sub-kind
+# rather than a peer is on that row.
+#
+# `job_transitions` is the edge a trigger fires where it has one of its own.
+# A trigger with none fires `running -> escalated`, which that edge's own row
+# in job-transitions.toml names as the default.
+#
+# Fields:
+#   kind            - Trigger | Sub-kind
+#   level           - Step | Job. Empty where the source left it undecided
+#   meaning         - the condition, in one sentence
+#   job_transitions - the edge this trigger fires. A "from -> to" pair whose
+#                     ends are keys in job-statuses.toml
+#   in_code         - whether v2 implements it. Every value is "Not yet": no
+#                     crate implements a trigger, and core-model holds only the
+#                     log envelope. The source recorded "In code" for
+#                     evidence_suspect, fan_out, gate_failure, stalled, thrashing — that was v1, and v1 is deleted, so as a
+#                     claim about this repository it was false.
+#   open_questions  - questions the source left open against this row
+#   notes           - the reasoning the row's page carried
+
+[triggers.blocked_by_policy]
+kind = "Trigger"
+level = "Step"
+meaning = "The Drone was refused a tool or command it needed and finished having submitted no evidence. Distinct from silent, which is a Drone that called nothing at all: this one tried and was stopped. The remedy differs — a rephrase cannot help, and the fix is a configuration change."
+in_code = "Not yet"
+open_questions = ["What does Fleet accept as proof a Drone did the work, given the result envelope reports success for a run that did nothing?"]
+
+[triggers.check_timeout]
+kind = "Trigger"
+level = "Step"
+meaning = "A Check hit its own bound — a config row narrowed by an optional per-Check field."
+in_code = "Not yet"
+notes = "Distinct from `gate_failure`: the Check did not fail, it did not finish, so retrying would reproduce the same hang. Distinct from the Drone/Job timeout, which bounds the whole Job rather than one command."
+
+[triggers.dependency_failed]
+kind = "Trigger"
+level = "Job"
+meaning = "An upstream Job this one depends on reached a terminal status other than completed_success."
+job_transitions = ["queued -> escalated"]
+in_code = "Not yet"
+notes = """
+Fires on a Job in `queued` whose upstream reaches `completed_failed`, `rejected`, or `killed`. `superseded` is the exception: it unblocks the dependent and surfaces it with the dependency marked unsatisfied, since superseding means the work landed outside the Job rather than failing to land.
+
+Job-level: a `queued` Job has no current step, so the payload's step field carries nothing here — the same reason `interrupted` and `resource_exhausted` are Job-level.
+"""
+why = """
+Cascading the failure would write `completed_failed` onto work that never ran, against a diff and worktree that don't exist. Fleet writes that terminal without a person, so one failure could silently terminate an arbitrarily deep dependency chain; escalating stops at the first dependent and asks instead.
+
+Leaving the Job queued under a new readiness reason fails differently: CPU headroom self-clears, but a failed upstream never does, so the Job would wait indefinitely behind a label with no action attached. Every escalation trigger names a malfunction, and a failed upstream is one — which is why `awaiting_attestation` has no home under `escalated` and this trigger does.
+"""
+
+[triggers.evidence_suspect]
+kind = "Trigger"
+meaning = "Mechanically passed, semantically flagged as likely gamed."
+in_code = "Not yet"
+open_questions = ["Are fan_out, stalled, thrashing and evidence_suspect step-level or Job-level escalations?"]
+notes = """
+Distinct from `gate_failure`: resubmission under the same instructions would likely reproduce the same gaming, so the retry flow is the wrong destination and a person needs to look. Raised by `judge_check.gaming_check`, optionally against an earlier step's evidence named by `baseline_ref`; Judge owns the routing.
+
+Renders as "evidence disputed," with Judge in the verification-source field rather than the headline.
+"""
+why = "\"Judge rejected the evidence\" would be wrong twice: `rejected` is already a Job state."
+
+[triggers.evidence_too_large]
+kind = "Trigger"
+level = "Step"
+meaning = "Evidence exceeded max_context_size."
+in_code = "Not yet"
+open_questions = ["Does exceeding max_context_size hard-fail or soft-warn?"]
+notes = """
+Escalates rather than hard-failing the step or warning past it. A hard fail would route to the retry flow, whose only re-scope for a combined diff is a smaller one — and a Convoy cannot be split, so retries would burn budget on something the Drone cannot fix. A soft warning would let the Judge grant on partial sight, showing an ordinary pass in the record.
+
+Not fully closed: the cap is authored per step by someone who cannot know how wide a Convoy will be, and a loop workflow breaches it by construction unless prior-iteration context is trimmed.
+"""
+
+[triggers.fan_out]
+kind = "Trigger"
+meaning = "A Job tripped the sub-dispatch cap or the sub-dispatch rate threshold."
+in_code = "Not yet"
+open_questions = ["Are fan_out, stalled, thrashing and evidence_suspect step-level or Job-level escalations?"]
+notes = "Volume itself is the signal, not any single dispatch: it escalates rather than gating each sub-dispatch, and sub-dispatches inside an already-approved Job need no separate approval. It counts Jobs only — a Judge call is not a sub-dispatch, since it has no worktree, no rail, and no Job Board row."
+why = "Counting Judge calls would make \"2 of 5\" meaningless, since one step at `panel_size: 3` would burn three of five on its own; `spawned_jobs` and `judge_calls` are counted separately for that reason. Judge owns the argument."
+
+[triggers.gate_failure]
+kind = "Trigger"
+level = "Step"
+meaning = "Evidence was submitted, honestly did not pass, and the retry limit is exhausted."
+in_code = "Not yet"
+notes = """
+The ordinary failure: nothing is wrong with the Drone, the evidence, or the machinery — the work did not clear the bar within the attempts allowed.
+
+`loop_cap` is not this, because nothing failed. `check_timeout` is not this, because the Check did not fail, it did not finish. `evidence_suspect` is not this, because the evidence passed mechanically and resubmitting would reproduce the same gaming.
+"""
+
+[triggers.interrupted]
+kind = "Trigger"
+level = "Job"
+meaning = "Crash recovery. A Job marked running has no matching OS process."
+job_transitions = ["awaiting_review -> escalated"]
+in_code = "Not yet"
+notes = """
+Set by Fleet's restart reconciliation. Behaviourally identical to any other escalation — the Job is paused and surfaced for a human decision; the distinction is in what happened, not in what the system does about it.
+
+This is also what catches a Drone that dies while a Job sits at a human gate: the liveness clock is suspended there, so `stalled` cannot fire, but reconciliation still notices the missing process.
+"""
+
+[triggers.loop_cap]
+kind = "Trigger"
+level = "Step"
+meaning = "A loop workflow's step hit its iteration_cap."
+in_code = "Not yet"
+open_questions = ["Where does a loop workflow's iteration cap live?", "Is there an aggregate attempt bound on a looping step, given retry_count resets each iteration?"]
+notes = """
+Nothing failed — the loop simply did not converge, which is why the count that tripped it is `iteration_count` rather than `retry_count`: an iteration is the step being redone as designed, and must never consume the retry budget. It escalates the way a stuck gate does.
+
+Because `retry_count` resets on each loop return, a looping step can burn `retry_limit × iteration_cap` attempts before this fires, and `completed_failed` is unreachable on such a step — `loop_cap` always gets there first. The aggregate attempt cap in `default_gate_policy` bounds that.
+"""
+
+[triggers.resource_exhausted]
+kind = "Trigger"
+level = "Job"
+meaning = "A running Job exhausted CPU or memory."
+in_code = "Not yet"
+notes = "Fleet's pre-spawn headroom poll covers only Jobs that have not started; this is what lets a Job that exhausts CPU or memory while already running say so. Job-level, like `interrupted` — the condition belongs to the process, not to any step it happened to be on."
+
+[triggers.silent]
+kind = "Sub-kind"
+meaning = "Sub-kind of stalled. The Drone process exited normally having called no tool at all. A Drone that did call tools and had every one of them refused is blocked_by_policy instead — the two look identical in the result envelope and take opposite remedies, so the boundary is the tool call and not the empty result."
+open_questions = ["What does Fleet accept as proof a Drone did the work, given the result envelope reports success for a run that did nothing?"]
+notes = """
+No `fleet.verdict`, no `fleet.report`, no question raised — the Drone ran to completion and said nothing. It is a sub-kind of `stalled` rather than its own trigger because the two behave identically: both pause the Job and surface it the same way, differing only in the suggested action.
+
+`stalled` recommends redispatch; `stalled(silent)` recommends rephrase and redispatch, since the brief itself needs work — redispatching it unchanged would reproduce the same silence. A Drone OOM-killed forty seconds into `fix` gives Fleet no signal at all, and redispatch is right; a Drone that runs to completion, finds the brief ambiguous, and stops without calling anything needs the brief rewritten instead.
+"""
+
+[triggers.stalled]
+kind = "Trigger"
+meaning = "Fleet has no signal despite the Job having been active — the Drone process died mid-work, or the relay never fired."
+in_code = "Not yet"
+open_questions = ["Are fan_out, stalled, thrashing and evidence_suspect step-level or Job-level escalations?"]
+notes = "Detected by the heartbeat/liveness timer, which runs only while the Job is `running` — Drone owns that decision and the reasoning behind it. The response is a poke, then escalation once `poke_limit` is spent. Carries a `silent` sub-kind, which pauses the Job identically and differs only in what the payload recommends."
+
+[triggers.thrashing]
+kind = "Trigger"
+meaning = "Active but not converging, and the forced report also failed."
+in_code = "Not yet"
+open_questions = ["Are fan_out, stalled, thrashing and evidence_suspect step-level or Job-level escalations?"]
+notes = """
+Detected mechanically — turn count against the step norm, wall-clock against an expected ceiling, and where `declare_plan_at: step_start` is set, a file-plan-versus-live-diff check. No model judgement is needed to *detect* it.
+
+A mid-step Judge pass runs only once a mechanical trigger fires, never on a schedule. It judges the work product so far, never the Drone's turns. If it finds thrashing, the Drone is force-interrupted with a "stop, report current state now" directive; this trigger fires when that also fails.
+
+Judge owns the routing.
+"""

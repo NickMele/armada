@@ -1,0 +1,365 @@
+# What a WorkflowDef declares. A step's gates, its evidence scope, and the
+# def-level defaults every step inherits.
+#
+# Authored here. Carried across from the design workspace's WorkflowDef
+# Fields database, which is the record of the decision and the reasoning that
+# produced it, not the authority on the current set — a page there that
+# disagrees with this file is stale, not right.
+#
+# `parent` is what makes the nesting readable: a row with no parent is a
+# field of the WorkflowDef, a row parented to `steps[]` is a field of a step,
+# and a row parented to `evidence_scope` is a field of that object. The
+# samples in workflow-samples/ instantiate these, and a rule can check every
+# key they use has a row here — which is how the source's own gaps surface.
+#
+# Fields:
+#   type           - the value's shape, as the source typed it
+#   concern        - Structure | Gating | Verification | Retry and loops
+#   parent         - the row this one nests under. Absent at the top level
+#   sub_items      - the rows nested under this one
+#   purpose        - what the field declares
+#   open_questions - questions the source left open against this row
+#   notes          - the reasoning the row's page carried
+
+[fields.advance_gate]
+type = "enum"
+concern = "Gating"
+parent = "steps[]"
+purpose = "What it takes to advance past this step. Four values, defined per step rather than globally fixed."
+open_questions = ["What does auto_if_judge_high_confidence mean, given the Judge answers yes/no?", "Can a human advance gate return a verdict rather than a boolean?"]
+notes = """
+`auto_if_judge_passes` is not a score above a bar: a veto-only Judge either refuses or does not, the question is a narrow yes/no, and a panel requires unanimity — nothing in the system produces a graded number to threshold against.
+
+Bug's review step reads a Manifest-level policy, the same pattern as merge's `manifest_rule:auto_merge`: default `human_always`, overridable per repo to `auto_if_judge_passes` for teams that want full automation. Resolution across several gating Manifests is Manifest's rule.
+
+A human gate returns a verdict, not a boolean: `approve` advances; `request_changes` returns to this step's `verdict_routing` target and increments this step's `iteration_count`, leaving the Job `running`; `reject` ends the Job. See Job for where each verdict lands on the record.
+"""
+why = "A boolean cannot carry the middle value, and the middle value is the common one."
+
+[fields.advance_gate.values]
+auto = "The mechanical tier holds, or the step has no gate at all"
+auto_if_judge_passes = "The mechanical tier holds and the Judge did not refuse"
+human_always = "A person answers, at the Inbox — returns a three-value verdict"
+"manifest_rule:<key>" = "A named Manifest-level policy says so. Keys in use: `auto_merge`, `review_gate`"
+
+[fields.context_paths]
+type = "array[path]"
+concern = "Verification"
+parent = "evidence_scope"
+purpose = "What else the Judge may open beyond the diff. Required on the resolved object, absent from the definition."
+notes = """
+Required on the resolved object; absent from the definition where `context_source` is `drone_declared`, since at definition time nobody knows the paths — the Drone supplies them at evidence-report time and Fleet validates them.
+
+The diff is pre-loaded, so this is not what the Judge reads but what else it may open: the unchanged remainder of a touched file, a sibling module, an interface being conformed to. A hunk alone often cannot answer whether a test is still meaningful; the rest of the file can.
+
+On steps with no diff — a `facts_note`, a Design Plan document — it is the whole payload instead.
+"""
+
+[fields.context_source]
+type = "enum"
+concern = "Verification"
+parent = "evidence_scope"
+purpose = "Where the paths came from: manifest_default, drone_declared or hybrid. Required."
+notes = """
+An audit trail for trust level. Paths the Manifest supplied and paths the Drone chose for itself are not equally trustworthy, and the resolved object should not lose which it was.
+
+`drone_declared` is also what makes `context_paths` absent from the definition — the field cannot be authored ahead of time when the Drone is the one who supplies it.
+
+Resolution order: Manifest default for the step type → Drone declares specifics at evidence-report time → Fleet validates against the allowlist and, where `scope_diff_check` is on, against the real diff.
+"""
+
+[fields.declare_plan_at]
+type = "enum"
+concern = "Verification"
+parent = "steps[]"
+purpose = "When the Drone declares its context_paths. One value is named: step_start."
+open_questions = ["What are the shapes of on_fail, on_gaming_flag, declare_plan_at and scope_diff_check?"]
+notes = """
+`step_start` lets the Drone declare `context_paths` at step start rather than only at evidence-submission time, enabling a continuous drift check — Fleet compares live edits against the declared plan throughout the step, not once at the end. A live mismatch does not auto-fail; it tags the step for a mandatory Judge look, since legitimate investigation sometimes reveals the real work is outside the original plan. This turns the mid-step Judge pass from a fixed-schedule check into a conditional one.
+
+The other value is unspecified: evidence-submission time is the default behaviour and is described in prose, but the enum member naming it is never written down, and neither is what the field defaults to when absent.
+"""
+
+[fields.default_gate_policy]
+type = "object"
+concern = "Retry and loops"
+purpose = "WorkflowDef-level defaults that every step inherits unless it overrides them."
+open_questions = ["Is there an aggregate attempt bound on a looping step, given retry_count resets each iteration?", "What caps criteria × panel_size?"]
+notes = """
+Supplies the default value a step uses when it does not set its own. Members in use across the samples: `retry_limit`, `iteration_cap`, `attempt_cap`, `judge_call_cap`, `fan_out_cap`, `fan_out_rate`, `heartbeat_interval_minutes`, `poke_limit`.
+
+`attempt_cap` bounds total attempts across all iterations of a step: `retry_count` resets on a loop return by design, so at defaults fifteen attempts pass unobserved and `completed_failed` is unreachable on a looping step — `loop_cap` always fires first. It is overridable per step, `unbounded` is a legal value, and it is a runaway guard for unattended work rather than a safety limit, since a person watching a loop kills a Job that is not converging.
+
+`judge_call_cap` bounds `criteria × panel_size` per step, for the same reason: each call sits at a gate someone is waiting behind and is a chance to trip `max_context_size`, which escalates. It is live because `acceptance_criteria[]` may be appended at an approved widening, so the left factor can climb mid-Job. Every sample carrying a `default_gate_policy` block sets both caps, at 15 and 12 — today's effective products, so stating them changes no behaviour.
+"""
+why = "Both caps exist because a product of two other dials was governing behaviour without anyone having stated it."
+
+[fields.evidence_scope]
+type = "object"
+concern = "Verification"
+parent = "steps[]"
+sub_items = ["scope_diff_check", "context_paths", "context_source", "exclude_paths", "max_context_size", "reference_docs"]
+purpose = "Exactly what the Judge, or the human at the gate, is allowed to read."
+open_questions = ["Does exceeding max_context_size hard-fail or soft-warn?", "How does a loop workflow's appended prior-iteration context stay under max_context_size?"]
+notes = "Attached to every step that triggers a Judge or a human gate, so whoever is judging is told exactly where to look rather than searching the whole codebase. It is also how a Judge inspects changed files directly, rather than being handed a parsed summary of them. The full object — the definition-versus-resolved split, the pre-loaded diff, the per-`evidence_type` table — is on Workflow under Evidence Scope Object, read as a unit rather than field by field."
+
+[fields.evidence_type]
+type = "enum"
+concern = "Verification"
+parent = "steps[]"
+purpose = "What the step produces as its work product. Determines what the Judge is handed."
+open_questions = ["Does the Judge see the Drone's transcript, or only task text, diff and deterministic facts?"]
+notes = """
+Values in use across the samples: `diff`, `failing_test`, `facts_note`, `test_suite_run`, `bundle`, `document`. A step may also declare none — Bug's `merge` produces nothing a Judge reads. A step with no gate advances once evidence of its declared `evidence_type` arrives, so on a gateless step this field is the entire advance condition.
+
+What the Judge receives for each value, and what `context_paths` is for in each case, is the per-`evidence_type` table on Workflow under Evidence Scope Object. Code Review is the exception that table cannot fold in — there the diff is the input and the review is the work product.
+"""
+
+[fields.exclude_paths]
+type = "array[path]"
+concern = "Verification"
+parent = "evidence_scope"
+purpose = "Explicit denylist — secrets, unrelated modules. Optional."
+notes = "Applied after `context_paths` resolves, so it wins over anything the Drone declared or the Manifest defaulted. Optional, with no stated default."
+why = "A denylist that resolved first could be widened by a later declaration."
+
+[fields.hard_prerequisite]
+type = "bool"
+concern = "Gating"
+parent = "steps[]"
+purpose = "The step's evidence artifact must exist and pass before advance, and the step cannot be skipped — even on retry."
+open_questions = ["Does hard_prerequisite render anywhere in the UI?"]
+notes = """
+Bug's `repro` failing test is the case it exists for: a bug with no reproduction is a bug nobody can prove was fixed. It lives on the step definition, so it is queryable per `step_id` and Bridge can mark it.
+
+A human can push it through: where Fleet's detection is judged wrong and the Drone has done the work, a human override at the gate advances the step. The override is recorded as a human action against the step, never as a passing Check — the evidence trail still shows the artifact missing.
+
+It has no counterpart on Job: a Job cannot currently record that a dependency was hard rather than soft, and `blocked_by_dependency` draws no hard/soft distinction either.
+"""
+
+[fields.iteration_cap]
+type = "int"
+concern = "Retry and loops"
+parent = "steps[]"
+purpose = "Ceiling on loop returns for this step. Distinct from retry_limit, which counts failures."
+open_questions = ["Where does a loop workflow's iteration cap live?", "Does an iteration need its own counter, separate from retry_count?"]
+notes = """
+Defaulted from `default_gate_policy.iteration_cap`. Renders as "iteration 3 of 5".
+
+Lives on the same step as `verdict_routing` — the one that emits the verdict — because a cap split from the count it bounds never fires.
+
+Reaching it escalates the way a stuck gate does, under the `loop_cap` trigger. Nothing failed: the loop simply did not converge, which is why it is not `gate_failure`.
+"""
+
+[fields.judge_checks]
+type = "array"
+concern = "Verification"
+parent = "steps[]"
+purpose = "Semantic checks on whether the evidence satisfies the step's intent. A refusal from any entry fails the step."
+open_questions = ["How does a step with no mechanical check advance?", "Does the Judge see the Drone's transcript, or only task text, diff and deterministic facts?", "What caps criteria × panel_size?"]
+notes = """
+Each entry carries its own `model` and `panel_size`, so a step can run one strong Judge on one question and a panel of three cheap ones on another. `panel_size` is unanimity within a single question — a different dial from asking two questions, which is what the array is for.
+
+Judge owns the contract every call obeys — veto-only, blind to the Drone's transcript, a narrow yes/no question, unanimity within a panel, a refusal must cite what it refuses on, `model` a per-step dial rather than a fleet-wide constant — without exception, including the mid-step thrashing pass. This field states only what a `WorkflowDef` declares.
+
+A step with no `mechanical_checks` and no `judge_checks` is a single node: Fleet advances it once evidence of the declared `evidence_type` arrives, since the veto-only rule constrains the Judge, not the step. Gateless steps are the common case on Prototype and Documentation, not an edge one.
+
+An absent `judge_check` and `"enabled": false` mean the same thing, and no validation rule rejects an ungated step — Design Plan is a back-and-forth the engineer ends when the design is in a good place, and treating that as a config error would break it.
+"""
+
+[fields.max_context_size]
+type = "int"
+concern = "Verification"
+parent = "evidence_scope"
+purpose = "Hard cap in files or tokens. Exceeding it fails closed and escalates rather than truncating. Required."
+open_questions = ["Does exceeding max_context_size hard-fail or soft-warn?"]
+notes = """
+Fails closed rather than silently truncating, escalating to a human under its own reason, `evidence_too_large`, rather than hard-failing the step or warning past it. A loop workflow breaches it by construction unless prior-iteration context is trimmed — only the latest work product is carried forward, plus every prior verdict.
+
+Two things this does not settle: the cap is authored per step by someone who cannot know how wide a Convoy will be, and the config row is scoped to `verification` rather than to the Judge alone — deliberately ownerless, since the cap bounds all of verification, not just the Judge Check.
+"""
+why = "A hard fail would route to the retry flow, whose only re-scope for a combined diff is a smaller one, and a Convoy cannot be split — so retries would burn budget on something the Drone cannot fix. A soft warning would let the Judge grant on partial sight while the record showed an ordinary pass."
+
+[fields.mechanical_checks]
+type = "array"
+concern = "Verification"
+parent = "steps[]"
+purpose = "Objective, deterministic pass/fail assertions. All entries must pass. Free, and always runs first."
+open_questions = ["Is requires_diff a real WorkflowDef field, or dead terminology?", "What catches a Check weakened by editing the config its command resolves through?", "What deterministic surfaces exist between the mechanical and Judge tiers?"]
+notes = """
+One entry is the common case, but the field is an array because a step often needs to assert two objective things at once — `implement` needs both that the build passed and that the diff is non-empty, since a build passes cleanly on an empty diff and a single field would let the Drone-did-nothing case through.
+
+Armada runs commands and reads exit codes; it never parses tool output. The Manifest defines a Check — a command that runs a test suite, a linter, a build, in whatever tool the repo uses — and Armada executes it and reads the exit code without interpreting the result. The logs are passed through as evidence instead.
+
+A mechanical check answers whether the command succeeded. Anything requiring the output to be understood — which tests ran, how many, whether they were weakened — is a Judge question, answered by reading the files, which is what `evidence_scope.context_paths` is for. A `git diff` already carries the before and the after, so no baseline needs capturing or parsing.
+
+The sanctioned `mechanical_check.type` values are listed below; there are no others, and a type naming a shape rather than a named Check — "the full suite" — is deliberately unsanctioned, since it invites the parsing this rule forbids. Bug's `regression_verify` is `manifest_check` for the suite plus a Judge asking whether the diff changes behaviour beyond the stated root cause — the same shape Refactor uses, so one rule covers both.
+"""
+why = "Maintaining parsers for cargo test, pytest, jest, go test, JUnit XML, TAP and the rest is an unbounded surface with no end, and every new tool would become a change to Armada rather than a line in an `armada.yml`."
+
+[[fields.mechanical_checks.types]]
+type = "manifest_check"
+asserts = "A named Check in the repo's `armada.yml` ran and exited 0. Carries `check` and `expect_exit_code`"
+used_by = ["Bug", "Refactor"]
+notes = "The general case, and the one to reach for"
+
+[[fields.mechanical_checks.types]]
+type = "diff_nonempty"
+asserts = "The step produced a non-empty diff"
+used_by = ["Bug", "Refactor"]
+
+[[fields.mechanical_checks.types]]
+type = "artifact_exists"
+asserts = "A named artifact is present. Carries `target`"
+used_by = ["Bug", "Refactor", "Design Plan"]
+
+[[fields.mechanical_checks.types]]
+type = "test_run"
+asserts = "A single test command ran with an expected exit code and status. Carries `expect_exit_code`, `expect_status`"
+used_by = ["Bug"]
+notes = "Bug's `repro` expects exit 1, a deliberately failing test"
+
+[[fields.mechanical_checks.types]]
+type = "pr_merged"
+asserts = "The pull request is merged"
+used_by = ["Bug", "Refactor"]
+
+[fields.on_complete]
+type = "workflow_id"
+concern = "Retry and loops"
+purpose = "Names a workflow to follow this one. Reaching completed_success creates that Job at awaiting_approval and stops — it never dispatches."
+open_questions = ["Can a WorkflowDef declare that finishing triggers another workflow?"]
+notes = """
+Optional, on the `WorkflowDef` rather than on a step, naming a single `workflow_id`. It creates a Job; it does not start one — reaching `completed_success` creates the successor at `awaiting_approval`, wired back to this Job through `subject` and carrying the same `owner_manifest_id`. The ordinary one-by-one dispatch gate then stands in front of it, unchanged.
+
+Only `completed_success` fires it; what follows a failed Job is escalation, not more work. It is not a sub-dispatch: no `dispatched_by` is set, since there is no live Drone to attribute it to, so it does not consume the fan-out cap, and `origin` carries `workflow_triggered`. It is not an event hook — a Job that lands cleanly and breaks something an hour later has not just completed a workflow; that is a different mechanism.
+
+A `WorkflowDef` is authored data that Fleet interprets rather than branches on, so a repo can pair Deploy with Smoke Test without a release; putting the pairing in Fleet would make every new one a code change.
+"""
+why = "One-by-one dispatch approval is the primary control on Fleet's autonomy, and a successor Job has no approved parent to sit inside since the Job that named it is finished — auto-dispatching it would be the only path by which Armada starts work with no person in the loop at any point. Approving a classifier's proposed plan already creates Jobs without dispatching them, so the split is not invented for this field. A definition naming a successor that names it back would cycle undetected by the fan-out cap, since these are peer Jobs rather than nested ones, but with a person gating every hop there is nothing left to run away."
+
+[fields.on_fail]
+type = "step_id"
+concern = "Gating"
+parent = "steps[]"
+purpose = "Where the step routes when it fails. Named on the Workflow page as an existing step-level target; nothing specifies it further."
+open_questions = ["What are the shapes of on_fail, on_gaming_flag, declare_plan_at and scope_diff_check?"]
+notes = """
+This row records a field asserted to exist and nowhere defined. The only statement about it: `verdict_routing` "sits beside `on_fail` and `on_gaming_flag`, which are already step-level targets" — which establishes it is a step-level field holding a routing target, and nothing else. Not stated: its default, what happens without it, how it interacts with `retry_limit` (whether it fires per failed attempt or only once the retry budget is exhausted), or whether it can name a terminal outcome rather than a `step_id`.
+
+No WorkflowDef sample instantiates it.
+"""
+
+[fields.on_gaming_flag]
+type = "string"
+concern = "Gating"
+parent = "steps[]"
+purpose = "Where the step routes when the Judge's gaming check fires. Instantiated in samples as escalate:evidence_suspect; never defined on the Workflow page."
+open_questions = ["What catches a Check weakened by editing the config its command resolves through?", "What are the shapes of on_fail, on_gaming_flag, declare_plan_at and scope_diff_check?"]
+notes = """
+Better attested than `on_fail`, but still undefined: Workflow names it only as an existing step-level target alongside `on_fail`. The Bug and Refactor samples both instantiate it as `"on_gaming_flag": "escalate:evidence_suspect"`; both Judge and Workflow state the rule it implements — a gaming flag routes as its own `evidence_suspect` escalation rather than a gate failure, since resubmission under the same instructions likely reproduces the same gaming.
+
+Unspecified: whether `escalate:<trigger>` is a general syntax or the only legal value, whether a `step_id` is acceptable here as it is for `on_fail`, and whether the field is required on any step carrying a `gaming_check`.
+"""
+
+[fields.ref_source]
+type = "enum"
+concern = "Structure"
+purpose = "Which branch gets checked out: default_branch or job_specified_branch."
+open_questions = ["Do Workflow types need more than requires_worktree and requires_checks?"]
+notes = "The gap the two booleans left: Code Review needs an isolated worktree but checks out the PR's branch, not main, which neither `requires_worktree` nor `requires_checks` can express. Code Review is the sole user today."
+
+[fields.reference_docs]
+type = "array[path | evidence_ref]"
+concern = "Verification"
+parent = "evidence_scope"
+purpose = "Static judge-against context — brief, spec, ticket. Kept separate from context_paths on purpose. Optional."
+notes = "An `evidence_ref` is `<step_id>.evidence`, as in `root_cause.evidence`, so a later step can be judged against what an earlier one produced. Kept deliberately separate from `context_paths`: one is what changed, the other is the yardstick, and a Judge handed both in one list cannot tell which is which."
+why = "This separation is cited on Judge as one of the things that keeps a narrow question narrow."
+
+[fields.requires_checks]
+type = "bool"
+concern = "Structure"
+purpose = "Whether Manifest Checks gate this workflow's steps. Legal only where requires_worktree is true."
+open_questions = ["Do Workflow types need more than requires_worktree and requires_checks?"]
+notes = "The dependency is enforced at config load rather than left to the author: Checks run against a worktree, so declaring them without one is a config error the validator can catch."
+
+[fields.requires_worktree]
+type = "bool"
+concern = "Structure"
+purpose = "Whether the workflow needs an isolated git worktree."
+open_questions = ["Do Workflow types need more than requires_worktree and requires_checks?"]
+notes = "Validated at config load together with `requires_checks`, which is legal only where this is true."
+
+[fields.retry_limit]
+type = "int"
+concern = "Retry and loops"
+parent = "steps[]"
+purpose = "How many auto-retries before a step's failures escalate instead of being silently re-attempted."
+notes = """
+Counts per gate-attempt — one full evidence-submission-and-check cycle — never per model turn inside an exchange. `retry_count` resets when a step is re-entered via a loop return, since re-entry as designed is a fresh attempt budget; the product of the two is bounded separately by the aggregate attempt cap in `default_gate_policy`.
+"""
+why = "Counting raw model turns kills every Job in its first exchange: a working exchange runs 50 to 100 turns while a useless one runs 3, so a turn budget punishes the Drone that is doing the work."
+
+[fields.scope_diff_check]
+type = "bool"
+concern = "Verification"
+parent = "evidence_scope"
+purpose = "If true, Fleet verifies the Drone's declared context_paths against its real diff footprint before the Judge runs."
+open_questions = ["What are the shapes of on_fail, on_gaming_flag, declare_plan_at and scope_diff_check?"]
+notes = """
+A mismatch is treated as a mechanical gate failure — a Drone-behaviour red flag — not a Judge question. Optional, with no default stated.
+
+Code Review's `files_read` is its exact mirror: where `scope_diff_check` verifies the Drone did not write outside what it declared, `files_read` verifies it did not skip files it was supposed to read.
+
+Filed under `evidence_scope` rather than `steps[]`, and that is unresolved: the Evidence Scope Object defines it as a field of that object, while Workflow's drift-check paragraph describes it as a property of the step ("for steps with `scope_diff_check: true`") — different places in the schema. See the open question on this row.
+"""
+
+[fields.step_id]
+type = "string"
+concern = "Structure"
+parent = "steps[]"
+purpose = "The step's name. The key everything else in the system counts and routes against."
+notes = """
+`verdict_routing` names one. `workflow_status.steps[]` on Job is keyed by one. Escalation payloads carry one. `hard_prerequisite` is queryable by one.
+
+Duplicate step names are rejected at config load.
+
+Because per-step counters are keyed to it, a re-resolve that renames or removes a step can delete the step a running Job is standing on — which is one of the reasons the resolved WorkflowDef is frozen at Job creation.
+"""
+
+[fields."steps[]"]
+type = "array[step]"
+concern = "Structure"
+sub_items = ["step_id", "mechanical_checks", "judge_checks", "evidence_scope", "evidence_type", "advance_gate", "retry_limit", "verdict_routing", "iteration_cap", "hard_prerequisite", "on_fail", "on_gaming_flag", "declare_plan_at"]
+purpose = "The ordered set of steps. Everything nested under this row is a field of a step, not of the WorkflowDef."
+notes = """
+Ordered, and loop-capable: `structure: "loop"` means a step returns to an earlier one by `verdict_routing`, not that the array is unordered.
+
+A step is the unit everything else in the system counts against: `retry_count` and `iteration_count` are per step, escalations name the step they tripped on, the rail renders one row per step, and evidence carries step attribution. That is why this array is the WorkflowDef's only structural field of substance — the rest of the top-level fields describe how the whole thing is set up, not what it does.
+"""
+
+[fields.structure]
+type = "enum"
+concern = "Structure"
+purpose = "linear or loop. Declared intent, validated at config load against how the steps are actually wired."
+notes = """
+`linear` is a fixed sequence; `loop` means a step returns to an earlier one by `verdict_routing` until converged or capped. Both values are instantiated in the samples. The value alone does not declare the loop edge — `verdict_routing` on the emitting step does, which is what lets one workflow carry more than one loop.
+
+Validated at config load against the wiring: `linear` carrying any `verdict_routing` is rejected, `loop` carrying none is rejected, and both name the offending step. The field is redundant with `verdict_routing` by construction, and that redundancy is its entire value — declared intent checked against what was actually wired. Without it, a `verdict_routing` added to a workflow the author believes is linear is legal config that surfaces as a Job which never terminates.
+
+Same shape as `id` versus the package manifest name: two statements kept deliberately so they can be compared.
+"""
+why = "Unlike `root: true` — cut for being declarable wrongly, since position is discoverable from the filesystem and could contradict it — `structure` and `verdict_routing` are both author-written in one file, so the comparison is the point rather than the hazard."
+
+[fields.verdict_routing]
+type = "map"
+concern = "Retry and loops"
+parent = "steps[]"
+purpose = "Maps a non-terminal verdict to the step_id it returns to. This is what declares the loop edge."
+open_questions = ["Which step does a loop workflow return to, and what field records it?", "Whose iteration_count does request_changes increment — the gate step's or the routed-to step's?"]
+notes = """
+`{ "request_changes": "draft" }` on Design Plan's `present` step. Lives on the step that emits the verdict, not on the `WorkflowDef`, so one workflow can carry more than one loop — it sits beside `on_fail` and `on_gaming_flag`, which are already step-level targets.
+
+A loop return is not a retry: nothing went wrong, so it must not consume the retry budget or trip an escalation — a plan on its fourth honest draft is not a gate failure. The counter it increments is `iteration_count`, not `retry_count`; both live in `workflow_status.steps[step_id]` on Job.
+"""

@@ -8,9 +8,9 @@
 
 Armada emits log lines from three independent emitters into sinks that already exist — per-Job `.armada/logs/<job-id>.jsonl`, machine-level `audit.jsonl`, and the WebSocket event stream. Nothing currently guarantees a line from Bridge can be joined to a line from Fleet or a Drone. This document is that guarantee.
 
-**What this document owns:** field names, their types, and which emitter is allowed to mint them. It does not own sink paths, retention or redaction — those live in `../contracts/system-architecture.md` sections 7 and 8.
+**This document owns field names, their types, and which emitter is allowed to mint them.** It does not own sink paths, retention or redaction — those live in `../contracts/system-architecture.md` sections 7 and 8.
 
-**Why it is a Policy rather than an Entity.** It has no ID, no state and no lifecycle. It is a rule applied at every emit site, and code branches on it only at the sink.
+**It is a Policy rather than an Entity: it has no ID, no state and no lifecycle.** It is a rule applied at every emit site, and code branches on it only at the sink.
 
 ## The envelope
 
@@ -21,7 +21,7 @@ Identical key names across all three emitters. A key is either present with a va
 | `ts` | RFC3339 UTC, ms precision | Always |  |
 | `level` | `trace` `debug` `info` `warn` `error` | Always | Lowercase |
 | `component` | `fleet` `bridge-main` `bridge-ui` `drone` | Always | Emitter identity. Closed set |
-| `run_id` | ULID | Always | The **emitting process's** instance, minted by that process at start. Fleet's changes on every restart, which is what makes a restart visible in the log; Bridge's and a Drone's identify theirs |
+| `run_id` | ULID | Always | The **emitting process's** instance, minted by that process at start |
 | `msg` | String | Always | Never carries an interpolated ID |
 | `job_id` | ULID | Once a Job exists | The correlation spine |
 | `drone_id` | ULID | While a Drone executes | A retry is a second `drone_id` under one `job_id` |
@@ -32,25 +32,27 @@ Identical key names across all three emitters. A key is either present with a va
 
 ## Rules
 
-**Fleet is the sole authority for `job_id` and `drone_id`.** Bridge and Drones never mint either. They echo what they were handed, which is what makes the join reliable rather than best-effort — an id invented by something that does not own the record joins to nothing.
+**Fleet is the sole authority for `job_id` and `drone_id`.** Bridge and Drones never mint either; they echo what they were handed, which makes the join reliable rather than best-effort. Why: an id invented by something that does not own the record joins to nothing.
 
-**`run_id` is the exception, because it names the emitter rather than a record.** Each process mints its own at start. A Drone outlives a Fleet restart under `setsid`, and Bridge runs before it has reached Fleet at all, so a single Fleet-owned `run_id` could not describe either. Reading it is per emitter: a Fleet restart is Fleet's `run_id` changing, not any `run_id` changing.
+**`run_id` is the exception, because it names the emitter rather than a record.** Each process mints its own at start: Fleet's changes on every restart, which is what makes a restart visible in the log, and Bridge's and a Drone's identify theirs.
+
+A Drone outlives a Fleet restart under `setsid`, and Bridge runs before it has reached Fleet at all, so a single Fleet-owned `run_id` could not describe either. Reading it is per emitter: a Fleet restart is Fleet's `run_id` changing, not any `run_id` changing.
 
 **IDs reach a Drone as environment variables** — `ARMADA_JOB_ID`, `ARMADA_DRONE_ID`, `ARMADA_STEP_ID` — set in `DroneSpawnConfig`. Hooks and transcripts then carry the spine without anything parsing a prompt.
 
-**Bridge attaches the spine at the protocol layer, not at the call site.** Every Fleet-to-Bridge message envelope carries the IDs; a Bridge log line inherits them from the message being handled. Threading them by hand through TypeScript call sites is how they go missing.
+**Bridge attaches the spine at the protocol layer, not at the call site.** Every Fleet-to-Bridge message envelope carries the IDs; a Bridge log line inherits them from the message being handled. Why: threading them by hand through TypeScript call sites is how they go missing.
 
-**Fleet uses spans, not arguments.** `job`, `step` and `drone` spans mean `tracing` propagates the fields automatically. No function signature grows an `id` parameter for logging's sake.
+**Fleet uses spans, not arguments.** `job`, `step` and `drone` spans mean `tracing` propagates the fields automatically, so no function signature grows an `id` parameter for logging's sake.
 
-**ULIDs, not UUIDv4.** Lexicographic sort is chronological, so merging three emitters' lines into one ordered view costs a string sort.
+**ULIDs, not UUIDv4.** Why: lexicographic sort is chronological, so merging three emitters' lines into one ordered view costs a string sort.
 
-**IDs are fields only.** Any query or `jq` filter targets a field. Nothing greps `msg` text. This is the same discipline as `store` being the only crate that deserializes: the structured path is the only path.
+**IDs are fields only.** Any query or `jq` filter targets a field; nothing greps `msg` text. This is the same discipline as `store` being the only crate that deserializes: the structured path is the only path.
 
 ## Convoy and `workspace`
 
-**Resolved Aug 2026. `workspace` is single-valued and omitted when the line is not scoped to one workspace.** A Convoy-spanning line carries `job_id` and no `workspace`. The full set a Job spans is recorded once, as a domain event at Job creation, and is already persisted in `job_manifests`.
+**`workspace` is single-valued and omitted when the line is not scoped to one workspace.** A Convoy-spanning line carries `job_id` and no `workspace`. Why: an array would tax every query on a hot-path field forever, and most lines genuinely concern one workspace or none.
 
-The alternative — always an array — was rejected. It taxes every query on a hot-path field forever, and most lines genuinely concern one workspace or none. The absence of `workspace` on a line is itself the signal that the line is Job-scoped rather than workspace-scoped.
+The full set a Job spans is recorded once, as a domain event at Job creation, and is already persisted in `job_manifests`. The absence of `workspace` on a line is itself the signal that the line is Job-scoped rather than workspace-scoped.
 
 This leans on `job_manifests` being the record. If that table is ever dropped, the Convoy workspace set loses its home and this decision reopens.
 
@@ -69,12 +71,14 @@ The envelope is the line shape. The sinks and their retention are already decide
 
 ## Where it surfaces
 
-**First surface, drawn 2026-08-23** in the M1 — Dogfood mockups. Until now the sinks were specified with nothing pointing at them, and no design work had been done for it yet.
+**The first surface is in the M1 — Dogfood mockups.**
 
-Bridge names a job's log on **every job from dispatch** — running, failed and finished. Not only on failures: the job worth reading a log for is usually the one still running badly, and a failed job has already stopped, so its log is a post-mortem. The treatment is a path in mono that copies on click, the line count and the error count beside it, and one secondary that opens the file.
+**Bridge names a job's log on every job from dispatch** — running, failed and finished. Why: the job worth reading a log for is usually the one still running badly, and a failed job has already stopped, so its log is a post-mortem.
+
+The treatment is a path in mono that copies on click, the line count and the error count beside it, and one secondary that opens the file.
 
 - **No viewer, no level filter, no tail.** The Check output pane answers what the suite said; the log answers what Fleet, the drone and Bridge each did, joined on `job_id`. A reader is a later milestone's problem; knowing where the file is, is not.
-- **UI copy says "log".** Never "Log Envelope" — the name is outside the sanctioned lexicon, which is the first item under Open questions below, and a surface is not the place to settle it.
+- **UI copy says "log".** Never "Log Envelope" — the name is outside the sanctioned lexicon (see Open questions below), and a surface is not the place to settle it.
 - **The `file-*` glyph family is reserved to evidence,** so the log row takes the plain page outline rather than a new glyph.
 
 Component row: **Job log reference**, in the Components registry.

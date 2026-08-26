@@ -1,0 +1,61 @@
+{
+  "workflow_id": "design_plan",
+  "version": 1,
+  "structure": "loop",
+  "default_gate_policy": {
+    "retry_limit": 3,
+    "iteration_cap": 5,
+    "attempt_cap": 15,
+    "judge_call_cap": 12,
+    "fan_out_cap": 5,
+    "fan_out_rate": {
+      "count": 3,
+      "window_minutes": 10
+    },
+    "heartbeat_interval_minutes": 5,
+    "poke_limit": 2
+  },
+  "steps": [
+    {
+      "step_id": "draft",
+      "order": 1,
+      "required": true,
+      "evidence_type": "document",
+      "mechanical_checks": [
+        {
+          "type": "artifact_exists",
+          "target": "plan_document"
+        }
+      ],
+      "judge_checks": [],
+      "evidence_scope": {
+        "context_source": "drone_declared",
+        "reference_docs": [
+          "brief"
+        ],
+        "max_context_size": 40
+      },
+      "advance_gate": "auto"
+    },
+    {
+      "step_id": "present",
+      "order": 2,
+      "required": true,
+      "evidence_type": "document",
+      "judge_checks": [],
+      "evidence_scope": {
+        "context_source": "hybrid",
+        "reference_docs": [
+          "brief",
+          "draft.evidence"
+        ],
+        "max_context_size": 40
+      },
+      "advance_gate": "human_always",
+      "verdict_routing": {
+        "request_changes": "draft"
+      },
+      "iteration_cap": 5
+    }
+  ]
+}

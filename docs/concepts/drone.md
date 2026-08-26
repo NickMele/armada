@@ -6,33 +6,37 @@
 
 **Kind:** Agent, Entity.
 
-Formalizes Drone — the execution runtime for a single Job. Companion to the main Armada brief, [Job](job.md), and [Workflow](workflow.md).
+Companion to the main Armada brief, [Job](job.md), and [Workflow](workflow.md).
 
 ## Core principle
 
-Drones cannot be trusted to manage their own state, even with a limited toolset and clear instructions — confirmed repeatedly in prototype use. A Drone works its Job and submits Evidence saying it is done; **Fleet decides if that's actually true.** This is the same "self-report is a signal, not a source of truth" principle from [Workflow](workflow.md), applied at the Drone level explicitly rather than left implicit.
+**Drones cannot be trusted to manage their own state**, even with a limited toolset and clear instructions — confirmed repeatedly in prototype use. A Drone works its Job and submits Evidence saying it is done; **Fleet decides if that's actually true.** Same principle as [Workflow](workflow.md): self-report is a signal, not a source of truth.
 
 ## Lifecycle
 
 **1:1 with a Job.** A Drone is spawned fresh when a Job dispatches (post-approval), and terminates when that Job reaches any terminal status (completed_success / completed_failed / rejected / killed / superseded). No reuse across Jobs — a new Job always gets a fresh Drone.
 
-**1:1 at any moment, 1:N over time.** A Job may have successive Drones over its life: redispatch and Debug's Kill & Redispatch both end a Drone *without* the Job reaching a terminal status. So the relationship is 1:N across the Job's life and only ever 1:1 at once.
+**1:1 at any moment, 1:N over time.** A Job may have successive Drones over its life: redispatch and Debug's Kill & Redispatch both end a Drone *without* the Job reaching a terminal status.
 
 **No independent state machine.** A Drone is a pure shadow of [Job.status](job.md). Fleet drives every transition on both; the Drone never transitions anything itself.
 
 | Job status | Drone | Liveness clock | Worktree |
 | --- | --- | --- | --- |
 | `running` | Alive | **Runs** | Held |
-| `awaiting_review` | Alive — same PID, worktree and session, so a human gate costs no session context | Suspended | Held |
+| `awaiting_review` | Alive — same PID, worktree and session | Suspended | Held |
 | `escalated` | Alive | Suspended | Held |
 | `interrupted` | Gone. The process died; the Job did not | — | Held, and **never swept** |
-| Terminal | Gone | — | Held until past retention, then removed by the Fleet-start sweep |
+| Terminal | Gone | — | Held until past retention, then swept at Fleet start |
 
-**Removal is driven by Job retention, never by process exit.** Deleting on merge would strand a retained Job, because Evidence references paths. A killed Job's worktree is held because redispatch may reuse it. An `interrupted` worktree is never swept because it may hold uncommitted work, and destroying that on a restart is the same class of act as auto-killing — which Fleet never does. A person decides.
+A human gate costs no session context, because the PID, the worktree and the session all survive it.
 
-**Why the clock suspends at a gate.** Every human gate that outlasted the heartbeat timeout used to escalate its own Job as `stalled`, because a Drone waiting on a person has no activity by construction. Design Plan gates on a human every iteration, so the loop shape hit it first and hardest. While suspended, Fleet stops expecting heartbeats and `poke_limit` does not advance.
+**Removal is driven by Job retention, never by process exit.** Deleting on merge would strand a retained Job, because Evidence references paths. A killed Job's worktree is held because redispatch may reuse it.
 
-**What bounds a Job sitting at a gate** is **Drone/Job timeout** and **worktree cleanup policy**, not the liveness timer. Fleet still reconciles dead processes against live Jobs on restart, which is how a Drone that dies during a gate is caught.
+**An `interrupted` worktree is never swept.** Why: it may hold uncommitted work, and destroying that on a restart is the same class of act as auto-killing, which Fleet never does. A person decides.
+
+**The liveness clock suspends at a human gate.** Why: a Drone waiting on a person has no activity by construction, so every gate that outlasted the heartbeat timeout escalated its own Job as `stalled`. Design Plan gates on a human every iteration, so the loop shape hit it first and hardest.
+
+While suspended, Fleet stops expecting heartbeats and `poke_limit` does not advance. **What bounds a Job sitting at a gate is Drone/Job timeout and worktree cleanup policy, not the liveness timer.** Fleet still reconciles dead processes against live Jobs on restart, which is how a Drone that dies during a gate is caught.
 
 **A healthy Drone accepts Redirect, Kill and Pause.** All three are available on a non-escalated Drone rather than reserved for escalated ones.
 
@@ -42,18 +46,41 @@ Drones cannot be trusted to manage their own state, even with a limited toolset 
 
 ## Composition
 
-A Drone is:
+A Drone is a Claude Code CLI process in headless mode, an isolated git worktree on its own branch, and an injected toolset.
 
-- Claude Code CLI (headless mode) process
-- An isolated git worktree, on its own branch. For a [**Convoy**](convoy.md), this single worktree spans every declared Workspace's directory, not just one — still one Drone, one worktree, one branch — see `../contracts/system-architecture.md` section 7 for where a worktree and its log live on disk, which is not configurable and is derived rather than stored
-- **A worktree outlives the Drone using it.** On a scope revision Fleet terminates the Drone, re-resolves configuration against the new Manifest set, and spawns a fresh Drone **on the same worktree and branch** — the same path [Pilot](pilot.md)'s Restart Step already uses. **A narrowing proceeds unchallenged; a widening returns to the dispatch approval gate first**, so a respawn against a widened scope happens only after a person has approved that scope. Consistent with a Drone being 1:1 with a Job at any moment and 1:N over time. What is lost is session context, not work: Facts and Evidence live on the [Job](job.md). **The resolution below runs again on every respawn** — and since permissions intersect, a widened scope can only produce a narrower toolset than the Drone that asked for it, Commands excepted since they union. Every declared Workspace descends from a **single root** `armada.yml`: a [Convoy](convoy.md) is root-Manifest-scoped and cannot span repos, which is exactly what makes one worktree spanning Workspaces ordinary git
-- Injected toolset: Skills / Agent file (Kit-only, see [Kit](kit.md)) / Sub agents (Kit global + Manifest project-specific) / MCP (resolved via Kit → Manifest inheritance), the project's allowlist, the [Manifest Commands registry](manifest.md), a brokered secrets scope, and a dedicated **Evidence MCP tool** — all of this assumes one owning Manifest. For a Drone working a [Convoy](convoy.md), see the resolution rule below. Discovery needs nothing from Armada for the MCP half: tools are self-describing, and what the prompt supplies is the obligation a schema cannot state. **The brokered scope never includes a Git credential.** A Drone commits locally, inside its own worktree, and the Drone-facing `VCS` type has no push method at all. Push, pull request and merge are [Fleet](fleet.md)'s, using credentials Fleet holds directly.
+The injected toolset:
 
-**Everything above describes what Armada injects. It does not describe what the process ends up holding.** Measured against the live CLI: `--allowedTools` is a permission allowlist rather than a toolset — it removed none of the thirty built-in tools, and a spawned Drone inherited the operator's own MCP servers, plugins, subagents, skills and SessionStart hook. **Isolation is opt-out, and the opt-out is not** `--allowedTools`**.**
+- Skills / Agent file (Kit-only, see [Kit](kit.md))
+- Sub agents (Kit global + Manifest project-specific)
+- MCP (resolved via Kit → Manifest inheritance)
+- The project's allowlist
+- The [Manifest Commands registry](manifest.md)
+- A brokered secrets scope
+- A dedicated **Evidence MCP tool**
 
-**For MCP servers, `--strict-mcp-config` is the opt-out, and it is not optional.** A harness must let Fleet inject the Evidence MCP server, since Evidence is the only sanctioned completion path, and must then run with that server and nothing else. The two fail differently: a harness that cannot inject fails loudly and immediately, while one that injects but cannot exclude looks like success — the Drone works, and holds the operator's whole toolbelt. Both are enforced at compile time rather than by a runtime check, because `mcp_config` and the strict-mode field are non-optional on `DroneSpawnConfig` with no escape-hatch constructor. See `../contracts/adapters.md`.
+All of that assumes one owning Manifest. For a Drone working a [Convoy](convoy.md), see the resolution rule below.
 
-**Built-in tools are a separate problem and still open** (see Open questions). `--strict-mcp-config` bounds MCP servers, not the thirty tools the CLI ships with, so the resolution table below governs what Armada grants rather than what the Drone can reach — which is the part the intersection rule exists to bound.
+Discovery needs nothing from Armada for the MCP half: tools are self-describing, and what the prompt supplies is the obligation a schema cannot state.
+
+**The brokered scope never includes a Git credential.** A Drone commits locally, inside its own worktree, and the Drone-facing `VCS` type has no push method at all. Push, pull request and merge are [Fleet](fleet.md)'s, using credentials Fleet holds directly.
+
+**A [Convoy](convoy.md) Drone's single worktree spans every declared Workspace's directory** — still one Drone, one worktree, one branch. Why: every declared Workspace descends from a single root `armada.yml`, so a Convoy is root-Manifest-scoped and cannot span repos, which is what makes one worktree spanning Workspaces ordinary git.
+
+Where a worktree and its log live on disk is in `../contracts/system-architecture.md` section 7. It is not configurable, and is derived rather than stored.
+
+**A worktree outlives the Drone using it.** On a scope revision Fleet terminates the Drone, re-resolves configuration against the new Manifest set, and spawns a fresh Drone **on the same worktree and branch** — the same path [Pilot](pilot.md)'s Restart Step already uses. Consistent with a Drone being 1:1 with a Job at any moment and 1:N over time.
+
+**A narrowing proceeds unchallenged; a widening returns to the dispatch approval gate first**, so a respawn against a widened scope happens only after a person has approved that scope. What is lost is session context, not work: Facts and Evidence live on the [Job](job.md).
+
+**The resolution below runs again on every respawn.** Since permissions intersect, a widened scope can only produce a narrower toolset than the Drone that asked for it — Commands excepted, since they union.
+
+**What Armada injects is not what the process ends up holding.** Measured against the live CLI: `--allowedTools` is a permission allowlist rather than a toolset — it removed none of the thirty built-in tools, and a spawned Drone inherited the operator's own MCP servers, plugins, subagents, skills and SessionStart hook. **Isolation is opt-out, and the opt-out is not** `--allowedTools`**.**
+
+**For MCP servers, `--strict-mcp-config` is the opt-out, and it is not optional.** A harness must let Fleet inject the Evidence MCP server, since Evidence is the only sanctioned completion path, and must then run with that server and nothing else.
+
+The two fail differently: a harness that cannot inject fails loudly and immediately, while one that injects but cannot exclude looks like success — the Drone works, and holds the operator's whole toolbelt. Both are enforced at compile time rather than by a runtime check, because `mcp_config` and the strict-mode field are non-optional on `DroneSpawnConfig` with no escape-hatch constructor. See `../contracts/adapters.md`.
+
+**Built-in tools are a separate problem and still open** (see Open questions). `--strict-mcp-config` bounds MCP servers, not the thirty tools the CLI ships with, so the resolution table below governs what Armada grants rather than what the Drone can reach — the part the intersection rule exists to bound.
 
 ### Convoy resolution — permissions intersect, knowledge unions
 
@@ -62,20 +89,30 @@ A Convoy is one Drone under several Manifests, so every injected item needs a ru
 | Injected item | Resolves | Why |
 | --- | --- | --- |
 | Allowlist | **Intersection** | Only ops *every* declared Manifest allows |
-| Secrets scope | **Intersection** | Only secrets *every* declared Manifest grants. A Drone unable to reach a secret because another Manifest withholds it is a visible, debuggable failure — not a silent scope violation |
+| Secrets scope | **Intersection** | Only secrets *every* declared Manifest grants |
 | MCP | **Intersection** | A callable tool is a permission. Only servers every Manifest grants |
-| Commands | **Union, namespaced by Manifest `id`** | Originally intersection, on the same "a named command is a permission" reasoning as MCP. Reversed once Commands were namespaced: `api:migrate` and `billing:migrate` are two commands, not one name with two meanings, so there is nothing to intersect. A Convoy Drone is legitimately working in every gating Workspace and needs their Commands to do the work; intersection is monotone, so it gave the widest Convoy the smallest toolbox. The namespace protects better than the intersection did — a prefixed name cannot be invoked in the belief that it belongs to another Workspace |
-| Ports | **Union, qualified by Manifest `id`** | A port is knowledge rather than authority. Injecting a port number grants no ability the Drone lacked — it could already bind any port, and the allowlist is blast-radius reduction rather than a sandbox. The same move Commands made once namespaced. Colliding `env` names across the Job's Manifest set are rejected at claim time |
 | Sub agents | **Intersection** | Only personas every declared Manifest defines |
-| Skills | **Union** — the exception | A Skill is *instructions*, not a permission. It grants the Drone no ability it did not have, so there is no authority to widen and intersection has nothing to protect. Intersecting them would also be near-vacuous — Skills are repo-specific and rarely overlap — leaving a Convoy Drone **less** capable than one working either Workspace alone, which is the opposite of the intent. Contradictions between two Workspaces' Skills are a prompt-quality problem, not a security boundary |
-| Agent file | **Union** | Same reasoning as Skills — instructions, not authority |
+| Commands | **Union, namespaced by Manifest `id`** | Namespacing leaves nothing to intersect |
+| Ports | **Union, qualified by Manifest `id`** | A port is knowledge rather than authority |
+| Skills | **Union** — the exception | A Skill is *instructions*, not a permission |
+| Agent file | **Union** | Instructions, not authority |
 | Evidence MCP tool | Unaffected | Armada's own, injected identically regardless of Manifest count |
 
-**The rule in one line: a permission intersects, knowledge unions.** What intersection protects is *authority* — whether a Drone working under several Manifests ends up holding power no single gating Manifest granted. Instructions grant none, so unioning them widens nothing. This is the peer axis, Manifest against Manifest; it is unaffected by the Kit → Manifest direction rule, since withdrawn.
+**Secrets.** A Drone unable to reach a secret because another Manifest withholds it is a visible, debuggable failure, not a silent scope violation.
+
+**Commands.** `api:migrate` and `billing:migrate` are two commands, not one name with two meanings, so there is nothing to intersect. A Convoy Drone is legitimately working in every gating Workspace and needs their Commands to do the work; intersection is monotone, so it gave the widest Convoy the smallest toolbox. The namespace protects better than the intersection did — a prefixed name cannot be invoked in the belief that it belongs to another Workspace.
+
+**Ports.** Injecting a port number grants no ability the Drone lacked — it could already bind any port, and the allowlist is blast-radius reduction rather than a sandbox. Colliding `env` names across the Job's Manifest set are rejected at claim time.
+
+**Skills.** A Skill grants the Drone no ability it did not have, so there is no authority to widen and intersection has nothing to protect. Intersecting them would also be near-vacuous — Skills are repo-specific and rarely overlap — leaving a Convoy Drone **less** capable than one working either Workspace alone, which is the opposite of the intent. Contradictions between two Workspaces' Skills are a prompt-quality problem, not a security boundary.
+
+**The rule in one line: a permission intersects, knowledge unions.** What intersection protects is *authority* — whether a Drone working under several Manifests ends up holding power no single gating Manifest granted. Instructions grant none, so unioning them widens nothing.
+
+This is the peer axis, Manifest against Manifest. The Kit → Manifest direction rule is withdrawn and does not bear on it.
 
 **Commands are the one item on the union side that is still a permission.** Namespacing removed the conflict the intersection existed to resolve, not the authority. The rule still holds for everything sharing a flat namespace; MCP servers are the closest case and were not namespaced.
 
-This is also what makes a Convoy Drone spawnable: Skills, Sub agents, MCP and Commands were undefined for a Convoy until the resolution rule existed, so there was no boot configuration to spawn against.
+**The resolution rule is what makes a Convoy Drone spawnable.** Without it, Skills, Sub agents, MCP and Commands are undefined for a Convoy, so there is no boot configuration to spawn against.
 
 ### What's frozen at spawn vs. live
 
@@ -83,11 +120,15 @@ Two different reasons, not one. Some items are frozen because a process cannot c
 
 | Item | Frozen or live | Why |
 | --- | --- | --- |
-| Skills, MCP, Agent file, Sub agents, Voice/tone | Frozen at spawn | Boot-time constraint — injected MCP servers cannot be swapped, nor the system prompt rewritten, without a kill and respawn |
-| Commands | Frozen at spawn | Not a boot-time constraint. A Drone that could write itself a Command mid-Job could grant itself one |
-| Checks that existed at spawn | Frozen for the life of the Job | Not a boot-time constraint. Fleet resolves them from the spawn snapshot rather than live, because a Check is a yardstick and a yardstick cannot move while the work is judged against it — the rule `acceptance_criteria` already follows |
-| Checks added mid-Job | **Live** | **Additive-only.** A Job may write a new Manifest or a new named Check and have it gate. Adding a gate is not weakening one |
-| Allowlist, budget caps, dispatch freeze | Live | Fleet already re-evaluates these at every gated checkpoint |
+| Skills, MCP, Agent file, Sub agents, Voice/tone | Frozen at spawn | Boot-time constraint |
+| Commands | Frozen at spawn | A Drone that could write itself a Command could grant itself one |
+| Checks that existed at spawn | Frozen for the life of the Job | A yardstick cannot move while the work is judged against it |
+| Checks added mid-Job | **Live** | **Additive-only.** Adding a gate is not weakening one |
+| Allowlist, budget caps, dispatch freeze | Live | Re-evaluated at every gated checkpoint |
+
+The boot-time constraint: injected MCP servers cannot be swapped, nor the system prompt rewritten, without a kill and respawn. Commands and Checks are frozen by choice rather than by that constraint.
+
+Fleet resolves Checks from the spawn snapshot rather than live — the rule `acceptance_criteria` already follows. A Job may write a new Manifest or a new named Check and have it gate.
 
 A change to a frozen item during a running Job takes effect on that Job's *next* Drone (redispatch or a future Job), not the current one.
 
@@ -97,25 +138,26 @@ A change to a frozen item during a running Job takes effect on that Job's *next*
 
 ## What a Drone is told
 
-The toolset above is what a Drone can **do**. What it is **told** — the framing wrapped around the task before the task itself — is governed by `../contracts/agent-prompt.md`, sibling to the Copy Contract. It exists because every constraint on Armada's prompts was written down and none of the prompts were.
+The toolset above is what a Drone can **do**. What it is **told** — the framing wrapped around the task before the task itself — is governed by `../contracts/agent-prompt.md`, sibling to the Copy Contract.
 
-The two things it settles that bear directly here:
+What it settles that bears directly here:
 
 - **Six layers, assembled in order.** Baseline → Kit → Manifest → WorkflowDef → task → step. **Freeze time orders them** — the boot-time constraint in the table above is the derivation, not a preference. A block that cannot be rewritten mid-session must precede the block rewritten at every step boundary.
 - **Layer 1 is not configurable.** A Kit or Manifest able to edit the baseline could delete the sentence making Evidence the only completion path.
 - **A running Drone's system prompt never mutates — but Fleet injects turns into a live session.** Each turn is a row in the prompt library under `Kind = Injected turn`, carrying its trigger and its wording. The mechanism is settled; a row with an empty Wording column is a turn with no sanctioned copy.
 
-Section 5 of the Agent Prompt Contract lists the clauses the baseline must carry — completion is claimed through the Evidence tool and nowhere else, stopping and handing back through `escape_hatch` is a legitimate way to finish, a denied command is denied rather than an obstacle to route around, and secrets are brokered and never held. Each already existed as a rule somewhere; none had been written as something a Drone is told.
+**The baseline's wording and how a Drone discovers its Commands and MCP tools are one surface seen from opposite ends**, and are settled together.
 
-**The Drone is never told what the Checks are.** "The suite is run against your work" says a gate exists without naming the bar. Naming it hands the Drone a target to satisfy rather than work to do, and `check_config_edited` is already a gaming pattern. The same rule keeps every counter out of an injected turn — a counter is a bar, and a Drone one attempt from escalation has the strongest possible incentive to satisfy it rather than do the work.
+The Agent Prompt Contract exists because every constraint on Armada's prompts was written down and none of the prompts were. Section 5 lists the clauses the baseline must carry — completion is claimed through the Evidence tool and nowhere else, stopping and handing back through `escape_hatch` is a legitimate way to finish, a denied command is denied rather than an obstacle to route around, and secrets are brokered and never held.
 
-The assembled wording is the **Drone** row in the prompt library, which carries the worked samples for a Bug step and for Code Review's inverted case, and the decisions visible in each.
+**The Drone is never told what the Checks are.** "The suite is run against your work" says a gate exists without naming the bar. Naming it hands the Drone a target to satisfy rather than work to do, and `check_config_edited` is already a gaming pattern.
+
+The same rule keeps every counter out of an injected turn — a counter is a bar, and a Drone one attempt from escalation has the strongest possible incentive to satisfy it rather than do the work.
 
 ### Worked samples
 
-The baseline wording, and how a Drone discovers its Commands and MCP tools, are the same surface seen from opposite ends, so they were settled together.
+The samples below, the assembled wording, and the decisions visible in each are on the **Drone** row in the prompt library, with the rest of the assembled prompts.
 
-The samples and the decisions visible in them are on the **Drone** row in the prompt library, with the rest of the assembled prompts.
 
 #### Bug, part 2 of 4
 
@@ -234,26 +276,32 @@ The test of the layering, since the diff is the Drone's **input** rather than it
 
 **What the inverted case forced.** A fifth block — the diff is injected as its own section *after* the step instructions, because it is reference material rather than an instruction. And `Do not edit the code you are reviewing`, which stops a review Job quietly becoming a fix Job: a coding Drone's instinct on seeing a diff is to improve it.
 
-Everything above the step block is structurally identical between the two samples. Only the step text and the injected material differ, which is the layering doing its job.
+Everything above the step block is structurally identical between the two samples. Only the step text and the injected material differ.
 
 ## Evidence reporting
 
 Structured only — through the Evidence MCP tool, not plain text and not an ambiguous "I'm done." This is the one sanctioned way a Drone submits Evidence that its Job is done, and it substantially closes the "claims done in plain text, bypasses structured Evidence" failure mode from [Workflow](workflow.md).
 
-It does not rest on output parsing, which was the point of making it a tool call — and that has turned out to matter for a reason nobody predicted. **A headless run denied every tool it needed still terminated reporting success, with** `is_error` **false and exit code 0**, having accomplished nothing. The envelope agrees with itself and is wrong, so what Fleet accepts as proof cannot be the exit code.
+It does not rest on output parsing, which was the point of making it a tool call. **A headless run denied every tool it needed still terminated reporting success, with** `is_error` **false and exit code 0**, having accomplished nothing. The envelope agrees with itself and is wrong, so what Fleet accepts as proof cannot be the exit code.
 
-**Fleet reads the run's result for cost and turn count, and for nothing else.** Exit code, `subtype`, `is_error` and `stop_reason` gate nothing. All four were present, agreeing, and wrong, so a gate written against any of them passes a Drone that did nothing — and the measurement's value is that it removes the temptation to put a cheap signal beside the tool call rather than that it changes the rule. Evidence submitted through the tool stays the only proof.
+**Fleet reads the run's result for cost and turn count, and for nothing else.** Exit code, `subtype`, `is_error` and `stop_reason` gate nothing. All four were present, agreeing, and wrong, so a gate written against any of them passes a Drone that did nothing. **No cheap signal goes beside the tool call.** Evidence submitted through the tool stays the only proof.
 
-**What is read instead explains an empty result rather than judging one.** `permission_denials[]` carries every refused call with its full input, and `tool_result_meta[].non_execution_kind` separates a call that was refused from one that ran and failed. A run ending with no evidence and at least one refusal is `blocked_by_policy` — a different condition from `silent`, which is a Drone that called nothing at all. Both come back empty and look identical in the envelope, and only one of them can be fixed by rewording the task.
+**What is read instead explains an empty result rather than judging one.** `permission_denials[]` carries every refused call with its full input, and `tool_result_meta[].non_execution_kind` separates a call that was refused from one that ran and failed.
+
+A run ending with no evidence and at least one refusal is `blocked_by_policy` — a different condition from `silent`, which is a Drone that called nothing at all. Both come back empty and look identical in the envelope, and only one of them can be fixed by rewording the task.
 
 ### Fleet's response to Evidence
 
 | Fleet receives | Fleet does | Counts against retry_limit? |
 | --- | --- | --- |
 | Valid evidence, passes Mechanical + Judge check | Advances the workflow step | N/A |
-| Valid evidence, fails Mechanical or Judge check | Standard gate-failure retry flow. The refusal reprompt carries the Judge record's `expected` and `produced` back to the Drone — never `consequence`, and never a counter | Yes |
-| Missing or insufficient evidence | Prompts the Drone for more — a free clarification round | No — capped, then escalates as `stalled`. `silent` is a sub-kind of `stalled`, not a separate trigger. The cap's value is a config row and is still undecided — tracked in `../contracts/configuration.md` |
-| No evidence, and at least one tool call refused | Escalates as `blocked_by_policy`, with the refused calls and their inputs on the payload. No clarification round is spent first — asking again cannot produce a tool the Drone is not permitted to call | No — nothing was attempted that a Check could fail |
+| Valid evidence, fails Mechanical or Judge check | Standard gate-failure retry flow | Yes |
+| Missing or insufficient evidence | Prompts the Drone for more — a free clarification round | No |
+| No evidence, and at least one tool call refused | Escalates as `blocked_by_policy` | No |
+
+- **On a gate failure**, the refusal reprompt carries the Judge record's `expected` and `produced` back to the Drone — never `consequence`, and never a counter.
+- **On missing or insufficient evidence**, the clarification round is capped, then escalates as `stalled`. `silent` is a sub-kind of `stalled`, not a separate trigger. The cap's value is a config row and is still undecided — tracked in `../contracts/configuration.md`.
+- **On `blocked_by_policy`**, the refused calls and their inputs go on the payload. No clarification round is spent first — asking again cannot produce a tool the Drone is not permitted to call, and nothing was attempted that a Check could fail.
 
 **Two distinct counters, not one.** This clarification-round cap — content arrived via the Evidence MCP tool but was not sufficient — is a separate counter from `poke_limit`, the liveness nudge used where nothing structured arrived at all. Both can end in the same `stalled` label, which reads ambiguous, but they check different things and are tracked independently. See [Workflow](workflow.md).
 
@@ -281,10 +329,16 @@ Not to be confused with the **Sub agents** configuration concept (Kit/Manifest �
 
 Every Drone carries one further injected tool, `escape_hatch`, which ends autonomous execution and hands the Job to a person. Full design lives on [Pilot](pilot.md).
 
-- **Drone-initiated.** The Drone calls it on its own as a sanctioned stuck signal, in place of thrashing or claiming a completion it did not reach. This sits alongside the five policed failure modes as the one exit a Drone is allowed to take for itself. **It does not count against the repeat counter** — counting a sanctioned exit as a repeat failure penalises the behaviour the mechanism exists to encourage, and the counter drives the escalation payload's suggested action, so a Drone that correctly raised its hand would still be described to the engineer as a repeat failure. Accepted cost: a step that two successive Drones both escape-hatch out of will not show as a repeat, so that pattern has to be read from the escalation history instead.
+- **Drone-initiated.** The Drone calls it on its own as a sanctioned stuck signal, in place of thrashing or claiming a completion it did not reach. It sits alongside the policed failure modes above as the one exit a Drone is allowed to take for itself.
 - **Human-initiated.** Fleet instructs the Drone to call it after the engineer confirms Pilot in Bridge.
 
-The Drone's only contribution is a narrative of what it is stuck on, passed as the tool argument in three named fields — `trying_to`, `blocked_by`, `tried`. It is not Evidence and does not go in the Evidence table: Evidence is proof tied to an advance gate, and this says no proof is coming. It lands in the handoff bundle. Fleet assembles everything else in the handoff. The session that opens for the engineer runs at a Kit-level unrestricted toolset, which is the point: the narrow toolset is the thing being escaped.
+**A Drone-initiated escape hatch does not count against the repeat counter.** Why: counting a sanctioned exit as a repeat failure penalises the behaviour the mechanism exists to encourage, and the counter drives the escalation payload's suggested action, so a Drone that correctly raised its hand would still be described to the engineer as a repeat failure.
+
+Accepted cost: a step that two successive Drones both escape-hatch out of will not show as a repeat, so that pattern has to be read from the escalation history instead.
+
+The Drone's only contribution is a narrative of what it is stuck on, passed as the tool argument in three named fields — `trying_to`, `blocked_by`, `tried`. It is not Evidence and does not go in the Evidence table: Evidence is proof tied to an advance gate, and this says no proof is coming.
+
+It lands in the handoff bundle, and Fleet assembles everything else in the handoff. The session that opens for the engineer runs at a Kit-level unrestricted toolset, which is the point: the narrow toolset is the thing being escaped.
 
 ## Written output
 
@@ -292,9 +346,9 @@ A Drone writes text that leaves Armada permanently: commit messages and PR descr
 
 The surfaces a Drone writes to are rows in the Copy registry under `Written by = Drone`, each carrying its enforcement, its reader and its samples. Enforcement splits by destination rather than by surface: text landing in a real repo is read by people who did not ask for it, which is what earns a hard gate.
 
-**A gate failure gets one free correction round that does not consume the retry budget.** That is what makes the gate safe: without the free round a style bounce spends `retry_count`, and enough of them escalate the Job as `gate_failure`. It reuses the one-free-round mechanism for present-but-insufficient evidence above. A phrasing problem can cost a turn and can never escalate a Job.
+**A gate failure gets one free correction round that does not consume the retry budget.** Why: without the free round a style bounce spends `retry_count`, and enough of them escalate the Job as `gate_failure`. It reuses the one-free-round mechanism for present-but-insufficient evidence above, so a phrasing problem can cost a turn and can never escalate a Job.
 
-**Seeded with real samples, not more rules.** The Drone prompt carries curated exemplars from actual pre-AI commit history. Corpus build is an open task on the Agent Copy Contract, targeted at the Ground Zero v1 harvest.
+**Seeded with real samples, not more rules.** The Drone prompt carries curated exemplars from actual pre-AI commit history. Corpus build is an open task on the Agent Copy Contract, targeted at the M0 v1 harvest.
 
 **Open collision:** the Manifest-level `Commit/PR message template` setting could mandate a format the lint rejects — tracked in `../contracts/configuration.md`.
 

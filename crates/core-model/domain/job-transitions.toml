@@ -1,0 +1,227 @@
+# Every legal edge of the Job status machine, and what fires it.
+#
+# Authored here. Carried across from the design workspace's Job Transitions
+# database, which is the record of the decision and the reasoning that
+# produced it, not the authority on the current set — a page there that
+# disagrees with this file is stale, not right.
+#
+# An array of tables rather than one table per edge, because an edge has no
+# name of its own that a Rust identifier could carry — `from` and `to` are
+# the whole identity. That is also what makes this file checkable without
+# heuristics: `from` and `to` are each a key in job-statuses.toml, verbatim,
+# and `escalation_trigger` is a key in escalation-triggers.toml. A rule needs
+# a set lookup and nothing else.
+#
+# Fields:
+#   from               - the status the Job leaves. A key in job-statuses.toml
+#   to                 - the status it arrives at. A key in job-statuses.toml
+#   on                 - what fires the edge. Absent where the source left it so
+#   escalation_trigger - the named trigger, where the edge belongs to one.
+#                        A key in escalation-triggers.toml
+#   in_code            - whether an implementation exists, as the source recorded it
+#   notes              - the reasoning the row's page carried
+
+[[transitions]]
+from = "awaiting_approval"
+to = "killed"
+on = "Cleared from the Board — an operator act, carrying no verdict"
+in_code = "Not yet"
+
+[[transitions]]
+from = "awaiting_approval"
+to = "queued"
+on = "Dispatch approved, including a re-approved widening"
+in_code = "Not yet"
+
+[[transitions]]
+from = "awaiting_approval"
+to = "rejected"
+on = "Approval denied — a verdict on the work"
+in_code = "Not yet"
+
+[[transitions]]
+from = "awaiting_attestation"
+to = "completed_failed"
+on = "The outside action cannot be done"
+in_code = "Not yet"
+
+[[transitions]]
+from = "awaiting_attestation"
+to = "completed_success"
+on = "Attested"
+in_code = "Not yet"
+
+[[transitions]]
+from = "awaiting_attestation"
+to = "killed"
+in_code = "Not yet"
+
+[[transitions]]
+from = "awaiting_attestation"
+to = "piloted"
+in_code = "Not yet"
+
+[[transitions]]
+from = "awaiting_review"
+to = "awaiting_attestation"
+on = "approve, with a criterion still owed outside"
+in_code = "Not yet"
+
+[[transitions]]
+from = "awaiting_review"
+to = "completed_success"
+on = "approve on the final gate"
+in_code = "Not yet"
+
+[[transitions]]
+from = "awaiting_review"
+to = "escalated"
+on = "The Drone dies during the gate"
+escalation_trigger = "interrupted"
+in_code = "Not yet"
+
+[[transitions]]
+from = "awaiting_review"
+to = "killed"
+in_code = "Not yet"
+
+[[transitions]]
+from = "awaiting_review"
+to = "piloted"
+in_code = "Not yet"
+
+[[transitions]]
+from = "awaiting_review"
+to = "rejected"
+on = "reject"
+in_code = "Not yet"
+notes = "The only gate verdict that writes a terminal Job status."
+
+[[transitions]]
+from = "awaiting_review"
+to = "running"
+on = "approve, advancing; or request_changes, routing to a step"
+in_code = "Not yet"
+notes = "`request_changes` increments `iteration_count` on the gate step. The three gate verdicts and what each does are defined on Workflow under Advance Gate; where each lands on this record is on the `last_verdict` field row."
+
+[[transitions]]
+from = "escalated"
+to = "completed_failed"
+on = "A person accepts the failure as the outcome"
+in_code = "Not yet"
+
+[[transitions]]
+from = "escalated"
+to = "killed"
+in_code = "Not yet"
+notes = "Includes rephrase-and-redispatch, which kills this Job and creates a new one carrying `redispatched_from`. **There is no edge back to `queued`.**"
+
+[[transitions]]
+from = "escalated"
+to = "piloted"
+on = "Pilot — the primary action on an escalated Job"
+in_code = "Not yet"
+
+[[transitions]]
+from = "escalated"
+to = "running"
+on = "A redirect: context injected mid-step, without a step restart"
+in_code = "Not yet"
+
+[[transitions]]
+from = "piloted"
+to = "completed_success"
+on = "Attest complete, under the human-attested verification source"
+in_code = "Not yet"
+
+[[transitions]]
+from = "piloted"
+to = "killed"
+in_code = "Not yet"
+
+[[transitions]]
+from = "piloted"
+to = "running"
+on = "Submit for verification. Fleet runs the step's gates with no Drone"
+in_code = "Not yet"
+notes = "Fleet invokes Checks itself and the Judge reads the diff, so `assigned_drone` is null. See the `running` status row."
+
+[[transitions]]
+from = "piloted"
+to = "superseded"
+on = "Close as superseded"
+in_code = "Not yet"
+
+[[transitions]]
+from = "queued"
+to = "awaiting_approval"
+on = "A widening declared before dispatch"
+in_code = "Not yet"
+
+[[transitions]]
+from = "queued"
+to = "escalated"
+on = "An upstream reached a terminal status other than completed_success"
+escalation_trigger = "dependency_failed"
+in_code = "Not yet"
+notes = "`superseded` is the exception: an upstream reaching it unblocks the dependent and surfaces it, rather than escalating."
+
+[[transitions]]
+from = "queued"
+to = "killed"
+in_code = "Not yet"
+
+[[transitions]]
+from = "queued"
+to = "running"
+on = "A Drone spawns: headroom free, dependencies satisfied"
+in_code = "Not yet"
+
+[[transitions]]
+from = "running"
+to = "awaiting_approval"
+on = "A widening"
+in_code = "Not yet"
+notes = "Narrowing proceeds unchallenged and stays `running`. Only a widening returns to the gate."
+
+[[transitions]]
+from = "running"
+to = "awaiting_attestation"
+on = "The work landed; a criterion needs an action outside Armada"
+in_code = "Not yet"
+
+[[transitions]]
+from = "running"
+to = "awaiting_review"
+on = "The current step's advance gate is a human gate"
+in_code = "Not yet"
+
+[[transitions]]
+from = "running"
+to = "completed_failed"
+on = "Retries exhausted. At M1, a failed Check"
+in_code = "Not yet"
+
+[[transitions]]
+from = "running"
+to = "completed_success"
+on = "Last step advanced, every criterion verified"
+in_code = "Not yet"
+
+[[transitions]]
+from = "running"
+to = "escalated"
+on = "Any escalation trigger fires"
+in_code = "Not yet"
+notes = "The default edge for the escalation trigger enum. A trigger with no edge of its own fires this one."
+
+[[transitions]]
+from = "running"
+to = "killed"
+in_code = "Not yet"
+
+[[transitions]]
+from = "running"
+to = "piloted"
+on = "escape_hatch — human-initiated or Drone-initiated"
+in_code = "Not yet"

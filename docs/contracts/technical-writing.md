@@ -21,6 +21,11 @@ Read before writing or editing any document here.
 **No paragraph exceeds three sentences.** No section exceeds 150 words of
 prose; anything longer becomes a table.
 
+**Where the table's cells would run past fifteen words, it becomes `###`
+subsections instead.** A section of independent normative claims does not fit
+a grid, and forcing one there trades the word cap for a fact — which the cap
+was never worth.
+
 ## Banned
 
 - **Rejected alternatives and decision history.** Also "this refines…", "note

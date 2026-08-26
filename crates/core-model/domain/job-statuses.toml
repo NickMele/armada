@@ -1,0 +1,205 @@
+# Where a Job is. The status column on the `jobs` table, and the outer half
+# of the two-level machine whose inner half is step-states.toml.
+#
+# Authored here. Carried across from the design workspace's Job Statuses
+# database, which is the record of the decision and the reasoning that
+# produced it, not the authority on the current set — a page there that
+# disagrees with this file is stale, not right.
+#
+# The table key is the wire value, so a rule can compare this set against the
+# enum `core-model` will hold without a mapping in between.
+#
+# `transitions_in` and `transitions_out` are derivable from
+# job-transitions.toml and are carried anyway, for the reason WorkflowDef's
+# own `structure` field is carried: declared intent checked against what was
+# actually wired. A rule reads both and fails where they disagree.
+#
+# Fields:
+#   terminal          - whether the Job is over here
+#   mode              - Waited on | Working | N/A. What the Job is doing
+#   who_is_acting     - Person | Drone | None
+#   drone_process     - what happens to the Drone's OS process here
+#   step_machine      - what the inner step machine is doing meanwhile
+#   step_states       - the step states observed under this status
+#   reason_storage    - Stored | Derived | None. Where a qualifying reason lives
+#   reason_vocabulary - the set that reason is drawn from
+#   transitions_in    - the edges that arrive, as "from -> to"
+#   transitions_out   - the edges that leave, as "from -> to"
+#   in_code           - whether an implementation exists, as the source recorded it
+#   open_questions    - questions the source left open against this row
+#   notes             - the reasoning the row's page carried
+
+[statuses.awaiting_approval]
+terminal = false
+mode = "Waited on"
+who_is_acting = "Person"
+drone_process = "None"
+step_machine = "Initialised, every step not_started"
+step_states = ["not_started"]
+reason_storage = "None"
+reason_vocabulary = "None"
+transitions_in = ["queued -> awaiting_approval", "running -> awaiting_approval"]
+transitions_out = ["awaiting_approval -> queued", "awaiting_approval -> rejected", "awaiting_approval -> killed"]
+in_code = "Not yet"
+open_questions = ["How are a not-started Job's approval state and readiness state recorded?"]
+notes = "A person must approve the dispatch before anything runs. Readiness is not a status of its own: the readiness values are `queued`'s reason, and `ready` is the null there rather than a value."
+why = "A `needs_approval` / `pre_approved` pair is rejected — this status and `queued` say what that pair said, and combining approval state with readiness state computes to an unrenderable label."
+
+[statuses.awaiting_attestation]
+terminal = false
+mode = "Waited on"
+who_is_acting = "Person"
+drone_process = "None"
+step_machine = "Frozen, final step advanced"
+reason_storage = "Stored"
+reason_vocabulary = "The criterion_ids owed — a reference, not an enum"
+transitions_in = ["running -> awaiting_attestation", "awaiting_review -> awaiting_attestation"]
+transitions_out = ["awaiting_attestation -> completed_success", "awaiting_attestation -> completed_failed", "awaiting_attestation -> piloted", "awaiting_attestation -> killed"]
+in_code = "Not yet"
+notes = "The work landed; a criterion needs an action outside Armada. The UI renders the status verb plus the criterion's own frozen text, in the requester's words."
+why = "Every status variant owes a generated UI verb and icon, and `criterion_id`s are a payload rather than a closed set — so no per-criterion or per-Job variant exists. The enum binds closed sets, not open references."
+
+[statuses.awaiting_review]
+terminal = false
+mode = "Waited on"
+who_is_acting = "Person"
+drone_process = "Alive, idle. Clock suspended"
+step_machine = "Live, current step awaiting_human"
+step_states = ["awaiting_human"]
+reason_storage = "None"
+reason_vocabulary = "None"
+transitions_in = ["running -> awaiting_review"]
+transitions_out = ["awaiting_review -> running", "awaiting_review -> completed_success", "awaiting_review -> awaiting_attestation", "awaiting_review -> rejected", "awaiting_review -> escalated", "awaiting_review -> piloted", "awaiting_review -> killed"]
+in_code = "Not yet"
+notes = """
+A human advance gate is open. The Drone keeps its PID, worktree and session across it, so the gate costs no session context.
+
+The liveness clock suspends here and in `escalated`; a Drone that dies during the gate is still caught, as `interrupted`, by Fleet's restart reconciliation. What bounds an indefinitely-open gate is Drone/Job timeout and worktree cleanup policy, owned by Drone — not the liveness timer.
+"""
+why = "A Drone waiting on a person has no activity by construction, so an unsuspended clock would escalate every gate that outlasts the timeout as stalled."
+
+[statuses.completed_failed]
+terminal = true
+mode = "N/A"
+who_is_acting = "None"
+drone_process = "None"
+step_machine = "Frozen at the failed step"
+reason_storage = "None"
+reason_vocabulary = "None"
+transitions_in = ["running -> completed_failed", "escalated -> completed_failed", "awaiting_attestation -> completed_failed"]
+in_code = "Not yet"
+notes = "Retries exhausted, a failed Check at M1, or a person accepting the failure as the outcome from `escalated`. Redispatch creates a new Job — see `redispatched_from`."
+
+[statuses.completed_success]
+terminal = true
+mode = "N/A"
+who_is_acting = "None"
+drone_process = "None"
+step_machine = "Frozen, every step advanced"
+reason_storage = "None"
+reason_vocabulary = "None"
+transitions_in = ["running -> completed_success", "awaiting_review -> completed_success", "piloted -> completed_success", "awaiting_attestation -> completed_success"]
+in_code = "Not yet"
+notes = """
+Last step advanced, every criterion verified. The status is immutable once reached: a merge that later breaks main produces a new Job — a revert or a fix — linked back through `subject`, rather than reopening this one.
+
+Armada does not watch what happens after a merge. Under `auto_merge: never`, a person merges and nothing observes, so a person raises any problem found later.
+"""
+why = "The record only needs to make raising a problem possible; detecting one automatically is out of scope. See Fleet."
+
+[statuses.escalated]
+terminal = false
+mode = "Waited on"
+who_is_acting = "Person"
+drone_process = "Alive, idle. Gone only on interrupted"
+step_machine = "Frozen at the failed step, stopped"
+step_states = ["stopped"]
+reason_storage = "Stored"
+reason_vocabulary = "The escalation trigger enum, which Workflow owns"
+transitions_in = ["queued -> escalated", "running -> escalated", "awaiting_review -> escalated"]
+transitions_out = ["escalated -> piloted", "escalated -> running", "escalated -> completed_failed", "escalated -> killed"]
+in_code = "Not yet"
+notes = "Fleet paused the Job; a person must decide, and nothing moves until they do — the worktree and port span are held as-is. A Job interrupted by a Fleet crash also lands here, holding those resources until a person answers; answering takes it terminal. See `piloted` for who holds the worktree, and `awaiting_review` for the liveness clock."
+why = "A separate status for work holding resources is rejected: holding them is a consequence of `escalated`, not a different condition, and the two would differ only in what a surface chooses to say."
+
+[statuses.killed]
+terminal = true
+mode = "N/A"
+who_is_acting = "None"
+drone_process = "Terminated"
+step_machine = "Frozen where it stood"
+reason_storage = "None"
+reason_vocabulary = "None"
+transitions_in = ["awaiting_approval -> killed", "queued -> killed", "running -> killed", "awaiting_review -> killed", "escalated -> killed", "piloted -> killed", "awaiting_attestation -> killed"]
+in_code = "Not yet"
+notes = "Cleared from the Board — an operator act, carrying no verdict. Reachable from every non-terminal status."
+
+[statuses.piloted]
+terminal = false
+mode = "Working"
+who_is_acting = "Person"
+drone_process = "Terminated. Parked under Assist"
+step_machine = "Frozen where the Drone left it"
+reason_storage = "Stored"
+reason_vocabulary = "take_over / restart_step / assist"
+transitions_in = ["running -> piloted", "awaiting_review -> piloted", "escalated -> piloted", "awaiting_attestation -> piloted"]
+transitions_out = ["piloted -> running", "piloted -> completed_success", "piloted -> superseded", "piloted -> killed"]
+in_code = "Not yet"
+notes = "A person is working it: the Drone is gone, the worktree belongs to the engineer, and Fleet must not reclaim it. It is distinguished from `escalated` by who holds the worktree, not by whether anyone has acted — escalated is waited on, piloted is worked."
+why = "Keeping the distinction in the state machine, rather than a UI label, keeps it authoritative over what a surface can say."
+
+[statuses.queued]
+terminal = false
+mode = "Waited on"
+who_is_acting = "Drone"
+drone_process = "None"
+step_machine = "Initialised, every step not_started"
+step_states = ["not_started"]
+reason_storage = "Derived"
+reason_vocabulary = "blocked_by_dependency / waiting_on_resources / none"
+transitions_in = ["awaiting_approval -> queued"]
+transitions_out = ["queued -> running", "queued -> awaiting_approval", "queued -> escalated", "queued -> killed"]
+in_code = "Not yet"
+notes = "Approved, waiting for a Drone — on headroom, or on a dependency. The reason is computed from `dependencies` and live headroom at read time rather than stored: a held port span never self-clears, so a stored value would go stale the moment headroom frees. This is the one status where the recomputed-label rule is applied literally."
+
+[statuses.rejected]
+terminal = true
+mode = "N/A"
+who_is_acting = "None"
+drone_process = "None"
+step_machine = "Frozen at the gate step"
+reason_storage = "None"
+reason_vocabulary = "None"
+transitions_in = ["awaiting_approval -> rejected", "awaiting_review -> rejected"]
+in_code = "Not yet"
+notes = "A verdict on the work — approval denied, or `reject` at a human gate. `reject` is the only gate verdict that writes a terminal status. Redispatch creates a new Job — see `redispatched_from`."
+
+[statuses.running]
+terminal = false
+mode = "Working"
+who_is_acting = "Drone"
+drone_process = "Alive, working"
+step_machine = "Live, advancing"
+step_states = ["running", "retrying"]
+reason_storage = "None"
+reason_vocabulary = "None"
+transitions_in = ["queued -> running", "awaiting_review -> running", "escalated -> running", "piloted -> running"]
+transitions_out = ["running -> awaiting_review", "running -> escalated", "running -> piloted", "running -> awaiting_attestation", "running -> completed_success", "running -> completed_failed", "running -> awaiting_approval", "running -> killed"]
+in_code = "Not yet"
+notes = "The work is being done, but this does not always imply a Drone: returning from `piloted` on Submit for verification leaves `assigned_drone` null, since Fleet invokes Checks itself and the Judge reads the diff. The liveness clock keys on the Drone, not the status, so a surface never renders a heartbeat for a process that is not there."
+
+[statuses.superseded]
+terminal = true
+mode = "N/A"
+who_is_acting = "None"
+drone_process = "Terminated"
+step_machine = "Frozen, and no longer describes the work"
+reason_storage = "None"
+reason_vocabulary = "None"
+transitions_in = ["piloted -> superseded"]
+in_code = "Not yet"
+notes = """
+The work landed outside the Job; the record has nothing left to say. A Job depending on it unblocks and surfaces, with the dependency marked unsatisfied — neither satisfied like `completed_success` nor blocking like the failures. Fleet's scheduler branches on this third case, making it a status rather than a reason.
+
+See Pilot.
+"""

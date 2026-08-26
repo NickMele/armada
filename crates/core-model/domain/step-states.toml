@@ -1,0 +1,50 @@
+# The state of one step of a Job's frozen WorkflowDef.
+#
+# Authored here. Carried across from the design workspace's Step States
+# database, which is the record of the decision and the reasoning that
+# produced it, not the authority on the current set — a page there that
+# disagrees with this file is stale, not right.
+#
+# The table key is the wire value, so a rule can compare this set against
+# the enum `core-model` will hold without a mapping in between. Job's `state`
+# column on `job_steps` takes its values from here, and nothing else does.
+#
+# `seen_under` names the Job statuses a step in this state is observed under.
+# Every name in it must be a key in job-statuses.toml.
+#
+# Fields:
+#   meaning    - what the state asserts about the step
+#   seen_under - the Job statuses this state appears beneath
+#   in_code    - whether an implementation exists, as the source recorded it
+#   notes      - the reasoning the row's page carried
+
+[states.advanced]
+meaning = "The step passed its advance gate"
+in_code = "Not yet"
+
+[states.awaiting_human]
+meaning = "The step's advance gate is a human gate, and it is open"
+seen_under = ["awaiting_review"]
+in_code = "Not yet"
+
+[states.not_started]
+meaning = "Written at Job creation for every step of the frozen WorkflowDef"
+seen_under = ["awaiting_approval", "queued"]
+in_code = "Not yet"
+
+[states.retrying]
+meaning = "The step failed and is being reattempted inside its retry budget"
+seen_under = ["running"]
+in_code = "Not yet"
+
+[states.running]
+meaning = "The step is being worked"
+seen_under = ["running"]
+in_code = "Not yet"
+
+[states.stopped]
+meaning = "Retries spent"
+seen_under = ["escalated"]
+in_code = "Not yet"
+notes = "The step's retries are spent; it is neither retrying nor waiting on a person."
+why = "Folding it into `retrying` or `awaiting_human` would make a designed human gate and a dead stop render alike."

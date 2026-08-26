@@ -1,0 +1,347 @@
+# The workflows Armada runs, and the ones it has decided it will not design
+# yet. A row is a decision about a shape, not a WorkflowDef — the definitions
+# themselves are the JSON beside this file.
+#
+# Authored here. Carried across from the design workspace's Armada Workflows
+# database, which is the record of the decision and the reasoning that
+# produced it, not the authority on the current set — a page there that
+# disagrees with this file is stale, not right.
+#
+# `status` is the field to read first. A Reference sample or Designed row has
+# a WorkflowDef in workflow-samples/ and `sample` points at it. A Policy
+# variant is the same steps under a different gate policy and needs no
+# definition of its own. A Needs design row has neither, and the row exists so
+# that the gap is a fact rather than an omission.
+#
+# The samples are JSON rather than TOML because they are the shape a repo
+# authors and Fleet interprets, verbatim as the source wrote them. A rule can
+# read one and check every key against workflowdef-fields.toml, every
+# `advance_gate` against that row's value table, and every `mechanical_check`
+# type against the sanctioned set — which is how the disagreements between the
+# samples and the schema stay visible instead of being smoothed over here.
+#
+# Fields:
+#   name              - the display name, from the row's own page
+#   workflow_id       - the id the sample declares. Absent where there is no sample
+#   version           - the sample's version
+#   sample            - path to the WorkflowDef, relative to this file
+#   status            - Reference sample | Designed | Policy variant | Needs design
+#   structure         - linear | loop
+#   steps             - the definition step count, which is not the rendered
+#                       row count on a loop
+#   gate_profile      - what it takes to advance, in one sentence
+#   what_it_exercises - why this workflow is worth having as a distinct shape
+#   open_questions    - questions the source left open against this row
+#   notes             - the reasoning the row's page carried
+
+[workflows.architecture_plan]
+name = "Architecture Plan"
+status = "Policy variant"
+structure = "loop"
+gate_profile = "As Design Plan"
+what_it_exercises = "Nothing — no structural difference from Design Plan"
+notes = "A variant of Design Plan in name only. Same loop shape, same gates, same evidence type. Nothing structural differs, so it needs no `WorkflowDef` of its own; it is a label on a Design Plan Job."
+
+[workflows.bug]
+name = "Bug"
+workflow_id = "bug"
+version = 2
+sample = "workflow-samples/bug.json"
+status = "Reference sample"
+structure = "linear"
+steps = 7
+gate_profile = "Check + Judge on the first three steps, Check only on regression_verify, Manifest rule at review and merge, human at review by default"
+what_it_exercises = "Every field type: mechanical check, Judge check, panel, gaming check with a baseline, hard-prerequisite evidence, a backward on_fail, and two manifest_rule gates. The one to copy from."
+notes = """
+The reference sample for the schema: `mechanical_checks[]` and `judge_checks[]` are arrays where every entry must pass and a refusal from any Judge fails the step. Every step here carries exactly one of each; Feature is the sample that uses more than one. Field values used on this sample are in `sample_values` below.
+
+`context_paths` is known only once the Drone declares it at evidence-report time, so it lives on the resolved evidence-scope object the Judge receives, not on the definition. `context_source` is required wherever `evidence_scope` appears, which attaches to any step that triggers a Judge or human review. `default_gate_policy.iteration_cap` is the schema's named default source for a step's cap; no schema default exists for `model`, and a human gate's `request_changes` verdict needs a routing target or it has nowhere to go.
+
+`regression_verify`'s mechanical check is `type: manifest_check`, asserting only exit 0 — Armada never learns which tests ran or how many, but that exit code covers whether the repro test is green, since a still-failing test leaves the suite red. "No new failures" is answered by a Judge instead, reading the pre-loaded diff for whether it changes behaviour beyond the stated root cause, so `advance_gate` is `auto_if_judge_passes` — a weaker guarantee than a deterministic check, but an implementable one.
+
+A fix that breaks an unrelated, untouched-module test does not appear in the diff, so the Judge cannot see it; only the suite exit code catches it, and only if that test runs inside the Check `manifest_check` names. A repo that splits fast and slow suites and points Armada at the fast one has a blind spot in both tiers; pointing the regression gate at the complete suite is the mitigation, and it is a repo concern.
+
+Open items against this sample are in `open_items` below. `hard_prerequisite` on `repro` means the failing test cannot be skipped or advanced past without the artifact, even on retry, since a bug with no reproduction is a bug nobody can prove was fixed. A human can override at the gate where Fleet's detection is judged wrong; the override is recorded as a human action, never as a passing Check.
+"""
+
+[workflows.bug.sample_values]
+context_paths = "Omitted; carried via `context_source: \"drone_declared\"`"
+context_source = "Present on every step with `evidence_scope`"
+"evidence_scope on review" = "`context_source: \"hybrid\"`"
+"default_gate_policy.iteration_cap" = "5"
+"model on each judge_check" = "Explicit: haiku for routine steps, sonnet for the advisory review pass"
+flag_if = "Three patterns, including `tautological_test`"
+"baseline_ref (gaming check)" = "\"root_cause.evidence\" — unconfirmed against the Compliance table's `repro` claim"
+"verdict_routing on review" = "{ \"request_changes\": \"fix\" }"
+
+[workflows.bug.open_items]
+reference_docs = "Typed `array[path]` but carries `\"ticket\"` and `\"root_cause.evidence\"`, neither a path — needs a wider type or a separate evidence-reference field"
+"on_fail: retry:fix" = "A backward jump called a retry, while the identical jump through `verdict_routing` is explicitly not one; whose `retry_count` increments is undefined"
+advance_gate = "Full value set unstated; this sample uses four of five forms in circulation, `human_always` appears in prose only"
+required = "`true` on every step here for consistency; the default when omitted was never stated"
+"manifest_rule:review_gate" = "Resolves — Manifest defines `review_gate` with values and a default in its auto-merge table"
+
+[workflows.code_review]
+name = "Code Review"
+workflow_id = "code_review"
+version = 1
+sample = "workflow-samples/code-review.json"
+status = "Designed"
+structure = "linear"
+steps = 3
+gate_profile = "artifact_exists on both working steps, a Judge panel of 2 against rubber-stamping, and a human gate only if the repo asks for one. No merge step — it lands nothing."
+what_it_exercises = "The inverted case. The diff is the Drone's input, not its output, so it moves from work product to yardstick — and the gaming risk flips from fabricating to rubber-stamping. Sole user of ref_source. The diff is injected into the Drone's context rather than verified after the fact."
+notes = """
+The first inverted workflow designed, chosen because it pushes hardest on the gate row: every other workflow's gate assumes a deterministic check on the Drone's own output, and here the Drone produces none. See `comparison` below for how it inverts the coding shape; landing nothing is why this is three steps rather than seven. `mechanical_checks[]` and `judge_checks[]` are arrays where every entry must pass; an empty array is how a step carries no Judge.
+
+`read` injects the PR diff into the Drone's context — the same mechanism the Judge uses — and the Drone writes a note of what changed. `artifact_exists` on that note is the whole mechanical tier and carries no `hard_prerequisite`, since nothing here is strong enough to fail; anti-rubber-stamping rests entirely on `assess`.
+
+`assess` runs a `panel_size: 2` Judge panel with unanimity, so either can veto — rubber-stamping is a failure of effort, and two independent Judges are harder to satisfy with generic praise than one. `gaming_check` names the three shapes rubber-stamping takes.
+
+`deliver` reuses Bug's `manifest_rule:review_gate`: a repo wanting sign-off before a Drone's review posts sets `human_always`, one that trusts it sets `auto_if_judge_passes`. `evidence_type: "review_findings"` is new and not yet enumerated elsewhere.
+
+"Work product" means what a step produced, not the diff: the veto-only contract has the Judge read the task text, the work product and the deterministic facts, with the diff delivered pre-loaded — here the diff is the reference and `REVIEW.md` is the work product. No `files_read` check exists, so the mechanical tier does not observe what the Drone read; injection does not prove engagement, and neither did a tool call, since both stop at availability. The one genuine loss is a ceiling: a Drone can read sixty files one at a time, while injection holds them all at once and a large PR breaches `max_context_size` and escalates.
+
+Turn count is unaffected by the retirement. Thrashing detection reads the same harness output stream, but counting events survives a format change where extracting file paths from a tool-call shape does not — so the more brittle of the two dependencies is gone and the other stands. The routes weighed before `files_read` was retired are in `retired_routes` below.
+
+An inverted workflow is lighter than a coding one: nothing is built, nothing lands, and there is no artifact to regression-verify, so a future inverted workflow should expect around three steps rather than seven.
+"""
+why = """
+`files_read` was a proposed sixth `mechanical_check.type` and dissolved rather than being deferred. It expected `all_files_in_ref_diff` — a set knowable before the Drone starts — and if the expected set is knowable in advance the diff should be injected rather than verified after the fact. The check is therefore either redundant, because the set is known, or undefinable, because without a known set there is no expected list to compare against.
+
+Some checks must be observed rather than reported: a Drone's self-report cannot be trusted, since the Drone that skimmed the diff will claim it read everything, and a self-reported coverage list is worthless exactly when it is needed. Where neither observation nor report works, the answer is to remove the Drone's opportunity to skip rather than to detect that it did.
+"""
+
+[workflows.code_review.retired_routes]
+parse_harness_stream = { how = "Fleet reads `Read` tool calls out of the headless JSON event stream", verdict = "Moot — works today, brittle to format change, and injection removes the need" }
+ask_the_drone = { how = "The Drone lists what it read", verdict = "Never — a self-reported list is worthless exactly when it is needed" }
+watch_the_filesystem = { how = "Fleet observes file access in the worktree at OS level", verdict = "Retracted — harness-independent but noisy, since the process also reads configs, lockfiles and vendored trees" }
+armada_mcp_read_tool = { how = "Deny the built-in reader in the allowlist, provide `armada.read_file` instead", verdict = "Whack-a-mole — denying the built-in reader pushes the model toward `bash cat` unless every read path is closed" }
+
+[workflows.code_review.comparison]
+diff_is = { coding = "the Drone's work product", code_review = "the Drone's input — the yardstick it is judged against" }
+work_product_is = { coding = "the diff", code_review = "the review — findings tied to specific lines" }
+"context_paths points at" = { coding = "what the Drone changed", code_review = "the PR under review, which the Drone did not write" }
+gaming_looks_like = { coding = "fabricating — a weakened assertion, a narrowed suite", code_review = "rubber-stamping — \"LGTM\" on a 900-line diff" }
+branch_checked_out = { coding = "the Job's own", code_review = "the PR's, via `ref_source: job_specified_branch`" }
+it_lands = { coding = "a PR", code_review = "nothing — there is no `merge` step" }
+
+[workflows.dependency_security_upgrade]
+name = "Dependency/Security Upgrade"
+status = "Needs design"
+gate_profile = "Undesigned — needs broader regression-verify scope than a Feature"
+what_it_exercises = "Inverted risk: breaking something unrelated rather than fixing the wrong thing"
+notes = """
+Risk is inverted from Bug. The danger is breaking something unrelated, not fixing the wrong thing, so regression-verify needs a broader scope and a rollback plan carries more weight than it does in a normal Feature.
+
+No step list yet.
+
+Note the coverage gap this leaves: a CVE selects no different workflow today, and urgency has no home on Job — see Does Job carry urgency, and may any pre-dispatch gate be skipped under an incident?
+"""
+
+[workflows.design_plan]
+name = "Design Plan"
+workflow_id = "design_plan"
+version = 1
+sample = "workflow-samples/design-plan.json"
+status = "Designed"
+structure = "loop"
+steps = 2
+gate_profile = "No Check tier at all. A human gate on every iteration — the evidence is a document, so every pass is yours to judge."
+what_it_exercises = "The only instantiated loop. Sole sample for structure: loop, verdict_routing, iteration_cap, and a three-value human gate. Half of Armada's declared workflow shapes had no schema before this row."
+notes = """
+The first instantiated loop sample: `verdict_routing`, `iteration_cap` and the three-value human gate have no earlier sample to derive from. Drawn shape: `draft → present → decide`, with `request_changes` looping `present` back to `draft`, an iteration cap of 5, and no Check tier. Field usage is in `fields` below.
+
+`mechanical_checks[]` and `judge_checks[]` are arrays where every entry must pass; an empty array and an absent `judge_check` mean the same thing, so the two blocks here that were `{ "enabled": false }` are now empty arrays. The canvas renders this as `draft · 2nd`, `draft · 3rd`, `iteration 3 of 5` — a rail that grows a row per iteration rather than promising steps that may never exist; `steps` in this table is the definition count of two, not the rendered row count.
+
+Left open: whose `iteration_count` increments — this sample assumes the emitting-step reading (the part to change if the decision goes the other way), though Job's text only says to increment it with no step named, and a cap and count on different steps means `loop_cap` never fires. `evidence_type: "document"` is used here though the `evidence_type` enum is nowhere enumerated, so the value may not be sanctioned. Appended prior-iteration context breaches `max_context_size` by construction at some iteration; the cap is raised to 40 here rather than 20, which delays the problem rather than solving it.
+
+`request_changes` and `reject` are not two strengths of the same verdict: `request_changes` loops the Job back to `draft` and never terminates it, while `reject` is a hard stop that ends the Job. The distinction matters most in a design loop, where a third unsatisfying draft can feel like a rejection without being one. See Job for the status enum.
+"""
+
+[workflows.design_plan.fields]
+"structure: loop" = { on = "the `WorkflowDef`", meaning = "The only other value besides `linear`" }
+verdict_routing = { on = "`present`, the step that emits the verdict", meaning = "`{ \"request_changes\": \"draft\" }` declares the loop edge; it lives on the emitting step so one workflow can carry more than one loop" }
+iteration_cap = { on = "`present`", meaning = "Overrides `default_gate_policy.iteration_cap`; reaching it escalates like a stuck gate. Not `retry_limit` — nothing failed" }
+"advance_gate: human_always" = { on = "`present`", meaning = "Returns `approve` / `request_changes` / `reject`, not a boolean" }
+
+[workflows.documentation_job]
+name = "Documentation Job"
+status = "Needs design"
+gate_profile = "No mechanical tier, no code diff"
+what_it_exercises = "Gateless steps as the common case rather than the edge"
+notes = """
+No mechanical layer and no code diff, so lighter-weight than Design Plan.
+
+Alongside Prototype, this is one of the two cases that made a step with neither a Check nor a Judge the common case rather than an edge one.
+
+Whether it is common enough to formalise separately, or just falls under Design Plan generically, is open: Is a Documentation Job its own workflow, or does it fall under Design Plan?
+"""
+
+[workflows.feature]
+name = "Feature"
+workflow_id = "feature"
+version = 1
+sample = "workflow-samples/feature.json"
+status = "Designed"
+structure = "linear"
+steps = 7
+gate_profile = "Check + Judge on the first four steps, human always at review, Manifest rule at merge. The only sample using human_always as a literal advance_gate value."
+what_it_exercises = "The template the other coding workflows derive from. Only instance of human_always, of two mechanical_checks on one step, and of two Manifest Checks on one step. Written in the array form decided Aug 22 2026."
+notes = """
+The template the coding workflows derive from, using `mechanical_checks[]` and `judge_checks[]`. What separates it from Bug is the front and the gate, not the shape: Bug opens with a hard-prerequisite failing test since a bug has a reproducible symptom to pin down first, while Feature opens with a scope note since it has a request and no artifact. Bug's review reads a Manifest rule; Feature's is `human_always`, since new behaviour is the case where the engineer looks every time.
+
+The only sample using `human_always` as a literal `advance_gate` value, and the only one with two `mechanical_checks` on one step — three times over. `implement` asserts the diff is non-empty and that the build passed, since a build can pass cleanly on an empty diff and either check alone would let a Drone that did nothing advance. It is also the only sample with two Manifest Checks on one step — `regression_verify` runs `test` and `lint` separately, keeping a failure attributable rather than folding both behind one exit code.
+
+`merge` and `close` are identical to Bug's, and `default_gate_policy` is the documented defaults verbatim; the evidence types, the `scope_diff_check`/`declare_plan_at` placement, and the advisory sonnet review all follow Bug, which is what makes this a derivation of the reference sample. `check_config_edited` is named here as a fourth `flag_if` gaming pattern, described on Workflow and appearing in no other sample.
+
+Open items inherited from Bug, plus one of its own, are in `open_items` below.
+"""
+
+[workflows.feature.open_items]
+"on_fail: retry:implement" = "A backward jump called a retry, while the identical jump through `verdict_routing` is explicitly not one, and whose `retry_count` increments is undefined"
+required = "`true` on every step for consistency, though the default when omitted has never been stated"
+reference_docs = "Carries `\"ticket\"`, which is not a path; the type was widened to `array[path | evidence_ref]`, and whether a bare `\"ticket\"` qualifies is unsettled"
+
+[workflows.investigation_research_spike]
+name = "Investigation / Research Spike"
+status = "Designed"
+structure = "loop"
+steps = 4
+gate_profile = "No mechanical tier and no Judge gate. Human gate on every iteration, as Design Plan"
+what_it_exercises = "The only designed workflow with no fallback done signal, so the thrashing tripwire is the sole safety net rather than a backstop"
+notes = """
+Loop: Frame → Investigate (open-ended) → Conclude → Present → (`approve` / `request_changes` / `reject`).
+
+"Nothing's wrong" is a valid successful outcome, which is what separates this from Bug — there is no artifact whose absence means failure.
+
+No mechanical check at all. Because there is no "done" signal to fall back on, the thrashing tripwire carries the whole safety burden here rather than backing up a Check.
+
+Wider context scope than coding workflows by nature: an investigation that cannot read outside the files it started with is not an investigation.
+
+Designed but not instantiated — no `WorkflowDef` sample exists yet.
+"""
+
+[workflows.plan_review]
+name = "Plan Review"
+status = "Policy variant"
+structure = "loop"
+gate_profile = "As Design Plan"
+what_it_exercises = "Nothing yet — its existence as a top-level workflow is open"
+notes = """
+Filed as a variant of Design Plan, but arguably a sub-step of Design or Architecture Plan rather than a top-level workflow at all: Design Plan's loop already routes `request_changes` back to `draft`, which is what a plan review produces.
+
+A separate workflow only earns its place if a plan is reviewed by someone who did not draft it, on a separate dispatch. That is a real case, but a different one from the loop.
+
+Open: Is Plan Review a top-level workflow or a step inside Design Plan?
+"""
+
+[workflows.production_support_incident]
+name = "Production Support Incident"
+status = "Policy variant"
+structure = "linear"
+gate_profile = "As Bug, with tighter retry and escalation thresholds and a shorter heartbeat interval. The dispatch gate is unchanged — no variant weakens it."
+what_it_exercises = "Policy as the axis of variation — the same steps under a different gate policy"
+open_questions = ["Does Job carry urgency, and may any pre-dispatch gate be skipped under an incident?"]
+notes = """
+A variant of Bug: same steps, a different gate policy — tighter retry and escalation thresholds, and a shorter heartbeat interval. A policy profile, not a new step list; if urgency can be expressed as thresholds, it does not need its own workflow.
+
+No gate is skipped and the approval path is not faster: every Job-level dispatch is approved explicitly and one by one. What is faster is the approval reaching you — an incident Job interrupts rather than queues, and jumps the scheduling tiebreak ahead of ordinary work.
+
+Thresholds are this variant's whole job. Anything urgency needs to say beyond them is carried by a Job's `urgency` field, since a workflow variant is chosen by whoever dispatches and cannot cover a case with no variant of its own — a security bump selects no different workflow. See Job.
+"""
+why = "Speed comes from surfacing the Job faster, not from a thinner gate — a weaker approval path under time pressure would apply least scrutiny exactly when judgement is worst."
+
+[workflows.project_plan]
+name = "Project Plan"
+status = "Policy variant"
+gate_profile = "As Design Plan, if it is a workflow at all"
+what_it_exercises = "Nothing yet — whether it is a workflow is open"
+notes = """
+Two readings, and the right one is not settled. If it produces a document, it is Design Plan under another name. If it schedules and tracks other Jobs, it is a meta-Job referencing a DAG of Jobs and not a workflow at all.
+
+Neither reading needs new workflow machinery: Job already carries `depends_on`/`blocks` for sequencing peer Jobs and `dispatched_by` for provenance.
+
+Open: Is Project Plan a workflow at all, or a meta-Job pointing at a DAG?
+"""
+
+[workflows.prototype]
+name = "Prototype"
+workflow_id = "prototype"
+version = 1
+sample = "workflow-samples/prototype.json"
+status = "Designed"
+structure = "linear"
+steps = 3
+gate_profile = "Two of three steps have no gate at all. One human gate. auto_merge never."
+what_it_exercises = "A step with no Check and no Judge — Fleet advances it outright. The canvas settled this as the common case rather than an edge one, and no sample carried it."
+notes = """
+A step with no Check and no Judge is a single node, and Fleet advances it to the next step outright; Documentation lands the same way, which makes this a rule rather than an exception. A gate row exists only where there is a gate — `frame` and `write_up` have no `mechanical_check` and no `judge_check`, not `"enabled": false`, absent — and Fleet advances them when the Drone submits evidence of the declared `evidence_type`.
+
+This resolves an apparent conflict with the Judge's veto-only framing, described as running "only after the mechanical check holds": read literally that would make any step without a mechanical tier unadvanceable, but an absent gate is not a failed gate — it is no gate.
+
+`manifest_rule_overrides` is invented notation for the Workflow page's line that this workflow "should default to `auto_merge: never`"; no field exists yet for a workflow overriding a Manifest rule, and the name here is a placeholder pending a decision. WorkflowDef against Manifest is a third axis, distinct from both Kit → Manifest and peer resolution, and nothing currently governs it.
+
+An empty `judge_checks[]` array is now the only way to say "no Judge" — omitting the key entirely, as this sample does, is equivalent to `[]`. The `enabled` flag survives only inside an array entry, where it means a configured Judge temporarily switched off, not the absence of one. This sample never carried `mechanical_check` or `judge_check` keys at all, so the array-form conversion changed nothing about it.
+"""
+why = "Prototype is exploratory, with fuzzy success criteria and usually no firm plan to check work against, so the \"does this match the plan\" question every coding workflow's Judge asks has no yardstick here — the absent Judge tier makes that explicit, and `auto_merge: never` carries the weight instead."
+
+[workflows.refactor]
+name = "Refactor"
+workflow_id = "refactor"
+version = 1
+sample = "workflow-samples/refactor.json"
+status = "Designed"
+structure = "linear"
+steps = 6
+gate_profile = "Check + Judge on all three working steps. The test Check is a hard prerequisite — no green suite, no advance, even on retry. Judge reads the test-file diff directly."
+what_it_exercises = "The gaming-check path end to end, and the no-parsing rule: one Manifest Check exit code is the whole mechanical tier, and every question about what the tests now cover is a Judge reading the diff"
+notes = """
+`regression_verify`'s mechanical check is `type: manifest_check`, naming a Check the repo already defines in its `armada.yml` and asserting only that it exited 0; Armada never learns which tests ran or how many. The Judge reads the diff directly instead, which already carries the before and the after, so nothing needs to be captured or parsed separately. This is the type that should propagate to Bug, whose vaguer `"expect": "repro_test_now_green_and_no_new_failures"` cannot be established from an exit code either.
+
+`flag_if` names four gaming patterns; Workflow names a fifth — a change to the configuration a Check's command resolves through — which has no enum value yet, and whether the set is fixed at all is open. The Judge does not receive a parsed test report: it receives the patch and reads the test files itself, which is what `evidence_scope` exists for — a test file that went from forty assertions to three is visible in the diff without anything being counted.
+
+`baseline_ref: "scope.evidence"` points at what the Drone said it would do, so the Judge's question is comparative — are these test changes explained by that refactor — rather than requiring an identical before-and-after. `panel_size: 2` on `regression_verify` is the one place rigour is scaled up, since this is the step the whole workflow exists to protect; unanimity means either Judge can veto.
+
+Six steps, not Bug's seven: there is no separate `root_cause` step, since `scope` already carries the behaviour-preservation claim that `regression_verify` judges the test changes against via `baseline_ref`. `hard_prerequisite: true` on `regression_verify` means a refactor cannot advance without a green suite, even on retry; the escape hatch is a human override where Fleet's detection is judged wrong or the repo's suite was already red, recorded as a human action against the step and never as a passing Check.
+
+Five `mechanical_check.type` values are sanctioned, documented on Workflow; `manifest_check` is the general case among them. `mechanical_checks[]` and `judge_checks[]` are arrays where every entry must pass; every step here carries one of each.
+
+This workflow does not verify that public API surface is unchanged, that no test moved from red to green, or that performance held — each would need either a parser or a second suite run, and both are ruled out. If a refactor changes behaviour, the path is the Judge noticing it in the diff, not a mechanical tripwire.
+"""
+why = """
+Gating on set equality against a captured test baseline — identical test IDs, identical outcomes — is rejected, and it is the shape to expect proposed again. It requires Armada to parse test-runner output, which the no-parsing rule forbids, and it blocks every legitimate refactor: renaming a module renames its test imports, and extracting a class splits its test file. Behaviour preservation was never a mechanical question.
+
+Every other coding workflow proves something new works; Refactor proves nothing changed, and a narrowed test set passes exactly as a real refactor does, with no positive artifact whose absence gives the game away — which is why `panel_size: 2` and the gaming check, not the mechanical tier, are the real gate here.
+"""
+
+[workflows.revert]
+name = "Revert"
+workflow_id = "revert"
+version = 1
+sample = "workflow-samples/revert.json"
+status = "Designed"
+structure = "linear"
+steps = 5
+gate_profile = "Check + Judge on the revert step at panel_size 3, mechanical only at verify, human always at review, Manifest rule at merge. The second workflow after Feature to use human_always, and the only one to raise panel_size above 1 on a working step."
+what_it_exercises = "Undoing landed work. The only workflow that inherits its scope instead of having it classified, and the only one whose yardstick is another Job rather than an earlier step of its own. First sample written in the criteria[] form."
+open_questions = ["Can a WorkflowDef declare that finishing triggers another workflow?", "What is a gaming baseline when the yardstick is another Job rather than an earlier step?", "Is there a revert workflow, and what are its steps?", "What happens when a completed Job's merge breaks main?"]
+notes = """
+Undoing a Job that landed and should not have. Nothing starts one automatically — a `WorkflowDef` may name a successor through `on_complete`, but that fires when a workflow completes, while a revert is wanted after a Job that already landed cleanly breaks something afterwards.
+
+Armada does not watch what happens after a merge; a person raises it, and the revert Job carries the causing Job as its `subject`. Whether Fleet should watch the merges it performs itself is open.
+
+The case this exists for: *Job 412 broke staging, revert it* was ordinary work with no workflow to run it under. A revert appeared in none of the designed workflows, none of the policy variants, and none of those still to be designed.
+
+It is not Bug with different words: there is no diagnose step, since the cause is known — it is the Job being undone — and no plan step, since there is nothing to plan. The Judge asks a different question, not "does this fix the stated cause" but "does this restore the prior state without taking anything else with it," against a yardstick that is another Job's landed state rather than an earlier step's evidence.
+
+Scope is inherited, not classified: a revert reads entry zero of its `subject`'s scope history and copies `write_targets` and `atomic` rather than running the classifier afresh. Without that, a revert of a Convoy could come back as separate Jobs and reintroduce the intermediate state the Convoy existed to prevent.
+
+The only sample with two criteria splitting one question into halves — did you undo it, and did you touch anything else — since they fail differently and a refusal has to say which. It is also the only sample with `panel_size` above 1 on a working step: Feature raises it on `implement`, this raises it on the only step that produces anything, since a revert destroys work that already passed every gate — two criteria at panel size three is six calls, inside the twelve-call ceiling.
+
+`reference_docs` here names the `subject` Job rather than a prior step of its own, making the yardstick external — every other sample points backwards inside its own Job. `human_always` applies for the opposite reason to Feature's: Feature's review is human because the behaviour is new, this one because the behaviour is old, worked, and is being thrown away.
+
+No `gaming_check`: the risk is real — a revert that quietly sweeps up unrelated work — but it cannot be expressed. `baseline_ref` names a step's evidence inside the same Job, and this baseline is another Job's pre-merge state, for which no value form exists; the `flag_if` vocabulary is also wrong for it, since its patterns are about weakening tests, not widening a change. Criterion `c2` carries the containment question instead, as a Judge check with no baseline to compare against.
+
+Written in the `criteria[]` form rather than the single `question` field every other existing sample still carries, since a new sample written in a superseded form would undercut the newer one. The advisory review step keeps `question`, since an advisory summary is not a criterion and has nothing to cite against.
+"""
