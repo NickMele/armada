@@ -1,42 +1,27 @@
 //! The transition registry and the edge table name the same edges.
 //!
-//! `domain/job-transitions.toml` is the authority on where a Job may move next.
-//! `transition.rs`'s `EDGES` is that file transcribed by hand into a `no_std`
-//! crate that cannot read TOML, and the transcription is the whole exposure: an
-//! edge dropped in the copy is a legal move the machine refuses, an edge
-//! invented in the copy is a move it admits that nothing sanctions, and neither
-//! shows up as a compile error.
+//! `domain/job-transitions.toml` is the authority on where a Job may move next;
+//! `transition.rs`'s `EDGES` is it transcribed by hand into a `no_std` crate
+//! that cannot read TOML. A dropped edge is a legal move the machine refuses,
+//! an invented one a move nothing sanctions, and neither is a compile error.
 //!
-//! # The identity is `from` and `to`, because the file says so
+//! The registry's header settles identity: "an edge has no name of its own that
+//! a Rust identifier could carry — `from` and `to` are the whole identity". So
+//! the match is on pairs, both ways, and the trigger is a value *inside* a
+//! matched edge; as identity it would report a changed trigger as one edge
+//! added and one removed, reading as a redesign rather than a one-word slip.
 //!
-//! The registry's own header states it: "an edge has no name of its own that a
-//! Rust identifier could carry — `from` and `to` are the whole identity". So
-//! the comparison is a set of pairs, matched both ways, and the trigger is a
-//! *value inside* a matched edge rather than part of what identifies it. A
-//! trigger compared as identity would report a changed trigger as one edge
-//! added and one removed, which reads as a redesign rather than as the one-word
-//! slip it is.
+//! `from` and `to` are keys in `job-statuses.toml`, `escalation_trigger` one
+//! in `escalation-triggers.toml`; all are checked against the *enums'* wire
+//! spellings, because [`super::every_registry_key_is_a_variant`] holds those
+//! sets equal and a trigger the enum cannot spell is an edge that cannot be
+//! transcribed at all.
 //!
-//! The same header names what a value may be: `from` and `to` are "each a key
-//! in job-statuses.toml, verbatim", and `escalation_trigger` "a key in
-//! escalation-triggers.toml". Those are checked here against the *enums'* wire
-//! spellings rather than against the other registries' keys, because
-//! [`super::every_registry_key_is_a_variant`] already holds those two sets
-//! equal — and where they are not equal, the spelling that matters to this file
-//! is the one an `Edge` can actually hold. A trigger the enum does not spell is
-//! an edge that cannot be transcribed at all.
-//!
-//! # What the count could not catch
-//!
-//! `EDGES.len() == 34` was true and proved nothing: thirty-four rows with one
-//! `from` wrong is still thirty-four. Every finding below names a `from -> to`
-//! pair and the line it is on, in the file whose side of the disagreement it is.
-//!
-//! No `toml` crate and no `syn`, for the reason [`super`] has neither. This
-//! reads `from`/`to`/`escalation_trigger` assignments and `edge(…)` /
-//! `triggered(…)` entries, and refuses anything it cannot read rather than
-//! skipping it — a comparison that quietly drops what it does not understand is
-//! the failure this rule replaces.
+//! `EDGES.len() == 34` proved nothing — thirty-four rows with one `from` wrong
+//! is still thirty-four. No `toml` and no `syn`, for the reason [`super`] has
+//! neither; this refuses what it cannot read rather than skipping it, because a
+//! comparison that silently drops what it does not understand is the failure it
+//! replaces.
 
 use std::collections::BTreeMap;
 use std::fs;

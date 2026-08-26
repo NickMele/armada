@@ -1,6 +1,5 @@
 //! The six rules. Each returns what is missing, by name.
 
-use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -181,63 +180,6 @@ pub fn no_file_too_long(root: &Path) -> Report {
                 report.warn(format!("{path} is {lines} lines, over 500"));
             }
         }
-    }
-    report
-}
-
-// --------------------------------------------------------------- rule four
-
-/// Every file under `crates/*/src/` is in `foundations-manifest.txt`.
-///
-/// The manifest is the answer to "was this file meant to be here" — one
-/// repo-relative path per line, sorted, no globs and no comments, so a file
-/// that appears without anybody deciding it should is visible as a diff.
-/// The check runs both ways: an unlisted file fails, and so does a listed
-/// file that no longer exists.
-pub fn every_source_file_is_in_the_manifest(root: &Path) -> Report {
-    let mut report = Report::new("every file under crates/*/src/ is in the manifest");
-    let manifest_path = root.join("foundations-manifest.txt");
-    let Ok(manifest_text) = fs::read_to_string(&manifest_path) else {
-        report.fail("foundations-manifest.txt — the manifest itself");
-        return report;
-    };
-    let listed: BTreeSet<String> = manifest_text
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_string)
-        .collect();
-
-    let mut on_disk = BTreeSet::new();
-    for dir in crate_dirs(root) {
-        walk(&dir.join("src"), &mut |path| {
-            if let Ok(rel) = path.strip_prefix(root) {
-                on_disk.insert(rel.to_string_lossy().replace('\\', "/"));
-            }
-        });
-    }
-
-    for path in on_disk.difference(&listed) {
-        report.fail(format!("{path} is on disk and not in the manifest"));
-    }
-    for path in listed.difference(&on_disk) {
-        report.fail(format!("{path} is in the manifest and not on disk"));
-    }
-
-    let sorted: Vec<&String> = {
-        let mut v: Vec<&String> = listed.iter().collect();
-        v.sort();
-        v
-    };
-    let as_written: Vec<&str> = manifest_text
-        .lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-        .collect();
-    if as_written.iter().map(|s| s.to_string()).collect::<Vec<_>>()
-        != sorted.iter().map(|s| s.to_string()).collect::<Vec<_>>()
-    {
-        report.fail("foundations-manifest.txt — sorted order");
     }
     report
 }

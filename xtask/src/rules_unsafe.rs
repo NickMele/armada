@@ -1,31 +1,18 @@
 //! Where `unsafe` may be spoken, and which crate may relax the lint that
 //! forbids it.
 //!
-//! # Why this rule exists, and what happened without it
+//! `unsafe_code = "forbid"` is a workspace lint, and `forbid` is absolute — it
+//! cannot be lifted by an `allow` at a call site, which is what makes it worth
+//! having. It also means one legitimate `unsafe` line costs a whole crate's
+//! inheritance of the workspace lints, and after that **nothing watches the
+//! second block, or the twentieth**: the relaxation is one line in a
+//! `Cargo.toml` that no diff reader looks at twice.
 //!
-//! `unsafe_code = "forbid"` is a workspace lint, and `forbid` is absolute: it
-//! cannot be lifted by an `allow` at a call site, which is exactly what makes
-//! it worth having. But it also means the only way to write one legitimate
-//! `unsafe` line is to stop inheriting the workspace lint for a whole crate —
-//! and once a crate has done that, **nothing watches the second block, or the
-//! twentieth.** The relaxation is one line in a `Cargo.toml` that no diff
-//! reader looks at twice.
-//!
-//! `fleet` did exactly that, for a real reason: detaching a Drone into its own
-//! session is `libc::setsid()` in `Command::pre_exec`, and `pre_exec` is unsafe
-//! by construction. So the crate takes `deny` instead of `forbid`, and a single
-//! site carries an `#[allow]`.
-//!
-//! **The list is meant to be short, not to be one.** `checks-runner` is the
-//! second entry and it is the same shape of problem at the other end of a
-//! process's life: ending a timed-out Check means signalling its whole process
-//! group, `libc::killpg` has no safe wrapper, and killing only the process
-//! Fleet started leaves the test runner it spawned holding the worktree. Adding
-//! a third is a deliberate edit to this file, which is the whole mechanism.
-//!
-//! The shape is the manifest's: an explicit list, checked both ways. A file
-//! that speaks `unsafe` and is not listed fails; a listed file that no longer
-//! speaks it fails too, so the list cannot quietly outlive its reason.
+//! **The list is meant to be short, not to be one.** Adding a third entry is a
+//! deliberate edit to this file, which is the whole mechanism. The shape is the
+//! manifest's — an explicit list, checked both ways: a file that speaks
+//! `unsafe` and is not listed fails, and a listed file that no longer speaks it
+//! fails too, so the list cannot quietly outlive its reason.
 
 use std::fs;
 use std::path::Path;

@@ -1,46 +1,26 @@
 //! The domain registries and the enums hold the same set.
 //!
-//! `crates/core-model/domain/` is the authority on where a Job can be, where
-//! one of its steps can be, and why it stopped and asked. `core-model` holds
-//! the enums those files describe. **The registry key is the wire value** —
-//! that is why the files key their tables on the spelling a stored row carries
-//! rather than on a slug with a `name` beside it, and it is what lets this rule
-//! compare the two with a set lookup and no mapping in between.
+//! `crates/core-model/domain/` is the authority on where a Job can be and why
+//! it stopped; `core-model` holds the enums. **The registry key is the wire
+//! value**, so the two compare by set lookup with no mapping in between — on
+//! wire spellings, never on Rust identifiers. It is `from_wire` this protects:
+//! a key with no variant is a stored row that reads back as `None`, a variant
+//! with no key is a value written to the column the registry never sanctioned.
 //!
-//! So the comparison is on wire spellings, never on Rust identifiers.
-//! `HatchUnbidden` and `hatch_unbidden` are the same variant to a reader and
-//! nothing to a `from_wire`, and it is `from_wire` this protects: a key with no
-//! variant is a stored row that reads back as `None`, and a variant with no key
-//! is a value written to the column that the registry never sanctioned.
+//! **It runs both ways**, unlike [`crate::rules_protocol`], where an operation
+//! with no route is not yet built rather than wrong. Nothing here is staged:
+//! `domain/README.md` requires a key and its variant in the same change, so
+//! either half of a mismatch is a live defect — one breaks reading, the other
+//! writing. **`in_code` cannot soften that**: all thirty-one rows of the three
+//! registries say `in_code = "Not yet"`, so reading it as licence for a missing
+//! variant would licence every absence at once. It is provenance.
 //!
-//! # It runs both ways, and that is the difference from `rules_protocol`
+//! **No `toml` crate**, for the reason [`crate::rules_icons`] has none: the
+//! gate keeps no dependencies. This reads table headers only, and skips `"""`
+//! blocks so a bracket inside a `notes` string is not mistaken for one.
 //!
-//! [`crate::rules_protocol`] runs one way on purpose: the operation inventory
-//! names every operation the seam will ever carry and M1 serves a subset, so an
-//! operation with no route is *not yet built* rather than wrong. Nothing here
-//! is staged like that. `domain/README.md` says it outright — "a value added
-//! here is a value some enum must gain, so add it in the change that adds the
-//! variant, not before and not after" — and both halves of a mismatch are a
-//! live defect rather than a milestone that has not arrived: one breaks
-//! reading, the other breaks writing.
-//!
-//! **`in_code` does not soften either direction, and cannot.** Every row of all
-//! three registries carries `in_code = "Not yet"` — thirty-one of thirty-one,
-//! which the escalation file's own header states as a fact about the whole
-//! table. Reading it as licence for a missing variant would licence every
-//! absence at once and leave this rule checking nothing. It is provenance, as
-//! the README says, not a staging flag.
-//!
-//! **No `toml` crate**, for the reason [`crate::rules_icons`] has none: the gate
-//! keeps no dependencies. This reads table headers only, and skips `"""` blocks
-//! so a bracket inside a `notes` string is not mistaken for one.
-//!
-//! # The edges are the same comparison one layer up
-//!
-//! [`edges`] holds the half that reads `domain/job-transitions.toml`, whose
-//! rows are not keys but `from`/`to` pairs of them. It shares this module's
-//! spellings and its parsing, and is split out only because both halves in one
-//! file is more than one file's worth.
+//! [`edges`] is the same comparison over `domain/job-transitions.toml`, whose
+//! rows are `from`/`to` pairs rather than keys; split out for size only.
 
 use std::collections::BTreeMap;
 use std::fs;

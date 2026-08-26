@@ -12,43 +12,28 @@ use crate::{files_with_ext, Report};
 
 /// Rule twelve: no off-contract design value in anything a renderer ships.
 ///
-/// Two things Tailwind cannot refuse for us. Replacing its scales stops
-/// `bg-slate-800` and `h-16` resolving — measured, not assumed — but an
-/// arbitrary value like `bg-[#161C23]` compiles clean under any config, and a
-/// hex or a `px` literal in a style object never reaches Tailwind at all.
+/// Two things Tailwind cannot refuse for us: replacing its scales stops
+/// `bg-slate-800` and `h-16` resolving — measured, not assumed — but
+/// `bg-[#161C23]` compiles clean under any config, and a hex or `px` literal
+/// in a style object never reaches Tailwind at all.
 ///
-/// It lives here rather than in a JS linter because a second enforcement
-/// system is a second definition of one rule, and two definitions drift. This
-/// is the same grep shape as the vendor-literal ban.
+/// Not a JS linter, though the editor is where this is cheapest to fix: a
+/// second enforcement system is a second definition of one rule, and two
+/// definitions drift. A hook once enforced a ceiling the gate did not, and a
+/// document was compressed to satisfy a rule nobody could find.
 ///
-/// The cost is accepted deliberately: a linter would say so in the editor,
-/// where it is cheapest to fix, and the gate only says so at the gate. What
-/// buys that back is that there is one place to read the rule and one place it
-/// can be wrong. A hook once enforced a ceiling the gate did not, and the
-/// result was a document compressed to satisfy a rule nobody could find.
-///
-/// **The escape hatch is two lines in the file** — a reason, then a citation
-/// of the open question that justifies it:
+/// **The escape hatch is two lines**, a reason then a citation, or the file is
+/// still checked:
 ///
 /// ```text
 /// // armada-allow-off-contract: the diff viewer needs pixel parity with git
 /// // [diff-gutter-parity]
 /// ```
 ///
-/// An unexplained opt-out is not one: the marker must carry a reason and the
-/// citation must be on the next line, or the file is still checked.
-///
-/// **Two citation forms are accepted.** A `[slug]` naming a question in some
-/// document's `## Open questions` section is the one to write — it is the only
-/// form the gate can follow, so a question that gets answered breaks its
-/// citations on purpose. A `docs/` path is accepted for a question that has a
-/// whole document to itself.
-///
-/// This first accepted a link into the design workspace and nothing else, which
-/// would have failed silently the first time a contract moved into the repo: a
-/// correct opt-out citing a repo path would read as unexplained, and the file
-/// would go back to being checked with nobody told why. That form is gone now
-/// for a second reason — rule sixteen.
+/// The `[slug]` form names a question in a `## Open questions` section and is
+/// the one to write — the gate follows it, so an answered question breaks its
+/// citations on purpose. A `docs/` path is accepted; a design-workspace link
+/// is refused by rule sixteen.
 pub fn no_off_contract_design_value(root: &Path) -> Report {
     let mut report = Report::new("no off-contract design value in what a renderer ships");
     const MARKER: &str = "armada-allow-off-contract:";

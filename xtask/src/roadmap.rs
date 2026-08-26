@@ -1,29 +1,23 @@
 //! The half of the capability check that needs a network, kept out of the gate.
 //!
-//! A capability is two things bound together: a GitHub issue that tracks it,
-//! and `docs/capabilities/<slug>.md` that holds the prose an issue body buries
-//! the moment it closes. Neither half is allowed to exist alone.
-//!
-//! **The gate cannot check that.** `xtask` has no dependencies and must run on
-//! a checkout with nothing built — a gate that fails on a plane is a gate people
-//! learn to ignore. So the binding is checked from both ends by two different
-//! things:
+//! A capability is a GitHub issue and `docs/capabilities/<slug>.md` bound
+//! together, and neither half may exist alone. **The gate cannot check that**:
+//! `xtask` has no dependencies and must run on a checkout with nothing built —
+//! a gate that fails on a plane is a gate people learn to ignore. So the
+//! binding is checked from both ends:
 //!
 //! | Check | Runs | Sees |
 //! |---|---|---|
 //! | `verify-foundations` | always, offline | the file: frontmatter, slug, index |
 //! | `verify-roadmap` | CI and on demand | the issue named by a file, and what a capability's steps add up to |
 //!
-//! Splitting it is the honest shape rather than a compromise. The offline half
-//! catches the mistake somebody makes while writing — a file with no issue
-//! number, a slug that disagrees with its filename — and catches it before the
-//! commit. The online half catches the mistake nobody makes on purpose: an
-//! issue deleted, relabelled, or moved to another milestone under a file that
-//! still claims the old one.
+//! The offline half catches the mistake made while writing — no issue number, a
+//! slug disagreeing with its filename — before the commit. The online half
+//! catches the one nobody makes on purpose: an issue deleted, relabelled or
+//! moved to another milestone under a file still claiming the old one.
 //!
 //! It also does the arithmetic a checkbox would only display: a capability
-//! references its steps by number, and a capability closed while its steps are
-//! open is a failure rather than a rendering.
+//! closed while its steps are open is a failure rather than a rendering.
 
 use std::collections::BTreeMap;
 use std::process::Command;

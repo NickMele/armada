@@ -77,33 +77,27 @@ struct Use {
 /// Rule seventeen: every glyph `apps/` imports is in the icon registry, and a
 /// banned glyph is imported nowhere.
 ///
-/// The registry is a set of decisions about what a silhouette is permitted to
-/// mean. `circle-check` is a Judge verdict and never a completed step;
-/// `hourglass` reads *be patient* for the state that most needs to read as
-/// *wrong*, so it is banned outright. None of that survives an engineer
-/// reaching into `lucide-react` for the glyph that looks right, and the result
-/// is not a broken build — it is a registry that quietly stops describing the
-/// UI while still being cited as the authority on it.
-///
-/// So the scan runs the direction that catches that: from what `apps/` imports
-/// back to the file. A glyph in use with no table means either the decision was
-/// never made, or it was made somewhere this file does not know about.
+/// The registry decides what a silhouette is permitted to mean: `circle-check`
+/// is a Judge verdict and never a completed step; `hourglass` reads *be
+/// patient* for the state that most needs to read as *wrong*, so it is banned.
+/// None of that survives an engineer reaching into `lucide-react` for the glyph
+/// that looks right, and the result is not a broken build — it is a registry
+/// that quietly stops describing the UI while still cited as the authority on
+/// it. So the scan runs from what `apps/` imports back to the file.
 ///
 /// **The reverse direction is deliberately not checked.** An entry with no use
 /// is the expected state — the registry was authored ahead of the surfaces, and
 /// most of Bridge does not exist yet. Failing on it would make the file's
-/// purpose, which is to decide before building, into a gate violation.
+/// purpose, which is to decide before building, into a violation.
 ///
-/// **A wholesale `import * as Icons from "lucide-react"` fails on sight.** Not
+/// **A wholesale `import * as Icons from "lucide-react"` fails on sight**, not
 /// because the style is wrong but because the gate cannot see through it: every
-/// glyph reached that way is invisible to this rule and to the next one. Named
-/// imports are the form that stays checkable, so the unscannable form is the
-/// one that does not compile past the gate.
+/// glyph reached that way is invisible here. Named imports stay checkable.
 ///
 /// The well-formedness half is not redundant with a generator, because there is
 /// no generator — this file is authored by hand out of a retired Notion
-/// database. A missing `means` or a status outside the declared set is a row
-/// somebody half-carried across.
+/// database, and a missing `means` or an undeclared status is a row somebody
+/// half-carried across.
 pub fn every_glyph_in_use_is_registered(root: &Path) -> Report {
     let mut report = Report::new("every glyph a surface uses is in the icon registry");
 
