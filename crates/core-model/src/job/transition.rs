@@ -22,7 +22,7 @@ use alloc::vec::Vec;
 use core::fmt;
 
 use crate::job::escalation::EscalationTrigger;
-use crate::job::fields::CriterionId;
+use crate::job::ids::CriterionId;
 use crate::job::status::JobStatus;
 
 /// One legal edge.

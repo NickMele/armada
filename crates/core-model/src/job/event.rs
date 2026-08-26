@@ -17,7 +17,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use crate::envelope::{Actor, FieldValue, Timestamp};
-use crate::job::fields::JobId;
+use crate::job::ids::JobId;
 use crate::job::status::JobStatus;
 use crate::job::transition::TransitionReason;
 

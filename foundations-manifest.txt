@@ -9,6 +9,7 @@ crates/core-model/src/envelope.rs
 crates/core-model/src/job/escalation.rs
 crates/core-model/src/job/event.rs
 crates/core-model/src/job/fields.rs
+crates/core-model/src/job/ids.rs
 crates/core-model/src/job/mod.rs
 crates/core-model/src/job/record.rs
 crates/core-model/src/job/status.rs

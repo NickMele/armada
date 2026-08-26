@@ -27,10 +27,10 @@ use alloc::vec::Vec;
 use crate::envelope::{Actor, Timestamp};
 use crate::job::event::JobEvent;
 use crate::job::fields::{
-    AcceptanceCriterion, DependencyEdge, DispatchOrigin, DroneId, Facts, GateManifest, JobId,
-    ManifestId, ModelName, Origin, ScopeRevision, StepId, Subject, TopLevelOrigin, Urgency,
-    WorkflowId, WriteTargets,
+    AcceptanceCriterion, DependencyEdge, DispatchOrigin, Facts, GateManifest, Origin,
+    ScopeRevision, Subject, TopLevelOrigin, Urgency, WriteTargets,
 };
+use crate::job::ids::{DroneId, JobId, ManifestId, ModelName, StepId, WorkflowId};
 use crate::job::status::JobStatus;
 use crate::job::step::{rows_at_creation, JobStep, StepSeed};
 use crate::job::transition::{admits, IllegalTransition, Target};

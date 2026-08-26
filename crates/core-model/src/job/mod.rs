@@ -36,6 +36,7 @@
 mod escalation;
 mod event;
 mod fields;
+mod ids;
 mod record;
 mod status;
 mod step;
@@ -47,11 +48,11 @@ mod tests;
 pub use escalation::{EscalationTrigger, TriggerKind, TriggerLevel};
 pub use event::JobEvent;
 pub use fields::{
-    AcceptanceCriterion, CriterionId, CriterionSource, DependencyDirection, DependencyEdge,
-    DispatchOrigin, DroneId, Facts, GateManifest, GateOutcome, JobId, ManifestId, ModelName,
-    NotRunDisposition, NotRunReason, Origin, RepoPath, ScopeRevision, ScopeRevisionOutcome, StepId,
-    Subject, TopLevelOrigin, Urgency, WorkflowId, WriteTargets,
+    AcceptanceCriterion, CriterionSource, DependencyDirection, DependencyEdge, DispatchOrigin,
+    Facts, GateManifest, GateOutcome, NotRunDisposition, NotRunReason, Origin, ScopeRevision,
+    ScopeRevisionOutcome, Subject, TopLevelOrigin, Urgency, WriteTargets,
 };
+pub use ids::{CriterionId, DroneId, JobId, ManifestId, ModelName, RepoPath, StepId, WorkflowId};
 pub use record::{Job, NewJob, Transitioned};
 pub use status::{JobStatus, StepState};
 pub use step::{JobStep, StepSeed, StepVerdict};

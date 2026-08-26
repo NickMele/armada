@@ -23,7 +23,7 @@ use alloc::vec::Vec;
 
 use crate::envelope::Timestamp;
 use crate::job::escalation::EscalationTrigger;
-use crate::job::fields::{JobId, StepId};
+use crate::job::ids::{JobId, StepId};
 use crate::job::status::StepState;
 
 /// The last verdict against a step.
