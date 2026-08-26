@@ -4,4 +4,5 @@
 //! above this crate runs against a fake.
 
 pub mod repo;
+mod work_product;
 mod worktree;

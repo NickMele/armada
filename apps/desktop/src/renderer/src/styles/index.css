@@ -15,3 +15,28 @@
 @import "tailwindcss";
 @import "@armada/tokens/tokens.theme.css";
 @import "@armada/tokens/base.css";
+
+/* The primitives' own stylesheets, last, because they consume the theme above.
+   Each component owns its file and index.css is the append-only list of them —
+   nothing here restates a value any of them declares. */
+@import "@armada/components/src/index.css";
+
+/* The app shell. Not design values: the window is the surface, so the surface
+   is the height of the window, and a flex child that scrolls needs to be
+   allowed to shrink. Layout is designed for resize rather than for the size it
+   happened to be built at. */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* `min-height: 0` on the one region that scrolls. It is not a spellable
+   utility: the theme resets the spacing namespace to `initial`, so `min-h-0`
+   compiles to nothing — checked in the emitted stylesheet, not assumed. Without
+   it a flex child keeps its content's height and the window grows instead of
+   the region scrolling, which is "the layout broke on resize" from v1's failure
+   log. No value here is a design value. */
+.armada-app__scroll {
+  min-height: 0;
+}

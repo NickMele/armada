@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    // Into out/, which is not committed. A build artefact beside the config is
+    // one more thing to ignore by hand.
+    "tsBuildInfoFile": "./out/tsconfig.node.tsbuildinfo",
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["electron-vite/node"]
+  },
+  "include": ["src/main/**/*.ts", "src/preload/**/*.ts", "src/shared/**/*.ts", "electron.vite.config.ts"]
+}

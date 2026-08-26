@@ -9,7 +9,7 @@ import {
   Clock,
   Cpu,
   Eye,
-  FileQuestion,
+  FileQuestionMark,
   Link,
   OctagonAlert,
   Power,
@@ -139,7 +139,7 @@ export const EscalationReasons: StoryObj = {
       <Badge status="escalated" icon={RefreshCw}>
         Churning
       </Badge>
-      <Badge status="escalated" icon={FileQuestion}>
+      <Badge status="escalated" icon={FileQuestionMark}>
         Evidence disputed
       </Badge>
       <Badge status="escalated" icon={ShieldX}>

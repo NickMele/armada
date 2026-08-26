@@ -167,13 +167,13 @@
     group = "Git and config"
     size = "12px"
 
-[icons.file-question]
+[icons.file-question-mark]
   means = "A page outline with a question mark"
   group = "Escalation reason"
   size = "12px"
   status = "Specified"
   reserved = "The file-* family means evidence throughout."
-  notes = "The page outline does the differentiating work alone. lucide ≥ 0.511 renames this file-question-mark."
+  notes = "The page outline does the differentiating work alone. Named file-question before lucide 0.511; that spelling is still exported as a deprecated alias, which is why nothing broke when the registry kept it."
 
 [icons.filter]
   means = "filter"

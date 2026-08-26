@@ -29,3 +29,8 @@ libc = "0.2"
 # Derives only, on this crate's own types. The runtime file is written and read
 # through `ipc`'s codec, which is why no `serde_json` appears here.
 serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+# Fixtures and fakes. `testkit` never ships and nothing that ships depends on it.
+testkit = { path = "../testkit" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }

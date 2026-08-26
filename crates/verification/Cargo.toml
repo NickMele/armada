@@ -11,3 +11,11 @@ workspace = true
 [dependencies]
 core-model = { path = "../core-model" }
 adapter-traits = { path = "../adapter-traits" }
+# The gate reads a step out of a `ResolvedWorkflow`, whose steps carry the
+# Check's command rather than its name — so an absent Check is unrepresentable
+# here rather than something this crate checks for.
+config = { path = "../config" }
+
+[dev-dependencies]
+# Fixtures only. `testkit` never ships and is a dependency of nothing that does.
+testkit = { path = "../testkit" }

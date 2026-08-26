@@ -177,7 +177,7 @@ notes = "Filed as a trigger Aug 2026 with neither a verb nor a glyph. Both are o
 
 [verbs.escalation_reason.evidence_suspect]
 verb = "evidence disputed"
-icon = "file-question"
+icon = "file-question-mark"
 status_token = "--status-escalated"
 vocabulary = "Escalation reason"
 in_code = "In code"

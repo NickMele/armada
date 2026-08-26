@@ -14,7 +14,14 @@
 //! `fleet` did exactly that, for a real reason: detaching a Drone into its own
 //! session is `libc::setsid()` in `Command::pre_exec`, and `pre_exec` is unsafe
 //! by construction. So the crate takes `deny` instead of `forbid`, and a single
-//! site carries an `#[allow]`. This rule is what keeps that single.
+//! site carries an `#[allow]`.
+//!
+//! **The list is meant to be short, not to be one.** `checks-runner` is the
+//! second entry and it is the same shape of problem at the other end of a
+//! process's life: ending a timed-out Check means signalling its whole process
+//! group, `libc::killpg` has no safe wrapper, and killing only the process
+//! Fleet started leaves the test runner it spawned holding the worktree. Adding
+//! a third is a deliberate edit to this file, which is the whole mechanism.
 //!
 //! The shape is the manifest's: an explicit list, checked both ways. A file
 //! that speaks `unsafe` and is not listed fails; a listed file that no longer
@@ -30,22 +37,35 @@ use crate::{crate_dirs, files_with_ext, Report};
 /// A crate here must still set `unsafe_code` to `deny` — never `allow`, and
 /// never leave it out. `deny` keeps every site refused except the ones that say
 /// out loud that they are exceptions.
-const RELAXED: &[(&str, &str)] = &[(
-    "fleet",
-    "libc::setsid() in pre_exec — a Drone left in Fleet's process group dies at every restart",
-)];
+const RELAXED: &[(&str, &str)] = &[
+    (
+        "fleet",
+        "libc::setsid() in pre_exec — a Drone left in Fleet's process group dies at every restart",
+    ),
+    (
+        "checks-runner",
+        "libc::killpg on a timed-out Check — killing only the process Fleet started leaves \
+         whatever it spawned holding the worktree",
+    ),
+];
 
 /// The files permitted to speak `unsafe`, and what they say it for.
-const UNSAFE_SITES: &[(&str, &str)] = &[(
-    "crates/fleet/src/detach.rs",
-    "the fork-to-exec closure that puts a Drone in its own session",
-)];
+const UNSAFE_SITES: &[(&str, &str)] = &[
+    (
+        "crates/fleet/src/detach.rs",
+        "the fork-to-exec closure that puts a Drone in its own session",
+    ),
+    (
+        "crates/checks-runner/src/run.rs",
+        "the group signal that ends a Check whose budget expired, and everything it spawned",
+    ),
+];
 
 /// What counts as speaking it. `unsafe_code` in a comment or an attribute name
 /// is not a block, so the tokens are the ones that actually open one.
 const SPOKEN: &[&str] = &["unsafe {", "unsafe fn", "unsafe impl", "unsafe trait"];
 
-pub fn unsafe_is_spoken_in_one_place(root: &Path) -> Report {
+pub fn unsafe_is_spoken_only_where_named(root: &Path) -> Report {
     let mut report = Report::new("unsafe is spoken only where the gate names, and only there");
 
     lints_are_inherited_or_named(root, &mut report);

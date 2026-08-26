@@ -176,3 +176,88 @@ impl Error for CreateWorktreeError {
         }
     }
 }
+
+/// Why a Job's work product could not be read.
+///
+/// **A different shape of failure from creating a worktree.** Creation fails
+/// before a Drone exists; this fails at the gate, with a Drone running and work
+/// on disk. Every variant means *the diff is unknown*, which is why none of
+/// them can be answered with an empty list — a `diff_nonempty` check decided on
+/// a reading that never happened is the vacuous pass the gate exists to refuse.
+#[derive(Debug)]
+pub enum ReadWorkProductError {
+    /// The worktree's path is not a repository, or will not open.
+    WorktreeUnreadable {
+        worktree: String,
+        cause: git2::Error,
+    },
+    /// The worktree opened and the repository it belongs to did not. Distinct
+    /// because a checkout can outlive the repository it was cut from.
+    RepositoryUnreadable {
+        worktree: String,
+        cause: git2::Error,
+    },
+    /// The branch has no commit to read, so there is nothing to diff from.
+    BranchUnreadable {
+        worktree: String,
+        branch: String,
+        cause: git2::Error,
+    },
+    /// The commit the branch was cut from is not in the object database.
+    BaseUnreadable {
+        worktree: String,
+        base: String,
+        cause: git2::Error,
+    },
+    /// The diff itself failed.
+    DiffFailed {
+        worktree: String,
+        cause: git2::Error,
+    },
+}
+
+impl fmt::Display for ReadWorkProductError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ReadWorkProductError::WorktreeUnreadable { worktree, cause } => {
+                write!(f, "the worktree at {worktree} would not open: {cause}")
+            }
+            ReadWorkProductError::RepositoryUnreadable { worktree, cause } => write!(
+                f,
+                "the repository behind the worktree at {worktree} would not open: {cause}"
+            ),
+            ReadWorkProductError::BranchUnreadable {
+                worktree,
+                branch,
+                cause,
+            } => write!(
+                f,
+                "`{branch}` in the worktree at {worktree} has no commit to read: {cause}"
+            ),
+            ReadWorkProductError::BaseUnreadable {
+                worktree,
+                base,
+                cause,
+            } => write!(
+                f,
+                "the commit {base} the worktree at {worktree} was cut from is not \
+                 readable: {cause}"
+            ),
+            ReadWorkProductError::DiffFailed { worktree, cause } => {
+                write!(f, "the diff of the worktree at {worktree} failed: {cause}")
+            }
+        }
+    }
+}
+
+impl Error for ReadWorkProductError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            ReadWorkProductError::WorktreeUnreadable { cause, .. }
+            | ReadWorkProductError::RepositoryUnreadable { cause, .. }
+            | ReadWorkProductError::BranchUnreadable { cause, .. }
+            | ReadWorkProductError::BaseUnreadable { cause, .. }
+            | ReadWorkProductError::DiffFailed { cause, .. } => Some(cause),
+        }
+    }
+}

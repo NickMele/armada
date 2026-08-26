@@ -1,7 +1,10 @@
 //! The seams: the traits an adapter implements, and nothing that implements
 //! them.
 //!
-//! Five boundaries, one trait each, and `Secret<T>`. The implementations live
+//! One trait per boundary, and `Secret<T>`. Version control splits into two of
+//! them — [`Vcs`] creates a worktree at approval, [`WorkProduct`] reads one at
+//! the gate — because the two are held by different callers and neither may
+//! reach the other's methods. The implementations live
 //! in `adapters`, which is the only crate permitted to know whose API it is
 //! talking to — a vendor's name outside `adapters` is the boundary having
 //! leaked, and it leaks in comments first.
@@ -29,9 +32,11 @@
 extern crate alloc;
 
 mod secret;
+mod work_product;
 mod worktree;
 
 pub use secret::Secret;
+pub use work_product::{Changed, WorkProduct};
 pub use worktree::{derived, Worktree, WorktreeSpec, WorktreeSpecRefused};
 
 /// The agent harness: what actually runs a Drone.

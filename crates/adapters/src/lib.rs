@@ -13,10 +13,11 @@
 //! core to 38,470 lines.
 
 mod error;
+mod work_product;
 mod worktree;
 
 #[cfg(test)]
 mod tests;
 
-pub use error::CreateWorktreeError;
+pub use error::{CreateWorktreeError, ReadWorkProductError};
 pub use worktree::GitVcs;

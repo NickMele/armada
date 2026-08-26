@@ -1,14 +1,37 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from "electron";
 
-// The whole surface the renderer is allowed to see. It is deliberately almost
-// empty: every capability added here is one the renderer can reach, so the
-// list is meant to stay short enough to read in one go.
-contextBridge.exposeInMainWorld('armada', {
-  // **A placeholder, and a known lie.** The protocol version has one source of
-  // truth — `protocol-version.toml` at the repo root — which `crates/ipc/build.rs`
-  // already reads for the Rust side. The TypeScript side is meant to be generated
-  // from the same file, and until that codegen exists this literal is exactly the
-  // drift the shared file was created to prevent. Do not update it by hand; wire
-  // the codegen instead.
-  protocolVersion: (): number => 1,
-})
+import { CHANNELS } from "../shared/bridge";
+import type { BridgeApi, BridgeState, Draft, Outcome } from "../shared/bridge";
+import { PROTOCOL_VERSION } from "../shared/generated/protocol-version";
+
+// The whole surface the renderer is allowed to see.
+//
+// **A preload surface is not the API the UI is meant to use, it is the API the
+// UI is physically capable of using.** So it is five entries, each one
+// operation with a typed return — no raw `ipcRenderer`, no `require`, no
+// filesystem handle, and no arbitrary-channel `invoke`, which would hand the
+// renderer the whole main process under a thin name.
+//
+// The protocol version is no longer a literal here: it is generated from
+// `protocol-version.toml`, the one number both sides check.
+const api: BridgeApi = {
+  protocolVersion: (): number => PROTOCOL_VERSION,
+
+  state: (): Promise<BridgeState> => ipcRenderer.invoke(CHANNELS.state),
+
+  subscribe: (onState: (state: BridgeState) => void): (() => void) => {
+    const handler = (_event: unknown, state: BridgeState): void => onState(state);
+    ipcRenderer.on(CHANNELS.changed, handler);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.changed, handler);
+    };
+  },
+
+  proposeJob: (draft: Draft): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.proposeJob, draft),
+
+  approveDispatch: (jobId: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.approveDispatch, jobId),
+};
+
+contextBridge.exposeInMainWorld("armada", api);

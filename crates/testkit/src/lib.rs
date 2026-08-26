@@ -19,11 +19,23 @@
 //!
 //! # The fakes
 //!
-//! One so far: [`FakeVcs`], which creates a Job's worktree without a git
-//! repository under it. A suite that needs a real checkout per case is one
-//! people stop running, so the cases that genuinely need git's own opinion stay
-//! in `adapters` and everything else fakes the seam.
+//! [`FakeVcs`] creates a Job's worktree without a repository under it, and
+//! [`FakeWorkProduct`] reads a diff out of one that does not exist. A suite
+//! that needs a real checkout per case is one people stop running, so the cases
+//! that genuinely need version control's own opinion stay in `adapters` and
+//! everything else fakes the seam.
+//!
+//! # The fixtures that are not fakes
+//!
+//! [`resolved`] builds a `ResolvedWorkflow` by running two small documents
+//! through the same parsers Fleet uses. It is not a fake of anything: the
+//! parsing is real, and it is here because a workflow is what every gate test
+//! needs and no test can construct one.
 
 mod vcs;
+mod work_product;
+mod workflow;
 
 pub use vcs::{FakeVcs, FakeVcsError};
+pub use work_product::{FakeDiffRefused, FakeWorkProduct};
+pub use workflow::{resolved, Gate, Sketch};

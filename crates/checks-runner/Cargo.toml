@@ -5,9 +5,25 @@ edition.workspace = true
 license.workspace = true
 publish = false
 
-[lints]
-workspace = true
+# **Deliberately not `[lints] workspace = true`**, for the same reason
+# `crates/fleet` is not. The workspace sets `unsafe_code = "forbid"` and
+# `forbid` cannot be lifted at a call site. Ending a timed-out Check's whole
+# process group is a `libc::killpg`, and there is no safe wrapper for it — so
+# this crate takes `deny` instead: every unsafe block still fails to compile
+# except the single site in `run.rs` carrying an explicit `#[allow]` and a
+# `SAFETY:` note. Recorded as a deviation rather than made silently.
+[lints.rust]
+unsafe_code = "deny"
 
 [dependencies]
 core-model = { path = "../core-model" }
 adapter-traits = { path = "../adapter-traits" }
+# The fact vocabulary — an exit code, a signal, an expired budget — is stated
+# where the gate reads it, so the runner and the gate cannot spell one
+# differently.
+verification = { path = "../verification" }
+tokio = { version = "1", features = ["rt", "process", "time", "io-util", "macros"] }
+libc = "0.2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }

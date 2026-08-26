@@ -1,12 +1,11 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "skipLibCheck": true,
-    "types": ["electron-vite/node"]
-  },
-  "include": ["src/**/*.ts", "electron.vite.config.ts"]
+  // Two projects, because the processes are not interchangeable: the main and
+  // preload bundles have Node and no DOM, the renderer has the DOM and no Node.
+  // One config covering both would let a renderer component reach for `fs` and
+  // still typecheck, which is the boundary `contextIsolation` exists to hold.
+  //
+  // `tsc -b` from here checks both. Plain `tsc --noEmit` checks neither: this
+  // project owns no files on purpose.
+  "files": [],
+  "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.web.json" }]
 }

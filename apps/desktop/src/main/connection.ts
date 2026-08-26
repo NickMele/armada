@@ -1,0 +1,356 @@
+// Bridge's one connection to Armada API: WebSocket for events, HTTP for
+// queries and commands.
+//
+// It lives in the main process because that is the only process allowed to hold
+// it. The renderer never opens a socket and never fetches — it reads the state
+// published from here and calls back through the preload for the two commands
+// it may initiate. A component that wants data it does not have is missing a
+// preload call, not a fetch of its own.
+//
+// **Bridge never talks to a Drone.** Everything below names Fleet.
+
+import WebSocket from "ws";
+
+import { PROTOCOL_VERSION } from "../shared/generated/protocol-version";
+import type { BridgeState, Connection, Draft, Outcome } from "../shared/bridge";
+import type { JobSummary, ProposeJob, StreamMessage, WireError } from "../shared/protocol";
+import { HOST, machinePath, read } from "./runtime-file";
+
+/** How long to wait before reading the runtime file again. */
+const RETRY_MS = 2000;
+/** How long a command waits for an answer before it is a transport failure. */
+const COMMAND_MS = 5000;
+
+/** Time is injected, never read: a connection that calls the clock cannot be replayed. */
+export type Clock = () => number;
+
+export type Wiring = {
+  home: string | undefined;
+  publish: (state: BridgeState) => void;
+  now: Clock;
+};
+
+const EMPTY: BridgeState = {
+  connection: { state: "reading" },
+  jobs: [],
+  unreadable: [],
+  missed: 0,
+  readAt: null,
+  approving: [],
+};
+
+export class FleetConnection {
+  private readonly wiring: Wiring;
+  private current: BridgeState = EMPTY;
+  private socket: WebSocket | null = null;
+  private retry: ReturnType<typeof setTimeout> | null = null;
+  private unreachableSince: number | null = null;
+  private readonly approving = new Set<string>();
+  private stopped = false;
+
+  constructor(wiring: Wiring) {
+    this.wiring = wiring;
+  }
+
+  state(): BridgeState {
+    return this.current;
+  }
+
+  /** Read the runtime file, verify the pid, connect. In that order, always. */
+  start(): void {
+    this.stopped = false;
+    void this.attach();
+  }
+
+  stop(): void {
+    this.stopped = true;
+    if (this.retry !== null) clearTimeout(this.retry);
+    this.retry = null;
+    this.socket?.close();
+    this.socket = null;
+  }
+
+  // ------------------------------------------------------------- connecting
+
+  private async attach(): Promise<void> {
+    if (this.stopped) return;
+    const path = machinePath(this.wiring.home);
+    if (path === null) {
+      this.settle({
+        state: "runtime_file_refused",
+        fault: {
+          why: "unreadable",
+          path: "",
+          detail: "HOME is not set, so the machine directory cannot be resolved",
+        },
+      });
+      return this.later();
+    }
+
+    const presence = await read(path);
+    if (this.stopped) return;
+
+    if (presence.at === "absent" || presence.at === "stale") {
+      // Both render as "Fleet is not running", and the screen says which.
+      // Neither opens a socket: the port in a stale file may be held by
+      // something that is not Fleet.
+      this.unreachableSince = null;
+      this.settle({ state: "not_running", absence: presence.absence });
+      return this.later();
+    }
+    if (presence.at === "refused") {
+      this.unreachableSince = null;
+      this.settle({ state: "runtime_file_refused", fault: presence.fault });
+      return this.later();
+    }
+
+    const fleet = presence.fleet;
+    if (fleet.protocolVersion !== PROTOCOL_VERSION) {
+      // Read before connecting, so skew is a refusal rather than a malformed
+      // first message.
+      this.settle({
+        state: "version_skew",
+        fleet,
+        speaks: fleet.protocolVersion,
+        expected: PROTOCOL_VERSION,
+      });
+      return this.later();
+    }
+
+    this.settle(
+      this.unreachableSince === null
+        ? { state: "connecting", fleet }
+        : {
+            state: "unreachable",
+            fleet,
+            detail: "the socket has not answered",
+            sinceMs: this.unreachableSince,
+          },
+    );
+    this.open(fleet.port, fleet);
+  }
+
+  private open(port: number, fleet: BridgeStateFleet): void {
+    const socket = new WebSocket(`ws://${HOST}:${port}/events`);
+    this.socket = socket;
+
+    socket.on("message", (data: WebSocket.RawData) => this.arrived(String(data), fleet));
+    socket.on("error", (cause: Error) => this.dropped(fleet, cause.message));
+    socket.on("close", () => this.dropped(fleet, "the connection closed"));
+  }
+
+  /** A dropped connection says so. It never leaves stale state reading as live. */
+  private dropped(fleet: BridgeStateFleet, detail: string): void {
+    if (this.socket === null || this.stopped) return;
+    this.socket.removeAllListeners();
+    this.socket = null;
+    if (this.unreachableSince === null) this.unreachableSince = this.wiring.now();
+    this.settle({ state: "unreachable", fleet, detail, sinceMs: this.unreachableSince });
+    this.later();
+  }
+
+  private later(): void {
+    if (this.stopped || this.retry !== null) return;
+    this.retry = setTimeout(() => {
+      this.retry = null;
+      void this.attach();
+    }, RETRY_MS);
+  }
+
+  // ---------------------------------------------------------------- arrivals
+
+  private arrived(text: string, fleet: BridgeStateFleet): void {
+    let message: StreamMessage;
+    try {
+      message = JSON.parse(text) as StreamMessage;
+    } catch {
+      // The stream carries no error message, so a message that will not parse
+      // is a connection to drop rather than a state to fold.
+      this.socket?.close();
+      return;
+    }
+
+    if (message.message === "resync") {
+      if (message.protocol_version !== PROTOCOL_VERSION) {
+        this.socket?.close();
+        this.settle({
+          state: "version_skew",
+          fleet,
+          speaks: message.protocol_version,
+          expected: PROTOCOL_VERSION,
+        });
+        return;
+      }
+      this.unreachableSince = null;
+      this.publish({
+        connection: { state: "connected", fleet, cursor: message.cursor },
+        jobs: message.jobs.jobs,
+        unreadable: message.jobs.unreadable ?? [],
+        readAt: this.wiring.now(),
+      });
+      return;
+    }
+
+    if (message.message === "missed") {
+      // The count alone cannot repair what Bridge holds. A resync always
+      // follows; until it lands the screen says how many it will never see.
+      this.publish({ missed: this.current.missed + message.dropped });
+      return;
+    }
+
+    const event = message.event;
+    const held = this.current.jobs.find((job) => job.id === event.job_id);
+    if (held === undefined) {
+      // A Job Bridge has never seen. The event vocabulary has no `job.created`,
+      // so there is nothing here to build a row from — the list is re-read
+      // rather than left one Job short.
+      this.publish({ connection: { state: "connected", fleet, cursor: message.cursor } });
+      void this.reread(fleet);
+      return;
+    }
+    const moved: JobSummary = { ...held, status: event.to, reason: event.reason };
+    this.publish({
+      connection: { state: "connected", fleet, cursor: message.cursor },
+      jobs: this.current.jobs.map((job) => (job.id === moved.id ? moved : job)),
+      readAt: this.wiring.now(),
+    });
+  }
+
+  private async reread(fleet: BridgeStateFleet): Promise<void> {
+    const answer = await this.request(fleet.port, "GET", "/jobs");
+    if (answer.ok !== true) return;
+    const list = answer.body as { jobs: JobSummary[]; unreadable?: [] };
+    this.publish({
+      jobs: list.jobs,
+      unreadable: list.unreadable ?? [],
+      readAt: this.wiring.now(),
+    });
+  }
+
+  // ---------------------------------------------------------------- commands
+
+  /**
+   * Draft a Job onto the approval gate. **The gate is unchanged** — what comes
+   * back is a Job at `awaiting_approval`, not a running one.
+   */
+  async proposeJob(draft: Draft): Promise<Outcome> {
+    // Refused before the Job is created, and refused here rather than only in
+    // the form: the renderer's check is a courtesy, this one is the rule.
+    if (draft.brief.trim() === "") return { ok: false, why: "empty_brief" };
+    const fleet = this.connected();
+    if (fleet === null) return { ok: false, why: "not_connected" };
+
+    const proposal: ProposeJob = {
+      workflow_id: draft.workflowId,
+      owner_manifest_id: draft.manifestId,
+      origin: draft.origin,
+      urgency: draft.urgency,
+      atomic: draft.atomic,
+      model: draft.model,
+      facts: draft.brief,
+    };
+    const answer = await this.request(fleet.port, "POST", "/jobs", proposal);
+    if (answer.ok !== true) return answer.outcome;
+    this.fold(answer.body as JobSummary);
+    return { ok: true };
+  }
+
+  /** Release a Job to spawn. Approving twice does not spawn twice. */
+  async approveDispatch(jobId: string): Promise<Outcome> {
+    if (this.approving.has(jobId)) return { ok: false, why: "already_approving" };
+    const fleet = this.connected();
+    if (fleet === null) return { ok: false, why: "not_connected" };
+
+    this.approving.add(jobId);
+    this.publish({ approving: [...this.approving] });
+    try {
+      const path = `/jobs/${encodeURIComponent(jobId)}/approve_dispatch`;
+      const answer = await this.request(fleet.port, "POST", path);
+      if (answer.ok !== true) return answer.outcome;
+      this.fold(answer.body as JobSummary);
+      return { ok: true };
+    } finally {
+      this.approving.delete(jobId);
+      this.publish({ approving: [...this.approving] });
+    }
+  }
+
+  private connected(): BridgeStateFleet | null {
+    const connection = this.current.connection;
+    return connection.state === "connected" ? connection.fleet : null;
+  }
+
+  private async request(
+    port: number,
+    method: "GET" | "POST",
+    path: string,
+    body?: unknown,
+  ): Promise<{ ok: true; body: unknown } | { ok: false; outcome: Outcome }> {
+    try {
+      const answer = await fetch(`http://${HOST}:${port}${path}`, {
+        method,
+        headers: body === undefined ? undefined : { "content-type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: AbortSignal.timeout(COMMAND_MS),
+      });
+      const text = await answer.text();
+      if (!answer.ok) {
+        const error = refusal(text);
+        return {
+          ok: false,
+          outcome:
+            error === null
+              ? { ok: false, why: "transport", detail: `Fleet answered ${answer.status}` }
+              : { ok: false, why: "refused", error },
+        };
+      }
+      return { ok: true, body: JSON.parse(text) };
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      return { ok: false, outcome: { ok: false, why: "transport", detail } };
+    }
+  }
+
+  // ------------------------------------------------------------------- state
+
+  /** A Job Fleet answered a command with. New rows lead; a known row is replaced. */
+  private fold(job: JobSummary): void {
+    const held = this.current.jobs.some((row) => row.id === job.id);
+    this.publish({
+      jobs: held
+        ? this.current.jobs.map((row) => (row.id === job.id ? job : row))
+        : [job, ...this.current.jobs],
+      readAt: this.wiring.now(),
+    });
+  }
+
+  private settle(connection: Connection): void {
+    this.publish({ connection });
+  }
+
+  private publish(change: Partial<BridgeState>): void {
+    this.current = { ...this.current, ...change };
+    this.wiring.publish(this.current);
+  }
+}
+
+type BridgeStateFleet = Extract<Connection, { state: "connected" }>["fleet"];
+
+/**
+ * A refusal, as the wire carries it, or `null` where the body is not one.
+ *
+ * **Nothing here mints a code.** A code's declaration lives beside the variant
+ * that raises it and `cargo xtask verify-error-codes` collects them, so a code
+ * invented in Bridge would be in no manifest and mean nothing to the lookup
+ * Bridge does. A body that is not a `WireError` is reported as the transport
+ * failure it is.
+ */
+function refusal(text: string): WireError | null {
+  try {
+    const parsed = JSON.parse(text) as WireError;
+    if (typeof parsed.code === "string" && typeof parsed.message === "string") return parsed;
+  } catch {
+    return null;
+  }
+  return null;
+}

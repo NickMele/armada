@@ -47,7 +47,7 @@
   group = "Data"
   kind = "shadcn primitive"
   status = "In the kit"
-  icons = ["circle-dot", "eye", "check", "x", "ban", "power", "cpu", "link", "user-check", "clock", "refresh-cw", "shield-x", "octagon-alert", "split", "unplug", "file-question"]
+  icons = ["circle-dot", "eye", "check", "x", "ban", "power", "cpu", "link", "user-check", "clock", "refresh-cw", "shield-x", "octagon-alert", "split", "unplug", "file-question-mark"]
 
 [components."Board empty state"]
   group = "Bridge surface"

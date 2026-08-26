@@ -1,5 +1,5 @@
 import { jsxs, jsx, Fragment } from "react/jsx-runtime";
-import { TriangleAlert, Stethoscope, UserCheck, Stamp, Eye, X, Check, Power, Terminal, Clock, Link, Cpu, Ban, CircleDot, Archive, OctagonAlert, RefreshCw, FileQuestion, ShieldX, Split, Unplug, ArrowUpToLine, RotateCw, Send, CornerUpRight, ClipboardList, Activity, Bell, MessageSquare, Settings, ChevronDown } from "lucide-react";
+import { TriangleAlert, Stethoscope, UserCheck, Stamp, Eye, X, Check, Power, Terminal, Clock, Link, Cpu, Ban, CircleDot, Archive, OctagonAlert, RefreshCw, FileQuestionMark, ShieldX, Split, Unplug, ArrowUpToLine, RotateCw, Send, CornerUpRight, ClipboardList, Activity, Bell, MessageSquare, Settings, ChevronDown } from "lucide-react";
 import { useState, useRef, useMemo, useEffect, useId, useCallback, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 function Alert({ tone = "escalated", title, children, icon, action }) {
@@ -134,7 +134,7 @@ const EscalationReasons = {
   render: () => /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "var(--space-2)" }, children: [
     /* @__PURE__ */ jsx(Badge, { status: "escalated", icon: OctagonAlert, children: "Stalled" }),
     /* @__PURE__ */ jsx(Badge, { status: "escalated", icon: RefreshCw, children: "Churning" }),
-    /* @__PURE__ */ jsx(Badge, { status: "escalated", icon: FileQuestion, children: "Evidence disputed" }),
+    /* @__PURE__ */ jsx(Badge, { status: "escalated", icon: FileQuestionMark, children: "Evidence disputed" }),
     /* @__PURE__ */ jsx(Badge, { status: "escalated", icon: ShieldX, children: "Check failed" }),
     /* @__PURE__ */ jsx(Badge, { status: "escalated", icon: Split, children: "Fanned out" }),
     /* @__PURE__ */ jsx(Badge, { status: "escalated", icon: Unplug, children: "Connection lost" }),
@@ -1937,6 +1937,9 @@ function Tabs({ items, value, defaultValue, onChange }) {
   }
   function onKey(event) {
     const at = items.findIndex((item) => item.id === active);
+    if (items.length === 0) {
+      return;
+    }
     if (event.key === "ArrowRight") {
       event.preventDefault();
       select(items[(at + 1) % items.length].id);
@@ -1999,6 +2002,9 @@ function TabsWithCounts({ items, value, defaultValue, onChange }) {
   }
   function onKey(event) {
     const at = items.findIndex((item) => item.id === active);
+    if (items.length === 0) {
+      return;
+    }
     if (event.key === "ArrowRight") {
       event.preventDefault();
       select(items[(at + 1) % items.length].id);

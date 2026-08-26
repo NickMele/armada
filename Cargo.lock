@@ -183,6 +183,9 @@ version = "0.0.0"
 dependencies = [
  "adapter-traits",
  "core-model",
+ "libc",
+ "tokio",
+ "verification",
 ]
 
 [[package]]
@@ -291,6 +294,7 @@ dependencies = [
  "libc",
  "serde",
  "store",
+ "testkit",
  "tokio",
  "verification",
 ]
@@ -1089,6 +1093,7 @@ name = "testkit"
 version = "0.0.0"
 dependencies = [
  "adapter-traits",
+ "config",
 ]
 
 [[package]]
@@ -1279,7 +1284,9 @@ name = "verification"
 version = "0.0.0"
 dependencies = [
  "adapter-traits",
+ "config",
  "core-model",
+ "testkit",
 ]
 
 [[package]]

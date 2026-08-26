@@ -7,10 +7,48 @@
 //!
 //! The Judge is a veto and not a grant. It fires on mechanical triggers, is
 //! blind to the Drone, and judges whether evidence satisfies the step's intent.
-//! It cannot vouch for something an exit code already contradicted.
+//! It cannot vouch for something an exit code already contradicted. **There is
+//! no Judge at M1**, so the mechanical tier is the whole gate and a step that
+//! passes it advances.
+//!
+//! # The property this crate exists to hold
+//!
+//! **A Drone claiming completion in prose advances nothing, and there is no
+//! path from text to a transition.** That is not a check anywhere in this
+//! crate; it is the shape of the types:
+//!
+//! | To reach | You need | Which you can only get from |
+//! |---|---|---|
+//! | [`Verdict::Advance`] | [`decide`] | An [`Accepted`] and a [`Ran`] |
+//! | [`Accepted`] | [`Accepted::of`] | A [`Submission`] |
+//! | [`Submission`] | [`Submission::submitted`] | The three fields of the tool call |
+//! | [`Ran`] | [`Ran::of`] | One observation per check the step declared |
+//!
+//! Nothing in that chain accepts a message, a turn, a transcript or a claim.
+//!
+//! # What the Drone hands over, and what Fleet derives
+//!
+//! Only `facts_note` hands over something the Drone produced. Every other
+//! gating artifact is Fleet's own reading: the diff is in the worktree and the
+//! Check result is its own run. So [`Submission`] carries no exit code, no file
+//! list and no diff — a Drone cannot report a fact that gates its own step,
+//! because there is no field to report it in.
 //!
 //! # Why the diff computation lives behind this crate
 //!
 //! The raw diff-computation adapter method is exposed **only** here, so exactly
 //! one place decides whether files changed outside their declared scope. Two
 //! places deciding that is two answers.
+
+mod gate;
+mod mechanical;
+mod outcome;
+mod submission;
+
+#[cfg(test)]
+mod tests;
+
+pub use gate::{decide, Accepted, NotWhatTheStepAsked, Verdict};
+pub use mechanical::{CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran};
+pub use outcome::OutcomeTurn;
+pub use submission::{NotASubmission, Submission};

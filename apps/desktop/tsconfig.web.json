@@ -1,0 +1,25 @@
+{
+  // The renderer. DOM, JSX, and the shared types the preload's shape is written in.
+  //
+  // `noUncheckedIndexedAccess` is on for the main and preload project and off
+  // here: `@armada/components` does not compile under it — Tabs and
+  // TabsWithCounts index a list by a computed position — and the primitives are
+  // not this app's to change. Bridge's own indexed lookups do not rely on the
+  // flag: the generated vocabulary spells `| undefined` into its own type.
+  "compilerOptions": {
+    "composite": true,
+    // Into out/, which is not committed. A build artefact beside the config is
+    // one more thing to ignore by hand.
+    "tsBuildInfoFile": "./out/tsconfig.web.tsbuildinfo",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["src/renderer/src/**/*.ts", "src/renderer/src/**/*.tsx", "src/shared/**/*.ts"]
+}
