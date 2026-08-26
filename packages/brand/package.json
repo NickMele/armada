@@ -1,0 +1,16 @@
+{
+  "name": "@armada/brand",
+  "private": true,
+  "version": "0.0.0",
+  "description": "The Countersign mark and its renderings. The rules are in docs/contracts/iconography.md.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./favicon.svg": "./web/favicon.svg",
+    "./mark.svg": "./svg/armada-mark.svg"
+  },
+  "dependencies": {
+    "react": "^19.2.0"
+  }
+}
