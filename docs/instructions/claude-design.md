@@ -5,19 +5,24 @@ Read this before designing anything for Armada. It is binding.
 ## Source of truth
 
 **The contracts are files in the Armada repository, and the repository wins.**
-They used to live in Notion and this file summarised them; that is no longer
-true, and where this file and a contract disagree, go read the contract.
+Where this file and a contract disagree, go read the contract.
 
-- **Design System — UI & Voice** — `docs/contracts/design-system.md`
-- **Iconography** — `docs/contracts/iconography.md`
-- Everything written down is listed in `docs/INDEX.md`, and the repository's
-  own gate refuses a document that is not in it.
+| Governs | File |
+|---|---|
+| Tokens, the status grammar, voice, the lexicon | `docs/contracts/design-system.md` |
+| Which glyph means what | `docs/contracts/iconography.md` |
+| The shape of any prose that lands in the repository | `docs/contracts/technical-writing.md` |
+| Everything written down | `docs/INDEX.md` |
 
-Two rosters are still databases in Notion, and are reference only:
+The repository's own gate refuses a document that is not in that index.
 
-- **Armada User Journeys** — the journeys, one file here per row
-- **Armada Components** — which components exist and their status. The
-  component sheet is the source of truth for how one is drawn and why
+**The journeys are files now**, at `docs/journeys/`, one per journey. They are
+no longer a database. Each carries its own `## Open questions` section.
+
+**Armada Components stays a database**, and this project writes to it. It
+carries which components exist and their status, and nothing else — no notes, no
+reasoning, no geometry. The component sheet is the source of truth for how one
+is drawn and why.
 
 **The values moved.** Every token is `packages/tokens/src/*.css` in the
 repository, and the icon set is `packages/icons/icons.toml`. The `tokens/*.css`
@@ -27,17 +32,19 @@ with the repository, the repository is right.
 The local implementation is a component sheet, a journey file per journey, and
 that working token set: `styles.css` with `tokens/*.css`, `Armada
 Components.dc.html` (every component, rendered at real size), `Journey N -
-<name>.dc.html` (one per journey, named and numbered to match the journeys
-database one to one), `readme.md` (the guide). **Use these. Do not re-derive
-tokens or re-invent primitives.**
+<name>.dc.html` (one per journey), `readme.md` (the guide). **Use these. Do not
+re-derive tokens or re-invent primitives.**
+
+**This project owns journey numbering.** A journey file in the repository
+carries a number only where a drawing exists here, so the number is a claim that
+something has been drawn. When you draw a journey that has none, say which
+number it took, so the repository filename can follow.
 
 **One rendering, on purpose.** The component sheet is the only place a component
 is drawn. A second hand-maintained rendering — the React reference components
 and the click-through Bridge kit — was deleted after it drifted from the
-contract. Do not recreate it. When a component changes, it changes in the sheet.
-Its row in Armada Components carries only its existence and status — no notes,
-no reasoning, no geometry. Reasoning belongs in the sheet's own annotation,
-beside the drawing it explains.
+contract. Do not recreate it; when a component changes, it changes in the sheet.
+Reasoning belongs in the sheet's own annotation, beside the drawing it explains.
 
 ## How a token changes
 
@@ -72,32 +79,45 @@ reused for.
 
 ## Procedures — read before working
 
-These govern how you work on Armada's documentation. They are read before
-starting, not when stuck. Both are in the repository at
-`.claude/skills/armada-docs/SKILL.md` — the page-cleanup procedure and the
-open-questions procedure, in one file.
+These govern how you work. They are read before starting, not when stuck, and
+all three are files in the repository.
 
-**Open questions.** A question that belongs to a document in the repository
-lives in that document's `## Open questions` section and is collected into
-`docs/OPEN.md` by a walk. A question about a concept or a journey is still a row
-in the decision record in Notion. Before filing one, answering one, or editing a
-page that carries an open-question link, read the procedures.
+| Read before | File |
+|---|---|
+| Adding or editing a document, or deciding where a fact belongs | `.claude/skills/armada-documents/SKILL.md` |
+| Filing, citing or answering an open question | `.claude/skills/armada-open-questions/SKILL.md` |
+| Writing any prose that lands in the repository | `docs/contracts/technical-writing.md` |
 
-**Writing to Notion:** propose, wait for an explicit yes, then write.
+**Open questions live in the repository.** A question belongs in the
+`## Open questions` section of the document it blocks — the journey, the concept
+or the contract — with a `[slug]` so code can cite it, and a walk collects every
+one into `docs/OPEN.md`.
 
-**Proposing a Notion change.** Never paraphrase. Give the page title, the field
-name, whether anything has been written yet, the field's current value in full,
-and the proposed value. One page per proposal.
+**You cannot write the repository.** Propose the bullet in full, exactly as it
+should read, and name the file and the section it goes in. Someone files it in
+Claude Code.
+
+**The bar is three things at once**, and one of them is that a person deferred
+it. You may propose a question; you may not file one on your own judgement.
+
+**Writing to a database:** propose, wait for an explicit yes, then write. Never
+paraphrase a proposal. Give the page title, the field name, whether anything has
+been written yet, the field's current value in full, and the proposed value. One
+page per proposal.
 
 ## What is tracked where
 
-Milestones, capabilities and steps are **GitHub issues** in `NickMele/armada`,
-not Notion databases. A capability names the steps that make it real. Concepts,
-journeys and the decision record stay in Notion.
+| Holds | Home |
+|---|---|
+| Contracts, concepts, journeys, open questions, tokens, icons | The repository, `NickMele/armada` |
+| Milestones, capabilities and steps | GitHub issues |
+| Which components exist, and their status | Armada Components |
+| How a component is drawn, and why | The component sheet here |
 
-**Never write a Notion address into anything that could reach the repository.**
-It is public and that workspace is not; a link into it publishes an address to
-something nobody outside can open. Name what a thing is, not where it is.
+**Never write an address into the design workspace anywhere that could reach the
+repository.** It is public and that workspace is not; a link into it publishes
+an address to something nobody outside can open. Name what a thing is, not where
+it is. A gate rule enforces this.
 
 ## How the design docs drift, and what stops it
 
@@ -125,16 +145,17 @@ something is wrong.
 
 ## Process — journeys before pixels
 
-Do not prototype a surface whose journey is not written. Order of work:
+Do not prototype a surface whose journey is not written.
 
-1. The journey exists in the Notion journeys database, with its flow and open
-   items.
-2. The surface is agreed in words — steps, forks, what gates what.
-3. Only then, pixels — in that journey's own `Journey N - <name>.dc.html`, which
-   carries a link to its journey page at the top.
+1. **The journey exists as a file** in `docs/journeys/`, with its flow and its
+   open questions.
+2. **The surface is agreed in words** — steps, forks, what gates what.
+3. **Then pixels**, in that journey's own `Journey N - <name>.dc.html`.
 
-When prototyping produces a decision that contradicts the journey doc, update the
-journey doc in the same turn. The prototype is not the record.
+**When prototyping produces a decision that contradicts the journey file, say so
+in the same turn** and give the replacement text. The prototype is not the
+record, and you cannot write the file — so a contradiction you do not surface is
+a contradiction nobody will find.
 
 ## Stack
 

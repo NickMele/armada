@@ -13,52 +13,64 @@ Body:
 - No unprompted next steps. If you think the order should change,
   that's a decision — put it in the Need from you block as options.
 
-Notion: propose → confirm → write. Never write without an explicit yes.
 Never re-explain what was just done unless asked.
 
-## Four homes
+## Where a fact lives
 
 | Holds | Home |
 |---|---|
-| Contracts, practices, registries, spikes, open questions | The repository, `NickMele/armada` |
+| Contracts, practices, concepts, journeys, spikes, open questions | The repository, `NickMele/armada` |
+| Registries — tokens, icons, settings, the domain model | The repository, as data files with checks over them |
 | What is being built and in what order | GitHub issues and milestones |
-| Concepts, journeys, job scenarios, the decision record | Notion |
-| Mockups and the canvas | Claude Design |
+| Mockups, the component sheet, the canvas | The design project |
 
-**The test when it is not obvious:** does an agent need this while writing code?
-If yes it belongs in the repository — a link anywhere else is where *read the
-source* dies, because a subagent cannot follow one. If a person reads it to
-orient or to think, Notion is the better home.
+**Everything an agent reads while writing code is a file in the repository.**
+A link anywhere else is where *read the source* dies, because a subagent cannot
+follow one.
 
-You can **read** the repository through the GitHub connector; it is public.
-`ARCHITECTURE.md` is the map, `docs/INDEX.md` lists everything written down, and
-`docs/OPEN.md` is every open question. **You cannot write it.** If a conversation
-here concludes a repository file should change, say what should change and leave
-it — do not describe the edit as though it has been made. Repository writes
-happen in Claude Code.
+**The design workspace is no longer a working surface.** What is left there is
+being closed out, not added to. Do not propose writing to it.
+
+## Reading the repository
+
+You can **read** it through the GitHub connector; it is public.
+
+| Looking for | Fetch |
+|---|---|
+| The map — topology, crate graph, the rules that hold everywhere | `ARCHITECTURE.md` |
+| Everything written down | `docs/INDEX.md` |
+| Every open question | `docs/OPEN.md` |
+| A binding rule | `docs/contracts/` |
+| What a thing is | `docs/concepts/` |
+| How a thing is used | `docs/journeys/` |
+
+**You cannot write it.** If a conversation here concludes a repository file
+should change, say what should change and leave it. Do not describe the edit as
+though it has been made. Repository writes happen in Claude Code.
 
 ## Procedures — read before working
 
-These govern how you work. They are read before starting the kind of work they
-cover, not when stuck. Both are now one file in the repository, which the GitHub
-connector can fetch: `.claude/skills/armada-docs/SKILL.md`.
+These govern how you work, and are read before starting the kind of work they
+cover, not when stuck. Both are files the GitHub connector can fetch.
 
-- **Page cleanup** — the order, what is removed, what becomes a queryable set,
-  which page type owns which facts.
-- **Open questions** — how one is filed, linked from the pages it affects, and
-  answered.
+| Read before | File |
+|---|---|
+| Adding or editing a document, or deciding where a fact belongs | `.claude/skills/armada-documents/SKILL.md` |
+| Filing, citing or answering an open question | `.claude/skills/armada-open-questions/SKILL.md` |
+| Writing any prose that lands in the repository | `docs/contracts/technical-writing.md` |
 
-Do not restate a procedure's contents here or on a page. Read it.
+Do not restate a procedure's contents here or in a document. Read it.
 
 ## The rules most often skipped
 
-- A page states what is true. It never says a decision was made, when,
+- A document states what is true. It never says a decision was made, when,
   or by whom. No date stamps in body text, no "resolved", no "amended".
 - Never assert what a decision is from memory, from a summary, or from
   what this conversation says. Read the record.
-- Every fact has one owner and nothing else restates it. A concept page
-  never restates another concept's decisions.
-- A fact three pages need is a row, not a sentence on three pages.
+- Every fact has one owner and nothing else restates it. A concept never
+  restates another concept's decisions.
+- A fact three documents need is a row in a data file, not a sentence on three
+  documents.
 - Never state a count in prose. Carry the rule that generates the list.
 
 ## The live plan model
@@ -68,77 +80,55 @@ Read them there, never from a summary or from what an earlier session said.
 
 | | |
 |---|---|
-| Milestone | A GitHub milestone. Its description is the claim it makes, which is either true or not |
-| Capability | An issue labelled `capability`. Its body names the steps that make it real, as `#N` references |
+| Milestone | A GitHub milestone. Its description is a claim that is either true or not |
+| Capability | An issue labelled `capability`. Its body names its steps as `#N` references |
 | Step | An issue labelled `step`, titled `M0 7 — …`. Closed by the pull request that implements it |
 
 A capability's progress is computed from its step references by
 `cargo xtask verify-roadmap`, not reported by anyone. **Nobody types a status.**
 
-**Armada Steps is archived** in Notion, and Armada Milestones and Armada
-Capabilities are on their way out — they still exist only because the decision
-record's `Blocks Capability` and `Blocks Milestone` relations need something to
-point at until a decision can name a GitHub issue instead. Do not write to any
-of the three. **Armada Implementation Steps** is archived and older still; it
-sits under "Archive — v2 phase plan" and its rules do not apply to anything.
+Step and capability bodies do not restate decisions. Acceptance and definition
+of done are phrased as observable behaviour; the content lives on the concept
+and is named, not copied.
 
-## Drift, and what was lost
+## Staleness is unassisted now
 
-Armada Capabilities carried `Written against`, `Concept last edited` and a
-`Stale?` formula — a capability whose acceptance criteria were written against a
-concept that has since changed said so, by itself. **A GitHub issue has no
-equivalent, and nothing replaces it yet.**
+A capability used to carry `Written against` and `Concept last edited`, so one
+whose acceptance criteria were written against a concept that had since changed
+said so by itself. **A GitHub issue has no equivalent and nothing replaces it.**
 
-So the discipline is now unassisted, which means it has to be stated:
+So the discipline has to be stated:
 
 1. Before writing or editing a capability's acceptance criteria or a step body,
-   fetch every concept it depends on and read it **as of now**. Never write from
-   what an earlier session, a summary, or this conversation says a concept
-   contains.
-2. **State in the response which concepts you read and when each was last
-   edited.** That sentence is the only staleness signal left.
-
-Step and capability bodies do not restate decisions. Acceptance and definition of
-done are phrased as observable behaviour; the content lives on the concept page
-and is named, not copied.
+   fetch every concept it depends on and read it **as of now**.
+2. **State in the response which concepts you read**, and name the commit or the
+   date each was last changed. That sentence is the only staleness signal left.
 
 ## How a question moves
 
-The open-questions procedure owns how a question is filed and answered. Read it
-before filing one, answering one, or editing any page that carries an
-open-question link. Three things it does not cover, because they belong to the
-plan model rather than to the question:
+**A question lives in the `## Open questions` section of the document that
+blocks on it**, with a `[slug]` so code can cite it. `cargo xtask verify-docs`
+collects every one into `docs/OPEN.md`.
 
-**A question about a repository document does not go in Notion.** It goes in
-that document's `## Open questions` section, with a `[slug]` so code can cite it,
-and `cargo xtask verify-docs` collects every one into `docs/OPEN.md`. Answering
-it means deleting the bullet, which breaks any citation and makes the gate name
-whatever was waiting.
+**Answering it means deleting the bullet**, which breaks any citation of the
+slug and makes the gate name whatever was waiting on it. That is the mechanism —
+not a convention someone has to remember.
 
-**Lands on and Blocks are different lists.** Lands on names the pages and
-sections whose text changes, and is what gates Applied. Blocks Capability and
-Blocks Milestone name the work the decision changes. A decision can land on no
-capability and still need every one of its pages updated, and it can block a
-capability whose text does not move. Fill both.
+**A question has one home.** Where it bears on a second document, that document
+names it in a sentence. Filing it twice gives one question two identities.
 
-**The traversal to steps is broken and has to be done by hand.** It used to run
-Question → Blocks Capability → that capability's Steps. Steps are GitHub issues
-now and the Notion capability row does not name its issue, so nothing carries a
-decision down to a step. When a decision is made:
+**Nothing carries a decision down to a step automatically.** When a decision is
+made, **name the affected GitHub issues explicitly, by number.** Nothing else
+will. Every step under a changed capability is stale by definition — say so.
 
-- Set Blocks Capability on every capability it changes, and Blocks Milestone
-  where it changes what a milestone claims. A decision with no Blocks link is a
-  decision nothing will act on.
-- **Name the affected GitHub issues explicitly in the response**, by number.
-  Nothing else will.
-- Every step under a linked capability is stale by definition. Say so.
+Read the open-questions procedure before filing one. The bar is three things at
+once, and one of them is that **a person deferred it** — you may propose a
+question, you may not file one on your own judgement.
 
-Never write to Notion without an explicit yes. Propose, confirm, then write.
+## The repository is public and the design workspace is not
 
-## The repository is public and this workspace is not
-
-Never write a Notion address into anything that could reach the repository — a
-commit message, an issue, a document. A link into it publishes an address to
-something nobody outside can open. Name what a thing is, not where it is. A gate
-rule enforces this, and seventy-nine issues once carried dead links into a
-private account before anyone looked.
+Never write an address into that workspace anywhere that could reach the
+repository — a commit message, an issue, a document. A link into it publishes an
+address to something nobody outside can open. Name what a thing is, not where it
+is. A gate rule enforces this, and seventy-nine issues once carried dead links
+into a private account before anyone looked.

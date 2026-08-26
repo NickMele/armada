@@ -165,3 +165,84 @@ pub fn nothing_links_to_the_design_workspace(root: &Path) -> Report {
     }
     report
 }
+
+/// Rule eighteen: every repository path a document names still exists.
+///
+/// A pointer is the whole value of a document that refuses to restate what it
+/// points at. When the file moves, the pointer does not follow it, and the
+/// reader is left holding a path that resolves to nothing — which reads
+/// exactly like a path that resolves to something until they go and look.
+///
+/// `docs/CLAUDE.md` reserves the bare path for v1 — `git show v1-final:<path>`
+/// — so a path is dead only when it is in neither tree. The v1 tree is read
+/// from the tag rather than inferred from a naming convention, because v1 and
+/// v2 share top-level directories and a first-segment heuristic reads
+/// `crates/core/src/fleet/drone.rs` as a typo when it is a citation.
+///
+/// Without the tag the rule cannot tell the two apart, and warns rather than
+/// failing: a shallow checkout is not a defect in the prose.
+///
+/// This does not catch a pointer that names a directory where it meant a file.
+/// `crates/core-model/` is a real directory, and eleven pointers once said it
+/// where they meant one of seven files inside it.
+pub fn every_path_a_document_names_exists(root: &Path) -> Report {
+    let mut report = Report::new("every repository path a document names exists");
+
+    const ROOTS: [&str; 6] = ["docs/", "crates/", "apps/", "packages/", "xtask/", ".claude/"];
+
+    let v1 = std::process::Command::new("git")
+        .args(["ls-tree", "-r", "--name-only", "v1-final"])
+        .current_dir(root)
+        .output();
+    let v1: std::collections::BTreeSet<String> = match &v1 {
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(str::to_string)
+            .collect(),
+        _ => {
+            report.warn("the v1-final tag is not in this checkout — v1 citations are not checked");
+            Default::default()
+        }
+    };
+
+    let mut paths = files_with_ext(root, &root.join("docs"), &["md"]);
+    for name in ["README.md", "ARCHITECTURE.md", "AGENTS.md", "CONTRIBUTING.md", "SECURITY.md"] {
+        if root.join(name).is_file() {
+            paths.insert(name.to_string());
+        }
+    }
+
+    for rel in paths {
+        // v1's own paths are quoted verbatim there, and are meant to be dead.
+        if rel.starts_with("docs/v1-learnings/") {
+            continue;
+        }
+        let Ok(text) = fs::read_to_string(root.join(&rel)) else {
+            continue;
+        };
+        for (n, line) in text.lines().enumerate() {
+            for span in line.split('`').skip(1).step_by(2) {
+                let named = span.trim_end_matches(['.', ',', ':', ';']);
+                if !ROOTS.iter().any(|r| named.starts_with(r)) {
+                    continue;
+                }
+                // A glob or a placeholder names a shape, not a file.
+                if named.contains(['*', '<', '{', ' ']) {
+                    continue;
+                }
+                if root.join(named).exists() {
+                    continue;
+                }
+                // A v1 citation resolves at the tag, not in the working tree.
+                if v1.contains(named) || v1.iter().any(|p| p.starts_with(&format!("{named}/"))) {
+                    continue;
+                }
+                report.fail(format!(
+                    "{rel}:{} names {named}, which is in neither this tree nor v1-final",
+                    n + 1
+                ));
+            }
+        }
+    }
+    report
+}

@@ -18,9 +18,14 @@ along with it. That is what this README is for.
 **Edit here first, then paste.** A change made only in the app is a change the
 next person cannot find.
 
-## What all three must agree on
+## What both must agree on
 
-The repository holds contracts, practices, registries and open questions.
-GitHub holds what is being built and in what order. Notion holds concepts,
-journeys, job scenarios and the decision record. Claude Design draws, and holds
-the original of nothing.
+| Holds | Home |
+|---|---|
+| Contracts, practices, concepts, journeys, spikes, open questions | The repository |
+| Registries code reads — tokens, icons, settings, the domain model | The repository |
+| What is being built and in what order | GitHub issues and milestones |
+| Mockups, the component sheet, the canvas | The design project |
+
+**The design workspace is no longer a working surface.** Armada Components is
+the exception: the design project still writes to it.

@@ -18,7 +18,7 @@ their work before advancing them. Rust daemon, Electron app, one repo.
 | A value — tokens, icons, settings | `packages/`, `crates/config/settings.toml` |
 | What was measured, and what was not | `docs/spikes/` |
 | What is being built, and in what order | GitHub issues, grouped by milestone |
-| Concepts, journeys, and the decision record | The design workspace — read `.claude/skills/armada-docs` first |
+| What a thing is, and how it is used | `docs/concepts/`, `docs/journeys/` |
 | Skills and subagents | `.claude/skills/`, `.claude/agents/` |
 
 Everything written down is in `docs/INDEX.md`; the gate refuses a document that
