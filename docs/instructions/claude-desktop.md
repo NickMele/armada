@@ -20,9 +20,10 @@ Never re-explain what was just done unless asked.
 | Holds | Home |
 |---|---|
 | Contracts, practices, concepts, journeys, spikes, open questions | The repository, `NickMele/armada` |
-| Registries — tokens, icons, settings, the domain model | The repository, as data files with checks over them |
+| Registries — tokens, icons, components, settings, the domain model | The repository, as data files with checks over them |
 | What is being built and in what order | GitHub issues and milestones |
 | Mockups, the component sheet, the canvas | The design project |
+| A component as built | Storybook, `packages/components` |
 
 **Everything an agent reads while writing code is a file in the repository.**
 A link anywhere else is where *read the source* dies, because a subagent cannot

@@ -1,0 +1,137 @@
+/* Table — the Job Board row's chrome, at the density the whole scale exists
+   for. Column tracks belong to the composition, not here.
+
+   border-collapse: collapse, because a border on a <tr> is ignored under
+   `separate` and the focused row's left edge is a border on the row. */
+.armada-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  background: var(--bg-raised);
+}
+
+/* Header — 32px on --bg-base, the one legal ALL CAPS, and a --border-default
+   rule beneath. The heavier rule is what separates the header from the row
+   rules, which are --border-subtle. */
+.armada-table-header-cell {
+  height: var(--h-row-header);
+  padding: 0 var(--space-3);
+  border-bottom: var(--border-width) solid var(--border-default);
+  background: var(--bg-base);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-subtle);
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  white-space: nowrap;
+}
+
+/* Body rows. --h-row is a FLOOR that keeps rows aligned down a column, not a
+   cap: `height` on a cell is a minimum, so a wrapping value grows the row
+   rather than clipping. No zebra striping — the row rule already separates,
+   and eight tinted rows in a list is unreadable.
+
+   The left edge is --row-focus-bar with its colour dropped to transparent at
+   rest, so focus adds no width and no row shifts when the cursor lands. */
+.armada-table-row {
+  border-bottom: var(--border-width) solid var(--border-subtle);
+  border-left: var(--row-focus-bar);
+  border-left-color: transparent;
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease);
+}
+
+.armada-table-row:hover {
+  background: var(--bg-hover);
+}
+
+/* Focused and selected are different states and coexist. */
+.armada-table-row[data-focused] {
+  background: var(--bg-hover);
+  border-left-color: var(--accent);
+}
+
+.armada-table-row[data-selected] {
+  background: var(--accent-muted);
+}
+
+/* Selected rows keep --fg-default text: --accent on --accent-muted measures
+   4.06:1 and would not clear as body text. */
+.armada-table-row[data-selected] .armada-table-cell {
+  color: var(--fg-default);
+}
+
+/* Dimming is a token, not an alpha. */
+.armada-table-row[data-dimmed] {
+  border-bottom-color: var(--border-subtle);
+}
+
+.armada-table-row[data-dimmed] .armada-table-cell {
+  color: var(--fg-subtle);
+}
+
+.armada-table-cell {
+  height: var(--h-row);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.armada-table-cell[data-variant="primary"] {
+  color: var(--fg-default);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.armada-table-cell[data-variant="secondary"] {
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+/* Timestamps and elapsed figures. */
+.armada-table-cell[data-variant="metadata"] {
+  color: var(--fg-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+/* Mono means machine-derived — a job id, a path, a branch, a command, a
+   duration, a cost. Never prose, and one step smaller than adjacent sans. */
+.armada-table-cell[data-variant="mono"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+/* A machine value copies on click and goes to --accent on hover. No `copy`
+   glyph: the affordance token is the affordance. */
+.armada-table-cell[data-copies] {
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-table-cell[data-copies]:hover {
+  color: var(--accent);
+}
+
+/* Secondary values truncate with a tooltip carrying the full string; they do
+   not vanish. No field is dropped at any width — narrow changes a row's shape,
+   never its content.
+
+   Truncation needs a declared track width to truncate against, and the track
+   list belongs to the field set, so the composition supplies the width and
+   this supplies the behaviour. */
+.armada-table-cell[data-truncates] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

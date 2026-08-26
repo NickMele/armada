@@ -1,0 +1,85 @@
+/* Checkbox — inherits the input's border and focus rules.
+ *
+ * Three values here are decisions the sources did not make.
+ *
+ * The box is --space-4. The component sheet draws it at 14px, which is off
+ * the 4px grid and has no token; rule twelve refuses the literal. --space-4
+ * is the nearest value that is both on the grid and spellable.
+ *
+ * The check glyph is 12px at strokeWidth 2. The sheet draws it at 10px and
+ * stroke 3; the icon contract permits 12px and 16px only and fixes the stroke
+ * at 2, and 12px is the exact half of lucide's 24px grid so the stroke lands
+ * on one whole pixel.
+ */
+
+.armada-checkbox {
+  /* The native input is absolutely positioned and clipped; the label is what
+     it is positioned against. */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+.armada-checkbox__input {
+  position: absolute;
+  width: var(--space-4);
+  height: var(--space-4);
+  margin: 0;
+  clip-path: inset(50%);
+}
+
+.armada-checkbox__box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--space-4);
+  height: var(--space-4);
+  border-radius: var(--radius-sm);
+  border-style: solid;
+  border-width: var(--border-width);
+  border-color: var(--border-default);
+  background: var(--bg-sunken);
+  color: transparent;
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+/* Checked is an accent fill with the mark in --fg-inverse — the same pairing
+ * a primary button uses, because both are the accent carrying text. */
+.armada-checkbox__input:checked + .armada-checkbox__box {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--fg-inverse);
+}
+
+.armada-checkbox__input:focus-visible + .armada-checkbox__box,
+.armada-checkbox__input[data-preview-focus] + .armada-checkbox__box {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Disabled is --fg-subtle with hover suppressed. Never opacity. */
+.armada-checkbox:has(.armada-checkbox__input:disabled) {
+  color: var(--fg-subtle);
+  cursor: default;
+}
+
+.armada-checkbox__input:disabled + .armada-checkbox__box {
+  border-color: var(--border-subtle);
+  background: var(--bg-sunken);
+}
+
+.armada-checkbox__input:disabled:checked + .armada-checkbox__box {
+  background: var(--bg-sunken);
+  border-color: var(--border-subtle);
+  color: var(--fg-subtle);
+}

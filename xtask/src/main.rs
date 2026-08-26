@@ -246,14 +246,18 @@ pub fn files_with_ext(root: &Path, dir: &Path, exts: &[&str]) -> BTreeSet<String
 /// gate's business. `out` and `dist` are on the list because the design lint
 /// found ninety violations in a compiled stylesheet the moment the app first
 /// built — every rule here reads source, and none of them can tell the
-/// difference on its own.
+/// difference on its own. `storybook-static` joined them the same way and for
+/// the same reason, two thousand violations at once, which is what a list like
+/// this looks like from the inside: it grows once per build tool, always after
+/// the fact, and the alternative is a rule that guesses.
 pub fn walk(dir: &Path, visit: &mut impl FnMut(&Path)) {
     let Ok(entries) = fs::read_dir(dir) else { return };
     let mut paths: Vec<PathBuf> = entries.filter_map(|e| e.ok()).map(|e| e.path()).collect();
     paths.sort();
     for path in paths {
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        const BUILD_OUTPUT: &[&str] = &["target", "node_modules", "out", "dist"];
+        const BUILD_OUTPUT: &[&str] =
+            &["target", "node_modules", "out", "dist", "storybook-static"];
         if name.starts_with('.') || BUILD_OUTPUT.contains(&name) {
             continue;
         }

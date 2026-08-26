@@ -1,0 +1,133 @@
+/* Switch — inherits the input's border, focus and height rules.
+ *
+ * The contract gives one line: --accent when on, --border-strong when off.
+ * It does not say whether --border-strong is the track's fill or its edge,
+ * and it names nothing for the thumb. The component sheet draws the answer:
+ * the off track is a --bg-hover fill with a --border-default edge, and the
+ * thumb is --fg-default on and --fg-subtle off. That is what is built here.
+ * --border-strong ends up unused, which is recorded rather than resolved.
+ *
+ * The geometry is derived, not measured off the sheet. The track is one
+ * control wide (--h-control) and one badge tall (--h-badge); the thumb is
+ * --space-4, and the pill radius is exactly half the track. The thumb travels
+ * by `left`, from the leading edge of the padding box to the trailing one, so
+ * no offset is written down and the hairline border never has to be
+ * subtracted from a number.
+ */
+
+.armada-switch {
+  /* The native input is absolutely positioned and clipped; the label is what
+     it is positioned against. */
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--h-control);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+/* With a description the two align at the top: the label is one line and the
+ * description runs to several, so centring them would drift the track down
+ * the block as the copy grows. */
+.armada-switch[data-described="true"] {
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-1) 0;
+}
+
+.armada-switch__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* The description states what the setting does when on, and what happens when
+ * off. It is not help text for the label. */
+.armada-switch__description {
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  text-wrap: pretty;
+}
+
+.armada-switch__input {
+  position: absolute;
+  width: var(--h-control);
+  height: var(--h-badge);
+  margin: 0;
+  clip-path: inset(50%);
+}
+
+.armada-switch__track {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--h-control);
+  height: var(--h-badge);
+  border-radius: calc(var(--h-badge) / 2);
+  border-style: solid;
+  border-width: var(--border-width);
+  border-color: var(--border-default);
+  background: var(--bg-hover);
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease);
+}
+
+.armada-switch__thumb {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  width: var(--space-4);
+  height: var(--space-4);
+  border-radius: 50%;
+  background: var(--fg-subtle);
+  transition:
+    left var(--duration-fast) var(--ease),
+    background-color var(--duration-fast) var(--ease);
+}
+
+.armada-switch__input:checked + .armada-switch__track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.armada-switch__input:checked + .armada-switch__track .armada-switch__thumb {
+  left: 100%;
+  transform: translate(-100%, -50%);
+  background: var(--fg-default);
+}
+
+.armada-switch__input:focus-visible + .armada-switch__track,
+.armada-switch__input[data-preview-focus] + .armada-switch__track {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Disabled is --fg-subtle with hover suppressed. Never opacity — so an off
+ * switch and a disabled one are told apart by the label's step and the
+ * track's edge, not by a wash over the whole control. */
+.armada-switch:has(.armada-switch__input:disabled) {
+  color: var(--fg-subtle);
+  cursor: default;
+}
+
+.armada-switch__input:disabled + .armada-switch__track {
+  background: var(--bg-sunken);
+  border-color: var(--border-subtle);
+}
+
+.armada-switch__input:disabled:checked + .armada-switch__track {
+  background: var(--bg-sunken);
+  border-color: var(--border-subtle);
+}
+
+.armada-switch__input:disabled + .armada-switch__track .armada-switch__thumb {
+  background: var(--fg-subtle);
+}

@@ -1,0 +1,11 @@
+/* The sheet's own frame: the canvas ground, the sans face, the body step.
+   Every component below inherits from here rather than restating it. */
+body {
+  background: var(--bg-base);
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  margin: 0;
+  padding: var(--space-6);
+}

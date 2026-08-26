@@ -1,0 +1,20 @@
+/* Separator — the table rule and the divider are one value: --border-subtle.
+   A hairline is not a length on the spacing scale, which is why the width is
+   written rather than tokenised: no --border-width token exists. */
+.armada-separator {
+  flex: none;
+  background: var(--border-subtle);
+}
+
+.armada-separator[data-orientation="horizontal"] {
+  width: 100%;
+  height: var(--border-width);
+}
+
+.armada-separator[data-orientation="vertical"] {
+  width: var(--border-width);
+  align-self: stretch;
+}
+
+/* The status bar's field separator is a middle dot in --fg-subtle rather than
+   a rule, and is copy rather than a component. It is not this. */

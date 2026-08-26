@@ -1,0 +1,58 @@
+/* Tabs with counts. The same geometry as Tabs, plus a trailing mono count in
+ * --fg-subtle. Not a filled pill: a pill is a badge, and a badge carries
+ * status. Mono because the count is machine-derived, and one step smaller than
+ * the sans beside it.
+ *
+ * MISSING TOKENS on the line below, the same two Tabs names.
+ * --armada-hairline: no border-width token exists in packages/tokens.
+ * --armada-active-bar: the accent shorthands in packages/tokens both mean
+ *   focus, and an active tab's underline is not focus.
+ */
+.armada-tabs-counts {
+  --armada-hairline: var(--border-width);
+  --armada-active-bar: var(--edge-active);
+}
+
+.armada-tabs-counts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  border-bottom: var(--armada-hairline) solid var(--border-subtle);
+}
+
+.armada-tabs-counts__tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--h-control);
+  padding: 0 var(--space-3);
+  border: none;
+  border-bottom: var(--armada-active-bar) solid transparent;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease);
+}
+
+.armada-tabs-counts__tab:hover {
+  color: var(--fg-default);
+}
+
+.armada-tabs-counts__tab--active {
+  border-bottom-color: var(--accent);
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+}
+
+/* --fg-subtle on the active tab too. The count is metadata beside the label,
+ * and lifting it on the active tab would make the number the heading. */
+.armada-tabs-counts__count {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-body);
+  color: var(--fg-subtle);
+}

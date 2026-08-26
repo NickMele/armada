@@ -45,10 +45,31 @@ carries a number only where a drawing exists here, so the number is a claim that
 something has been drawn. When you draw a journey that has none, say which
 number it took, so the repository filename can follow.
 
-**One rendering, on purpose.** The component sheet is the only place a component
-is drawn. A second hand-maintained rendering — the React reference components
-and the click-through Bridge kit — was deleted after it drifted from the
-contract. Do not recreate it; when a component changes, it changes in the sheet.
+**Storybook owns the component; this project owns the journey.** That is what
+keeps the design tool's job small — a journey is a flow, not a pixel, and any
+canvas can hold one. Figma was weighed and not taken: its variables would be a
+second authoring surface for values authored as CSS in the repository, and the
+whole point of the token pipeline is that there is one. The trade would be worth
+it for mechanically-checked design-to-code fidelity, or for a second person
+designing; neither is true yet.
+
+**Two renderings, and they answer different questions.** The component sheet
+here is design intent — what a component should be. Storybook in the repository
+is the built component, rendered from the code the app ships.
+
+| Question | Answer |
+|---|---|
+| What should this component be? | The component sheet, here |
+| What is it, as built? | Storybook, `packages/components` |
+| Which components exist, and their status | `packages/components/components.toml` |
+
+**A third rendering is what drifted.** The React reference components and the
+click-through Bridge kit were a hand-maintained *copy* of the design, and were
+deleted. A Storybook story is not a copy — it imports the component the app
+imports, so it cannot drift from the app, only from the sheet. That difference
+is the whole reason it is allowed.
+
+**Never hand over a folder of components.** That is what the deleted kit was.
 Reasoning belongs in the sheet's own annotation, beside the drawing it explains.
 
 ## How a token changes
@@ -130,7 +151,8 @@ where design drift comes from.
 
 - **Design System** owns tokens, the status grammar, voice and the lexicon.
   **Iconography** owns which glyph means what. `packages/tokens`,
-  `packages/icons` and `packages/components` are the rosters.
+  `packages/icons` and `packages/components` are the rosters, and Storybook
+  renders what the last of them claims exists.
 - **A roster is never enumerated in prose.** An entry is an address; a list
   written into a document body goes stale and then gets copied onward. Both the
   Design System and this file have had an enumeration go stale more than once.
@@ -156,6 +178,25 @@ Do not prototype a surface whose journey is not written.
 2. **The surface is agreed in words** — steps, forks, what gates what.
 3. **Then pixels**, in that journey's own `Journey N - <name>.dc.html`.
 
+## How a component reaches the app
+
+1. **A journey is designed here**, in its own file.
+2. **The components it needs are drawn in the component sheet**, at real size,
+   with their states.
+3. **A Claude Code agent builds the component in Storybook**, against
+   `docs/contracts/design-system.md` and the sheet.
+4. **Storybook is what the app imports.** A component is built when it has a
+   story for every state the contract names.
+
+**Nothing is extracted in between.** The sheet is already HTML carrying real
+token names, and an agent reads it directly. A written component spec between
+the sheet and the story would be a third description of one component, and the
+third description is the one that goes stale.
+
+**When a journey needs a component that does not exist**, propose a
+`components.toml` row for it with a status, and an open question for whatever it
+raises. Do not invent one on the spot.
+
 **When prototyping produces a decision that contradicts the journey file, say so
 in the same turn** and give the replacement text. The prototype is not the
 record, and you cannot write the file — so a contradiction you do not surface is
@@ -173,8 +214,9 @@ resolve. Only the token set is spellable, and an arbitrary value like
 
 Mockups in this project are single-file HTML for review speed. They are not the
 app's source. Keep them translatable: same token names, same component names,
-same prop names as the component registry. A Claude Code agent should be
-able to read a mockup and map it onto shadcn primitives without interpretation.
+same prop names as the component registry. **A Claude Code agent reads a mockup
+and writes the story from it**, so anything that needs interpretation is a
+question rather than a judgement call it should make.
 
 ## Hard rules
 

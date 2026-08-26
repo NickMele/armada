@@ -1,0 +1,101 @@
+/* Sheet. The contract gives it one line: the same surface treatment as a
+ * dialog, at --radius-lg. A floating layer, so a shadow is legal and no blur
+ * is. Everything else here is inferred from Dialog and is reported.
+ *
+ * MISSING TOKENS on the line below.
+ * --armada-hairline: no border-width token exists in packages/tokens.
+ * --armada-sheet-width: no panel-width token exists. The sidebar's own range
+ *   tokens are the sidebar's and do not describe an overlay panel.
+ */
+.armada-sheet {
+  --armada-hairline: var(--border-width);
+  --armada-sheet-width: var(--w-sheet);
+}
+
+.armada-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  background: color-mix(in srgb, var(--bg-sunken) 62%, transparent);
+}
+
+.armada-sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--armada-sheet-width);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-overlay);
+}
+
+/* Rounded on the inner edge only. A panel flush to the window edge that keeps
+ * a radius there draws a sliver of canvas the window does not have. */
+.armada-sheet--right {
+  margin-left: auto;
+  border-left: var(--armada-hairline) solid var(--border-default);
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+}
+
+.armada-sheet--left {
+  margin-right: auto;
+  border-right: var(--armada-hairline) solid var(--border-default);
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+}
+
+.armada-sheet__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--pad-card);
+  border-bottom: var(--armada-hairline) solid var(--border-subtle);
+}
+
+.armada-sheet__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-heading);
+}
+
+/* An icon-only ghost control, which is where Iconography permits a glyph. */
+.armada-sheet__close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--h-control-sm);
+  height: var(--h-control-sm);
+  border: var(--armada-hairline) solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+
+.armada-sheet__close:hover {
+  background: var(--bg-hover);
+  color: var(--fg-default);
+}
+
+.armada-sheet__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--pad-card);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+.armada-sheet__foot {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--pad-card);
+  border-top: var(--armada-hairline) solid var(--border-subtle);
+}

@@ -1,0 +1,23 @@
+/* Skeleton — a bar in --bg-hover, the same step a row takes under the cursor,
+   which is what makes it read as surface rather than as content.
+
+   No animation. The motion contract allows exactly one continuous animation on
+   a data surface and it is the running mark; a shimmering placeholder is what
+   the first sentence of that section forbids outright.
+
+   The bar height is --space-2. The sheet draws it at ten, which is off the
+   four-unit grid and has no token, and stepping to eight is the nearest thing
+   on the scale. Reported. */
+.armada-skeleton {
+  width: 100%;
+  height: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+}
+
+.armada-skeleton-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}

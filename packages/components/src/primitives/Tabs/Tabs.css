@@ -1,0 +1,53 @@
+/* Tabs. Sections of one object, drawn as the component sheet draws them:
+ * --h-control tall, --space-3 horizontal padding, a var(--edge-active) --accent underline on
+ * the active one, inactive in --fg-muted, on a --border-subtle rule.
+ *
+ * The underline is emphasis, not status, and not focus. Focus is the global
+ * var(--edge-active) --accent ring at var(--edge-active) offset, which base.css applies.
+ *
+ * MISSING TOKENS on the line below.
+ * --armada-hairline: no border-width token exists in packages/tokens.
+ * --armada-active-bar: --focus-ring and --row-focus-bar are both var(--edge-active) accent
+ *   shorthands, and both mean focus. An active tab's underline is neither, so
+ *   it cannot borrow one without saying focus where there is none.
+ */
+.armada-tabs {
+  --armada-hairline: var(--border-width);
+  --armada-active-bar: var(--edge-active);
+}
+
+.armada-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  border-bottom: var(--armada-hairline) solid var(--border-subtle);
+}
+
+.armada-tabs__tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--h-control);
+  padding: 0 var(--space-3);
+  border: none;
+  border-bottom: var(--armada-active-bar) solid transparent;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease), border-color var(--duration-fast) var(--ease);
+}
+
+.armada-tabs__tab:hover {
+  color: var(--fg-default);
+}
+
+/* Emphasis comes from fill and weight, never from size. Every tab in the group
+ * is the same height. */
+.armada-tabs__tab--active {
+  border-bottom-color: var(--accent);
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+}

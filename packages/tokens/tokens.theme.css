@@ -97,6 +97,7 @@
   --spacing-6: var(--space-6);
   --spacing-8: var(--space-8);
   --spacing-12: var(--space-12);
+  --color-border-width: var(--border-width);
   --spacing-row: var(--h-row);
   --spacing-row-header: var(--h-row-header);
   --spacing-row-stacked: var(--h-row-stacked);
@@ -115,6 +116,13 @@
   --spacing-rail: var(--sidebar-rail);
   --spacing-width: var(--palette-width);
   --spacing-max-height: var(--palette-max-height);
+  --spacing-dialog: var(--w-dialog);
+  --spacing-sheet: var(--w-sheet);
+  --spacing-menu: var(--w-menu);
+  --spacing-tooltip: var(--w-tooltip);
+  --spacing-toast: var(--w-toast);
+  --color-edge-active: var(--edge-active);
+  --spacing-dot: var(--dot);
   --ease-base: var(--ease);
   --color-surface-canvas: var(--surface-canvas);
   --color-surface-card: var(--surface-card);

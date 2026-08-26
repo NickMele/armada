@@ -1,0 +1,46 @@
+/* ScrollArea — the scrollbar drawn from the token set. macOS hides its own
+   scrollbar until you scroll, which on an instrument panel means a pane that
+   gives no sign there is more below it.
+
+   The thumb is --border-strong, the edge token for an active border, stepping
+   to --fg-subtle under the cursor. The track stays transparent so it does not
+   read as a second column rule. The width is --space-2, which is a spacing
+   token standing in for a control width that has none. Reported.
+
+   scrollbar-width is honoured by Chromium and this ships in Electron, so the
+   -webkit rules below are the same decision spelled twice rather than a
+   fallback to something different. */
+.armada-scroll-area {
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  overscroll-behavior: contain;
+}
+
+.armada-scroll-area[data-axis="both"] {
+  overflow-x: auto;
+}
+
+.armada-scroll-area::-webkit-scrollbar {
+  width: var(--space-2);
+  height: var(--space-2);
+}
+
+.armada-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.armada-scroll-area::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-sm);
+  background: var(--border-strong);
+}
+
+.armada-scroll-area::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-subtle);
+}
+
+.armada-scroll-area::-webkit-scrollbar-corner {
+  background: transparent;
+}

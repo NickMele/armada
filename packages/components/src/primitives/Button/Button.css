@@ -1,0 +1,131 @@
+/* Button — the four variants of `### Button` in the design system contract.
+ * Every value here reads a token; a raw value fails gate rule twelve.
+ *
+ * Two spellings need their reasoning recorded beside them.
+ */
+
+.armada-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  box-sizing: border-box;
+  height: var(--h-control);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  border-style: solid;
+  border-width: var(--border-width);
+  border-color: transparent;
+  background: transparent;
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+/* sm — use inside table rows. Every button in a group is the same height, so
+ * size is a property of the group, never a way to recede within one. */
+.armada-button[data-size="sm"] {
+  height: var(--h-control-sm);
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+/* Icon-only is a ghost affordance: icons live on row actions and toolbars,
+ * never beside a primary or secondary label. Square, so it lines up in a
+ * column of row actions. */
+.armada-button[data-icon-only="true"] {
+  width: var(--h-control);
+  padding: 0;
+}
+
+.armada-button[data-icon-only="true"][data-size="sm"] {
+  width: var(--h-control-sm);
+}
+
+/* Primary — one per view, and never on a list row. Emphasis is the fill. */
+.armada-button[data-variant="primary"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--fg-inverse);
+}
+
+.armada-button[data-variant="primary"]:hover:not(:disabled),
+.armada-button[data-variant="primary"][data-preview-hover] {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* Secondary — filled one surface step from its ground, so the box reads as a
+ * box. `--bg-sunken` on a card is the default; a secondary sitting on a sunken
+ * or overlay row takes `--bg-raised` instead, or it shows only its text and
+ * looks shorter than the primary beside it. */
+.armada-button[data-variant="secondary"] {
+  background: var(--bg-sunken);
+  border-color: var(--border-strong);
+  color: var(--fg-default);
+}
+
+.armada-button[data-variant="secondary"][data-ground="sunken"] {
+  background: var(--bg-raised);
+}
+
+.armada-button[data-variant="secondary"]:hover:not(:disabled),
+.armada-button[data-variant="secondary"][data-preview-hover] {
+  background: var(--bg-hover);
+}
+
+/* Ghost — recedes by losing its fill and dropping to --fg-muted, never by
+ * shrinking. */
+.armada-button[data-variant="ghost"] {
+  background: transparent;
+  border-color: transparent;
+  color: var(--fg-muted);
+}
+
+.armada-button[data-variant="ghost"]:hover:not(:disabled),
+.armada-button[data-variant="ghost"][data-preview-hover] {
+  background: var(--bg-hover);
+  color: var(--fg-default);
+}
+
+/* Destructive stays outlined. A solid red button reads as an error state
+ * rather than an action, and --status-completed-failed is already spoken for
+ * as a status. Kill is deliberate, not alarming. */
+.armada-button[data-variant="destructive"] {
+  background: transparent;
+  border-color: var(--status-completed-failed);
+  color: var(--status-completed-failed);
+}
+
+.armada-button[data-variant="destructive"]:hover:not(:disabled),
+.armada-button[data-variant="destructive"][data-preview-hover] {
+  background: var(--status-completed-failed-bg);
+}
+
+/* Focus is a 2px --accent ring at 2px offset, no glow — a resting edge and a
+ * focus ring differ in colour, width and position. */
+.armada-button:focus-visible,
+.armada-button[data-preview-focus] {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Disabled is --fg-subtle text with hover suppressed. Never opacity, which
+ * muddies status colours. Every variant collapses onto one disabled
+ * rendering: an accent fill under --fg-subtle text is unreadable, and a
+ * disabled control has no variant left to express. */
+.armada-button:disabled {
+  background: var(--bg-sunken);
+  border-color: var(--border-strong);
+  color: var(--fg-subtle);
+  cursor: default;
+}

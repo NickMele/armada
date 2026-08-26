@@ -1,0 +1,149 @@
+/* Command palette. The contract specifies this one at token level:
+ *   surface    --bg-overlay, --border-default, --radius-lg, shadow
+ *   width      --palette-width, max-height --palette-max-height, scroll beyond
+ *   anchor     top-aligned at 20% of viewport height, never centered
+ *   input      --text-base, no border, --fg-default, placeholder --fg-subtle,
+ *              bottom rule --border-subtle
+ *   row        --h-menu-item, --space-3 padding, --text-sm, --fg-default,
+ *              12px leading icon, shortcut right-aligned as kbd
+ *   active row --bg-hover
+ *   section    --text-2xs, --fg-subtle
+ *
+ * No blur and no second elevation inside it. Nothing animates in: the palette
+ * is a data surface the moment it has results.
+ *
+ * MISSING TOKEN on the line below.
+ * --armada-hairline: no border-width token exists in packages/tokens.
+ */
+.armada-palette {
+  --armada-hairline: var(--border-width);
+}
+
+.armada-palette-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  justify-content: center;
+  /* Top-anchored, never centered. A centered dialog shifts vertically as the
+   * result count changes, and a target that moves while you type is a target
+   * you misclick. */
+  align-items: flex-start;
+  padding-top: 20vh;
+  background: color-mix(in srgb, var(--bg-sunken) 62%, transparent);
+}
+
+.armada-palette {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--palette-width);
+  max-height: var(--palette-max-height);
+  border-radius: var(--radius-lg);
+  background: var(--bg-overlay);
+  border: var(--armada-hairline) solid var(--border-default);
+  box-shadow: var(--shadow-overlay);
+  overflow: hidden;
+}
+
+.armada-palette__input {
+  flex: none;
+  height: var(--h-control);
+  padding: 0 var(--space-3);
+  border: none;
+  border-bottom: var(--armada-hairline) solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+}
+
+.armada-palette__input::placeholder {
+  color: var(--fg-subtle);
+}
+
+/* The ring belongs to the palette's edge, not to a borderless input inside it. */
+.armada-palette__input:focus {
+  outline: none;
+}
+
+.armada-palette__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-1) 0;
+}
+
+.armada-palette__section {
+  display: flex;
+  align-items: center;
+  height: var(--h-row-header);
+  padding: 0 var(--space-3);
+  color: var(--fg-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+.armada-palette__row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--h-menu-item);
+  padding: 0 var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease);
+}
+
+.armada-palette__row--active {
+  background: var(--bg-hover);
+}
+
+.armada-palette__glyph {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  color: var(--fg-muted);
+}
+
+.armada-palette__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Never --fg-default: a shortcut hint is reference material beside the thing
+ * it describes, and full contrast makes it compete with the label. */
+.armada-palette__kbd {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: var(--h-kbd);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  border: var(--armada-hairline) solid var(--border-subtle);
+  background: var(--bg-sunken);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+.armada-palette__empty {
+  margin: 0;
+  padding: var(--space-3);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-wrap: pretty;
+}

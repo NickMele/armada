@@ -129,6 +129,9 @@ pub const THEME: &[(&str, Slot)] = &[
     ("--surface-", Slot::NsFull("color")),
     ("--edge-", Slot::NsFull("color")),
     // Everything sized. One namespace, by v4's design.
+    ("--w-", Slot::Ns("spacing")),
+    ("--dot", Slot::Named("spacing", "dot")),
+    ("--edge-active", Slot::CssOnly("a border width read beside --edge-* colours")),
     ("--space-", Slot::Ns("spacing")),
     ("--h-", Slot::Ns("spacing")),
     ("--pad-", Slot::Ns("spacing")),
@@ -138,6 +141,7 @@ pub const THEME: &[(&str, Slot)] = &[
     // No namespace carries these.
     ("--duration-", Slot::CssOnly("v4 has no --duration-* namespace; read it in CSS")),
     ("--tooltip-delay", Slot::CssOnly("v4 has no --delay-* namespace; read it in CSS")),
+    ("--border-width", Slot::CssOnly("a hairline every edge reads; not a scale")),
     ("--focus-ring", Slot::CssOnly("an outline shorthand, not a scale value")),
     ("--focus-ring-offset", Slot::CssOnly("paired with --focus-ring")),
     ("--row-focus-bar", Slot::CssOnly("a border shorthand, not a scale value")),

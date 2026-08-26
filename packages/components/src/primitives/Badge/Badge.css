@@ -1,0 +1,58 @@
+/* Badge — status, and the one place status tokens are used directly.
+   Hue and tint arrive as inline token references from Badge.tsx, because the
+   stem is data. Everything geometric lives here.
+
+   Horizontal padding is --space-2 rather than the six the contract asks for.
+   Six is off the four-unit grid the same contract mandates, and no token
+   spells it. Reported. */
+.armada-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--h-badge);
+  padding: 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: 1;
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+.armada-badge > svg {
+  flex: none;
+}
+
+/* The pulse: the inner dot of circle-dot, opacity and scale only, at
+   --duration-pulse. The ring holds still, so no row shifts and nothing
+   reflows. Hue says which mark is running; motion says it is still working.
+
+   lucide draws that dot at a radius of one on a twenty-four grid, so at badge
+   size it is about a device pixel across. Opacity carries most of the reading
+   and the scale stays shallow — taken further the dot disappears and the mark
+   reads as blinking rather than breathing. */
+.armada-badge[data-pulsing] > svg > circle + circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: armada-badge-pulse var(--duration-pulse) var(--ease) infinite;
+}
+
+@keyframes armada-badge-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.7);
+  }
+}
+
+/* The pulse stops. Hue still carries the reading, so nothing is lost. */
+@media (prefers-reduced-motion: reduce) {
+  .armada-badge[data-pulsing] > svg > circle + circle {
+    animation: none;
+  }
+}

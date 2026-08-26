@@ -1,0 +1,142 @@
+/* Dialog. A floating layer: --bg-overlay, --border-default, --radius-lg and a
+ * shadow. Elevation is surface plus shadow and nothing else — no blur, and
+ * never a second floating layer stacked inside this one.
+ *
+ * MISSING TOKENS, both named on the line below and reported.
+ * --armada-hairline: packages/tokens declares no border-width. --focus-ring
+ *   proves the pattern the token set uses (the shorthand is the token) and has
+ *   no hairline counterpart, so the contract's edge on a floating layer cannot
+ *   be spelled from a token today.
+ * --armada-dialog-width: the component sheet draws the confirmation at a fixed
+ *   width and no width token exists for it. --palette-width is the palette's.
+ */
+.armada-dialog {
+  --armada-hairline: var(--border-width);
+  --armada-dialog-width: var(--w-dialog);
+}
+
+/* No --scrim token either. Mixed from --bg-sunken rather than written as a
+ * literal, so the value at least tracks the ground it sits over. */
+.armada-dialog-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: color-mix(in srgb, var(--bg-sunken) 62%, transparent);
+}
+
+.armada-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: var(--armada-dialog-width);
+  padding: var(--pad-card);
+  border-radius: var(--radius-lg);
+  background: var(--bg-overlay);
+  border: var(--armada-hairline) solid var(--border-default);
+  box-shadow: var(--shadow-overlay);
+}
+
+.armada-dialog__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+/* An icon is legal here: Iconography puts them on ghost row actions, in
+ * confirmation dialogs, and in toolbars. */
+.armada-dialog__glyph {
+  flex: none;
+  margin-top: var(--space-1);
+}
+
+.armada-dialog__glyph--destructive {
+  color: var(--status-completed-failed);
+}
+
+.armada-dialog__glyph--escalated {
+  color: var(--status-escalated);
+}
+
+.armada-dialog__copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-dialog__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-heading);
+  text-wrap: pretty;
+}
+
+.armada-dialog__body {
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-wrap: pretty;
+}
+
+.armada-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* Every button in a group is the same height. A ghost recedes by losing its
+ * fill, never by shrinking. Local rather than imported from Button so this
+ * component builds on its own; see the report. */
+.armada-dialog__button {
+  flex: none;
+  white-space: nowrap;
+  height: var(--h-control);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+
+/* A secondary is filled one surface step from its ground. This dialog's ground
+ * is --bg-overlay, so the secondary takes --bg-raised. */
+.armada-dialog__button--secondary {
+  border: var(--armada-hairline) solid var(--border-strong);
+  background: var(--bg-raised);
+  color: var(--fg-default);
+}
+
+.armada-dialog__button--secondary:hover {
+  background: var(--bg-hover);
+}
+
+/* Destructive stays outlined. A solid red button reads as an error state
+ * rather than an action, and Kill is deliberate, not alarming. */
+.armada-dialog__button--destructive {
+  border: var(--armada-hairline) solid var(--status-completed-failed);
+  background: transparent;
+  color: var(--status-completed-failed);
+}
+
+.armada-dialog__button--destructive:hover {
+  background: var(--status-completed-failed-bg);
+}
+
+.armada-dialog__button--primary {
+  border: var(--armada-hairline) solid var(--accent);
+  background: var(--accent);
+  color: var(--fg-inverse);
+}
+
+.armada-dialog__button--primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}

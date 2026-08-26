@@ -23,9 +23,10 @@ next person cannot find.
 | Holds | Home |
 |---|---|
 | Contracts, practices, concepts, journeys, spikes, open questions | The repository |
-| Registries code reads — tokens, icons, settings, the domain model | The repository |
+| Registries code reads — tokens, icons, components, settings, the domain model | The repository |
 | What is being built and in what order | GitHub issues and milestones |
 | Mockups, the component sheet, the canvas | The design project |
+| A component as built | Storybook, `packages/components` |
 
 **The design workspace is no longer a working surface**, and nothing sits
 between the repository and the design project.

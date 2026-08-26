@@ -1,0 +1,97 @@
+/* Radio — inherits the input's border and focus rules.
+ *
+ * The ring is --space-4 and the dot is --space-2. The component sheet draws
+ * them at 14px and 6px; both are off the 4px grid and have no token, and rule
+ * twelve refuses the literals. --space-4 and --space-2 are the nearest values
+ * that are on the grid and spellable, and they hold the sheet's reading of a
+ * dot that fills about half the ring.
+ */
+
+.armada-radio {
+  /* The native input is absolutely positioned and clipped; the label is what
+     it is positioned against. */
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+.armada-radio__input {
+  position: absolute;
+  width: var(--space-4);
+  height: var(--space-4);
+  margin: 0;
+  clip-path: inset(50%);
+}
+
+.armada-radio__ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--space-4);
+  height: var(--space-4);
+  border-radius: 50%;
+  border-style: solid;
+  border-width: var(--border-width);
+  border-color: var(--border-default);
+  background: var(--bg-sunken);
+  transition: border-color var(--duration-fast) var(--ease);
+}
+
+/* The dot is the accent, and so is the ring it sits in: a radio states one
+ * choice out of a set, and the accent is the affordance token for chosen. */
+.armada-radio__dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: 50%;
+  background: transparent;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+.armada-radio__input:checked + .armada-radio__ring {
+  border-color: var(--accent);
+}
+
+.armada-radio__input:checked + .armada-radio__ring .armada-radio__dot {
+  background: var(--accent);
+}
+
+.armada-radio__input:focus-visible + .armada-radio__ring,
+.armada-radio__input[data-preview-focus] + .armada-radio__ring {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Disabled is --fg-subtle with hover suppressed. Never opacity. */
+.armada-radio:has(.armada-radio__input:disabled) {
+  color: var(--fg-subtle);
+  cursor: default;
+}
+
+.armada-radio__input:disabled + .armada-radio__ring {
+  border-color: var(--border-subtle);
+}
+
+.armada-radio__input:disabled:checked + .armada-radio__ring .armada-radio__dot {
+  background: var(--fg-subtle);
+}
+
+/* A set of choices, stacked. The group is the component: one radio alone is a
+ * choice with nothing to choose against. */
+.armada-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.armada-radio-group__label {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}

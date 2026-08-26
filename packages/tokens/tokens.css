@@ -252,6 +252,18 @@
   --space-8: 32px;
   --space-12: 48px;
 
+  /* Every panel, card, input and floating layer carries a hairline, and the
+     contract says so in prose without ever naming a value that could be
+     spelled. Twenty-six lines across the component package reached for a bare
+     `1px`, which the design lint refuses and is right to refuse: an unnamed
+     value is one nobody can change in one place. `thin` is not a substitute —
+     it is browser-defined, not 1px by specification.
+
+     The focus ring already has its own spelling — `--focus-ring` and
+     `--row-focus-bar` in semantic.css are outline and border shorthands, and
+     carry their width inside. Nothing here duplicates them. */
+  --border-width: 1px;
+
   --radius-sm: 3px;  /* badges, small controls */
   --radius-md: 5px;  /* buttons, inputs, cards */
   --radius-lg: 8px;  /* dialogs, panels */
@@ -285,6 +297,26 @@
   --layout-breakpoint: 1100px;
   --palette-width: 560px;
   --palette-max-height: 400px;
+
+  /* Floating-layer widths. The palette already had two of these and nothing
+     else did, so every other overlay reached for a literal the design lint
+     refuses. The values are the ones the component sheet draws — naming them
+     is not a decision, it is the decision written down where it can be
+     changed once. */
+  --w-dialog: 440px;
+  --w-sheet: 480px;
+  --w-menu: 240px;
+  --w-tooltip: 340px;
+  --w-toast: 420px;
+
+  /* An active tab's underline. Both 2px accent shorthands already in
+     semantic.css mean focus — a resting mark that borrowed one would say
+     "you are here" in the vocabulary reserved for "your cursor is here". */
+  --edge-active: 2px;
+
+  /* The status dot. Off the 4px grid deliberately: a 4px dot disappears at
+     desk distance and an 8px one reads as a badge that lost its label. */
+  --dot: 6px;
 
   /* Shadows are legal on floating layers only */
   --shadow-overlay: 0 8px 24px -6px rgb(0 0 0 / 0.55), 0 2px 6px -2px rgb(0 0 0 / 0.4);

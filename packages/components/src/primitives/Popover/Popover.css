@@ -1,0 +1,66 @@
+/* Popover. A floating layer: --bg-overlay and a shadow, and no blur.
+ *
+ * The radius is taken from the dropdown-menu line because the contract
+ * declares none for a popover. --radius-lg on a dropdown and --radius-sm on a
+ * tooltip leaves a popover unclaimed between them; reported.
+ *
+ * MISSING TOKEN on the line below.
+ * --armada-hairline: no border-width token exists in packages/tokens.
+ */
+.armada-popover {
+  --armada-hairline: var(--border-width);
+}
+
+.armada-popover {
+  position: relative;
+  display: inline-flex;
+}
+
+.armada-popover__trigger {
+  display: inline-flex;
+}
+
+.armada-popover__panel {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  z-index: 40;
+  min-width: var(--sidebar-default);
+  max-width: var(--palette-width);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--bg-overlay);
+  border: var(--armada-hairline) solid var(--border-default);
+  box-shadow: var(--shadow-overlay);
+  color: var(--fg-default);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-align: left;
+  text-wrap: pretty;
+}
+
+.armada-popover__panel--start {
+  left: 0;
+}
+
+.armada-popover__panel--end {
+  right: 0;
+}
+
+/* The trigger a story uses. Ghost, because a popover trigger is chrome. */
+.armada-popover__button {
+  height: var(--h-control);
+  padding: 0 var(--space-3);
+  border: var(--armada-hairline) solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease);
+}
+
+.armada-popover__button:hover {
+  background: var(--bg-hover);
+}

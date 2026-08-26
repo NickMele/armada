@@ -1,0 +1,75 @@
+/* Toast. A floating layer, drawn as the component sheet draws it: bottom
+ * right, --bg-overlay, --border-default, --radius-md and a shadow. No blur,
+ * and never a second floating layer inside it.
+ *
+ * It does not animate in. No entrance animations on data.
+ *
+ * MISSING TOKENS on the line below.
+ * --armada-hairline: no border-width token exists in packages/tokens.
+ * --armada-toast-max: the sheet caps the toast so a sentence wraps rather than
+ *   running the window's width. No token carries that measure.
+ * --armada-dot: the status bar and the toast both draw a leading dot at this
+ *   size and the spacing scale has no step for it.
+ */
+.armada-toast {
+  --armada-hairline: var(--border-width);
+  --armada-toast-max: var(--w-toast);
+  --armada-dot: var(--dot);
+}
+
+.armada-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: var(--armada-toast-max);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-overlay);
+  border: var(--armada-hairline) solid var(--border-default);
+  box-shadow: var(--shadow-overlay);
+  color: var(--fg-default);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.armada-toast__dot {
+  flex: none;
+  width: var(--armada-dot);
+  height: var(--armada-dot);
+  border-radius: 50%;
+}
+
+.armada-toast__text {
+  flex: 1;
+  min-width: 0;
+  text-wrap: pretty;
+}
+
+.armada-toast__action {
+  flex: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-toast__action:hover {
+  color: var(--accent-hover);
+}
+
+/* Where a toast actually sits. The stories draw it in flow so several can be
+ * read at once; the app pins it. */
+.armada-toast-region {
+  position: fixed;
+  right: var(--space-6);
+  bottom: var(--space-6);
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}

@@ -1,0 +1,78 @@
+/* Input — `### Input` in the design system contract.
+ *
+ * Recessed, the opposite of raised: an input is a well you type into, so it
+ * takes --bg-sunken while the card around it is --bg-raised.
+ *
+ *
+ * `[data-preview-focus]` is a Storybook rendering aid, not a design state: it
+ * selects the same declarations as `:focus-visible`, which a static story
+ * cannot reach. */
+
+.armada-input-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* Labels align with their fields, and no label opens with a Wh- word: the
+ * label is `Project location`, not a question. */
+.armada-input-field__label {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--h-control);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  border-style: solid;
+  border-width: var(--border-width);
+  border-color: var(--border-default);
+  background: var(--bg-sunken);
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  transition: border-color var(--duration-fast) var(--ease);
+}
+
+/* Mono means machine-derived — a path, a branch, a command — and runs one
+ * step smaller than the adjacent sans. */
+.armada-input[data-mono="true"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+.armada-input::placeholder {
+  color: var(--fg-subtle);
+}
+
+.armada-input:focus-visible,
+.armada-input[data-preview-focus] {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Invalid takes the --status-completed-failed edge and states why underneath.
+ * The border alone is one channel; the message is the one that says what to
+ * do about it. */
+.armada-input[aria-invalid="true"] {
+  border-color: var(--status-completed-failed);
+}
+
+.armada-input-field__message {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--status-completed-failed);
+}
+
+/* Disabled is --fg-subtle text with hover suppressed. Never opacity. */
+.armada-input:disabled {
+  color: var(--fg-subtle);
+  border-color: var(--border-subtle);
+  cursor: default;
+}

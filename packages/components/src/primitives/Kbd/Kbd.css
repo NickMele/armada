@@ -1,0 +1,30 @@
+/* kbd — --bg-sunken behind a --border-subtle edge at --radius-sm, mono at
+   --text-2xs in --fg-muted, --h-kbd tall.
+
+   Horizontal padding is --space-1, which is what the contract asks for. The
+   sheet draws five, off the four-unit grid and with no token; the contract
+   wins, and the difference is one device pixel a side. */
+.armada-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  height: var(--h-kbd);
+  padding: 0 var(--space-1);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: 1;
+  font-weight: var(--weight-body);
+  white-space: nowrap;
+}
+
+/* One key per box. A chord set in one box reads as a key that does not exist. */
+.armada-kbd-chord {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}

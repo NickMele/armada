@@ -1,0 +1,97 @@
+/* Alert. A standing condition, drawn flat: no shadow, because it is not a
+ * floating layer. The escalated tone takes the Job token and its 12% tint; the
+ * neutral tone takes no hue, because a module is not a Job state.
+ *
+ * MISSING TOKEN on the line below.
+ * --armada-hairline: no border-width token exists in packages/tokens.
+ */
+.armada-alert {
+  --armada-hairline: var(--border-width);
+}
+
+.armada-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--fg-default);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.armada-alert--escalated {
+  background: var(--status-escalated-bg);
+  border: var(--armada-hairline) solid var(--status-escalated);
+}
+
+.armada-alert--neutral {
+  background: var(--bg-sunken);
+  border: var(--armada-hairline) solid var(--border-default);
+}
+
+.armada-alert__glyph {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  margin-top: var(--space-1);
+}
+
+.armada-alert--escalated .armada-alert__glyph {
+  color: var(--status-escalated);
+}
+
+.armada-alert--neutral .armada-alert__glyph {
+  color: var(--fg-muted);
+}
+
+.armada-alert__copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  text-wrap: pretty;
+}
+
+.armada-alert__title {
+  font-weight: var(--weight-medium);
+}
+
+.armada-alert__body {
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+/* The neutral strip runs as one line: the condition and what it costs, with no
+ * headline above it. */
+.armada-alert--neutral .armada-alert__body {
+  color: var(--fg-default);
+}
+
+.armada-alert__action {
+  flex: none;
+  align-self: center;
+}
+
+/* The one ghost control a condition strip carries. */
+.armada-alert__button {
+  height: var(--h-control);
+  padding: 0 var(--space-3);
+  border: var(--armada-hairline) solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+
+.armada-alert__button:hover {
+  background: var(--bg-hover);
+  color: var(--fg-default);
+}

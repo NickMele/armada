@@ -1,0 +1,218 @@
+/* Split button — the likely action, with the rest one click away. Button plus
+ * dropdown menu, no new primitive.
+ *
+ * The geometry is the component sheet's, and it diverges from `### Button` in
+ * three places, which is recorded rather than reconciled: --radius-sm not
+ * --radius-md, --text-xs not --text-sm, and a --border-default edge where a
+ * secondary button rests on --border-strong. The sheet is the drawing; the
+ * divergence is in the report.
+ *
+ * The caret segment is one control minus one step (28px). The sheet states
+ * 28px outright and no token carries it.
+ *
+ * The container must not clip. The menu is a floating layer, so the wrapper
+ * takes no overflow: a menu opening from the last row of a list would be cut
+ * by the boundary. The control itself clips, which is what rounds the two
+ * segments against one shared edge.
+ */
+
+.armada-split-button {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.armada-split-button__control {
+  display: inline-flex;
+  align-items: stretch;
+  width: fit-content;
+  height: var(--h-control);
+  border-radius: var(--radius-sm);
+  border-style: solid;
+  border-width: var(--border-width);
+  border-color: var(--border-default);
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+
+/* A secondary is filled one surface step from its ground. On a sunken or
+ * overlay row that step is --bg-raised, not --bg-sunken. */
+.armada-split-button__control[data-ground="sunken"] {
+  background: var(--bg-raised);
+}
+
+.armada-split-button__action,
+.armada-split-button__caret {
+  display: flex;
+  align-items: center;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+/* The label commits. It is the act the state calls for, so it changes with
+ * the Job, and it never repeats inside the menu. */
+.armada-split-button__action {
+  padding: 0 var(--space-3);
+  color: var(--fg-default);
+  white-space: nowrap;
+}
+
+.armada-split-button__action:hover,
+.armada-split-button__action[data-preview-hover] {
+  background: var(--bg-hover);
+}
+
+/* The caret offers the alternatives. chevron-down is reserved to disclosure:
+ * it is the whole content of its own divided segment, never an ornament
+ * beside a label.
+ *
+ * The divider between the segments is the caret's leading edge. It is drawn
+ * as a border rather than as an element of its own so that a hairline never
+ * has to be spelled as a width — `thin` is a border keyword and nothing
+ * else. */
+.armada-split-button__caret {
+  justify-content: center;
+  flex: none;
+  width: calc(var(--h-control) - var(--space-2));
+  padding: 0;
+  border-inline-start-style: solid;
+  border-inline-start-width: var(--border-width);
+  border-inline-start-color: var(--border-default);
+  color: var(--fg-muted);
+}
+
+.armada-split-button__caret:hover,
+.armada-split-button__caret[data-preview-hover],
+.armada-split-button__caret[aria-expanded="true"] {
+  background: var(--bg-hover);
+  color: var(--fg-default);
+}
+
+.armada-split-button__action:focus-visible,
+.armada-split-button__caret:focus-visible,
+[data-preview-focus="action"] .armada-split-button__action,
+[data-preview-focus="caret"] .armada-split-button__caret {
+  outline: var(--focus-ring);
+  /* No offset: the segments share one clipped edge, so an offset ring would
+ * be cut by the control it sits inside. The ring still differs from every
+ * resting edge in colour and width. */
+  outline-offset: 0;
+}
+
+/* On job detail there is one Job and one primary, so the same control may
+ * take the accent. A list row never does: fourteen rows offering a decision
+ * would be fourteen accent blocks. */
+.armada-split-button__control[data-variant="primary"] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.armada-split-button__control[data-variant="primary"] .armada-split-button__action,
+.armada-split-button__control[data-variant="primary"] .armada-split-button__caret {
+  color: var(--fg-inverse);
+}
+
+.armada-split-button__control[data-variant="primary"] .armada-split-button__action:hover,
+.armada-split-button__control[data-variant="primary"] .armada-split-button__caret:hover,
+.armada-split-button__control[data-variant="primary"] .armada-split-button__action[data-preview-hover],
+.armada-split-button__control[data-variant="primary"] .armada-split-button__caret[data-preview-hover],
+.armada-split-button__control[data-variant="primary"] .armada-split-button__caret[aria-expanded="true"] {
+  background: var(--accent-hover);
+  color: var(--fg-inverse);
+}
+
+/* The divider on an accent fill has no token of its own. --accent-hover is
+ * the only step within the accent, and it is what separates the segments
+ * without introducing a colour the fill does not already carry. */
+.armada-split-button__control[data-variant="primary"] .armada-split-button__caret {
+  border-inline-start-color: var(--accent-hover);
+}
+
+/* Disabled is --fg-subtle with hover suppressed. Never opacity. */
+.armada-split-button__control:has(.armada-split-button__action:disabled) {
+  background: var(--bg-sunken);
+  border-color: var(--border-strong);
+}
+
+.armada-split-button__action:disabled,
+.armada-split-button__caret:disabled {
+  color: var(--fg-subtle);
+  cursor: default;
+}
+
+/* The menu is a floating layer, so it takes --bg-overlay and a shadow — one
+ * of the few places a shadow is legal, and it is positioned out of flow. A
+ * menu that pushed layout would move every row beneath the one being acted
+ * on. Its container must not clip: a menu opening from the last row of a list
+ * would be cut by the boundary, so rows carry the corner radius, never the
+ * list. */
+.armada-split-button__menu {
+  position: absolute;
+  top: 100%;
+  inset-inline-start: 0;
+  z-index: 1;
+  margin-top: var(--space-2);
+  width: fit-content;
+  min-width: var(--sidebar-default);
+  padding: var(--space-1) 0;
+  border-radius: var(--radius-md);
+  border-style: solid;
+  border-width: var(--border-width);
+  border-color: var(--border-default);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-overlay);
+}
+
+/* The menu holds what the row could also do, never a repeat of the label —
+ * and no item ever says Open, because clicking the row already does that. */
+.armada-split-button__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  width: 100%;
+  box-sizing: border-box;
+  height: var(--h-row);
+  padding: 0 var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease);
+}
+
+.armada-split-button__item:hover,
+.armada-split-button__item:focus-visible,
+.armada-split-button__item[data-preview-hover] {
+  background: var(--bg-hover);
+  outline: none;
+}
+
+/* Destructive last, and in --status-completed-failed text — never a filled
+ * red row. */
+.armada-split-button__item[data-danger="true"] {
+  color: var(--status-completed-failed);
+}
+
+/* The shortcut is machine-derived reference material sitting beside the thing
+ * it describes, so it is mono at --fg-subtle rather than at full contrast. */
+.armada-split-button__shortcut {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}

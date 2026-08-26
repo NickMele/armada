@@ -1,0 +1,59 @@
+/* Card — --bg-raised with a --border-default edge, --radius-md, and --pad-card
+   rather than the section gap. No shadow: elevation is surface. */
+.armada-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--pad-card);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  color: var(--fg-default);
+}
+
+/* A de-emphasised card steps to --border-subtle and --fg-subtle. Dimming is a
+   token, never an alpha, because opacity muddies every status colour inside. */
+.armada-card[data-dimmed] {
+  border-color: var(--border-subtle);
+  color: var(--fg-subtle);
+}
+
+.armada-card[data-dimmed] .armada-card-description {
+  color: var(--fg-subtle);
+}
+
+.armada-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.armada-card-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-heading);
+  text-wrap: pretty;
+}
+
+.armada-card-description {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-wrap: pretty;
+}
+
+.armada-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-card-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

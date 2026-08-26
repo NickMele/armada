@@ -28,3 +28,6 @@ out/
 # Golden-comparison output, written beside a fixture when one fails so the diff
 # can be read. Never the fixture itself.
 *.actual
+
+# Storybook builds from source on demand; the output is not a record of anything.
+storybook-static/
