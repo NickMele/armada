@@ -14,19 +14,35 @@ this first.
 
 ## The single source of truth
 
-`protocol-version.toml`, at the repo root, holds one number:
+`protocol-version.toml`, at the repo root, holds a major and a minor:
 
 ```toml
-version = 1
+major = 4
+minor = 0
 ```
+
+**Which of the two moves decides what a mismatch does**, and the table further
+down is what the code implements. `major` moves when a message an older peer
+already parses stops parsing the same way. `minor` moves when the change is
+additive only, and resets to zero whenever `major` moves.
+
+The pair crosses the wire as **one field carrying both numbers** —
+`"protocol_version": {"major": 4, "minor": 0}` — rather than as two fields. Two
+would let either side compare the majors and forget the minors, which is the
+defect this shape replaced: the version was one integer, `connection.ts`
+compared it with `!==`, and every bump was a full refusal. A bare integer is
+still read, as that major at minor zero, because version 4 shipped as one and a
+Fleet from before the pair should reach the skew screen rather than read as a
+runtime file nothing wrote.
 
 That file is read on both sides, but not the same way:
 
 - **Rust** reads it at compile time. `crates/ipc/build.rs` parses it and emits
-  a `PROTOCOL_VERSION` constant that the rest of the Rust workspace compiles
-  against. This half is self-correcting by construction — `build.rs` runs on
-  every `cargo build`, so the embedded constant cannot go stale relative to the
-  file. There is no step to forget here.
+  the two numbers, which `crates/ipc/src/version.rs` assembles into the
+  `PROTOCOL_VERSION` constant the rest of the Rust workspace compiles against.
+  This half is self-correcting by construction — `build.rs` runs on every
+  `cargo build`, so the embedded constant cannot go stale relative to the file.
+  There is no step to forget here.
 - **TypeScript** cannot read a `build.rs`. The plan is a codegen step, driven
   off the same `ipc` crate that defines the DTOs, that emits the matching
   TypeScript types and the version number into `packages/` (see
@@ -47,29 +63,22 @@ drift a build failure instead of a runtime surprise. It checks two things:
 2. Nothing outside the generated file hard-codes the protocol version as a
    literal.
 
-That second check exists because of a violation already in the tree today:
-`apps/desktop/src/preload/index.ts` currently does this —
-
-```ts
-contextBridge.exposeInMainWorld('armada', {
-  protocolVersion: (): number => 1,
-})
-```
-
-That `1` is a hand copy of `protocol-version.toml`'s `version`, typed by a
-person, with no mechanism forcing it to move when the source file does. It is
-exactly the drift `protocol-version.toml` was created to make impossible, and
-it is currently possible anyway because the generated-types pipeline it's
-supposed to read from doesn't exist yet. When `ipc`'s codegen lands, this line
-needs to import the generated constant instead of restating it — that's a
-required follow-up, not a someday-nice-to-have.
+That second check exists because of a violation this document was written
+against: `apps/desktop/src/preload/index.ts` returned a hand-typed `1`, with no
+mechanism forcing it to move when the source file did. It reads the generated
+constant now, and nothing in Bridge restates either number — but the check is
+what keeps it that way, because the literal is a one-line shortcut that looks
+harmless in review.
 
 **Contributor workflow, in order:**
 
 1. Change the DTOs in `crates/ipc` (add a field, add a variant, whatever the
    change is).
-2. If the change is wire-breaking (see the minor/major table below), bump
-   `version` in `protocol-version.toml`.
+2. Decide which number moves, from the table below, and move it in
+   `protocol-version.toml`. Additive-only moves `minor`; anything else moves
+   `major` and resets `minor` to zero. **The table is the decision, not a
+   guideline** — a minor bump that removes or retypes a field makes Bridge's
+   banner a lie and breaks it while a Job runs.
 3. Regenerate the TypeScript with `pnpm --filter @armada/desktop codegen`. It
    needs `pnpm install` to have run and nothing else; it rewrites
    `apps/desktop/src/shared/generated/` from `protocol-version.toml` and
@@ -166,6 +175,47 @@ adding/loosening X" — that sentence is the tell. Stop and check whether the
 other side's code has an exhaustive match, a presence assumption, or a name
 lookup anywhere near the thing you're touching.
 
+## What Bridge does with the version it reads
+
+Bridge is the side that decides. It reads Fleet's version out of the runtime
+file **before it opens a socket**, so a refusal is a screen naming both versions
+rather than a malformed first message, and it checks the same fact again on the
+resync — a client that reached the socket without reading the file has had no
+check at all, and a Fleet restarted under a live socket is not the Fleet the
+file described.
+
+Four readings, and only the first two connect.
+
+| Reading | What is true | What Bridge does |
+|---|---|---|
+| Same | The majors and the minors agree | Connects. The status bar says nothing about versions |
+| Fleet ahead | Same major, Fleet's minor is higher | **Connects, and carries a banner.** Everything drawn is current; Fleet has additions this Bridge cannot ask for |
+| Fleet behind | Same major, Fleet's minor is lower | **Refuses.** The screen names both versions and says to restart Fleet when no Job is running |
+| Incompatible | The majors differ, either way round | **Refuses.** The screen names both versions and says to update both to the same commit. This is what the v0 lifeboat is for |
+
+**The middle two rows are the same gap in opposite directions and they are not
+the same situation.** Additive-only says the newer side's additions are things
+the older side never asks for and never reads. A newer *writer* is therefore
+safe: Fleet sends a field, Bridge ignores it, and nothing Bridge draws is
+wrong. A newer *reader* is not: Bridge reads a field an older Fleet was built
+before sending, and additive-only promises nothing about that. The hole would
+arrive mid-Job rather than at startup, on a Job Board that gives no sign it is
+missing anything — which is worse than not connecting.
+
+The banner therefore says the connection is fine and names what it cannot
+reach. It goes in the status bar beside the running dot, as advice on a healthy
+connection, and **not** as a failure notice: a minor gap Bridge can survive is
+not a fault, and drawing it as one tells somebody something is broken when it is
+working. `apps/desktop/src/renderer/src/fleet.ts` carries the sentences and
+`apps/desktop/src/shared/version.ts` carries the rule; `crates/ipc/src/version.rs`
+is the same rule in Rust, where the four readings are tested.
+
+**The rule is spelled twice, and that is a known cost.** Bridge decides, so the
+rule has to exist in TypeScript; the desktop app has no test runner, so the only
+place the four readings can be proved is Rust. Two spellings of one rule is
+exactly what this repository calls a second vocabulary, and it is written down
+here rather than left to be discovered.
+
 ## Why skew is dangerous here specifically
 
 Version skew is usually a deploy-time annoyance: you restart the old thing,
@@ -185,11 +235,20 @@ cost minor-bump-additive-only is bought against: a minor bump has to be safe
 to hit *mid-Job*, unattended, with money on the line, not just safe to hit at
 startup.
 
+**And the same lifetimes make the refusing direction the likely one.** A
+running Fleet's version does not change when someone updates the app — the
+daemon that was started last week is still speaking last week's protocol, and
+the Bridge relaunched after the update is the newer of the two. So "Fleet
+behind" is what an ordinary update produces and "Fleet ahead" is the rarer
+case, reached by restarting Fleet without relaunching Bridge. The banner is not
+the common path. The refusal is, and its screen has to say plainly that the
+daemon is the thing to restart.
+
 ## The v0 lifeboat
 
-When the version check fails outright — major skew, or a Fleet too old or too
-new to speak the current protocol at all — Bridge doesn't get nothing. It gets
-four routes that don't depend on version agreement:
+When the version check refuses — either of the bottom two rows above — Bridge
+doesn't get nothing. It gets four routes that don't depend on version
+agreement:
 
 | Operation | Route |
 |---|---|

@@ -30,12 +30,20 @@ It is not a startup-time inconvenience.
 | Skew | Behaviour |
 |---|---|
 | Exact match | Normal |
-| Minor | Normal, plus a persistent "Fleet is behind, restart when idle" banner. Safe **only** because minor bumps are additive-only |
-| Major | The lifeboat, not refusal |
+| Minor, **Fleet ahead** | Normal, plus a persistent banner. Safe **only** because minor bumps are additive-only |
+| Minor, **Fleet behind** | Refused |
+| Major, either direction | The lifeboat, not refusal |
 
-**Minor means additive-only. That is the whole basis of the middle row** — if a
-minor bump removes or retypes a field, the banner is lying and Bridge breaks
-while a Job runs.
+**Minor means additive-only, and additive-only is safe in one direction.** A
+Fleet ahead sends fields Bridge does not read — harmless. A Fleet behind does
+not send fields Bridge *does* read, and the hole lands mid-Job on a Board
+showing no sign of it. So the banner is Fleet-ahead's and the refusal is
+Fleet-behind's.
+
+**This table read "Fleet is behind, restart when idle" on the middle row, which
+is exactly backwards, and it was carried into a brief before anybody checked
+it.** The direction is the whole safety argument; a table that states it wrongly
+is worse than one that omits it.
 
 ## The v0 lifeboat
 

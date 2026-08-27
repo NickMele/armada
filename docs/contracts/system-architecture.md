@@ -242,8 +242,11 @@ spans. Drop that table and the decision reopens.
 # 6. Protocol surface
 
 **Versioning.** `protocol-version.toml` at the repo root is the source of
-truth. `crates/ipc/build.rs` reads it and embeds `PROTOCOL_VERSION`; a
-codegen step emits matching TS types from the same `ipc` source. Both
+truth, and it carries a major and a minor. `crates/ipc/build.rs` reads it and
+embeds `PROTOCOL_VERSION`; a codegen step emits matching TS types from the
+same `ipc` source. A major mismatch refuses the connection in either
+direction; a minor one is additive-only, so a Fleet ahead of Bridge connects
+with a banner and a Fleet behind it refuses. Both
 generated outputs are checked in, and `cargo xtask verify-protocol` fails
 when either is stale, so a cross-language breaking change is a build
 failure rather than a runtime surprise.
@@ -277,7 +280,8 @@ side, which is a known seam rather than a solved one.
 | Skew | Behavior |
 | --- | --- |
 | Exact match | Normal |
-| Minor | Normal, plus a persistent "Fleet is behind, restart when idle" banner. Safe only because minor bumps are additive-only |
+| Minor, Fleet ahead | Normal, plus a persistent banner. Safe only because minor bumps are additive-only |
+| Minor, Fleet behind | Refused. Bridge reads a field an older Fleet was built before sending, and the hole lands mid-Job |
 | Major | Lifeboat, not refusal |
 
 **The v0 lifeboat.** A frozen contract serving four operations when the

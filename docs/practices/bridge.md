@@ -39,7 +39,7 @@ actually allowed to initiate:
 ```ts
 // src/preload/index.ts
 contextBridge.exposeInMainWorld('armada', {
-  protocolVersion: (): number => PROTOCOL_VERSION,
+  protocolVersion: (): ProtocolVersion => PROTOCOL_VERSION,
   jobs: {
     list: (): Promise<JobSummary[]> => ipcRenderer.invoke('jobs:list'),
     subscribe: (onEvent: (e: JobEvent) => void): (() => void) => {
@@ -170,7 +170,7 @@ What the UI shows has to name the actual state, not paper over it with a spinner
 | Runtime file present, pid dead | Fleet crashed or was killed without cleanup | "Fleet is not running" (not "unreachable" — the pid check already told you which one this is) |
 | Runtime file present, pid alive, socket refuses or times out | Fleet is running but something between Bridge and it is broken | "Fleet is running and unreachable" — distinct copy, distinct next step, because restarting Fleet is the wrong fix here |
 | Connected, protocol versions match | Normal | Full UI |
-| Connected, minor version skew | Fleet is behind an additive-only bump | Full UI plus a persistent "Fleet is behind, restart when idle" banner — safe only because minor bumps never remove or retype a field |
+| Connected, minor version skew | Fleet is **ahead** by an additive-only bump | Full UI plus a persistent banner. Safe only in this direction: Fleet sends fields Bridge does not read. A Fleet **behind** is refused, because Bridge would read a field it never sends |
 | Connected, major version skew | Wire-incompatible | The v0 lifeboat: a frozen, hand-written recovery screen — list Jobs with status, kill a Job, stop Fleet, report Fleet's version, nothing else. It has no dependency to break because breaking is the one case it exists to survive |
 
 The lifeboat is deliberately minimal and Bridge-side code should not try to
@@ -251,11 +251,14 @@ rely on, the unknown-code fallback, and the rule that where a message appears is
 chosen by blast radius rather than severity all live in
 `docs/contracts/error-contract.md`.
 
-**`protocol-version.toml` at the repo root is the one number both sides check**,
-Rust and TypeScript alike (`crates/ipc/build.rs` on Fleet's side, a generated
-TS constant on Bridge's). Bridge should read the generated constant, never a
-hardcoded literal — a hand-typed `1` in Bridge code is a second source of
-truth the day the file changes.
+**`protocol-version.toml` at the repo root is what both sides read**, Rust and
+TypeScript alike (`crates/ipc/build.rs` on Fleet's side, a generated TS constant
+on Bridge's). Bridge should read the generated constant, never a hardcoded
+literal — a hand-typed number in Bridge code is a second source of truth the day
+the file changes. It carries a major and a minor, and Bridge compares them
+through `skew` in `src/shared/version.ts` rather than with `!==`: a major
+mismatch refuses, a minor one connects with a banner in the one direction that
+is safe. `docs/practices/protocol.md` is the specification.
 
 **`packages/` stays empty until something is actually shared** — the generated
 IPC types will be its first real occupant once the protocol crate exists.
