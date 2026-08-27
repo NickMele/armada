@@ -360,16 +360,18 @@ where
             // The whole of what finishing a Job is, including the commit that
             // makes its branch mergeable, is `landing`'s.
             Ruling::Finished { tell, .. } => self.finish(ruling, tell, job_id, step, working).await,
-            // Both end the Job, and neither tells the Drone. A refusal is a
-            // Check failure's sibling here: the citation is on the record and
-            // the person who opens the branch reads it. The refusal reprompt
-            // the prompt contract specifies arrives with the retry ledger,
-            // which is what would give a Drone somewhere to go with it.
+            // Both stop the step and neither tells the Drone, and there the
+            // two part: `Failed` ends the Job, `Refused` escalates it. The
+            // refusal reprompt the prompt contract specifies arrives with the
+            // retry ledger, which is what would give a Drone somewhere to go
+            // with a citation; until then it goes to the person, and `apply`
+            // is where the two destinations are decided.
             Ruling::Failed { .. } | Ruling::Refused { .. } => {
                 let job = self.load(job_id).await?;
                 self.applied(&job, ruling).await?;
-                // Terminated without a turn, and the worktree is kept. The
-                // reason goes to the person who opens the branch.
+                // Terminated without a turn, and the worktree is kept. See
+                // `Ruling::ends_the_drone` for why an escalated Job's Drone
+                // goes too, where the registry says it stays.
                 self.end_the_drone(working).await;
                 Ok(())
             }

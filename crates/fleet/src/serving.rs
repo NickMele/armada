@@ -39,9 +39,9 @@ use api::{Daemon, Observed, Refusal};
 use core_model::Job;
 use ipc::mcp::{NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    CheckRun, DeclaredCheck, JobDetail, JobId, JobList, JobSummary, ManifestId, ManifestSummary,
-    ModelChoices, ProposeJob, Redispatched, RunId, StepFacts, StepId, WireError, WorkflowId,
-    WorkflowStep, WorkflowSummary,
+    CheckRun, DeclaredCheck, JobDetail, JobId, JobList, JobSummary, Judged, ManifestId,
+    ManifestSummary, ModelChoices, ProposeJob, Redispatched, RunId, StepFacts, StepId, WireError,
+    WorkflowId, WorkflowStep, WorkflowSummary,
 };
 use store::{LoadJobError, WriteError};
 
@@ -104,16 +104,20 @@ where
             .last_reason(job.id())
             .await
             .map_err(|why| self.refusal(why))?;
-        let ran = self
-            .store()
-            .lock()
-            .await
-            .step_checks(job.id())
-            .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+        let (ran, judged) = {
+            let store = self.store().lock().await;
+            let ran = store
+                .step_checks(job.id())
+                .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+            let judged = store
+                .step_judgments(job.id())
+                .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+            (ran, judged)
+        };
         Ok(JobDetail::of(
             &job,
             reason.as_ref(),
-            &self.step_facts(&job, ran),
+            &self.step_facts(&job, ran, judged),
         ))
     }
 
@@ -348,10 +352,14 @@ where
     /// kept because "Fleet cannot say" and "the step declares nothing" are
     /// different sentences on the wire and a row written by something else
     /// should not read as the second.
+    /// `judged` is read from the store beside `ran` and never off the Job: a
+    /// refusal's citation is the whole of what an escalated Job has to say, and
+    /// the `job_steps` row carries only that the gate stopped.
     fn step_facts(
         &self,
         job: &Job,
         ran: Vec<(core_model::StepId, Vec<core_model::StepCheck>)>,
+        judged: Vec<(core_model::StepId, Vec<core_model::Judgment>)>,
     ) -> Vec<StepFacts> {
         job.steps()
             .iter()
@@ -369,6 +377,11 @@ where
                     .iter()
                     .find(|(at, _)| at == step.step_id())
                     .map(|(_, checks)| checks.iter().map(CheckRun::from).collect())
+                    .unwrap_or_default(),
+                judged: judged
+                    .iter()
+                    .find(|(at, _)| at == step.step_id())
+                    .map(|(_, answers)| answers.iter().map(Judged::from).collect())
                     .unwrap_or_default(),
             })
             .collect()

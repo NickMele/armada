@@ -32,7 +32,7 @@ use core_model::{
     AcceptanceCriterion, Actor, CriterionId, CriterionSource, Facts, IllegalStepTransition,
     IllegalTransition, Job, JobEvent, JobId, JobStatus, JobStep, ManifestId, ModelName, NewJob,
     StepEvent, StepId, StepSeed, StepState, StepTarget, Target, Timestamp, Title, TopLevelOrigin,
-    Ulid, Urgency,
+    TransitionReason, Ulid, Urgency,
 };
 use fleet::{apply, rule_on, AtStep, CheckBudget, Clock, JudgeBudget, Judging, Mint, Ruling};
 use testkit::{resolved, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch};
@@ -368,6 +368,16 @@ impl Bench {
 
     pub fn actors(&self) -> Vec<Actor> {
         self.moves.borrow().iter().map(|e| e.actor()).collect()
+    }
+
+    /// The qualifying reason each move carried, read out of the events.
+    /// Unqualified on most; an escalation is where the trigger is.
+    pub fn reasons(&self) -> Vec<TransitionReason> {
+        self.moves
+            .borrow()
+            .iter()
+            .map(|e| e.reason().clone())
+            .collect()
     }
 }
 

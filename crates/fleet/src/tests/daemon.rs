@@ -227,6 +227,23 @@ pub fn a_fleet_holding(
     Fleet::assembled(fittings)
 }
 
+/// A Fleet whose steps are judged, and by whom.
+///
+/// The workflow is an argument because the Judge is cold by default: the
+/// fixture workflow declares no criterion, so a Fleet that only swapped the
+/// client would never make a call.
+pub fn a_fleet_judged_by(
+    home: &TempDir,
+    work: FakeWorkProduct,
+    workflow: config::ResolvedWorkflow,
+    judge: FakeJudge,
+) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
+    let mut fittings = fittings(home, work);
+    fittings.workflow = workflow;
+    fittings.judge = Arc::new(judge);
+    Fleet::assembled(fittings)
+}
+
 /// A Fleet over a store another Fleet wrote to. See [`Counted::from_next`].
 pub fn a_fleet_minting_from(
     home: &TempDir,

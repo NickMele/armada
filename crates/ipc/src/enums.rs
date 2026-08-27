@@ -90,6 +90,11 @@ wire_enum! {
     CheckOutcome, core_model::CheckOutcome, "a check outcome"
 }
 wire_enum! {
+    /// What one Judge call answered about one criterion. **Neither word is an
+    /// approval**: `met` reads "no objection", and there is no third variant.
+    JudgeVerdict, core_model::JudgeVerdict, "a judge verdict"
+}
+wire_enum! {
     /// Who caused a transition. Three ways, and a message that did not record
     /// which never will.
     Actor, core_model::Actor, "an actor"

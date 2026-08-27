@@ -15,12 +15,20 @@ use std::time::Duration;
 
 use adapter_traits::{Environment, Model, Worktree};
 use config::ResolvedWorkflow;
-use core_model::{CheckOutcome, CriterionId, JobStatus, JudgeVerdict, Timestamp};
+use core_model::{
+    CheckOutcome, CriterionId, EscalationTrigger, JobStatus, JudgeVerdict, Timestamp,
+    TransitionReason,
+};
 use testkit::{FakeJudge, FakeWorkProduct, Gate, Sketch};
+
+use ipc::{JobDetail, RunId};
 
 use crate::gate::{apply, rule_on, AtStep, Ruling};
 use crate::judging::{JudgeBudget, Judging};
+use crate::tests::daemon::{a_fleet_judged_by, a_proposal, worktree_directory};
+use crate::tests::detail::get;
 use crate::tests::gate::{budget, diff_evidence, running_job, worktree};
+use crate::tests::tmp::TempDir;
 
 const THE_QUESTION: &str = "Does the fix address the cause the note names?";
 
@@ -87,8 +95,8 @@ async fn a_veto_stops_a_step_whose_check_passed() {
         refusals.cited()[0].consequence.as_deref(),
         Some("the last row is dropped")
     );
-    // It ends the Job the same way a failed Check does, and the Drone is not
-    // told: there is no retry ledger for it to retry against.
+    // The Drone goes and is not told: there is no retry ledger for it to retry
+    // against. The Job does not go with it.
     assert!(ruling.ends_the_drone());
     assert!(ruling.tell().is_none());
     let job = running_job();
@@ -99,7 +107,151 @@ async fn a_veto_stops_a_step_whose_check_passed() {
     )
     .expect("a refusal moves the Job")
     .expect("a legal move");
+    assert_eq!(
+        moved.job.status(),
+        JobStatus::Escalated,
+        "a refusal is stopped-and-needs-a-person, not over"
+    );
+    assert!(!moved.job.status().is_terminal(), "a refusal is answerable");
+    assert_eq!(
+        moved.event.reason(),
+        &TransitionReason::Escalation(EscalationTrigger::GateFailure),
+        "the trigger says the gate stopped; the criteria say why"
+    );
+}
+
+/// **The two verdicts read differently, and that is the point of the change.**
+/// A Check failing means the work is broken and the Job is over. A Judge
+/// refusing means the work runs and is not what was asked for, which is a
+/// person's to answer.
+#[tokio::test]
+async fn a_failed_check_still_ends_the_job_where_a_refusal_does_not() {
+    let worktree = worktree();
+    let workflow = testkit::resolved(&[Sketch {
+        id: "implement",
+        label: "Implement",
+        evidence_type: Some("diff"),
+        gates: &[Gate::Check {
+            name: "suite",
+            run: "/usr/bin/false",
+            expect_exit_code: 0,
+        }],
+        judged_on: &[("c1", THE_QUESTION)],
+    }]);
+    let at = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
+    let work = FakeWorkProduct::changed(&["src/log.rs"]);
+    let ruling = rule_on(
+        at,
+        &diff_evidence(),
+        &work,
+        budget(),
+        &judged_by(FakeJudge::with_no_objection()),
+    )
+    .await;
+
+    assert!(matches!(ruling, Ruling::Failed { .. }), "{ruling:?}");
+    assert!(
+        ruling.judged().is_empty(),
+        "the Judge is never asked past a failing Check"
+    );
+    let moved = apply(
+        &running_job(),
+        &ruling,
+        Timestamp::from_rfc3339("2026-08-26T09:00:00.000Z"),
+    )
+    .expect("a failure moves the Job")
+    .expect("a legal move");
     assert_eq!(moved.job.status(), JobStatus::CompletedFailed);
+    assert!(moved.job.status().is_terminal());
+}
+
+/// **A refusal stops the step; it does not un-run the Checks.** What the
+/// mechanical tier recorded is still on the ruling, which is what the person
+/// reading the escalation needs in order to see that the work builds.
+#[tokio::test]
+async fn a_refusal_leaves_what_the_checks_recorded_standing() {
+    let worktree = worktree();
+    let ruling = ruled(
+        FakeJudge::refusing(
+            "the loop stops at n",
+            "the loop stops at n - 1",
+            "the last row is dropped",
+        ),
+        &worktree,
+    )
+    .await;
+
+    assert_eq!(
+        ruling.checks().len(),
+        2,
+        "both declared Checks are recorded"
+    );
+    assert!(ruling.checks().iter().all(|check| check.outcome.passed()));
+    assert_eq!(ruling.judged().len(), 1, "the record says the Judge ran");
+}
+
+/// **The end of the line for a refusal**: the loop rules, the Job escalates,
+/// and the citation is on the detail view a person opens.
+///
+/// A terminal status had nowhere to put the three lines. This is why the
+/// change was worth making — the trigger says the gate stopped, and only the
+/// criterion says what is wrong with the work.
+#[tokio::test]
+async fn a_refusal_escalates_the_job_and_its_citation_reaches_the_detail_view() {
+    let home = TempDir::new();
+    let fleet = a_fleet_judged_by(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        judged_workflow(),
+        FakeJudge::refusing(
+            "the loop stops at n",
+            "the loop stops at n - 1",
+            "the last row is dropped",
+        ),
+    );
+    let job = fleet
+        .propose(a_proposal("widen the bound instead of fixing it"))
+        .await
+        .expect("a Job at the gate");
+    let job_id = job.id().clone();
+    worktree_directory(&home, &job_id);
+    fleet.approve(&job_id).await.expect("released to run");
+    fleet
+        .submit_evidence(crate::tests::daemon::diff_evidence())
+        .await
+        .expect("the tool took it");
+    let turned = fleet.turn().await.expect("the gate ruled");
+    assert!(matches!(turned.ruled, Some(Ruling::Refused { .. })));
+
+    let escalated = fleet.load(&job_id).await.expect("the Job reads");
+    assert_eq!(escalated.status(), JobStatus::Escalated);
+    assert!(
+        !escalated.status().is_terminal(),
+        "a refusal leaves something to answer"
+    );
+
+    let events = fleet.events();
+    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+    let (_, body) = get(&app, &format!("/jobs/{}", job_id.as_str())).await;
+    let detail: JobDetail = ipc::decode("a Job in full", &body).expect("a JobDetail");
+
+    assert_eq!(detail.job.status.as_wire(), "escalated");
+    assert_eq!(
+        detail
+            .job
+            .reason
+            .as_ref()
+            .and_then(|reason| reason.named.as_deref()),
+        Some("gate_failure"),
+        "the Board reads the trigger, and it is not a Check's failure"
+    );
+    let refused = &detail.steps[0].judged[0];
+    assert_eq!(refused.verdict.as_wire(), "not_met");
+    assert_eq!(
+        refused.consequence.as_deref(),
+        Some("the last row is dropped"),
+        "the line a person triages on survived the escalation"
+    );
 }
 
 #[tokio::test]

@@ -37,8 +37,8 @@ use std::time::Duration;
 use adapter_traits::{WorkProduct, Worktree};
 use checks_runner::Output;
 use core_model::{
-    Actor, FrozenWorkflow, IllegalTransition, Job, Judgment, ResolvedCheck, ResolvedStep,
-    StepCheck, StepId, Target, Timestamp, Transitioned,
+    Actor, EscalationTrigger, FrozenWorkflow, IllegalTransition, Job, Judgment, ResolvedCheck,
+    ResolvedStep, StepCheck, StepId, Target, Timestamp, Transitioned,
 };
 use verification::{
     decide, Accepted, CheckFailed, NotWhatTheStepAsked, Observed, OutcomeTurn, Ran, Refusals,
@@ -177,10 +177,16 @@ pub enum Ruling {
         checks: Vec<StepCheck>,
         output: Vec<CheckOutput>,
     },
-    /// Every Check passed and the Judge refused. **The Job ends**, the same as
-    /// a Check failure and for the same reason: there is no retry ledger yet,
-    /// so a refusal surfaces to the person who opens the branch rather than
-    /// going back to the Drone. The citation is on the record.
+    /// Every Check passed and the Judge refused. **The Job escalates**, and
+    /// that is what makes it different from [`Ruling::Failed`]: a Check failing
+    /// says the work is broken, a refusal says the work runs and is not what
+    /// was asked for — which is "stopped, and needs a person". Ending the Job
+    /// would throw the verdict away, because a terminal status has nowhere to
+    /// put a citation.
+    ///
+    /// The citation itself travels on the step, in `job_step_judgments`, and
+    /// reaches the wire on [`ipc::StepDetail::judged`]. `Target::Escalated`
+    /// carries the trigger and nothing else — see [`apply`].
     Refused {
         /// Never empty.
         refusals: Refusals,
@@ -274,8 +280,15 @@ impl Ruling {
         }
     }
 
-    /// Whether the Drone's session ends here. True where the Job is over, in
-    /// either direction, and false everywhere else.
+    /// Whether the Drone's session ends here. True where the Job is over, and
+    /// on a refusal, where the Job is not.
+    ///
+    /// `job-statuses.toml` says `escalated` keeps its Drone "alive, idle", and
+    /// that is not reachable yet: the only way back to a live session is
+    /// `escalated -> running`, the redirect, which is not built — and a Drone
+    /// left running would be reaped, which would ask the machine for an
+    /// `escalated -> escalated` move it does not have. Named in this crate's
+    /// report rather than half-built.
     pub fn ends_the_drone(&self) -> bool {
         matches!(
             self,
@@ -422,6 +435,22 @@ where
 /// **The actor is always Fleet.** A Drone is never the actor on a transition
 /// its own evidence led to, which is what the recorded event has to say: the
 /// evidence was a signal and Fleet made the decision.
+///
+/// # A failure and a refusal go to different statuses
+///
+/// A Check failing is the work being broken and is terminal. A refusal is the
+/// work running and not being what was asked for, which is a person's to
+/// answer — so it is `escalated`, from which redispatch and Pilot are both
+/// reachable and `completed_failed` still is, once a person agrees.
+///
+/// The trigger is `gate_failure`, which `docs/concepts/judge.md` picks for the
+/// step evidence gate in as many words: evidence was submitted, it honestly did
+/// not pass, and the retry budget — none, at this milestone — is spent.
+///
+/// **Not `evidence_suspect`**, which the same table gives to the gaming check
+/// alone. It means the evidence was likely gamed, and a Judge that refused a
+/// criterion accused nobody; it is also the one trigger whose `level` the
+/// registry leaves undecided, so it could not legally reach `last_verdict`.
 pub fn apply(
     job: &Job,
     ruling: &Ruling,
@@ -429,7 +458,8 @@ pub fn apply(
 ) -> Option<Result<Transitioned, IllegalTransition>> {
     let target = match ruling {
         Ruling::Finished { .. } => Target::CompletedSuccess,
-        Ruling::Failed { .. } | Ruling::Refused { .. } => Target::CompletedFailed,
+        Ruling::Failed { .. } => Target::CompletedFailed,
+        Ruling::Refused { .. } => Target::Escalated(EscalationTrigger::GateFailure),
         // A step advancing inside a running Job moves the inner machine and not
         // the outer one, and the other two rulings move nothing at all.
         Ruling::Advanced { .. }

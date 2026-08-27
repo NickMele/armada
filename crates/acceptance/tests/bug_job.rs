@@ -52,8 +52,8 @@ mod bench;
 
 use adapter_traits::{CallDetail, DroneEvent, WorktreeSpec};
 use core_model::{
-    Actor, IllegalStepTransition, IllegalTransition, JobStatus, StepId, StepState, StepTarget,
-    Target,
+    Actor, EscalationTrigger, IllegalStepTransition, IllegalTransition, JobStatus, StepId,
+    StepState, StepTarget, Target, TransitionReason,
 };
 use fleet::{aftermath, Aftermath, Ending, Left, Ruling};
 use testkit::{FakeJudge, FakeWorkProduct};
@@ -329,7 +329,20 @@ async fn a_judge_stops_a_step_whose_checks_all_passed() {
     );
     bench.settled(&mut run, &bench.step(1), &ruling);
 
-    assert_eq!(run.job.status(), JobStatus::CompletedFailed);
+    // **Escalated, not over.** A failed Check says the work is broken; a
+    // refusal says the work runs and is not what was asked for, and that is
+    // exactly "stopped, and needs a person". The status is the difference a
+    // reader sees first, and it is not terminal, so the verdict can still be
+    // answered — by redispatch, by Pilot, or by accepting the failure.
+    assert_eq!(run.job.status(), JobStatus::Escalated);
+    assert!(!run.job.status().is_terminal());
+    assert_eq!(
+        bench.reasons().last(),
+        Some(&TransitionReason::Escalation(
+            EscalationTrigger::GateFailure
+        )),
+        "the trigger says the gate stopped it"
+    );
     assert_eq!(
         states(&run.job),
         [
@@ -337,6 +350,14 @@ async fn a_judge_stops_a_step_whose_checks_all_passed() {
             ("fix", StepState::Running)
         ],
         "the refused step never advanced"
+    );
+    // The citation is the whole value of the verdict and is what a terminal
+    // status had nowhere to put. It is on the ruling, keyed by the criterion,
+    // and `store` writes it against the step for the person who opens the Job.
+    assert_eq!(
+        ruling.judged()[0].consequence.as_deref(),
+        Some("every other caller of `read_to` now reads one row too many"),
+        "the line a person triages on survives the escalation"
     );
 }
 

@@ -24,7 +24,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::checks::{CheckRun, DeclaredCheck};
-use crate::enums::{CriterionSource, DependencyDirection, StepState};
+use crate::enums::{CriterionSource, DependencyDirection, JudgeVerdict, StepState};
 use crate::ids::{CriterionId, Instant, JobId, StepId};
 use crate::job::{JobSummary, Subject};
 
@@ -51,6 +51,9 @@ pub struct StepFacts {
     /// What each declared Check did, in the step's order. Empty until the gate
     /// has run them.
     pub ran: Vec<CheckRun>,
+    /// What the Judge answered, in the order asked. Empty on a step that asks
+    /// nothing, which is most of them.
+    pub judged: Vec<Judged>,
 }
 
 /// One Job, whole.
@@ -157,6 +160,13 @@ pub struct StepDetail {
     /// Absent until a gate has ruled on the step.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_verdict: Option<Verdict>,
+    /// Every criterion the Judge answered on this step, in the order asked.
+    ///
+    /// **This is where a refusal's citation arrives**, and it is the whole
+    /// reason a refusal escalates rather than ending the Job: the trigger says
+    /// the gate stopped, and only these say what was wrong with the work.
+    /// Empty on a step that asks nothing and on a step the Judge never reached.
+    pub judged: Vec<Judged>,
     /// When the step was entered. Stamped at creation and moved on entering
     /// `running`, so `entered_at` to `updated_at` is how long the step took.
     pub entered_at: Instant,
@@ -176,8 +186,45 @@ impl StepDetail {
             checks: facts.and_then(|facts| facts.declares.clone()),
             check_runs: facts.map(|facts| facts.ran.clone()).unwrap_or_default(),
             last_verdict: step.last_verdict().map(Verdict::of),
+            judged: facts.map(|facts| facts.judged.clone()).unwrap_or_default(),
             entered_at: step.entered_at().into(),
             updated_at: step.updated_at().into(),
+        }
+    }
+}
+
+/// One criterion the Judge answered, as a person reads it.
+///
+/// **A refusal owes three lines and a no-objection owes none**, which is why
+/// the three below are optional rather than blank: there is nothing to cite
+/// where nothing was refused, and an empty string would read as a citation
+/// somebody lost.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Judged {
+    /// Which criterion was asked. What a citation points at, and what stays
+    /// meaningful at any panel size.
+    pub criterion_id: CriterionId,
+    pub verdict: JudgeVerdict,
+    /// What should be seen if the work were right.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected: Option<String>,
+    /// What is seen instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub produced: Option<String>,
+    /// What that difference does to whoever consumes it. **The line a person
+    /// triages on.**
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub consequence: Option<String>,
+}
+
+impl From<&core_model::Judgment> for Judged {
+    fn from(judgment: &core_model::Judgment) -> Judged {
+        Judged {
+            criterion_id: (&judgment.criterion_id).into(),
+            verdict: judgment.verdict.into(),
+            expected: judgment.expected.clone(),
+            produced: judgment.produced.clone(),
+            consequence: judgment.consequence.clone(),
         }
     }
 }

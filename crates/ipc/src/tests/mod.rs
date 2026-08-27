@@ -21,7 +21,7 @@ use core_model::{
 };
 
 use crate::{
-    decode, encode, CheckRun, DeclaredCheck, JobDetail, JobSummary, ProposeJob, StepFacts,
+    decode, encode, CheckRun, DeclaredCheck, JobDetail, JobSummary, Judged, ProposeJob, StepFacts,
     StreamMessage,
 };
 
@@ -132,6 +132,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             label: Some("Reproduce it".to_string()),
             declares: Some(Vec::new()),
             ran: Vec::new(),
+            judged: Vec::new(),
         }],
     );
     let json = encode(&ungated).expect("a detail is plain data");
@@ -145,6 +146,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             label: None,
             declares: None,
             ran: Vec::new(),
+            judged: Vec::new(),
         }],
     );
     let json = encode(&unanswerable).expect("a detail is plain data");
@@ -171,6 +173,7 @@ fn a_step_with_no_label_reads_as_its_id() {
             label: Some("   ".to_string()),
             declares: None,
             ran: Vec::new(),
+            judged: Vec::new(),
         }],
     );
     assert_eq!(detail.steps[0].label, "repro");
@@ -201,6 +204,7 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
                 produced: Some("`suite` is not installed".to_string()),
                 output_path: Some(".armada/checks/01JOB/repro.0.log".to_string()),
             }],
+            judged: Vec::new(),
         }],
     );
     let json = encode(&detail).expect("a detail is plain data");
@@ -214,6 +218,65 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
         decode::<JobDetail>("a Job in full", json.as_bytes()).expect("it round-trips"),
         detail
     );
+}
+
+/// **A refusal's citation crosses, and a no-objection carries none.**
+///
+/// This is what makes escalating a refusal worth more than ending the Job: the
+/// escalation trigger says the gate stopped, and only these three lines say
+/// what was wrong with the work. A person reading the Job is the audience.
+#[test]
+fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
+    let detail = JobDetail::of(
+        &job(),
+        None,
+        &[StepFacts {
+            step_id: crate::StepId::carried("repro"),
+            label: Some("Reproduce it".to_string()),
+            declares: Some(Vec::new()),
+            ran: Vec::new(),
+            judged: vec![
+                Judged {
+                    criterion_id: crate::CriterionId::carried("c1"),
+                    verdict: core_model::JudgeVerdict::NotMet.into(),
+                    expected: Some("the caller's bound narrowed".to_string()),
+                    produced: Some("the reader's bound widened".to_string()),
+                    consequence: Some("every other caller reads one row too many".to_string()),
+                },
+                Judged {
+                    criterion_id: crate::CriterionId::carried("c2"),
+                    verdict: core_model::JudgeVerdict::Met.into(),
+                    expected: None,
+                    produced: None,
+                    consequence: None,
+                },
+            ],
+        }],
+    );
+    let json = encode(&detail).expect("a detail is plain data");
+
+    assert!(json.contains("\"verdict\":\"not_met\""), "{json}");
+    assert!(
+        json.contains("every other caller reads one row too many"),
+        "the line a person triages on crosses: {json}"
+    );
+    assert!(
+        !json.contains("\"expected\":null"),
+        "a no-objection cites nothing, and absent is not null: {json}"
+    );
+    assert_eq!(
+        decode::<JobDetail>("a Job in full", json.as_bytes()).expect("it round-trips"),
+        detail
+    );
+}
+
+/// A step nothing asked the Judge about says so with an empty list, the way an
+/// ungated step says so about its Checks.
+#[test]
+fn a_step_the_judge_was_never_asked_about_carries_an_empty_list() {
+    let detail = JobDetail::of(&job(), None, &[]);
+    let json = encode(&detail).expect("a detail is plain data");
+    assert!(json.contains("\"judged\":[]"), "{json}");
 }
 
 #[test]
