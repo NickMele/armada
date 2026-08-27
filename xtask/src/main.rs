@@ -23,6 +23,7 @@ mod rules_docs;
 mod rules_enums;
 mod rules_icons;
 mod rules_protocol;
+mod rules_stories;
 mod rules_unsafe;
 mod tokens;
 mod tokens_emit;
@@ -105,6 +106,7 @@ fn verify_foundations() -> ExitCode {
         rules_docs::every_path_a_document_names_exists(&root),
         capabilities::every_capability_is_bound_and_indexed(&root),
         rules_icons::every_glyph_in_use_is_registered(&root),
+        rules_stories::every_story_names_its_own_path(&root),
         rules_protocol::the_router_serves_what_the_inventory_names(&root),
         rules_enums::every_registry_key_is_a_variant(&root),
         rules_enums::edges::the_registry_and_the_edge_table_hold_the_same_edges(&root),
