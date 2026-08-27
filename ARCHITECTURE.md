@@ -38,8 +38,9 @@ Drone.** A Drone never talks to anything except the tools Fleet handed it.
 
 The seam between Bridge and Fleet is the only place Rust stops and TypeScript
 starts. Every other boundary in this repository is a function call or a file.
-`protocol-version.toml` holds the one number both sides check; when they
-disagree, four routes stay up so you can still see what is running and stop it.
+`protocol-version.toml` holds the major and the minor both sides check; when
+the majors disagree, four routes stay up so you can still see what is running
+and stop it.
 `docs/practices/protocol.md` is the detail.
 
 ## Where things are

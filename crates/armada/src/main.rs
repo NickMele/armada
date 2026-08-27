@@ -20,6 +20,8 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use adapters::UnmergedWork;
+use armada::clean::Scope;
 use armada::cli::{self, Usage, Verb};
 use armada::declared::Registry;
 use armada::serve::PROVISIONAL_CHECK_BUDGET;
@@ -49,7 +51,7 @@ async fn main() -> ExitCode {
         },
         Verb::Check { name } => declared_by_the_manifest(Registry::Checks, &name, "check").await,
         Verb::Run { name } => declared_by_the_manifest(Registry::Commands, &name, "run").await,
-        Verb::Clean { everything } => clean_this_repository(everything),
+        Verb::Clean { everything, force } => clean_this_repository(everything, force),
     }
 }
 
@@ -79,7 +81,7 @@ async fn declared_by_the_manifest(registry: Registry, name: &str, verb: &str) ->
     }
 }
 
-fn clean_this_repository(everything: bool) -> ExitCode {
+fn clean_this_repository(everything: bool, force: bool) -> ExitCode {
     let (Ok(root), Ok(runtime_file)) = (std::env::current_dir(), fleet::runtime::machine_path())
     else {
         eprintln!("the working directory and HOME are both needed, and one of them is not there");
@@ -90,9 +92,20 @@ fn clean_this_repository(everything: bool) -> ExitCode {
         .expect("the runtime file has a directory")
         .to_path_buf();
 
-    match clean::clean(&root, &machine, everything) {
+    let scope = match everything {
+        true => Scope::AndTheMachine,
+        false => Scope::Repository,
+    };
+    let unmerged = match force {
+        true => UnmergedWork::Delete,
+        false => UnmergedWork::Keep,
+    };
+    match clean::clean(&root, &machine, scope, unmerged) {
         Ok(cleaned) => {
             say::cleaned(&cleaned);
+            // A kept branch is not a fault. A completed Job's branch is
+            // unmerged by definition, so failing on one would make the
+            // ordinary clean exit non-zero.
             match cleaned.faults.is_empty() {
                 true => ExitCode::SUCCESS,
                 // Every fault was already named on its own line. This is only

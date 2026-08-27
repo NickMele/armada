@@ -39,8 +39,40 @@ fn the_four_verbs_parse() {
             name: "fmt".to_string()
         })
     );
-    assert_eq!(asked("clean"), Ok(Verb::Clean { everything: false }));
-    assert_eq!(asked("clean --all"), Ok(Verb::Clean { everything: true }));
+    assert_eq!(
+        asked("clean"),
+        Ok(Verb::Clean {
+            everything: false,
+            force: false
+        })
+    );
+    assert_eq!(
+        asked("clean --all"),
+        Ok(Verb::Clean {
+            everything: true,
+            force: false
+        })
+    );
+}
+
+/// **Two flags because they are two questions.** `--all` clears this machine's
+/// store; `--force` deletes work nobody has taken. Either alone, or both.
+#[test]
+fn force_and_all_are_separate_answers_and_compose() {
+    assert_eq!(
+        asked("clean --force"),
+        Ok(Verb::Clean {
+            everything: false,
+            force: true
+        })
+    );
+    assert_eq!(
+        asked("clean --all --force"),
+        Ok(Verb::Clean {
+            everything: true,
+            force: true
+        })
+    );
 }
 
 /// **`check` and `run` stay two verbs.** There is no flag on either that turns
@@ -102,5 +134,5 @@ fn clean_takes_no_path() {
 
 #[test]
 fn a_flag_that_does_not_exist_names_the_one_that_does() {
-    assert!(said("clean --everything").contains("it takes `--all`"));
+    assert!(said("clean --everything").contains("it takes `--all`, `--force`"));
 }

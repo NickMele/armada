@@ -1,0 +1,208 @@
+//! Getting a Job's work back to the branch it merges into.
+//!
+//! # Two moments, and they are not the same moment
+//!
+//! At a step boundary that is not the last, the branch is brought up to the
+//! base and the Drone is told in the turn it gets for the next step — a Drone
+//! is alive there, and a conflict is work it can do. At the last step the
+//! branch is brought up, pushed and opened for review, and by then there is no
+//! Drone to hand anything to.
+//!
+//! # A boundary is asked, never the Drone
+//!
+//! The Drone has just submitted and nothing is in flight, so git can answer
+//! every question here on its own. Asking the Drone whether its branch is
+//! behind would be asking it to manage its own state, which
+//! `docs/concepts/drone.md` says outright it cannot be trusted to do.
+//!
+//! # Two things are checked before anything moves
+//!
+//! Whether the repository names a base at all, and whether the branch is behind
+//! it. A branch that is not behind is left alone and nothing is announced. What
+//! the worktree is *holding* is not checked here, because it does not have to
+//! be: the rebase carries uncommitted work across and puts it back, and where
+//! it cannot, the branch is put back instead. See `adapters`' delivery module.
+
+use adapter_traits::{
+    AgentHarness, Base, BroughtUpToDate, Delivery, Opened, Pushed, Standing, Vcs, WorkProduct,
+    Worktree,
+};
+use core_model::Job;
+use verification::TheBaseMoved;
+
+use crate::adrift::Adrift;
+use crate::daemon::Fleet;
+use crate::review::review_of;
+use crate::working::Working;
+
+/// What happened to a Job's branch this turn.
+///
+/// **Every field is optional and absent means not attempted**, which is the
+/// distinction a person reading this needs: a push that did not happen because
+/// a conflict stopped everything before it is not a push that failed. A step
+/// boundary that is not the last fills the first two and leaves the rest empty,
+/// because nothing is published until a Job is finished.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Delivered {
+    /// The branch it merges into. `None` where the repository names none, and
+    /// then nothing was rebased and no pull request could name a target.
+    pub base: Option<Base>,
+    /// What catching up came to. `None` where the branch was not behind.
+    pub caught_up: Option<BroughtUpToDate>,
+    /// `None` where a conflict stopped everything after it.
+    pub pushed: Option<Pushed>,
+    pub opened: Option<Opened>,
+}
+
+impl<H, V, W> Fleet<H, V, W>
+where
+    H: AgentHarness + Send + Sync + 'static,
+    H::Error: std::error::Error + Send + Sync + 'static,
+    V: Vcs + Delivery + Send + Sync + 'static,
+    V::Error: std::error::Error + Send + Sync + 'static,
+    V::CommitError: std::error::Error + Send + Sync + 'static,
+    W: WorkProduct + Send + Sync + 'static,
+    W::Error: std::error::Error + Send + Sync + 'static,
+{
+    /// Bring the working Job's branch up to its base at a step boundary.
+    ///
+    /// `None` is a branch that had nothing to catch up to, and it is the
+    /// ordinary answer. A caller turns it straight into the turn it was already
+    /// going to send, so nothing is announced when nothing happened.
+    pub(crate) async fn caught_up(
+        &self,
+        working: &Option<Working>,
+    ) -> Result<Option<TheBaseMoved>, Adrift> {
+        let Some(at_work) = working.as_ref() else {
+            return Ok(None);
+        };
+        let (job_id, _, worktree) = at_work.standing();
+        let Some(base) = self.the_base(&job_id, &worktree)? else {
+            return Ok(None);
+        };
+        if self.behind(&job_id, &worktree, &base)? == 0 {
+            return Ok(None);
+        }
+        let moved = self
+            .vcs()
+            .bring_up_to_date(&worktree, &base)
+            .map_err(|why| Adrift::from_delivery(&job_id, why))?;
+        // Left where the turn that reports it will find it. A boundary and a
+        // finish are two moments and one question — what happened to this Job's
+        // branch — so they answer through one field rather than two.
+        *self.delivery_slot().lock().await = Some(Delivered {
+            base: Some(base),
+            caught_up: Some(moved.clone()),
+            ..Delivered::default()
+        });
+        Ok(Some(match moved {
+            BroughtUpToDate::Clean { base, commits } => {
+                TheBaseMoved::BroughtUpToDate { base, commits }
+            }
+            BroughtUpToDate::Conflicted { base, files } => TheBaseMoved::Conflicted { base, files },
+            BroughtUpToDate::PutBack { base, .. } => TheBaseMoved::CouldNotFollow { base },
+        }))
+    }
+
+    /// Catch the finished Job's branch up, push it, and open it for review.
+    ///
+    /// Called after the commit, so the worktree is clean and the branch carries
+    /// the whole change. Each stage is skipped when the one before it says
+    /// there is nothing to do it to — a branch that would not replay is not
+    /// pushed, and a branch that reached no remote gets no pull request.
+    pub(crate) async fn deliver(
+        &self,
+        job: &Job,
+        worktree: &Worktree,
+    ) -> Result<Delivered, Adrift> {
+        let job_id = job.id().clone();
+        let mut delivered = Delivered {
+            base: self.the_base(&job_id, worktree)?,
+            ..Delivered::default()
+        };
+        if let Some(base) = delivered.base.clone() {
+            if self.behind(&job_id, worktree, &base)? > 0 {
+                let moved = self
+                    .vcs()
+                    .bring_up_to_date(worktree, &base)
+                    .map_err(|why| Adrift::from_delivery(&job_id, why))?;
+                let replayed = matches!(moved, BroughtUpToDate::Clean { .. });
+                delivered.caught_up = Some(moved);
+                // A branch known to conflict with what it merges into is not
+                // pushed. The work is committed and the worktree is held; a
+                // person resolves it, and a pull request opened over it would
+                // be a review request nobody can act on.
+                if !replayed {
+                    return Ok(delivered);
+                }
+            }
+        }
+
+        let pushed = self
+            .vcs()
+            .push(worktree)
+            .map_err(|why| Adrift::from_delivery(&job_id, why))?;
+        let reached_a_remote = pushed != Pushed::NoRemote;
+        delivered.pushed = Some(pushed);
+
+        delivered.opened = match (&delivered.base, reached_a_remote) {
+            (Some(base), true) => Some(self.opened_for_review(job, worktree, base).await?),
+            // A repository with no remote is ordinary and not an error: the
+            // branch is the work, and a person merges it where it is.
+            (_, false) => Some(Opened::NothingPushed),
+            (None, true) => None,
+        };
+        Ok(delivered)
+    }
+
+    /// Assemble the pull request from the record and open it.
+    async fn opened_for_review(
+        &self,
+        job: &Job,
+        worktree: &Worktree,
+        base: &Base,
+    ) -> Result<Opened, Adrift> {
+        let checks = self
+            .store()
+            .lock()
+            .await
+            .step_checks(job.id())
+            .map_err(Adrift::Reading)?;
+        let review = review_of(job, &checks, base);
+        self.vcs()
+            .open_for_review(worktree, base, &review)
+            .map_err(|why| Adrift::from_delivery(job.id(), why))
+    }
+
+    /// The branch this repository's work merges into.
+    ///
+    /// The Manifest's `base:` is handed down; **inference is what the adapter
+    /// does when nothing was declared**, so the fallback lives beside the
+    /// repository it is reading rather than here.
+    fn the_base(
+        &self,
+        job_id: &core_model::JobId,
+        worktree: &Worktree,
+    ) -> Result<Option<Base>, Adrift> {
+        self.vcs()
+            .base(worktree, self.manifest().base())
+            .map_err(|why| Adrift::from_delivery(job_id, why))
+    }
+
+    /// How many commits the base holds that the branch has not got.
+    fn behind(
+        &self,
+        job_id: &core_model::JobId,
+        worktree: &Worktree,
+        base: &Base,
+    ) -> Result<usize, Adrift> {
+        match self
+            .vcs()
+            .standing(worktree, base)
+            .map_err(|why| Adrift::from_delivery(job_id, why))?
+        {
+            Standing::UpToDate => Ok(0),
+            Standing::Behind { commits } => Ok(commits),
+        }
+    }
+}

@@ -60,8 +60,137 @@ impl OutcomeTurn {
         OutcomeTurn { text }
     }
 
+    /// The same turn, with what happened to the branch underneath added.
+    ///
+    /// `None` leaves it alone, which is how a base that did not move stays
+    /// unannounced — a turn saying nothing happened spends a Drone's tool call
+    /// to deliver nothing.
+    pub fn and(self, moved: Option<TheBaseMoved>) -> OutcomeTurn {
+        let Some(moved) = moved else {
+            return self;
+        };
+        OutcomeTurn {
+            text: format!("{}\n\n{}", self.text, moved.told()),
+        }
+    }
+
     /// The content of the injected message, exactly as it goes to the session.
     pub fn text(&self) -> &str {
         &self.text
+    }
+}
+
+/// What happened to the branch a Drone is working on while it worked.
+///
+/// **Told, not asked.** The Drone has just submitted and holds no git, so
+/// nothing here is a decision it could have taken part in — and a conflict is
+/// work rather than a question, which is why the second variant reads as an
+/// instruction and not as an apology.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TheBaseMoved {
+    /// It moved and the branch was brought up to it cleanly.
+    BroughtUpToDate { base: String, commits: usize },
+    /// It moved, the branch was brought up to it, and files were left with
+    /// conflict markers in them.
+    Conflicted { base: String, files: Vec<String> },
+    /// It moved and the branch could not be put on top of it, so nothing moved.
+    /// **Nothing here is the Drone's to fix** — it is told because it is going
+    /// on to work against a tree that is behind.
+    CouldNotFollow { base: String },
+}
+
+impl TheBaseMoved {
+    /// The paragraph that goes into the turn.
+    fn told(&self) -> String {
+        match self {
+            TheBaseMoved::BroughtUpToDate { base, commits } => format!(
+                "While you worked, `{base}` moved on by {commits} commit(s) and your branch \
+                 has been put on top of it. Anything you are about to change may have \
+                 changed underneath you — re-read a file before you edit it."
+            ),
+            TheBaseMoved::Conflicted { base, files } => format!(
+                "While you worked, `{base}` moved on and your branch has been put on top of \
+                 it. These files were left with conflict markers in them and resolving them \
+                 is part of the work:\n\n{}\n\nOpen each one, keep what belongs, and \
+                 remove every marker before you submit again.",
+                files
+                    .iter()
+                    .map(|file| format!("- {file}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
+            TheBaseMoved::CouldNotFollow { base } => format!(
+                "While you worked, `{base}` moved on, and this branch could not be put on \
+                 top of it. It is exactly where you left it. Carry on — somebody will \
+                 reconcile the two."
+            ),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn advanced() -> OutcomeTurn {
+        OutcomeTurn {
+            text: String::from("Implement is verified."),
+        }
+    }
+
+    #[test]
+    fn a_base_that_did_not_move_leaves_the_turn_exactly_as_it_was() {
+        assert_eq!(advanced().and(None), advanced());
+    }
+
+    #[test]
+    fn a_clean_catch_up_tells_the_drone_what_moved_and_how_much() {
+        let told = advanced()
+            .and(Some(TheBaseMoved::BroughtUpToDate {
+                base: String::from("main"),
+                commits: 3,
+            }))
+            .text()
+            .to_string();
+        assert!(told.starts_with("Implement is verified."), "{told}");
+        assert!(
+            told.contains("`main`") && told.contains("3 commit"),
+            "{told}"
+        );
+        assert!(
+            told.contains("re-read a file before you edit it"),
+            "the reason it is being told at all: {told}"
+        );
+    }
+
+    #[test]
+    fn a_conflict_is_handed_over_as_work_and_names_every_file() {
+        let told = advanced()
+            .and(Some(TheBaseMoved::Conflicted {
+                base: String::from("main"),
+                files: vec![String::from("src/log.rs"), String::from("src/write.rs")],
+            }))
+            .text()
+            .to_string();
+        assert!(told.contains("- src/log.rs"), "{told}");
+        assert!(told.contains("- src/write.rs"), "{told}");
+        assert!(
+            told.contains("part of the work"),
+            "a conflict is work, not a question: {told}"
+        );
+    }
+
+    /// No count of anything the Drone could be measured on. The rule this type
+    /// already carries about attempts holds for what moved underneath it too.
+    #[test]
+    fn nothing_told_here_is_a_number_a_drone_could_be_judged_on() {
+        let told = advanced()
+            .and(Some(TheBaseMoved::CouldNotFollow {
+                base: String::from("main"),
+            }))
+            .text()
+            .to_string();
+        assert!(told.contains("exactly where you left it"), "{told}");
+        assert!(!told.contains("attempt"), "{told}");
     }
 }

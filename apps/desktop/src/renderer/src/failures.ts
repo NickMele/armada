@@ -15,6 +15,7 @@ import type { FailureDetail, FailureMachineValue } from "@armada/components";
 
 import type { BridgeIdentity, Connection } from "../../shared/bridge";
 import type { UnreadableJob, WireError } from "../../shared/protocol";
+import { spoken } from "../../shared/version";
 import { elapsed } from "./fleet";
 import type { Statement } from "./fleet";
 import type { Uncaught } from "./uncaught";
@@ -63,9 +64,9 @@ function fleetRun(runId: string): FailureMachineValue[] {
 /**
  * Fleet, when the one connection is not a connection.
  *
- * `null` where there is nothing wrong — the statement's own `next` is what says
- * whether a state is a fault, so this cannot disagree with the status bar about
- * whether Fleet is healthy.
+ * `null` where there is nothing wrong. A state with no `next` has nothing to
+ * say and takes no notice; a state that is not a fault takes none either, which
+ * is why `connected` is answered below rather than filtered out by the guard.
  *
  * **The four runtime-file answers stay four.** Which one it was is the first
  * row of the fold, because only one of the four — running and silent — is
@@ -147,17 +148,27 @@ export function fleetFailure(
         ...base,
         detailsLabel: "What each side speaks",
         details: [
-          { label: "Fleet", value: String(connection.speaks) },
-          { label: "Bridge", value: String(connection.expected) },
+          { label: "Fleet", value: spoken(connection.speaks) },
+          { label: "Bridge", value: spoken(connection.expected) },
           { label: "Pid", value: String(connection.fleet.pid) },
           { label: "Port", value: String(connection.fleet.port) },
         ],
-        note: "Bridge did not open a socket. A message from a Fleet on another protocol is not one Bridge can read.",
+        // Two refusals, and naming which one is the whole use of this fold: a
+        // major gap is two binaries from different commits, and a Fleet behind
+        // by a minor is the right binaries with the daemon left running.
+        note:
+          connection.why === "incompatible"
+            ? "Bridge did not open a socket. A message from a Fleet on another protocol is not one Bridge can read."
+            : "Bridge did not open a socket. This Fleet speaks the same protocol without the additions Bridge now reads, and a field arriving absent mid-Job is worse than not connecting.",
       };
 
-    // Reading, connecting and connected carry no `next`, so they never reach
-    // here. Listed rather than defaulted, so a new connection state is a
-    // compile error instead of a silent fall-through to a generic message.
+    // None of the three is a fault, so none takes a notice. **`connected` is
+    // the one that can carry a `next` anyway** — a Fleet ahead by a minor puts
+    // its banner in the status bar, and drawing it here as well would say
+    // something is broken when the connection is working.
+    //
+    // Listed rather than defaulted, so a new connection state is a compile
+    // error instead of a silent fall-through to a generic message.
     case "reading":
     case "connecting":
     case "connected":

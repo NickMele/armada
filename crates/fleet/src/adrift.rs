@@ -28,7 +28,7 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 
-use adapter_traits::{SpawnConfigRefused, WorktreeSpecRefused};
+use adapter_traits::{NotDelivered, SpawnConfigRefused, WorktreeSpecRefused};
 use core_model::{
     IllegalDroneMove, IllegalStepTransition, IllegalTransition, JobId, JobStatus, StepId,
 };
@@ -99,6 +99,22 @@ pub enum Adrift {
     NotCommitted {
         job: JobId,
         cause: Box<dyn Error + Send + Sync>,
+    },
+    /// The work is committed and getting it to the branch it merges into did
+    /// not finish — the base would not read, the rebase would not run, the push
+    /// or the pull request was refused.
+    ///
+    /// **Nothing is lost and no verdict changed.** A Job that reaches this at
+    /// its last step is still `completed_success`, because that is a fact about
+    /// its Checks; a Job that reaches it mid-workflow is still running and its
+    /// Drone was still told the step advanced.
+    ///
+    /// Not boxed, unlike its neighbours: the seam answers one shape rather than
+    /// an implementation's own enum, so there is nothing here to downcast to.
+    NotDelivered {
+        job: JobId,
+        doing: &'static str,
+        said: String,
     },
     /// The frozen workflow has no step by this name. A Job dispatched against a
     /// workflow that has since been edited, or a workflow with no steps at all.
@@ -195,6 +211,12 @@ impl fmt::Display for Adrift {
                 "the gate ruled on {} and the Drone could not be told: {cause}",
                 job.as_str()
             ),
+            Adrift::NotDelivered { job, doing, said } => write!(
+                out,
+                "{}'s work is committed and {doing} did not happen: {said}. The branch holds \
+                 the change and every Check passed",
+                job.as_str()
+            ),
             Adrift::NotCommitted { job, cause } => write!(
                 out,
                 "{} finished and its work would not commit: {cause}. The Job succeeded and the \
@@ -255,6 +277,21 @@ impl fmt::Display for Adrift {
     }
 }
 
+impl Adrift {
+    /// A refusal from the delivery seam, named against the Job it was for.
+    ///
+    /// One constructor rather than the same three-field literal at six call
+    /// sites, which is where the two halves would come to disagree about which
+    /// is `doing` and which is `said`.
+    pub(crate) fn from_delivery(job: &JobId, why: NotDelivered) -> Adrift {
+        Adrift::NotDelivered {
+            job: job.clone(),
+            doing: why.doing,
+            said: why.said,
+        }
+    }
+}
+
 impl Error for Adrift {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
@@ -270,7 +307,8 @@ impl Error for Adrift {
             Adrift::NotTold { cause, .. }
             | Adrift::NotReaped { cause, .. }
             | Adrift::NoTranscript { cause, .. } => Some(cause),
-            Adrift::Unworkable { .. }
+            Adrift::NotDelivered { .. }
+            | Adrift::Unworkable { .. }
             | Adrift::NotConfigurable { .. }
             | Adrift::NoSuchStep { .. }
             | Adrift::NotRedispatchable { .. }

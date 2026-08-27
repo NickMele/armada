@@ -20,7 +20,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use adapter_traits::{AgentHarness, Vcs, WorkProduct};
+use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use checks_runner::Output;
 use core_model::{JobId, StepCheck, StepId};
 
@@ -32,7 +32,7 @@ impl<H, V, W> Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
     H::Error: std::error::Error + Send + Sync + 'static,
-    V: Vcs + Send + Sync + 'static,
+    V: Vcs + Delivery + Send + Sync + 'static,
     V::Error: std::error::Error + Send + Sync + 'static,
     V::CommitError: std::error::Error + Send + Sync + 'static,
     W: WorkProduct + Send + Sync + 'static,

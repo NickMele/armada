@@ -53,6 +53,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use ipc::ProtocolVersion;
+
 use crate::process::{holder_of, Holder, ProbeFailed, StartedAt};
 
 /// The address Fleet binds. **Provisional**: hardcoded for M1, and the number
@@ -84,9 +86,10 @@ pub const FILE_NAME: &str = "fleet.json";
 /// breaking one. The same discipline the wire DTOs are held to.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RuntimeFile {
-    /// What Fleet speaks. Read before connecting, so skew is a refusal rather
-    /// than a malformed first message.
-    pub protocol_version: u32,
+    /// What Fleet speaks, both numbers. Read before connecting, so a refusal
+    /// is a screen naming two versions rather than a malformed first message —
+    /// and so a minor gap Bridge can survive is a banner instead of one.
+    pub protocol_version: ProtocolVersion,
     pub pid: u32,
     /// On `127.0.0.1`, always. See the module comment.
     pub port: u16,
@@ -216,7 +219,7 @@ impl RuntimeFile {
     pub fn publish(
         vacancy: Vacancy,
         port: u16,
-        protocol_version: u32,
+        protocol_version: ProtocolVersion,
     ) -> Result<Published, PublishError> {
         let path = vacancy.path;
         let pid = std::process::id();

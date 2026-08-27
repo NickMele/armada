@@ -7,6 +7,10 @@
 //! nothing else, so the SHA goes on the screen while the person is still
 //! looking at it.
 //!
+//! A branch it kept is said twice on purpose — once beside its Job, and once
+//! at the very end, because a clean that left work standing must not read as a
+//! clean that finished.
+//!
 //! Absences are printed too. "There was nothing there" and "it was removed" are
 //! different answers, and a command that shows only the second leaves the
 //! reader to guess which one they got.
@@ -84,9 +88,32 @@ pub fn cleaned(cleaned: &Cleaned) {
     if cleaned.jobs.is_empty() && cleaned.unclaimed.is_empty() {
         println!("\nno Jobs and no worktrees — there was nothing to give back");
     }
+    // Last, because it is the only part of this a person still has to act on.
+    branches_left(cleaned);
     for fault in &cleaned.faults {
         eprintln!("  {fault}");
     }
+}
+
+/// The branches that are still there, and what to do about each.
+fn branches_left(cleaned: &Cleaned) {
+    let left = cleaned.branches_left();
+    if left.is_empty() {
+        return;
+    }
+    println!(
+        "\n{} branch(es) still hold work nothing has taken. Their worktrees \
+         were removed; the branches were not:",
+        left.len()
+    );
+    for gone in &left {
+        println!("  {}", branch(gone));
+    }
+    println!(
+        "Merge one, then `git branch -d <branch>` — git itself refuses that \
+         while it is unmerged. `armada clean --force` deletes them instead, \
+         and the commits with them."
+    );
 }
 
 fn worktree(gone: &WorktreeGone) -> String {
@@ -116,6 +143,18 @@ fn branch(gone: &BranchGone) -> String {
             format!("branch deleted: {branch} was at {tip}")
         }
         BranchGone::Absent { branch } => format!("no branch: {branch}"),
+        BranchGone::Kept {
+            branch,
+            tip,
+            base,
+            commits,
+        } => format!(
+            "branch kept, {commits} commit(s) of its own are not on `{base}`: \
+             {branch} is at {tip}"
+        ),
+        BranchGone::KeptUnanswered { branch, tip, why } => {
+            format!("branch kept, {why}: {branch} is at {tip}")
+        }
         BranchGone::NotDeleted { branch, why } => {
             format!("branch NOT deleted — {why}: {branch}")
         }

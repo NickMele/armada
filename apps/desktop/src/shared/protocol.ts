@@ -12,6 +12,8 @@
 // copy of a roster that already has two, and an unknown status renders as
 // itself rather than as a guess.
 
+import type { ProtocolVersion } from "./version";
+
 /** A Job, as a list row. `crates/ipc/src/job.rs`. */
 export type JobSummary = {
   id: string;
@@ -220,7 +222,7 @@ export type StreamMessage =
   | ({ message: "missed" } & Missed);
 
 export type Resync = {
-  protocol_version: number;
+  protocol_version: ProtocolVersion;
   cursor: number;
   jobs: JobList;
 };
@@ -357,7 +359,7 @@ export type TurnMessage =
 
 /** The first message on every connection, before any row. */
 export type Opened = {
-  protocol_version: number;
+  protocol_version: ProtocolVersion;
   job_id: string;
   /** Whether a Drone was writing when this opened. `false` is ordinary. */
   live: boolean;

@@ -1,10 +1,10 @@
 //! The seams: the traits an adapter implements, and nothing that implements
 //! them.
 //!
-//! One trait per boundary, and `Secret<T>`. Version control splits into two of
-//! them — [`Vcs`] creates a worktree at approval, [`WorkProduct`] reads one at
-//! the gate — because the two are held by different callers and neither may
-//! reach the other's methods. The implementations live
+//! One trait per boundary, and `Secret<T>`. Version control splits into three
+//! of them — [`Vcs`] creates a worktree at approval, [`WorkProduct`] reads one
+//! at the gate, [`Delivery`] publishes what a finished one holds — because each
+//! is held by a different caller and none may reach another's methods. The implementations live
 //! in `adapters`, which is the only crate permitted to know whose API it is
 //! talking to — a vendor's name outside `adapters` is the boundary having
 //! leaked, and it leaks in comments first.
@@ -32,6 +32,7 @@
 extern crate alloc;
 
 mod commit;
+mod delivery;
 mod event;
 mod harness;
 mod secret;
@@ -39,6 +40,10 @@ mod work_product;
 mod worktree;
 
 pub use commit::{CommitTime, Committed};
+pub use delivery::{
+    how_the_base_was_found, Base, BroughtUpToDate, Delivery, NotDelivered, Opened, Pushed, Review,
+    Standing,
+};
 pub use event::{CallDetail, DroneEvent};
 pub use harness::{
     AmbientServers, DroneHandle, DroneSpawnConfig, Environment, Grant, Launch, McpConfig, Model,
@@ -101,11 +106,11 @@ pub trait AgentHarness {
 ///
 /// # It has no push method, and that is not the only thing missing
 ///
-/// **No push.** Push, pull request and merge are Fleet's, with credentials
-/// Fleet holds. A capability absent from the type cannot be reached by a Drone
-/// that reasons its way around a denial. What a Drone itself is handed is a
-/// narrower type again, which is not this trait — and it carries no `git` at
-/// all, which is why the commit below is here.
+/// **No push.** Push, pull request and merge are [`Delivery`]'s, held by Fleet
+/// with the operator's credentials. A capability absent from the type cannot be
+/// reached by a Drone that reasons its way around a denial. What a Drone itself
+/// is handed is a narrower type again, which is neither trait — and it carries
+/// no `git` at all, which is why the commit below is here.
 ///
 /// **No removal, and no way to ask for one.** Removal is driven by Job
 /// retention, never by a process ending — so the caller that would decide is

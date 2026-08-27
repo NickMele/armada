@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::event::Missed;
 use crate::ids::{Instant, JobId};
+use crate::version::ProtocolVersion;
 
 /// One line of `.armada/transcripts/<drone-id>.jsonl`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -176,7 +177,7 @@ pub enum TurnMessage {
 pub struct Opened {
     /// Restated on the socket so a client that reached it without reading the
     /// runtime file still learns what it is talking to.
-    pub protocol_version: u32,
+    pub protocol_version: ProtocolVersion,
     pub job_id: JobId,
     /// Whether a Drone was writing rows when this opened. `false` is ordinary:
     /// the Job may not have been dispatched, or its Drone may have gone with

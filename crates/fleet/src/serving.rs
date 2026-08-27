@@ -34,7 +34,7 @@
 //! which would be a second vocabulary that agrees with the log only until
 //! something changes.
 
-use adapter_traits::{AgentHarness, Vcs, WorkProduct};
+use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Daemon, Observed, Refusal};
 use core_model::Job;
 use ipc::mcp::{NotRecorded, Receipt, SubmitEvidence};
@@ -65,7 +65,7 @@ impl<H, V, W> Daemon for Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
     H::Error: std::error::Error + Send + Sync + 'static,
-    V: Vcs + Send + Sync + 'static,
+    V: Vcs + Delivery + Send + Sync + 'static,
     V::Error: std::error::Error + Send + Sync + 'static,
     V::CommitError: std::error::Error + Send + Sync + 'static,
     W: WorkProduct + Send + Sync + 'static,
@@ -307,7 +307,7 @@ impl<H, V, W> Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
     H::Error: std::error::Error + Send + Sync + 'static,
-    V: Vcs + Send + Sync + 'static,
+    V: Vcs + Delivery + Send + Sync + 'static,
     V::Error: std::error::Error + Send + Sync + 'static,
     V::CommitError: std::error::Error + Send + Sync + 'static,
     W: WorkProduct + Send + Sync + 'static,

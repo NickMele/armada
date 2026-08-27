@@ -12,6 +12,7 @@
 //! take is refused rather than ignored.
 
 mod mcp;
+mod version;
 
 use core_model::{
     Actor, AdvanceGate, CriteriaOwed, CriterionId, DispatchOrigin, EvidenceType, Facts,

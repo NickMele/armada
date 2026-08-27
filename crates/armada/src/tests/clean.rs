@@ -12,15 +12,15 @@
 use std::path::Path;
 use std::process::Command;
 
-use adapter_traits::{Vcs, WorktreeSpec};
-use adapters::GitVcs;
+use adapter_traits::{CommitTime, Vcs, Worktree, WorktreeSpec};
+use adapters::{BranchGone, GitVcs, UnmergedWork};
 use core_model::{
     Facts, Job, JobId, ManifestId, ModelName, NewJob, StepId, StepSeed, Timestamp, Title,
     TopLevelOrigin, Ulid, Urgency,
 };
 use store::Store;
 
-use crate::clean::{clean, CleanRefused, FileGone};
+use crate::clean::{clean, CleanRefused, FileGone, Scope};
 use crate::serve::STORE_FILE;
 use crate::tests::TempDir;
 
@@ -35,7 +35,12 @@ fn a_repository() -> TempDir {
         "armada.yml",
         &format!("version: 1\nid: {MANIFEST_ID}\nchecks:\n  build:\n    run: /bin/sh -c true\n"),
     );
-    git(dir.path(), &["init", "--quiet"]);
+    // `main` by name, not by whoever's `init.defaultBranch` is set: what
+    // counts as merged is now read from the repository.
+    git(
+        dir.path(),
+        &["-c", "init.defaultBranch=main", "init", "--quiet"],
+    );
     git(dir.path(), &["add", "."]);
     git(
         dir.path(),
@@ -127,7 +132,13 @@ fn a_jobs_worktree_its_branch_and_its_record_all_go() {
     let machine = TempDir::new();
     a_job_with_a_worktree(machine.path(), repo.path(), JOB, MANIFEST_ID);
 
-    let cleaned = clean(repo.path(), machine.path(), false).expect("a clean");
+    let cleaned = clean(
+        repo.path(),
+        machine.path(),
+        Scope::Repository,
+        UnmergedWork::Keep,
+    )
+    .expect("a clean");
 
     assert_eq!(cleaned.jobs.len(), 1);
     assert!(cleaned.jobs[0].forgotten.existed);
@@ -151,7 +162,13 @@ fn an_unrelated_armada_branch_is_left_alone() {
         &["branch", "armada/a-branch-somebody-is-using"],
     );
 
-    clean(repo.path(), machine.path(), false).expect("a clean");
+    clean(
+        repo.path(),
+        machine.path(),
+        Scope::Repository,
+        UnmergedWork::Keep,
+    )
+    .expect("a clean");
 
     let left = branches(repo.path());
     assert!(
@@ -170,7 +187,13 @@ fn another_manifests_jobs_are_not_this_manifests_to_clean() {
     a_job_with_a_worktree(machine.path(), repo.path(), JOB, MANIFEST_ID);
     a_job_with_a_worktree(machine.path(), repo.path(), OTHER_JOB, "another-project");
 
-    let cleaned = clean(repo.path(), machine.path(), false).expect("a clean");
+    let cleaned = clean(
+        repo.path(),
+        machine.path(),
+        Scope::Repository,
+        UnmergedWork::Keep,
+    )
+    .expect("a clean");
 
     assert_eq!(cleaned.jobs.len(), 1);
     assert!(branches(repo.path()).contains(&format!("armada/{OTHER_JOB}")));
@@ -192,10 +215,109 @@ fn a_worktree_with_no_job_behind_it_is_reported_and_left_alone() {
         .join(".armada/worktrees/01NOJOBEVERCLAIMEDTHIS0000");
     std::fs::create_dir_all(&orphan).expect("a directory nothing accounts for");
 
-    let cleaned = clean(repo.path(), machine.path(), false).expect("a clean");
+    let cleaned = clean(
+        repo.path(),
+        machine.path(),
+        Scope::Repository,
+        UnmergedWork::Keep,
+    )
+    .expect("a clean");
 
     assert_eq!(cleaned.unclaimed, vec![orphan.clone()]);
     assert!(orphan.is_dir(), "it is still there");
+}
+
+// ------------------------------------------ what it refuses to throw away
+
+const NINE: CommitTime = CommitTime::seconds_since_epoch(1_787_734_800);
+
+/// A Job whose last step advanced, so Fleet committed its work to its branch.
+fn a_job_that_finished(machine: &Path, repo: &Path, job: &str) {
+    a_job_with_a_worktree(machine, repo, job, MANIFEST_ID);
+    // Derived from the spec, never composed by hand — the same rule the verb
+    // under test follows for the branch it deletes.
+    let spec = WorktreeSpec::for_job(&repo.to_string_lossy(), job).expect("a legal spec");
+    let worktree = Worktree::at(spec.worktree_path(), spec.branch());
+    std::fs::write(format!("{}/answer.txt", worktree.path()), "42").expect("the work");
+    GitVcs::new()
+        .commit_all(&worktree, "the work", NINE)
+        .expect("Fleet commits when the last step advances");
+}
+
+/// **The loss this closes.** A completed Job's branch is the only copy of its
+/// work until somebody merges it, so a clean that deletes it destroys a commit.
+#[test]
+fn a_branch_holding_work_nothing_has_taken_survives_the_clean_and_is_named() {
+    let repo = a_repository();
+    let machine = TempDir::new();
+    a_job_that_finished(machine.path(), repo.path(), JOB);
+
+    let cleaned = clean(
+        repo.path(),
+        machine.path(),
+        Scope::Repository,
+        UnmergedWork::Keep,
+    )
+    .expect("a clean");
+
+    assert!(branches(repo.path()).contains(&format!("armada/{JOB}")));
+    let left = cleaned.branches_left();
+    assert_eq!(left.len(), 1);
+    let BranchGone::Kept { base, commits, .. } = left[0] else {
+        panic!("it says how much is unmerged: {:?}", left[0]);
+    };
+    assert_eq!((base.as_str(), *commits), ("main", 1));
+    // The worktree is reproducible and the commit is not, so only one stays.
+    assert!(!repo.path().join(".armada/worktrees").join(JOB).exists());
+    assert!(cleaned.faults.is_empty(), "keeping a branch is not a fault");
+}
+
+/// Merged is deleted. Somebody took the work, so the branch is a label.
+#[test]
+fn a_branch_whose_work_is_on_main_is_deleted_as_before() {
+    let repo = a_repository();
+    let machine = TempDir::new();
+    a_job_that_finished(machine.path(), repo.path(), JOB);
+    git(
+        repo.path(),
+        &["merge", "--ff-only", &format!("armada/{JOB}")],
+    );
+
+    let cleaned = clean(
+        repo.path(),
+        machine.path(),
+        Scope::Repository,
+        UnmergedWork::Keep,
+    )
+    .expect("a clean");
+
+    assert!(!branches(repo.path()).contains(&format!("armada/{JOB}")));
+    assert!(cleaned.branches_left().is_empty());
+}
+
+/// `--force` is the deliberate override. It is a different question from
+/// `--all`, and a different flag.
+#[test]
+fn force_deletes_a_branch_nothing_has_taken() {
+    let repo = a_repository();
+    let machine = TempDir::new();
+    a_job_that_finished(machine.path(), repo.path(), JOB);
+
+    let cleaned = clean(
+        repo.path(),
+        machine.path(),
+        Scope::Repository,
+        UnmergedWork::Delete,
+    )
+    .expect("a clean");
+
+    assert!(!branches(repo.path()).contains(&format!("armada/{JOB}")));
+    assert!(cleaned.branches_left().is_empty());
+    // The tip is the only thing that makes a deleted branch recoverable.
+    assert!(matches!(
+        cleaned.jobs[0].reclaimed.branch,
+        BranchGone::Deleted { .. }
+    ));
 }
 
 // -------------------------------------------------------------- what it takes
@@ -207,7 +329,13 @@ fn all_removes_the_store_and_the_files_beside_it() {
     a_job_with_a_worktree(machine.path(), repo.path(), JOB, MANIFEST_ID);
     machine.write("mcp.json", "{}");
 
-    let cleaned = clean(repo.path(), machine.path(), true).expect("a clean");
+    let cleaned = clean(
+        repo.path(),
+        machine.path(),
+        Scope::AndTheMachine,
+        UnmergedWork::Keep,
+    )
+    .expect("a clean");
 
     assert!(!machine.path().join(STORE_FILE).exists());
     assert!(!machine.path().join("mcp.json").exists());
@@ -224,7 +352,13 @@ fn a_machine_file_that_was_never_there_is_said_rather_than_skipped() {
     let repo = a_repository();
     let machine = TempDir::new();
 
-    let cleaned = clean(repo.path(), machine.path(), true).expect("a clean");
+    let cleaned = clean(
+        repo.path(),
+        machine.path(),
+        Scope::AndTheMachine,
+        UnmergedWork::Keep,
+    )
+    .expect("a clean");
 
     assert!(cleaned
         .machine
@@ -240,8 +374,8 @@ fn a_clean_is_refused_while_a_fleet_holds_the_store() {
     let machine = TempDir::new();
     pretend_a_fleet_is_running(machine.path());
 
-    for everything in [false, true] {
-        let refused = clean(repo.path(), machine.path(), everything)
+    for scope in [Scope::Repository, Scope::AndTheMachine] {
+        let refused = clean(repo.path(), machine.path(), scope, UnmergedWork::Keep)
             .expect_err("a live Fleet is holding these Jobs");
         let CleanRefused::FleetIsRunning { pid, .. } = refused else {
             panic!("the refusal names the Fleet: {refused}");
@@ -276,9 +410,14 @@ fn a_directory_that_is_not_a_repository_is_refused_by_naming_the_manifest() {
     let nowhere = TempDir::new();
     let machine = TempDir::new();
 
-    let refused = clean(nowhere.path(), machine.path(), false)
-        .expect_err("there is no Manifest here")
-        .to_string();
+    let refused = clean(
+        nowhere.path(),
+        machine.path(),
+        Scope::Repository,
+        UnmergedWork::Keep,
+    )
+    .expect_err("there is no Manifest here")
+    .to_string();
 
     assert!(refused.contains("armada.yml"), "{refused}");
 }

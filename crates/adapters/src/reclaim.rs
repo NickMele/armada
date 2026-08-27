@@ -8,6 +8,12 @@
 //! Job derives. Deleting by glob is how nine unrelated branches were destroyed
 //! by hand, and care at the call site does not fix a shape that accepts one.
 //!
+//! # A branch the base cannot reach is kept
+//!
+//! Fleet commits a finished Job's work, so the branch *is* the work. Only
+//! [`UnmergedWork::Delete`] removes commits nobody has taken. Which branch the
+//! base is comes from `crate::base`, shared with delivery.
+//!
 //! # Remove, prune, then the branch
 //!
 //! Removing the checkout and pruning its record are one libgit2 call. The
@@ -19,7 +25,19 @@
 //! Each half is answered on its own, so neither hides the other's fault.
 
 use adapter_traits::WorktreeSpec;
-use git2::{BranchType, ErrorCode, Repository, WorktreeLockStatus, WorktreePruneOptions};
+use git2::{BranchType, ErrorCode, Oid, Repository, WorktreeLockStatus, WorktreePruneOptions};
+
+/// Whether a branch holding commits the base cannot reach may be deleted.
+///
+/// Two named states rather than a `bool`, because the call site is a delete and
+/// `reclaim(&spec, true)` says nothing about what is true.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnmergedWork {
+    /// Left where it is. Work nobody has taken is not a clean's to remove.
+    Keep,
+    /// Deleted, and the commits with it — `armada clean --force`.
+    Delete,
+}
 
 /// What one Job's reclaim did, half by half.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -84,6 +102,21 @@ pub enum BranchGone {
     Absent {
         branch: String,
     },
+    /// **Left standing on purpose.** `commits` of its own are not on `base`,
+    /// so deleting it would destroy work nobody has taken.
+    Kept {
+        branch: String,
+        tip: String,
+        base: String,
+        commits: usize,
+    },
+    /// Left standing because nothing here could say whether it was merged.
+    /// Unanswered is kept: the cost of guessing wrong is a lost commit.
+    KeptUnanswered {
+        branch: String,
+        tip: String,
+        why: String,
+    },
     NotDeleted {
         branch: String,
         why: String,
@@ -98,7 +131,11 @@ pub struct RepoUnreadable {
 }
 
 /// Remove one Job's worktree, then delete the branch that Job derived.
-pub fn reclaim(spec: &WorktreeSpec) -> Result<Reclaimed, RepoUnreadable> {
+pub fn reclaim(
+    spec: &WorktreeSpec,
+    declared_base: Option<&str>,
+    unmerged: UnmergedWork,
+) -> Result<Reclaimed, RepoUnreadable> {
     let repo = Repository::open(spec.repo_root()).map_err(|cause| RepoUnreadable {
         repo: spec.repo_root().to_string(),
         why: cause.message().to_string(),
@@ -108,7 +145,7 @@ pub fn reclaim(spec: &WorktreeSpec) -> Result<Reclaimed, RepoUnreadable> {
     // Only after the record is gone. A branch still checked out by a
     // registration git knows about cannot be deleted, and the message git gives
     // for that names the branch rather than the record.
-    let branch = delete_the_branch(&repo, &spec.branch(), &worktree);
+    let branch = delete_the_branch(&repo, &spec.branch(), declared_base, &worktree, unmerged);
     Ok(Reclaimed { worktree, branch })
 }
 
@@ -156,7 +193,13 @@ fn remove_the_worktree(repo: &Repository, spec: &WorktreeSpec) -> WorktreeGone {
     }
 }
 
-fn delete_the_branch(repo: &Repository, branch: &str, worktree: &WorktreeGone) -> BranchGone {
+fn delete_the_branch(
+    repo: &Repository,
+    branch: &str,
+    declared_base: Option<&str>,
+    worktree: &WorktreeGone,
+    unmerged: UnmergedWork,
+) -> BranchGone {
     let mut found = match repo.find_branch(branch, BranchType::Local) {
         Ok(found) => found,
         Err(cause) if cause.code() == ErrorCode::NotFound => {
@@ -183,11 +226,34 @@ fn delete_the_branch(repo: &Repository, branch: &str, worktree: &WorktreeGone) -
     }
 
     // Read before the delete, because after it there is nothing left to ask.
-    let tip = found
-        .get()
-        .target()
+    let target = found.get().target();
+    let tip = target
         .map(|oid| oid.to_string())
         .unwrap_or_else(|| String::from("an unresolved ref"));
+
+    // A ref pointing at no commit has no commits to lose, so it is not asked
+    // about. Everything else is, unless the caller said --force.
+    if let (UnmergedWork::Keep, Some(oid)) = (unmerged, target) {
+        match standing_against_the_base(repo, declared_base, oid) {
+            Standing::Merged => {}
+            Standing::Ahead { base, commits } => {
+                return BranchGone::Kept {
+                    branch: branch.to_string(),
+                    tip,
+                    base,
+                    commits,
+                }
+            }
+            Standing::Unanswered { why } => {
+                return BranchGone::KeptUnanswered {
+                    branch: branch.to_string(),
+                    tip,
+                    why,
+                }
+            }
+        }
+    }
+
     match found.delete() {
         Ok(()) => BranchGone::Deleted {
             branch: branch.to_string(),
@@ -198,4 +264,46 @@ fn delete_the_branch(repo: &Repository, branch: &str, worktree: &WorktreeGone) -
             why: cause.message().to_string(),
         },
     }
+}
+
+/// Where a branch stands relative to the base it would be merged into.
+enum Standing {
+    /// The base already reaches every commit on it.
+    Merged,
+    Ahead {
+        base: String,
+        commits: usize,
+    },
+    Unanswered {
+        why: String,
+    },
+}
+
+fn standing_against_the_base(repo: &Repository, declared_base: Option<&str>, tip: Oid) -> Standing {
+    let looked_for = crate::base::candidates(repo, declared_base);
+    let Some((base, base_tip)) = looked_for
+        .iter()
+        .find_map(|name| the_branch_tip(repo, name).map(|oid| (name.clone(), oid)))
+    else {
+        return Standing::Unanswered {
+            why: format!(
+                "none of {} is here, so nothing says what it would be merged into",
+                looked_for.join(", ")
+            ),
+        };
+    };
+    match repo.graph_ahead_behind(tip, base_tip) {
+        Ok((0, _)) => Standing::Merged,
+        Ok((commits, _)) => Standing::Ahead { base, commits },
+        Err(cause) => Standing::Unanswered {
+            why: format!("{base} would not compare: {}", cause.message()),
+        },
+    }
+}
+
+fn the_branch_tip(repo: &Repository, name: &str) -> Option<Oid> {
+    repo.find_branch(name, BranchType::Local)
+        .ok()?
+        .get()
+        .target()
 }

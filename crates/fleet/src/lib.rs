@@ -46,8 +46,12 @@
 //! Job while it is in that slot. `landing` is the end of that: a Job whose last
 //! step advances has its work committed onto its own branch before it is
 //! recorded complete, because a Drone is denied `git` and a verified change
-//! nobody can merge is not a finished Job. [`serving`](mod@serving) is the
-//! trait implementation, so the operations answer from a real Fleet.
+//! nobody can merge is not a finished Job. [`delivery`](mod@delivery) is what
+//! happens after the commit and at every earlier step boundary — the branch is
+//! brought up to the base it merges into, then pushed and opened for review,
+//! and `review` assembles that pull request from the record rather than from
+//! anything a Drone said. [`serving`](mod@serving) is the trait implementation,
+//! so the operations answer from a real Fleet.
 //!
 //! **Two things enter the process here and nowhere else.** [`clock`](mod@clock)
 //! is the one place a clock is read, and [`mint`](mod@mint) the one place an id
@@ -78,6 +82,7 @@ pub mod briefing;
 mod check_output;
 pub mod clock;
 pub mod daemon;
+pub mod delivery;
 pub mod detach;
 pub mod dispatch;
 pub mod drafting;
@@ -89,6 +94,7 @@ mod landing;
 pub mod mint;
 pub mod process;
 pub mod redispatch;
+mod review;
 pub mod runtime;
 pub mod serving;
 pub mod session;
@@ -103,6 +109,7 @@ mod tests;
 pub use adrift::{Adrift, NotSubmitted};
 pub use clock::{Clock, SystemClock};
 pub use daemon::{Fittings, Fleet, Host, Reconciled, Turned};
+pub use delivery::Delivered;
 pub use detach::Detached;
 pub use drone::{
     aftermath, environment, Aftermath, DroneNotStarted, Ending, HostPaths, Left, Started,

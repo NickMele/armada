@@ -27,7 +27,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use adapter_traits::{AgentHarness, Vcs, WorkProduct};
+use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 use tokio::time::MissedTickBehavior;
@@ -48,7 +48,7 @@ pub fn keep_turning<H, V, W>(
 where
     H: AgentHarness + Send + Sync + 'static,
     H::Error: std::error::Error + Send + Sync + 'static,
-    V: Vcs + Send + Sync + 'static,
+    V: Vcs + Delivery + Send + Sync + 'static,
     V::Error: std::error::Error + Send + Sync + 'static,
     V::CommitError: std::error::Error + Send + Sync + 'static,
     W: WorkProduct + Send + Sync + 'static,

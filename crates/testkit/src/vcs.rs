@@ -28,7 +28,10 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Mutex;
 
-use adapter_traits::{CommitTime, Committed, Vcs, Worktree, WorktreeSpec};
+use adapter_traits::{
+    Base, BroughtUpToDate, CommitTime, Committed, Delivery, NotDelivered, Opened, Pushed, Review,
+    Standing, Vcs, Worktree, WorktreeSpec,
+};
 
 /// Why the fake refused.
 ///
@@ -84,6 +87,57 @@ pub struct FakeVcs {
     /// inferred: a fake that guessed whether a worktree it never created has
     /// anything in it would be asserting against its own guess.
     commits: Mutex<Willing>,
+    /// What delivery answers. Scripted for the same reason: there is no
+    /// repository here to be behind anything, and no remote to push to.
+    delivery: Mutex<Delivering>,
+    delivered: Mutex<Vec<Delivered>>,
+}
+
+/// One thing this fake was asked to do to a Job's branch, in order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Delivered {
+    /// The branch was put on top of `base`.
+    BroughtUpToDate { branch: String, base: String },
+    /// The branch was pushed.
+    Pushed { branch: String },
+    /// A pull request was opened, carrying this.
+    OpenedForReview { base: String, review: Review },
+}
+
+/// What the fake's version control looks like from the delivery side.
+///
+/// Public fields and no `Default` for the reason `Fittings` has neither: a test
+/// writes out every one of the four, so the repository it is describing is
+/// visible at the call site rather than inherited.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Delivering {
+    /// What the repository says its base is, or `None` for one that names none.
+    pub base: Option<Base>,
+    /// How far behind the base the branch is.
+    pub standing: Standing,
+    /// What bringing it up to date comes to. `None` where it is not behind.
+    pub rebase: Option<BroughtUpToDate>,
+    pub push: Pushed,
+    pub review: Opened,
+}
+
+impl Default for Delivering {
+    /// A repository on `main`, up to date, with a remote and a forge — the
+    /// shape a Job that goes the whole way runs against.
+    fn default() -> Delivering {
+        Delivering {
+            base: Some(Base::Inferred(String::from("main"))),
+            standing: Standing::UpToDate,
+            rebase: None,
+            push: Pushed::ToTheRemote {
+                remote: String::from("origin"),
+                branch: String::from("armada/a-job"),
+            },
+            review: Opened::PullRequest {
+                url: String::from("https://forge.invalid/armada/pull/1"),
+            },
+        }
+    }
 }
 
 /// One commit this fake said it made.
@@ -152,6 +206,91 @@ impl FakeVcs {
     /// Every commit this fake said it made, in order.
     pub fn committed(&self) -> Vec<FakeCommit> {
         self.committed.lock().expect("not poisoned").clone()
+    }
+
+    /// Script what the repository looks like from the delivery side.
+    pub fn delivering(self, delivering: Delivering) -> FakeVcs {
+        *self.delivery.lock().expect("not poisoned") = delivering;
+        self
+    }
+
+    /// Everything this fake was asked to do to a branch, in order. **Nothing
+    /// removes an entry**, so a test asserting that no push happened is
+    /// asserting on the whole run rather than on the last call.
+    pub fn delivered(&self) -> Vec<Delivered> {
+        self.delivered.lock().expect("not poisoned").clone()
+    }
+}
+
+impl Delivery for FakeVcs {
+    fn base(
+        &self,
+        _worktree: &Worktree,
+        declared: Option<&str>,
+    ) -> Result<Option<Base>, NotDelivered> {
+        // Declared beats scripted, so a test can assert the key is honoured
+        // without describing a repository at all.
+        if let Some(declared) = declared {
+            return Ok(Some(Base::Declared(declared.to_string())));
+        }
+        Ok(self.delivery.lock().expect("not poisoned").base.clone())
+    }
+
+    fn standing(&self, _worktree: &Worktree, _base: &Base) -> Result<Standing, NotDelivered> {
+        Ok(self.delivery.lock().expect("not poisoned").standing)
+    }
+
+    fn bring_up_to_date(
+        &self,
+        worktree: &Worktree,
+        base: &Base,
+    ) -> Result<BroughtUpToDate, NotDelivered> {
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .push(Delivered::BroughtUpToDate {
+                branch: worktree.branch().to_string(),
+                base: base.name().to_string(),
+            });
+        Ok(self
+            .delivery
+            .lock()
+            .expect("not poisoned")
+            .rebase
+            .clone()
+            .unwrap_or(BroughtUpToDate::Clean {
+                base: base.name().to_string(),
+                commits: 0,
+            }))
+    }
+
+    fn push(&self, worktree: &Worktree) -> Result<Pushed, NotDelivered> {
+        let pushed = self.delivery.lock().expect("not poisoned").push.clone();
+        if pushed != Pushed::NoRemote {
+            self.delivered
+                .lock()
+                .expect("not poisoned")
+                .push(Delivered::Pushed {
+                    branch: worktree.branch().to_string(),
+                });
+        }
+        Ok(pushed)
+    }
+
+    fn open_for_review(
+        &self,
+        _worktree: &Worktree,
+        base: &Base,
+        review: &Review,
+    ) -> Result<Opened, NotDelivered> {
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .push(Delivered::OpenedForReview {
+                base: base.name().to_string(),
+                review: review.clone(),
+            });
+        Ok(self.delivery.lock().expect("not poisoned").review.clone())
     }
 }
 

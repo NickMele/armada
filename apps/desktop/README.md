@@ -24,8 +24,8 @@ app draws rather than an error.
 It reads `crates/core-model/domain/enum-verbs.toml`, `job-statuses.toml`,
 `job-fields.toml` and `protocol-version.toml`, and writes two checked-in
 TypeScript modules: the verb, glyph and status token each enum variant renders
-as, and the protocol version both sides check. **It does not emit the DTO
-types** — nothing generates those from `crates/ipc` yet, so a shape change is
+as, and the two numbers of the protocol version both sides read. **It does not
+emit the DTO types** — nothing generates those from `crates/ipc` yet, so a shape change is
 still hand-mirrored in `src/shared/protocol.ts`.
 
 The output is checked in on purpose. A generated file that is `.gitignore`d

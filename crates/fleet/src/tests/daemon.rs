@@ -172,7 +172,8 @@ pub fn a_fleet(
 }
 
 /// A Fleet whose version control is scripted. What `landing` needs: the commit
-/// a finished Job gets is the fake's to record, refuse, or answer as nothing.
+/// a finished Job gets is the fake's to record, refuse, or answer as nothing,
+/// and what `delivery` needs: where the branch stands and what a push answers.
 pub fn a_fleet_committing_through(
     home: &TempDir,
     work: FakeWorkProduct,
@@ -180,6 +181,23 @@ pub fn a_fleet_committing_through(
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
     fittings.vcs = vcs;
+    Fleet::assembled(fittings)
+}
+
+/// A Fleet over an `armada.yml` that names the branch its work merges into.
+pub fn a_fleet_whose_manifest_declares_a_base(
+    home: &TempDir,
+    work: FakeWorkProduct,
+    vcs: FakeVcs,
+    base: &str,
+) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
+    let mut fittings = fittings(home, work);
+    fittings.vcs = vcs;
+    fittings.manifest = Manifest::parse(
+        std::path::Path::new("armada.yml"),
+        &format!("version: 1\nid: 01FIXTUREMANIFEST\nbase: {base}\n"),
+    )
+    .expect("a manifest that parses");
     Fleet::assembled(fittings)
 }
 

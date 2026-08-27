@@ -26,7 +26,7 @@ pub enum Verb {
     /// One Command the Manifest declares, by name.
     Run { name: String },
     /// Worktrees, branches and Jobs, given back.
-    Clean { everything: bool },
+    Clean { everything: bool, force: bool },
     /// What the four verbs are.
     Help,
 }
@@ -83,7 +83,7 @@ pub fn read<I: IntoIterator<Item = String>>(args: I) -> Result<Verb, Misread> {
             }
         }
         "clean" => {
-            let positional = positionals(rest, &["--all"], &mut faults);
+            let positional = positionals(rest, &["--all", "--force"], &mut faults);
             at_most_one("clean", &positional, &mut faults);
             if let Some(given) = positional.first() {
                 faults.push(Fault::CleanTakesNoPath {
@@ -92,6 +92,7 @@ pub fn read<I: IntoIterator<Item = String>>(args: I) -> Result<Verb, Misread> {
             }
             Some(Verb::Clean {
                 everything: rest.iter().any(|arg| arg == "--all"),
+                force: rest.iter().any(|arg| arg == "--force"),
             })
         }
         _ => {
@@ -232,6 +233,15 @@ impl fmt::Display for Usage {
             };
             writeln!(out, "  armada {shape:<16}  {what}")?;
         }
+        writeln!(out)?;
+        writeln!(
+            out,
+            "  clean keeps a branch whose commits are not on the base branch, and names"
+        )?;
+        writeln!(
+            out,
+            "  it. --force deletes it, and the work on it, along with the rest."
+        )?;
         Ok(())
     }
 }

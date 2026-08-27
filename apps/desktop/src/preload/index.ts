@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import { CHANNELS } from "../shared/bridge";
 import type { BridgeApi, BridgeState, Draft, Outcome } from "../shared/bridge";
+import type { ProtocolVersion } from "../shared/version";
 import { PROTOCOL_VERSION } from "../shared/generated/protocol-version";
 
 // The whole surface the renderer is allowed to see.
@@ -16,9 +17,9 @@ import { PROTOCOL_VERSION } from "../shared/generated/protocol-version";
 // as an argument would be a surface that reads as one act and performs two.
 //
 // The protocol version is no longer a literal here: it is generated from
-// `protocol-version.toml`, the one number both sides check.
+// `protocol-version.toml`, which both sides read.
 const api: BridgeApi = {
-  protocolVersion: (): number => PROTOCOL_VERSION,
+  protocolVersion: (): ProtocolVersion => PROTOCOL_VERSION,
 
   state: (): Promise<BridgeState> => ipcRenderer.invoke(CHANNELS.state),
 

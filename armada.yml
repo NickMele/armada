@@ -6,7 +6,7 @@
 # workspace is actually built and tested with, and a Job dispatched here runs
 # them verbatim.
 #
-# Five keys, and no others. `version`, `id`, `checks.<name>.run`,
+# Six keys, and no others. `version`, `id`, `base`, `checks.<name>.run`,
 # `commands.<name>.run` and `commands.<name>.destructive` are the whole of what
 # `crates/config` reads at M1; every other section the Manifest concept page
 # describes — permissions, secrets, ports, skills, budget, dispatch freeze,
@@ -25,6 +25,18 @@ version: 1
 # it. What it cannot survive is being edited, which is the trade a readable key
 # makes and a minted one does not.
 id: armada
+
+# The branch a Job's work merges into.
+#
+# Three things read it: the rebase Fleet runs at each step boundary, the pull
+# request a finished Job opens, and `armada clean`, which keeps any branch whose
+# commits this one cannot reach.
+#
+# **Optional, and leaving it out is not the same as writing it.** With no `base`,
+# Armada infers one — what `origin/HEAD` names, then `main`, then `master` — and
+# says in the pull request that it inferred it. Written here it is an answer, and
+# a name no branch answers to is refused rather than quietly replaced by a guess.
+base: main
 
 # Checks gate advancement. A step's `mechanical_checks` names one of these by
 # name; a name a step asks for and this file does not declare is refused before

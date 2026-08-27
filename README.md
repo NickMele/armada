@@ -21,7 +21,7 @@ with four verbs:
 | `armada serve [<path>]` | The daemon. Binds a loopback port, publishes a runtime file, serves the API and turns Jobs until it is signalled |
 | `armada check <name>` | Runs one Check the repository's `armada.yml` declares |
 | `armada run <name>` | Runs one Command it declares. Checks gate advancement; Commands do not, and the two stay separate verbs |
-| `armada clean [--all]` | Gives this repository's worktrees, branches and Jobs back |
+| `armada clean [--all] [--force]` | Gives this repository's worktrees, branches and Jobs back, keeping any branch whose work is not merged |
 
 [Running it locally](#running-it-locally) is how to start.
 
@@ -121,7 +121,8 @@ runs on a laptop and in CI. It has no dependencies and needs nothing built.
 
 Some of what the gate refuses: untyped JSON outside the two crates allowed to
 parse it, a vendor's name outside the adapter layer, a design value that is not
-a token, a file over 900 lines, and anything that names a person or a machine.
+a token, a file over 900 lines, a Storybook story whose title and directory
+disagree, and anything that names a person or a machine.
 
 ### Tests
 
@@ -165,10 +166,12 @@ pnpm --filter @armada/desktop dev            # in another terminal
 reads that file to find out where to connect. Bridge started first has nothing
 to read.
 
-**Fleet and Bridge ship as a pair and version together.** One number in
-`protocol-version.toml` governs both, and a peer that sees a version it does not
-know refuses the connection rather than guessing. So they are rebuilt together
-or not at all.
+**Fleet and Bridge ship as a pair and version together.** A major and a minor
+in `protocol-version.toml` govern both. A major mismatch refuses the connection
+in either direction; a minor one is additive-only, so a Fleet *ahead* of Bridge
+connects and shows a banner and a Fleet *behind* it refuses — Bridge would be
+reading fields that Fleet is too old to send. So they are rebuilt together or
+not at all, and `docs/practices/protocol.md` says which number moves when.
 
 What a healthy start prints: the repository and its workflow, the pid, port and
 protocol version, what reconciliation found, the turn interval, and how many
@@ -200,6 +203,53 @@ that would have worked, and a name in neither is refused by listing what is
 declared. **Output is captured and printed when the command ends**, not
 streamed — a long Check prints nothing while it runs.
 
+### What a finished Job leaves behind
+
+A Job that passes every Check ends with its work committed on its own branch,
+that branch brought up to date with the branch it merges into, pushed, and a
+pull request open against it. Fleet does all four — a Drone is denied `git`, and
+a change nobody can merge is not a finished Job.
+
+**The branch it merges into is `base:` in `armada.yml`.** Leave the key out and
+Armada infers one: what `origin/HEAD` names, then `main`, then `master`. A
+declared branch the repository has not got is refused by name rather than
+replaced with a guess.
+
+**Fleet rebases at every step boundary, not only at the end.** A Job that runs
+for an hour is a Job `main` moves under, and finding that out at the end is
+finding it out too late. At a boundary the Drone has just submitted and nothing
+is in flight, so git can answer on its own — no question reaches the Drone.
+Three outcomes:
+
+| What git says | What happens |
+|---|---|
+| Not behind | Nothing at all, and nothing is announced |
+| Behind, and it replays | The Drone is told what moved in the turn it gets for the next step |
+| Behind, and it conflicts | The conflict is handed to the Drone as work, with every file named |
+
+**Uncommitted work is never destroyed by this.** Fleet commits only at the last
+step, so mid-Job the worktree is full of changes nothing has committed — the
+rebase carries them across and puts them back. Where they will not go back
+cleanly the files are left with conflict markers and git keeps its own copy in a
+stash; where the branch's *own* commits will not replay, the branch is put back
+exactly where it was and nothing is pushed.
+
+**A pull request's body is assembled from the record, never written by an
+agent.** It carries the brief, what the Job had to satisfy, every step with its
+verdict, every Check with its outcome and a link to what it printed, and a
+closing section naming what nothing checked. What the agent claimed is not in
+it: a claim is a signal the gate ruled on, and the record is what Fleet
+verified.
+
+**A repository with no remote is ordinary.** The work is committed, nothing is
+pushed, no pull request is invented, and the Job still completes — the Checks
+passed either way. The branch is the whole of the work and you merge it where it
+is.
+
+Opening the pull request needs `gh` on your `PATH` and signed in. Without it the
+branch is pushed and the pull request is yours to open; the Job does not fail
+over it.
+
 ### Clearing up
 
 **Destructive.** `armada clean` removes this repository's Armada worktrees,
@@ -212,12 +262,29 @@ a name pattern — **a worktree with no Job behind it is reported and left where
 it is.** It prints what it removed item by item, including the commit each
 deleted branch pointed at, which is the only thing that makes one recoverable.
 
+**It will not delete a branch whose commits nobody has taken.** Fleet commits a
+finished Job's work, so that branch is the only copy of it. A branch the base
+branch cannot reach is named, counted — *2 commit(s) of its own are not on
+`main`* — and left standing, while its worktree still goes, because a checkout
+can be made again and a commit cannot. The base branch is `base:` in
+`armada.yml`, or — with no such key — the one `origin/HEAD` names, or `main`, or
+`master`, whichever is found first; where nothing answers, nothing can say what
+merged means, so every branch is kept and the line says so.
+
+**What to do about a branch it left:** merge it, then `git branch -d
+armada/<job-id>` — git refuses that itself while the branch is unmerged, so the
+two checks agree. `armada clean --force` deletes them instead, and the commits
+with them. `--force` and `--all` are separate questions and separate flags:
+one is *delete work nobody has taken*, the other is *clear this machine's
+store too*.
+
 Both forms refuse while Fleet is running and name the pid: the Jobs being
 forgotten are the ones it is holding.
 
 ```sh
-armada clean          # this repository's worktrees, branches and Jobs
-armada clean --all    # and the machine's store beside them
+armada clean            # worktrees, branches and Jobs; unmerged branches stay
+armada clean --all      # and the machine's store beside them
+armada clean --force    # and the unmerged branches, and their commits
 ```
 
 ## Roadmap

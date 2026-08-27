@@ -1,5 +1,5 @@
 //! What happens when a Job's last step advances: the work is committed, then
-//! the Job is recorded complete.
+//! the Job is recorded complete, then the branch is delivered.
 //!
 //! # Fleet commits, because a Drone cannot
 //!
@@ -21,14 +21,16 @@
 //!
 //! The Job still reaches `completed_success`, its Drone is still ended and the
 //! slot still freed. The failure comes out as [`Adrift::NotCommitted`] once all
-//! of that has happened, and the worktree is untouched.
+//! of that has happened, and the worktree is untouched. Delivery is held the
+//! same way; see [`crate::delivery`].
 
-use adapter_traits::{AgentHarness, CommitTime, Committed, Vcs, WorkProduct};
+use adapter_traits::{AgentHarness, CommitTime, Committed, Delivery, Vcs, WorkProduct};
 use core_model::{Job, JobId, StepId, StepTarget};
 use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
+use crate::delivery::Delivered;
 use crate::gate::Ruling;
 use crate::working::Working;
 
@@ -36,7 +38,7 @@ impl<H, V, W> Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
     H::Error: std::error::Error + Send + Sync + 'static,
-    V: Vcs + Send + Sync + 'static,
+    V: Vcs + Delivery + Send + Sync + 'static,
     V::Error: std::error::Error + Send + Sync + 'static,
     V::CommitError: std::error::Error + Send + Sync + 'static,
     W: WorkProduct + Send + Sync + 'static,
@@ -60,13 +62,36 @@ where
         let job = self.load(job_id).await?;
         let job = self.move_step(&job, step, StepTarget::Advanced).await?;
         let landed = self.land(&job, working).await;
+        // **After the commit and only after it.** A push of a branch whose work
+        // is still uncommitted would publish the commit the Job started from.
+        let delivered = match landed {
+            Ok(_) => self.delivered(&job, working).await,
+            Err(_) => Ok(Delivered::default()),
+        };
+        if let Ok(delivered) = &delivered {
+            *self.delivery_slot().lock().await = Some(delivered.clone());
+        }
         // The Job is moved before the Drone is told, so a session that has gone
         // deaf cannot leave a finished Job at `running`.
         self.applied(&job, ruling).await?;
         let told = self.tell(job_id, tell, working).await;
         self.end_the_drone(working).await;
         landed?;
+        delivered?;
         told
+    }
+
+    /// Deliver the Job's branch, from the worktree the slot is holding.
+    ///
+    /// An empty slot delivers nothing, for the reason [`land`](Fleet::land)
+    /// gives about the same read: it cannot happen, and neither case is
+    /// distinguished here because neither exists.
+    async fn delivered(&self, job: &Job, working: &Option<Working>) -> Result<Delivered, Adrift> {
+        let Some(at_work) = working.as_ref() else {
+            return Ok(Delivered::default());
+        };
+        let (_, _, worktree) = at_work.standing();
+        self.deliver(job, &worktree).await
     }
 
     /// Put the Job's work on its branch.

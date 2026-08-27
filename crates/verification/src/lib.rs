@@ -55,5 +55,5 @@ mod tests;
 
 pub use gate::{decide, Accepted, NotWhatTheStepAsked, Verdict};
 pub use mechanical::{CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran};
-pub use outcome::OutcomeTurn;
+pub use outcome::{OutcomeTurn, TheBaseMoved};
 pub use submission::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};

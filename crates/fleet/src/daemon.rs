@@ -44,7 +44,7 @@
 
 use std::sync::Arc;
 
-use adapter_traits::{AgentHarness, Vcs, WorkProduct};
+use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use config::{Manifest, ResolvedWorkflow};
 use core_model::{Actor, Job, JobId, JobStatus, Target, Timestamp, TransitionReason, Ulid};
 use store::{LoadAllError, LoadJobError, Loaded, Moved, Store};
@@ -52,6 +52,7 @@ use tokio::sync::Mutex;
 
 use crate::adrift::Adrift;
 use crate::clock::Clock;
+use crate::delivery::Delivered;
 use crate::drone::{aftermath, Aftermath, Ending};
 use crate::evidence::EvidenceInbox;
 use crate::gate::{CheckBudget, Ruling};
@@ -144,6 +145,9 @@ pub struct Turned {
     pub after: Option<Aftermath>,
     /// The Job admitted because the slot came free.
     pub admitted: Option<JobId>,
+    /// What became of a finished Job's branch. Present on the turn that
+    /// finished one and empty on every other, like the two fields above it.
+    pub delivered: Option<Delivered>,
 }
 
 /// The daemon core: **the only writer of Job state.**
@@ -166,6 +170,10 @@ pub struct Fleet<H, V, W> {
     /// root.
     turns: api::Turns,
     inbox: EvidenceInbox,
+    /// What the last finished Job's delivery came to, waiting for the turn that
+    /// reports it. **Drained, not read** — a second turn must not report a
+    /// push that happened before it.
+    delivered: Mutex<Option<Delivered>>,
     working: Mutex<Option<Working>>,
     /// **This process's** run id, minted once at assembly.
     ///
@@ -179,7 +187,7 @@ impl<H, V, W> Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
     H::Error: std::error::Error + Send + Sync + 'static,
-    V: Vcs + Send + Sync + 'static,
+    V: Vcs + Delivery + Send + Sync + 'static,
     V::Error: std::error::Error + Send + Sync + 'static,
     V::CommitError: std::error::Error + Send + Sync + 'static,
     W: WorkProduct + Send + Sync + 'static,
@@ -202,6 +210,7 @@ where
             events: fittings.events,
             turns: api::Turns::new(),
             inbox: EvidenceInbox::new(),
+            delivered: Mutex::new(None),
             working: Mutex::new(None),
             run,
         }
@@ -254,12 +263,14 @@ where
     pub async fn turn(&self) -> Result<Turned, Adrift> {
         let mut working = self.working.lock().await;
         let ruled = self.settle(&mut working).await?;
+        let delivered = self.delivered.lock().await.take();
         let after = self.reap(&mut working).await?;
         let admitted = self.admit_next(&mut working).await?;
         Ok(Turned {
             ruled,
             after,
             admitted,
+            delivered,
         })
     }
 
@@ -472,5 +483,9 @@ where
     }
     pub(crate) fn inbox(&self) -> &EvidenceInbox {
         &self.inbox
+    }
+    /// Where a finished Job's delivery is left for the turn that reports it.
+    pub(crate) fn delivery_slot(&self) -> &Mutex<Option<Delivered>> {
+        &self.delivered
     }
 }

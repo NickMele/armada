@@ -1,10 +1,27 @@
-# The version of the Fleet <-> Bridge IPC protocol.
+# The version of the Fleet <-> Bridge IPC protocol. Both sides read this file:
+# `crates/ipc/build.rs` emits the Rust constant, `apps/desktop/codegen/vocabulary.mjs`
+# emits the TypeScript one. Neither is written by hand.
 #
-# Fleet and Bridge ship as a pair and version together, so one number governs
-# both sides. `crates/ipc/build.rs` reads this file and emits the constant the
-# Rust side compares against; the TypeScript side reads the same file.
+# `major` moves when a message an older peer already parses stops parsing the
+# same way — a field removed, renamed, retyped, made optional, made required,
+# or a variant the other side matches on. A major mismatch is refused in either
+# direction: Bridge does not open a socket, and the /v0 lifeboat is what it
+# falls back to.
 #
-# Bump this when the wire shape changes in a way an older peer cannot read.
-# A peer that sees a version it does not know refuses the connection rather
-# than guessing.
-version = 4
+# `minor` moves when the change is additive only — a new DTO, a new route, a
+# new event kind, a new optional field — so that nothing an older peer already
+# reads changes. Reset it to 0 when `major` moves.
+#
+# Additive-only is what makes a minor mismatch survivable, and only in one
+# direction. A Fleet ahead of Bridge sends fields Bridge ignores, so Bridge
+# connects and carries a banner. A Fleet *behind* Bridge is refused: Bridge may
+# require a field that Fleet was built before sending, and the additive rule
+# promises nothing about that direction.
+#
+# `docs/practices/protocol.md` carries the change-by-change table this rule
+# comes from, and the skew table the code implements.
+#
+# Version 4 shipped as a bare integer and is exactly 4.0. A peer that sends one
+# integer is naming a major at minor zero, and is read that way.
+major = 4
+minor = 0

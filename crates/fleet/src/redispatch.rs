@@ -22,7 +22,7 @@
 //! the complaint this exists to answer. This order leaves, at worst, a Job at
 //! the approval gate beside a still-escalated one: visible and recoverable.
 
-use adapter_traits::{AgentHarness, Vcs, WorkProduct};
+use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{Job, JobId, JobStatus, NewJob, StepSeed};
 
 use crate::adrift::Adrift;
@@ -42,7 +42,7 @@ impl<H, V, W> Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
     H::Error: std::error::Error + Send + Sync + 'static,
-    V: Vcs + Send + Sync + 'static,
+    V: Vcs + Delivery + Send + Sync + 'static,
     V::Error: std::error::Error + Send + Sync + 'static,
     V::CommitError: std::error::Error + Send + Sync + 'static,
     W: WorkProduct + Send + Sync + 'static,

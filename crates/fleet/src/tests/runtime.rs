@@ -8,13 +8,15 @@
 use std::net::{Ipv4Addr, SocketAddr, TcpListener};
 use std::path::Path;
 
+use ipc::ProtocolVersion;
+
 use crate::process::{holder_of, Holder, StartedAt};
 use crate::runtime::{
     self, provisional_address, Presence, RuntimeFile, Staleness, PROVISIONAL_PORT,
 };
 use crate::tests::tmp::TempDir;
 
-const VERSION: u32 = 1;
+const VERSION: ProtocolVersion = ProtocolVersion::new(1, 0);
 
 /// Our own start time, as the OS reports it.
 fn our_start() -> StartedAt {
@@ -253,7 +255,7 @@ fn a_field_a_reader_has_never_heard_of_is_ignored() {
     std::fs::write(
         &path,
         format!(
-            r#"{{"protocol_version":1,"pid":{},"port":47821,"started_at":"{}","measured_at":"later"}}"#,
+            r#"{{"protocol_version":{{"major":1,"minor":0}},"pid":{},"port":47821,"started_at":"{}","measured_at":"later"}}"#,
             std::process::id(),
             our_start()
         ),
@@ -266,4 +268,28 @@ fn a_field_a_reader_has_never_heard_of_is_ignored() {
         runtime::read(&path).expect("it reads"),
         Presence::Running(_)
     ));
+}
+
+/// The runtime file is the first thing a new Bridge reads, and a Fleet from
+/// before the version was a pair wrote one integer. It names that major at
+/// minor zero, so an old Fleet reaches the skew screen rather than reading as a
+/// file nothing wrote.
+#[test]
+fn a_runtime_file_carrying_one_integer_reads_as_that_major_at_minor_zero() {
+    let dir = TempDir::new();
+    let path = dir.runtime_file();
+    std::fs::write(
+        &path,
+        format!(
+            r#"{{"protocol_version":4,"pid":{},"port":47821,"started_at":"{}"}}"#,
+            std::process::id(),
+            our_start()
+        ),
+    )
+    .expect("it writes");
+
+    let Presence::Running(found) = runtime::read(&path).expect("it reads") else {
+        panic!("our own pid is held by us");
+    };
+    assert_eq!(found.protocol_version, ProtocolVersion::new(4, 0));
 }

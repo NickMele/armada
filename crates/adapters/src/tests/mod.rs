@@ -11,6 +11,7 @@
 //! credential, a network, or an agent.
 
 mod commit;
+mod delivery;
 mod harness;
 mod reclaim;
 pub mod repo;

@@ -41,6 +41,7 @@
 mod briefing;
 mod checks;
 mod daemon;
+mod delivery;
 mod detach;
 mod detail;
 mod drone;

@@ -1,4 +1,4 @@
-//! `armada.yml`: the five keys, and everything that is not one of them.
+//! `armada.yml`: the six keys, and everything that is not one of them.
 
 use crate::error::Fault;
 use crate::manifest::Manifest;
@@ -8,6 +8,7 @@ use crate::tests::{fault_at, named, refusals};
 const WHOLE: &str = r#"
 version: 1
 id: armada
+base: main
 checks:
   build:
     run: cargo build --workspace
@@ -26,10 +27,11 @@ fn parse(text: &str) -> Result<Manifest, crate::LoadError> {
 }
 
 #[test]
-fn the_five_keys_parse_and_nothing_else_is_needed() {
-    let manifest = parse(WHOLE).expect("the five keys");
+fn the_six_keys_parse_and_nothing_else_is_needed() {
+    let manifest = parse(WHOLE).expect("the six keys");
     assert_eq!(manifest.version(), 1);
     assert_eq!(manifest.id().as_str(), "armada");
+    assert_eq!(manifest.base(), Some("main"));
     assert_eq!(manifest.check_names(), ["build", "test"]);
     assert_eq!(manifest.command_names(), ["fmt", "reset"]);
     assert_eq!(
@@ -40,9 +42,30 @@ fn the_five_keys_parse_and_nothing_else_is_needed() {
 
 #[test]
 fn destructive_is_read_when_present_and_false_when_absent() {
-    let manifest = parse(WHOLE).expect("the five keys");
+    let manifest = parse(WHOLE).expect("the six keys");
     assert!(manifest.command("reset").expect("reset").is_destructive());
     assert!(!manifest.command("fmt").expect("fmt").is_destructive());
+}
+
+#[test]
+fn a_repository_that_names_no_base_says_nothing_rather_than_guessing() {
+    // Absent is not `main`. Inference happens where a repository can be read,
+    // and a default written here would be a guess nothing could tell from an
+    // answer.
+    let manifest = parse("version: 1\nid: tooling\n").expect("no base at all");
+    assert_eq!(manifest.base(), None);
+}
+
+#[test]
+fn a_base_that_is_not_text_is_refused() {
+    let refused = refusals(parse("version: 1\nid: armada\nbase: 7\n"));
+    assert_eq!(
+        fault_at(&refused, "base"),
+        &Fault::WrongType {
+            wanted: "text",
+            found: "a number",
+        }
+    );
 }
 
 #[test]
@@ -69,7 +92,7 @@ fn a_section_m1_does_not_read_hard_fails_and_names_what_it_does_read() {
     let Fault::Unknown { known } = fault_at(&refused, "ports") else {
         panic!("ports should be an unknown key");
     };
-    assert_eq!(*known, ["version", "id", "checks", "commands"]);
+    assert_eq!(*known, ["version", "id", "base", "checks", "commands"]);
 }
 
 #[test]

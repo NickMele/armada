@@ -9,6 +9,13 @@
 //! first place. **No Job, no delete.** A worktree on disk with nothing behind
 //! it is reported and left alone, because it is evidence rather than litter.
 //!
+//! # A branch holding work nothing has taken is kept
+//!
+//! Fleet commits a finished Job's work, so its branch is the only copy. A
+//! branch whose commits are not on the base branch is named and left, on the
+//! same grounds as an unclaimed worktree. Its worktree still goes — the
+//! checkout is reproducible and the commit is not. `--force` deletes it.
+//!
 //! # Two scopes, and why the second refuses more
 //!
 //! Bare, this is a repository's own state: its worktrees, their branches, its
@@ -19,7 +26,7 @@
 use std::path::{Path, PathBuf};
 
 use adapter_traits::WorktreeSpec;
-use adapters::Reclaimed;
+use adapters::{BranchGone, Reclaimed, UnmergedWork};
 use config::Manifest;
 use core_model::JobId;
 use fleet::runtime::{self, Presence};
@@ -40,6 +47,16 @@ const MACHINE_FILES: &[&str] = &[
     runtime::FILE_NAME,
     serve::MCP_FILE,
 ];
+
+/// How far one clean reaches. `--all` is a different question from `--force`
+/// and is kept a different type, so neither can be passed for the other.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Scope {
+    /// This repository's worktrees, branches and Jobs.
+    Repository,
+    /// And the machine's store and the files beside it.
+    AndTheMachine,
+}
 
 /// What one Job's clean did.
 #[derive(Debug)]
@@ -76,6 +93,23 @@ pub struct Cleaned {
 }
 
 impl Cleaned {
+    /// The branches left standing because nothing has taken their commits.
+    ///
+    /// Derived from the Jobs rather than stored beside them: two copies of one
+    /// list is how a summary comes to disagree with the lines above it.
+    pub fn branches_left(&self) -> Vec<&BranchGone> {
+        self.jobs
+            .iter()
+            .map(|job| &job.reclaimed.branch)
+            .filter(|branch| {
+                matches!(
+                    branch,
+                    BranchGone::Kept { .. } | BranchGone::KeptUnanswered { .. }
+                )
+            })
+            .collect()
+    }
+
     /// Whether anything was removed at all. A clean that did nothing says so
     /// rather than printing an empty list.
     pub fn touched_nothing(&self) -> bool {
@@ -112,8 +146,13 @@ pub enum CleanRefused {
     },
 }
 
-/// Clean `root`, and — with `everything` — the machine files under `machine`.
-pub fn clean(root: &Path, machine: &Path, everything: bool) -> Result<Cleaned, CleanRefused> {
+/// Clean `root`, as far as `scope` reaches.
+pub fn clean(
+    root: &Path,
+    machine: &Path,
+    scope: Scope,
+    unmerged: UnmergedWork,
+) -> Result<Cleaned, CleanRefused> {
     let manifest = read_the_manifest(root)?;
     refuse_a_live_fleet(&machine.join(runtime::FILE_NAME))?;
 
@@ -133,11 +172,11 @@ pub fn clean(root: &Path, machine: &Path, everything: bool) -> Result<Cleaned, C
     if db.exists() {
         let mut store =
             Store::open(&db).map_err(|why| CleanRefused::StoreUnreadable(Box::new(why)))?;
-        forget_this_manifests_jobs(&mut store, &manifest, &root, &mut cleaned);
+        forget_this_manifests_jobs(&mut store, &manifest, &root, unmerged, &mut cleaned);
     }
     report_what_no_job_claims(&root, &mut cleaned);
 
-    if everything {
+    if scope == Scope::AndTheMachine {
         // After the Jobs, never before. Removing the store first would leave
         // every worktree unclaimed and every branch undeleted.
         cleaned.machine = MACHINE_FILES
@@ -177,6 +216,7 @@ fn forget_this_manifests_jobs(
     store: &mut Store,
     manifest: &Manifest,
     root: &Path,
+    unmerged: UnmergedWork,
     cleaned: &mut Cleaned,
 ) {
     let loaded = match store.load_all_jobs() {
@@ -195,6 +235,11 @@ fn forget_this_manifests_jobs(
         }
     };
 
+    // Read once, before the loop: `base:` is the repository's own answer to
+    // what merged means, and a clean that guessed would keep a branch that had
+    // just been merged into the branch the file names.
+    let declared_base = manifest.base().map(str::to_string);
+
     let mine: Vec<(JobId, String)> = loaded
         .jobs
         .iter()
@@ -212,7 +257,7 @@ fn forget_this_manifests_jobs(
                 continue;
             }
         };
-        let reclaimed = match adapters::reclaim(&spec) {
+        let reclaimed = match adapters::reclaim(&spec, declared_base.as_deref(), unmerged) {
             Ok(reclaimed) => reclaimed,
             Err(why) => {
                 cleaned
@@ -223,6 +268,8 @@ fn forget_this_manifests_jobs(
         };
         // The worktree first, the record second. A Job forgotten before its
         // worktree failed to go is a worktree nothing can derive a branch for.
+        // A *kept* branch is not a fault: the worktree went, the record goes,
+        // and the branch is a git branch a person merges with git.
         if reclaimed.faulted() {
             cleaned.jobs.push(JobCleaned {
                 job_id: job_id.as_str().to_string(),

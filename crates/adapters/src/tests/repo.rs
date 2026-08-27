@@ -46,7 +46,12 @@ impl TempRepo {
         // not the one git will report back turns every path assertion into a
         // guess. Canonicalise once, here.
         let root = root.canonicalize().expect("a real path");
-        Repository::init(&root).expect("a repository");
+        // `main` by name rather than by whoever's `init.defaultBranch` is set:
+        // a base branch is now something reclaim looks for, and a test that
+        // reads the machine's git config is a test that fails elsewhere.
+        let mut options = git2::RepositoryInitOptions::new();
+        options.initial_head("main");
+        Repository::init_opts(&root, &options).expect("a repository");
         TempRepo { root }
     }
 
@@ -101,6 +106,58 @@ impl TempRepo {
             .expect("a commit");
     }
 
+    /// Write one file and commit only that file.
+    ///
+    /// [`TempRepo::commit_everything`] stages the whole tree, and libgit2
+    /// refuses to stage `.armada/worktrees/<job>/` once a worktree is nested
+    /// under it. These cases move the base branch on **while a Job's worktree
+    /// exists**, which is the whole scenario, so the pathspec is the only way to
+    /// express it.
+    pub fn commit_one(&self, relative: &str, contents: &str, message: &str) {
+        self.write(relative, contents);
+        self.git(&["add", "--", relative]);
+        self.git(&[
+            "-c",
+            "user.name=armada",
+            "-c",
+            "user.email=armada@example.invalid",
+            "commit",
+            "-m",
+            message,
+        ]);
+    }
+
+    /// Run `git` in this repository and assert it worked.
+    ///
+    /// The command line rather than the library, for the reason
+    /// [`TempRepo::status`] gives — and because the delivery cases set up a
+    /// remote, which is a thing a person does with `git remote add`.
+    pub fn git(&self, args: &[&str]) -> String {
+        let run = std::process::Command::new("git")
+            .args(["-C", &self.root_str()])
+            .args(args)
+            .output()
+            .expect("git on PATH — a check nothing can run is a check that does not exist");
+        assert!(
+            run.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+        String::from_utf8_lossy(&run.stdout).trim().to_string()
+    }
+
+    /// A bare repository beside this one, wired up as `origin`.
+    ///
+    /// **Never a real remote.** A push in a test that reached a network would
+    /// be a test that needs a credential and touches somebody's account.
+    pub fn with_a_bare_remote(&self) -> PathBuf {
+        let bare = self.root.with_extension("remote.git");
+        Repository::init_bare(&bare).expect("a bare repository");
+        let bare = bare.canonicalize().expect("a real path");
+        self.git(&["remote", "add", "origin", &bare.to_string_lossy()]);
+        bare
+    }
+
     /// What a person's `git status --porcelain` reports, one entry per line.
     ///
     /// **The command-line git, not the library**, and the difference is the
@@ -144,5 +201,6 @@ impl TempRepo {
 impl Drop for TempRepo {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.root);
+        let _ = std::fs::remove_dir_all(self.root.with_extension("remote.git"));
     }
 }

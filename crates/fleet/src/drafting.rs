@@ -41,7 +41,7 @@
 //! none *and* configuration supplies none, which is a machine that is not set
 //! up rather than a request that is wrong.
 
-use adapter_traits::{AgentHarness, Vcs, WorkProduct};
+use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
     AcceptanceCriterion, CriterionId, Facts, JobId, ModelName, NewJob, RepoPath, StepSeed, Subject,
     Title, TopLevelOrigin, WriteTargets,
@@ -54,7 +54,7 @@ impl<H, V, W> Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
     H::Error: std::error::Error + Send + Sync + 'static,
-    V: Vcs + Send + Sync + 'static,
+    V: Vcs + Delivery + Send + Sync + 'static,
     V::Error: std::error::Error + Send + Sync + 'static,
     V::CommitError: std::error::Error + Send + Sync + 'static,
     W: WorkProduct + Send + Sync + 'static,

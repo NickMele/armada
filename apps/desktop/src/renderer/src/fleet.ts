@@ -12,6 +12,8 @@
 // `Compositions/Status bar` now, so what is left is the reading.
 
 import type { Connection } from "../../shared/bridge";
+import { PROTOCOL_VERSION } from "../../shared/generated/protocol-version";
+import { spoken } from "../../shared/version";
 
 /** Sentence, detail and hue. The detail is machine-derived and renders in mono. */
 export type Statement = {
@@ -80,12 +82,24 @@ export function statementOf(connection: Connection, now: number, readAt: number 
         next: "Fleet is up and not answering. What is shown below is not live.",
       };
 
-    case "version_skew":
-      return {
-        headline: "Fleet speaks a protocol Bridge does not",
-        detail: `Fleet ${connection.speaks} · Bridge ${connection.expected}`,
-        next: "Fleet and Bridge ship as a pair. Update both to the same commit.",
-      };
+    case "version_skew": {
+      const versions = `Fleet ${spoken(connection.speaks)} · Bridge ${spoken(connection.expected)}`;
+      // Two refusals, two sentences. A different protocol needs both sides
+      // moved; a Fleet merely behind needs only the daemon restarted, and
+      // telling somebody to rebuild both would be telling them to do more than
+      // the situation asks.
+      return connection.why === "incompatible"
+        ? {
+            headline: "Fleet speaks a protocol Bridge does not",
+            detail: versions,
+            next: "Fleet and Bridge ship as a pair. Update both to the same commit.",
+          }
+        : {
+            headline: "Fleet is older than Bridge",
+            detail: versions,
+            next: "Bridge reads fields this Fleet is too old to send. Restart Fleet when no Job is running.",
+          };
+    }
 
     case "connected":
       // **No "last read" here, and that is the point.** A healthy connection
@@ -95,8 +109,22 @@ export function statementOf(connection: Connection, now: number, readAt: number 
       // which is the state where how old the reading is is the whole fact.
       return {
         headline: "Fleet running",
-        detail: `pid ${connection.fleet.pid} · port ${connection.fleet.port}`,
-        next: null,
+        detail:
+          `pid ${connection.fleet.pid} · port ${connection.fleet.port}` +
+          (connection.skew === "fleet_ahead"
+            ? ` · Fleet ${spoken(connection.fleet.protocolVersion)}, Bridge ${spoken(PROTOCOL_VERSION)}`
+            : ""),
+        // **The one `next` on a healthy connection, and it is not a fault.** A
+        // minor bump is additive only, so everything drawn here is current and
+        // correct and the only fact is that Fleet knows more than this Bridge
+        // can ask about. Said out loud because the alternative is a person
+        // meeting a feature that exists and not knowing why they cannot see it
+        // — and said in the status bar rather than as a failure notice, which
+        // would tell them something is broken when nothing is.
+        next:
+          connection.skew === "fleet_ahead"
+            ? "Fleet is newer than Bridge. Nothing here is stale; update Bridge to reach what it adds."
+            : null,
       };
   }
 }

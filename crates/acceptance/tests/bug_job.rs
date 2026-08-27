@@ -19,7 +19,10 @@
 //! an agent doing work, a commit, a push or a pull request. The milestone's
 //! claim is "Armada does a small real task in the Armada repo, and I merge the
 //! branch it wrote"; this file proves the machinery that would carry such a
-//! task, and the run itself is a person's to perform once.
+//! task, and the run itself is a person's to perform once. What a finished Job
+//! does with its branch — the base it merges into, the rebase, the push, the
+//! pull request — is asserted in `fleet` against a scripted seam and in
+//! `adapters` against a real repository, for the same reason.
 //!
 //! Three more gaps, named rather than implied:
 //!
@@ -364,13 +367,17 @@ async fn what_the_job_is_judged_against_does_not_move_under_it() {
 // The branch, which is the half a person finishes
 // ---------------------------------------------------------------------------
 
-/// The branch a Job writes is derived from its id, and nothing can push it.
+/// The branch a Job writes is derived from its id, and no Drone can push it.
 ///
 /// The milestone ends with a person merging a branch, so the branch has to be
 /// findable from the record alone. It is: one derivation, from the Job id, and
-/// the same one the real adapter uses. **No type reachable from here has a push
-/// method** — `Vcs` says so on itself, and a capability that is not on the type
-/// cannot be reached by a Drone that reasons its way around a denial.
+/// the same one the real adapter uses.
+///
+/// **Pushing is on a different trait, and no Drone holds one.** `Vcs` — the
+/// trait that makes this worktree — still has no push method, and `Delivery`,
+/// which does, is Fleet's with the operator's credentials. A capability that is
+/// not on the type cannot be reached by a Drone that reasons its way around a
+/// denial, and a Drone is handed neither.
 #[test]
 fn the_branch_a_job_writes_is_derived_from_its_id() {
     let bench = Bench::with(FakeWorkProduct::untouched());

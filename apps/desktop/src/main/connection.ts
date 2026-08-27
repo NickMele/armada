@@ -10,7 +10,8 @@
 import WebSocket from "ws";
 
 import { PROTOCOL_VERSION } from "../shared/generated/protocol-version";
-import { NOTHING_YET } from "../shared/bridge";
+import { connectedTo, NOTHING_YET } from "../shared/bridge";
+import { connects, skew } from "../shared/version";
 import type { BridgeState, Connection, Draft, Outcome, Watched } from "../shared/bridge";
 import type {
   JobDetail,
@@ -128,14 +129,13 @@ export class FleetConnection {
     }
 
     const fleet = presence.fleet;
-    if (fleet.protocolVersion !== PROTOCOL_VERSION) {
-      // Read before connecting: skew is a refusal, not a bad first message.
-      this.settle({
-        state: "version_skew",
-        fleet,
-        speaks: fleet.protocolVersion,
-        expected: PROTOCOL_VERSION,
-      });
+    // Read before connecting, so a version Bridge will not speak is a refusal
+    // rather than a bad first message. A minor gap one way round is not one.
+    const reading = skew({ fleet: fleet.protocolVersion, bridge: PROTOCOL_VERSION });
+    if (!connects(reading)) {
+      const speaks = fleet.protocolVersion;
+      const expected = PROTOCOL_VERSION;
+      this.settle({ state: "version_skew", fleet, why: reading, speaks, expected });
       return this.later();
     }
 
@@ -192,19 +192,19 @@ export class FleetConnection {
     }
 
     if (message.message === "resync") {
-      if (message.protocol_version !== PROTOCOL_VERSION) {
+      // Again, because a Fleet restarted under a live socket is not the one
+      // the runtime file described.
+      const reading = skew({ fleet: message.protocol_version, bridge: PROTOCOL_VERSION });
+      if (!connects(reading)) {
         this.socket?.close();
-        this.settle({
-          state: "version_skew",
-          fleet,
-          speaks: message.protocol_version,
-          expected: PROTOCOL_VERSION,
-        });
+        const speaks = message.protocol_version;
+        const expected = PROTOCOL_VERSION;
+        this.settle({ state: "version_skew", fleet, why: reading, speaks, expected });
         return;
       }
       this.unreachableSince = null;
       this.publish({
-        connection: { state: "connected", fleet, cursor: message.cursor },
+        connection: connectedTo(fleet, message.cursor),
         jobs: message.jobs.jobs,
         unreadable: message.jobs.unreadable ?? [],
         readAt: this.wiring.now(),
@@ -231,7 +231,7 @@ export class FleetConnection {
     }
 
     const event = message.event;
-    const connection: Connection = { state: "connected", fleet, cursor: message.cursor };
+    const connection: Connection = connectedTo(fleet, message.cursor);
 
     if (event.kind === "job.created") {
       // The row travels whole, so the list gains it without a round trip — a

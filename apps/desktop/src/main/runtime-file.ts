@@ -17,6 +17,7 @@ import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
 import type { Absence, FleetIdentity, RuntimeFault } from "../shared/bridge";
+import { versionOf } from "../shared/version";
 
 /** Not `fleet.pid`: it carries four fields, and something would eventually `cat` it. */
 const FILE_NAME = "fleet.json";
@@ -98,9 +99,13 @@ function identity(parsed: unknown): FleetIdentity | null {
   if (typeof parsed !== "object" || parsed === null) return null;
   const record = parsed as Record<string, unknown>;
   const { protocol_version: version, pid, port, started_at: startedAt } = record;
-  if (typeof version !== "number" || typeof pid !== "number") return null;
+  // A pair, or the bare integer a Fleet from before the pair wrote. Refusing
+  // the old form would tell a person their runtime file is corrupt when it is
+  // only old — and skew is the reading that belongs on that screen.
+  const speaks = versionOf(version);
+  if (speaks === null || typeof pid !== "number") return null;
   if (typeof port !== "number" || typeof startedAt !== "string") return null;
-  return { protocolVersion: version, pid, port, startedAt };
+  return { protocolVersion: speaks, pid, port, startedAt };
 }
 
 /**

@@ -27,8 +27,8 @@
 use std::sync::Arc;
 
 use adapter_traits::{
-    AgentHarness, DroneSpawnConfig, Grant, McpConfig, Model, SpawnConfigRefused, Toolbelt, Vcs,
-    WorkProduct, Worktree, WorktreeSpec,
+    AgentHarness, Delivery, DroneSpawnConfig, Grant, McpConfig, Model, SpawnConfigRefused,
+    Toolbelt, Vcs, WorkProduct, Worktree, WorktreeSpec,
 };
 use core_model::{
     Actor, Branch, DroneId, EscalationTrigger, Job, JobId, JobStatus, StepId, StepTarget, Target,
@@ -50,7 +50,7 @@ impl<H, V, W> Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
     H::Error: std::error::Error + Send + Sync + 'static,
-    V: Vcs + Send + Sync + 'static,
+    V: Vcs + Delivery + Send + Sync + 'static,
     V::Error: std::error::Error + Send + Sync + 'static,
     V::CommitError: std::error::Error + Send + Sync + 'static,
     W: WorkProduct + Send + Sync + 'static,
@@ -341,7 +341,13 @@ where
                 if let Some(at_work) = working.as_mut() {
                     at_work.now_on(next);
                 }
-                self.tell(job_id, tell, working).await
+                // The boundary catch-up is `delivery`'s. It is told either way
+                // — a Drone that never heard the step advanced would sit there,
+                // and a base that would not read is not its fault.
+                let caught_up = self.caught_up(working).await;
+                let tell = tell.clone().and(caught_up.as_ref().ok().cloned().flatten());
+                self.tell(job_id, &tell, working).await?;
+                caught_up.map(|_| ())
             }
             // The whole of what finishing a Job is, including the commit that
             // makes its branch mergeable, is `landing`'s.

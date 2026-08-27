@@ -65,6 +65,7 @@ use serde::{Deserialize, Serialize};
 use crate::enums::{Actor, JobStatus, StepState};
 use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
 use crate::job::{JobList, JobSummary};
+use crate::version::ProtocolVersion;
 
 /// A position in the stream. Monotonic, assigned by Fleet, never reused.
 ///
@@ -103,7 +104,7 @@ pub enum StreamMessage {
 pub struct Resync {
     /// Restated on the stream so a client that reached the socket without
     /// reading the runtime file still learns what it is talking to.
-    pub protocol_version: u32,
+    pub protocol_version: ProtocolVersion,
     /// The position this state is current as of. The next `Event` carries a
     /// later one.
     pub cursor: Cursor,

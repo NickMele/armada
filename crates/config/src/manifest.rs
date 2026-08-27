@@ -1,8 +1,8 @@
 //! `armada.yml`, in the slice M1 reads.
 //!
-//! # Five keys, and nothing else
+//! # Six keys, and nothing else
 //!
-//! `version`, `id`, `checks.<name>.run`, `commands.<name>.run` and
+//! `version`, `id`, `base`, `checks.<name>.run`, `commands.<name>.run` and
 //! `commands.<name>.destructive`. The Manifest concept page describes eight
 //! sections — permissions, secrets, ports, skills, budget, dispatch freeze,
 //! setup requirements, auto-merge policy — and every one of them is a key this
@@ -39,7 +39,7 @@ use crate::error::{Fault, LoadError, Refusal};
 use crate::yaml::{self, Table};
 
 /// The keys M1 reads at the top level of an `armada.yml`.
-const TOP_LEVEL: &[&str] = &["version", "id", "checks", "commands"];
+const TOP_LEVEL: &[&str] = &["version", "id", "base", "checks", "commands"];
 /// The keys M1 reads inside `checks.<name>`.
 const CHECK_KEYS: &[&str] = &["run"];
 /// The keys M1 reads inside `commands.<name>`.
@@ -96,6 +96,7 @@ pub struct Manifest {
     path: PathBuf,
     id: ManifestId,
     version: u32,
+    base: Option<String>,
     checks: BTreeMap<String, Check>,
     commands: BTreeMap<String, Command>,
 }
@@ -146,6 +147,16 @@ impl Manifest {
         self.version
     }
 
+    /// The branch a Job's work merges into, where the file names one.
+    ///
+    /// **Optional, and absent is not a default.** A repository that does not
+    /// say has its base inferred from what git already knows, which is a
+    /// reading rather than an answer — so the two cases stay distinguishable
+    /// all the way to the line a person reads.
+    pub fn base(&self) -> Option<&str> {
+        self.base.as_deref()
+    }
+
     /// A Check by name, or [`None`]. The only lookup in the crate that may
     /// miss; [`crate::ResolvedWorkflow`] exists so it happens exactly once, at
     /// load, rather than at the step that needed it.
@@ -183,6 +194,10 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         .required("id", out)
         .and_then(|value| yaml::text("id", value, out));
 
+    let base = top
+        .optional("base")
+        .and_then(|value| yaml::text("base", value, out));
+
     let checks = match top.optional("checks") {
         Some(value) => registry(value, "checks", CHECK_KEYS, out, check_entry),
         None => BTreeMap::new(),
@@ -208,6 +223,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         path: path.to_path_buf(),
         id: ManifestId::carried(Ulid::carried(id?)),
         version: version?,
+        base,
         checks,
         commands,
     })
