@@ -25,13 +25,6 @@ export const LongFilename: Story = {
     filename: "a-very-long-filename-that-should-truncate-rather-than-widen-the-row.png",
     onRemove: () => {},
   },
-  decorators: [
-    (Story) => (
-      <div style={{ maxWidth: "200px" }}>
-        <Story />
-      </div>
-    ),
-  ],
 };
 
 /** No `onRemove` — a chip with nothing to take back. */
