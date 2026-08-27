@@ -154,6 +154,7 @@ fn fitted_with(
             path: "/usr/bin:/bin".to_string(),
             home: root,
             mcp_config: "/etc/armada/mcp.json".to_string(),
+            attachments_dir: home.path().join("attachments").to_string_lossy().to_string(),
         },
         budget: CheckBudget::of(Duration::from_secs(5)),
         // A Judge that fails every call, because no step in these fixtures
@@ -288,6 +289,7 @@ pub fn a_proposal(title: &str) -> ipc::ProposeJob {
         subject: None,
         facts: "the reader is off by one".to_string(),
         write_targets: None,
+        attachments: Vec::new(),
     }
 }
 

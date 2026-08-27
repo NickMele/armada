@@ -86,6 +86,10 @@ pub struct Host {
     pub user: String,
     /// The strict MCP configuration a Drone is bound to.
     pub mcp_config: String,
+    /// Where Fleet keeps its own copy of a Job's attachments, outside every
+    /// worktree. `drafted()` writes under `<attachments_dir>/<job_id>/`, and
+    /// `dispatch` reads from there to seed the worktree a Drone actually sees.
+    pub attachments_dir: String,
 }
 
 /// Everything Fleet is assembled from.

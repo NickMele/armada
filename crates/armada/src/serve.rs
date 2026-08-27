@@ -337,6 +337,11 @@ fn assemble(
     } = facts;
 
     std::fs::create_dir_all(machine)?;
+    // Where Fleet keeps its own copy of a Job's attachments, outside every
+    // worktree — `drafted()` writes here at proposal time and `dispatch`
+    // copies from here into the worktree a Drone can see.
+    let attachments_dir = machine.join("attachments");
+    std::fs::create_dir_all(&attachments_dir)?;
 
     // The document names one server and there is no parameter through which a
     // second could arrive. The path is `api`'s own constant rather than a
@@ -373,6 +378,7 @@ fn assemble(
             home,
             user,
             mcp_config: mcp_config.to_string_lossy().to_string(),
+            attachments_dir: attachments_dir.to_string_lossy().to_string(),
         },
         budget: CheckBudget::of(PROVISIONAL_CHECK_BUDGET),
         // The same CLI, invoked as a call rather than as a session. The

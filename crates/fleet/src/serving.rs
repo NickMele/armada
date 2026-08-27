@@ -436,7 +436,8 @@ where
             Adrift::Unnameable
             | Adrift::NoSuchWorkflow { .. }
             | Adrift::NoSuchManifest { .. }
-            | Adrift::Modelless => {
+            | Adrift::Modelless
+            | Adrift::AttachmentUnreadable { .. } => {
                 Refusal::Unacceptable(WireError::raised(UNACCEPTABLE, said, self.run_id()))
             }
             _ => Refusal::Fault(WireError::raised(FAULT, said, self.run_id())),
