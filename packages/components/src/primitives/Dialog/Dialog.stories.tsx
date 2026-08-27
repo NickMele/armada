@@ -44,3 +44,64 @@ export const NeutralConfirm: Story = {
       "Ends job 12 and opens a new job on the same workspace and branch. The worktree is kept.",
   },
 };
+
+/**
+ * The three confirmations Bridge actually shows, in the words it uses.
+ *
+ * Each states **what happens and what survives**, which is the two halves the
+ * copy contract asks for — and it is why the two kills cannot share one dialog:
+ * they survive differently. Neither names a step or an elapsed the way the
+ * contract's sample line does, because neither is a fact the dialog holds; the
+ * detail behind it carries both and stays on screen.
+ */
+export const KillTheDrone: Story = {
+  args: {
+    open: true,
+    tone: "destructive",
+    title: "Kill the drone on this job?",
+    confirmLabel: "Kill drone",
+    children:
+      "The process stops and the job stays open. Its worktree is held as the drone left it, " +
+      "so the job can be redispatched from where it got to.",
+  },
+};
+
+/** The other kill. Terminal, and it says so rather than implying a pause. */
+export const KillTheJob: Story = {
+  args: {
+    open: true,
+    tone: "destructive",
+    title: "Kill this job?",
+    confirmLabel: "Kill job",
+    children:
+      "The job ends at killed. That is terminal and carries no verdict — nothing resumes it, " +
+      "and anything the drone wrote stays on its branch.",
+  },
+};
+
+/**
+ * Redispatch. **Two acts in one press**, and the copy says so.
+ *
+ * It disagrees with `Neutral confirm` above, which is read off the sheet's Kill
+ * & Redispatch drawing: that copy says the replacement opens "on the same
+ * workspace and branch". `crates/ipc/src/job.rs` says otherwise — the
+ * replacement is minted at the approval gate carrying `redispatched_from`, and
+ * the failed Job's worktree and branch are left as its drone left them, with
+ * nothing stated about the new Job reusing either. The wire wins; the
+ * disagreement is in the report.
+ *
+ * Destructive rather than neutral for the same reason: the sheet fills the
+ * confirm with the accent on an act that ends a Job, and a redispatch ends one.
+ */
+export const RedispatchAsANewJob: Story = {
+  args: {
+    open: true,
+    tone: "destructive",
+    title: "Redispatch this job as a new one?",
+    confirmLabel: "Redispatch as a new job",
+    children:
+      "This job is killed and a replacement is created carrying a reference back to it. " +
+      "Nothing resumes: the new job starts at the approval gate and needs releasing. " +
+      "The failed job's worktree and branch are left as its drone left them.",
+  },
+};

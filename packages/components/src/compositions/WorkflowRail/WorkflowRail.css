@@ -130,6 +130,37 @@
   color: var(--step-failed);
 }
 
+/* The last ruling against the step. A different axis from the row's activity,
+   so it sits beside the state rather than replacing it. */
+.armada-rail__verdict {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+.armada-rail__verdict[data-verdict="failed"] {
+  color: var(--step-failed);
+}
+
+.armada-rail__verdict[data-verdict="passed"] {
+  color: var(--step-advanced);
+}
+
+/* How long the step took. Measured, so it stays flat even under a hued row —
+   the same rule the gate row's exit code follows. */
+.armada-rail__elapsed {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- Gate rows ------------------------------------------------------------ */
 
 /* Indented to the step name's left edge: the mark's slot plus the row gap,
@@ -195,6 +226,15 @@
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
   white-space: nowrap;
+}
+
+/* Nothing to the left of it, so it takes the command's slot. A lone phrase at
+   the trailing edge floats away from the step it is about. */
+.armada-rail__gate-ungated[data-alone="true"] {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* The accessible name on a gate glyph. */

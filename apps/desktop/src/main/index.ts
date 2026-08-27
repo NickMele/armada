@@ -83,7 +83,7 @@ void app.whenReady().then(() => {
     now: () => Date.now(),
   });
 
-  // The renderer initiates exactly these three things. There is no
+  // The renderer initiates exactly these things and no others. There is no
   // arbitrary-channel invoke, which is what keeps the surface readable.
   // Awaited, because `state()` brings the connection current first — a window
   // reload is a fresh reader and gets what exists rather than what main last
@@ -92,6 +92,23 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.proposeJob, (_event, draft: Draft) => connection?.proposeJob(draft));
   ipcMain.handle(CHANNELS.approveDispatch, (_event, jobId: string) =>
     connection?.approveDispatch(jobId),
+  );
+  ipcMain.handle(CHANNELS.redispatchJob, (_event, jobId: string) =>
+    connection?.redispatchJob(jobId),
+  );
+  // Two channels, because they are two acts: one ends a process and one ends
+  // the unit of work. Collapsing them here would make the difference a flag.
+  ipcMain.handle(CHANNELS.killDrone, (_event, jobId: string) => connection?.killDrone(jobId));
+  ipcMain.handle(CHANNELS.killJob, (_event, jobId: string) => connection?.killJob(jobId));
+  // Which Job is open. Main does the reading and republishes it as events
+  // arrive, so the detail moves without the renderer asking again.
+  ipcMain.handle(CHANNELS.watchJob, (_event, jobId: string | null) =>
+    connection?.watchJob(jobId),
+  );
+  // Which Job's turns are open. A second socket to Fleet, carrying rows only:
+  // there is nothing to send up it, which is what keeps observing read-only.
+  ipcMain.handle(CHANNELS.observeJob, (_event, jobId: string | null) =>
+    connection?.observeJob(jobId),
   );
 
   createWindow();

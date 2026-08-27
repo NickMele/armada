@@ -1,7 +1,23 @@
 import type { LucideIcon } from "lucide-react";
-import type { MouseEvent, ReactNode } from "react";
-import { useCallback } from "react";
+import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from "react";
+import { createContext, useCallback, useContext } from "react";
 import { Badge } from "../../primitives/Badge/Badge";
+
+/**
+ * Where this row sits in a roving list, supplied by the list that holds it.
+ *
+ * **A listbox is one tab stop, not one per row.** Tab reaches the list, the
+ * arrows move within it, and that means exactly one option carries
+ * `tabIndex=0` at a time — which the row cannot decide alone, because it does
+ * not know its own position or which sibling the cursor is on.
+ *
+ * `null` is a row standing outside any list, which keeps its own tab stop.
+ * Declared here rather than in `Active jobs list` because the list already
+ * imports this file, and the reverse would be a cycle.
+ */
+export type Roving = { index: number; active: number };
+
+export const RovingOption = createContext<Roving | null>(null);
 
 /**
  * Job row (stacked) — the most repeated element in the app, and one shape at
@@ -76,10 +92,8 @@ export type JobRowStackedProps = {
   /** The job id, in mono, set back. Copies on click. */
   jobId?: string;
   /**
-   * The field run. Five fixed tracks on Active jobs, so the list reads down as
-   * well as across; the track list belongs to the field set, which is why a
-   * Job that has not run carries a different one — no branch, no step and no
-   * elapsed yet.
+   * The field run. One track per field, shared down the list so it reads down
+   * as well as across.
    *
    * The step bar is a field, not a region beside the run: "the same stacked
    * row, with the step added to the field run."
@@ -89,6 +103,11 @@ export type JobRowStackedProps = {
    * The field run's `grid-template-columns`, where the field set wants
    * something other than the drawn default. Composed from the track custom
    * properties in this component's stylesheet, never from a literal.
+   *
+   * **The fallback's tracks, not the list's.** Inside a list the columns are
+   * the list's and every row shares them, which is the alignment this used to
+   * approximate per field set; this is what a row falls back to standing alone
+   * or on an engine without `subgrid`.
    */
   tracks?: string;
   /** The one secondary control. Never a primary, and never more than one. */
@@ -105,7 +124,11 @@ export type JobRowStackedProps = {
   selected?: boolean;
   /** De-emphasised: `--border-subtle` and `--fg-subtle`, never an alpha. */
   dimmed?: boolean;
-  /** The row opens the Job, the same as its control's default action. */
+  /**
+   * The row opens the Job. Setting it makes the row a real control — a focus
+   * stop that Enter and Space activate, announced as an option in the list it
+   * selects from rather than as a listitem with a click handler bolted on.
+   */
   onOpen?: () => void;
   /** A clipboard write is silent, so the surface confirms it with a toast. */
   onCopied?: (value: string) => void;
@@ -164,14 +187,40 @@ export function JobRowStacked({
   onOpen,
   onCopied,
 }: JobRowStackedProps) {
+  // Enter and Space, because the row is a control when it opens something and
+  // a control that only answers the mouse is unreachable. Space is stopped
+  // from scrolling the list out from under the row it just activated.
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (onOpen === undefined) return;
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      onOpen();
+    },
+    [onOpen],
+  );
+
+  const opens = onOpen !== undefined;
+  // Outside a roving list every row is its own tab stop, which is right for a
+  // row standing alone. Inside one, only the row the cursor is on is.
+  const roving = useContext(RovingOption);
+  const tabIndex = !opens ? undefined : roving === null || roving.index === roving.active ? 0 : -1;
+
   return (
     <div
       className="armada-job-row"
-      role="listitem"
+      // A row that selects a detail is an `option`, not a `listitem`: the list
+      // it belongs to is a listbox, and `aria-selected` is what says which one
+      // is open. A row that opens nothing stays a plain listitem.
+      role={opens ? "option" : "listitem"}
+      aria-selected={opens ? (selected ?? false) : undefined}
+      tabIndex={tabIndex}
+      data-job-id={jobId}
       data-focused={focused || undefined}
       data-selected={selected || undefined}
       data-dimmed={dimmed || undefined}
       onClick={onOpen}
+      onKeyDown={opens ? handleKeyDown : undefined}
     >
       <div className="armada-job-row__badge">
         <Badge status={status} icon={statusIcon} pulsing={pulsing}>
@@ -192,9 +241,13 @@ export function JobRowStacked({
           ) : null}
         </div>
 
+        {/* The track list is a custom property rather than
+            `grid-template-columns` itself, because an inline
+            `grid-template-columns` outranks every stylesheet — including the
+            `subgrid` the list switches to when it can. */}
         <div
           className="armada-job-row__fields"
-          style={{ gridTemplateColumns: tracks ?? trackList(fields.length) }}
+          style={{ "--armada-row-fallback-tracks": tracks ?? trackList(fields.length) } as CSSProperties}
         >
           {fields.map((field, i) => (
             <span
@@ -229,14 +282,26 @@ export function JobRowStacked({
 }
 
 /**
+ * The class the element holding the rows carries, so the field tracks are
+ * declared once above every row instead of once inside each. `Active jobs
+ * list` sets it; anything else that holds rows may.
+ *
+ * Exported rather than spelled twice: a magic string in two stylesheets is a
+ * subgrid that silently stops being one when either side is renamed.
+ */
+export const JOB_ROW_LIST = "armada-job-row-list";
+
+/**
  * The field run's drawn track list — the M1 field set, in order: the branch or
  * the workflow, the step bar, the step, elapsed, spend.
  *
- * **The tracks are fixed, and that is the point**: five fixed tracks make the
- * list read down as well as across, so a column of elapsed figures lines up
- * whatever precedes it. None of the five widths has a token — the drawing
- * sizes them, and each is composed from the spacing scale in this component's
- * stylesheet rather than written as a literal. Reported.
+ * **This is the fallback.** Inside a list the tracks come from the list and
+ * these five widths are their floor; outside one, and on an engine without
+ * `subgrid`, this is the whole answer. Fixed widths make the list read down as
+ * well as across, so a column of elapsed figures lines up whatever precedes
+ * it — but fixed is also why a row truncates on a wide window, which is what
+ * the list's own tracks fix. None of the five has a token; each is composed
+ * from the spacing scale in this component's stylesheet. Reported.
  *
  * A field set with a different shape passes its own `tracks`; a longer one
  * gets `auto` past the fifth, which is honest rather than silently wrong.

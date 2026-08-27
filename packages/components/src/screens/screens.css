@@ -10,7 +10,12 @@
    with the drawn value in the comment beside it. Nothing is invented and
    nothing is a literal. */
 
-.armada-screen {
+/* The drawn measurements. Declared on the detail block as well as the screen
+   frame, because Bridge mounts a job detail on its own — outside the gallery
+   there is no 1180px frame to inherit them from, and an unresolved
+   `var()` in `grid-template-columns` drops the whole declaration. */
+.armada-screen,
+.armada-screen__detail {
   /* 1180px — the drawing's screen width, the same on every screen. */
   --armada-screen-width: calc(var(--space-12) * 24 + var(--space-6) + var(--space-1));
   /* 420px — the shell window's height, and the width of the running job's
@@ -27,7 +32,9 @@
   --armada-screen-empty: calc(var(--space-12) * 4 + var(--space-2));
   /* 80px — the Claimed / Shown by / Not claimed label track. */
   --armada-screen-label-track: calc(var(--space-12) + var(--space-8));
+}
 
+.armada-screen {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -41,7 +48,9 @@
 
 /* ---- the shell ---------------------------------------------------------- */
 
-/* The window: rail, panel, status bar, one edge around all three. */
+/* The gallery's frame around the shell: one edge, and the drawn window height.
+   Outside the gallery there is no frame — the window is the surface, so the
+   shell fills it and carries no edge of its own. */
 .armada-screen__window {
   display: flex;
   height: var(--armada-screen-shell);
@@ -52,11 +61,54 @@
   overflow: hidden;
 }
 
-.armada-screen__panel {
+/* The shell itself: rail and panel side by side, the status bar beneath both.
+   Beneath both rather than inside the panel, because the bar is app-level and
+   appears on Helm too — the drawing insets it and the contract does not. */
+.armada-shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  background: var(--bg-base);
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.armada-shell__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.armada-shell__panel {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+}
+
+/* The one region that scrolls, and the only place `min-height: 0` is
+   load-bearing: without it the flex child keeps its content's height and the
+   window grows instead of the region scrolling — v1's "layout broke on
+   resize", restated in CSS. */
+.armada-shell__mount {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+/* The head's trailing controls. `New job` is the primary; anything beside it
+   is a ghost, so the accent reads as the one decision on the surface. */
+.armada-shell__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
 }
 
 .armada-screen__panel-head {
@@ -221,15 +273,19 @@
   color: var(--accent);
 }
 
+/* The aside is a maximum, not a width. A fixed track keeps demanding its width
+   in a window narrower than the pair, and the panel's `overflow-y: auto` makes
+   the other axis `auto` with it — so the whole page scrolls sideways instead of
+   the aside getting narrower. The failure this app was built to escape. */
 .armada-screen__split {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--armada-screen-shell);
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--armada-screen-shell));
   gap: var(--space-4);
   align-items: start;
 }
 
 .armada-screen__split[data-wide] {
-  grid-template-columns: minmax(0, 1fr) var(--armada-screen-aside-wide);
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--armada-screen-aside-wide));
 }
 
 .armada-screen__col {

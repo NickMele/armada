@@ -1,0 +1,102 @@
+/* Failure notice. The escalated tone drawn flat — it is a standing condition
+   on a surface, not a floating layer, so no shadow. The tone is not a choice
+   per failure: one condition, one hue, and the sentence says which failure. */
+.armada-failure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--status-escalated-bg);
+  border: var(--border-width) solid var(--status-escalated);
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.armada-failure__copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  text-wrap: pretty;
+}
+
+.armada-failure__headline {
+  font-weight: var(--weight-medium);
+}
+
+/* What to do. One step down, like every Alert body, because the headline is
+   what is read first and the instruction is what is read next. */
+.armada-failure__next {
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+.armada-failure__details {
+  min-width: 0;
+}
+
+.armada-failure__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  cursor: pointer;
+  list-style: none;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+/* Safari draws its own marker through `list-style: none`. */
+.armada-failure__summary::-webkit-details-marker {
+  display: none;
+}
+
+.armada-failure__summary:hover {
+  color: var(--fg-default);
+}
+
+.armada-failure__summary:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+.armada-failure__list {
+  margin: var(--space-2) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* 96px label column — two spacing steps, the same rhythm the row field runs
+   are built from. Wide enough for "Component" and "Runtime file" unwrapped. */
+.armada-failure__pair {
+  display: grid;
+  grid-template-columns: calc(var(--space-12) * 2) minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.armada-failure__label {
+  color: var(--fg-muted);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+/* Everything folded away here is machine-derived, so all of it is mono — and
+   a stack keeps its own newlines, because a stack reflowed is not a stack. */
+.armada-failure__value {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

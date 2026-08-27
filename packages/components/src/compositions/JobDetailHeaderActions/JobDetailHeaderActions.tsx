@@ -26,13 +26,12 @@ import { Badge } from "../../primitives/Badge/Badge";
  * estimated and is marked approximate. Rendering the two alike would destroy
  * trust in both.
  *
- * **`Kill` is the only action any state carries, and it stays outlined.** A
- * running job offers no primary: there is nothing to approve and nothing to
- * merge while it works, so the accent is spent elsewhere. Destructive is an
- * outline because a solid red button reads as an error state rather than an
- * act — killing a job is deliberate, not alarming. Both terminal states carry
- * nothing here at all: the acts on a stopped job are about its branch and its
- * log, so they sit beside those below rather than in the header.
+ * **What the header offers changes with the state; how it is arranged does
+ * not.** The set is the caller's, and which state carries what is written where
+ * that decision is made — `Acts` in Bridge's `JobDetail.tsx`. The arrangement
+ * is this file's: ghost first, the acts that end something as one outlined
+ * destructive group, and the one primary a Job detail ever carries last, at the
+ * trailing edge where the shell head puts its own.
  */
 export type JobDetailField = {
   /** The label, where the fact needs one. `Dispatched by you` does not. */
@@ -76,7 +75,7 @@ export type JobDetailHeaderActionsProps = {
   jobId?: ReactNode;
   /** The facts, in the order the drawing runs them. */
   fields: JobDetailField[];
-  /** The controls at the trailing edge. One, on a running job. */
+  /** The controls at the trailing edge. None on a terminal Job. */
   actions?: ReactNode;
   /** A clipboard write is silent, so the surface confirms it with a toast. */
   onCopied?: (value: string) => void;

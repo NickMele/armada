@@ -69,6 +69,20 @@ export type WorkflowRailStep = {
    */
   status?: string;
   /**
+   * How long the step took — `entered_at` to `updated_at` on the served step.
+   * Measured, so it is mono and speaks flatly whatever the row's state is.
+   */
+  elapsed?: ReactNode;
+  /**
+   * The last ruling against the step, from `last_verdict`. **Not the same axis
+   * as `activity`** — a step retrying after a refusal is `running` in activity
+   * and `failed` in verdict at the same moment, which is why one row shows
+   * both. Absent until a gate has ruled.
+   */
+  verdict?: ReactNode;
+  /** Which of `passed`, `failed` or `not_reached` the verdict is, for its hue. */
+  verdictNamed?: string;
+  /**
    * The Checks beneath. An empty array is a step with no Check, and it says so
    * in words rather than leaving a gap — an empty slot where a gate row would
    * sit reads as a gate that failed to render.
@@ -111,6 +125,11 @@ export type WorkflowRailProps = {
 const GATE_ICON = 12;
 const GATE_STROKE = 2;
 
+/** Whether the ungated row has an evidence submission to name beside it. */
+function named(step: WorkflowRailStep): boolean {
+  return (step.evidence?.label ?? "") !== "";
+}
+
 export function WorkflowRail({ steps, pulsing = false }: WorkflowRailProps) {
   return (
     <ol className="armada-rail">
@@ -136,6 +155,12 @@ export function WorkflowRail({ steps, pulsing = false }: WorkflowRailProps) {
                 {step.label}
               </span>
               {step.trailing}
+              {step.verdict ? (
+                <span className="armada-rail__verdict" data-verdict={step.verdictNamed}>
+                  {step.verdict}
+                </span>
+              ) : null}
+              {step.elapsed ? <span className="armada-rail__elapsed">{step.elapsed}</span> : null}
               {step.status ? <span className="armada-rail__status">{step.status}</span> : null}
             </div>
             {gates.length > 0 ? (
@@ -171,8 +196,13 @@ export function WorkflowRail({ steps, pulsing = false }: WorkflowRailProps) {
                       <span className="armada-rail__sr">{step.evidence.iconLabel}</span>
                     ) : null}
                   </span>
-                  <span className="armada-rail__gate-command">{step.evidence?.label}</span>
-                  <span className="armada-rail__gate-ungated">
+                  {named(step) ? (
+                    <span className="armada-rail__gate-command">{step.evidence?.label}</span>
+                  ) : null}
+                  {/* With no evidence to name, the sentence takes the command's
+                      slot instead of the trailing edge: a phrase alone at the
+                      far right reads as unattached to the step above it. */}
+                  <span className="armada-rail__gate-ungated" data-alone={named(step) ? undefined : "true"}>
                     {step.ungatedLabel ?? "no check on this step"}
                   </span>
                 </li>

@@ -3,6 +3,14 @@
 // called, its state, the step it is on, and the one decision a person can make
 // from here.
 //
+// # A row is a control, not a div that happens to answer a click
+//
+// Every drawn row opens that Job's detail, so the frame is a listbox and its
+// rows are options: Tab reaches the list once, Up and Down rove within it,
+// Enter and Space open a row, and the open one carries `aria-selected` as well
+// as the accent fill. A listitem with an `onClick` looks identical and is
+// reachable by the mouse alone.
+//
 // # It was a table, and the table is the thing the row shape replaced
 //
 // This file built an eight-column `Table` because the Bridge shell was written
@@ -35,16 +43,19 @@
 // **No glyph is invented for it.** `octagon-alert` is reserved to `stalled`,
 // `triangle-alert` is reserved to Doctor, and there is no registry row meaning
 // "unspecified". So those Jobs are named beneath the list rather than drawn in
-// a second row shape — the same treatment the unreadable half gets, for the
-// same reason: a missing thing that renders as a finding is a finding, and one
-// that is silently absent is a gap nobody sees. Reported against the
+// a second row shape: a missing thing that renders as a finding is a finding,
+// and one that is silently absent is a gap nobody sees. Reported against the
 // composition, not worked around with a prop only this app would use.
+//
+// A row the store refused is a different thing and is not here. It is a failure
+// with a fault and a log, so `App` draws it as a failure notice — a Job that
+// will not render and a Job that will not load are told apart.
 
 import { ActiveJobsList, BoardEmptyState, Button, JobRowStacked, StepBar } from "@armada/components";
 import type { JobRowField } from "@armada/components";
 import { Layers } from "lucide-react";
 
-import type { JobSummary, ManifestSummary, UnreadableJob, WorkflowSummary } from "../../shared/protocol";
+import type { JobSummary, ManifestSummary, WorkflowSummary } from "../../shared/protocol";
 import { readingOf } from "./reading";
 
 /**
@@ -70,7 +81,6 @@ const APPROVAL_TRACKS = [
 
 export type JobsProps = {
   jobs: readonly JobSummary[];
-  unreadable: readonly UnreadableJob[];
   /** Jobs with an approval in flight. A second click on one does not dispatch twice. */
   approving: readonly string[];
   /** True while what is shown is not live. Every row reads as de-emphasised. */
@@ -80,31 +90,42 @@ export type JobsProps = {
   manifests: readonly ManifestSummary[];
   /** The whole reading of the connection, for the empty state that is a fault. */
   disconnected: string | null;
+  /** The Job whose detail is open, where one is. */
+  selected: string | null;
+  /** Open a Job. Every row is a control, so every row calls this. */
+  onOpen: (jobId: string) => void;
   onApprove: (jobId: string) => void;
+  /** A clipboard write is silent, so the surface confirms every one with a toast. */
+  onCopied: (value: string) => void;
 };
 
 export function Jobs({
   jobs,
-  unreadable,
   approving,
   stale,
   workflows,
   manifests,
   disconnected,
+  selected,
+  onOpen,
   onApprove,
+  onCopied,
 }: JobsProps) {
   const bounded = jobs.slice(0, DRAWN);
   const drawn = bounded.filter((job) => readingOf(job).as === "badge");
   const undrawable = bounded.filter((job) => readingOf(job).as !== "badge");
-  const atTheGate = jobs.filter((job) => job.status === "awaiting_approval").length;
+
 
   return (
     <div className="flex flex-col gap-2">
       <ActiveJobsList
-        heading="Active jobs"
-        // Written where the counts are known, which the composition's own note
-        // says is the caller's job rather than its own.
-        summary={summaryOf(jobs.length, atTheGate)}
+        // No heading and no summary: the panel head above the list carries
+        // both, and the same sentence in two places is two chances to disagree.
+        // Every drawn row opens a Job, so the frame is a listbox and its rows
+        // are options — which is what lets "this one is open" be a state a
+        // screen reader can read rather than a fill only a sighted eye catches.
+        selectable
+        label="Active jobs"
         empty={
           disconnected === null ? (
             <BoardEmptyState quiet>No jobs. Propose one above.</BoardEmptyState>
@@ -126,7 +147,10 @@ export function Jobs({
             stale={stale}
             workflows={workflows}
             manifests={manifests}
+            selected={job.id === selected}
+            onOpen={onOpen}
             onApprove={onApprove}
+            onCopied={onCopied}
           />
         ))}
       </ActiveJobsList>
@@ -150,24 +174,30 @@ export function Jobs({
           </p>
         );
       })}
-
-      {/* Never merged into the list as a placeholder: a board that shows nine
-          of ten Jobs and says so is honest, one that shows nine is not. The
-          list changed shape; this half did not. */}
-      {unreadable.map((row) => (
-        <p key={row.job_id ?? row.fault} className="text-status-completed-failed">
-          {row.job_id === undefined ? "A job did not load: " : `Job ${row.job_id} did not load: `}
-          <span className="mono">{row.fault}</span>
-        </p>
-      ))}
     </div>
   );
 }
 
-/** "6 jobs. 1 awaiting approval." Lowercase anything countable. */
-function summaryOf(total: number, atTheGate: number): string {
-  const jobs = `${total} ${total === 1 ? "job" : "jobs"}.`;
+/**
+ * "6 jobs. 1 awaiting approval." Lowercase anything countable.
+ *
+ * The panel head above the list draws this, and the status bar draws the count
+ * on its own — so both read the one function rather than two spellings of the
+ * same plural.
+ */
+export function summaryOf(total: number, atTheGate: number): string {
+  const jobs = `${jobCount(total)}.`;
   return atTheGate === 0 ? jobs : `${jobs} ${atTheGate} awaiting approval.`;
+}
+
+/** "6 jobs", on its own. */
+export function jobCount(total: number): string {
+  return `${total} ${total === 1 ? "job" : "jobs"}`;
+}
+
+/** How many Jobs are at the approval gate. What the sentence above counts. */
+export function atTheGate(jobs: readonly JobSummary[]): number {
+  return jobs.filter((job) => job.status === "awaiting_approval").length;
 }
 
 function Row({
@@ -176,14 +206,20 @@ function Row({
   stale,
   workflows,
   manifests,
+  selected,
+  onOpen,
   onApprove,
+  onCopied,
 }: {
   job: JobSummary;
   approving: boolean;
   stale: boolean;
   workflows: readonly WorkflowSummary[];
   manifests: readonly ManifestSummary[];
+  selected: boolean;
+  onOpen: (jobId: string) => void;
   onApprove: (jobId: string) => void;
+  onCopied: (value: string) => void;
 }) {
   const reading = readingOf(job);
   // Every row reaching here is renderable — the list filtered the rest out and
@@ -196,7 +232,10 @@ function Row({
   const workflow = workflows.find((held) => held.id === job.workflow_id);
   const manifest = manifests.find((held) => held.id === job.owner_manifest_id);
   const steps = workflow?.steps ?? [];
-  const at = steps.findIndex((step) => step === job.current_step_id);
+  // Matched on `step_id`, because a workflow's steps are objects carrying their
+  // Checks since protocol 3. Compared against the whole step this silently
+  // never matched, and every bar drew its first segment as the current one.
+  const at = steps.findIndex((step) => step.step_id === job.current_step_id);
 
   const fields: JobRowField[] = [
     {
@@ -241,6 +280,9 @@ function Row({
 
   return (
     <JobRowStacked
+      onCopied={onCopied}
+      onOpen={() => onOpen(job.id)}
+      selected={selected}
       status={reading.status}
       statusIcon={reading.icon}
       statusLabel={reading.verb}

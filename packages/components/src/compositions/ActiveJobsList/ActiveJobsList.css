@@ -60,3 +60,23 @@
   background: var(--bg-raised);
   overflow: hidden;
 }
+
+/* The frame is the grid the rows borrow their field tracks from, so a column
+   sizes to the widest value in the list and stays put down it. `Job row
+   (stacked)` owns the track list; this only says where it is declared.
+
+   Without subgrid the frame stays a flex column and every row keeps the drawn
+   fixed tracks, which is the layout as it was. */
+@supports (grid-template-columns: subgrid) {
+  .armada-active-jobs__frame {
+    display: grid;
+    grid-template-columns: var(--armada-job-row-tracks);
+    column-gap: var(--space-3);
+  }
+
+  /* Anything that is not a row — the empty state — spans the whole width
+     rather than landing in the badge column. */
+  .armada-active-jobs__frame > * {
+    grid-column: 1 / -1;
+  }
+}

@@ -34,8 +34,13 @@ export type SplitButtonProps = {
   /**
    * Secondary on a list row, always. `primary` is legal only on job detail,
    * where there is one Job and one primary.
+   *
+   * `destructive` is outlined, never filled — a solid red control reads as an
+   * error state rather than as an act. It is for a group whose every member
+   * ends something, so that the caret cannot make a terminal act look like a
+   * variant of the one on the face.
    */
-  variant?: "secondary" | "primary";
+  variant?: "secondary" | "primary" | "destructive";
   /** The surface underneath: `card` fills `--bg-sunken`, `sunken` `--bg-raised`. */
   ground?: "card" | "sunken";
   /** Render with the menu open. Uncontrolled otherwise. */
@@ -90,7 +95,12 @@ export function SplitButton({
               role="menuitem"
               className="armada-split-button__item"
               data-danger={item.danger || undefined}
-              onClick={item.onSelect}
+              // Closes on choosing. A menu still open over the confirmation it
+              // just raised is a control that did not respond.
+              onClick={() => {
+                setOpen(false);
+                item.onSelect?.();
+              }}
             >
               <span>{item.label}</span>
               {item.shortcut !== undefined && (

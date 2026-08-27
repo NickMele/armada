@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import type { LucideIcon } from "lucide-react";
-import { Lock, ShieldCheck, ShieldMinus, ShieldX } from "lucide-react";
+import { FileCheck, Lock, ShieldCheck, ShieldMinus, ShieldX } from "lucide-react";
 import { WorkflowRail, type WorkflowRailStep } from "./WorkflowRail";
 
 /**
@@ -20,12 +19,13 @@ export default meta;
 type Story = StoryObj<typeof WorkflowRail>;
 
 /**
- * The evidence row on an ungated step wants the plain page-with-a-check
- * outline, and `file-check` has no entry in `packages/icons/icons.toml`. The
- * row renders a channel short rather than reaching for an unregistered glyph.
- * Reported.
+ * The evidence row on an ungated step takes the plain page-with-a-check
+ * outline. `[icons.file-check]` reserves it to a submission that landed and is
+ * explicit that it is never a Check result — the check marks that evidence was
+ * submitted, not that anything passed. These stories claimed the registry had
+ * no row for it; it does.
  */
-const NO_GLYPH_IN_REGISTRY = undefined as unknown as LucideIcon;
+const EVIDENCE = FileCheck;
 
 const running: WorkflowRailStep[] = [
   {
@@ -33,7 +33,7 @@ const running: WorkflowRailStep[] = [
     label: "Plan the change",
     activity: "advanced",
     status: "advanced",
-    evidence: { icon: NO_GLYPH_IN_REGISTRY, iconLabel: "Evidence", label: "evidence · 09:14" },
+    evidence: { icon: EVIDENCE, iconLabel: "Evidence", label: "evidence · 09:14" },
   },
   {
     id: "implement",
@@ -60,7 +60,7 @@ const running: WorkflowRailStep[] = [
     label: "Summarise",
     activity: "not_started",
     status: "not started",
-    evidence: { icon: NO_GLYPH_IN_REGISTRY, iconLabel: "Evidence", label: "" },
+    evidence: { icon: EVIDENCE, iconLabel: "Evidence", label: "" },
   },
 ];
 
@@ -90,7 +90,7 @@ export const RunningPulseElsewhere: Story = {
 export const Failed: Story = {
   args: {
     steps: [
-      { id: "plan", label: "Plan the change", activity: "advanced", status: "advanced", evidence: { icon: NO_GLYPH_IN_REGISTRY, label: "evidence · 13:58" } },
+      { id: "plan", label: "Plan the change", activity: "advanced", status: "advanced", evidence: { icon: EVIDENCE, label: "evidence · 13:58" } },
       {
         id: "implement",
         label: "Implement",
@@ -224,5 +224,255 @@ export const OneStep: Story = {
   args: {
     steps: [{ id: "fix", label: "Fix", activity: "running", status: "running · 1m 40s", current: true }],
     pulsing: true,
+  },
+};
+
+/**
+ * The rail Bridge draws from `GET /jobs/:job_id`. **Nothing here is inferred**
+ * — `state` is `job_steps.state` as Fleet recorded it, and the duration on each
+ * row is `entered_at` to `updated_at` on that step.
+ *
+ * **The status word is `job_steps.state`'s own wire spelling.**
+ * `enum-verbs.toml` carries no `step_state` rows, so the generated module emits
+ * an empty map and the underscored value renders — the same fallback a Check
+ * outcome took until its rows landed. A word chosen at the call site would be
+ * the second vocabulary that rule exists to prevent. Reported.
+ *
+ * **The unstarted step shows no duration.** `entered_at` is stamped at Job
+ * creation for every step of the frozen workflow, so a span on a step that has
+ * not run measures how long the Job has been alive — and `0s` on a row reads as
+ * a step that ran instantly. The running step measures to now instead, because
+ * `updated_at` stopped moving when the step started.
+ */
+export const ServedSteps: Story = {
+  args: {
+    steps: [
+      {
+        id: "plan",
+        label: "plan",
+        labelIsAnIdentifier: true,
+        activity: "advanced",
+        status: "advanced",
+        elapsed: "2m 14s",
+        verdict: "passed",
+        verdictNamed: "passed",
+      },
+      {
+        id: "implement",
+        label: "implement",
+        labelIsAnIdentifier: true,
+        activity: "running",
+        status: "running",
+        current: true,
+        elapsed: "11m 03s",
+      },
+      {
+        id: "verify",
+        label: "verify",
+        labelIsAnIdentifier: true,
+        activity: "not_started",
+        status: "not_started",
+      },
+      {
+        id: "handoff",
+        label: "handoff",
+        labelIsAnIdentifier: true,
+        activity: "not_started",
+        status: "not_started",
+      },
+    ],
+    pulsing: true,
+  },
+};
+
+/**
+ * The six `job_steps.state` values `crates/core-model/domain/step-states.toml`
+ * declares, one row each, exactly as Bridge draws them from `GET /jobs/:job_id`.
+ *
+ * **Every word on every row is the wire's own.** The label is the `step_id`,
+ * because neither `StepDetail` nor `WorkflowStep` carries the `label` the
+ * WorkflowDef declares. The status is the state's underscored spelling, because
+ * `enum-verbs.toml` has no `step_state` rows. The Check row says its name and
+ * not its command, because `GET /manifests` serves check names and not their
+ * `run` strings. Three wire gaps, drawn rather than papered over.
+ *
+ * `not reached` and its `shield-minus` come from the criterion Check
+ * vocabulary: `check_outcome`'s five are what a Check that *ran* did, and it
+ * declares no row for one the gate has not reached.
+ */
+export const EveryStepState: Story = {
+  args: {
+    steps: [
+      {
+        id: "not_started",
+        label: "not_started",
+        labelIsAnIdentifier: true,
+        activity: "not_started",
+        status: "not_started",
+        gates: [{ command: "build", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }],
+      },
+      {
+        id: "running",
+        label: "running",
+        labelIsAnIdentifier: true,
+        activity: "running",
+        status: "running",
+        current: true,
+        elapsed: "6m 12s",
+        gates: [{ command: "test", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }],
+      },
+      {
+        id: "awaiting_human",
+        label: "awaiting_human",
+        labelIsAnIdentifier: true,
+        activity: "awaiting_human",
+        status: "awaiting_human",
+        elapsed: "1m 04s",
+      },
+      {
+        id: "retrying",
+        label: "retrying",
+        labelIsAnIdentifier: true,
+        activity: "retrying",
+        status: "retrying",
+        elapsed: "3m 41s",
+        verdict: "failed · failed a check",
+        verdictNamed: "failed",
+      },
+      {
+        id: "advanced",
+        label: "advanced",
+        labelIsAnIdentifier: true,
+        activity: "advanced",
+        status: "advanced",
+        elapsed: "2m 14s",
+        verdict: "passed",
+        verdictNamed: "passed",
+        gates: [{ command: "fmt", result: "passed", icon: ShieldCheck, iconLabel: "passed" }],
+      },
+      {
+        id: "stopped",
+        label: "stopped",
+        labelIsAnIdentifier: true,
+        activity: "stopped",
+        status: "stopped",
+        elapsed: "12m 30s",
+        gates: [
+          { command: "build", result: "failed · exit 0 → exit 101", icon: ShieldX, iconLabel: "failed" },
+        ],
+      },
+    ],
+    pulsing: true,
+  },
+};
+
+/**
+ * A verdict and an activity on one row, on different axes.
+ *
+ * A step retrying after a refusal is `running` in activity and `failed` in
+ * verdict at the same moment, which is why one column cannot say both. The
+ * trigger beside the verdict takes its verb from the escalation vocabulary
+ * where the registry has one.
+ */
+export const AVerdictBesideTheState: Story = {
+  args: {
+    steps: [
+      {
+        id: "plan",
+        label: "plan",
+        labelIsAnIdentifier: true,
+        activity: "advanced",
+        elapsed: "2m 14s",
+        verdict: "passed",
+        verdictNamed: "passed",
+      },
+      {
+        id: "verify",
+        label: "verify",
+        labelIsAnIdentifier: true,
+        activity: "retrying",
+        current: true,
+        elapsed: "6m 51s",
+        verdict: "failed · failed a check",
+        verdictNamed: "failed",
+      },
+      { id: "handoff", label: "handoff", labelIsAnIdentifier: true, activity: "not_started" },
+    ],
+  },
+};
+
+/**
+ * The two different sentences a rail says where a Check would be.
+ *
+ * **`checks: []` is "this step is ungated" and an absent key is "Fleet cannot
+ * say."** The first is the ordinary case — every step of the `bug` workflow
+ * declares none — and the second means the Job named a workflow this Fleet does
+ * not hold. Neither is a gap, because a blank row reads as a gate that failed
+ * to render, and one sentence for both would tell a reader a step gates on
+ * nothing when what is true is that nobody could answer.
+ */
+export const UngatedAndUnanswerable: Story = {
+  args: {
+    steps: [
+      {
+        id: "reproduce",
+        label: "reproduce",
+        labelIsAnIdentifier: true,
+        activity: "advanced",
+        elapsed: "1m 40s",
+        evidence: { label: "" },
+      },
+      {
+        id: "root_cause",
+        label: "root_cause",
+        labelIsAnIdentifier: true,
+        activity: "running",
+        current: true,
+        elapsed: "4m 02s",
+        // What Bridge passes when `checks` is absent from the served step.
+        ungatedLabel: "Fleet cannot say what this step checks",
+        evidence: { label: "" },
+      },
+    ],
+    pulsing: true,
+  },
+};
+
+/**
+ * The five Check outcomes, rendered apart.
+ *
+ * **Only `passed` advances a step, and the other four are four different
+ * things.** A hanging Check and a Check whose command is not installed need
+ * opposite responses, so collapsing them into "failed" hides the one difference
+ * a reader acts on. A pass carries nothing beside it because a pass measured
+ * nothing — the outcome is the whole sentence.
+ *
+ * **Every result here is the wire's own spelling.**
+ * `crates/core-model/domain/check-outcomes.toml` declares the five and
+ * `enum-verbs.toml` carries no `check_outcome` rows, so there is no sanctioned
+ * verb, glyph or hue for any of them. The gate rows render a glyph short rather
+ * than borrowing one that means something else. Reported.
+ */
+export const TheFiveCheckOutcomes: Story = {
+  args: {
+    steps: [
+      {
+        id: "verify",
+        label: "verify",
+        labelIsAnIdentifier: true,
+        activity: "stopped",
+        current: true,
+        elapsed: "3m 18s",
+        verdict: "failed · failed a check",
+        verdictNamed: "failed",
+        gates: [
+          { command: "fmt" , result: "passed" },
+          { command: "build", result: "failed · exit 0 → exit 101" },
+          { command: "test", result: "signalled · SIGKILL" },
+          { command: "audit", result: "timed_out · 120s budget" },
+          { command: "typecheck", result: "never_ran · tsc is not installed" },
+        ],
+      },
+    ],
   },
 };

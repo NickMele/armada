@@ -1,0 +1,101 @@
+/* Job brief — what the Job was told, and what done means for it. Sits inside
+   the region that names where the work is, above the paths. */
+.armada-job-brief {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+}
+
+.armada-job-brief__block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The sub-label inside the region. ALL CAPS at --tracking-caps, the same
+   treatment every region label on every screen carries. */
+.armada-job-brief__label {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--fg-subtle);
+}
+
+/* The criteria. Tracks are declared once on the list and borrowed by each row
+   through `subgrid`, so the ordinals and the sources line up down the list
+   without any of the three being pinned to a width somebody guessed. The text
+   track is the `minmax(0, 1fr)` that absorbs the slack. */
+.armada-job-brief__criteria {
+  display: grid;
+  grid-template-columns: min-content minmax(0, 1fr) max-content;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-job-brief__criterion {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  min-width: 0;
+}
+
+/* The number, not the marker: an explicit ordinal is what lets a citation to
+   "criterion 4" still resolve when the rows sort. Mono, because the citation
+   is machine-written. */
+.armada-job-brief__ordinal {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+}
+
+.armada-job-brief__text {
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  text-wrap: pretty;
+}
+
+/* The verification source. Mono and muted: it is a closed vocabulary the wire
+   supplies, and it hedges the row rather than judging it. No hue — a source is
+   not a verdict, and no verdict is served. */
+.armada-job-brief__source {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+/* The brief itself. A person's own prose, so sans, at full contrast, and its
+   line breaks kept — a brief written as a list reads as one. */
+.armada-job-brief__facts {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  white-space: pre-wrap;
+  text-wrap: pretty;
+}
+
+/* What is absent, and why. Never a labelled blank: a label with nothing under
+   it reads as a value that failed to load. */
+.armada-job-brief__note {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}

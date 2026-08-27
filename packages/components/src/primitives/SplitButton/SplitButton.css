@@ -155,6 +155,30 @@
   border-inline-start-color: var(--accent-hover);
 }
 
+/* Destructive is outlined, matching `### Button`'s destructive exactly: a solid
+ * red control reads as an error state rather than as an act. The divider takes
+ * the same edge, so the caret is part of the control rather than a neutral
+ * segment bolted to a red one. */
+.armada-split-button__control[data-variant="destructive"] {
+  background: transparent;
+  border-color: var(--status-completed-failed);
+}
+
+.armada-split-button__control[data-variant="destructive"] .armada-split-button__action,
+.armada-split-button__control[data-variant="destructive"] .armada-split-button__caret {
+  color: var(--status-completed-failed);
+  border-inline-start-color: var(--status-completed-failed);
+}
+
+.armada-split-button__control[data-variant="destructive"] .armada-split-button__action:hover,
+.armada-split-button__control[data-variant="destructive"] .armada-split-button__caret:hover,
+.armada-split-button__control[data-variant="destructive"] .armada-split-button__action[data-preview-hover],
+.armada-split-button__control[data-variant="destructive"] .armada-split-button__caret[data-preview-hover],
+.armada-split-button__control[data-variant="destructive"] .armada-split-button__caret[aria-expanded="true"] {
+  background: var(--status-completed-failed-bg);
+  color: var(--status-completed-failed);
+}
+
 /* Disabled is --fg-subtle with hover suppressed. Never opacity. */
 .armada-split-button__control:has(.armada-split-button__action:disabled) {
   background: var(--bg-sunken);

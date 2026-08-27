@@ -31,12 +31,19 @@ body,
   height: 100%;
 }
 
-/* `min-height: 0` on the one region that scrolls. It is not a spellable
+/* The region that scrolls is the shell's panel now, and `min-height: 0` on it
+   lives in the shell's own stylesheet with the reason. It is not a spellable
    utility: the theme resets the spacing namespace to `initial`, so `min-h-0`
-   compiles to nothing — checked in the emitted stylesheet, not assumed. Without
-   it a flex child keeps its content's height and the window grows instead of
-   the region scrolling, which is "the layout broke on resize" from v1's failure
-   log. No value here is a design value. */
-.armada-app__scroll {
-  min-height: 0;
+   compiles to nothing — checked in the emitted stylesheet, not assumed. */
+
+/* Where a toast lands. Position and stacking order only — the toast owns its
+   own surface and every value in it. `--z-toast` is a stacking order rather
+   than a scale value, so the theme spells no utility for it and it is named
+   here. Clear of the status bar, which states Fleet's health continuously and
+   must not be covered by a confirmation that expires. */
+.armada-app__toasts {
+  position: fixed;
+  right: var(--space-6);
+  bottom: calc(var(--h-status-bar) + var(--space-3));
+  z-index: var(--z-toast);
 }

@@ -1,0 +1,95 @@
+/* Drone turns — a well, because it is a record being read rather than a
+   surface being acted on. The same treatment the rail takes for the same
+   reason, and for the further reason that nothing here is actionable at all. */
+.armada-turns {
+  display: grid;
+  /* Three tracks declared once on the list, so the instant and the kind line up
+     down the whole transcript rather than per row. Each is a floor and not a
+     fixed width — a fixed one truncates the longest tool name against empty
+     space, which is the defect the fixed-width column rule produced. The body
+     absorbs the slack, so growth lands in one deliberate place. */
+  grid-template-columns:
+    minmax(max-content, auto)
+    minmax(max-content, auto)
+    minmax(0, 1fr);
+  column-gap: var(--space-3);
+  row-gap: calc(var(--space-1) / 2);
+  padding: var(--space-2);
+  margin: 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  list-style: none;
+}
+
+.armada-turns__turn {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+/* Machine values speak flatly. The instant, the kind and the subject are all
+   machine-derived, so all three are mono and none of them is hued: no
+   vocabulary in the repository assigns a colour to a turn kind, and choosing
+   one here would be inventing a status. Reported. */
+.armada-turns__at,
+.armada-turns__kind,
+.armada-turns__subject {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+.armada-turns__at {
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+.armada-turns__kind {
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.armada-turns__body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+.armada-turns__subject {
+  color: var(--fg-default);
+  overflow-wrap: anywhere;
+}
+
+/* What came back, and prose the Drone wrote. Sans, because both are read as
+   language rather than looked up as values. */
+.armada-turns__answer,
+.armada-turns__said {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+
+.armada-turns__said {
+  color: var(--fg-default);
+}
+
+/* No rows at all. A Job that was never dispatched is an ordinary answer, so
+   this is a sentence in the well rather than an error treatment. */
+.armada-turns__empty {
+  margin: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}

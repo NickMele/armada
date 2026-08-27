@@ -21,6 +21,9 @@ import type { Absence, FleetIdentity, RuntimeFault } from "../shared/bridge";
 /** Not `fleet.pid`: it carries four fields, and something would eventually `cat` it. */
 const FILE_NAME = "fleet.json";
 
+/** The machine-level sink, named by `docs/concepts/log-envelope.md`. */
+const AUDIT_NAME = "audit.jsonl";
+
 /**
  * Loopback, always. Fleet answers commands that spawn processes against a real
  * repository, so the host is structural rather than configured — it is not in
@@ -40,8 +43,22 @@ export type Presence =
  * desktop application rather than a command-line tool.
  */
 export function machinePath(home: string | undefined): string | null {
+  const dir = machineDir(home);
+  return dir === null ? null : join(dir, FILE_NAME);
+}
+
+/**
+ * Where a Bridge failure says its line is. **Machine-level, not per-Job**: a
+ * connection that never reached Fleet has no `job_id` to file itself under.
+ */
+export function auditPath(home: string | undefined): string | null {
+  const dir = machineDir(home);
+  return dir === null ? null : join(dir, AUDIT_NAME);
+}
+
+function machineDir(home: string | undefined): string | null {
   if (home === undefined || home === "") return null;
-  return join(home, "Library", "Application Support", "Armada", FILE_NAME);
+  return join(home, "Library", "Application Support", "Armada");
 }
 
 /** What a process reported as its start time. Compared for equality, never parsed. */

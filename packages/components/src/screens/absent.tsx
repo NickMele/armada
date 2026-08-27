@@ -1,19 +1,19 @@
 /**
- * A region of a screen whose component is not built.
+ * A region of a screen with nothing to draw in it.
  *
- * **This is scaffolding, not a component.** It has no registry row in
- * `components.toml`, no story of its own, and nothing outside `src/screens`
- * imports it. It exists so that a screen can be assembled from what is built
- * and still say, in the place where the missing thing goes, what is missing.
+ * **This is scaffolding, not a component.** It has no story of its own and
+ * nothing outside `src/screens` imports it. It exists so that a screen can be
+ * assembled from what is built and still say, in the place where the missing
+ * thing goes, what is missing.
  *
- * The alternative was drawing the missing component here on the spot, which is
+ * The alternative was drawing the missing thing here on the spot, which is
  * inventing one, or leaving the region blank, which reads as a screen that is
  * finished.
  *
- * **No M1 screen renders one now.** The four regions that carried it are built,
- * and the fifth — `Approval card` — is not held open, because a milestone that
- * does not render a thing should not draw a hole where it would go. This stays
- * for the next screen whose component is agreed and not yet built.
+ * **Two kinds of missing, one treatment.** It was written for a component that
+ * is not built; the three job detail screens render it for a value Fleet does
+ * not serve. Both are a hole in a finished-looking screen, and `note` is where
+ * the screen says which one this is.
  */
 export function Absent({ name, note }: { name: string; note: string }) {
   return (

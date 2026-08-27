@@ -1,8 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { ReactElement } from "react";
+import { cloneElement } from "react";
 import { Check, CircleDot, Cpu, GitBranch, Power, UserCheck, X } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
-import { JobRowStacked } from "../JobRowStacked/JobRowStacked";
+import { JobRowStacked, type JobRowStackedProps } from "../JobRowStacked/JobRowStacked";
 import { StepBar } from "../StepBar/StepBar";
 import { ActiveJobsList, type ActiveJobsListProps } from "./ActiveJobsList";
 
@@ -180,5 +182,66 @@ export const EmptyWithNoEmptyState: Story = {
     summary: "No active jobs. 3 waiting on the Job Board.",
     action: <Button variant="primary">New job</Button>,
     children: [],
+  },
+};
+
+/**
+ * Twice the width floor — 1536px, wider than the drawing and wider than the
+ * window most of the time. **The field run reaches the right edge and nothing
+ * truncates while there is room**, because the tracks are the list's and grow
+ * with it; before subgrid they were five fixed lengths on each row and the run
+ * stopped short whatever the window did.
+ *
+ * Read this beside `At the width floor`: the same six rows, the same fields,
+ * the columns still lining up down the list at both ends.
+ */
+export const AtAWideWindow: StoryObj = {
+  render: () => (
+    <div style={{ width: "calc(var(--window-floor) * 2)" }}>
+      <ActiveJobsList {...(SixStates.args as ActiveJobsListProps)} />
+    </div>
+  ),
+};
+
+/**
+ * The list Bridge draws: every row opens a Job, so the frame is a listbox and
+ * the rows are options. Tab reaches a row, Enter and Space open it, and the
+ * open one carries `aria-selected` as well as the accent fill.
+ *
+ * **This is also the roving state.** Tab lands on one row and one only; Up and
+ * Down move the cursor, Home and End go to the ends, and the row the cursor
+ * leaves gives up its tab stop. Read it with the keyboard rather than the eye —
+ * the difference from a list of six tab stops is invisible in a screenshot.
+ *
+ * Clamped rather than wrapped: Down on the last row stays there. A Board is
+ * scanned, and a list that jumps back to the top loses the reader's place.
+ */
+export const Selectable: Story = {
+  args: {
+    ...SixStates.args,
+    selectable: true,
+    label: "Active jobs",
+    children: (SixStates.args?.children as ReactElement<JobRowStackedProps>[]).map((row, i) =>
+      cloneElement(row, { onOpen: () => {}, selected: i === 2 }),
+    ),
+  },
+};
+
+/**
+ * The same listbox with one row. **The roving cursor has nowhere to go**, and
+ * both arrows leave it where it is rather than wrapping onto itself — the
+ * state a clamp gets wrong most easily.
+ */
+export const OneOption: Story = {
+  args: {
+    heading: "Active jobs",
+    summary: "1 job. 1 awaiting approval.",
+    selectable: true,
+    label: "Active jobs",
+    children: [
+      cloneElement((SixStates.args?.children as ReactElement<JobRowStackedProps>[])[0], {
+        onOpen: () => {},
+      }),
+    ],
   },
 };

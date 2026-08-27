@@ -1,29 +1,27 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { LucideIcon } from "lucide-react";
-import { Folder, GitBranch, ShieldCheck, ShieldX, X } from "lucide-react";
+import { File, Folder, GitBranch, OctagonAlert, ShieldCheck, ShieldX, X } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
-import { JobDetailHeaderActions } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
-import { JobLogReference } from "../../compositions/JobLogReference/JobLogReference";
-import { WorkflowRail, type WorkflowRailStep } from "../../compositions/WorkflowRail/WorkflowRail";
+import type { WorkflowRailStep } from "../../compositions/WorkflowRail/WorkflowRail";
+import { AFailedJobADeadEndReadAsOne } from "./AFailedJobADeadEndReadAsOne";
 
 /**
  * Journey · Read a failed Job. The screen states four things in order — what
  * failed, that the job is over, where the branch is, and where the log is.
  *
  * The header is `Job detail header actions`, the same component the running job
- * renders. The drawing tags it only there, but the block is the same one — a
- * badge, a title, a job id and a run of facts — and a second hand-built copy
- * could only drift from it. What changes with the state is the field run and
- * the trailing action: a failed job reports where it stopped and carries no
- * action here at all, because the acts on a dead end are about its branch and
- * its log and sit beside those below.
+ * renders: a badge, a title, a job id and a run of facts. What changes with the
+ * state is the field run and the trailing action — a terminal job carries none,
+ * because the acts on a dead end are about its branch and its log and sit
+ * beside those below.
  */
-const meta: Meta = {
+const meta: Meta<typeof AFailedJobADeadEndReadAsOne> = {
   title: "Screens/A failed job — a dead end, read as one",
+  component: AFailedJobADeadEndReadAsOne,
 };
 export default meta;
 
-type Story = StoryObj;
+type Story = StoryObj<typeof AFailedJobADeadEndReadAsOne>;
 
 /* `file` has no entry in `packages/icons/icons.toml`, so the log row renders a
    channel short rather than reaching for an unregistered glyph. Reported. */
@@ -102,91 +100,125 @@ const tail = [
   "test result: FAILED. 82 passed; 2 failed",
 ].join("\n");
 
+const heading = {
+  status: "completed-failed",
+  statusIcon: X,
+  statusLabel: "Failed",
+  headline: "Cache the manifest read",
+  jobId: "job_91ab",
+  fields: [
+    // A step name is a label, so it stays sans beside its mono siblings, and
+    // the two halves are one fact joined by a comma.
+    { label: "Stopped at", value: "Run tests" },
+    { label: "step", value: "3 of 4", mono: true, continues: true },
+    { label: "Ran", value: "22m 41s", mono: true },
+    { label: "Spend, estimated", value: "~$2.10", mono: true },
+    { label: "Dispatched by you" },
+  ],
+};
+
 export const FailedJob: Story = {
   render: () => (
     <div className="armada-screen">
-      <div className="armada-screen__detail">
-        <JobDetailHeaderActions
-          status="completed-failed"
-          statusIcon={X}
-          statusLabel="Failed"
-          headline="Cache the manifest read"
-          jobId="job_91ab"
-          fields={[
-            // A step name is a label, so it stays sans beside its mono
-            // siblings, and the two halves are one fact joined by a comma.
-            { label: "Stopped at", value: "Run tests" },
-            { label: "step", value: "3 of 4", mono: true, continues: true },
-            { label: "Ran", value: "22m 41s", mono: true },
-            { label: "Spend, estimated", value: "~$2.10", mono: true },
-            { label: "Dispatched by you" },
-          ]}
-        />
-
-        <div className="armada-screen__sunken">
-          <span className="armada-screen__eyebrow">Why this stopped</span>
-          <p className="armada-screen__why">
+      <AFailedJobADeadEndReadAsOne
+        heading={heading}
+        why={
+          <>
             The test check exited 1 at Run tests, on 2 assertions in{" "}
-            <span className="armada-screen__mono">core/manifest</span>. The job is over.
-            Nothing runs from here without you.
-          </p>
-        </div>
+            <span className="armada-screen__mono">core/manifest</span>. The job is over. Nothing
+            runs from here without you.
+          </>
+        }
+        steps={steps}
+        output={{ tail, meta: "exit 1 · 4.2s · tail 12 lines" }}
+        work={{
+          brief: {
+            criteria: [
+              { text: "The manifest is read once per dispatch, not once per step.", source: "check" },
+              { text: "A changed armada.yml is picked up without restarting Fleet.", source: "judge" },
+            ],
+            facts: "`config::manifest` is the only reader. The cache key is the absolute path.",
+          },
+          rows: [
+            {
+              icon: GitBranch,
+              iconLabel: "Branch",
+              value: "feat/manifest-cache",
+              copyValue: "feat/manifest-cache",
+              meta: "2 files +48 −11",
+            },
+            // `folder` means "workspace" in the registry. A worktree is not a
+            // workspace, and the registry has no row for one. Reported.
+            {
+              icon: Folder,
+              iconLabel: "Worktree",
+              value: "/repos/armada/.armada/worktrees/job_91ab",
+              copyValue: "/repos/armada/.armada/worktrees/job_91ab",
+            },
+            {
+              icon: File,
+              iconLabel: "Log",
+              value: "/repos/armada/.armada/logs/job_91ab.jsonl",
+              copyValue: "/repos/armada/.armada/logs/job_91ab.jsonl",
+              separated: true,
+            },
+            // No registered glyph means a transcript, so the mark keeps its
+            // column and renders empty rather than borrowing one. Reported.
+            {
+              iconLabel: "Transcript",
+              value: "/repos/armada/.armada/transcripts/",
+              copyValue: "/repos/armada/.armada/transcripts/",
+              meta: "named by a drone id nothing serves",
+            },
+          ],
+          note: "The worktree and the branch are left in place. Armada will not touch either. The log holds Fleet, the drone and Bridge in one order, keyed on this job.",
+          actions: (
+            <>
+              <Button>Open the log</Button>
+              <Button>Open the worktree</Button>
+            </>
+          ),
+        }}
+      />
+    </div>
+  ),
+};
 
-        <div className="armada-screen__split" data-wide>
-          <div className="armada-screen__col">
-            <span className="armada-screen__eyebrow">What ran</span>
-            <WorkflowRail steps={steps} />
-          </div>
-
-          <div className="armada-screen__col" data-loose>
-            <div className="armada-screen__col">
-              <div className="armada-screen__head-row">
-                <span className="armada-screen__eyebrow">Check output</span>
-                <span className="armada-screen__tag">exit 1 · 4.2s · tail 12 lines</span>
-              </div>
-              <pre className="armada-screen__output">{tail}</pre>
-            </div>
-
-            <div className="armada-screen__col">
-              <span className="armada-screen__eyebrow">Where the work is</span>
-              <JobLogReference
-                rows={[
-                  {
-                    icon: GitBranch,
-                    iconLabel: "Branch",
-                    value: "feat/manifest-cache",
-                    copyValue: "feat/manifest-cache",
-                    meta: "2 files +48 −11",
-                  },
-                  // `folder` means "workspace" in the registry. A worktree is
-                  // not a workspace, and the registry has no row for one.
-                  // Reported.
-                  {
-                    icon: Folder,
-                    iconLabel: "Worktree",
-                    value: "~/.armada/worktrees/job_91ab",
-                  },
-                  {
-                    icon: NO_GLYPH_IN_REGISTRY,
-                    iconLabel: "Log",
-                    value: ".armada/logs/job_91ab.jsonl",
-                    copyValue: ".armada/logs/job_91ab.jsonl",
-                    meta: "318 lines · 4 error",
-                    separated: true,
-                  },
-                ]}
-              >
-                The worktree and the branch are left in place. Armada will not touch either.
-                The log holds Fleet, the drone and Bridge in one order, keyed on this job.
-              </JobLogReference>
-              <div className="armada-screen__actions">
-                <Button>Open the log</Button>
-                <Button>Open the worktree</Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+/**
+ * A Job that stopped and asked. **Not terminal** — the one act on it is a
+ * redispatch, and it is about the Job rather than its branch, so it goes in
+ * the header where `Kill` goes on a running Job.
+ *
+ * The verb and the glyph are `escalation_reason.stalled`'s, which is what
+ * Bridge reads from the generated vocabulary rather than writing here.
+ */
+export const StoppedAndAsked: Story = {
+  render: () => (
+    <div className="armada-screen">
+      <AFailedJobADeadEndReadAsOne
+        heading={{
+          status: "escalated",
+          statusIcon: OctagonAlert,
+          statusLabel: "stalled",
+          headline: "Cache the manifest read",
+          jobId: "job_91ab",
+          fields: [
+            { label: "Stopped at", value: "verify" },
+            { label: "step", value: "3 of 4", mono: true, continues: true },
+            { label: "Model", value: "sonnet", mono: true },
+          ],
+          actions: <Button>Redispatch</Button>,
+        }}
+        why="The job stalled. Nothing runs from here without you."
+        steps={steps.map((step) => ({
+          id: step.id,
+          label: step.id,
+          labelIsAnIdentifier: true,
+          activity: step.activity,
+          ungatedLabel: "Fleet serves no check result for this step",
+          evidence: { label: "" },
+        }))}
+      />
     </div>
   ),
 };

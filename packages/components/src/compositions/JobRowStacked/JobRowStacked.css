@@ -4,7 +4,8 @@
    sized by the M1 drawing and no token spells any of them. They are composed
    from the spacing scale here, so the drawn value is reproduced exactly and
    there is one place to change when the tokens land. Reported. */
-.armada-job-row {
+.armada-job-row,
+.armada-job-row-list {
   /* 132px: the badge column. Fixed on every row, which is what lets the badge
      — and the pulse it carries — sit in one predictable place down the list
      rather than moving with the headline's length. */
@@ -22,6 +23,23 @@
      for whichever appears first, because neither mode is the default. */
   --armada-track-spend: calc(var(--space-12) + var(--space-4) + var(--space-1));
 
+  /* The whole row, for a list that spreads its tracks across every row at
+     once. The drawn width is each track's FLOOR and `auto` is its ceiling, so
+     a track never reads narrower than the drawing and never truncates while
+     the row has room. The 1fr before the action is what the slack goes into,
+     so the field values keep their measure instead of drifting apart. */
+  --armada-job-row-tracks:
+    var(--armada-track-badge)
+    minmax(var(--armada-track-origin), auto)
+    minmax(var(--armada-track-bar), auto)
+    minmax(var(--armada-track-step), auto)
+    minmax(var(--armada-track-time), auto)
+    minmax(var(--armada-track-spend), auto)
+    minmax(0, 1fr)
+    max-content;
+}
+
+.armada-job-row {
   display: grid;
   grid-template-columns: var(--armada-track-badge) minmax(0, 1fr) auto;
   align-items: center;
@@ -51,11 +69,44 @@
   background: var(--bg-hover);
 }
 
+/* A row that opens a Job is a control, so the pointer says so before the click
+   does. `[role="option"]` is exactly the row that opens something — a row that
+   does not stays a listitem and keeps the text cursor, which is honest. */
+.armada-job-row[role="option"] {
+  cursor: pointer;
+}
+
+/* Hover brings the left edge in at --border-strong, which is the same edge
+   focus takes at --accent one step louder. It animates over --duration-fast on
+   the transition already declared above, so hover reads as a movement rather
+   than a colour that swapped. `packages/tokens/src/motion.css` zeroes that
+   duration under prefers-reduced-motion, so nothing here needs its own query.
+
+   Deliberately not a transform: a row that shifts would move its neighbours'
+   perceived alignment down a list, which is the flip-flopping the v1 log
+   recorded. The edge occupies width already reserved at rest.
+
+   Guarded against focus, which owns the same edge at --accent: without the
+   guard this selector is the more specific of the two and hovering the row the
+   cursor is on would quietly demote it. */
+.armada-job-row[role="option"]:not([data-focused]):not(:focus-visible):hover {
+  border-left-color: var(--border-strong);
+}
+
 /* Focused and selected are different states and coexist. A 1px ring around a
-   full-width row is nearly invisible, so the row does something stronger. */
-.armada-job-row[data-focused] {
+   full-width row is nearly invisible, so the row does something stronger.
+
+   The keyboard's own focus takes the same treatment rather than a second one:
+   `data-focused` is the caller saying where the cursor is, `:focus-visible` is
+   the browser saying it, and both mean one thing to whoever is looking. */
+.armada-job-row[data-focused],
+.armada-job-row:focus-visible {
   background: var(--bg-hover);
   border-left-color: var(--accent);
+}
+
+.armada-job-row:focus-visible {
+  outline: none;
 }
 
 /* Selected rows keep --fg-default text: --accent on --accent-muted measures
@@ -119,10 +170,11 @@
   white-space: nowrap;
 }
 
-/* Line two: the labelled field run, on fixed tracks so the list reads down as
-   well as across. No field is dropped at any width. */
+/* Line two: the labelled field run, on tracks shared down the list so it reads
+   down as well as across. No field is dropped at any width. */
 .armada-job-row__fields {
   display: grid;
+  grid-template-columns: var(--armada-row-fallback-tracks);
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
@@ -198,4 +250,50 @@
   align-items: center;
   gap: var(--space-1);
   flex: none;
+}
+
+/* ---- the list's tracks, spread across every row -------------------------
+
+   Fixed tracks make a column line up down the list, and are also why a row
+   truncates on a wide window: the track ran out of room, not the row. Subgrid
+   keeps the alignment without that cost — the columns are declared once on the
+   list, every row's field run borrows them, and a column sizes to the widest
+   content in the whole list rather than to one row's.
+
+   Chained through the row and its body because subgrid borrows only from its
+   own parent grid, and scoped to a list because a row rendered on its own has
+   no grid to borrow from and keeps the drawn fixed tracks. */
+@supports (grid-template-columns: subgrid) {
+  .armada-job-row-list > .armada-job-row {
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+  }
+
+  .armada-job-row-list > .armada-job-row > .armada-job-row__badge {
+    grid-column: 1;
+  }
+
+  .armada-job-row-list > .armada-job-row > .armada-job-row__body {
+    grid-column: 2 / -2;
+    display: grid;
+    grid-template-columns: subgrid;
+    /* Spelled out, not inherited: a subgrid takes its parent's gutters, and the
+       headline sits one 2px step above its field run rather than a --space-3. */
+    column-gap: var(--space-3);
+    row-gap: calc(var(--space-1) / 2);
+    align-content: center;
+  }
+
+  .armada-job-row-list > .armada-job-row > .armada-job-row__body > .armada-job-row__headline,
+  .armada-job-row-list > .armada-job-row > .armada-job-row__body > .armada-job-row__fields {
+    grid-column: 1 / -1;
+  }
+
+  .armada-job-row-list > .armada-job-row > .armada-job-row__body > .armada-job-row__fields {
+    grid-template-columns: subgrid;
+  }
+
+  .armada-job-row-list > .armada-job-row > .armada-job-row__action {
+    grid-column: -2 / -1;
+  }
 }

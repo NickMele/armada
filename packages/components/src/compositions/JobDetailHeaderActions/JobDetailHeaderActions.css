@@ -78,10 +78,13 @@
   color: var(--accent);
 }
 
-/* Every button in the group is the same height. On a running job there is one,
-   and it is outlined: no primary exists on this screen. */
+/* Every control in the group is the same height, and they align to the top of
+   the group so a split button's menu opening below does not move the row.
+   `align-items: flex-start` rather than `center`, because the split button is a
+   column wrapper one control tall until it opens. */
 .armada-job-head__actions {
   display: flex;
+  align-items: flex-start;
   gap: var(--space-2);
   flex: none;
 }

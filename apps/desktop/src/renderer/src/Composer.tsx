@@ -1,32 +1,28 @@
 // The create form. A Job drafted onto the approval gate, and nothing else —
 // what comes back is a Job at `awaiting_approval`, never a running one.
 //
-// **An empty title and an empty brief are both refused before the Job is
-// created**, here and again in the main process. The check here is what makes
-// the refusal legible; the one behind it is the rule.
+// **An empty title and an empty brief are refused here and again in the main
+// process.** The check here makes the refusal legible; the one behind it is the
+// rule. A title is typed for now; the Job proposer will generate one, from the
+// same call that decides the workflow and the write targets.
 //
-// A title is typed for now. The Job proposer will generate one from the
-// description, which is the same call that decides the workflow and the write
-// targets — hand entry stays the override rather than the path.
+// # The id fields were text boxes, and that was half a bug
 //
-// # The two id fields were text boxes, and that was half a bug
+// Nothing served the workflows or the Manifests, so this offered whatever ids
+// were on the board and a typed one otherwise — and a pasted id was accepted by
+// Fleet unchecked, which is how a Job claimed a workflow that does not exist.
+// Both halves are closed: Fleet refuses an id it does not hold, and
+// `list_workflows` says what the workflows are, so that field is a picker over
+// what Fleet will accept, showing the name rather than the ULID.
 //
-// Nothing served the workflows or the Manifests, so this form offered whatever
-// ids happened to be on the board and a typed one otherwise. A pasted id was
-// then accepted by Fleet unchecked, which is how a Job ended up on the board
-// claiming a workflow that does not exist. Both halves are closed: Fleet
-// refuses an id it does not hold, and `list_workflows` and `list_manifests` say
-// what those are — so these are pickers over what Fleet will accept, and the
-// value shown is the name rather than the ULID.
+// **The project is not a picker.** The drawn composer makes it read-only:
+// Bridge dispatches into the workspace it is pointed at, and a disabled select
+// is a control that looks choosable and is not. The rail names that workspace.
 //
-// # And the model is a picker now
-//
-// `job-fields.toml` says "At M1 nothing varies it — no create-form field, no
-// picker; the value comes from configuration". That was a scope note written
-// before any of this existed and the owner has decided otherwise. It starts on
-// the configured default, so the common path is still one click, and a
-// proposal that names nothing still gets that default at the Fleet boundary —
-// the picker is the convenience, not the rule.
+// **The model is a picker, against `job-fields.toml`.** That file says M1 has
+// no create-form field for it; it is a scope note written before any of this
+// existed and the owner decided otherwise. A proposal naming no model still
+// gets the configured default at the Fleet boundary.
 
 import { useEffect, useState } from "react";
 import { Button, Card, CardContent, CardFooter, CardHeader, CardTitle, Checkbox, Input, Select, Textarea } from "@armada/components";
@@ -46,7 +42,8 @@ const ORIGIN = "manual";
 export type ComposerProps = {
   /** The workflows Fleet holds. **The only ones it will accept.** */
   workflows: readonly WorkflowSummary[];
-  manifests: readonly ManifestSummary[];
+  /** The Manifest the rail names. A fact here, not a choice. */
+  manifest: ManifestSummary | undefined;
   /** The models, and the configured default the field starts on. */
   models: ModelChoices | null;
   /** Nothing may be proposed while the connection is not live. */
@@ -54,11 +51,10 @@ export type ComposerProps = {
   onPropose: (draft: Draft) => void;
 };
 
-export function Composer({ workflows, manifests, models, disabled, onPropose }: ComposerProps) {
+export function Composer({ workflows, manifest, models, disabled, onPropose }: ComposerProps) {
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
   const [workflowId, setWorkflowId] = useState("");
-  const [manifestId, setManifestId] = useState("");
   const [model, setModel] = useState("");
   const [urgency, setUrgency] = useState(URGENCIES[0] ?? "");
   const [atomic, setAtomic] = useState(false);
@@ -71,12 +67,10 @@ export function Composer({ workflows, manifests, models, disabled, onPropose }: 
     if (workflowId === "" && workflows.length > 0) setWorkflowId(workflows[0]!.id);
   }, [workflows, workflowId]);
   useEffect(() => {
-    if (manifestId === "" && manifests.length > 0) setManifestId(manifests[0]!.id);
-  }, [manifests, manifestId]);
-  useEffect(() => {
     if (model === "" && models !== null) setModel(models.default);
   }, [models, model]);
 
+  const manifestId = manifest?.id ?? "";
   const emptyTitle = title.trim() === "";
   const emptyBrief = brief.trim() === "";
   const emptyWorkflow = workflowId === "";
@@ -140,21 +134,18 @@ export function Composer({ workflows, manifests, models, disabled, onPropose }: 
                 </option>
               ))}
             </Select>
-            <Select
-              label="Manifest"
-              value={manifestId}
-              onChange={(event) => setManifestId(event.target.value)}
-              invalid={tried && emptyManifest}
-              message={held(manifests.length, "manifest")}
-            >
-              <option value="" />
-              {manifests.map((manifest) => (
-                <option key={manifest.id} value={manifest.id}>
-                  {/* The repository, because `armada.yml` declares no name. */}
-                  {manifest.repository}
-                </option>
-              ))}
-            </Select>
+            {/* Read-only, so it is a labelled value rather than a field —
+                the drawing's own treatment. The repository, because
+                `armada.yml` declares no name. */}
+            <div className="flex flex-col gap-1">
+              <span className="text-2xs text-fg-muted">Project</span>
+              {manifest === undefined ? null : (
+                <span className="mono text-fg-default">{manifest.repository}</span>
+              )}
+              <span className="text-2xs text-fg-muted">
+                {held(manifest === undefined ? 0 : 1, "manifest")}
+              </span>
+            </div>
             <Select
               label="Model"
               value={model}

@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import type { LucideIcon } from "lucide-react";
-import { Folder, GitBranch } from "lucide-react";
+import { File, Folder, GitBranch } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
 import { JobLogReference } from "./JobLogReference";
 
@@ -18,14 +17,12 @@ export default meta;
 type Story = StoryObj<typeof JobLogReference>;
 
 /**
- * The log row wants the plain page outline. **`file` has no entry in
- * `packages/icons/icons.toml`**, so the row renders a channel short rather
- * than reaching for an unregistered glyph. The concept names the treatment —
- * the `file-*` family is reserved to evidence, so the log takes the plain page
- * outline rather than a new glyph — and the registry has no row for it.
- * Reported.
+ * The log row takes `file`, the plain page outline — `[icons.file]` reserves it
+ * to the log row and nothing else, because the `file-*` family means evidence
+ * and a log is not evidence. These stories claimed the registry had no row for
+ * it; it does, and Bridge has been drawing it.
  */
-const NO_GLYPH_IN_REGISTRY = undefined as unknown as LucideIcon;
+const LOG = File;
 
 /**
  * A running job. The log is being written now, and the counts are the reason
@@ -36,7 +33,7 @@ export const OnARunningJob: Story = {
   args: {
     rows: [
       {
-        icon: NO_GLYPH_IN_REGISTRY,
+        icon: LOG,
         iconLabel: "Log",
         value: ".armada/logs/job_2d90bb.jsonl",
         copyValue: ".armada/logs/job_2d90bb.jsonl",
@@ -68,7 +65,7 @@ export const OnAFailedJob: Story = {
       },
       { icon: Folder, iconLabel: "Worktree", value: "~/.armada/worktrees/job_91ab" },
       {
-        icon: NO_GLYPH_IN_REGISTRY,
+        icon: LOG,
         iconLabel: "Log",
         value: ".armada/logs/job_91ab.jsonl",
         copyValue: ".armada/logs/job_91ab.jsonl",
@@ -96,7 +93,7 @@ export const OnAFinishedJob: Story = {
   args: {
     rows: [
       {
-        icon: NO_GLYPH_IN_REGISTRY,
+        icon: LOG,
         iconLabel: "Log",
         value: ".armada/logs/job_4f10.jsonl",
         copyValue: ".armada/logs/job_4f10.jsonl",
@@ -117,7 +114,7 @@ export const WithErrors: Story = {
   args: {
     rows: [
       {
-        icon: NO_GLYPH_IN_REGISTRY,
+        icon: LOG,
         iconLabel: "Log",
         value: ".armada/logs/job_91ab.jsonl",
         copyValue: ".armada/logs/job_91ab.jsonl",
@@ -126,5 +123,57 @@ export const WithErrors: Story = {
     ],
     children: "Whether the error count is computed per view or carried on the job record is open.",
     actions: <Button ground="sunken">Open the log</Button>,
+  },
+};
+
+/**
+ * The paths as Bridge actually derives them: a repository root, the fixed
+ * `.armada` layout, and a 26-character ULID at the end. Rendered at the width
+ * of the running Job's aside, which is the container they sit in.
+ *
+ * **The head gives way and the last segment never does.** A trailing ellipsis
+ * eats the ULID, which is the only part that tells one Job's worktree from
+ * another's. The whole value stays on the clipboard and on the `title` however
+ * narrow the row gets — a copy that truncated with the display would be worse
+ * than the overflow it was fixing.
+ */
+export const LongPaths: Story = {
+  decorators: [
+    (Story) => (
+      <div className="armada-log-ref-narrow">
+        <Story />
+      </div>
+    ),
+  ],
+  args: {
+    rows: [
+      {
+        icon: Folder,
+        iconLabel: "Worktree",
+        value: "/Users/user/Development/armada/.armada/worktrees/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+        copyValue: "/Users/user/Development/armada/.armada/worktrees/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+      },
+      {
+        icon: GitBranch,
+        iconLabel: "Branch",
+        value: "armada/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+        copyValue: "armada/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+      },
+      {
+        icon: LOG,
+        iconLabel: "Log",
+        value: "/Users/user/Development/armada/.armada/logs/01JQ8ZK4T7WY3N2VXB6RGM5D9C.jsonl",
+        copyValue: "/Users/user/Development/armada/.armada/logs/01JQ8ZK4T7WY3N2VXB6RGM5D9C.jsonl",
+        separated: true,
+      },
+      {
+        iconLabel: "Transcript",
+        value: "/Users/user/Development/armada/.armada/transcripts/",
+        copyValue: "/Users/user/Development/armada/.armada/transcripts/",
+        meta: "named by a drone id nothing serves",
+      },
+    ],
+    children:
+      "The worktree, the log and the transcripts directory follow from this job's id and the repository its manifest was read from. The branch is served.",
   },
 };

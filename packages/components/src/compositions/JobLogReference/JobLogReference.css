@@ -40,6 +40,7 @@
 /* A path, a branch, a directory. Mono, because every one of them is
    machine-derived — and one step smaller than the sentence beneath. */
 .armada-log-ref__value {
+  display: flex;
   flex: 1;
   min-width: 0;
   font-family: var(--font-mono);
@@ -47,8 +48,21 @@
   line-height: var(--leading-xs);
   color: var(--fg-default);
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Middle ellipsis: the directories give way, the last segment never does. A
+   worktree path is a repo root plus a ULID and the ULID is the whole of what
+   distinguishes it, so a trailing ellipsis would eat the only part worth
+   reading. */
+.armada-log-ref__head {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.armada-log-ref__tail {
+  flex: none;
 }
 
 /* A machine value copies on click and goes to --accent on hover. No `copy`
@@ -99,6 +113,13 @@
   flex-wrap: wrap;
   gap: var(--space-2);
   flex: none;
+}
+
+/* The story that proves a long path truncates, and nothing else. 420px is the
+   running Job's aside — the container this block actually sits in — and
+   `--w-toast` is the only token that spells it outside a screen's own scope. */
+.armada-log-ref-narrow {
+  max-width: var(--w-toast);
 }
 
 .armada-log-ref__sr {

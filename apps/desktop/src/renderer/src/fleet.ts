@@ -1,12 +1,15 @@
-// Where Bridge says what Fleet is, in the words the design contract settles.
+// What Fleet is, in the words the design contract settles. The status bar
+// draws them; this decides them.
 //
-// **The bar states a healthy status out loud**, because an empty bar reads the
-// same whether Fleet is healthy or dead. The leading dot carries the hue and is
-// the one exception to the bar being `--fg-muted` throughout.
+// **A healthy status is stated out loud**, because an empty bar reads the same
+// whether Fleet is healthy or dead.
 //
 // Four runtime-file answers, not one message. "Fleet is not running" is three
 // different facts underneath — no file, a dead pid, and a pid something else
 // now holds — and the third is the one that must never become a socket.
+//
+// This was `FleetBar.tsx` and drew the bar itself. The bar is
+// `Compositions/Status bar` now, so what is left is the reading.
 
 import type { Connection } from "../../shared/bridge";
 
@@ -16,9 +19,14 @@ export type Statement = {
   detail: string;
   /** What to do about it, where there is something to do. */
   next: string | null;
-  /** A status token stem, spelled `--status-{stem}`. */
-  hue: string;
 };
+
+// **No hue here any more.** This carried a status token stem per state, and
+// the bar drew a dot in it. The contract's bar names three states and the two
+// readings that are neither — a refused runtime file, a protocol Bridge does
+// not speak — took a fourth hue that the contract does not grant. They keep
+// the neutral dot; the sentence names them, and the failure notice on the
+// board carries the whole reading.
 
 export function elapsed(ms: number): string {
   const seconds = Math.max(0, Math.round(ms / 1000));
@@ -36,7 +44,6 @@ export function statementOf(connection: Connection, now: number, readAt: number 
         headline: "Reading Fleet's runtime file",
         detail: "",
         next: null,
-        hue: "not-started",
       };
 
     case "not_running":
@@ -45,7 +52,6 @@ export function statementOf(connection: Connection, now: number, readAt: number 
         detail: absence(connection.absence),
         // Bridge cannot start Fleet, so the sentence says who does.
         next: "Start Fleet. Bridge reconnects on its own.",
-        hue: "completed-failed",
       };
 
     case "runtime_file_refused":
@@ -55,7 +61,6 @@ export function statementOf(connection: Connection, now: number, readAt: number 
         // Not folded into "not running": the read failed, and calling that a
         // Fleet that is down decides on no evidence.
         next: "Check what wrote the file. Bridge will not connect to a port it names.",
-        hue: "escalated",
       };
 
     case "connecting":
@@ -63,7 +68,6 @@ export function statementOf(connection: Connection, now: number, readAt: number 
         headline: "Connecting to Fleet",
         detail: `pid ${connection.fleet.pid} · port ${connection.fleet.port}`,
         next: null,
-        hue: "not-started",
       };
 
     case "unreachable":
@@ -74,7 +78,6 @@ export function statementOf(connection: Connection, now: number, readAt: number 
           `no answer for ${elapsed(now - connection.sinceMs)} · ${staleness}`,
         // Restarting Fleet is the wrong fix here, so the sentence does not say to.
         next: "Fleet is up and not answering. What is shown below is not live.",
-        hue: "awaiting-review",
       };
 
     case "version_skew":
@@ -82,36 +85,20 @@ export function statementOf(connection: Connection, now: number, readAt: number 
         headline: "Fleet speaks a protocol Bridge does not",
         detail: `Fleet ${connection.speaks} · Bridge ${connection.expected}`,
         next: "Fleet and Bridge ship as a pair. Update both to the same commit.",
-        hue: "escalated",
       };
 
     case "connected":
+      // **No "last read" here, and that is the point.** A healthy connection
+      // folds `job.created`, `job.state_changed` and `job.step_advanced` as
+      // they arrive, so the Board is current by construction and an age beside
+      // it says the opposite of what is true. The age stays on `unreachable`,
+      // which is the state where how old the reading is is the whole fact.
       return {
         headline: "Fleet running",
-        detail: `pid ${connection.fleet.pid} · port ${connection.fleet.port} · ${staleness}`,
+        detail: `pid ${connection.fleet.pid} · port ${connection.fleet.port}`,
         next: null,
-        hue: "completed-success",
       };
   }
-}
-
-export function FleetBar({ statement }: { statement: Statement }) {
-  return (
-    <footer className="flex h-status-bar shrink-0 items-center gap-2 border-t border-border-subtle bg-bg-raised px-4 text-2xs text-fg-muted">
-      <span
-        className="h-dot w-dot shrink-0 rounded-full"
-        style={{ background: `var(--status-${statement.hue})` }}
-        aria-hidden
-      />
-      <span>{statement.headline}</span>
-      {statement.detail === "" ? null : (
-        <>
-          <span className="text-fg-subtle">·</span>
-          <span className="mono">{statement.detail}</span>
-        </>
-      )}
-    </footer>
-  );
 }
 
 /** The three ways a runtime file says Fleet is not running. */
