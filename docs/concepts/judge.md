@@ -62,7 +62,7 @@ Why: majority voting would let the Judge grant by consensus, breaking rule 1, so
 **6. Cold by default.** The Judge fires on mechanical triggers only, never on a schedule, and on a well-behaved Drone it never runs at all.
 Why: a detector that polls is the wrong design — the Judge costs money, and a free mechanical signal decides when it is worth spending.
 
-> Rules 1–4 originate in `docs/reserved/036`. How a v1 path citation resolves — and why it currently needs a commit hash — is on `../contracts/design-system.md`, Typography of reference.
+> How a v1 path citation resolves — and why it currently needs a commit hash — is on `../contracts/design-system.md`, Typography of reference.
 
 ## Where it fires
 
