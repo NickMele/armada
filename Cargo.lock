@@ -58,6 +58,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "armada"
+version = "0.0.0"
+dependencies = [
+ "adapter-traits",
+ "adapters",
+ "api",
+ "axum",
+ "checks-runner",
+ "config",
+ "core-model",
+ "fleet",
+ "ipc",
+ "store",
+ "testkit",
+ "tokio",
+ "verification",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -307,25 +326,6 @@ dependencies = [
  "testkit",
  "tokio",
  "tower",
- "verification",
-]
-
-[[package]]
-name = "fleet-bin"
-version = "0.0.0"
-dependencies = [
- "adapter-traits",
- "adapters",
- "api",
- "axum",
- "checks-runner",
- "config",
- "core-model",
- "fleet",
- "ipc",
- "store",
- "testkit",
- "tokio",
  "verification",
 ]
 
@@ -1106,6 +1106,7 @@ version = "0.0.0"
 dependencies = [
  "adapter-traits",
  "config",
+ "core-model",
 ]
 
 [[package]]

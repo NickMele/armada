@@ -61,8 +61,11 @@ Direction is dependency. The two crates at the bottom have none, on purpose.
 
 ```mermaid
 flowchart TD
-    bin["fleet-bin<br/><i>the binary</i>"] --> fleet
+    bin["armada<br/><i>the binary</i>"] --> fleet
     bin --> api
+    bin --> config
+    bin --> checks
+    bin --> adapters
     fleet --> store
     fleet --> config
     fleet --> ipc
@@ -85,6 +88,12 @@ flowchart TD
     style cm stroke-width:3px
     style at stroke-width:3px
 ```
+
+**The binary's three edges past `fleet` are the three verbs that need no
+daemon.** `armada check` and `armada run` resolve a name against `config`'s
+Manifest and execute it through `checks-runner`; `armada clean` gives a
+worktree and its branch back through `adapters`. Only `armada serve` needs
+`fleet` and `api`.
 
 **`core-model` and `adapter-traits` pull no runtime and no I/O** — no `tokio`,
 no `git2`, no `reqwest`. Every crate depends on those two, so anything they

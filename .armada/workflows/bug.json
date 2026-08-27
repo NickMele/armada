@@ -32,11 +32,19 @@
 # because a repository's workflows are the shape `workflow-samples/` already
 # established.
 #
-# Five fields, and no others. `version`, `name`, `structure`, `steps[]`, and
-# within a step `id`, `label`, `evidence_type`, `mechanical_checks[]` and
-# `advance_gate`. Everything else in the schema is refused by name.
+# Six fields, and no others. `version`, `workflow_id`, `name`, `structure`,
+# `steps[]`, and within a step `id`, `label`, `evidence_type`,
+# `mechanical_checks[]` and `advance_gate`. Everything else in the schema is
+# refused by name.
+#
+# `workflow_id` is the key the designed definition beside this one already
+# carried and M1 did not read. Without it nothing joined a proposal's
+# `workflow_id` to a workflow, so a Job could be proposed against a workflow
+# that does not exist, stored, and shown on the board claiming one Fleet has
+# never heard of. The value is the slug, exactly as the designed file spells it.
 {
   "version": 1,
+  "workflow_id": "bug",
   "name": "bug",
   "structure": "linear",
   "steps": [

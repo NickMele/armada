@@ -10,6 +10,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@armada/brand':
+        specifier: workspace:*
+        version: link:../../packages/brand
       '@armada/components':
         specifier: workspace:*
         version: link:../../packages/components
