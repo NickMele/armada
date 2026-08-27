@@ -120,6 +120,7 @@ fn a_job(id: &str, manifest: &str) -> Job {
             redispatched_from: None,
             facts: Facts::new("what was observed"),
             scope_revisions: Vec::new(),
+            attachments: Vec::new(),
         },
         TopLevelOrigin::HelmDrafted,
         at(),

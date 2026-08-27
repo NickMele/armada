@@ -22,7 +22,7 @@
 //! rather than this file's: a Job cannot be created into a state, so a proposal
 //! cannot ask for one.
 //!
-//! # Four refusals, and every one of them used to be a Job on the board
+//! # Five refusals, and every one of them used to be a Job on the board
 //!
 //! **This is where a value that cannot produce a Drone is refused**, and until
 //! it was, three of the four were accepted here and failed layers further in —
@@ -34,17 +34,18 @@
 //! | `model: ""` | Stored, drawn on the board, refused at spawn as "no model was named" |
 //! | a workflow id nothing holds | Written onto the record unverified; the Job claimed a workflow Fleet had never heard of |
 //! | a Manifest id nothing holds | The same, for the other id |
+//! | an attachment's `staged_path` does not exist or cannot be read | Nothing checked this until now — a screenshot a person believed they attached would silently not exist on the Job, which is worse than the Job never being proposed |
 //!
-//! The model is the one of the four that a proposal may leave out. Naming none
-//! is the ordinary case — `list_models` says what the configured default is and
-//! Fleet fills it in — and the refusal is for the case where the proposal names
-//! none *and* configuration supplies none, which is a machine that is not set
-//! up rather than a request that is wrong.
+//! The model is the one of the four original refusals that a proposal may
+//! leave out. Naming none is the ordinary case — `list_models` says what the
+//! configured default is and Fleet fills it in — and the refusal is for the
+//! case where the proposal names none *and* configuration supplies none,
+//! which is a machine that is not set up rather than a request that is wrong.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
-    AcceptanceCriterion, CriterionId, Facts, JobId, ModelName, NewJob, RepoPath, StepSeed, Subject,
-    Title, TopLevelOrigin, WriteTargets,
+    AcceptanceCriterion, Attachment, CriterionId, Facts, JobId, ModelName, NewJob, RepoPath,
+    StepSeed, Subject, Title, TopLevelOrigin, WriteTargets,
 };
 
 use crate::adrift::Adrift;
@@ -78,8 +79,10 @@ where
         let owner_manifest_id = self.the_manifest_named(&proposal.owner_manifest_id)?;
         let model = self.the_model_named(proposal.model.as_deref())?;
         let origin = proposal.origin.domain();
+        let id = JobId::carried(self.mint().ulid());
+        let attachments = self.promoted(&id, proposal.attachments)?;
         let new = NewJob {
-            id: JobId::carried(self.mint().ulid()),
+            id,
             title,
             workflow,
             owner_manifest_id,
@@ -124,8 +127,47 @@ where
             redispatched_from: None,
             facts: Facts::new(proposal.facts),
             scope_revisions: Vec::new(),
+            attachments,
         };
         Ok((new, origin))
+    }
+
+    /// Copy each staged file into Fleet's own keeping, under
+    /// `<attachments_dir>/<job_id>/<filename>` — outside every worktree,
+    /// because dispatch is what puts a copy where a Drone can see it.
+    ///
+    /// **Refused, not dropped**, where a staged path does not exist or cannot
+    /// be read. A person who believed they attached a screenshot and got a
+    /// Job that silently carries none is worse than a Job that was never
+    /// proposed — the same argument the other four refusals in this file make
+    /// about a value that cannot produce a working Drone.
+    fn promoted(
+        &self,
+        job: &JobId,
+        staged: Vec<ipc::AttachmentRef>,
+    ) -> Result<Vec<Attachment>, Adrift> {
+        let mut attachments = Vec::with_capacity(staged.len());
+        for entry in staged {
+            let unreadable = |cause: std::io::Error| Adrift::AttachmentUnreadable {
+                job: job.clone(),
+                filename: entry.filename.clone(),
+                cause,
+            };
+            let byte_size = std::fs::metadata(&entry.staged_path)
+                .map_err(unreadable)?
+                .len();
+            let dir = std::path::Path::new(&self.host().attachments_dir).join(job.as_str());
+            std::fs::create_dir_all(&dir).map_err(unreadable)?;
+            let stored = dir.join(&entry.filename);
+            std::fs::copy(&entry.staged_path, &stored).map_err(unreadable)?;
+            attachments.push(Attachment {
+                filename: entry.filename,
+                mime_type: entry.mime_type,
+                byte_size,
+                storage_ref: stored.to_string_lossy().to_string(),
+            });
+        }
+        Ok(attachments)
     }
 
     /// The proposal's workflow, if it is the one this Fleet holds — **and the

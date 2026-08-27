@@ -4,9 +4,9 @@
 //! round-trip over an empty record exercises almost nothing and passes anyway.
 
 use core_model::{
-    Actor, AdvanceGate, CheckOutcome, ContextSource, CriterionId, DeclarePlanAt, DroneId, Job,
-    JobStatus, JudgeVerdict, Judgment, ModelName, RepoPath, ResolvedCheck, StepCheck, StepId,
-    Target, Ulid, WriteTargets,
+    Actor, AdvanceGate, Attachment, CheckOutcome, ContextSource, CriterionId, DeclarePlanAt,
+    DroneId, Job, JobStatus, JudgeVerdict, Judgment, ModelName, RepoPath, ResolvedCheck, StepCheck,
+    StepId, Target, Ulid, WriteTargets,
 };
 
 use crate::tests::{created_at, job_id, open, sub_dispatched, top_level, TempDir};
@@ -91,6 +91,36 @@ fn with_targets(id: &str, targets: Option<WriteTargets>) -> Job {
     let mut new = crate::tests::full_new_job(id);
     new.write_targets = targets;
     Job::create_top_level(new, core_model::TopLevelOrigin::Manual, created_at())
+}
+
+/// A file handed to the Job at proposal time survives a close and reopen —
+/// its own table, like `job_write_targets`, and read back the same way.
+#[test]
+fn an_attachment_survives_the_reopen() {
+    let dir = TempDir::new();
+    let mut new = crate::tests::full_new_job("01ATTACHED");
+    new.attachments = vec![Attachment {
+        filename: "repro.png".to_string(),
+        mime_type: "image/png".to_string(),
+        byte_size: 20480,
+        storage_ref: "/var/armada/attachments/01ATTACHED/repro.png".to_string(),
+    }];
+    let stored = Job::create_top_level(new, core_model::TopLevelOrigin::Manual, created_at());
+
+    let mut store = open(&dir);
+    store.insert_job(&stored, &created_at()).expect("stored");
+    drop(store);
+
+    let reopened = open(&dir);
+    let loaded = reopened.load_job(&job_id("01ATTACHED")).expect("loads");
+    assert_eq!(loaded.attachments().len(), 1);
+    assert_eq!(loaded.attachments()[0].filename, "repro.png");
+    assert_eq!(loaded.attachments()[0].mime_type, "image/png");
+    assert_eq!(loaded.attachments()[0].byte_size, 20480);
+    assert_eq!(
+        loaded.attachments()[0].storage_ref,
+        "/var/armada/attachments/01ATTACHED/repro.png"
+    );
 }
 
 #[test]

@@ -22,12 +22,12 @@ mod roundtrip;
 mod tmp;
 
 use core_model::{
-    AcceptanceCriterion, Actor, AdvanceGate, ContextSource, CriterionId, CriterionSource,
-    DeclarePlanAt, DependencyDirection, DependencyEdge, DispatchOrigin, EvidenceScope,
-    EvidenceType, Facts, FrozenWorkflow, GateManifest, GateOutcome, Job, JobId, JudgeCheck,
-    JudgeCriterion, ManifestId, ModelName, NewJob, NotRunReason, RepoPath, ResolvedCheck,
-    ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject, Timestamp, Title,
-    TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
+    AcceptanceCriterion, Actor, AdvanceGate, Attachment, ContextSource, CriterionId,
+    CriterionSource, DeclarePlanAt, DependencyDirection, DependencyEdge, DispatchOrigin,
+    EvidenceScope, EvidenceType, Facts, FrozenWorkflow, GateManifest, GateOutcome, Job, JobId,
+    JudgeCheck, JudgeCriterion, ManifestId, ModelName, NewJob, NotRunReason, RepoPath,
+    ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject,
+    Timestamp, Title, TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
 };
 
 use crate::Store;
@@ -186,6 +186,12 @@ pub fn full_new_job(id: &str) -> NewJob {
             outcome: ScopeRevisionOutcome::recorded("approved"),
             approved_by: Actor::Human,
             at: at("2026-08-26T09:30:00.000Z"),
+        }],
+        attachments: vec![Attachment {
+            filename: "before.png".to_string(),
+            mime_type: "image/png".to_string(),
+            byte_size: 4096,
+            storage_ref: "/var/armada/attachments/01FULL/before.png".to_string(),
         }],
     }
 }

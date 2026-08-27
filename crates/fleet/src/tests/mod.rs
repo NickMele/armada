@@ -48,7 +48,13 @@
 //! router that ships. `briefing` and `host` are the two seams that arrived with
 //! them — what a Drone is told, and the one place a clock is read and an id is
 //! invented.
+//!
+//! `attachments` is the eleventh: a file staged before a Job exists, promoted
+//! at creation, refused where the staged path cannot be read, and copied again
+//! into the worktree dispatch makes — proving the same path `briefing` writes
+//! into a Drone's first turn is one the worktree actually holds.
 
+mod attachments;
 mod briefing;
 mod checks;
 mod daemon;

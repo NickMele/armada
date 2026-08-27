@@ -5,6 +5,7 @@
    Append-only, and appended by hand. It once said `cargo xtask verify-components`
    generates it; there is no such task, so nothing checks this list — a component
    whose line is missing is invisible and the gate stays green. Reported. */
+@import "./primitives/AttachmentChip/AttachmentChip.css";
 @import "./primitives/Badge/Badge.css";
 @import "./primitives/Button/Button.css";
 @import "./primitives/Checkbox/Checkbox.css";

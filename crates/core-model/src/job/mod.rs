@@ -58,9 +58,10 @@ pub use drone::{DroneAssigned, DroneMoved, DronePresence, IllegalDroneMove};
 pub use escalation::{EscalationTrigger, TriggerKind, TriggerLevel};
 pub use event::{JobEvent, StepEvent};
 pub use fields::{
-    AcceptanceCriterion, BlankBranch, Branch, CriterionSource, DependencyDirection, DependencyEdge,
-    DispatchOrigin, Facts, GateManifest, GateOutcome, NotRunDisposition, NotRunReason, Origin,
-    ScopeRevision, ScopeRevisionOutcome, Subject, TopLevelOrigin, Urgency, WriteTargets,
+    AcceptanceCriterion, Attachment, BlankBranch, Branch, CriterionSource, DependencyDirection,
+    DependencyEdge, DispatchOrigin, Facts, GateManifest, GateOutcome, NotRunDisposition,
+    NotRunReason, Origin, ScopeRevision, ScopeRevisionOutcome, Subject, TopLevelOrigin, Urgency,
+    WriteTargets,
 };
 pub use ids::{
     BlankModel, BlankTitle, CriterionId, DroneId, JobId, ManifestId, ModelName, RepoPath, StepId,

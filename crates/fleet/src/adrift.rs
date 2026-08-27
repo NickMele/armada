@@ -158,6 +158,22 @@ pub enum Adrift {
     /// refused at spawn as "no model was named". The message names the settings
     /// row to set rather than the layer that failed.
     Modelless,
+    /// An attachment's bytes could not be gotten where they needed to be —
+    /// at creation, a staged path that does not exist or cannot be read; at
+    /// dispatch, Fleet's own stored copy that would not copy into the fresh
+    /// worktree.
+    ///
+    /// **Refused, not dropped, either time.** A person who believed they
+    /// attached a screenshot to the brief and got a Job that silently carries
+    /// none — or a Drone briefed about a file that is not where the brief
+    /// says — is worse off than being told outright. The same argument
+    /// [`Adrift::NoSuchWorkflow`] and [`Adrift::NoSuchManifest`] make about a
+    /// value that cannot work being accepted where it enters.
+    AttachmentUnreadable {
+        job: JobId,
+        filename: String,
+        cause: io::Error,
+    },
 }
 
 impl fmt::Display for Adrift {
@@ -273,6 +289,15 @@ impl fmt::Display for Adrift {
                  Set `default-model-per-job-type` in crates/config/settings.toml, or name a \
                  model on the proposal — `list_models` says which are available",
             ),
+            Adrift::AttachmentUnreadable {
+                job,
+                filename,
+                cause,
+            } => write!(
+                out,
+                "{}'s attachment `{filename}` could not be made ready: {cause}",
+                job.as_str()
+            ),
         }
     }
 }
@@ -306,7 +331,8 @@ impl Error for Adrift {
             | Adrift::NotCommitted { cause, .. } => Some(cause.as_ref()),
             Adrift::NotTold { cause, .. }
             | Adrift::NotReaped { cause, .. }
-            | Adrift::NoTranscript { cause, .. } => Some(cause),
+            | Adrift::NoTranscript { cause, .. }
+            | Adrift::AttachmentUnreadable { cause, .. } => Some(cause),
             Adrift::NotDelivered { .. }
             | Adrift::Unworkable { .. }
             | Adrift::NotConfigurable { .. }

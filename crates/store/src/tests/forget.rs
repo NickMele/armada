@@ -40,6 +40,10 @@ fn a_forgotten_job_takes_its_whole_history_with_it() {
     assert_eq!(gone.steps, 2, "the two seeded steps go with it");
     assert_eq!(gone.write_targets, 2);
     assert_eq!(gone.manifests, 2);
+    assert_eq!(
+        gone.attachments, 1,
+        "the fixture's one attached file goes with it"
+    );
     assert!(matches!(
         store.load_job(&job_id("01FORGOTTEN")),
         Err(LoadJobError::NoSuchJob { .. })

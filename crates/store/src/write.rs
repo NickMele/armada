@@ -31,8 +31,8 @@
 //! could not be tested.
 
 use core_model::{
-    DroneAssigned, DronePresence, GateManifest, Job, JobId, JobStep, Judgment, StepCheck, StepId,
-    StepTransitioned, Timestamp, Transitioned, WriteTargets,
+    Attachment, DroneAssigned, DronePresence, GateManifest, Job, JobId, JobStep, Judgment,
+    StepCheck, StepId, StepTransitioned, Timestamp, Transitioned, WriteTargets,
 };
 use rusqlite::Transaction;
 
@@ -113,6 +113,7 @@ impl Store {
         write_steps(&tx, job)?;
         write_targets(&tx, job)?;
         write_manifests(&tx, job)?;
+        write_attachments(&tx, job, created_at)?;
 
         tx.commit()
             .map_err(fault("committing the insert"))
@@ -533,6 +534,40 @@ fn write_manifests(tx: &Transaction<'_>, job: &Job) -> Result<(), WriteError> {
             ],
         )
         .map_err(fault("writing a gate manifest"))
+        .map_err(WriteError::Database)?;
+    }
+    Ok(())
+}
+
+/// One row per file handed to the Job at proposal time. Unordered, unlike
+/// `job_write_targets`: a Drone opens an attachment by name, not by position,
+/// so there is no `ordinal` to keep faith with.
+fn write_attachments(
+    tx: &Transaction<'_>,
+    job: &Job,
+    created_at: &Timestamp,
+) -> Result<(), WriteError> {
+    for attachment in job.attachments() {
+        let Attachment {
+            filename,
+            mime_type,
+            byte_size,
+            storage_ref,
+        } = attachment;
+        tx.execute(
+            "INSERT INTO job_attachments (
+                 job_id, filename, mime_type, byte_size, storage_ref, created_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
+                job.id().as_str(),
+                filename.as_str(),
+                mime_type.as_str(),
+                *byte_size as i64,
+                storage_ref.as_str(),
+                created_at.as_str(),
+            ],
+        )
+        .map_err(fault("writing an attachment"))
         .map_err(WriteError::Database)?;
     }
     Ok(())

@@ -165,6 +165,20 @@ where
             }
         };
 
+        // Every attachment the Job carries, copied again into this fresh
+        // worktree — under `.armada/attachments/`, where `job_brief` names it
+        // and a Drone's own tools can open it. Before the first-turn prompt is
+        // assembled, which is what makes the path `job_brief` writes one the
+        // Drone can actually read.
+        if let Err((filename, cause)) = copy_attachments(&job, &worktree) {
+            self.interrupt(&job).await?;
+            return Err(Adrift::AttachmentUnreadable {
+                job: job_id,
+                filename,
+                cause,
+            });
+        }
+
         // Read from the worktree, not derived from the id: a branch a reader
         // recomputes cannot be renamed and cannot say what happened. `Err` is
         // unreachable — `WorktreeSpec` refuses an empty job id.
@@ -585,4 +599,27 @@ where
         )));
         Ok(moved.job)
     }
+}
+
+/// Copy every attachment the Job carries into this worktree, under
+/// `.armada/attachments/<filename>` — the path `briefing::job_brief` names, so
+/// what the brief points at is there by the time a Drone reads it.
+///
+/// A free function rather than a method: it touches no Fleet state, and the
+/// error it returns names the one attachment that failed rather than a whole
+/// `Adrift` variant, which is `dispatch`'s own business to build — the same
+/// split `Adrift::from_delivery` draws for a different seam.
+fn copy_attachments(job: &Job, worktree: &Worktree) -> Result<(), (String, std::io::Error)> {
+    if job.attachments().is_empty() {
+        return Ok(());
+    }
+    let dir = std::path::Path::new(worktree.path())
+        .join(".armada")
+        .join("attachments");
+    std::fs::create_dir_all(&dir).map_err(|cause| (String::new(), cause))?;
+    for attachment in job.attachments() {
+        std::fs::copy(&attachment.storage_ref, dir.join(&attachment.filename))
+            .map_err(|cause| (attachment.filename.clone(), cause))?;
+    }
+    Ok(())
 }

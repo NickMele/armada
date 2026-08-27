@@ -29,9 +29,10 @@
 //! cannot be dispatched against anything.
 
 use core_model::{
-    Branch, CheckOutcome, CriterionId, DispatchOrigin, Facts, GateManifest, GateOutcome, Job,
-    JobId, JobStatus, JudgeVerdict, Judgment, ManifestId, ModelName, NewJob, Origin, RepoPath,
-    StepCheck, StepId, StepSeed, StepState, Subject, Timestamp, Title, Ulid, Urgency, WriteTargets,
+    Attachment, Branch, CheckOutcome, CriterionId, DispatchOrigin, Facts, GateManifest,
+    GateOutcome, Job, JobId, JobStatus, JudgeVerdict, Judgment, ManifestId, ModelName, NewJob,
+    Origin, RepoPath, StepCheck, StepId, StepSeed, StepState, Subject, Timestamp, Title, Ulid,
+    Urgency, WriteTargets,
 };
 use rusqlite::Row;
 
@@ -243,6 +244,7 @@ impl Store {
             facts: Facts::new(string(row, "facts")?),
             scope_revisions: columns::read_scope_revisions(&string(row, "scope_revisions")?)
                 .map_err(malformed("scope_revisions"))?,
+            attachments: self.attachments(&job_id)?,
         };
 
         let origin = enum_value(Origin::from_wire, "jobs", "origin", &string(row, "origin")?)?;
@@ -432,6 +434,29 @@ impl Store {
                             value: outcome,
                         },
                     )?,
+                })
+            },
+        )
+    }
+
+    /// Every file handed to the Job at proposal time. Unlike `write_targets`,
+    /// zero rows is unambiguous here: an attachment list has no "determined to
+    /// carry nothing" state to distinguish from "none was ever attached".
+    fn attachments(&self, job_id: &JobId) -> Result<Vec<Attachment>, RowError> {
+        self.collect(
+            "SELECT filename, mime_type, byte_size, storage_ref FROM job_attachments
+             WHERE job_id = ?1 ORDER BY filename",
+            job_id,
+            "reading attachments",
+            |row| {
+                let byte_size: i64 = row
+                    .get("byte_size")
+                    .map_err(column("job_attachments", "byte_size"))?;
+                Ok(Attachment {
+                    filename: string(row, "filename")?,
+                    mime_type: string(row, "mime_type")?,
+                    byte_size: byte_size as u64,
+                    storage_ref: string(row, "storage_ref")?,
                 })
             },
         )

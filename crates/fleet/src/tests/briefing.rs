@@ -46,6 +46,7 @@ fn a_job() -> Job {
             redispatched_from: None,
             facts: Facts::new("the reader is off by one"),
             scope_revisions: Vec::new(),
+            attachments: Vec::new(),
         },
         TopLevelOrigin::Manual,
         Timestamp::from_rfc3339("2026-08-26T09:00:00.000Z"),

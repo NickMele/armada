@@ -1,4 +1,6 @@
 import { app, BrowserWindow, ipcMain, nativeImage } from "electron";
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import tokens from "@armada/tokens/tokens.json";
@@ -42,6 +44,24 @@ function wearTheMark(): void {
 function floor(name: string): number {
   const found = tokens.tokens.find((token) => token.name === name);
   return found === undefined ? 0 : Number.parseInt(found.value, 10);
+}
+
+/**
+ * Write pasted or picked bytes to a fresh staging directory, before any Job
+ * exists to key storage on. One directory per file rather than one per
+ * batch, keyed by a fresh uuid, so two attachments sharing a filename in one
+ * paste never collide on disk.
+ */
+async function stageAttachment(
+  bytes: ArrayBuffer,
+  filename: string,
+  _mimeType: string,
+): Promise<{ path: string }> {
+  const dir = join(app.getPath("temp"), "armada-attachments", randomUUID());
+  await mkdir(dir, { recursive: true });
+  const path = join(dir, filename);
+  await writeFile(path, Buffer.from(bytes));
+  return { path };
 }
 
 let connection: FleetConnection | null = null;
@@ -96,6 +116,14 @@ void app.whenReady().then(() => {
   // heard about. See `FleetConnection.state`.
   ipcMain.handle(CHANNELS.state, () => connection?.state());
   ipcMain.handle(CHANNELS.proposeJob, (_event, draft: Draft) => connection?.proposeJob(draft));
+  // Staging happens before a Job exists — there is no id yet to key storage
+  // on, and one is minted at `propose` time. Fleet is not involved here at
+  // all; this only writes bytes to a temp file `proposeJob` later names.
+  ipcMain.handle(
+    CHANNELS.stageAttachment,
+    (_event, bytes: ArrayBuffer, filename: string, mimeType: string) =>
+      stageAttachment(bytes, filename, mimeType),
+  );
   ipcMain.handle(CHANNELS.approveDispatch, (_event, jobId: string) =>
     connection?.approveDispatch(jobId),
   );

@@ -47,7 +47,7 @@ pub const KNOWN_SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 /// **Nothing is ever edited here.** Changing entry zero changes what an already
 /// migrated file is assumed to contain, which is the one thing the version
 /// number exists to stop.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9];
 
 /// Version 1 — the Job record, the rows beneath it, and the log.
 const V1: &str = r#"
@@ -461,5 +461,32 @@ CREATE TABLE job_step_judgments (
     consequence TEXT,
     judged_at   TEXT NOT NULL,
     PRIMARY KEY (job_id, step_id, ordinal)
+) STRICT;
+"#;
+
+/// Version 9 — files a person attached to the brief.
+///
+/// # Its own table, like `job_write_targets`
+///
+/// Written once, at Job creation, from paths a proposal staged before the Job
+/// existed. There is no column this could be folded onto and no event that
+/// describes it — an attachment is not a transition, it is a fact about what
+/// the Job was created carrying, the same shape `job_write_targets` already
+/// has for declared paths. `job_id` has no `ordinal`: order does not matter to
+/// a Drone opening a file by name, where it does for a write target's list.
+///
+/// # Nothing to backfill
+///
+/// No Job carried an attachment before this table existed, so every Job in
+/// every existing store has none — which is what zero rows says, the same
+/// refusal V6 and V8 both make.
+const V9: &str = r#"
+CREATE TABLE job_attachments (
+    job_id      TEXT NOT NULL REFERENCES jobs(job_id),
+    filename    TEXT NOT NULL,
+    mime_type   TEXT NOT NULL,
+    byte_size   INTEGER NOT NULL,
+    storage_ref TEXT NOT NULL,
+    created_at  TEXT NOT NULL
 ) STRICT;
 "#;

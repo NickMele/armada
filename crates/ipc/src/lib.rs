@@ -75,7 +75,8 @@ pub use event::{
 };
 pub use ids::{CriterionId, DroneId, Instant, JobId, ManifestId, StepId, WorkflowId};
 pub use job::{
-    JobList, JobSummary, ProposeJob, ProposedCriterion, Redispatched, Subject, UnreadableJob,
+    AttachmentRef, JobList, JobSummary, ProposeJob, ProposedCriterion, Redispatched, Subject,
+    UnreadableJob,
 };
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
 pub use turn::{Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage, Withheld};

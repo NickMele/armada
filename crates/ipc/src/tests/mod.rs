@@ -21,8 +21,8 @@ use core_model::{
 };
 
 use crate::{
-    decode, encode, CheckRun, DeclaredCheck, JobDetail, JobSummary, Judged, ProposeJob, StepFacts,
-    StreamMessage,
+    decode, encode, AttachmentRef, CheckRun, DeclaredCheck, JobDetail, JobSummary, Judged,
+    ProposeJob, StepFacts, StreamMessage,
 };
 
 fn at(instant: &str) -> Timestamp {
@@ -69,6 +69,7 @@ fn job() -> Job {
             redispatched_from: None,
             facts: Facts::new("a secret nobody outside Fleet needs"),
             scope_revisions: Vec::new(),
+            attachments: Vec::new(),
         },
         TopLevelOrigin::Manual,
         at("2026-08-26T09:00:00.000Z"),
@@ -447,6 +448,36 @@ fn a_proposal_may_name_no_model_at_all() {
     assert_eq!(proposal.model, None);
 }
 
+/// **Additive, like `model`.** A proposal that predates this field carries no
+/// `attachments` key at all, and `#[serde(default)]` is what lets it still
+/// decode — the minor bump this field cost rests on exactly this.
+#[test]
+fn a_proposal_with_no_attachments_key_still_decodes() {
+    let body = br#"{"title":"fix the parser","workflow_id":"01WF","owner_manifest_id":"01MF",
+        "origin":"manual","urgency":"normal","atomic":false}"#;
+    let proposal = decode::<ProposeJob>("proposal", body).expect("attachments default to none");
+    assert!(proposal.attachments.is_empty());
+}
+
+/// A staged file crosses as a path, never as bytes — the same same-machine
+/// assumption `write_targets` already rests on.
+#[test]
+fn a_proposal_carries_the_staged_files_a_person_attached() {
+    let body = br#"{"title":"fix the parser","workflow_id":"01WF","owner_manifest_id":"01MF",
+        "origin":"manual","urgency":"normal","atomic":false,
+        "attachments":[{"staged_path":"/tmp/armada-attachments/01/before.png",
+        "filename":"before.png","mime_type":"image/png"}]}"#;
+    let proposal = decode::<ProposeJob>("proposal", body).expect("attachments decode");
+    assert_eq!(
+        proposal.attachments,
+        vec![AttachmentRef {
+            staged_path: "/tmp/armada-attachments/01/before.png".to_string(),
+            filename: "before.png".to_string(),
+            mime_type: "image/png".to_string(),
+        }]
+    );
+}
+
 #[test]
 fn the_summary_of_a_sub_dispatched_job_says_so() {
     let parent = DispatchOrigin {
@@ -471,6 +502,7 @@ fn the_summary_of_a_sub_dispatched_job_says_so() {
             redispatched_from: None,
             facts: Facts::empty(),
             scope_revisions: Vec::new(),
+            attachments: Vec::new(),
         },
         parent,
         at("2026-08-26T09:00:00.000Z"),

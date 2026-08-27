@@ -382,6 +382,27 @@ pub struct GateManifest {
     pub outcome: GateOutcome,
 }
 
+/// One file handed to the Job at proposal time — a screenshot of what's wrong,
+/// a log capture, whatever a person attached to the brief so a Drone can open
+/// it directly rather than have it described in prose.
+///
+/// **A pointer, not bytes**, mirroring [`GateManifest`]'s own table and
+/// [`Facts`]'s reason for staying off it: a blob on the Job row would rewrite
+/// whole on every entry, and a file is the same argument applied to something
+/// bigger than text. `storage_ref` names where Fleet keeps its own copy, made
+/// once at Job creation and kept outside the worktree a Drone writes to — this
+/// type never carries the bytes themselves, on the Job row or off it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Attachment {
+    pub filename: String,
+    pub mime_type: String,
+    pub byte_size: u64,
+    /// Where Fleet's own copy lives. A path, never bytes — read by dispatch,
+    /// which copies it again into the worktree a Drone can see, and by nothing
+    /// else in this crate.
+    pub storage_ref: String,
+}
+
 /// The paths a Job intends to write. **Null is not empty.**
 ///
 /// `None` on the Job is scope not yet determined; `Some` with no paths is

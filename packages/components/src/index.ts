@@ -3,6 +3,7 @@
 // Storybook is what says whether it does.
 
 export * from "./primitives/Alert/Alert";
+export * from "./primitives/AttachmentChip/AttachmentChip";
 export * from "./primitives/Badge/Badge";
 export * from "./primitives/Button/Button";
 export * from "./primitives/Card/Card";

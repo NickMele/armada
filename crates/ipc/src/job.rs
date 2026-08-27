@@ -223,6 +223,31 @@ pub struct ProposeJob {
     /// empty is determined to write nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub write_targets: Option<Vec<String>>,
+    /// Files a person attached to the brief before proposing it. **Additive,
+    /// like `model`** — a caller that predates this field sends nothing and
+    /// decodes exactly as it did before.
+    ///
+    /// Each entry names a path Bridge already wrote bytes to, on the same
+    /// machine Fleet runs on — the assumption `docs/practices/protocol.md`
+    /// already makes for a staged path rather than a payload. `drafted()` is
+    /// where Fleet promotes each into its own keeping and where a path that
+    /// does not exist is refused rather than silently dropped.
+    #[serde(default)]
+    pub attachments: Vec<AttachmentRef>,
+}
+
+/// One staged file, named by where Bridge already wrote it.
+///
+/// **A path, never bytes.** The wire carries a pointer to a file already on
+/// disk rather than a base64 payload, for the reason `write_targets` and every
+/// other same-machine path on this DTO already carries one: Bridge and Fleet
+/// share a filesystem, and a payload round-tripped through this channel would
+/// duplicate bytes a path can name for free.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AttachmentRef {
+    pub staged_path: String,
+    pub filename: String,
+    pub mime_type: String,
 }
 
 /// One criterion, in the requester's words.

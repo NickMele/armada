@@ -72,6 +72,7 @@ pub(super) fn running_job() -> Job {
             redispatched_from: None,
             facts: Facts::empty(),
             scope_revisions: Vec::new(),
+            attachments: Vec::new(),
         },
         TopLevelOrigin::Manual,
         at(NOW),

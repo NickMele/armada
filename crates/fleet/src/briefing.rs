@@ -126,11 +126,24 @@ fn scope_block(step: &ResolvedStep) -> Option<String> {
 /// requester said "done" means. Both are the requester's text and both go in:
 /// the criteria in particular are layer 5 in the contract's order, and a Drone
 /// that cannot see them is being asked to hit a bar it was not shown.
+///
+/// Between the two, a line per attachment — a screenshot, a log capture,
+/// whatever a person picked when the brief was written. Naming the
+/// worktree-relative path is the whole of what this owes a Drone: `dispatch`
+/// already copied the file to that path, and a Drone opens it with its own
+/// tools rather than being handed anything more than where to look.
 fn job_brief(job: &Job) -> String {
     let mut brief = format!("JOB BRIEF\n\n{}", job.title().as_str());
     if !job.facts().as_str().is_empty() {
         brief.push_str("\n\n");
         brief.push_str(job.facts().as_str());
+    }
+    if !job.attachments().is_empty() {
+        brief.push_str("\n\nFiles attached to this brief, copied into your worktree:");
+        for attachment in job.attachments() {
+            brief.push_str("\n  - .armada/attachments/");
+            brief.push_str(&attachment.filename);
+        }
     }
     if !job.acceptance_criteria().is_empty() {
         brief.push_str("\n\nThis is done when:");

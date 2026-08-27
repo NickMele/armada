@@ -40,6 +40,8 @@ pub struct Forgotten {
     pub manifests: usize,
     /// Rows recording what each declared Check did.
     pub step_checks: usize,
+    /// Files handed to the Job at proposal time.
+    pub attachments: usize,
 }
 
 impl Store {
@@ -78,6 +80,7 @@ impl Store {
             ("job_write_targets", &mut removed.write_targets),
             ("job_manifests", &mut removed.manifests),
             ("job_step_checks", &mut removed.step_checks),
+            ("job_attachments", &mut removed.attachments),
         ] {
             *into = tx
                 .execute(&format!("DELETE FROM {table} WHERE job_id = ?1"), (id,))

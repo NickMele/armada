@@ -125,6 +125,7 @@ where
             redispatched_from: Some(failed.id().clone()),
             facts: failed.facts().clone(),
             scope_revisions: failed.scope_revisions().to_vec(),
+            attachments: failed.attachments().to_vec(),
         };
         // A replacement enters where its original entered, so the approval gate
         // is neither skipped nor imposed. A sub-dispatched Job has no top-level
