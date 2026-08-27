@@ -63,6 +63,12 @@ function createWindow(): BrowserWindow {
   });
 
   window.on("ready-to-show", () => window.show());
+  // **Always the built renderer, and `dev` builds it first.** electron-vite
+  // serves a dev server and publishes `ELECTRON_RENDERER_URL`; loading it would
+  // be the obvious branch and it does not work here, because the React plugin
+  // injects an inline module preamble in dev and `default-src 'self'` refuses
+  // it. Relaxing the CSP is a security review rather than a local convenience,
+  // so the build is what moves. Reported.
   void window.loadFile(join(__dirname, "../renderer/index.html"));
   return window;
 }

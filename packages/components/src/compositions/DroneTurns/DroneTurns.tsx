@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, CircleDot } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
 
@@ -22,6 +22,10 @@ import { Button } from "../../primitives/Button/Button";
  * repository carries a verb, a glyph or a hue per turn kind — `Saw` is the
  * wire's enum and has no `enum-verbs.toml` rows — so the spelling renders
  * rather than copy invented here. Reported.
+ *
+ * **It follows the tail, and stops the moment you scroll away from it.** A
+ * pane that pulls you back to the bottom while you are reading is worse than
+ * one that never moves. It resumes when you return to the bottom.
  */
 export type DroneTurn = {
   /** Stable across re-renders. Rows arrive in order and nothing reorders them. */
@@ -76,6 +80,53 @@ export type DroneTurnsProps = {
 
 export function DroneTurns({ turns, emptyNote, live = false }: DroneTurnsProps) {
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
+  // State rather than a ref, because every effect below needs the element and
+  // the first render has no rows: the socket says whether a Drone is writing
+  // after the pane is already on screen.
+  const [list, setList] = useState<HTMLOListElement | null>(null);
+  const following = useRef(false);
+  const seeded = useRef(false);
+  const drawn = useRef(0);
+  const scroller = useRef<Element | null>(null);
+
+  // **`live` decides where the pane opens, once.** A live run opens at the tail
+  // and a finished one at the top, where the brief is — landing at the bottom of
+  // a whole history hides its beginning. A run that ends under a reader changes
+  // nothing about where they are.
+  useEffect(() => {
+    if (list === null || seeded.current) return;
+    seeded.current = true;
+    following.current = live;
+  }, [list, live]);
+
+  // The pane owns no scroller: it is drawn inside one, so it reads the ancestor
+  // that scrolls rather than declaring a height no drawing gives it.
+  useEffect(() => {
+    const found = scrollerFor(list);
+    scroller.current = found;
+    if (list === null || found === null) return undefined;
+    // A viewport's scroll event is fired at the document and does not reach the
+    // element that scrolled, so the listener goes on the window instead.
+    const target = found === document.scrollingElement ? window : found;
+    const read = (): void => {
+      following.current = atBottom(found);
+    };
+    target.addEventListener("scroll", read, { passive: true });
+    return () => target.removeEventListener("scroll", read);
+  }, [list]);
+
+  // **The scroller's own bottom, not the list's.** `scrollIntoView` would stop
+  // at the list's last row, leaving the region's padding below it — which the
+  // scroll this causes then reads as having been scrolled away from, so the
+  // pane would follow exactly once. `scrollTop` clamps, so this lands where
+  // `atBottom` measures. Nothing animates, so nothing is reduced.
+  useEffect(() => {
+    if (list === null || turns.length === drawn.current) return;
+    drawn.current = turns.length;
+    const pane = scroller.current;
+    if (!following.current || pane === null) return;
+    pane.scrollTop = pane.scrollHeight;
+  }, [list, turns.length]);
 
   if (turns.length === 0) {
     return (
@@ -87,7 +138,7 @@ export function DroneTurns({ turns, emptyNote, live = false }: DroneTurnsProps) 
 
   const entries = runs(turns);
   return (
-    <ol className="armada-turns">
+    <ol className="armada-turns" ref={setList}>
       {entries.map((entry, at) =>
         entry.of === "turn" ? (
           <Row key={entry.turn.id} turn={entry.turn} />
@@ -106,6 +157,30 @@ export function DroneTurns({ turns, emptyNote, live = false }: DroneTurnsProps) 
       )}
     </ol>
   );
+}
+
+/**
+ * How near the bottom still counts as the bottom, in pixels.
+ *
+ * **Never an equality test.** `scrollTop` is fractional on a HiDPI display
+ * while `scrollHeight` and `clientHeight` are rounded, so the three never
+ * cancel exactly and a pane compared against zero stops following for good.
+ * Four absorbs that rounding and is far under one row, so scrolling away by
+ * even a line still reads as scrolling away.
+ */
+const BOTTOM_SLACK = 4;
+
+function atBottom(scroller: Element): boolean {
+  return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= BOTTOM_SLACK;
+}
+
+/** The nearest ancestor that scrolls, or the document's own scroller. */
+function scrollerFor(from: Element | null): Element | null {
+  for (let at = from?.parentElement ?? null; at !== null; at = at.parentElement) {
+    const overflow = getComputedStyle(at).overflowY;
+    if (overflow === "auto" || overflow === "scroll") return at;
+  }
+  return document.scrollingElement;
 }
 
 type Entry = { of: "turn"; turn: DroneTurn } | { of: "quiet"; turns: DroneTurn[] };

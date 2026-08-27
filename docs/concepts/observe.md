@@ -73,7 +73,7 @@ What that gives up is a payload the vocabulary has no variant for: `Unrecognised
 
 | Row | Carries | Reads as |
 | --- | --- | --- |
-| `Called` | The tool, and the call's id | The Drone reached for something |
+| `Called` | The tool, the call's id, and what the call was on — a path, a command, a pattern — with a flag saying whether it was cut | The Drone reached for something, and what it did with it |
 | `Answered` | The call's id, whether the tool itself failed | What came back |
 | `Said` | The Drone's own text | Prose, which advances nothing |
 | `Refused` | The tool, the call, the harness's wording | Reached for and stopped |
@@ -84,6 +84,10 @@ What that gives up is a payload the vocabulary has no variant for: `Unrecognised
 **`Missed` is the one row that is not a `DroneEvent`.** It is the sink saying how much of the record is not there, which the vocabulary has no way to say. It is written to the file and is not shown to a viewer, whose losses are the subscription's rather than the sink's.
 
 **A tool call and its result are one row, joined on the call id.** Why: `Called` and `Answered` arrive as separate events with a gap between them that is the tool running, and two rows would separate a command from its output by everything that happened while it ran.
+
+**A call says what it did, and the payload is bounded by its type.** A row carrying only a tool name and an opaque id reads the same whether the Drone ran `ls` or `rm -rf`. What is carried is the argument a person would name the call by — the path, the command, the pattern, and an edit's size as `+42 -18`. What is not carried is content: a `Write`'s file body has no field to arrive in. `adapter_traits::CallDetail` is the bound rather than a check at the writer, so there is no call site at which an unbounded argument can reach a row; a detail longer than the bound is cut, and **the row says it was cut** rather than leaving a reader to infer it from a trailing character a command could legitimately end with.
+
+**A path under a home directory is elided to `~`.** Why: spike 3's finding was the operator's own home path in the opening event, scrubbed by hand before this repository could hold the capture. A row naming a file the Drone read would carry it again on every call.
 
 **`Unrecognised` and `Unreadable` are rows and never gaps.** Why: they are already never dropped in the vocabulary, and a view that hid them would report a quiet stream where there was a broken one.
 
@@ -139,6 +143,8 @@ Two facts bound it rather than a mechanism. The view is local, on the operator's
 
 **Redaction is not yet a step on this path.** `Redactor` is named by the architecture and does not exist in the code, so nothing scrubs the transcript or the Job log today. What bounds the exposure is the decoding: a row is a `DroneEvent`, and the variant that carried the operator's home path and tool inventory in spike 3's capture carries a session, a model and a count.
 
+**Carrying a call's arguments widens what is inside that bound, and does not move the bound.** The socket already carries `Said` — the Drone's own prose, which can hold anything it read — and `Unreadable`, which is raw. So arguments are not a new category. What is new is the path: a credential in a command line now reaches a row because the Drone *used* it, where before it reached one only if the Drone *talked about* it. The answer is still loopback-only and a viewer who is the operator, and this makes attaching a transcript to anything more costly rather than less — see Open questions.
+
 ## Neither a Doctor row nor an Alert
 
 **Observe earns no [Doctor](doctor.md) row.** Why: a row exists where Armada depends on a thing and that thing can be up or down, and a view is neither depended on nor a service.
@@ -157,6 +163,6 @@ The flow, the placement and the copy belong to the Monitor Active Work user jour
 
 ## Open questions
 
-- **[observe-transcript-sharing]** May an observed transcript leave the machine, and what would have to be true first? Redaction covers credentials Armada brokered, and a transcript carries whatever the Drone read — so the bound today is that the viewer is the operator, on their own machine, reading a Job they dispatched. Attaching a transcript to an escalation, a bug report or a shared Job record would each remove that bound. `../spikes/003-does-headless-output-parse.md` is the worked example: its capture had to be redacted by hand before this repository could hold it, and what needed removing was the session's opening event.
+- **[observe-transcript-sharing]** May an observed transcript leave the machine, and what would have to be true first? Redaction covers credentials Armada brokered, and a transcript carries whatever the Drone read — so the bound today is that the viewer is the operator, on their own machine, reading a Job they dispatched. Attaching a transcript to an escalation, a bug report or a shared Job record would each remove that bound. `../spikes/003-does-headless-output-parse.md` is the worked example: its capture had to be redacted by hand before this repository could hold it, and what needed removing was the session's opening event. Since a `Called` row carries the call's arguments, a shared transcript would also carry every command the Drone ran and every path it touched — which is a wider scrub than the opening event, not the same one.
 
 - **[observe-retention-against-the-log]** Does a Job's transcript live and die with its log, or on its own schedule? Per-Job logs are pruned on terminal status after a retention grace period, which would take the transcript with them — and the transcript is the larger artifact by a wide margin, so the setting that sizes one may be wrong for the other. `log_retention_days` does not exist yet, which is why this is answerable now rather than later.

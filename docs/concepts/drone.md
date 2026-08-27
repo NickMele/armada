@@ -30,7 +30,7 @@ Companion to the main Armada brief, [Job](job.md), and [Workflow](workflow.md).
 
 A human gate costs no session context, because the PID, the worktree and the session all survive it.
 
-**Removal is driven by Job retention, never by process exit.** Deleting on merge would strand a retained Job, because Evidence references paths. A killed Job's worktree is held because redispatch may reuse it.
+**Removal is driven by Job retention, never by process exit.** Deleting on merge would strand a retained Job, because Evidence references paths. A killed Job's worktree is held because it is the record of why the Job stopped: a redispatch mints a new Job, and the replacement works in a worktree of its own.
 
 **An `interrupted` worktree is never swept.** Why: it may hold uncommitted work, and destroying that on a restart is the same class of act as auto-killing, which Fleet never does. A person decides.
 

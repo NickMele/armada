@@ -1198,9 +1198,22 @@ a permissions problem that does not exist; `fan_out` moved off
 gained icons they previously lacked.
 
 **Fields: universal in lists, per-state in detail.** The universal row
-carries job identity, workspace (or "convoy, 3"), state, step N of M,
-elapsed, spend so far, verification source, actor. The detail view
-expands per state and shows only what applies.
+carries job identity, state, step N of M, elapsed, spend so far,
+verification source, actor. The detail view expands per state and shows
+only what applies.
+
+**Workspace is not in the row.** It was, and it came out: a row is
+scanned, and the workspace is the field a reader already knows — they
+opened this board, and every Job on it is theirs. Spending a track on it
+costs the one that answers "is this stuck", which is elapsed. It stays on
+the detail view, where a reader is asking about one Job rather than
+comparing several.
+
+The cost is real and is worth writing down rather than discovering: the
+Job list is not scoped by the rail's Manifest picker — that picker sets
+what a new Job starts pointed at — so a board holding Jobs from more than
+one project cannot say which project a row belongs to. Revisit when a
+second project is dispatched against, not before.
 
 **Spend follows the active billing mode.** Personal-machine mode gates
 on the quota % floor, so the row shows quota % remaining, which is
