@@ -371,6 +371,13 @@ export class FleetConnection {
       // fills it from configuration.
       ...(draft.model === "" ? {} : { model: draft.model }),
       facts: draft.brief,
+      // Sent unconditionally, even empty: unlike `model` there is no
+      // meaningful absent-vs-empty reading for Fleet to fill in.
+      attachments: draft.attachments.map((attachment) => ({
+        staged_path: attachment.path,
+        filename: attachment.filename,
+        mime_type: attachment.mimeType,
+      })),
     };
     const answer = await ask(fleet.port, "POST", "/jobs", proposal);
     if (answer.ok !== true) return answer.outcome;

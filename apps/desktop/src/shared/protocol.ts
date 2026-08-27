@@ -211,9 +211,22 @@ export type ProposeJob = {
   facts: string;
   /** Null is not empty: absent is scope not yet determined. */
   write_targets?: string[];
+  /**
+   * Files staged before the Job existed. Fleet reads the bytes itself, at
+   * `staged_path`, on the same machine — nothing here carries a payload.
+   */
+  attachments?: AttachmentRef[];
 };
 
 export type ProposedCriterion = { text: string; source: string };
+
+/**
+ * One staged file, named to Fleet. `staged_path` is an absolute path on the
+ * machine Fleet runs on — the same-machine assumption this seam already
+ * makes (`docs/practices/protocol.md`). Fleet reads the bytes itself; Bridge
+ * never sends a payload over this channel.
+ */
+export type AttachmentRef = { staged_path: string; filename: string; mime_type: string };
 
 /** One message from Fleet to a connected client. `crates/ipc/src/event.rs`. */
 export type StreamMessage =

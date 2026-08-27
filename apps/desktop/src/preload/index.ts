@@ -34,6 +34,12 @@ const api: BridgeApi = {
   proposeJob: (draft: Draft): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.proposeJob, draft),
 
+  // Bytes never round-trip through `proposeJob`'s JSON channel as base64 —
+  // this writes them to a staging file and hands back the path a later
+  // `proposeJob` call carries as a `staged_path`.
+  stageAttachment: (bytes: ArrayBuffer, filename: string, mimeType: string): Promise<{ path: string }> =>
+    ipcRenderer.invoke(CHANNELS.stageAttachment, bytes, filename, mimeType),
+
   approveDispatch: (jobId: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.approveDispatch, jobId),
 

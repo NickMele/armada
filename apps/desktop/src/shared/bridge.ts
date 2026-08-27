@@ -248,6 +248,12 @@ export type Draft = {
   atomic: boolean;
   /** Free text. Refused empty before the Job is created. */
   brief: string;
+  /**
+   * Files staged through `stageAttachment` before this Job exists. Empty is
+   * the ordinary case and is sent as such — unlike `model`, there is no
+   * absent-vs-empty distinction here for Fleet to fill in.
+   */
+  attachments: { path: string; filename: string; mimeType: string }[];
 };
 
 /** The whole preload surface, and therefore everything the renderer can reach. */
@@ -256,6 +262,17 @@ export type BridgeApi = {
   state: () => Promise<BridgeState>;
   subscribe: (onState: (state: BridgeState) => void) => () => void;
   proposeJob: (draft: Draft) => Promise<Outcome>;
+  /**
+   * Write pasted or picked bytes to a staging file before a Job exists —
+   * there is no Job id yet to key storage on; one is minted at `propose`
+   * time. Returns the absolute path written, which the caller carries on
+   * `Draft.attachments` until `proposeJob` sends it as a `staged_path`.
+   */
+  stageAttachment: (
+    bytes: ArrayBuffer,
+    filename: string,
+    mimeType: string,
+  ) => Promise<{ path: string }>;
   approveDispatch: (jobId: string) => Promise<Outcome>;
   /**
    * Kill the failed Job and mint its replacement. **Nothing resumes** — the
@@ -312,6 +329,7 @@ export const CHANNELS = {
   state: "bridge:state",
   changed: "bridge:changed",
   proposeJob: "bridge:propose-job",
+  stageAttachment: "bridge:stage-attachment",
   approveDispatch: "bridge:approve-dispatch",
   redispatchJob: "bridge:redispatch-job",
   killDrone: "bridge:kill-drone",
