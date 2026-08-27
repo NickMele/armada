@@ -447,16 +447,16 @@ pub fn nothing_names_a_person_or_a_machine(root: &Path) -> Report {
 /// redacts, and nothing can correlate to the Job that caused it — and it is the
 /// easiest thing in the world to add while debugging and forget.
 ///
-/// `fleet-bin` is exempt: it is the composition root and `fleet-bin doctor
-/// --json` writes to stdout on purpose, which is a CLI answering a question
-/// rather than a component logging.
+/// `armada` is exempt: it is the composition root and the CLI, and every one of
+/// its verbs writes to stdout on purpose — a command answering a question is
+/// not a component logging.
 pub fn nothing_writes_its_own_log_format(root: &Path) -> Report {
     let mut report = Report::new("everything logs through the envelope");
     const MACROS: &[&str] = &["println!", "eprintln!", "print!", "eprint!"];
 
     for dir in crate_dirs(root) {
         let name = dir.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if name == "fleet-bin" {
+        if name == "armada" {
             continue;
         }
         for path in files_with_ext(root, &dir.join("src"), &["rs"]) {

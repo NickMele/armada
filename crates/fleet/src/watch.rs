@@ -1,41 +1,37 @@
-//! Reading a Drone's transcript while it runs, so that its ending means
-//! something.
+//! Reading a Drone's transcript while it runs, so its ending means something.
 //!
 //! # Why the stream is read at all, given the gate does not read it
 //!
-//! Nothing a Drone says gates its own step — `verification` has no type that
-//! can be built from a message. But `crate::aftermath` needs an
-//! [`Ending`](crate::Ending), and an `Ending` is a fold over the events the
-//! Drone emitted: whether it called anything, and how often it was refused. The
-//! three answers that fold produces — `blocked_by_policy`, `silent`, `stalled`
-//! — are three different things for a person to do, and a Fleet that never read
-//! the stream could only ever say `interrupted`.
-//!
-//! So the transcript is read for exactly one purpose: to know what a Drone's
-//! silence was made of. It is never read for a fact that advances anything.
+//! Nothing a Drone says gates its own step. But `crate::aftermath` needs an
+//! [`Ending`](crate::Ending) — a fold over what the Drone emitted: whether it
+//! called anything, and how often it was refused. Those three answers,
+//! `blocked_by_policy`, `silent` and `stalled`, are three different things for
+//! a person to do, and a Fleet that never read the stream could only ever say
+//! `interrupted`. An `Unreadable` line is kept rather than filtered: a run full
+//! of them is not a silent run.
 //!
 //! # EOF is the signal, not a poll
 //!
-//! The task below ends when the pipe closes, which is when the child's stdout
-//! is gone. That is a fact the operating system delivers rather than one Fleet
-//! discovers by asking on a timer, and it is why nothing here has an interval.
-//! Whether the process itself is also gone is `crate::holder_of`'s question —
-//! `Ending::Reported`'s own comment is explicit that a terminating event is a
-//! turn boundary and not a lifetime.
+//! The task ends when the pipe closes, which the operating system delivers
+//! rather than Fleet asking on a timer. Whether the *process* is also gone is
+//! `crate::holder_of`'s question: a terminating event is a turn boundary, not
+//! a lifetime.
 //!
-//! # A line that will not decode is still evidence of life
+//! # One read, then a fan-out
 //!
-//! `AgentHarness::read` is total and answers `Unreadable` rather than an error,
-//! and nothing here filters those out. A run full of undecodable lines is not a
-//! silent run, and folding it as one would send a person to rephrase a prompt
-//! that was working.
-
+//! Everything else that wants the transcript is fed from here rather than from
+//! the pipe, and **the parser is served first on every line**. A `Tap` gets
+//! what the harness already decoded, never the line and never a decoder of its
+//! own. `docs/concepts/observe.md` is the design.
+use core::fmt;
 use std::sync::{Arc, Mutex};
 
 use adapter_traits::{AgentHarness, DroneEvent};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::ChildStdout;
 use tokio::task::JoinHandle;
+
+use crate::transcript::Tap;
 
 /// What a Drone has said so far, and whether it has stopped saying anything.
 ///
@@ -50,19 +46,34 @@ struct Heard {
 }
 
 /// A transcript being read.
-#[derive(Debug)]
 pub struct Watching {
     heard: Arc<Mutex<Heard>>,
     reader: JoinHandle<()>,
 }
 
+impl fmt::Debug for Watching {
+    /// By hand, because a `Tap` is a trait object and a `Recording` holds a
+    /// clock. What a reader wants from this is how much has been heard.
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let heard = self.heard.lock().expect("not held across a panic");
+        out.debug_struct("Watching")
+            .field("events", &heard.events.len())
+            .field("ended", &heard.ended)
+            .finish()
+    }
+}
+
 impl Watching {
-    /// Start reading, on a task of its own.
+    /// Start reading, on a task of its own, and fan every line out.
     ///
     /// The harness is shared rather than borrowed because the task outlives the
     /// call: decoding a line is the harness's, and the harness is the only
     /// thing that knows what a line means.
-    pub fn reading<H>(transcript: ChildStdout, harness: Arc<H>) -> Watching
+    ///
+    /// **The parser takes the line before any tap sees it**, and the lock is
+    /// released before the taps are offered anything — so a tap cannot hold the
+    /// lock that `Ending::of` reads through.
+    pub fn reading<H>(transcript: ChildStdout, harness: Arc<H>, taps: Vec<Arc<dyn Tap>>) -> Watching
     where
         H: AgentHarness + Send + Sync + 'static,
     {
@@ -72,10 +83,14 @@ impl Watching {
             let mut lines = BufReader::new(transcript).lines();
             while let Ok(Some(line)) = lines.next_line().await {
                 let read = harness.read(&line);
-                let mut held = filling
+                filling
                     .lock()
-                    .expect("the transcript is not held across a panic");
-                held.events.extend(read);
+                    .expect("the transcript is not held across a panic")
+                    .events
+                    .extend(read.iter().cloned());
+                for tap in &taps {
+                    tap.saw(&read);
+                }
             }
             filling
                 .lock()

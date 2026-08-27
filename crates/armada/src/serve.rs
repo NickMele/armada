@@ -1,4 +1,4 @@
-//! Fleet, started by hand, against a repository.
+//! `armada serve` — Fleet, started by hand, against a repository.
 //!
 //! # The shape, which is the point of this step
 //!
@@ -26,7 +26,7 @@
 //! There is no `--manifest` flag and no `--workflow` flag. Fleet is given a
 //! repository — one argument, or the working directory — and everything else
 //! is read from inside it: `armada.yml` at the root and one definition in
-//! `.armada/workflows/`. `fleet_bin::setup` holds the reasoning; what matters
+//! `.armada/workflows/`. [`crate::setup`] holds the reasoning; what matters
 //! here is that a Fleet started twice against one repository cannot be started
 //! two different ways.
 //!
@@ -71,16 +71,16 @@
 
 use std::error::Error;
 use std::path::PathBuf;
-use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
 
 use adapters::{GitVcs, HeadlessAgent};
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{CheckBudget, Fittings, Fleet, Host, Mint, SystemClock, UlidMint};
-use fleet_bin::{agent_binary, model_choices, Setup, AGENT_BINARY, MODEL};
 use ipc::PROTOCOL_VERSION;
 use store::Store;
+
+use crate::{agent_binary, model_choices, Setup, AGENT_BINARY, MODEL};
 
 /// The store, beside the runtime file rather than inside the repository.
 ///
@@ -88,14 +88,14 @@ use store::Store;
 /// `.armada/` would be a file every repository Armada is pointed at has to
 /// remember to ignore, and two checkouts of one repository would each have
 /// their own.
-const STORE_FILE: &str = "armada.db";
+pub const STORE_FILE: &str = "armada.db";
 
 /// The strict MCP configuration every Drone is spawned against.
 ///
 /// Outside the repository, deliberately — a Drone that could read its own MCP
 /// configuration could read the address it reports evidence to, and one that
 /// could write it could name a different server.
-const MCP_FILE: &str = "mcp.json";
+pub const MCP_FILE: &str = "mcp.json";
 
 /// What a Drone's `PATH` is set to. **Provisional**, in the sense
 /// `runtime::PROVISIONAL_PORT` is: nothing owns this value yet.
@@ -115,7 +115,7 @@ const PROVISIONAL_DRONE_PATH: &[&str] = &[
 /// How long a Check may run before it is a failure. **Provisional**: a cold
 /// workspace build is minutes, and nothing has measured what the ceiling should
 /// be.
-const PROVISIONAL_CHECK_BUDGET: Duration = Duration::from_secs(900);
+pub const PROVISIONAL_CHECK_BUDGET: Duration = Duration::from_secs(900);
 
 /// How often Fleet is turned. **Provisional**, and nothing has measured it.
 ///
@@ -127,18 +127,12 @@ const PROVISIONAL_CHECK_BUDGET: Duration = Duration::from_secs(900);
 /// it.
 const PROVISIONAL_TURN_INTERVAL: Duration = Duration::from_millis(250);
 
-#[tokio::main]
-async fn main() -> ExitCode {
-    match run().await {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(why) => {
-            report(why.as_ref());
-            ExitCode::FAILURE
-        }
-    }
-}
-
-async fn run() -> Result<(), Box<dyn Error>> {
+/// Serve `repository`, or the working directory, until a signal says stop.
+///
+/// **The one argument is the repository**, positional rather than a flag,
+/// because there is exactly one of them and a flag would invite a second — and
+/// the second is the pair of file paths this step exists to refuse.
+pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     let path = runtime::machine_path()?;
 
     let presence = runtime::read(&path)?;
@@ -157,7 +151,10 @@ async fn run() -> Result<(), Box<dyn Error>> {
     // have is a refusal that costs nothing to discover here and costs a bound
     // socket and a published file to discover later.
     let machine_facts = machine_facts()?;
-    let repository = repository()?;
+    let repository = match repository {
+        Some(given) => given,
+        None => std::env::current_dir()?,
+    };
     let setup = Setup::at(&repository)?;
     println!(
         "{} — workflow `{}` ({}), {} step(s), Checks {} — model {}",
@@ -261,18 +258,6 @@ async fn run() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// The repository Fleet was pointed at: one argument, or the working directory.
-///
-/// A positional rather than a flag, because there is exactly one of them and a
-/// flag would invite a second — and the second is the pair of file paths this
-/// step exists to refuse.
-fn repository() -> Result<PathBuf, Box<dyn Error>> {
-    match std::env::args_os().nth(1) {
-        Some(given) => Ok(PathBuf::from(given)),
-        None => Ok(std::env::current_dir()?),
-    }
-}
-
 /// The three things Fleet reads out of its own environment.
 ///
 /// **Read before the bind**, with the repository's setup, so that a machine
@@ -283,6 +268,12 @@ struct MachineFacts {
     /// The operator's home. The agent CLI reads its credentials from it, which
     /// is the confinement's known floor — see `fleet::HostPaths`.
     home: String,
+    /// Who the operator is. **The agent CLI will not authenticate without it**,
+    /// however readable its credentials are — measured against a live Drone,
+    /// where `USER` was the only difference between working and
+    /// `Not logged in`. Read here with the others so a machine missing it
+    /// refuses before the bind rather than at spawn.
+    user: String,
     /// What a Drone's `PATH` is set to. Assembled here, and handed both to the
     /// Drone and to the probe below, so the `PATH` a named binary is looked for
     /// on is the `PATH` it will be run from.
@@ -299,6 +290,7 @@ struct MachineFacts {
 
 fn machine_facts() -> Result<MachineFacts, Box<dyn Error>> {
     let home = std::env::var("HOME")?;
+    let user = std::env::var("USER")?;
     let path = drone_path(&home);
     // Unset is the ordinary case and the adapter's default answers it. Set and
     // wrong is somebody having tried to point Fleet at something, and is
@@ -310,6 +302,7 @@ fn machine_facts() -> Result<MachineFacts, Box<dyn Error>> {
     let models = model_choices(std::env::var(MODEL).ok());
     Ok(MachineFacts {
         home,
+        user,
         path,
         agent,
         models,
@@ -330,6 +323,7 @@ fn assemble(
 ) -> Result<Fleet<HeadlessAgent, GitVcs, GitVcs>, Box<dyn Error>> {
     let MachineFacts {
         home,
+        user,
         path,
         agent,
         models,
@@ -338,11 +332,15 @@ fn assemble(
     std::fs::create_dir_all(machine)?;
 
     // The document names one server and there is no parameter through which a
-    // second could arrive. Nothing serves that address yet — the Evidence MCP
-    // endpoint is not among the five operations — so what this writes is where
-    // the server will be rather than where it is.
+    // second could arrive. The path is `api`'s own constant rather than a
+    // literal: this address is in no route table a gate rule reads, so the one
+    // thing standing between a typo and a Drone that can never report is that
+    // the address written here and the address routed there are one value.
     let mcp_config = machine.join(MCP_FILE);
-    adapters::only_the_evidence_server(&mcp_config, &format!("http://127.0.0.1:{port}/mcp"))?;
+    adapters::only_the_evidence_server(
+        &mcp_config,
+        &format!("http://127.0.0.1:{port}{}", api::MCP_PATH),
+    )?;
 
     let root = setup.root().to_path_buf();
     let (manifest, workflow) = setup.into_parts();
@@ -360,6 +358,7 @@ fn assemble(
             repo_root: root.canonicalize()?.to_string_lossy().to_string(),
             path,
             home,
+            user,
             mcp_config: mcp_config.to_string_lossy().to_string(),
         },
         budget: CheckBudget::of(PROVISIONAL_CHECK_BUDGET),
@@ -368,13 +367,25 @@ fn assemble(
     }))
 }
 
-/// The `PATH` a Drone gets: the standard system locations, and the one
-/// per-user toolchain directory a repository's Checks are likely to need.
+/// The two per-user directories on a Drone's `PATH`, before the system ones.
+///
+/// `.cargo/bin` is where a repository's Checks find their toolchain.
+/// `.local/bin` is **where the agent CLI's own native installer puts it** — a
+/// Drone spawned without it died with *no such file or directory* on a machine
+/// where the CLI was installed the ordinary way, because none of the six system
+/// directories below is where that installer writes.
+const PER_USER_DRONE_PATH: &[&str] = &[".cargo/bin", ".local/bin"];
+
+/// The `PATH` a Drone gets: the per-user directories above, then the standard
+/// system locations.
 ///
 /// Assembled rather than inherited. Adding an entry is a deliberate edit here,
 /// which is the point — the list is a diff, not a default.
-fn drone_path(home: &str) -> String {
-    let mut entries = vec![format!("{home}/.cargo/bin")];
+pub(crate) fn drone_path(home: &str) -> String {
+    let mut entries: Vec<String> = PER_USER_DRONE_PATH
+        .iter()
+        .map(|dir| format!("{home}/{dir}"))
+        .collect();
     entries.extend(PROVISIONAL_DRONE_PATH.iter().map(|dir| dir.to_string()));
     entries.join(":")
 }
@@ -395,20 +406,5 @@ async fn stop_requested() {
     tokio::select! {
         _ = terminate.recv() => {}
         _ = interrupt.recv() => {}
-    }
-}
-
-/// The whole cause chain, outermost first.
-///
-/// A failure here is carried as a chain rather than a sentence, and printing
-/// only the outermost link would throw away the part that says what actually
-/// went wrong — which is the entire reason the chain is not flattened until it
-/// reaches the wire.
-fn report(why: &dyn Error) {
-    eprintln!("Fleet did not start: {why}");
-    let mut cause = why.source();
-    while let Some(link) = cause {
-        eprintln!("  caused by: {link}");
-        cause = link.source();
     }
 }

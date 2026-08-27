@@ -20,6 +20,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use config::{Manifest, ResolvedWorkflow, WorkflowDef};
+use core_model::FrozenWorkflow;
 
 /// One mechanical check on a fixture step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,6 +63,14 @@ pub fn resolved(steps: &[Sketch<'_>]) -> ResolvedWorkflow {
         .unwrap_or_else(|refused| panic!("the fixture manifest did not parse: {refused}"));
     ResolvedWorkflow::resolve(&def, &manifest)
         .unwrap_or_else(|refused| panic!("the fixture did not resolve: {refused}"))
+}
+
+/// The same fixture as a Job would freeze it.
+///
+/// Still built through both parsers — this is [`resolved`]'s output with the
+/// two file paths dropped, which is exactly what creation copies onto a record.
+pub fn frozen(steps: &[Sketch<'_>]) -> FrozenWorkflow {
+    resolved(steps).frozen().clone()
 }
 
 fn workflow_text(steps: &[Sketch<'_>]) -> String {

@@ -28,6 +28,7 @@
 use std::time::Duration;
 
 use config::{ResolvedCheck, ResolvedStep};
+use core_model::{CheckOutcome, StepCheck};
 
 /// How a Check's process ended. The fact, before anything decides what it
 /// means.
@@ -115,6 +116,20 @@ pub enum CheckFailed {
 }
 
 impl CheckFailed {
+    /// Which of the four not-passes this is, as the record spells it.
+    ///
+    /// A wrong code and an empty diff are both `Failed` — the check ran and
+    /// answered wrongly. The other three did not produce an answer at all, and
+    /// each needs a different thing done about it.
+    pub fn outcome(&self) -> CheckOutcome {
+        match self {
+            CheckFailed::WrongExitCode { .. } | CheckFailed::DiffEmpty => CheckOutcome::Failed,
+            CheckFailed::Signalled { .. } => CheckOutcome::Signalled,
+            CheckFailed::TimedOut { .. } => CheckOutcome::TimedOut,
+            CheckFailed::NeverRan { .. } => CheckOutcome::NeverRan,
+        }
+    }
+
     /// What the Drone is told it was measured against, in the outcome turn.
     pub fn expected(&self) -> String {
         match self {
@@ -162,10 +177,13 @@ impl CheckFailed {
 /// needs three observations, and a step with none needs none — which is how
 /// "a step with no `mechanical_checks` advances on evidence alone" falls out
 /// rather than being a case somebody wrote.
+///
+/// It keeps one entry per declared check rather than a list of the failures,
+/// because a pass has to be recordable too: a step that ran three checks and
+/// wrote down nothing is indistinguishable from a step that ran none.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ran {
-    failures: Vec<CheckFailed>,
-    count: usize,
+    each: Vec<(String, Option<CheckFailed>)>,
 }
 
 /// Why a set of observations is not a run of the step's checks.
@@ -211,33 +229,54 @@ impl Ran {
                 observed: observed.len(),
             });
         }
-        let mut failures = Vec::new();
+        let mut each = Vec::with_capacity(checks.len());
         for (at, (check, observed)) in checks.iter().zip(observed).enumerate() {
-            if let Some(failed) = verdict(at, check, observed)? {
-                failures.push(failed);
-            }
+            each.push((check.label().to_string(), verdict(at, check, observed)?));
         }
-        Ok(Ran {
-            failures,
-            count: checks.len(),
-        })
+        Ok(Ran { each })
     }
 
     /// How many checks the step declared. Zero is the common case.
     pub fn count(&self) -> usize {
-        self.count
+        self.each.len()
     }
 
     /// Every check that did not pass, in the step's order. Empty means every
     /// declared check passed — and, because a short list is refused at
     /// construction, that every declared check ran.
-    pub fn failures(&self) -> &[CheckFailed] {
-        &self.failures
+    pub fn failures(&self) -> Vec<CheckFailed> {
+        self.each.iter().filter_map(|(_, f)| f.clone()).collect()
     }
 
     /// Whether every declared check passed.
     pub fn all_passed(&self) -> bool {
-        self.failures.is_empty()
+        self.each.iter().all(|(_, failed)| failed.is_none())
+    }
+
+    /// Every declared check with what it did, in the step's order, as the row
+    /// that is written against the step.
+    ///
+    /// **A pass is a row like any other.** The alternative — writing only the
+    /// failures — cannot tell a step whose checks all passed from a step whose
+    /// checks were never run, and that is the vacuous pass in the record rather
+    /// than in the gate.
+    pub fn recorded(&self) -> Vec<StepCheck> {
+        self.each
+            .iter()
+            .map(|(name, failed)| StepCheck {
+                name: name.clone(),
+                outcome: match failed {
+                    None => CheckOutcome::Passed,
+                    Some(failed) => failed.outcome(),
+                },
+                expected: failed.as_ref().map(CheckFailed::expected),
+                produced: failed.as_ref().map(CheckFailed::produced),
+                // Absent here on purpose. This crate never touches a disk, so
+                // where a Check's output was written is filled in by whoever
+                // wrote it — see `fleet::check_output`.
+                output_path: None,
+            })
+            .collect()
     }
 }
 

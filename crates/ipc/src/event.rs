@@ -27,14 +27,21 @@
 //! and would need a subscribe message, an unsubscribe message and a rule for
 //! what a resync means when the set changes mid-stream.
 //!
-//! # Two event kinds are produced at M1
+//! # Five event kinds are produced at M1
 //!
-//! `operations.toml` names nine. Seven of them — the Drone lifecycle pair,
-//! `job.step_advanced`, `alert.raised`, `review.ready`, `evidence.submitted`
-//! and `usage.threshold` — describe records this workspace has no type for yet;
-//! the inner step machine has no edge table, and there is no Alert, Evidence or
-//! usage type to carry. They are named there and **not stubbed**: an event kind
-//! that exists and never fires reads as a stream that is working.
+//! The rest of `operations.toml`'s — `alert.raised`, `review.ready`,
+//! `evidence.submitted` and `usage.threshold` — describe records this workspace
+//! has no type for yet, and are **not stubbed**: a kind that exists and never
+//! fires reads as a stream that is working.
+//!
+//! The Drone lifecycle pair left that list when `assigned_drone` got an event
+//! that sets it. A Board could show a Drone only by re-reading the Job, and
+//! nothing told it to.
+//!
+//! `job.step_advanced` was in that list until the inner machine arrived, and
+//! then a Job running through four steps still emitted one event and nothing
+//! after it. What changes most often during a run was what the stream did not
+//! carry.
 //!
 //! # `job.created` is a kind and not a state change, and that is why it exists
 //!
@@ -55,8 +62,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::enums::{Actor, JobStatus};
-use crate::ids::{CriterionId, Instant, JobId};
+use crate::enums::{Actor, JobStatus, StepState};
+use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
 use crate::job::{JobList, JobSummary};
 
 /// A position in the stream. Monotonic, assigned by Fleet, never reused.
@@ -125,6 +132,12 @@ pub enum Event {
     JobCreated(JobCreated),
     #[serde(rename = "job.state_changed")]
     JobStateChanged(JobStateChanged),
+    #[serde(rename = "job.step_advanced")]
+    JobStepAdvanced(JobStepAdvanced),
+    #[serde(rename = "drone.spawned")]
+    DroneSpawned(DroneSpawned),
+    #[serde(rename = "drone.exited")]
+    DroneExited(DroneExited),
 }
 
 /// A Job exists that did not before, whole enough to draw.
@@ -162,6 +175,112 @@ impl From<&core_model::JobEvent> for JobStateChanged {
             from: event.from().into(),
             to: event.to().into(),
             reason: Reason::of(event.reason()),
+            actor: event.actor().into(),
+            at: event.at().into(),
+        }
+    }
+}
+
+/// A step of the frozen WorkflowDef moved. **The Job did not.**
+///
+/// It carries the whole [`JobSummary`] for the reason [`JobCreated`] does: the
+/// Job's `current_step_id` moves when a step enters `running`, and a kind that
+/// named only ids would make every client re-read the row it was just told
+/// about — which is the reload this event exists to stop.
+///
+/// `status` is the status the move happened *beneath*, not a move. The inner
+/// machine advances only while the Job is `running` or `awaiting_review`, and
+/// a client folding this must not read it as a status change.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobStepAdvanced {
+    /// The Job as it now stands. Replaces the row whole.
+    pub job: JobSummary,
+    pub step_id: StepId,
+    pub from: StepState,
+    pub to: StepState,
+    /// The status the step moved beneath. Unchanged by this event.
+    pub status: JobStatus,
+    pub actor: Actor,
+    pub at: Instant,
+}
+
+impl JobStepAdvanced {
+    /// The move, plus the Job it happened on. The Job is a second argument
+    /// because the event does not carry one — `core-model` records the move,
+    /// and only a caller holding the record can redact it.
+    pub fn of(event: &core_model::StepEvent, job: JobSummary) -> JobStepAdvanced {
+        JobStepAdvanced {
+            job,
+            step_id: event.step_id().into(),
+            from: event.from().into(),
+            to: event.to().into(),
+            status: event.under().into(),
+            actor: event.actor().into(),
+            at: event.at().into(),
+        }
+    }
+}
+
+/// A Drone started against a Job's worktree.
+///
+/// It carries the whole [`JobSummary`] for the reason [`JobStepAdvanced`] does:
+/// `assigned_drone` is a field of that row, so a client replaces the row rather
+/// than re-reading it.
+///
+/// **`branch` is here and not on the summary.** The registry describes this
+/// event as a Drone starting *against a worktree*, and the branch is what a
+/// person checks out to see what it is doing. It is absent only where the
+/// worktree could not name one.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DroneSpawned {
+    pub job: JobSummary,
+    pub drone_id: DroneId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    /// Always Fleet. Carried anyway, because an actor cannot be reconstructed
+    /// afterwards and a field absent on one event kind and present on the rest
+    /// is a shape a client has to special-case.
+    pub actor: Actor,
+    pub at: Instant,
+}
+
+/// A Drone is gone, however it went.
+///
+/// **It does not say why.** What a Drone's ending means is the Job's own
+/// transition, which is a `job.state_changed` of its own — an outcome carried
+/// here too would be a second statement of it, and the two would disagree the
+/// first time one path forgot.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DroneExited {
+    /// The Job as it now stands, with `assigned_drone` gone.
+    pub job: JobSummary,
+    /// The Drone that left. Named, because "which one" is the question an exit
+    /// has to answer once a Job has had more than one.
+    pub drone_id: DroneId,
+    pub actor: Actor,
+    pub at: Instant,
+}
+
+impl DroneSpawned {
+    /// The arrival, plus the Job it happened on. The Job is a second argument
+    /// for the reason [`JobStepAdvanced::of`] takes one: `core-model` records
+    /// the move, and only a caller holding the record can redact it.
+    pub fn of(event: &core_model::DroneMoved, job: JobSummary, branch: Option<String>) -> Self {
+        DroneSpawned {
+            job,
+            drone_id: event.drone_id().into(),
+            branch,
+            actor: event.actor().into(),
+            at: event.at().into(),
+        }
+    }
+}
+
+impl DroneExited {
+    pub fn of(event: &core_model::DroneMoved, job: JobSummary) -> Self {
+        DroneExited {
+            job,
+            drone_id: event.drone_id().into(),
             actor: event.actor().into(),
             at: event.at().into(),
         }

@@ -11,12 +11,11 @@
 //! SQL. Nothing in this crate's API can produce a Job without a title, which is
 //! why a test about one has to go around it.
 //!
-//! **V3 backfills nothing, and that is the claim under test at the bottom of
-//! this file.** Every log row an earlier version could hold is a status
-//! transition, because there was no other kind to write, and every step in
-//! every store is where creation left it, because `read.rs` refused a row that
-//! was not. So the `DEFAULT` on `kind` is not a guess about an old row — it is
-//! the only thing an old row could be.
+//! **V3 backfills nothing**, and every log row an earlier version could hold is
+//! a status transition because there was no other kind to write. **V7 backfills
+//! nothing either**, and there the absence is fatal to the row: a pre-V7 Job
+//! cannot say what workflow it froze, so it is refused by name while the file
+//! around it still migrates.
 
 use core_model::{Actor, JobStatus, Target, TransitionReason};
 use rusqlite::Connection;
@@ -57,9 +56,44 @@ fn a_version_one_file_is_brought_forward_rather_than_refused() {
 
     let store = Store::open(&dir.db()).expect("a version 1 file opens and is migrated");
     assert_eq!(recorded_version(&store), KNOWN_SCHEMA_VERSION.to_string());
+    assert_eq!(
+        titles(&store),
+        vec!["Untitled job 01OLDONE".to_string()],
+        "and every column a later version added was filled in"
+    );
+}
+
+/// The one migration with nothing honest to backfill, and what it costs.
+///
+/// A Job written before V7 cannot say which WorkflowDef it followed, and the
+/// step it names cannot be shown to declare anything — writing "no Checks"
+/// would read as an ungated step. So it is named rather than guessed at, and
+/// [`Store::load_all_jobs`] hands the refusal back beside the Jobs that loaded
+/// instead of shortening the list.
+#[test]
+fn a_job_written_before_the_workflow_was_frozen_is_named_rather_than_guessed_at() {
+    let dir = TempDir::new();
+    version_one(&dir, &["01OLDONE"]);
+    let mut store = Store::open(&dir.db()).expect("migrated");
     store
-        .load_job(&job_id("01OLDONE"))
-        .expect("and the Job that was on it is still readable");
+        .insert_job(&top_level("01NEWONE"), &created_at())
+        .expect("a Job written after the migration");
+
+    match store.load_job(&job_id("01OLDONE")) {
+        Err(crate::LoadJobError::Unreadable(RowError::WorkflowNotFrozen { job_id })) => {
+            assert_eq!(job_id.as_str(), "01OLDONE")
+        }
+        other => panic!("expected a named refusal, found {other:?}"),
+    }
+
+    match store.load_all_jobs() {
+        Err(crate::LoadAllError::SomeJobsUnreadable { loaded, failed }) => {
+            assert_eq!(loaded.jobs.len(), 1, "the readable Job still comes back");
+            assert_eq!(loaded.jobs[0].id().as_str(), "01NEWONE");
+            assert_eq!(failed.len(), 1, "and the unreadable one is carried out");
+        }
+        other => panic!("expected a partial failure, found {other:?}"),
+    }
 }
 
 /// The property the backfill exists for. A constant would have been shorter and
@@ -71,15 +105,17 @@ fn every_migrated_job_gets_a_name_of_its_own_that_says_it_was_never_typed() {
     version_one(&dir, &["01OLDONE", "01OLDTWO", "01OLDTHREE"]);
 
     let store = Store::open(&dir.db()).expect("migrated");
-    let mut titles = Vec::new();
-    for id in ["01OLDONE", "01OLDTWO", "01OLDTHREE"] {
-        let job = store.load_job(&job_id(id)).expect("loads");
-        assert_eq!(job.title().as_str(), format!("Untitled job {id}"));
-        titles.push(job.title().clone());
-    }
-    titles.sort();
-    titles.dedup();
-    assert_eq!(titles.len(), 3, "no two migrated Jobs share a name");
+    let mut named = titles(&store);
+    assert_eq!(
+        named,
+        vec![
+            "Untitled job 01OLDONE".to_string(),
+            "Untitled job 01OLDTHREE".to_string(),
+            "Untitled job 01OLDTWO".to_string(),
+        ]
+    );
+    named.dedup();
+    assert_eq!(named.len(), 3, "no two migrated Jobs share a name");
 }
 
 /// Version 1 wrote no titles, so nothing it wrote may come back looking typed.
@@ -113,20 +149,12 @@ fn reopening_a_migrated_file_does_not_rename_the_jobs_on_it() {
 
     let store = open(&dir);
     assert_eq!(
-        store
-            .load_job(&job_id("01OLDONE"))
-            .expect("loads")
-            .title()
-            .as_str(),
-        "Untitled job 01OLDONE"
-    );
-    assert_eq!(
-        store
-            .load_job(&job_id("01NEWONE"))
-            .expect("loads")
-            .title()
-            .as_str(),
-        "fix the off-by-one in the log reader"
+        titles(&store),
+        vec![
+            "fix the off-by-one in the log reader".to_string(),
+            "Untitled job 01OLDONE".to_string(),
+        ],
+        "the backfilled name and the typed one both survive a second migration"
     );
 }
 
@@ -197,6 +225,20 @@ fn a_row_whose_title_is_blank_is_named_rather_than_substituted() {
         }
         other => panic!("expected a refusal, found {other:?}"),
     }
+}
+
+/// Every `title` column, in `job_id` order. Read straight off the row because
+/// the Jobs these tests write predate the frozen workflow and do not rebuild —
+/// which is the point of the test above, and not of these.
+fn titles(store: &Store) -> Vec<String> {
+    let mut statement = store
+        .conn
+        .prepare("SELECT title FROM jobs ORDER BY job_id")
+        .expect("the column");
+    let rows = statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .expect("titles");
+    rows.map(|title| title.expect("a title")).collect()
 }
 
 fn recorded_version(store: &Store) -> String {
@@ -278,11 +320,21 @@ fn a_log_row_from_before_the_step_log_is_still_a_status_transition() {
         }
     );
 
-    let job = store.load_job(&job_id("01BEFORESTEPS")).expect("it folds");
-    assert_eq!(job.status(), JobStatus::Queued);
+    // The Job itself does not rebuild — it was written before V7 froze a
+    // workflow onto the row — so what is asserted here is the log, which is
+    // what V3 changed. The fold over it is `reconstruct`'s subject.
+    assert!(matches!(
+        store.load_job(&job_id("01BEFORESTEPS")),
+        Err(crate::LoadJobError::Unreadable(
+            RowError::WorkflowNotFrozen { .. }
+        ))
+    ));
+    let cursor: Option<String> = store
+        .conn
+        .query_row("SELECT current_step_id FROM jobs", [], |row| row.get(0))
+        .expect("the cursor column");
     assert_eq!(
-        job.current_step_id(),
-        None,
+        cursor, None,
         "no step move was ever recorded, so the cursor was never set"
     );
 }
@@ -329,4 +381,75 @@ fn row_digest(dir: &TempDir) -> String {
         )
         .expect("the event row");
     format!("{jobs}//{steps}//{events}")
+}
+
+// --------------------------------------------------------------- version five
+
+/// A file at version 4, with one Job that reached `running` and one that never
+/// left the gate. Neither has a branch column to hold anything.
+fn version_four(dir: &TempDir, ran: &str, never_ran: &str) {
+    let conn = Connection::open(dir.db()).expect("a file to put version 4 in");
+    for migration in &MIGRATIONS[..4] {
+        conn.execute_batch(migration).expect("a migration");
+    }
+    conn.execute(
+        "INSERT INTO armada_meta (key, value) VALUES (?1, '4')",
+        (SCHEMA_VERSION_KEY,),
+    )
+    .expect("recorded as version 4");
+    for (id, status) in [(ran, "running"), (never_ran, "awaiting_approval")] {
+        conn.execute(
+            "INSERT INTO jobs (
+                 job_id, title, status, workflow_id, owner_manifest_id, origin, urgency,
+                 atomic, model, acceptance_criteria, dependencies, facts, scope_revisions,
+                 write_targets_known, created_at
+             ) VALUES (?1, 'a job from before the branch column', ?2, '01WORKFLOW',
+                       '01OWNERMANIFEST', 'manual', 'normal', 0, 'a-model-name', '[]', '[]',
+                       '', '[]', 0, '2026-08-26T09:00:00.000Z')",
+            (id, status),
+        )
+        .expect("a Job as version 4 wrote them");
+    }
+    conn.execute(
+        "INSERT INTO job_events (
+             kind, job_id, status_from, status_to, reason_kind, reason_value, actor, at
+         ) VALUES ('job_transition', ?1, 'queued', 'running', 'unqualified', NULL, 'fleet',
+                   '2026-08-26T09:30:00.000Z')",
+        (ran,),
+    )
+    .expect("the move that proves a worktree was made");
+}
+
+/// **The backfill is what the log says, not what every row could be told.** A
+/// Job that reached `running` had a worktree, and every build that made one
+/// named the branch after the Job; a Job that never ran has no branch and is
+/// left with none rather than given one it never had.
+#[test]
+fn version_five_names_the_branch_of_a_job_that_ran_and_no_other() {
+    let dir = TempDir::new();
+    version_four(&dir, "01ITRAN", "01ITNEVERRAN");
+
+    let store = Store::open(&dir.db()).expect("a version 4 file opens and is migrated");
+    assert_eq!(recorded_version(&store), KNOWN_SCHEMA_VERSION.to_string());
+
+    assert_eq!(
+        branch_of(&store, "01ITRAN").as_deref(),
+        Some("armada/01ITRAN")
+    );
+    assert_eq!(
+        branch_of(&store, "01ITNEVERRAN"),
+        None,
+        "no worktree was ever made, so there is nothing true to write"
+    );
+}
+
+fn branch_of(store: &Store, job_id: &str) -> Option<String> {
+    store
+        .conn
+        .query_row(
+            "SELECT branch FROM jobs WHERE job_id = ?1",
+            (job_id,),
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .expect("the Job is there")
 }

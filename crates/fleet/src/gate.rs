@@ -37,8 +37,10 @@ use std::time::Duration;
 
 use adapter_traits::{WorkProduct, Worktree};
 use checks_runner::Output;
-use config::{ResolvedCheck, ResolvedStep, ResolvedWorkflow};
-use core_model::{Actor, IllegalTransition, Job, StepId, Target, Timestamp, Transitioned};
+use core_model::{
+    Actor, FrozenWorkflow, IllegalTransition, Job, ResolvedCheck, ResolvedStep, StepCheck, StepId,
+    Target, Timestamp, Transitioned,
+};
 use verification::{
     decide, Accepted, CheckFailed, NotWhatTheStepAsked, Observed, OutcomeTurn, Ran, Submission,
     Verdict,
@@ -71,14 +73,14 @@ impl CheckBudget {
 /// step that is not in the definition the Job froze.
 #[derive(Clone, Copy, Debug)]
 pub struct AtStep<'a> {
-    workflow: &'a ResolvedWorkflow,
+    workflow: &'a FrozenWorkflow,
     at: usize,
     worktree: &'a Worktree,
 }
 
 impl<'a> AtStep<'a> {
     /// The first step, where a Job starts. `None` for a workflow with no steps.
-    pub fn first(workflow: &'a ResolvedWorkflow, worktree: &'a Worktree) -> Option<AtStep<'a>> {
+    pub fn first(workflow: &'a FrozenWorkflow, worktree: &'a Worktree) -> Option<AtStep<'a>> {
         (!workflow.steps().is_empty()).then_some(AtStep {
             workflow,
             at: 0,
@@ -88,7 +90,7 @@ impl<'a> AtStep<'a> {
 
     /// A named step. `None` where the workflow declares no step by that id.
     pub fn named(
-        workflow: &'a ResolvedWorkflow,
+        workflow: &'a FrozenWorkflow,
         step: &StepId,
         worktree: &'a Worktree,
     ) -> Option<AtStep<'a>> {
@@ -143,17 +145,30 @@ pub enum Ruling {
     /// The step passed. The Drone is told and goes on to the next step. The Job
     /// stays where it is: `running` has no self-edge, and a step advancing is
     /// the inner machine, not the outer one.
-    Advanced { tell: OutcomeTurn },
+    Advanced {
+        tell: OutcomeTurn,
+        /// Every declared Check with what it did. **Carried on a pass too**,
+        /// because a step that advanced having written nothing down cannot be
+        /// told from a step whose Checks were never run.
+        checks: Vec<StepCheck>,
+        /// What each Manifest Check printed, in the step's order.
+        output: Vec<CheckOutput>,
+    },
     /// The last step passed. The Drone is told, then terminated, and the Job
     /// reaches `completed_success`.
-    Finished { tell: OutcomeTurn },
+    Finished {
+        tell: OutcomeTurn,
+        checks: Vec<StepCheck>,
+        output: Vec<CheckOutput>,
+    },
     /// A Check did not pass. **The Job ends**: no Judge, no retry, no
     /// escalation. The worktree is kept, the output below is readable, and the
     /// Drone is terminated without a turn.
     Failed {
         /// Never empty.
         failures: Vec<CheckFailed>,
-        /// What each Manifest Check printed, in the step's order.
+        /// Every declared Check with what it did, passes included.
+        checks: Vec<StepCheck>,
         output: Vec<CheckOutput>,
     },
     /// The submission was not the kind of work product the step declared.
@@ -185,8 +200,37 @@ impl Ruling {
     /// Job is over and the Drone is terminated rather than told.
     pub fn tell(&self) -> Option<&OutcomeTurn> {
         match self {
-            Ruling::Advanced { tell } | Ruling::Finished { tell } => Some(tell),
+            Ruling::Advanced { tell, .. } | Ruling::Finished { tell, .. } => Some(tell),
             _ => None,
+        }
+    }
+
+    /// Every declared Check with what it did, in the step's order.
+    ///
+    /// Empty on the two rulings that ran nothing — a submission of the wrong
+    /// kind does not spend a Check, and a gate that could not decide has no
+    /// full set to report.
+    pub fn checks(&self) -> &[StepCheck] {
+        match self {
+            Ruling::Advanced { checks, .. }
+            | Ruling::Finished { checks, .. }
+            | Ruling::Failed { checks, .. } => checks,
+            Ruling::NotWhatTheStepAsked(_) | Ruling::CouldNotDecide { .. } => &[],
+        }
+    }
+
+    /// What each Manifest Check printed, in the same order.
+    ///
+    /// **Carried on a pass as well as a failure.** A step whose Checks all
+    /// passed and a step whose Checks were never run are different sentences in
+    /// the output too, not only in the record — and `diff_nonempty` runs no
+    /// command, so this list is shorter than [`checks`](Ruling::checks).
+    pub fn output(&self) -> &[CheckOutput] {
+        match self {
+            Ruling::Advanced { output, .. }
+            | Ruling::Finished { output, .. }
+            | Ruling::Failed { output, .. } => output,
+            Ruling::NotWhatTheStepAsked(_) | Ruling::CouldNotDecide { .. } => &[],
         }
     }
 
@@ -260,16 +304,25 @@ where
         }
     };
 
+    let checks = ran.recorded();
     match decide(accepted, &ran) {
         Verdict::Advance => match at.next() {
             Some(next) => Ruling::Advanced {
                 tell: OutcomeTurn::advanced(step, Some(next)),
+                checks,
+                output,
             },
             None => Ruling::Finished {
                 tell: OutcomeTurn::advanced(step, None),
+                checks,
+                output,
             },
         },
-        Verdict::Failed(failures) => Ruling::Failed { failures, output },
+        Verdict::Failed(failures) => Ruling::Failed {
+            failures,
+            checks,
+            output,
+        },
     }
 }
 

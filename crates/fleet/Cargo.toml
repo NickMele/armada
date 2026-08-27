@@ -28,7 +28,9 @@ adapters = { path = "../adapters" }
 # `cargo tree -p api` names no `fleet`, and a dependency the other way would
 # put the transport under the thing it serves.
 api = { path = "../api" }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "signal", "sync", "time"] }
+# `fs` is the transcript sink's: a Drone's rows are appended to a file on a
+# task of their own, and a blocking write there would hold a runtime thread.
+tokio = { version = "1", features = ["fs", "rt-multi-thread", "macros", "process", "signal", "sync", "time"] }
 libc = "0.2"
 # The random half of a ULID. Fleet is the sole authority for the ids that name
 # records, so this is the one crate that needs it.

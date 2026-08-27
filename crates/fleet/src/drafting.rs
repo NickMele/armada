@@ -73,14 +73,14 @@ where
         proposal: ipc::ProposeJob,
     ) -> Result<(NewJob, TopLevelOrigin), Adrift> {
         let title = Title::new(&proposal.title).map_err(|_| Adrift::Unnameable)?;
-        let workflow_id = self.the_workflow_named(&proposal.workflow_id)?;
+        let workflow = self.the_workflow_named(&proposal.workflow_id)?;
         let owner_manifest_id = self.the_manifest_named(&proposal.owner_manifest_id)?;
         let model = self.the_model_named(proposal.model.as_deref())?;
         let origin = proposal.origin.domain();
         let new = NewJob {
             id: JobId::carried(self.mint().ulid()),
             title,
-            workflow_id,
+            workflow,
             owner_manifest_id,
             urgency: proposal.urgency.domain(),
             atomic: proposal.atomic,
@@ -100,6 +100,7 @@ where
                 .collect(),
             steps: self
                 .workflow()
+                .frozen()
                 .steps()
                 .iter()
                 .enumerate()
@@ -126,7 +127,12 @@ where
         Ok((new, origin))
     }
 
-    /// The proposal's workflow, if it is the one this Fleet holds.
+    /// The proposal's workflow, if it is the one this Fleet holds — **and the
+    /// definition itself, not its id.**
+    ///
+    /// This is where the freeze happens. What comes back is copied onto the
+    /// record, and from then on the Job's own copy is what runs; a later edit to
+    /// the file reaches the next proposal instead.
     ///
     /// **The id is compared, not the name.** A rename is a change to what a
     /// person reads and not to what a Job points at, which is the whole reason
@@ -134,15 +140,15 @@ where
     fn the_workflow_named(
         &self,
         named: &ipc::WorkflowId,
-    ) -> Result<core_model::WorkflowId, Adrift> {
-        let held = self.workflow().id();
-        if named.as_str() != held.as_str() {
+    ) -> Result<core_model::FrozenWorkflow, Adrift> {
+        let held = self.workflow();
+        if named.as_str() != held.id().as_str() {
             return Err(Adrift::NoSuchWorkflow {
                 named: named.as_str().to_string(),
-                held: held.as_str().to_string(),
+                held: held.id().as_str().to_string(),
             });
         }
-        Ok(held.clone())
+        Ok(held.frozen().clone())
     }
 
     /// The proposal's Manifest, if it is the one this Fleet was started

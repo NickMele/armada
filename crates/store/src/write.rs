@@ -1,4 +1,4 @@
-//! The three writes, and the fact that there are only three.
+//! The four writes, and the fact that each writes one thing.
 //!
 //! # There is no method here that sets a status, or a step state
 //!
@@ -31,7 +31,8 @@
 //! could not be tested.
 
 use core_model::{
-    GateManifest, Job, JobStep, StepTransitioned, Timestamp, Transitioned, WriteTargets,
+    DroneAssigned, DronePresence, GateManifest, Job, JobId, JobStep, StepCheck, StepId,
+    StepTransitioned, Timestamp, Transitioned, WriteTargets,
 };
 use rusqlite::Transaction;
 
@@ -61,10 +62,10 @@ impl Store {
                      atomic, model, acceptance_criteria, current_step_id, assigned_drone,
                      dependencies, dispatched_by_job_id, dispatched_by_step_id,
                      redispatched_from, subject_kind, subject_ref, facts, scope_revisions,
-                     write_targets_known, created_at
+                     write_targets_known, created_at, branch, workflow
                  ) VALUES (
                      ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
-                     ?16, ?17, ?18, ?19, ?20, ?21, ?22
+                     ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24
                  )",
                 rusqlite::params![
                     job.id().as_str(),
@@ -72,6 +73,9 @@ impl Store {
                     // `ALTER` in V2 had to carry is never the value used.
                     job.title().as_str(),
                     job.status().as_wire(),
+                    // Derived from the frozen workflow rather than stored
+                    // beside it, so the join key and the declaration cannot
+                    // come to disagree.
                     job.workflow_id().as_str(),
                     job.owner_manifest_id().as_str(),
                     job.origin().as_wire(),
@@ -91,6 +95,11 @@ impl Store {
                     columns::write_scope_revisions(job.scope_revisions()),
                     job.write_targets().is_some(),
                     created_at.as_str(),
+                    // Ordinarily null: a Job is created before it has a
+                    // worktree. Bound anyway, so a Job rebuilt and reinserted
+                    // does not lose it.
+                    job.branch().map(|branch| branch.as_str()),
+                    columns::write_workflow(job.workflow()),
                 ],
             )
             .map_err(fault("writing the job row"))
@@ -108,6 +117,33 @@ impl Store {
         tx.commit()
             .map_err(fault("committing the insert"))
             .map_err(WriteError::Database)
+    }
+
+    /// Record the branch a Job's worktree was made on, and nothing else.
+    ///
+    /// **The one column with no event behind it.** A worktree is not a
+    /// transition — dispatch makes one between `queued -> running` and the step
+    /// move that follows — so there is no `Transitioned` to carry it and this
+    /// writes the column directly. Everything the log is authoritative for
+    /// still goes through the two methods that mint an event.
+    pub fn record_branch(&mut self, job: &Job) -> Result<(), WriteError> {
+        let Some(branch) = job.branch() else {
+            return Ok(());
+        };
+        let updated = self
+            .conn
+            .execute(
+                "UPDATE jobs SET branch = ?2 WHERE job_id = ?1",
+                (job.id().as_str(), branch.as_str()),
+            )
+            .map_err(fault("recording the branch"))
+            .map_err(WriteError::Database)?;
+        if updated == 0 {
+            return Err(WriteError::NoSuchJob {
+                job_id: job.id().clone(),
+            });
+        }
+        Ok(())
     }
 
     /// Record a transition: the event row, and the status column it caches.
@@ -257,6 +293,125 @@ impl Store {
             .map_err(WriteError::Database)?;
         Ok(seq)
     }
+
+    /// Record a Drone arriving on a Job, or leaving it: the column, and the
+    /// log entry it caches.
+    ///
+    /// Takes a [`DroneAssigned`], which only `Job::drone_spawned` and
+    /// `Job::drone_exited` mint — the property [`record_transition`] has, for
+    /// the same reason. `assigned_drone` and its event cannot disagree because
+    /// there is no call that writes one without the other.
+    ///
+    /// [`record_transition`]: Store::record_transition
+    pub fn record_drone_move(&mut self, moved: &DroneAssigned) -> Result<i64, WriteError> {
+        let event = &moved.event;
+        let job_id = event.job_id().as_str();
+
+        let tx = self
+            .conn
+            .transaction()
+            .map_err(fault("starting the drone move"))
+            .map_err(WriteError::Database)?;
+
+        let updated = tx
+            .execute(
+                "UPDATE jobs SET assigned_drone = ?2 WHERE job_id = ?1",
+                rusqlite::params![job_id, moved.job.assigned_drone().map(|id| id.as_str())],
+            )
+            .map_err(fault("updating the assigned drone"))
+            .map_err(WriteError::Database)?;
+        if updated == 0 {
+            return Err(WriteError::NoSuchJob {
+                job_id: event.job_id().clone(),
+            });
+        }
+
+        tx.execute(
+            "INSERT INTO job_events (
+                 kind, job_id, status_from, status_to, reason_kind, reason_value,
+                 drone_id, actor, at
+             ) VALUES (?1, ?2, ?3, ?3, 'unqualified', NULL, ?4, ?5, ?6)",
+            rusqlite::params![
+                kind_of(event.presence()),
+                job_id,
+                event.under().as_wire(),
+                event.drone_id().as_str(),
+                event.actor().as_wire(),
+                event.at().as_str(),
+            ],
+        )
+        .map_err(fault("appending the drone event"))
+        .map_err(WriteError::Database)?;
+
+        let seq = tx.last_insert_rowid();
+        tx.commit()
+            .map_err(fault("committing the drone move"))
+            .map_err(WriteError::Database)?;
+        Ok(seq)
+    }
+
+    /// Record what each of a step's declared Checks did.
+    ///
+    /// **No event, like [`record_branch`](Store::record_branch).** A Check
+    /// running is not a transition; it is the evidence one was derived from,
+    /// and the transition it led to is already a row in the log.
+    ///
+    /// The step's rows are replaced whole rather than appended to. A second run
+    /// of the same step supersedes the first, and a mixture of the two would be
+    /// a set of results no single run ever produced.
+    pub fn record_step_checks(
+        &mut self,
+        job_id: &JobId,
+        step_id: &StepId,
+        checks: &[StepCheck],
+        at: &Timestamp,
+    ) -> Result<(), WriteError> {
+        let tx = self
+            .conn
+            .transaction()
+            .map_err(fault("starting the check record"))
+            .map_err(WriteError::Database)?;
+
+        tx.execute(
+            "DELETE FROM job_step_checks WHERE job_id = ?1 AND step_id = ?2",
+            (job_id.as_str(), step_id.as_str()),
+        )
+        .map_err(fault("clearing the previous run"))
+        .map_err(WriteError::Database)?;
+
+        for (ordinal, check) in checks.iter().enumerate() {
+            tx.execute(
+                "INSERT INTO job_step_checks (
+                     job_id, step_id, ordinal, name, outcome, expected, produced, ran_at,
+                     output_path
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                rusqlite::params![
+                    job_id.as_str(),
+                    step_id.as_str(),
+                    ordinal as i64,
+                    check.name.as_str(),
+                    check.outcome.as_wire(),
+                    check.expected.as_deref(),
+                    check.produced.as_deref(),
+                    at.as_str(),
+                    check.output_path.as_deref(),
+                ],
+            )
+            .map_err(fault("writing a check result"))
+            .map_err(WriteError::Database)?;
+        }
+
+        tx.commit()
+            .map_err(fault("committing the check record"))
+            .map_err(WriteError::Database)
+    }
+}
+
+/// The `kind` column's value for a drone row. Read off the domain enum rather
+/// than spelled here, so the schema's trigger and the fold agree by
+/// construction.
+fn kind_of(presence: DronePresence) -> &'static str {
+    presence.as_wire()
 }
 
 /// One row per step of the frozen WorkflowDef, as the Job holds them.

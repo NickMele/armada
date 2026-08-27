@@ -1,0 +1,42 @@
+# What one declared mechanical Check did, once the gate ran it.
+#
+# Authored here. This file is the authority on the set; a page in the design
+# workspace that disagrees with it is stale, not right.
+#
+# The table key is the wire value, so a rule can compare this set against the
+# enum `core-model` holds without a mapping in between. The `outcome` column on
+# `job_step_checks` takes its values from here, and nothing else does.
+#
+# Only `passed` advances a step. The other four are the four different things a
+# person does about a Check that did not, which is why they are four rows and
+# not one — a hanging Check and a Check whose command is not installed need
+# opposite responses, and neither is ever a vacuous pass.
+#
+# Fields:
+#   meaning  - what the outcome asserts about the Check
+#   advances - whether a step may pass its gate on this outcome
+#   notes    - the reasoning the row carried, where it carried any
+
+[outcomes.passed]
+meaning = "It ran and answered what the step declared"
+advances = true
+
+[outcomes.failed]
+meaning = "It ran and the answer was not what the step declared"
+advances = false
+notes = "A code the step did not expect, or a `diff_nonempty` over a worktree holding no change. The one outcome where an exit code was actually compared."
+
+[outcomes.signalled]
+meaning = "A signal ended it, so there was no code to compare"
+advances = false
+notes = "Not folded into `failed`, and not rendered as the `128 + n` a shell would report: that convention is a shell's, and adopting it would put a signal back in the space of codes a Check can expect."
+
+[outcomes.timed_out]
+meaning = "It was still running when the budget expired"
+advances = false
+notes = "The budget is a parameter with no default — nothing in `crates/config/settings.toml` names a Check timeout. Distinct from `signalled` even though the process is killed by one, because the reason is Fleet's own budget rather than something the machine did."
+
+[outcomes.never_ran]
+meaning = "The command never started"
+advances = false
+notes = "The failure a fresh machine actually produces. `produced` on the row names which — a program that is not installed, a `run` string holding no program, a worktree that is gone, or a spawn refused for some other reason."

@@ -18,17 +18,20 @@
 //! `job_steps` columns and `current_step_id` are caches of that fold in exactly
 //! the sense `status` is, and this file does not read them back.
 //!
+//! `assigned_drone` folds too, now that a Drone arriving is a row in the same
+//! log. It was refused here until it was — the refusal `current_step_id` had
+//! before a step move became a row — because a rebuild that cannot put a value
+//! back must say so rather than drop it.
+//!
 //! Every other column on the Job row is the authority for its own field,
-//! because nothing in the log describes it. `assigned_drone` is the one that
-//! still has no writer and no event, and it is **checked, not assumed:** a row
-//! holding one is refused rather than quietly dropped, because the rebuild has
-//! no way to put it back. That refusal is what `current_step_id` had until a
-//! step move became a row in the log.
+//! because nothing in the log describes it. `workflow` is the newest of them
+//! and the only one whose absence is fatal: a Job that cannot say what it froze
+//! cannot be dispatched against anything.
 
 use core_model::{
-    DispatchOrigin, Facts, GateManifest, GateOutcome, Job, JobId, JobStatus, ManifestId, ModelName,
-    NewJob, Origin, RepoPath, StepId, StepSeed, StepState, Subject, Timestamp, Title, Ulid,
-    Urgency, WorkflowId, WriteTargets,
+    Branch, CheckOutcome, DispatchOrigin, Facts, GateManifest, GateOutcome, Job, JobId, JobStatus,
+    ManifestId, ModelName, NewJob, Origin, RepoPath, StepCheck, StepId, StepSeed, StepState,
+    Subject, Timestamp, Title, Ulid, Urgency, WriteTargets,
 };
 use rusqlite::Row;
 
@@ -146,10 +149,8 @@ impl Store {
         )?;
         let created_at = Timestamp::from_rfc3339(string(row, "created_at")?);
 
-        // `current_step_id` was refused here until a step move became a row in
-        // the log. It is a cache of the fold now, like `status`, and is not
-        // read back. `assigned_drone` still has no event and so still is.
-        refuse_if_set(&job_id, "assigned_drone", maybe(row, "assigned_drone")?)?;
+        // Both are caches of the fold now, like `status`, and neither is read
+        // back: a step move and a Drone arriving are each a row in the log.
 
         let new = NewJob {
             id: job_id.clone(),
@@ -164,7 +165,14 @@ impl Store {
                     detail: blank.to_string(),
                 }
             })?,
-            workflow_id: WorkflowId::carried(Ulid::carried(string(row, "workflow_id")?)),
+            // The declaration the Job froze, not the id beside it. The
+            // `workflow_id` column is written from this and never read into it.
+            workflow: columns::read_workflow(&maybe(row, "workflow")?.ok_or_else(|| {
+                RowError::WorkflowNotFrozen {
+                    job_id: job_id.clone(),
+                }
+            })?)
+            .map_err(malformed("workflow"))?,
             owner_manifest_id: ManifestId::carried(Ulid::carried(string(
                 row,
                 "owner_manifest_id",
@@ -225,6 +233,20 @@ impl Store {
             }
         };
 
+        // Not folded, and not on `NewJob`: the worktree is made after creation
+        // and no event describes it, so the column is this field's authority
+        // the way every non-status column is.
+        let created = match maybe(row, "branch")? {
+            Some(name) => created.on_branch(Branch::new(&name).map_err(|blank| {
+                RowError::MalformedColumn {
+                    table: "jobs",
+                    column: "branch",
+                    detail: blank.to_string(),
+                }
+            })?),
+            None => created,
+        };
+
         let events = self.events_for(&job_id)?;
         Ok((replay(created, &events)?, cached))
     }
@@ -256,6 +278,57 @@ impl Store {
                 })
             },
         )
+    }
+
+    /// What each of a Job's declared Checks did, grouped by step and in the
+    /// order the step declares them.
+    ///
+    /// **Not folded, and not on the Job.** A Check result is a fact Fleet
+    /// observed rather than a move a machine made, so it is read beside the
+    /// record rather than through it — the same shape `last_reason` has, and
+    /// for the same reason: it is not a field of `core_model::Job`.
+    ///
+    /// A step with no rows comes back absent from the list, which is what "the
+    /// gate has not run this step's checks" looks like.
+    pub fn step_checks(
+        &self,
+        job_id: &JobId,
+    ) -> Result<Vec<(StepId, Vec<StepCheck>)>, LoadJobError> {
+        let rows = self
+            .collect(
+                "SELECT step_id, name, outcome, expected, produced, output_path
+                 FROM job_step_checks WHERE job_id = ?1 ORDER BY step_id, ordinal",
+                job_id,
+                "reading check results",
+                |row| {
+                    let outcome = string(row, "outcome")?;
+                    Ok((
+                        StepId::new(string(row, "step_id")?),
+                        StepCheck {
+                            name: string(row, "name")?,
+                            outcome: enum_value(
+                                CheckOutcome::from_wire,
+                                "job_step_checks",
+                                "outcome",
+                                &outcome,
+                            )?,
+                            expected: maybe(row, "expected")?,
+                            produced: maybe(row, "produced")?,
+                            output_path: maybe(row, "output_path")?,
+                        },
+                    ))
+                },
+            )
+            .map_err(LoadJobError::Unreadable)?;
+
+        let mut grouped: Vec<(StepId, Vec<StepCheck>)> = Vec::new();
+        for (step_id, check) in rows {
+            match grouped.last_mut() {
+                Some((last, checks)) if *last == step_id => checks.push(check),
+                _ => grouped.push((step_id, vec![check])),
+            }
+        }
+        Ok(grouped)
     }
 
     fn gate_manifests(&self, job_id: &JobId) -> Result<Vec<GateManifest>, RowError> {
@@ -357,22 +430,6 @@ fn dispatched_by(row: &Row<'_>) -> Result<Option<DispatchOrigin>, RowError> {
             table: "jobs",
             column: "dispatched_by_job_id",
             detail: "half of a dispatch origin is present".to_string(),
-        }),
-    }
-}
-
-/// A column the record offers no way to set. Refused, never dropped.
-fn refuse_if_set(
-    job_id: &JobId,
-    name: &'static str,
-    value: Option<String>,
-) -> Result<(), RowError> {
-    match value {
-        None => Ok(()),
-        Some(value) => Err(RowError::ColumnNotReconstructable {
-            job_id: job_id.clone(),
-            column: name,
-            value,
         }),
     }
 }

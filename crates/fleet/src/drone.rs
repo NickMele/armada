@@ -63,6 +63,11 @@ pub struct HostPaths<'a> {
     /// happened to have in front, which is a different toolchain on two
     /// machines and a different one again after a shell profile changes.
     pub path: &'a str,
+    /// Who the operator is, as the agent CLI insists on being told.
+    ///
+    /// Not decoration and not provenance: the CLI refuses to authenticate
+    /// without it, however readable its credentials are. See `environment`.
+    pub user: &'a str,
     /// The home directory the agent CLI reads its own credentials from.
     ///
     /// **This is the confinement's known floor and it is written down as one.**
@@ -89,7 +94,16 @@ pub fn environment(host: HostPaths<'_>) -> Result<Environment, SpawnConfigRefuse
         .and("LANG", "en_US.UTF-8")?
         // The CLI renders progress differently into a pipe than into a
         // terminal. Saying so once here beats a heuristic reading the stream.
-        .and("TERM", "dumb")
+        .and("TERM", "dumb")?
+        // **Without this the agent CLI is not logged in**, and says so on its
+        // first turn instead of working. Its credentials are in the macOS
+        // Keychain, and the Keychain is readable without this — the same
+        // `security` read succeeds either way, so nothing here is an access
+        // problem. The CLI simply will not authenticate with no `USER`.
+        //
+        // Measured against a real Drone: same binary, same `HOME`, `USER` the
+        // only difference. `LOGNAME` does not substitute.
+        .and("USER", host.user)
 }
 
 /// A Drone that is running.

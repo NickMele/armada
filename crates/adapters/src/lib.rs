@@ -14,8 +14,9 @@
 
 //! # What is built so far
 //!
-//! Version control ([`GitVcs`], and the work-product reader beside it), and the
-//! agent harness: [`HeadlessAgent`] renders a confined Drone into a program and
+//! Version control ([`GitVcs`], the work-product reader beside it, and
+//! [`reclaim`] — which gives one Job's worktree and branch back, and is the
+//! only thing in the workspace that can), and the agent harness: [`HeadlessAgent`] renders a confined Drone into a program and
 //! an argument list, [`transcript`](mod@transcript) reads what that Drone says
 //! back, and [`mcp`](mod@mcp) writes the one-server configuration file the two
 //! flags that confine it point at.
@@ -28,6 +29,7 @@
 mod error;
 mod harness;
 mod mcp;
+mod reclaim;
 mod transcript;
 mod work_product;
 mod worktree;
@@ -38,4 +40,5 @@ mod tests;
 pub use error::{CreateWorktreeError, ReadWorkProductError};
 pub use harness::{evidence_server, evidence_tool, HarnessRefused, HeadlessAgent};
 pub use mcp::only_the_evidence_server;
+pub use reclaim::{reclaim, BranchGone, Reclaimed, RepoUnreadable, WorktreeGone};
 pub use worktree::GitVcs;

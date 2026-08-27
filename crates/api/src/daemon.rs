@@ -24,12 +24,14 @@
 
 use std::future::Future;
 
+use crate::observing::Observed;
+use ipc::mcp::{NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    JobId, JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, WireError,
-    WorkflowSummary,
+    JobDetail, JobId, JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redispatched,
+    WireError, WorkflowSummary,
 };
 
-/// The eight request-response operations M1 serves.
+/// The request-response operations M1 serves.
 ///
 /// **What M1 needs, not what the seam carries.** The inventory in
 /// `crates/ipc/operations.toml` is
@@ -46,6 +48,15 @@ use ipc::{
 pub trait Daemon: Send + Sync + 'static {
     /// `list_jobs` — Jobs with state and reason.
     fn list_jobs(&self) -> impl Future<Output = Result<JobList, Refusal>> + Send;
+
+    /// `get_job` — one Job in full: its steps and where each got to, the
+    /// criteria it is held to, the branch its worktree is on, and the brief it
+    /// was given.
+    ///
+    /// **What `list_jobs` deliberately leaves behind.** A Board row is a row; a
+    /// detail view is one Job somebody opened, and it cannot be assembled from
+    /// the list without Fleet answering for the fields the list redacts.
+    fn get_job(&self, job_id: JobId) -> impl Future<Output = Result<JobDetail, Refusal>> + Send;
 
     /// `list_workflows` — the workflows Fleet holds, with their steps.
     ///
@@ -94,6 +105,66 @@ pub trait Daemon: Send + Sync + 'static {
     /// Legal from every non-terminal status, including those with no Drone
     /// under them, which is why it cannot be spelled as [`Daemon::kill_drone`].
     fn kill_job(&self, job_id: JobId) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `redispatch_job` — kills the failed Job and mints its replacement.
+    /// Intervention Ladder rung 2, and the answer to a Job that stopped and
+    /// has no way to be tried again.
+    ///
+    /// **It does not reopen the failed Job**, which is why it answers with
+    /// [`Redispatched`] rather than a `JobSummary`: the registry's
+    /// `redispatched_from` row says a redispatch is always a new Job carrying
+    /// a reference back, and the replacement's id is what the caller needs
+    /// next.
+    fn redispatch_job(
+        &self,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<Redispatched, Refusal>> + Send;
+
+    /// `observe_job` — one Job's turns, the history and then the live ones.
+    ///
+    /// # It answers before the socket opens
+    ///
+    /// A Job that does not exist is a 404 the caller reads at the moment they
+    /// asked, rather than a connection that opens and immediately says nothing.
+    /// That is why this returns a value and not a socket.
+    ///
+    /// # The order inside is the whole guarantee
+    ///
+    /// An implementation subscribes **first** and reads the history after, so
+    /// no row can fall between the two. A caller holding an [`Observed`] cannot
+    /// get that order wrong because both halves are already in it.
+    ///
+    /// A Job nothing is writing is not a refusal. [`Observed::live`] is `None`
+    /// and the history is served on its own — a Job never dispatched, one
+    /// already finished, and one whose Drone went with the Fleet that spawned
+    /// it all reach a viewer that way.
+    fn observe_job(&self, job_id: JobId) -> impl Future<Output = Result<Observed, Refusal>> + Send;
+
+    /// `submit_evidence` — the Evidence tool, called by the Drone that is
+    /// working. **Not an inventory operation and not Bridge's**: it is the one
+    /// method on this trait whose caller is a Drone, which is why its refusal
+    /// is [`NotRecorded`] rather than [`Refusal`].
+    ///
+    /// # The submission is bound to a Job the caller never names
+    ///
+    /// There is no `job_id` parameter and no `step_id`, so there is nothing to
+    /// forge: the implementation attributes the submission to the Job it is
+    /// itself working, which it knows and the caller cannot influence. A call
+    /// that arrives while nothing is working is refused rather than queued.
+    ///
+    /// **That is binding by construction and not authentication.** Any process
+    /// that can reach the listener can make this call; what it cannot do is
+    /// choose which Job the evidence lands against.
+    ///
+    /// # It decides nothing
+    ///
+    /// The receipt says the submission was taken, not that it passed. A call
+    /// that blocked while a repository's Checks ran would time out, so the
+    /// gate runs afterwards and the outcome reaches the Drone as a later turn.
+    fn submit_evidence(
+        &self,
+        submission: SubmitEvidence,
+    ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
 }
 
 /// A request the daemon would not serve.

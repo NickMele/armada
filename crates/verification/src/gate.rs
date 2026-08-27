@@ -117,6 +117,6 @@ pub fn decide(_evidence: Accepted<'_>, ran: &Ran) -> Verdict {
     if ran.all_passed() {
         Verdict::Advance
     } else {
-        Verdict::Failed(ran.failures().to_vec())
+        Verdict::Failed(ran.failures())
     }
 }

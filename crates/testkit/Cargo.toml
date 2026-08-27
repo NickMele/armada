@@ -13,3 +13,4 @@ workspace = true
 [dependencies]
 adapter-traits = { path = "../adapter-traits" }
 config = { path = "../config" }
+core-model = { path = "../core-model" }

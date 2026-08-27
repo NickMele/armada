@@ -37,8 +37,8 @@
 //! `core-model` offers, and the rebuild calls the same one.
 
 use core_model::{
-    Actor, CriteriaOwed, EscalationTrigger, Job, JobId, JobStatus, PilotReason, StepId, StepState,
-    StepTarget, Target, Timestamp, TransitionReason, Ulid,
+    Actor, CriteriaOwed, DroneId, DronePresence, EscalationTrigger, Job, JobId, JobStatus,
+    PilotReason, StepId, StepState, StepTarget, Target, Timestamp, TransitionReason, Ulid,
 };
 use rusqlite::Row;
 
@@ -80,6 +80,13 @@ pub enum Moved {
         step_id: StepId,
         from: StepState,
         to: StepState,
+    },
+    /// A Drone arrived on the Job or left it, and the Job did not move either.
+    /// The pointer this folds to is `assigned_drone`, which has no states of
+    /// its own — hence a presence rather than a `from` and a `to`.
+    Drone {
+        drone_id: DroneId,
+        presence: DronePresence,
     },
 }
 
@@ -143,6 +150,7 @@ pub(crate) fn replay(created: Job, events: &[RecordedEvent]) -> Result<Job, RowE
                     .job
             }
             Moved::Step { step_id, from, to } => step(&job, event, step_id, *from, *to)?,
+            Moved::Drone { drone_id, presence } => drone(&job, event, drone_id, *presence)?,
         };
     }
     Ok(job)
@@ -180,6 +188,32 @@ fn step(
     Ok(job
         .transition_step(step_id, target, event.actor, event.at.clone())
         .map_err(|cause| RowError::IllegalRecordedStepTransition {
+            job_id: event.job_id.clone(),
+            seq: event.seq,
+            cause,
+        })?
+        .job)
+}
+
+/// One drone row, put back through the mutator that wrote it.
+///
+/// A spawn onto a Job that already holds a Drone, or an exit from one holding
+/// none, is refused here rather than applied — the same continuity the step
+/// fold checks, over a pointer instead of a state.
+fn drone(
+    job: &Job,
+    event: &RecordedEvent,
+    drone_id: &DroneId,
+    presence: DronePresence,
+) -> Result<Job, RowError> {
+    let moved = match presence {
+        DronePresence::Spawned => {
+            job.drone_spawned(drone_id.clone(), event.actor, event.at.clone())
+        }
+        DronePresence::Exited => job.drone_exited(event.actor, event.at.clone()),
+    };
+    Ok(moved
+        .map_err(|cause| RowError::IllegalRecordedDroneMove {
             job_id: event.job_id.clone(),
             seq: event.seq,
             cause,
@@ -304,7 +338,7 @@ impl Store {
 }
 
 const SELECT_EVENTS: &str = "SELECT seq, job_id, kind, status_from, status_to, reason_kind,
-                             reason_value, step_id, state_from, state_to, actor, at
+                             reason_value, step_id, state_from, state_to, drone_id, actor, at
                              FROM job_events WHERE job_id = ?1 ORDER BY seq";
 
 /// One log row, of either kind.
@@ -376,6 +410,12 @@ fn moved(row: &Row<'_>) -> Result<Moved, RowError> {
                 &present(row, "state_to")?,
             )?,
         }),
+        // The `kind` column is the presence, spelled by the domain enum itself,
+        // so the trigger's `IN` list and this arm cannot drift apart.
+        other if DronePresence::from_wire(other).is_some() => Ok(Moved::Drone {
+            drone_id: DroneId::carried(Ulid::carried(present(row, "drone_id")?)),
+            presence: DronePresence::from_wire(other).expect("just read as a presence"),
+        }),
         _ => Err(RowError::UnknownEnumValue {
             table: "job_events",
             column: "kind",
@@ -389,6 +429,6 @@ fn present(row: &Row<'_>, name: &'static str) -> Result<String, RowError> {
     maybe(row, name)?.ok_or(RowError::MalformedColumn {
         table: "job_events",
         column: name,
-        detail: "a step move leaves it null".to_string(),
+        detail: "the row's kind requires it and it is null".to_string(),
     })
 }

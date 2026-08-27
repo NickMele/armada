@@ -25,13 +25,34 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::checks::DeclaredCheck;
 use crate::ids::{ManifestId, StepId, WorkflowId};
+
+/// One step of a workflow, as the definition declares it.
+///
+/// **This is the one place a step's Checks are read from**, and `get_job`
+/// answers from the same values rather than a second copy on the Job. A
+/// declaration stored twice is a registry that drifts; the Job's frozen rows
+/// carry where a step *got to*, which is a different fact with a different
+/// authority.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowStep {
+    pub step_id: StepId,
+    /// The Checks the step declares, in the order it declares them.
+    ///
+    /// **Empty is the sentence "this step declares no check."** A WorkflowDef
+    /// may write `mechanical_checks: []` or leave the key out and the two mean
+    /// the same thing, so the wire spells it one way — always a list, never
+    /// absent — and a reader never has to infer an ungated step from a gap.
+    pub checks: Vec<DeclaredCheck>,
+}
 
 /// One workflow Fleet holds, as a picker offers it.
 ///
-/// The steps are their ids in order rather than the whole definition: a
+/// The steps are their ids and their Checks rather than the whole definition: a
 /// composer needs the count and the names to say "4 steps, ending at close",
-/// and the gates, the evidence types and the Checks are `get_job`'s business.
+/// and the labels, the gates and the evidence types are still `get_job`'s
+/// business.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkflowSummary {
     /// What a proposal's `workflow_id` must name. **The only value Fleet
@@ -42,7 +63,7 @@ pub struct WorkflowSummary {
     pub name: String,
     pub version: u32,
     /// The steps, in order. Order is the semantics; there is no ordinal field.
-    pub steps: Vec<StepId>,
+    pub steps: Vec<WorkflowStep>,
     /// The `armada.yml` this workflow's Checks resolved against. Holding a
     /// resolved workflow means every Check its steps name was declared there.
     pub manifest_id: ManifestId,

@@ -61,7 +61,7 @@ const EVIDENCE_TOOL: &str = "mcp__armada__submit_evidence";
 ///
 /// **The vendor's spelling, and this file is where it is allowed to be.** A
 /// composition root that carried its own default would be the boundary having
-/// leaked — which is why `fleet-bin` calls [`HeadlessAgent::on_path`] rather
+/// leaked — which is why the composition root calls [`HeadlessAgent::on_path`] rather
 /// than passing a string it wrote down.
 const ON_PATH: &str = "claude";
 
@@ -114,6 +114,14 @@ impl HeadlessAgent {
     /// refused before the bind if that name is wrong.
     pub fn on_path() -> HeadlessAgent {
         HeadlessAgent::at(ON_PATH)
+    }
+
+    /// The program that will be executed. **The one way to ask what this
+    /// harness is, without spelling it** — the name is a vendor's and lives in
+    /// this crate, so the composition root probes it through here rather than
+    /// carrying a literal it is not allowed to write.
+    pub fn program(&self) -> &str {
+        &self.program
     }
 
     /// The models a Job may name, for the composer's picker.

@@ -73,6 +73,12 @@ impl Counted {
     pub fn from_one() -> Counted {
         Counted(AtomicU64::new(1))
     }
+
+    /// A real mint is a ULID and cannot repeat; this one restarts at one on
+    /// every assembly, so two Fleets over one store would hand out one id twice.
+    pub fn from_next(next: u64) -> Counted {
+        Counted(AtomicU64::new(next))
+    }
 }
 
 impl Mint for Counted {
@@ -138,6 +144,7 @@ fn fitted_with(
         workflow: two_steps(),
         manifest: manifest(),
         host: Host {
+            user: String::from("someone"),
             repo_root: root.clone(),
             path: "/usr/bin:/bin".to_string(),
             home: root,
@@ -162,6 +169,34 @@ pub fn a_fleet(
     work: FakeWorkProduct,
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     Fleet::assembled(fittings(home, work))
+}
+
+/// A Fleet over a store another Fleet wrote to, holding a workflow of its own.
+///
+/// The pair of arguments is what an edited `.armada/workflows/` looks like from
+/// inside the process: Fleet reads the file once at assembly, so a different
+/// definition and a restart are the same event.
+pub fn a_fleet_holding(
+    home: &TempDir,
+    work: FakeWorkProduct,
+    workflow: config::ResolvedWorkflow,
+    next: u64,
+) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
+    let mut fittings = fittings(home, work);
+    fittings.workflow = workflow;
+    fittings.mint = Arc::new(Counted::from_next(next));
+    Fleet::assembled(fittings)
+}
+
+/// A Fleet over a store another Fleet wrote to. See [`Counted::from_next`].
+pub fn a_fleet_minting_from(
+    home: &TempDir,
+    work: FakeWorkProduct,
+    next: u64,
+) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
+    let mut fittings = fittings(home, work);
+    fittings.mint = Arc::new(Counted::from_next(next));
+    Fleet::assembled(fittings)
 }
 
 /// A Fleet whose Drone reads its first turn, prints it back and exits — which

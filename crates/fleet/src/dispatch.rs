@@ -31,7 +31,8 @@ use adapter_traits::{
     WorkProduct, Worktree, WorktreeSpec,
 };
 use core_model::{
-    Actor, EscalationTrigger, Job, JobId, JobStatus, StepId, StepTarget, Target, Transitioned,
+    Actor, Branch, DroneId, EscalationTrigger, Job, JobId, JobStatus, StepId, StepTarget, Target,
+    Transitioned,
 };
 use store::Moved;
 use verification::OutcomeTurn;
@@ -42,6 +43,7 @@ use crate::daemon::Fleet;
 use crate::drone::{self, aftermath, environment, Aftermath, Ending, HostPaths, Left};
 use crate::gate::{apply, rule_on, AtStep, Ruling};
 use crate::session::LiveSession;
+use crate::transcript::{Spine, Taps};
 use crate::working::Working;
 
 impl<H, V, W> Fleet<H, V, W>
@@ -132,7 +134,9 @@ where
     /// not put the Job back in the queue for itself to fail on again.
     async fn dispatch(&self, job: Job, working: &mut Option<Working>) -> Result<(), Adrift> {
         let job_id = job.id().clone();
-        let Some(first) = self.workflow().steps().first() else {
+        // The Job's own copy, never the file. A workflow edited while this Job
+        // sat at the approval gate declares what it declared then.
+        let Some(first) = job.workflow().steps().first() else {
             return Err(Adrift::NoSuchStep {
                 job: job_id,
                 step: None,
@@ -160,6 +164,14 @@ where
             }
         };
 
+        // Read from the worktree, not derived from the id: a branch a reader
+        // recomputes cannot be renamed and cannot say what happened. `Err` is
+        // unreachable — `WorktreeSpec` refuses an empty job id.
+        let job = match Branch::new(worktree.branch()) {
+            Ok(branch) => self.branded(&job, branch).await?,
+            Err(_) => job,
+        };
+
         let job = self.move_step(&job, &step, StepTarget::Running).await?;
 
         let config = match self.spawn_config(&job, &worktree, &step) {
@@ -167,6 +179,17 @@ where
             Err(cause) => {
                 self.interrupt(&job).await?;
                 return Err(Adrift::NotConfigurable { job: job_id, cause });
+            }
+        };
+        // The record is opened **before** the Drone, so a disk that will not
+        // hold it escalates the Job rather than losing a transcript quietly
+        // once there is already a process producing one.
+        let drone = DroneId::carried(self.mint().ulid());
+        let recording = match self.recording(&job_id, &drone, &step) {
+            Ok(recording) => recording,
+            Err(cause) => {
+                self.interrupt(&job).await?;
+                return Err(Adrift::NoTranscript { job: job_id, cause });
             }
         };
         let started = match drone::start(self.harness().as_ref(), &config).await {
@@ -179,15 +202,45 @@ where
                 });
             }
         };
+        // After the process exists, never before: `assigned_drone` is presence,
+        // and a Job claiming a Drone that failed to start is exactly the
+        // liveness lie the column is read for.
+        self.drone_arrived(&job, drone.clone()).await?;
 
         *working = Some(Working::holding(
             job_id,
+            drone,
             step,
             worktree,
             started,
             Arc::clone(self.harness()),
+            recording,
         ));
         Ok(())
+    }
+
+    /// Open this Drone's transcript, and name it in the Job's log.
+    ///
+    /// The log line is still written: it carries the transcript's path, which
+    /// `assigned_drone` does not — the column names the Drone and this names
+    /// the file its rows are in.
+    fn recording(
+        &self,
+        job: &JobId,
+        drone: &DroneId,
+        step: &StepId,
+    ) -> Result<Taps, std::io::Error> {
+        Taps::opening(
+            &self.host().repo_root,
+            Spine {
+                job: job.clone(),
+                drone: drone.clone(),
+                step: step.clone(),
+                run: self.run().clone(),
+            },
+            Arc::clone(self.clock()),
+            self.turns().feeding(&ipc::JobId::from(job)),
+        )
     }
 
     /// Everything one Drone is started with, from the Job and the machine.
@@ -200,12 +253,13 @@ where
         Ok(DroneSpawnConfig::spawn_in(
             worktree,
             Model::named(job.model().as_str())?,
-            briefing::first_turn(job, self.workflow(), step)?,
+            briefing::first_turn(job, job.workflow(), step)?,
             McpConfig::only_these(&self.host().mcp_config)?,
             self.toolbelt(),
             environment(HostPaths {
                 path: &self.host().path,
                 home: &self.host().home,
+                user: &self.host().user,
             })?,
         ))
     }
@@ -252,13 +306,18 @@ where
             return Ok(None);
         }
 
-        let Some(at) = AtStep::named(self.workflow(), &step, &worktree) else {
+        let job = self.load(&job_id).await?;
+        let Some(at) = AtStep::named(job.workflow(), &step, &worktree) else {
             return Err(Adrift::NoSuchStep {
                 job: job_id,
                 step: Some(step),
             });
         };
         let ruling = rule_on(at, &landed.submission, self.work(), self.budget()).await;
+        // Before the Job or the step moves. A recorded result the transition
+        // then failed to make is readable; a transition whose evidence was
+        // never written down is a verdict with no trace.
+        self.recorded_checks(&job_id, &step, &ruling).await?;
         self.act_on(&ruling, &job_id, &step, working).await?;
         Ok(Some(ruling))
     }
@@ -273,17 +332,17 @@ where
         working: &mut Option<Working>,
     ) -> Result<(), Adrift> {
         match ruling {
-            Ruling::Advanced { tell } => {
+            Ruling::Advanced { tell, .. } => {
                 let job = self.load(job_id).await?;
                 let job = self.move_step(&job, step, StepTarget::Advanced).await?;
-                let next = self.step_after(job_id, step)?;
+                let next = self.step_after(&job, step)?;
                 self.move_step(&job, &next, StepTarget::Running).await?;
                 if let Some(at_work) = working.as_mut() {
                     at_work.now_on(next);
                 }
                 self.tell(job_id, tell, working).await
             }
-            Ruling::Finished { tell } => {
+            Ruling::Finished { tell, .. } => {
                 let job = self.load(job_id).await?;
                 let job = self.move_step(&job, step, StepTarget::Advanced).await?;
                 // The Job is moved before the Drone is told, so a session that
@@ -309,16 +368,13 @@ where
         }
     }
 
-    /// The step that follows this one in the frozen workflow.
-    fn step_after(&self, job_id: &JobId, step: &StepId) -> Result<StepId, Adrift> {
-        self.workflow()
-            .steps()
-            .iter()
-            .position(|declared| declared.id() == step)
-            .and_then(|at| self.workflow().steps().get(at + 1))
+    /// The step that follows this one in **the Job's own** frozen workflow.
+    fn step_after(&self, job: &Job, step: &StepId) -> Result<StepId, Adrift> {
+        job.workflow()
+            .after(step)
             .map(|next| next.id().clone())
             .ok_or_else(|| Adrift::NoSuchStep {
-                job: job_id.clone(),
+                job: job.id().clone(),
                 step: Some(step.clone()),
             })
     }
@@ -355,6 +411,9 @@ where
         let job_id = at_work.standing().0;
         let after = aftermath(&Ending::of(&at_work.heard()), self.left());
         if let Aftermath::JobMoves(target) = &after {
+            // The departure first, so the Job's move is published over a record
+            // that already says no Drone is on it.
+            self.drone_left(&job_id).await;
             let job = self.load(&job_id).await?;
             self.move_job(&job, target.clone(), Actor::Fleet).await?;
             working.take();
@@ -401,8 +460,14 @@ where
     /// A terminate that fails is a process already gone or one the operating
     /// system will not signal, and there is nothing further to do about either:
     /// the slot is already free, and the Job has already moved.
+    ///
+    /// The exit is recorded before the signal is sent, because the slot is
+    /// taken here and the id goes with it — and a `drone.exited` that never
+    /// landed would leave the Board showing a Drone on a Job that has none.
     pub(crate) async fn end_the_drone(&self, working: &mut Option<Working>) {
         if let Some(at_work) = working.take() {
+            let (job_id, _) = at_work.drone();
+            self.drone_left(&job_id).await;
             let _ = at_work.session().terminate().await;
         }
         self.empty_the_inbox();
@@ -424,6 +489,19 @@ where
         )
         .await
         .map(|_| ())
+    }
+
+    /// Write the branch the worktree was made on. **No event and nothing
+    /// published**: a worktree is not a transition, and the column is the
+    /// field's authority.
+    async fn branded(&self, job: &Job, branch: Branch) -> Result<Job, Adrift> {
+        let job = job.on_branch(branch);
+        self.store()
+            .lock()
+            .await
+            .record_branch(&job)
+            .map_err(Adrift::Writing)?;
+        Ok(job)
     }
 
     /// Move the Job, write the event, publish it. **The only path.**
@@ -455,11 +533,13 @@ where
         Ok(moved.job)
     }
 
-    /// Move one step of the frozen workflow, and write it to the same log.
+    /// Move one step of the frozen workflow, write it to the same log, and
+    /// publish it. **The only path**, like [`move_job`](Fleet::move_job).
     ///
-    /// **Nothing is published.** `ipc::Event` carries one kind at M1 and
-    /// `job.step_advanced` is deliberately not stubbed — an event kind that
-    /// exists and never fires reads as a stream that is working.
+    /// The publish is after the write: announcing a move that then failed to
+    /// land tells every client something that did not happen. It published
+    /// nothing until now, and a Job running through four steps emitted one
+    /// event and nothing after it.
     pub(crate) async fn move_step(
         &self,
         job: &Job,
@@ -474,6 +554,11 @@ where
             .await
             .record_step_transition(&moved)
             .map_err(Adrift::Writing)?;
+        // The row whole, so a client replaces it rather than re-reading it.
+        self.publish(ipc::Event::JobStepAdvanced(ipc::JobStepAdvanced::of(
+            &moved.event,
+            ipc::JobSummary::from(&moved.job),
+        )));
         Ok(moved.job)
     }
 }

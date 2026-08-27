@@ -12,6 +12,7 @@
 
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::fmt;
 
 use crate::envelope::Timestamp;
 use crate::job::ids::{CriterionId, JobId, ManifestId, RepoPath, StepId};
@@ -404,6 +405,47 @@ impl WriteTargets {
         &self.0
     }
 }
+
+/// The git branch a Job's worktree is checked out on.
+///
+/// **A value, not a formula.** Dispatch derives `armada/<job_id>` today, but a
+/// branch that is only ever recomputed cannot be renamed, cannot survive a
+/// change to the naming scheme, and cannot say what actually happened where a
+/// worktree was made some other way.
+///
+/// Stored trimmed, and blank is refused, for the reason [`Title`] gives: a
+/// branch nobody can check out is not a branch.
+///
+/// [`Title`]: crate::Title
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Branch(String);
+
+impl Branch {
+    /// A branch name, or the refusal.
+    pub fn new(name: &str) -> Result<Branch, BlankBranch> {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return Err(BlankBranch);
+        }
+        Ok(Branch(String::from(trimmed)))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// A branch name that was blank, or was nothing but whitespace.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BlankBranch;
+
+impl fmt::Display for BlankBranch {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("a branch is what a person checks out, and blank is not one")
+    }
+}
+
+impl core::error::Error for BlankBranch {}
 
 /// What became of a proposed scope revision.
 ///

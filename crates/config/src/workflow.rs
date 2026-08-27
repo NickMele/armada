@@ -12,10 +12,12 @@
 //!
 //! # Three closed sets, each narrowed
 //!
-//! [`Structure`], [`AdvanceGate`] and [`MechanicalCheck`] each carry one or two
+//! [`Structure`], `AdvanceGate` and [`MechanicalCheck`] each carry one or two
 //! variants where the schema has more, and each is an enum rather than a string
 //! so that widening one is a compile error at every `match` that reads it. A
-//! `String` here would widen silently.
+//! `String` here would widen silently. The two a Job freezes —
+//! [`AdvanceGate`] and [`EvidenceType`] — are `core-model`'s, because the
+//! record carries them.
 //!
 //! # `mechanical_checks` is absent more often than it is present
 //!
@@ -36,7 +38,9 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use core_model::{StepId, Ulid, WorkflowId};
+use core_model::{
+    AdvanceGate, EvidenceType, StepId, Ulid, WorkflowId, DIFF_NONEMPTY, MANIFEST_CHECK,
+};
 use serde_yaml_ng::Value;
 
 use crate::error::{Fault, LoadError, Refusal};
@@ -68,17 +72,6 @@ const STRUCTURE_CARRIED: &[(&str, Structure)] = &[("linear", Structure::Linear)]
 const STRUCTURE_LEGAL: &[&str] = &["linear", "loop"];
 const STRUCTURE_M1: &[&str] = &["linear"];
 
-/// What it takes to advance past a step. **One variant, of four.**
-///
-/// The schema's other three — `auto_if_judge_passes`, `human_always` and
-/// `manifest_rule:<key>` — all need something that does not exist at M1. There
-/// is no Judge, and the Manifest-level policies those rules resolve through are
-/// not among the five keys M1 reads from an `armada.yml`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AdvanceGate {
-    Auto,
-}
-
 const GATE_LEGAL: &[&str] = &[
     "auto",
     "auto_if_judge_passes",
@@ -86,26 +79,6 @@ const GATE_LEGAL: &[&str] = &[
     "manifest_rule:<key>",
 ];
 const GATE_M1: &[&str] = &["auto"];
-
-/// What a step produces as its work product.
-///
-/// The six values the registry records as in use across the samples. A step may
-/// declare none: the sample set's `merge` step produces nothing a Judge reads,
-/// and the registry says so explicitly.
-///
-/// `review_findings` is **not** here. The Code Review sample uses it and the
-/// registry's own open questions record that it is not among the legal values —
-/// either the set grows or that workflow submits under an existing type, and
-/// neither has been decided. Until one is, it is refused by name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EvidenceType {
-    Diff,
-    FailingTest,
-    FactsNote,
-    TestSuiteRun,
-    Bundle,
-    Document,
-}
 
 const EVIDENCE_CARRIED: &[(&str, EvidenceType)] = &[
     ("diff", EvidenceType::Diff),
@@ -145,13 +118,13 @@ pub enum MechanicalCheck {
 }
 
 const CHECK_TYPE_LEGAL: &[&str] = &[
-    "manifest_check",
-    "diff_nonempty",
+    MANIFEST_CHECK,
+    DIFF_NONEMPTY,
     "artifact_exists",
     "test_run",
     "pr_merged",
 ];
-const CHECK_TYPE_M1: &[&str] = &["manifest_check", "diff_nonempty"];
+const CHECK_TYPE_M1: &[&str] = &[MANIFEST_CHECK, DIFF_NONEMPTY];
 const MANIFEST_CHECK_KEYS: &[&str] = &["type", "check", "expect_exit_code"];
 const DIFF_NONEMPTY_KEYS: &[&str] = &["type"];
 
@@ -441,7 +414,7 @@ fn mechanical_check(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<M
         .and_then(|value| yaml::text(&table.at("type"), value, out))?;
 
     match kind.as_str() {
-        "manifest_check" => {
+        MANIFEST_CHECK => {
             let check = table
                 .required("check", out)
                 .and_then(|value| yaml::text(&table.at("check"), value, out));
@@ -454,7 +427,7 @@ fn mechanical_check(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<M
                 expect_exit_code: expect_exit_code?,
             })
         }
-        "diff_nonempty" => {
+        DIFF_NONEMPTY => {
             table.close(DIFF_NONEMPTY_KEYS, out);
             Some(MechanicalCheck::DiffNonempty)
         }

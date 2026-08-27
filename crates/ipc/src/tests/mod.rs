@@ -1,21 +1,47 @@
-//! What the wire must keep true.
+//! What the wire must keep true: the DTOs a Bridge reads.
 //!
-//! Three properties, and the third is the one a review cannot check by reading:
-//! the DTOs round-trip, a spelling the domain does not have is refused rather
-//! than defaulted, and **an unknown field does not break a parse** — which is
-//! the whole basis of the minor-skew row, and would break silently the day
-//! somebody added `deny_unknown_fields` for tidiness.
+//! The DTOs round-trip, a spelling the domain does not have is refused rather
+//! than defaulted, and **an unknown field does not break a parse** — the last
+//! is the one a review cannot check by reading, is the whole basis of the
+//! minor-skew row, and would break silently the day somebody added
+//! `deny_unknown_fields` for tidiness.
+//!
+//! The Evidence tool's transport is the other seam and is [`mcp`]'s. Nothing
+//! about it is version-skewed — a Drone is spawned by the Fleet it reports to —
+//! so what those cases hold is the opposite property: a field the tool does not
+//! take is refused rather than ignored.
+
+mod mcp;
 
 use core_model::{
-    Actor, CriteriaOwed, CriterionId, DispatchOrigin, Facts, Job, JobId, JobStatus, ManifestId,
-    ModelName, NewJob, StepId, StepSeed, Target, Timestamp, Title, TopLevelOrigin, Ulid, Urgency,
-    WorkflowId,
+    Actor, AdvanceGate, CriteriaOwed, CriterionId, DispatchOrigin, EvidenceType, Facts,
+    FrozenWorkflow, Job, JobId, JobStatus, ManifestId, ModelName, NewJob, ResolvedStep, StepId,
+    StepSeed, Target, Timestamp, Title, TopLevelOrigin, Ulid, Urgency, WorkflowId,
 };
 
-use crate::{decode, encode, JobSummary, ProposeJob, StreamMessage};
+use crate::{
+    decode, encode, CheckRun, DeclaredCheck, JobDetail, JobSummary, ProposeJob, StepFacts,
+    StreamMessage,
+};
 
 fn at(instant: &str) -> Timestamp {
     Timestamp::from_rfc3339(instant)
+}
+
+/// The one-step workflow the fixture Jobs freeze.
+fn workflow() -> FrozenWorkflow {
+    FrozenWorkflow::frozen(
+        WorkflowId::carried(Ulid::carried("01WF")),
+        "bug".to_string(),
+        1,
+        vec![ResolvedStep::frozen(
+            StepId::new("repro"),
+            "Reproduce".to_string(),
+            Some(EvidenceType::FailingTest),
+            Vec::new(),
+            AdvanceGate::Auto,
+        )],
+    )
 }
 
 fn job() -> Job {
@@ -23,7 +49,7 @@ fn job() -> Job {
         NewJob {
             id: JobId::carried(Ulid::carried("01JOB")),
             title: Title::new("fix the off-by-one").expect("a title"),
-            workflow_id: WorkflowId::carried(Ulid::carried("01WF")),
+            workflow: workflow(),
             owner_manifest_id: ManifestId::carried(Ulid::carried("01MF")),
             urgency: Urgency::Normal,
             atomic: false,
@@ -64,6 +90,79 @@ fn a_summary_carries_what_a_board_renders_and_nothing_else() {
     assert_eq!(
         decode::<JobSummary>("job summary", json.as_bytes()).expect("it round-trips"),
         summary
+    );
+}
+
+/// **The distinction the whole field exists for.** An ungated step says so with
+/// an empty list; a step Fleet cannot answer for carries no key at all. A
+/// client that saw a gap either way could not tell them apart.
+#[test]
+fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
+    let job = job();
+    let ungated = JobDetail::of(
+        &job,
+        None,
+        &[StepFacts {
+            step_id: crate::StepId::carried("repro"),
+            declares: Some(Vec::new()),
+            ran: Vec::new(),
+        }],
+    );
+    let json = encode(&ungated).expect("a detail is plain data");
+    assert!(json.contains("\"checks\":[]"), "declares none: {json}");
+
+    let unanswerable = JobDetail::of(
+        &job,
+        None,
+        &[StepFacts {
+            step_id: crate::StepId::carried("repro"),
+            declares: None,
+            ran: Vec::new(),
+        }],
+    );
+    let json = encode(&unanswerable).expect("a detail is plain data");
+    assert!(
+        !json.contains("\"checks\""),
+        "absent, never present-and-null: {json}"
+    );
+    assert!(
+        json.contains("\"check_runs\":[]"),
+        "what ran is always a list — nothing ran: {json}"
+    );
+}
+
+/// A recorded run round-trips, and a pass carries neither sentence.
+#[test]
+fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
+    let detail = JobDetail::of(
+        &job(),
+        None,
+        &[StepFacts {
+            step_id: crate::StepId::carried("repro"),
+            declares: Some(vec![DeclaredCheck {
+                kind: "manifest_check".to_string(),
+                name: Some("suite".to_string()),
+                expect_exit_code: Some(0),
+            }]),
+            ran: vec![CheckRun {
+                name: "suite".to_string(),
+                outcome: core_model::CheckOutcome::NeverRan.into(),
+                expected: Some("`suite` can be run".to_string()),
+                produced: Some("`suite` is not installed".to_string()),
+                output_path: Some(".armada/checks/01JOB/repro.0.log".to_string()),
+            }],
+        }],
+    );
+    let json = encode(&detail).expect("a detail is plain data");
+
+    assert!(json.contains("\"outcome\":\"never_ran\""), "{json}");
+    assert!(
+        !json.contains("\"run\":"),
+        "the Manifest's command does not cross: {json}"
+    );
+    assert_eq!(
+        decode::<JobDetail>("a Job in full", json.as_bytes()).expect("it round-trips"),
+        detail
     );
 }
 
@@ -108,6 +207,53 @@ fn a_transition_becomes_an_event_with_its_reason() {
     assert_eq!(
         decode::<StreamMessage>("stream message", json.as_bytes()).expect("it round-trips"),
         message
+    );
+}
+
+/// The kinds are the dotted names `operations.toml` keys them under, so a rule
+/// can compare the two without a mapping in between — and `branch` is absent
+/// rather than null on an exit, which is the rule the whole file holds.
+#[test]
+fn the_drone_lifecycle_pair_travels_under_the_names_the_inventory_declares() {
+    let job = job();
+    let arrived = job
+        .drone_spawned(
+            core_model::DroneId::carried(Ulid::carried("01DRONE")),
+            Actor::Fleet,
+            at("2026-08-26T09:05:00.000Z"),
+        )
+        .expect("nothing is on it yet");
+
+    let spawned = StreamMessage::Event(crate::Delivered {
+        cursor: crate::Cursor::at(9),
+        event: crate::Event::DroneSpawned(crate::DroneSpawned::of(
+            &arrived.event,
+            JobSummary::from(&arrived.job),
+            Some("armada/01JOB".to_string()),
+        )),
+    });
+    let json = encode(&spawned).expect("plain data");
+    assert!(json.contains("\"kind\":\"drone.spawned\""), "{json}");
+    assert!(json.contains("\"drone_id\":\"01DRONE\""), "{json}");
+    assert!(json.contains("\"branch\":\"armada/01JOB\""), "{json}");
+    assert_eq!(
+        decode::<StreamMessage>("stream message", json.as_bytes()).expect("it round-trips"),
+        spawned
+    );
+
+    let left = arrived
+        .job
+        .drone_exited(Actor::Fleet, at("2026-08-26T09:06:00.000Z"))
+        .expect("one is on it");
+    let exited = crate::Event::DroneExited(crate::DroneExited::of(
+        &left.event,
+        JobSummary::from(&left.job),
+    ));
+    let json = encode(&exited).expect("plain data");
+    assert!(json.contains("\"kind\":\"drone.exited\""), "{json}");
+    assert!(
+        !json.contains("assigned_drone"),
+        "the row it carries no longer names a Drone, and absent is not null: {json}"
     );
 }
 
@@ -197,7 +343,7 @@ fn the_summary_of_a_sub_dispatched_job_says_so() {
         NewJob {
             id: JobId::carried(Ulid::carried("01SUB")),
             title: Title::new("write the regression test").expect("a title"),
-            workflow_id: WorkflowId::carried(Ulid::carried("01WF")),
+            workflow: workflow(),
             owner_manifest_id: ManifestId::carried(Ulid::carried("01MF")),
             urgency: Urgency::Incident,
             atomic: true,

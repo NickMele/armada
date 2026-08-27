@@ -3,7 +3,10 @@
 //! The fixtures fill every `Option` and leave no array empty, because a
 //! round-trip over an empty record exercises almost nothing and passes anyway.
 
-use core_model::{Actor, Job, JobStatus, RepoPath, Target, WriteTargets};
+use core_model::{
+    Actor, CheckOutcome, DroneId, Job, JobStatus, RepoPath, ResolvedCheck, StepCheck, StepId,
+    Target, Ulid, WriteTargets,
+};
 
 use crate::tests::{created_at, job_id, open, sub_dispatched, top_level, TempDir};
 use crate::{LoadAllError, WriteError};
@@ -190,4 +193,206 @@ fn one_unreadable_job_does_not_hide_and_does_not_take_the_others_down() {
         }
         other => panic!("expected both halves, found {other:?}"),
     }
+}
+
+/// What each declared Check did, written against the step and read back.
+///
+/// **A pass is a row.** Writing only the failures would make a step whose
+/// checks all passed indistinguishable from one whose checks never ran, which
+/// is the vacuous pass moved from the gate into the record.
+#[test]
+fn what_a_step_s_checks_did_survives_the_process_that_ran_them() {
+    let dir = TempDir::new();
+    let stored = top_level("01CHK");
+    let step = StepId::new("reproduce");
+    let mut store = open(&dir);
+    store.insert_job(&stored, &created_at()).expect("stored");
+    store
+        .record_step_checks(
+            &job_id("01CHK"),
+            &step,
+            &[
+                StepCheck {
+                    name: "suite".to_string(),
+                    outcome: CheckOutcome::NeverRan,
+                    expected: Some("`suite` can be run".to_string()),
+                    produced: Some("`suite` is not installed".to_string()),
+                    output_path: Some(".armada/checks/01CHK/reproduce.0.log".to_string()),
+                },
+                StepCheck {
+                    name: "diff_nonempty".to_string(),
+                    outcome: CheckOutcome::Passed,
+                    expected: None,
+                    produced: None,
+                    output_path: None,
+                },
+            ],
+            &created_at(),
+        )
+        .expect("recorded");
+    drop(store);
+
+    let reopened = open(&dir);
+    let read = reopened.step_checks(&job_id("01CHK")).expect("loads");
+    assert_eq!(read.len(), 1, "one step recorded anything");
+    assert_eq!(read[0].0, step);
+    assert_eq!(read[0].1.len(), 2, "in the order the step declares them");
+    assert_eq!(read[0].1[0].outcome, CheckOutcome::NeverRan);
+    assert_eq!(
+        read[0].1[0].produced.as_deref(),
+        Some("`suite` is not installed"),
+        "which of the four not-passes it was, kept in words"
+    );
+    assert_eq!(
+        read[0].1[0].output_path.as_deref(),
+        Some(".armada/checks/01CHK/reproduce.0.log"),
+        "the row holds where the output was written, not the output"
+    );
+    assert_eq!(read[0].1[1].outcome, CheckOutcome::Passed);
+    assert!(read[0].1[1].expected.is_none(), "a pass measured nothing");
+    assert!(
+        read[0].1[1].output_path.is_none(),
+        "a built-in assertion runs no command and prints nothing"
+    );
+}
+
+/// A second run of the same step supersedes the first. A mixture of the two
+/// would be a set of results no single run ever produced.
+#[test]
+fn a_second_run_of_a_step_replaces_the_first_rather_than_joining_it() {
+    let dir = TempDir::new();
+    let stored = top_level("01AGAIN");
+    let step = StepId::new("reproduce");
+    let mut store = open(&dir);
+    store.insert_job(&stored, &created_at()).expect("stored");
+    let failed = [StepCheck {
+        name: "suite".to_string(),
+        outcome: CheckOutcome::Failed,
+        expected: Some("`suite` exits 0".to_string()),
+        produced: Some("it exited 1".to_string()),
+        output_path: Some(".armada/checks/01AGAIN/reproduce.0.log".to_string()),
+    }];
+    let passed = [StepCheck {
+        name: "suite".to_string(),
+        outcome: CheckOutcome::Passed,
+        expected: None,
+        produced: None,
+        output_path: Some(".armada/checks/01AGAIN/reproduce.0.log".to_string()),
+    }];
+    store
+        .record_step_checks(&job_id("01AGAIN"), &step, &failed, &created_at())
+        .expect("recorded");
+    store
+        .record_step_checks(&job_id("01AGAIN"), &step, &passed, &created_at())
+        .expect("recorded again");
+
+    let read = store.step_checks(&job_id("01AGAIN")).expect("loads");
+    assert_eq!(read[0].1.len(), 1, "one run, not two");
+    assert_eq!(read[0].1[0].outcome, CheckOutcome::Passed);
+}
+
+// ------------------------------------------------------------ the two added
+
+/// The whole declaration, not the id beside it.
+///
+/// A Job that came back knowing only which workflow it followed would have to
+/// read the file to find out what its steps declare, which is the thing that
+/// could have changed underneath it.
+#[test]
+fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
+    let dir = TempDir::new();
+    let stored = top_level("01FROZEN");
+    let mut store = open(&dir);
+    store.insert_job(&stored, &created_at()).expect("stored");
+    drop(store);
+
+    let reopened = open(&dir);
+    let loaded = reopened.load_job(&job_id("01FROZEN")).expect("loads");
+    let workflow = loaded.workflow();
+    assert_eq!(workflow.id().as_str(), "01WORKFLOW");
+    assert_eq!(workflow.name(), "bug");
+    assert_eq!(workflow.version(), 1);
+    assert_eq!(workflow.steps().len(), 2);
+
+    let fix = workflow.step(&StepId::new("fix")).expect("the gated step");
+    assert_eq!(fix.label(), "Fix");
+    assert_eq!(
+        fix.checks(),
+        &[
+            ResolvedCheck::ManifestCheck {
+                name: "build".to_string(),
+                run: "cargo build".to_string(),
+                expect_exit_code: 0,
+            },
+            ResolvedCheck::DiffNonempty,
+        ],
+        "the command lifted out of the Manifest, not the name it was written as"
+    );
+    assert!(
+        workflow
+            .step(&StepId::new("reproduce"))
+            .expect("the ungated step")
+            .checks()
+            .is_empty(),
+        "and an ungated step comes back declaring nothing, which is not the          same sentence as Fleet being unable to say"
+    );
+    assert_eq!(
+        loaded.workflow_id().as_str(),
+        "01WORKFLOW",
+        "read off the frozen workflow, so the join key cannot disagree with it"
+    );
+}
+
+/// `assigned_drone` folds. It was refused on read until a Drone arriving was a
+/// row in the log, because a rebuild that cannot put a value back must not
+/// quietly drop it.
+#[test]
+fn a_drone_arriving_and_leaving_folds_back_out_of_the_log() {
+    let dir = TempDir::new();
+    let stored = top_level("01WITHDRONE");
+    let drone = DroneId::carried(Ulid::carried("01DRONE"));
+    let mut store = open(&dir);
+    store.insert_job(&stored, &created_at()).expect("stored");
+
+    let queued = stored
+        .transition(Target::Queued, Actor::Human, created_at())
+        .expect("a legal move");
+    store.record_transition(&queued).expect("recorded");
+    let running = queued
+        .job
+        .transition(Target::Running, Actor::Fleet, created_at())
+        .expect("a legal move");
+    store.record_transition(&running).expect("recorded");
+    let arrived = running
+        .job
+        .drone_spawned(drone.clone(), Actor::Fleet, created_at())
+        .expect("nothing is on it yet");
+    store.record_drone_move(&arrived).expect("recorded");
+    drop(store);
+
+    let reopened = open(&dir);
+    let loaded = reopened.load_job(&job_id("01WITHDRONE")).expect("loads");
+    assert_eq!(
+        loaded.assigned_drone(),
+        Some(&drone),
+        "the column is not read back; this came off the log"
+    );
+
+    let mut store = reopened;
+    let left = loaded
+        .drone_exited(Actor::Fleet, created_at())
+        .expect("one is on it");
+    store.record_drone_move(&left).expect("recorded");
+    drop(store);
+
+    let reopened = open(&dir);
+    assert_eq!(
+        reopened
+            .load_job(&job_id("01WITHDRONE"))
+            .expect("loads")
+            .assigned_drone(),
+        None,
+        "and a Drone that left is null again, which is what suspends the \
+         liveness clock"
+    );
 }

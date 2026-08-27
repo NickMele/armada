@@ -1,33 +1,28 @@
 //! What a Drone is started as: which binary, and which model.
 //!
-//! **One reader, because they are one missing piece.** `ARMADA_AGENT_BINARY`
-//! and the model were both "nothing reads configuration yet", and both are
-//! answered the same way — a default the adapter states, an environment
-//! variable that overrides it, and the reading done here at the composition
-//! root before anything is bound. Nothing below Fleet reads either.
+//! **One reader, because they are one missing piece.** Both were "nothing reads
+//! configuration yet", and both are answered the same way — a default the
+//! adapter states, an environment variable that overrides it, read here before
+//! anything is bound. Nothing below Fleet reads either.
 //!
 //! # The default is the adapter's, and this file cannot spell it
 //!
 //! `crates/config/settings.toml` gives the AgentHarness binary path as Machine
-//! scope, `Daemon start`, defaulting to the CLI as installed and found on
-//! `PATH`. **That name is a vendor's**, so it lives in `adapters` and nowhere
-//! else: this module asks for [`HeadlessAgent::on_path`] and never learns what
-//! comes back. A composition root carrying the string would be the adapter
-//! boundary leaking into the one crate that assembles everything.
+//! scope, `Daemon start`, defaulting to the CLI as installed on `PATH`. **That
+//! name is a vendor's**, so it lives in `adapters`: this module asks
+//! [`HeadlessAgent`] for it and never learns what comes back.
 //!
-//! # An override, not a requirement
+//! # Both names are probed, not just the override
 //!
-//! [`AGENT_BINARY`] names a binary for a machine that put one somewhere
-//! unusual. Unset is the ordinary case and is **not** a refusal.
+//! Probing only [`AGENT_BINARY`] produced the failure this file exists to move
+//! earlier: Fleet bound a port, published a runtime file, accepted a Job,
+//! showed it on the Board and died at spawn with *no such file or directory* —
+//! a condition knowable before the bind. Same shape as the empty model that was
+//! accepted, stored, shown and refused at dispatch.
 //!
-//! Set-and-wrong is the case worth failing on, because it is somebody having
-//! tried to point Fleet at something. It is probed here — with the operator at
-//! the terminal, before a port is taken and before a runtime file is published
-//! — rather than at the first Drone, where it reads as a Job that will not
-//! start. The unset default is deliberately **not** probed: that would refuse
-//! the ordinary case on a machine whose `PATH` differs from a Drone's, and
-//! whether the agent is installed is Doctor's question rather than a start-up
-//! precondition.
+//! The probe uses the `PATH` a **Drone** is given, and the refusal prints it.
+//! `which` succeeding in the operator's shell is a different question, and a
+//! message that did not say so cost half an hour.
 
 use std::error::Error;
 use std::fmt;
@@ -50,22 +45,27 @@ pub const AGENT_BINARY: &str = "ARMADA_AGENT_BINARY";
 /// answer, and asking it would put a network call before the bind.
 pub const MODEL: &str = "ARMADA_MODEL";
 
-/// The harness to assemble Fleet with: the settings default, or the override,
-/// which is refused if nothing runnable is there.
+/// The harness to assemble Fleet with: the settings default, or the override.
+/// **Either one is refused if nothing runnable is there.**
 ///
 /// `path` is the `PATH` a **Drone** is given rather than this process's, which
 /// is what makes the probe answer the question actually being asked: not
 /// whether the operator can run it, but whether a Drone will find it.
 pub fn agent_binary(named: Option<String>, path: &str) -> Result<HeadlessAgent, NoSuchAgent> {
-    let Some(named) = named else {
-        return Ok(HeadlessAgent::on_path());
+    let overridden = named.is_some();
+    let harness = match named {
+        Some(named) => HeadlessAgent::at(named),
+        None => HeadlessAgent::on_path(),
     };
-    if runnable(&named, path) {
-        return Ok(HeadlessAgent::at(named));
+    if runnable(harness.program(), path) {
+        return Ok(harness);
     }
     Err(NoSuchAgent {
-        named,
+        // Read back through the adapter rather than written here. The default's
+        // spelling is a vendor's and this crate may not carry it.
+        named: harness.program().to_string(),
         path: String::from(path),
+        overridden,
     })
 }
 
@@ -128,7 +128,7 @@ fn executable(at: &Path) -> bool {
     metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
 }
 
-/// The named agent binary is not there. **Raised before the bind.**
+/// The agent binary is not there. **Raised before the bind.**
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NoSuchAgent {
     /// What was named. Carried so the message can print it — a refusal that
@@ -136,23 +136,48 @@ pub struct NoSuchAgent {
     named: String,
     /// What was searched, where the name was a bare one.
     path: String,
+    /// Whether [`AGENT_BINARY`] chose the name. The two cases need opposite
+    /// answers: unset the variable, or install the CLI.
+    overridden: bool,
+}
+
+impl NoSuchAgent {
+    /// The `PATH` that was searched. **Named in every message**: `which`
+    /// succeeding in the operator's shell says nothing about a Drone's `PATH`,
+    /// and a refusal that omitted it is what made this take half an hour.
+    pub fn path(&self) -> &str {
+        &self.path
+    }
 }
 
 impl fmt::Display for NoSuchAgent {
     fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            out,
-            "{AGENT_BINARY} names `{}`, and there is nothing runnable there",
-            self.named
-        )?;
-        if !self.named.contains('/') {
-            write!(out, " on a Drone's PATH ({})", self.path)?;
+        match self.overridden {
+            true => write!(
+                out,
+                "{AGENT_BINARY} names `{}`, and there is nothing runnable there",
+                self.named
+            )?,
+            false => write!(
+                out,
+                "the agent CLI `{}` is not installed anywhere a Drone would find it",
+                self.named
+            )?,
         }
-        out.write_str(
-            ". It is an override — unset it to use the agent CLI as installed, \
-             or name a path that exists. A Fleet started on a wrong name would \
-             fail at the first Drone instead of here",
-        )
+        if !self.named.contains('/') {
+            write!(out, " — a Drone's PATH is {}", self.path)?;
+        }
+        match self.overridden {
+            true => out.write_str(
+                ". It is an override — unset it to use the agent CLI as installed, \
+                 or name a path that exists",
+            ),
+            false => out.write_str(
+                ". Install it, or set ARMADA_AGENT_BINARY to where it already is. \
+                 A Fleet started without it would take a port, publish a runtime \
+                 file, accept a Job and fail at the first Drone",
+            ),
+        }
     }
 }
 

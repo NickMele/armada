@@ -46,6 +46,16 @@ pub enum EscalationTrigger {
     /// Evidence was submitted, honestly did not pass, and the retry limit is
     /// exhausted. The ordinary failure.
     GateFailure,
+    /// The Drone called `escape_hatch` on a Job Fleet had not marked for the
+    /// handoff. **The pull is refused and the Job surfaces**: a Drone does not
+    /// open a terminal on the operator's machine on its own initiative, but a
+    /// Drone reaching for the hatch unbidden has said it is stuck, and that is
+    /// the most reliable stuck signal there is.
+    ///
+    /// Not [`Thrashing`](Self::Thrashing): the call stands in place of
+    /// thrashing rather than following it, and nothing mechanical has to fire
+    /// first.
+    HatchUnbidden,
     /// Crash recovery. A Job marked running has no matching OS process. Set by
     /// Fleet's restart reconciliation.
     Interrupted,
@@ -98,6 +108,7 @@ impl EscalationTrigger {
         EscalationTrigger::EvidenceTooLarge,
         EscalationTrigger::FanOut,
         EscalationTrigger::GateFailure,
+        EscalationTrigger::HatchUnbidden,
         EscalationTrigger::Interrupted,
         EscalationTrigger::LoopCap,
         EscalationTrigger::ResourceExhausted,
@@ -116,6 +127,7 @@ impl EscalationTrigger {
             EscalationTrigger::EvidenceTooLarge => "evidence_too_large",
             EscalationTrigger::FanOut => "fan_out",
             EscalationTrigger::GateFailure => "gate_failure",
+            EscalationTrigger::HatchUnbidden => "hatch_unbidden",
             EscalationTrigger::Interrupted => "interrupted",
             EscalationTrigger::LoopCap => "loop_cap",
             EscalationTrigger::ResourceExhausted => "resource_exhausted",
@@ -160,6 +172,7 @@ impl EscalationTrigger {
             | EscalationTrigger::GateFailure
             | EscalationTrigger::LoopCap => Some(TriggerLevel::Step),
             EscalationTrigger::DependencyFailed
+            | EscalationTrigger::HatchUnbidden
             | EscalationTrigger::Interrupted
             | EscalationTrigger::ResourceExhausted => Some(TriggerLevel::Job),
             EscalationTrigger::EvidenceSuspect

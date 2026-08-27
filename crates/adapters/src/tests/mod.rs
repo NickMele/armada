@@ -11,6 +11,7 @@
 //! credential, a network, or an agent.
 
 mod harness;
+mod reclaim;
 pub mod repo;
 mod transcript;
 mod work_product;

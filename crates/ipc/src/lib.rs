@@ -32,8 +32,10 @@
 //!
 //! Not the full protocol surface. `operations.toml` inventories every
 //! operation; the types here serve the ones M1 needs — `list_jobs`,
-//! `propose_job`, `approve_dispatch`, `kill_drone`, `kill_job` and the event
-//! stream. Neither kill adds a type: both name a Job and answer with one. The
+//! `get_job`, `propose_job`, `approve_dispatch`, `kill_drone`, `kill_job`,
+//! `redispatch_job` and the event stream. Neither kill adds a type: both name
+//! a Job and answer with one. `redispatch_job` adds [`Redispatched`], because
+//! it is the one command that leaves two Jobs behind. The
 //! `/v0` lifeboat and version-skew handling are the Ship milestone's, and are
 //! deliberately absent rather than stubbed: a lifeboat that shares a type with
 //! the protocol it is the lifeboat for is not one.
@@ -45,23 +47,39 @@
 // does not know refuses rather than guessing.
 include!(concat!(env!("OUT_DIR"), "/protocol_version.rs"));
 
+mod checks;
 mod codec;
+mod detail;
 mod enums;
 mod error;
 mod event;
 mod ids;
 mod job;
+/// The Evidence tool's transport. **A different seam** — Fleet to Drone, not
+/// Fleet to Bridge — so it is a module rather than a flat re-export and none of
+/// its types are in `operations.toml`.
+pub mod mcp;
 mod setup;
+mod turn;
 
 #[cfg(test)]
 mod tests;
 
+pub use checks::{CheckRun, DeclaredCheck};
 pub use codec::{decode, encode, Undecodable, Unencodable};
-pub use enums::{Actor, CriterionSource, JobStatus, Origin, TopLevelOrigin, Urgency};
+pub use detail::{Criterion, Dependency, JobDetail, StepDetail, StepFacts, Verdict};
+pub use enums::{
+    Actor, CheckOutcome, CriterionSource, DependencyDirection, JobStatus, Origin, StepState,
+    TopLevelOrigin, Urgency,
+};
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
-    Cursor, Delivered, Event, JobCreated, JobStateChanged, Missed, Reason, Resync, StreamMessage,
+    Cursor, Delivered, DroneExited, DroneSpawned, Event, JobCreated, JobStateChanged,
+    JobStepAdvanced, Missed, Reason, Resync, StreamMessage,
 };
 pub use ids::{CriterionId, DroneId, Instant, JobId, ManifestId, StepId, WorkflowId};
-pub use job::{JobList, JobSummary, ProposeJob, ProposedCriterion, Subject, UnreadableJob};
-pub use setup::{ManifestSummary, ModelChoices, WorkflowSummary};
+pub use job::{
+    JobList, JobSummary, ProposeJob, ProposedCriterion, Redispatched, Subject, UnreadableJob,
+};
+pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
+pub use turn::{Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage, Withheld};

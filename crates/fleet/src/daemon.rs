@@ -50,10 +50,10 @@ use core_model::{Actor, Job, JobId, JobStatus, Target, Timestamp, TransitionReas
 use store::{LoadAllError, LoadJobError, Loaded, Moved, Store};
 use tokio::sync::Mutex;
 
-use crate::adrift::{Adrift, NotSubmitted};
+use crate::adrift::Adrift;
 use crate::clock::Clock;
 use crate::drone::{aftermath, Aftermath, Ending};
-use crate::evidence::{Call, EvidenceInbox, EvidenceTool, Landed, Recorded};
+use crate::evidence::EvidenceInbox;
 use crate::gate::{CheckBudget, Ruling};
 use crate::mint::Mint;
 use crate::working::Working;
@@ -76,6 +76,9 @@ pub struct Host {
     /// The home directory the agent CLI reads its credentials from. **The
     /// confinement's known floor** — see `crate::drone::HostPaths`.
     pub home: String,
+    /// Who the operator is. The agent CLI will not authenticate without it,
+    /// however readable its credentials are — see `crate::drone::environment`.
+    pub user: String,
     /// The strict MCP configuration a Drone is bound to.
     pub mcp_config: String,
 }
@@ -157,6 +160,11 @@ pub struct Fleet<H, V, W> {
     budget: CheckBudget,
     models: ipc::ModelChoices,
     events: api::Broadcaster,
+    /// Every Job somebody could be watching. **Minted here, not a fitting** —
+    /// nothing outside this crate holds one, because a viewer reaches it
+    /// through `api::Daemon::observe_job` rather than through the composition
+    /// root.
+    turns: api::Turns,
     inbox: EvidenceInbox,
     working: Mutex<Option<Working>>,
     /// **This process's** run id, minted once at assembly.
@@ -191,6 +199,7 @@ where
             budget: fittings.budget,
             models: fittings.models,
             events: fittings.events,
+            turns: api::Turns::new(),
             inbox: EvidenceInbox::new(),
             working: Mutex::new(None),
             run,
@@ -220,7 +229,13 @@ where
             .filter(|job| job.status() == JobStatus::Running);
         for job in interrupted {
             if let Aftermath::JobMoves(target) = aftermath(&Ending::Vanished, self.left()) {
-                self.move_job(job, target, Actor::Fleet).await?;
+                // The Drone went with the Fleet that spawned it, so the column
+                // saying one is on the Job is stale before the Job moves. A
+                // record still naming a process nobody holds is what
+                // `assigned_drone` was given an event to stop.
+                self.drone_left(job.id()).await;
+                let job = self.load(job.id()).await?;
+                self.move_job(&job, target, Actor::Fleet).await?;
                 reconciled.interrupted.push(job.id().clone());
             }
         }
@@ -371,7 +386,7 @@ where
             .map_err(|cause| Adrift::Reading(LoadJobError::Unreadable(cause)))?;
         Ok(events.iter().rev().find_map(|event| match event.moved() {
             Moved::Job { reason, .. } => Some(reason.clone()),
-            Moved::Step { .. } => None,
+            Moved::Step { .. } | Moved::Drone { .. } => None,
         }))
     }
 
@@ -382,27 +397,6 @@ where
             .await
             .as_ref()
             .map(|at_work| at_work.standing().0)
-    }
-
-    /// Record a submission from the working Job's Drone, and decide nothing.
-    ///
-    /// **The gate does not run here.** A tool call that blocked while a Check
-    /// ran would time out, so this returns the receipt and the gate runs on the
-    /// next turn — which is also what makes "nothing has been decided yet"
-    /// assertable.
-    pub async fn submit_evidence(&self, call: Call<'_>) -> Result<Recorded, NotSubmitted> {
-        let at = self.now();
-        let Some(job) = self.working_on().await else {
-            return Err(NotSubmitted::NothingIsWorking);
-        };
-        EvidenceTool::for_job(job, &self.inbox)
-            .submit(call, at)
-            .map_err(NotSubmitted::Malformed)
-    }
-
-    /// How many submissions are waiting for the gate.
-    pub fn evidence_waiting(&self) -> usize {
-        self.inbox.waiting()
     }
 
     /// The stream Fleet publishes transitions on. Cloned for the listener.
@@ -451,21 +445,31 @@ where
     pub(crate) fn now(&self) -> Timestamp {
         self.clock.now()
     }
+    /// The clock itself, for the one thing that outlives a call and still has
+    /// to stamp what it writes: a transcript's writer.
+    pub(crate) fn clock(&self) -> &Arc<dyn Clock> {
+        &self.clock
+    }
     pub(crate) fn run(&self) -> &Ulid {
         &self.run
     }
     pub(crate) fn publish(&self, event: ipc::Event) {
         self.events.publish(event);
     }
-    pub(crate) fn take_evidence(&self) -> Option<Landed> {
-        self.inbox.take()
+    /// The per-Job transcript channels. Dispatch opens one, `serving`
+    /// subscribes to it.
+    pub(crate) fn turns(&self) -> &api::Turns {
+        &self.turns
     }
-    /// Drop every submission still waiting.
+    /// The working slot, for `evidence`.
     ///
-    /// Called when a Job ends: evidence for a Job that is over has no step to
-    /// be against, and leaving it would let the next Job's gate rule on the
-    /// last one's work.
-    pub(crate) fn empty_the_inbox(&self) {
-        while self.inbox.take().is_some() {}
+    /// Everything the Evidence tool binds to is in it, and taking this lock
+    /// once is what makes which-Job, which-step and which-type one decision
+    /// rather than three reads a turn can interleave with.
+    pub(crate) fn slot(&self) -> &Mutex<Option<Working>> {
+        &self.working
+    }
+    pub(crate) fn inbox(&self) -> &EvidenceInbox {
+        &self.inbox
     }
 }

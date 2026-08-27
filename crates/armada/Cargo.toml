@@ -1,5 +1,5 @@
 [package]
-name = "fleet-bin"
+name = "armada"
 version = "0.0.0"
 edition.workspace = true
 license.workspace = true
@@ -29,9 +29,9 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal
 axum = "0.7"
 
 # **Declared dev-only, against the crate table, deliberately.** The table lists
-# `testkit` among fleet-bin's dependencies, and fleet-bin is the composition
-# root of the shipping binary — a normal dependency there puts the fake harness,
-# the fake VCS and the fake secrets provider inside the product. Recorded as a
-# deviation rather than followed silently.
+# `testkit` among the composition root's dependencies, and this is the
+# composition root of the shipping binary — a normal dependency there puts the
+# fake harness, the fake VCS and the fake secrets provider inside the product.
+# Recorded as a deviation rather than followed silently.
 [dev-dependencies]
 testkit = { path = "../testkit" }

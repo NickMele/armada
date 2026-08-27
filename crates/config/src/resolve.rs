@@ -11,71 +11,24 @@
 //! # The type is the enforcement, not a call somebody remembers to make
 //!
 //! [`ResolvedWorkflow`] has no constructor but [`ResolvedWorkflow::resolve`],
-//! and its fields are private. There is no way to build one from a
-//! [`WorkflowDef`] without the Manifest, and nothing downstream should accept a
-//! bare `WorkflowDef` — the whole value of this type is that holding one is
-//! proof the names resolved.
+//! and its fields are private. Holding one is proof the names resolved, which
+//! is why nothing downstream accepts a bare [`WorkflowDef`]. A resolved step
+//! carries the Manifest's command rather than its name, so the lookup that
+//! could have missed happens once.
 //!
-//! **A resolved step carries the command, not the name.** [`ResolvedCheck`]
-//! holds the `run` string lifted out of the Manifest, so the lookup that could
-//! have missed happens exactly once and nothing at step time performs one at
-//! all. That is the difference between a check that rejects a bad state and a
-//! type in which the bad state cannot be written down.
+//! # What it produces is `core-model`'s, because a Job keeps it
+//!
+//! [`ResolvedWorkflow::frozen`] hands back the [`FrozenWorkflow`] a Job is
+//! created with. Resolution happens here once; from then on Fleet reads the
+//! Job's copy and never this file again.
 
 use std::path::PathBuf;
 
-use core_model::{StepId, WorkflowId};
+use core_model::{FrozenWorkflow, ResolvedCheck, ResolvedStep, WorkflowId};
 
 use crate::error::{ResolveError, UnknownCheck};
 use crate::manifest::Manifest;
-use crate::workflow::{AdvanceGate, EvidenceType, MechanicalCheck, Step, WorkflowDef};
-
-/// A deterministic assertion with everything it needs already in hand.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ResolvedCheck {
-    /// The named Check, and the command it resolved to. `name` is kept beside
-    /// `run` because evidence and escalation payloads cite the Check by name,
-    /// and a bare command line in a message tells nobody which gate failed.
-    ManifestCheck {
-        name: String,
-        run: String,
-        expect_exit_code: i64,
-    },
-    DiffNonempty,
-}
-
-/// A step whose Checks have all resolved.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ResolvedStep {
-    id: StepId,
-    label: String,
-    evidence_type: Option<EvidenceType>,
-    checks: Vec<ResolvedCheck>,
-    advance_gate: AdvanceGate,
-}
-
-impl ResolvedStep {
-    pub fn id(&self) -> &StepId {
-        &self.id
-    }
-
-    pub fn label(&self) -> &str {
-        &self.label
-    }
-
-    pub fn evidence_type(&self) -> Option<EvidenceType> {
-        self.evidence_type
-    }
-
-    /// All entries must pass. Empty on the common case of an ungated step.
-    pub fn checks(&self) -> &[ResolvedCheck] {
-        &self.checks
-    }
-
-    pub fn advance_gate(&self) -> AdvanceGate {
-        self.advance_gate
-    }
-}
+use crate::workflow::{MechanicalCheck, Step, WorkflowDef};
 
 /// A workflow that can be dispatched against a specific Manifest.
 ///
@@ -85,10 +38,7 @@ impl ResolvedStep {
 pub struct ResolvedWorkflow {
     workflow: PathBuf,
     manifest: PathBuf,
-    id: WorkflowId,
-    name: String,
-    version: u32,
-    steps: Vec<ResolvedStep>,
+    frozen: FrozenWorkflow,
 }
 
 impl ResolvedWorkflow {
@@ -119,11 +69,19 @@ impl ResolvedWorkflow {
         Ok(ResolvedWorkflow {
             workflow: def.path().to_path_buf(),
             manifest: manifest.path().to_path_buf(),
-            id: def.id().clone(),
-            name: def.name().to_string(),
-            version: def.version(),
-            steps,
+            frozen: FrozenWorkflow::frozen(
+                def.id().clone(),
+                def.name().to_string(),
+                def.version(),
+                steps,
+            ),
         })
+    }
+
+    /// What a Job freezes. **The paths do not travel with it** — a path on a
+    /// record outlives the file at it, and what a Job needs is the declaration.
+    pub fn frozen(&self) -> &FrozenWorkflow {
+        &self.frozen
     }
 
     /// The definition this came from.
@@ -139,20 +97,20 @@ impl ResolvedWorkflow {
     /// The definition's own id — what a proposal's `workflow_id` must name.
     /// See [`crate::WorkflowDef::id`] for why the key exists.
     pub fn id(&self) -> &WorkflowId {
-        &self.id
+        self.frozen.id()
     }
 
     pub fn name(&self) -> &str {
-        &self.name
+        self.frozen.name()
     }
 
     pub fn version(&self) -> u32 {
-        self.version
+        self.frozen.version()
     }
 
     /// The steps, in order.
     pub fn steps(&self) -> &[ResolvedStep] {
-        &self.steps
+        self.frozen.steps()
     }
 }
 
@@ -182,11 +140,11 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
             },
         }
     }
-    ResolvedStep {
-        id: step.id().clone(),
-        label: step.label().to_string(),
-        evidence_type: step.evidence_type(),
+    ResolvedStep::frozen(
+        step.id().clone(),
+        step.label().to_string(),
+        step.evidence_type(),
         checks,
-        advance_gate: step.advance_gate(),
-    }
+        step.advance_gate(),
+    )
 }

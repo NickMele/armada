@@ -31,8 +31,7 @@
 //! work, which is the failure the whole gate exists to refuse.
 
 use adapter_traits::{Prompt, SpawnConfigRefused};
-use config::{ResolvedStep, ResolvedWorkflow};
-use core_model::{Job, StepId};
+use core_model::{FrozenWorkflow, Job, ResolvedStep, StepId};
 
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering.
 ///
@@ -61,13 +60,13 @@ turn, with the reason. Wait for that turn.";
 /// [`Prompt::assembled`] decides and this does not restate.
 pub fn first_turn(
     job: &Job,
-    workflow: &ResolvedWorkflow,
+    workflow: &FrozenWorkflow,
     at: &StepId,
 ) -> Result<Prompt, SpawnConfigRefused> {
     Prompt::assembled(&assemble(job, workflow, at))
 }
 
-fn assemble(job: &Job, workflow: &ResolvedWorkflow, at: &StepId) -> String {
+fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId) -> String {
     let mut text = String::from(BASELINE);
     text.push_str("\n\n");
     text.push_str(&job_brief(job));
@@ -111,7 +110,7 @@ fn job_brief(job: &Job) -> String {
 /// **The stop sits inside the list rather than after it**, because where the
 /// line falls is the boundary, and later parts carry the specific prohibition
 /// rather than a general one.
-fn where_you_are(workflow: &ResolvedWorkflow, at: &StepId) -> String {
+fn where_you_are(workflow: &FrozenWorkflow, at: &StepId) -> String {
     let steps = workflow.steps();
     let position = steps.iter().position(|step| step.id() == at);
     let mut block = format!("WHERE YOU ARE\n\nThis task runs in {} parts.", steps.len());

@@ -17,9 +17,9 @@
 //! **The server itself.** Answering a tool call means turning JSON-RPC bytes
 //! into a typed call, and gate rule five scopes that to the crates where bytes
 //! enter the process. `fleet::evidence` is everything from the typed call
-//! inward and says the same thing from the other side. This module writes the
-//! document that names where the server will be; nothing serves on that address
-//! yet, which is the same state `fleet-bin` is in with its own listener.
+//! inward and says the same thing from the other side. What answers on the
+//! address this document names is `api`'s Evidence endpoint, which is where the
+//! JSON-RPC is read and where `ipc` does the reading.
 
 use std::fs;
 use std::io;

@@ -39,8 +39,9 @@
 //! # What is not here
 //!
 //! No removal, no sweep, no retention. [`Vcs`] has no method for it, so this
-//! file could not offer one anyway. That is the point: a worktree survives
-//! every terminal state because nothing in the workspace can delete one.
+//! file could not offer one anyway — a worktree survives every terminal state
+//! because nothing Fleet hands a Drone can delete one. Removal is a person's
+//! act, at `armada clean`, through [`reclaim`](crate::reclaim()).
 
 use std::fs;
 use std::path::Path;

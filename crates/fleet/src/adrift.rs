@@ -29,7 +29,9 @@ use std::fmt;
 use std::io;
 
 use adapter_traits::{SpawnConfigRefused, WorktreeSpecRefused};
-use core_model::{IllegalStepTransition, IllegalTransition, JobId, StepId};
+use core_model::{
+    IllegalDroneMove, IllegalStepTransition, IllegalTransition, JobId, JobStatus, StepId,
+};
 use store::{LoadAllError, LoadJobError, WriteError};
 
 /// A Job that could not be carried forward, and what stopped it.
@@ -48,6 +50,9 @@ pub enum Adrift {
     IllegalMove(IllegalTransition),
     /// **A bug in Fleet**, for the inner machine.
     IllegalStepMove(IllegalStepTransition),
+    /// **A bug in Fleet**, for the pointer a Drone's presence writes: a spawn
+    /// onto a Job that already holds one.
+    IllegalDroneMove(IllegalDroneMove),
     /// The Job's id or the configured repository root could not name a
     /// worktree.
     Unworkable {
@@ -70,6 +75,12 @@ pub enum Adrift {
         job: JobId,
         cause: Box<dyn Error + Send + Sync>,
     },
+    /// The Drone's transcript, or the Job's log, could not be opened.
+    ///
+    /// **Nothing was spawned.** The record is opened before the Drone for that
+    /// reason: a Job whose work cannot be written down is one a person should
+    /// see, and a disk that refuses a file will refuse the worktree next.
+    NoTranscript { job: JobId, cause: io::Error },
     /// The gate ruled and the Drone could not be told. **The step still
     /// advanced** — the ruling is Fleet's and does not depend on the Drone
     /// hearing it — so this says a session went deaf, not that a verdict was
@@ -82,6 +93,16 @@ pub enum Adrift {
     /// **Not the same as "it is gone"** — folding a failed reading into absence
     /// is how a live Drone gets declared interrupted.
     NotReaped { job: JobId, cause: io::Error },
+    /// A redispatch was asked for on a Job that is not waiting for a person.
+    ///
+    /// **Not an illegal transition**, which is why it is its own variant: the
+    /// machine was never asked. A redispatch mints a replacement, so it is a
+    /// refusal to *create* rather than to move, and there is no edge whose
+    /// absence could have said so.
+    NotRedispatchable { job: JobId, status: JobStatus },
+    /// A redispatch was asked for on a Job that is a step of another Job.
+    /// Replacing one is the parent's act, and nothing dispatches a sub-Job yet.
+    NotReplaceable { job: JobId },
     /// A proposal carried a title nothing could be picked out of a list by.
     Unnameable,
     /// A proposal named a workflow this Fleet does not hold.
@@ -116,6 +137,12 @@ impl fmt::Display for Adrift {
                 out,
                 "Fleet asked for a step move the machine refuses: {cause}"
             ),
+            Adrift::IllegalDroneMove(cause) => {
+                write!(
+                    out,
+                    "Fleet asked to put a drone where it cannot go: {cause}"
+                )
+            }
             Adrift::Unworkable { job, cause } => {
                 write!(
                     out,
@@ -124,6 +151,11 @@ impl fmt::Display for Adrift {
                     cause.said()
                 )
             }
+            Adrift::NoTranscript { job, cause } => write!(
+                out,
+                "{}'s work could not be written down and nothing was spawned: {cause}",
+                job.as_str()
+            ),
             Adrift::NoWorktree { job, cause } => write!(
                 out,
                 "{} has no worktree and nothing was spawned: {cause}",
@@ -157,6 +189,19 @@ impl fmt::Display for Adrift {
                 "whether {}'s Drone had exited could not be established: {cause}",
                 job.as_str()
             ),
+            Adrift::NotRedispatchable { job, status } => write!(
+                out,
+                "{} is {} and cannot be redispatched. Redispatch replaces a Job that stopped and \
+                 is waiting for a person, which is `escalated`",
+                job.as_str(),
+                status.as_wire()
+            ),
+            Adrift::NotReplaceable { job } => write!(
+                out,
+                "{} was dispatched by a step of another Job, and replacing it is that Job's act \
+                 rather than this one's",
+                job.as_str()
+            ),
             Adrift::Unnameable => out.write_str("a Job needs a title somebody can read"),
             Adrift::NoSuchWorkflow { named, held } => write!(
                 out,
@@ -185,13 +230,18 @@ impl Error for Adrift {
             Adrift::Writing(cause) => Some(cause),
             Adrift::IllegalMove(cause) => Some(cause),
             Adrift::IllegalStepMove(cause) => Some(cause),
+            Adrift::IllegalDroneMove(cause) => Some(cause),
             Adrift::NoWorktree { cause, .. } | Adrift::NoDrone { cause, .. } => {
                 Some(cause.as_ref())
             }
-            Adrift::NotTold { cause, .. } | Adrift::NotReaped { cause, .. } => Some(cause),
+            Adrift::NotTold { cause, .. }
+            | Adrift::NotReaped { cause, .. }
+            | Adrift::NoTranscript { cause, .. } => Some(cause),
             Adrift::Unworkable { .. }
             | Adrift::NotConfigurable { .. }
             | Adrift::NoSuchStep { .. }
+            | Adrift::NotRedispatchable { .. }
+            | Adrift::NotReplaceable { .. }
             | Adrift::Unnameable
             | Adrift::NoSuchWorkflow { .. }
             | Adrift::NoSuchManifest { .. }
@@ -211,6 +261,22 @@ pub enum NotSubmitted {
     /// against. The Evidence tool is bound to a Job at construction, so this is
     /// a call that arrived after its Drone's Job ended.
     NothingIsWorking,
+    /// The Job is standing at a step its frozen workflow does not name. **A
+    /// fault in Fleet, not in the call**, and nothing the Drone can do about it.
+    NoSuchStep { step: StepId },
+    /// The step declares no work product, so there is no type for Fleet to
+    /// record the submission under. A Drone cannot supply one — the tool has no
+    /// parameter for it, because a Drone is never told what its step declared.
+    StepDeclaresNothing { step: StepId },
+    /// Evidence for this step is already waiting for the gate.
+    ///
+    /// **This is the "already advanced" refusal**, arriving one moment earlier
+    /// than the phrase suggests: the tool names no step, so a submission that
+    /// beats the gate and one that follows it are the same bytes, and the
+    /// distinguishable case is the second call rather than the stale step.
+    /// Refused rather than queued — a second submission would be ruled on
+    /// against whatever step the first one advanced the Job to.
+    AlreadyWaiting { step: StepId },
     /// The call itself was not a submission — a `facts_note` with no note, an
     /// empty `shown_by`.
     Malformed(verification::NotASubmission),
@@ -219,9 +285,31 @@ pub enum NotSubmitted {
 impl fmt::Display for NotSubmitted {
     fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            NotSubmitted::NothingIsWorking => {
-                out.write_str("no Job is being worked, so there is nothing to submit against")
-            }
+            NotSubmitted::NothingIsWorking => out.write_str(
+                "no Job is being worked, so there is no step for this submission \
+                 to be against. Stop — the Job this Drone was started for has \
+                 already ended",
+            ),
+            NotSubmitted::NoSuchStep { step } => write!(
+                out,
+                "the Job is standing at step `{}`, which its workflow does not \
+                 name. This is a fault in Fleet and not in the submission",
+                step.as_str()
+            ),
+            NotSubmitted::StepDeclaresNothing { step } => write!(
+                out,
+                "step `{}` declares no work product, so there is nothing for a \
+                 submission to be recorded as. This is a fault in the workflow \
+                 and not in the submission",
+                step.as_str()
+            ),
+            NotSubmitted::AlreadyWaiting { step } => write!(
+                out,
+                "the submission already made for step `{}` has not been checked \
+                 yet. Wait for the outcome — it arrives as a later turn, and a \
+                 second submission is not read",
+                step.as_str()
+            ),
             NotSubmitted::Malformed(cause) => write!(out, "{cause}"),
         }
     }
@@ -230,7 +318,10 @@ impl fmt::Display for NotSubmitted {
 impl Error for NotSubmitted {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            NotSubmitted::NothingIsWorking => None,
+            NotSubmitted::NothingIsWorking
+            | NotSubmitted::NoSuchStep { .. }
+            | NotSubmitted::StepDeclaresNothing { .. }
+            | NotSubmitted::AlreadyWaiting { .. } => None,
             NotSubmitted::Malformed(cause) => Some(cause),
         }
     }

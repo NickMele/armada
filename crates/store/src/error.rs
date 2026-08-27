@@ -26,7 +26,9 @@
 use std::error::Error;
 use std::fmt;
 
-use core_model::{IllegalStepTransition, IllegalTransition, JobId, JobStatus, StepId, StepState};
+use core_model::{
+    IllegalDroneMove, IllegalStepTransition, IllegalTransition, JobId, JobStatus, StepId, StepState,
+};
 
 use crate::read::Loaded;
 
@@ -185,17 +187,32 @@ pub enum RowError {
         seq: i64,
         cause: IllegalStepTransition,
     },
-    /// `assigned_drone` is set, and the record offers no way to put it back.
+    /// The log records a Drone arriving on a Job that already held one, or
+    /// leaving one that held none.
+    IllegalRecordedDroneMove {
+        job_id: JobId,
+        seq: i64,
+        cause: IllegalDroneMove,
+    },
+    /// A column the record offers no way to put back, holding a value.
     ///
-    /// The log carries what a machine moved, and nothing moves this one: there
-    /// is no event for assigning a Drone, so the rebuild would drop the value
-    /// silently. `current_step_id` was here too until a step move became a row
-    /// in the log — which is the shape a writer for this field needs before the
-    /// column can be read back.
+    /// The log carries what a machine moved, so a column the rebuild cannot
+    /// reach is refused rather than dropped silently. `current_step_id` was here
+    /// until a step move became a row in the log, and `assigned_drone` until a
+    /// Drone's arrival did.
     ColumnNotReconstructable {
         job_id: JobId,
         column: &'static str,
         value: String,
+    },
+    /// A Job written before its workflow was frozen onto the row.
+    ///
+    /// Nothing in a pre-V7 store records which definition a Job followed, and a
+    /// step backfilled as declaring no Check would read as an ungated step
+    /// rather than as a gap. So it is named, and the Job is carried out of
+    /// `load_all_jobs` beside the ones that did load.
+    WorkflowNotFrozen {
+        job_id: JobId,
     },
 }
 
@@ -362,6 +379,11 @@ display!(RowError, |self, f| match self {
     ),
     RowError::IllegalRecordedStepTransition { job_id, seq, cause } =>
         write!(f, "job {}: event {seq} records {cause}", job_id.as_str()),
+    RowError::IllegalRecordedDroneMove { job_id, seq, cause } => write!(
+        f,
+        "job {}: event {seq} records that {cause}",
+        job_id.as_str()
+    ),
     RowError::ColumnNotReconstructable {
         job_id,
         column,
@@ -369,6 +391,11 @@ display!(RowError, |self, f| match self {
     } => write!(
         f,
         "job {} has {column} = `{value}`, and the record offers no way to set it",
+        job_id.as_str()
+    ),
+    RowError::WorkflowNotFrozen { job_id } => write!(
+        f,
+        "job {} was written before its workflow was frozen onto the row",
         job_id.as_str()
     ),
 });

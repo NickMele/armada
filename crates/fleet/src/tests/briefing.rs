@@ -8,7 +8,7 @@
 
 use core_model::{
     AcceptanceCriterion, CriterionId, CriterionSource, Facts, Job, JobId, ManifestId, ModelName,
-    NewJob, StepId, StepSeed, Timestamp, TopLevelOrigin, Ulid, Urgency, WorkflowId,
+    NewJob, StepId, StepSeed, Timestamp, TopLevelOrigin, Ulid, Urgency,
 };
 use testkit::{Gate, Sketch};
 
@@ -19,7 +19,7 @@ fn a_job() -> Job {
         NewJob {
             id: JobId::carried(Ulid::carried("01TEST00000000000000000001")),
             title: core_model::Title::new("fix the off-by-one").expect("a title"),
-            workflow_id: WorkflowId::carried(Ulid::carried("01WF")),
+            workflow: a_workflow(),
             owner_manifest_id: ManifestId::carried(Ulid::carried("01MF")),
             urgency: Urgency::Normal,
             atomic: false,
@@ -52,8 +52,8 @@ fn a_job() -> Job {
     )
 }
 
-fn a_workflow() -> config::ResolvedWorkflow {
-    testkit::resolved(&[
+fn a_workflow() -> core_model::FrozenWorkflow {
+    testkit::frozen(&[
         Sketch {
             id: "implement",
             label: "Implement",

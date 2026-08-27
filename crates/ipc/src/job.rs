@@ -78,6 +78,11 @@ pub struct JobSummary {
     /// what suspends the liveness clock.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assigned_drone: Option<DroneId>,
+    /// The Job this one replaces. **Lineage, and the only field on the row a
+    /// repeat can be counted along** — a redispatch mints a new Job, so
+    /// without this a Board reads every second failure as a first one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub redispatched_from: Option<JobId>,
 }
 
 impl JobSummary {
@@ -100,8 +105,24 @@ impl JobSummary {
             model: job.model().as_str().to_string(),
             current_step_id: job.current_step_id().map(StepId::from),
             assigned_drone: job.assigned_drone().map(DroneId::from),
+            redispatched_from: job.redispatched_from().map(JobId::from),
         }
     }
+}
+
+/// What a redispatch did. **Two Jobs, because a redispatch is two acts.**
+///
+/// The failed Job is killed and a replacement is minted carrying
+/// `redispatched_from`; both are answered so a caller learns the new id
+/// without waiting for the stream and re-reading the Board to find it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Redispatched {
+    /// The Job that failed, now `killed`. Its worktree and branch are as its
+    /// Drone left them — nothing in Armada removes either.
+    pub replaced: JobSummary,
+    /// The replacement, at the approval gate, with `redispatched_from` set to
+    /// [`replaced`](Redispatched::replaced)'s id.
+    pub dispatched: JobSummary,
 }
 
 /// The redaction, at the Fleet boundary, with no reason to hand.

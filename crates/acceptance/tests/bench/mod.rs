@@ -30,7 +30,7 @@ use core_model::{
     AcceptanceCriterion, Actor, CriterionId, CriterionSource, Facts, IllegalStepTransition,
     IllegalTransition, Job, JobEvent, JobId, JobStatus, JobStep, ManifestId, ModelName, NewJob,
     StepEvent, StepId, StepSeed, StepState, StepTarget, Target, Timestamp, Title, TopLevelOrigin,
-    Ulid, Urgency, WorkflowId,
+    Ulid, Urgency,
 };
 use fleet::{apply, rule_on, AtStep, CheckBudget, Clock, Mint, Ruling};
 use testkit::{resolved, FakeVcs, FakeWorkProduct, Gate, Sketch};
@@ -203,7 +203,7 @@ impl Bench {
         let new = NewJob {
             id,
             title: Title::new(title).expect("a title somebody could pick out of a list"),
-            workflow_id: WorkflowId::carried(Ulid::carried("01WORKFLOWBUG")),
+            workflow: self.workflow.frozen().clone(),
             owner_manifest_id: ManifestId::carried(Ulid::carried("01FIXTUREMANIFEST")),
             urgency: Urgency::Normal,
             atomic: false,
@@ -211,6 +211,7 @@ impl Bench {
             acceptance_criteria: criteria(),
             steps: self
                 .workflow
+                .frozen()
                 .steps()
                 .iter()
                 .enumerate()
@@ -280,8 +281,8 @@ impl Bench {
     /// gate**, called directly, because a hermetic test cannot reach the loop
     /// that ordinarily calls it.
     pub async fn gate(&self, run: &Run, step: &StepId, submitted: &Submission) -> Ruling {
-        let at =
-            AtStep::named(&self.workflow, step, &run.worktree).expect("a step of the workflow");
+        let at = AtStep::named(self.workflow.frozen(), step, &run.worktree)
+            .expect("a step of the workflow");
         rule_on(at, submitted, &self.work, self.budget).await
     }
 

@@ -18,17 +18,15 @@
 //! them. A history the machine would not admit fails to load instead of
 //! producing a Job no legal sequence of moves could reach.
 //!
-//! The log carries what a machine moved, and there are two machines: a status
-//! transition and a step move are both rows in it, in one order. A step move
-//! that could not be ordered against the status transitions around it could not
-//! be replayed at all, because the inner machine only advances beneath two of
-//! the twelve statuses.
+//! The log carries what a machine moved, and a status transition, a step move
+//! and a Drone arriving are all rows in it, in one order. A step move that
+//! could not be ordered against the status transitions around it could not be
+//! replayed at all, because the inner machine only advances beneath two of the
+//! twelve statuses.
 //!
-//! What that costs: a field with no machine has no event, so it can only be
-//! authoritative on the row. `assigned_drone` is the one left, and a later
-//! writer for it needs an event of its own or it will not survive a restart the
-//! way the rest does. It is checked rather than assumed — see
-//! [`RowError::ColumnNotReconstructable`].
+//! What that costs: a field with no event can only be authoritative on the row,
+//! and it is checked rather than assumed — see
+//! [`RowError::ColumnNotReconstructable`]. `branch` is the one left.
 //!
 //! # The rule that cost v1 twenty-one Jobs
 //!
@@ -57,6 +55,7 @@
 mod columns;
 mod error;
 mod fold;
+mod forget;
 mod open;
 mod read;
 mod row;
@@ -68,6 +67,7 @@ mod tests;
 
 pub use error::{DatabaseFault, LoadAllError, LoadJobError, OpenError, RowError, WriteError};
 pub use fold::{Moved, RecordedEvent};
+pub use forget::Forgotten;
 pub use open::Store;
 pub use read::{Loaded, StatusRepair};
 pub use schema::KNOWN_SCHEMA_VERSION;

@@ -55,8 +55,30 @@ storage = "Column"
 nullable = "Yes"
 frozen_at = "Never"
 purpose = "The Drone working this Job, null if not dispatched."
-in_code = "Not yet"
-notes = "Presence, not state. Null also suspends the liveness clock — see the `running` status row."
+in_code = "Yes"
+notes = "Presence, not state. Null also suspends the liveness clock — see the `running` status row. Folded from the log like `status`: a Drone arriving and a Drone leaving are each a row in `job_events`, carrying the `drone_id` and the status they happened beneath. The column is the cache."
+why = "A column written in place could say a Drone is on a Job and never say which one left, or when. It was refused on read for want of an event until it had one, because a rebuild that cannot put a value back must not drop it silently."
+
+[fields.branch]
+type = "string"
+table = "jobs"
+storage = "Column"
+nullable = "Yes"
+frozen_at = "Never"
+purpose = "The git branch the Job's worktree is checked out on. Null until a worktree exists."
+in_code = "Yes"
+notes = "Written when dispatch makes the worktree, from what the worktree says rather than from the id. Not folded from the log: no event describes a worktree, so the column is this field's authority the way every non-status column is. It overwrites, because a branch can be renamed."
+why = "Dispatch derives `armada/<job_id>` today and a formula was enough while nothing could differ. A derived branch cannot be renamed, cannot survive a change to the naming scheme, and cannot record a worktree made some other way — the same argument that stores `owner_manifest_id` rather than inferring it from a path."
+
+[fields.created_at]
+type = "timestamp"
+table = "jobs"
+storage = "Column"
+nullable = "No"
+frozen_at = "Creation"
+purpose = "When the Job was created. What a whole-Job elapsed is measured from."
+in_code = "Yes"
+notes = "The instant every constructor already takes. It was a column and not a field while nothing read it — the rebuild needed it to stamp the `job_steps` rows — and it is on the record now because creation writes no event, so nothing else on the Job can answer how long it has been open."
 
 [fields.atomic]
 type = "bool"
@@ -353,17 +375,28 @@ in_code = "Not yet"
 notes = "Not a scale: retry limits, escalation thresholds and heartbeat interval belong to the Production Support Incident workflow variant instead. This field exists for what a variant cannot carry — a security bump selects no different workflow at all. It is read by scheduling and notification routing, never by an approval gate."
 why = "A scale invites triage theatre, since every Job arrives feeling urgent; gating approval on it would mean the weakest supervision path gets taken exactly when judgement is worst."
 
-[fields.workflow_id]
-type = "id"
+[fields.workflow]
+type = "object — the WorkflowDef, resolved"
 table = "jobs"
 storage = "Column"
 nullable = "No"
 frozen_at = "Creation"
+purpose = "The WorkflowDef this Job follows, as it stood when the Job was created: its steps, their labels, their evidence types and the Checks each declares with the command already lifted out of the Manifest."
+in_code = "Yes"
+notes = "Written once and never updated. Fleet reads this and never `.armada/workflows/`, so editing a definition changes the next Job rather than a running one. `workflow_id` is read off it rather than stored beside it. The file it came from is not carried: a path on a record outlives the file at it."
+why = "A step that declared two Checks when a person approved the Job still declares two when it runs. A gate that can move under an approved Job makes the approval meaningless — the same discipline `acceptance_criteria` already had, applied to the other thing creation freezes."
+
+[fields.workflow_id]
+type = "id"
+table = "jobs"
+storage = "Derived — not stored"
+nullable = "No"
+frozen_at = "Creation"
 purpose = "Which WorkflowDef this Job follows."
-in_code = "Not yet"
+in_code = "Yes"
 open_questions = ["Which field names the WorkflowDef a Job follows — task_type or workflow_id?"]
-notes = "Not named `task_type`: `task` is a banned synonym for Job in the Design System lexicon, and every other reference on this record names the thing it points at."
-why = "\"Type\" would read as a closed set, where this is a pointer to a row."
+notes = "Not named `task_type`: `task` is a banned synonym for Job in the Design System lexicon, and every other reference on this record names the thing it points at. Read off `workflow`, and written to a column of the same name so the Board can join and filter on it without unpacking the definition."
+why = "\"Type\" would read as a closed set, where this is a pointer to a row. Derived rather than stored a second time because two statements of one fact can disagree, and this one is a join key."
 
 [fields.workflow_status]
 type = "object"

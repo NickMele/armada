@@ -50,5 +50,10 @@ mod tests;
 
 pub use error::{Fault, LoadError, Refusal, ResolveError, UnknownCheck};
 pub use manifest::{Check, Command, Manifest};
-pub use resolve::{ResolvedCheck, ResolvedStep, ResolvedWorkflow};
-pub use workflow::{AdvanceGate, EvidenceType, MechanicalCheck, Step, Structure, WorkflowDef};
+pub use resolve::ResolvedWorkflow;
+pub use workflow::{MechanicalCheck, Step, Structure, WorkflowDef};
+
+// Re-exported, not re-declared. A Job carries its resolved workflow, so these
+// four are spelled in `core-model` where the record is — and every caller that
+// already said `config::ResolvedStep` still means the same type.
+pub use core_model::{AdvanceGate, EvidenceType, FrozenWorkflow, ResolvedCheck, ResolvedStep};

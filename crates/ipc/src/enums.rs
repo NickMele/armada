@@ -85,6 +85,11 @@ wire_enum! {
     Origin, DomainOrigin, "an origin"
 }
 wire_enum! {
+    /// What one declared mechanical Check did. Five, from
+    /// `domain/check-outcomes.toml`, and only `passed` advances a step.
+    CheckOutcome, core_model::CheckOutcome, "a check outcome"
+}
+wire_enum! {
     /// Who caused a transition. Three ways, and a message that did not record
     /// which never will.
     Actor, core_model::Actor, "an actor"
@@ -92,6 +97,15 @@ wire_enum! {
 wire_enum! {
     /// Which verification source answers a criterion.
     CriterionSource, core_model::CriterionSource, "a criterion source"
+}
+wire_enum! {
+    /// Where one step of the frozen WorkflowDef got to. The inner machine's
+    /// states, which are rows rather than a field on the Job.
+    StepState, core_model::StepState, "a step state"
+}
+wire_enum! {
+    /// Which way a dependency edge points.
+    DependencyDirection, core_model::DependencyDirection, "a dependency direction"
 }
 
 /// The four origins a Job proposed over the wire may claim.

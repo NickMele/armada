@@ -136,10 +136,10 @@ async fn until(app: &Router, what: &str, ready: impl Fn(&JobSummary) -> bool) ->
 /// `Fleet::turn` by hand.
 ///
 /// Every call below goes through the router, and every advance is the loop's.
-/// The two submissions stand in for the Drone's Evidence tool, which is the one
-/// part with no server in front of it yet — the Fleet they are submitted to is
-/// the same one the router answers from, which is exactly what the second `Arc`
-/// buys and what the shape before it could not express.
+/// The two submissions are made against Fleet directly rather than through the
+/// Evidence endpoint, which `tests::evidence` drives end to end — what this one
+/// is about is that the Fleet they reach is the same one the router answers
+/// from, which is what the second `Arc` buys.
 #[tokio::test]
 async fn a_job_approved_over_the_api_reaches_a_terminal_state() {
     let home = TempDir::new();
@@ -281,6 +281,53 @@ async fn a_job_created_while_a_client_is_connected_reaches_that_client() {
         "the row travels whole, so a Board draws it without a second call"
     );
     assert_eq!(created.actor.as_wire(), "human");
+}
+
+/// **A step move reaches the stream.** The complaint this answers is a Job
+/// running for twenty minutes and a Board that had to be reloaded to see it
+/// move: the step is what changes most often, and it published nothing.
+///
+/// The subscription is taken before the dispatch, in the order the listener
+/// takes it, so the events are read in the order they were produced.
+#[tokio::test]
+async fn a_step_that_moves_while_a_client_is_connected_reaches_that_client() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let job = fleet
+        .propose(a_proposal("watch it advance"))
+        .await
+        .expect("a Job at the gate");
+    worktree_directory(&home, job.id());
+    let events = fleet.events();
+    let mut watching = events.subscribe();
+
+    fleet.approve(job.id()).await.expect("released to run");
+
+    // `awaiting_approval -> queued`, `queued -> running`, then the first step
+    // entering `running` — which is the one that used to be silent.
+    let advanced = loop {
+        let Some(api::Next::Send(delivered)) = watching.next().await else {
+            panic!("no step move reached the stream");
+        };
+        if let ipc::Event::JobStepAdvanced(advanced) = delivered.event {
+            break advanced;
+        }
+    };
+
+    assert_eq!(advanced.step_id.as_str(), "implement");
+    assert_eq!(advanced.from.as_wire(), "not_started");
+    assert_eq!(advanced.to.as_wire(), "running");
+    assert_eq!(
+        advanced.status.as_wire(),
+        "running",
+        "the status the move happened beneath — the Job did not move"
+    );
+    assert_eq!(
+        advanced.job.current_step_id.as_ref().map(|id| id.as_str()),
+        Some("implement"),
+        "the row travels whole, so a Board updates it in place"
+    );
+    assert_eq!(advanced.actor.as_wire(), "fleet");
 }
 
 /// **A client that reconnects sees every Job that exists.**

@@ -48,15 +48,22 @@ pub struct Route {
 /// placeholder is worse than one that 404s, because a client cannot tell the
 /// difference between not built and not working.
 ///
-/// Every path spells its operation's inventory key in its last segment, which
-/// is what lets a reader check a row against `operations.toml` by eye. The
-/// lifeboat's `POST /v0/jobs/:id/kill` is the same act as `kill_job` under a
-/// frozen prefix that shares nothing with this table, by design.
+/// A path is checkable against its inventory key by eye. `list_jobs` and
+/// `get_job` are the collection and the member and name no act; every other row
+/// spells its key in the last segment, except `redispatch`, which drops `_job`
+/// because no `redispatch_drone` exists to tell it apart from. The lifeboat's
+/// `POST /v0/jobs/:id/kill` is the same act as `kill_job` under a frozen prefix
+/// that shares nothing with this table, by design.
 pub const SERVED: &[Route] = &[
     Route {
         operation: "list_jobs",
         method: "GET",
         path: "/jobs",
+    },
+    Route {
+        operation: "get_job",
+        method: "GET",
+        path: "/jobs/:job_id",
     },
     Route {
         operation: "list_workflows",
@@ -93,7 +100,21 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/kill_job",
     },
-    // Both event kinds are served on the one socket, and both are named:
+    Route {
+        operation: "redispatch_job",
+        method: "POST",
+        path: "/jobs/:job_id/redispatch",
+    },
+    // A socket rather than a body: it opens with what has already happened and
+    // then continues, which no request-response shape carries. The path drops
+    // `_job` for the reason `redispatch` does — the segment before it already
+    // names the Job.
+    Route {
+        operation: "observe_job",
+        method: "GET",
+        path: "/jobs/:job_id/observe",
+    },
+    // Every event kind is served on the one socket, and every one is named:
     // `SERVED` is what a rule compares to the inventory, so a kind published
     // and not listed here is a kind no rule can see.
     Route {
@@ -103,6 +124,11 @@ pub const SERVED: &[Route] = &[
     },
     Route {
         operation: "job.state_changed",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "job.step_advanced",
         method: "GET",
         path: "/events",
     },
@@ -162,6 +188,11 @@ impl<D> Served<D> {
     pub fn events(&self) -> Broadcaster {
         self.events.clone()
     }
+
+    /// The daemon, for a handler in another module of this crate.
+    pub(crate) fn daemon(&self) -> &D {
+        &self.daemon
+    }
 }
 
 impl<D> Clone for Served<D> {
@@ -181,13 +212,20 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/workflows", get(list_workflows::<D>))
         .route("/manifests", get(list_manifests::<D>))
         .route("/models", get(list_models::<D>))
+        .route("/jobs/:job_id", get(get_job::<D>))
         .route(
             "/jobs/:job_id/approve_dispatch",
             post(approve_dispatch::<D>),
         )
         .route("/jobs/:job_id/kill_drone", post(kill_drone::<D>))
         .route("/jobs/:job_id/kill_job", post(kill_job::<D>))
+        .route("/jobs/:job_id/redispatch", post(redispatch_job::<D>))
+        .route("/jobs/:job_id/observe", get(observe_job::<D>))
         .route("/events", get(events::<D>))
+        // The Evidence endpoint, on the same listener and deliberately not in
+        // `SERVED`: it is the Fleet/Drone seam rather than the Fleet/Bridge
+        // one, and the inventory this table is checked against is Bridge's.
+        .merge(crate::mcp::mounted::<D>())
         .with_state(served)
 }
 
@@ -196,6 +234,18 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
 async fn list_jobs<D: Daemon>(State(served): State<Served<D>>) -> Response {
     match served.daemon.list_jobs().await {
         Ok(jobs) => answer(StatusCode::OK, &jobs, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// One Job in full. **The Board row plus what the list redacts** — the steps
+/// and where each got to, the criteria, the branch, the brief.
+async fn get_job<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served.daemon.get_job(JobId::carried(job_id)).await {
+        Ok(detail) => answer(StatusCode::OK, &detail, &served.run_id),
         Err(refusal) => refused(refusal),
     }
 }
@@ -282,6 +332,19 @@ async fn kill_job<D: Daemon>(
     }
 }
 
+/// Kill the failed Job and mint its replacement. **Two Jobs come back**, and
+/// the answer is 200 rather than 201 because the act a caller asked for is the
+/// recovery, not the creation — the new Job's id is in the body.
+async fn redispatch_job<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served.daemon.redispatch_job(JobId::carried(job_id)).await {
+        Ok(both) => answer(StatusCode::OK, &both, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 // ------------------------------------------------------------- the upgrade
 
 /// The event stream. **Global, and a client subscribes to nothing** — one
@@ -290,6 +353,25 @@ async fn kill_job<D: Daemon>(
 /// Nothing is read from the socket. The stream is one-directional by design:
 /// there is no subscribe message to read, and a connection that carried state
 /// would be a connection that is expensive to drop and remake.
+/// One Job's turns. **Per-Job, and not on `/events`** — that stream is one
+/// drop-oldest channel carrying every Job, and a transcript row on it would
+/// evict the state changes a Board is drawn from.
+///
+/// The daemon is asked **before** the upgrade, so a Job that does not exist is
+/// a 404 the caller reads at the moment they asked rather than a socket that
+/// opens and says nothing. What comes back already holds the subscription and
+/// the history, in that order.
+async fn observe_job<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+    upgrade: WebSocketUpgrade,
+) -> Response {
+    match served.daemon.observe_job(JobId::carried(job_id)).await {
+        Ok(observed) => upgrade.on_upgrade(move |socket| crate::observing::relay(socket, observed)),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 async fn events<D: Daemon>(State(served): State<Served<D>>, upgrade: WebSocketUpgrade) -> Response {
     upgrade.on_upgrade(move |socket| watch(socket, served))
 }

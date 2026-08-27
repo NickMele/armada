@@ -15,6 +15,12 @@
 //! and no step id: Fleet knows the current step, and a Drone naming one could
 //! only agree or disagree, and the disagreeing case would need a rule.
 //!
+//! **The tool a Drone reaches carries neither either**, and refuses a call that
+//! invents one rather than dropping it — see `ipc::mcp`. What that buys is a
+//! bound submission and not an authenticated one: a caller cannot choose a Job,
+//! and nothing stops a caller that is not the Drone from reaching the endpoint
+//! at all.
+//!
 //! # The fields are the ones the Drone prompt already names
 //!
 //! `claimed`, `shown_by` and `not_claimed` — the Agent Copy Contract's Work
@@ -37,18 +43,22 @@
 //!
 //! **The MCP server itself.** Turning a JSON-RPC tool call into a [`Call`]
 //! means deserializing untyped bytes, and gate rule five scopes that to `store`
-//! and `ipc` — bytes enter the process in exactly two places, and the
-//! Fleet/Drone seam is neither of them. It is also injected into a Drone's
-//! strict config, and nothing in this workspace spawns a Drone yet. So this
-//! module is everything from the typed call inward, and the transport arrives
-//! with the spawn that needs it.
+//! and `ipc`. So the transport is `ipc::mcp`, which reads the bytes, and
+//! `api`'s Evidence endpoint, which routes them. What is here is everything
+//! from the typed call inward, on both sides of the inbox: the tool, the queue,
+//! and Fleet's own answering half.
 
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
+use adapter_traits::{AgentHarness, Vcs, WorkProduct};
 use config::EvidenceType;
 use core_model::{JobId, Timestamp};
+use ipc::mcp::SubmitEvidence;
 use verification::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};
+
+use crate::adrift::NotSubmitted;
+use crate::daemon::Fleet;
 
 /// The receipt. **One word, and no way to make it say anything else.**
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -180,5 +190,105 @@ impl<'a> EvidenceTool<'a> {
             at,
         });
         Ok(Recorded)
+    }
+}
+
+// ------------------------------------------------- and Fleet, answering it
+
+/// The Evidence tool's half of Fleet.
+impl<H, V, W> Fleet<H, V, W>
+where
+    H: AgentHarness + Send + Sync + 'static,
+    H::Error: std::error::Error + Send + Sync + 'static,
+    V: Vcs + Send + Sync + 'static,
+    V::Error: std::error::Error + Send + Sync + 'static,
+    W: WorkProduct + Send + Sync + 'static,
+    W::Error: std::error::Error + Send + Sync + 'static,
+{
+    /// Record a submission from the working Job's Drone, and decide nothing.
+    ///
+    /// **The gate does not run here.** A tool call that blocked while a Check
+    /// ran would time out, so this returns the receipt and the gate runs on the
+    /// next turn — which is also what makes "nothing has been decided yet"
+    /// assertable.
+    pub async fn submit_evidence(&self, call: Call<'_>) -> Result<Recorded, NotSubmitted> {
+        let at = self.now();
+        let working = self.slot().lock().await;
+        let Some(at_work) = working.as_ref() else {
+            return Err(NotSubmitted::NothingIsWorking);
+        };
+        EvidenceTool::for_job(at_work.standing().0, self.inbox())
+            .submit(call, at)
+            .map_err(NotSubmitted::Malformed)
+    }
+
+    /// The same thing, from a Drone's tool call rather than from a typed
+    /// caller. **This is where a submission is bound to a Job.**
+    ///
+    /// The Drone names no Job, no step and no evidence type; all three are read
+    /// out of the working slot and the Job's own frozen workflow, under one
+    /// lock, so a second call cannot land against a step the first one has just
+    /// advanced.
+    /// A caller therefore cannot choose which Job its evidence is for — which
+    /// is binding by construction, and is not authentication: nothing here asks
+    /// who is calling.
+    pub async fn record_evidence(
+        &self,
+        submission: &SubmitEvidence,
+    ) -> Result<Recorded, NotSubmitted> {
+        let at = self.now();
+        let working = self.slot().lock().await;
+        let Some(at_work) = working.as_ref() else {
+            return Err(NotSubmitted::NothingIsWorking);
+        };
+        let (job, step, _) = at_work.standing();
+        // The Job's own frozen workflow, read under the slot lock the way every
+        // other half of this binding is. What evidence type the step asks for is
+        // what it asked for when the Job was approved.
+        let record = self
+            .load(&job)
+            .await
+            .map_err(|_| NotSubmitted::NoSuchStep { step: step.clone() })?;
+        let Some(declared) = record.workflow().step(&step) else {
+            return Err(NotSubmitted::NoSuchStep { step });
+        };
+        let Some(evidence_type) = declared.evidence_type() else {
+            return Err(NotSubmitted::StepDeclaresNothing { step });
+        };
+        // Before anything is recorded. A second submission would sit behind the
+        // first and be ruled on against the step the first one advanced to.
+        if self.inbox().waiting() > 0 {
+            return Err(NotSubmitted::AlreadyWaiting { step });
+        }
+        EvidenceTool::for_job(job, self.inbox())
+            .submit(
+                Call {
+                    evidence_type,
+                    claimed: Claimed(&submission.claimed),
+                    shown_by: ShownBy(&submission.shown_by),
+                    not_claimed: NotClaimed(&submission.not_claimed),
+                    note: submission.note.as_deref(),
+                },
+                at,
+            )
+            .map_err(NotSubmitted::Malformed)
+    }
+
+    /// How many submissions are waiting for the gate.
+    pub fn evidence_waiting(&self) -> usize {
+        self.inbox().waiting()
+    }
+
+    pub(crate) fn take_evidence(&self) -> Option<Landed> {
+        self.inbox().take()
+    }
+
+    /// Drop every submission still waiting.
+    ///
+    /// Called when a Job ends: evidence for a Job that is over has no step to
+    /// be against, and leaving it would let the next Job's gate rule on the
+    /// last one's work.
+    pub(crate) fn empty_the_inbox(&self) {
+        while self.inbox().take().is_some() {}
     }
 }

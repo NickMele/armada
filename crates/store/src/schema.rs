@@ -19,9 +19,11 @@
 //!
 //! # `job_events` is append-only in the database, not in the code
 //!
-//! Two triggers refuse `UPDATE` and `DELETE` on it. A convention that events
-//! are never edited is a convention some later query breaks; a trigger is the
-//! same rule where breaking it is an error and not a diff nobody reviewed.
+//! Two triggers refuse `UPDATE` on it, and `DELETE` while the Job it belongs to
+//! still exists — see [`V4`], which narrowed the second. A convention that
+//! events are never edited is a convention some later query breaks; a trigger
+//! is the same rule where breaking it is an error and not a diff nobody
+//! reviewed.
 //!
 //! # `STRICT`, and integer keys
 //!
@@ -45,7 +47,7 @@ pub const KNOWN_SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 /// **Nothing is ever edited here.** Changing entry zero changes what an already
 /// migrated file is assumed to contain, which is the one thing the version
 /// number exists to stop.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7];
 
 /// Version 1 — the Job record, the rows beneath it, and the log.
 const V1: &str = r#"
@@ -262,5 +264,168 @@ WHEN NOT (
 )
 BEGIN
     SELECT RAISE(ABORT, 'a job_events row is one whole shape or the other: a job transition with no step columns, or a step move beneath an unchanged status');
+END;
+"#;
+
+/// Version 4 — a Job can be forgotten, and only whole.
+///
+/// # Why the append-only trigger had to move rather than stand
+///
+/// `armada clean` deletes a repository's Jobs. Every route to that runs into
+/// V1's trigger, which refuses any `DELETE` on `job_events` — so the store as
+/// built could not forget a Job at all, only accumulate them.
+///
+/// The rule worth keeping is not "no row is ever deleted". It is **no
+/// transition is ever removed from a Job's history**, which is what makes the
+/// fold authoritative. So the trigger now fires only while the Job row is still
+/// there: an event cannot be deleted out from under a live Job, and the only
+/// deletion that succeeds is one that has already forgotten the Job itself.
+/// Forgetting is therefore whole or nothing, and there is still no way to
+/// spell "remove that one transition".
+///
+/// `store::forget` does it in one transaction with `defer_foreign_keys`, so the
+/// window in which a Job row is gone and its events are not never reaches disk.
+const V4: &str = r#"
+DROP TRIGGER job_events_are_never_removed;
+
+CREATE TRIGGER job_events_are_never_removed_from_a_job_that_exists
+BEFORE DELETE ON job_events
+WHEN EXISTS (SELECT 1 FROM jobs WHERE jobs.job_id = OLD.job_id)
+BEGIN
+    SELECT RAISE(ABORT, 'job_events is append-only: a transition is never removed from a Job that exists');
+END;
+"#;
+
+/// Version 5 — the branch a Job's worktree is on.
+///
+/// **The backfill is bounded by the log, not applied to every row.** Only a Job
+/// whose log holds a move into `running` ever had a worktree, and every build
+/// that made one named the branch `armada/<job_id>` — so for those rows the
+/// value is observed rather than assumed. A Job that never ran keeps null,
+/// because writing a branch for a worktree that does not exist is the formula
+/// this column replaces.
+///
+/// It also corrects V1's note on `created_at`: that column is a field of the
+/// record now, and a whole-Job elapsed is read from it.
+const V5: &str = r#"
+ALTER TABLE jobs ADD COLUMN branch TEXT;
+
+UPDATE jobs SET branch = 'armada/' || job_id
+WHERE branch IS NULL
+  AND EXISTS (
+      SELECT 1 FROM job_events
+      WHERE job_events.job_id = jobs.job_id
+        AND job_events.kind = 'job_transition'
+        AND job_events.status_to = 'running'
+  );
+
+CREATE TRIGGER jobs_are_never_given_a_blank_branch
+BEFORE UPDATE ON jobs
+WHEN NEW.branch IS NOT NULL AND trim(NEW.branch) = ''
+BEGIN
+    SELECT RAISE(ABORT, 'a branch is what a person checks out, and blank is not one');
+END;
+"#;
+
+/// Version 6 — what each of a step's declared Checks did.
+///
+/// # Its own table, and not `job_events`
+///
+/// A Check running is not a transition. It is the evidence a transition was
+/// derived from, the way `jobs.branch` is a fact about a worktree rather than a
+/// move — and V3's shape trigger admits two shapes on purpose. A third would
+/// weaken the one rule that makes the log foldable.
+///
+/// # A pass is a row
+///
+/// Writing only failures cannot tell a step whose checks all passed from a step
+/// whose checks were never run. `outcome` is one of the five in
+/// `domain/check-outcomes.toml` and `passed` is one of them.
+///
+/// # No backfill, and nothing to refuse
+///
+/// Nothing recorded a Check result before this table existed, so every step in
+/// every existing store has none — which is exactly what zero rows says.
+const V6: &str = r#"
+-- One row per Check a step declared, in the order the step declares them.
+-- `name` is the Manifest Check's name, or the built-in's kind where it names
+-- none. `expected` and `produced` are the sentences the failure carried and are
+-- both null on a pass, where the outcome is the whole sentence.
+CREATE TABLE job_step_checks (
+    job_id   TEXT NOT NULL REFERENCES jobs(job_id),
+    step_id  TEXT NOT NULL,
+    ordinal  INTEGER NOT NULL,
+    name     TEXT NOT NULL,
+    outcome  TEXT NOT NULL,
+    expected TEXT,
+    produced TEXT,
+    ran_at   TEXT NOT NULL,
+    PRIMARY KEY (job_id, step_id, ordinal)
+) STRICT;
+"#;
+
+/// Version 7 — the workflow a Job froze, where its Checks printed, and the
+/// Drone that worked it.
+///
+/// Four columns, one migration, because three concurrent ones would race.
+///
+/// | Column | What it holds |
+/// |---|---|
+/// | `jobs.workflow` | The whole WorkflowDef the Job froze at creation, as JSON. Fleet reads this and never the file, so editing `.armada/workflows/` changes the next Job rather than a running one |
+/// | `job_step_checks.output_path` | Where that Check's stdout and stderr were written, relative to the repository root. The reference, never the bytes |
+/// | `job_events.drone_id` | Which Drone the row is about. Set on the two drone rows and null on every other |
+/// | `job_events.kind` (values) | Admits `drone_spawned` and `drone_exited`, which the V3 shape trigger refused |
+///
+/// # `workflow` is null on every existing row, and that is a refusal
+///
+/// V2 named a titleless Job after itself because a per-row value existed to
+/// compute. There is none here: nothing in a pre-V7 store records which
+/// definition a Job followed, and a step backfilled as declaring no Check is
+/// the one wrong answer — it reads as an ungated step rather than as a gap.
+/// V5's rule applies, which is to backfill only what is observed, and nothing
+/// is. `read.rs` refuses such a row, and `load_all_jobs` carries it out beside
+/// the Jobs that did load rather than shortening the list.
+///
+/// # The shape trigger is replaced rather than extended
+///
+/// `SQLite` cannot alter a trigger, so admitting a third and fourth kind means
+/// dropping V3's and writing the whole condition again. The rule is unchanged
+/// in kind: one row is one whole shape, and a drone row is a `drone_id` beneath
+/// an unchanged status with no step columns and no reason.
+const V7: &str = r#"
+ALTER TABLE jobs ADD COLUMN workflow TEXT;
+ALTER TABLE job_step_checks ADD COLUMN output_path TEXT;
+ALTER TABLE job_events ADD COLUMN drone_id TEXT;
+
+DROP TRIGGER job_events_hold_one_whole_shape;
+
+CREATE TRIGGER job_events_hold_one_whole_shape
+BEFORE INSERT ON job_events
+WHEN NOT (
+    (NEW.kind = 'job_transition'
+        AND NEW.step_id IS NULL
+        AND NEW.state_from IS NULL
+        AND NEW.state_to IS NULL
+        AND NEW.drone_id IS NULL
+        AND NEW.status_from <> NEW.status_to)
+ OR (NEW.kind = 'step_transition'
+        AND NEW.step_id IS NOT NULL
+        AND NEW.state_from IS NOT NULL
+        AND NEW.state_to IS NOT NULL
+        AND NEW.drone_id IS NULL
+        AND NEW.status_from = NEW.status_to
+        AND NEW.reason_kind = 'unqualified'
+        AND NEW.reason_value IS NULL)
+ OR (NEW.kind IN ('drone_spawned', 'drone_exited')
+        AND NEW.step_id IS NULL
+        AND NEW.state_from IS NULL
+        AND NEW.state_to IS NULL
+        AND NEW.drone_id IS NOT NULL
+        AND NEW.status_from = NEW.status_to
+        AND NEW.reason_kind = 'unqualified'
+        AND NEW.reason_value IS NULL)
+)
+BEGIN
+    SELECT RAISE(ABORT, 'a job_events row is one whole shape: a job transition with no step or drone columns, a step move beneath an unchanged status, or a drone arriving or leaving beneath one');
 END;
 "#;

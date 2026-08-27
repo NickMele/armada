@@ -22,7 +22,7 @@ use crate::{LoadJobError, Moved, RecordedEvent, Store};
 fn reason(event: &RecordedEvent) -> TransitionReason {
     match event.moved() {
         Moved::Job { reason, .. } => reason.clone(),
-        Moved::Step { .. } => panic!("this history moves no step"),
+        Moved::Step { .. } | Moved::Drone { .. } => panic!("this history moves only the Job"),
     }
 }
 

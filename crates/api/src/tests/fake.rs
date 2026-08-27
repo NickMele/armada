@@ -9,13 +9,14 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
+use ipc::mcp::{NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    Actor, Event, Instant, JobCreated, JobId, JobList, JobStateChanged, JobStatus, JobSummary,
-    ManifestId, ManifestSummary, ModelChoices, Origin, ProposeJob, RunId, StepId, UnreadableJob,
-    Urgency, WorkflowId, WorkflowSummary,
+    Actor, Event, Instant, JobCreated, JobDetail, JobId, JobList, JobStateChanged, JobStatus,
+    JobSummary, ManifestId, ManifestSummary, ModelChoices, Origin, ProposeJob, Redispatched, RunId,
+    StepId, UnreadableJob, Urgency, WorkflowId, WorkflowSummary,
 };
 
-use crate::{Broadcaster, Daemon, Refusal};
+use crate::{Broadcaster, Daemon, Feed, Observed, Refusal, Turns};
 
 /// A spelling the registry has. Panics in a test rather than returning an
 /// `Option` nobody would handle.
@@ -31,7 +32,18 @@ pub struct FakeDaemon {
     jobs: Mutex<Vec<JobSummary>>,
     unreadable: Mutex<Vec<UnreadableJob>>,
     events: Broadcaster,
+    /// The per-Job transcript channels, so a test can watch one Job while a
+    /// Board client is on `/events` and prove neither reaches the other.
+    pub turns: Turns,
+    /// What `observe_job` answers with as the history, for whichever Job is
+    /// asked. A Job with none is the ordinary case, not an error.
+    pub history: Mutex<Vec<ipc::TranscriptRow>>,
+    /// Older rows the history left out.
+    pub skipped: Mutex<u64>,
     minted: AtomicU64,
+    /// Every submission taken, so a test can assert that a refused call left
+    /// nothing behind.
+    pub submitted: Mutex<Vec<SubmitEvidence>>,
     /// When set, every call answers with a fault. The stream closing on a
     /// daemon that cannot answer is a behaviour worth a test.
     pub mute: Mutex<bool>,
@@ -43,7 +55,11 @@ impl FakeDaemon {
             jobs: Mutex::new(Vec::new()),
             unreadable: Mutex::new(Vec::new()),
             events,
+            turns: Turns::new(),
+            history: Mutex::new(Vec::new()),
+            skipped: Mutex::new(0),
             minted: AtomicU64::new(0),
+            submitted: Mutex::new(Vec::new()),
             mute: Mutex::new(false),
         }
     }
@@ -58,6 +74,12 @@ impl FakeDaemon {
                 fault: fault.to_string(),
             });
         self
+    }
+
+    /// A Drone writing this Job's rows. Dropping what comes back ends it, the
+    /// same as a Drone exiting under Fleet.
+    pub fn dispatching(&self, job_id: &JobId) -> Feed {
+        self.turns.feeding(job_id)
     }
 
     fn fault(&self, message: &str) -> Refusal {
@@ -116,6 +138,28 @@ impl Daemon for FakeDaemon {
         })
     }
 
+    /// One Job, with nothing the fake does not hold. **Every list is empty and
+    /// every option absent**, because this daemon holds `JobSummary` and
+    /// nothing beneath it — the shape is what is under test here, and the real
+    /// fields are asserted against a real Fleet in `fleet`'s own suite.
+    async fn get_job(&self, job_id: JobId) -> Result<JobDetail, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+            return Err(self.no_such_job(&job_id));
+        };
+        Ok(JobDetail {
+            job: job.clone(),
+            created_at: Instant::carried("2026-08-26T09:00:00.000Z"),
+            branch: None,
+            steps: Vec::new(),
+            acceptance_criteria: Vec::new(),
+            facts: None,
+            write_targets: None,
+            subject: None,
+            dependencies: Vec::new(),
+        })
+    }
+
     /// The one workflow this fake holds. A list, because the operation is one.
     async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
@@ -125,7 +169,22 @@ impl Daemon for FakeDaemon {
             id: WorkflowId::carried("01WF"),
             name: "a-workflow".to_string(),
             version: 1,
-            steps: vec![StepId::carried("implement"), StepId::carried("summarise")],
+            steps: vec![
+                // Gated, and ungated. The pair is the distinction `get_job`'s
+                // rail turns on, so the fake carries both rather than one.
+                ipc::WorkflowStep {
+                    step_id: StepId::carried("implement"),
+                    checks: vec![ipc::DeclaredCheck {
+                        kind: "manifest_check".to_string(),
+                        name: Some("build".to_string()),
+                        expect_exit_code: Some(0),
+                    }],
+                },
+                ipc::WorkflowStep {
+                    step_id: StepId::carried("summarise"),
+                    checks: Vec::new(),
+                },
+            ],
             manifest_id: ManifestId::carried("01MF"),
         }])
     }
@@ -174,6 +233,7 @@ impl Daemon for FakeDaemon {
             model: proposal.model.unwrap_or_else(|| "a-model".to_string()),
             current_step_id: None,
             assigned_drone: None,
+            redispatched_from: None,
         };
         self.jobs.lock().expect("not poisoned").push(job.clone());
         self.events.publish(Event::JobCreated(JobCreated {
@@ -234,6 +294,101 @@ impl Daemon for FakeDaemon {
         };
         self.move_to(&job_id, from, "killed", "human")
     }
+
+    /// Kill the failed Job and mint its replacement. **The fake asserts one
+    /// thing about the domain and no more**: only `escalated` is replaceable,
+    /// because that is the whole of what the route refuses on.
+    async fn redispatch_job(&self, job_id: JobId) -> Result<Redispatched, Refusal> {
+        let failed = {
+            let jobs = self.jobs.lock().expect("not poisoned");
+            let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+                return Err(self.no_such_job(&job_id));
+            };
+            if job.status.as_wire() != "escalated" {
+                return Err(Refusal::IllegalMove(ipc::WireError::raised(
+                    "fake.not_redispatchable",
+                    format!(
+                        "a Job at {} is not waiting for a person",
+                        job.status.as_wire()
+                    ),
+                    run_id(),
+                )));
+            }
+            job.clone()
+        };
+        let minted = self.minted.fetch_add(1, Ordering::SeqCst);
+        let dispatched = JobSummary {
+            id: JobId::carried(format!("01JOB{minted}")),
+            status: status("awaiting_approval"),
+            reason: None,
+            redispatched_from: Some(failed.id.clone()),
+            ..failed.clone()
+        };
+        self.jobs
+            .lock()
+            .expect("not poisoned")
+            .push(dispatched.clone());
+        self.events.publish(Event::JobCreated(JobCreated {
+            job: dispatched.clone(),
+            actor: Actor::from_wire("human").expect("an actor the envelope has"),
+            at: Instant::carried("2026-08-26T09:00:00.000Z"),
+        }));
+        let replaced = self.move_to(&job_id, "escalated", "killed", "human")?;
+        Ok(Redispatched {
+            replaced,
+            dispatched,
+        })
+    }
+
+    /// The Evidence tool, faked down to what the transport is under test for:
+    /// a submission is taken while a Job is running and refused otherwise.
+    ///
+    /// **The fake names no Job either.** The trait has no parameter for one, so
+    /// a fake that wanted to accept evidence for a Job of the caller's choosing
+    /// could not express it — which is the binding this crate is able to assert
+    /// about, the rest being Fleet's working slot and asserted there.
+    /// Subscribe, then read the history. The same order Fleet takes, so a test
+    /// of the socket exercises the order rather than assuming it.
+    async fn observe_job(&self, job_id: JobId) -> Result<Observed, Refusal> {
+        if *self.mute.lock().expect("not poisoned") {
+            return Err(self.fault("the fake was told not to answer"));
+        }
+        let jobs = self.jobs.lock().expect("not poisoned");
+        if !jobs.iter().any(|job| job.id == job_id) {
+            return Err(self.no_such_job(&job_id));
+        }
+        drop(jobs);
+        let live = self.turns.watching(&job_id);
+        Ok(Observed {
+            job_id,
+            live,
+            history: self.history.lock().expect("not poisoned").clone(),
+            skipped: *self.skipped.lock().expect("not poisoned"),
+        })
+    }
+
+    async fn submit_evidence(&self, submission: SubmitEvidence) -> Result<Receipt, NotRecorded> {
+        let running = self
+            .jobs
+            .lock()
+            .expect("not poisoned")
+            .iter()
+            .any(|job| job.status.as_wire() == "running");
+        if !running {
+            return Err(NotRecorded {
+                because: "no Job is being worked, so there is no step for this \
+                          submission to be against"
+                    .to_string(),
+            });
+        }
+        self.submitted
+            .lock()
+            .expect("not poisoned")
+            .push(submission);
+        Ok(Receipt {
+            word: "recorded".to_string(),
+        })
+    }
 }
 
 /// A Job already running, so the Drone kill has something to kill.
@@ -257,6 +412,7 @@ pub fn at(daemon: &FakeDaemon, id: &str, spelling: &str) {
         model: "a-model".to_string(),
         current_step_id: None,
         assigned_drone: None,
+        redispatched_from: None,
     });
 }
 

@@ -49,6 +49,10 @@ const ENUMS: &[EnumSource] = &[
         name: "EscalationTrigger",
         path: "crates/core-model/src/job/escalation.rs",
     },
+    EnumSource {
+        name: "CheckOutcome",
+        path: "crates/core-model/src/job/check.rs",
+    },
 ];
 
 /// A registry table, and the enum whose wire spellings its keys must be.
@@ -79,6 +83,11 @@ const PAIRINGS: &[Pairing] = &[
         enum_name: "EscalationTrigger",
     },
     Pairing {
+        registry: "check-outcomes.toml",
+        prefix: "outcomes.",
+        enum_name: "CheckOutcome",
+    },
+    Pairing {
         registry: "enum-verbs.toml",
         prefix: "verbs.job_status.",
         enum_name: "JobStatus",
@@ -88,9 +97,17 @@ const PAIRINGS: &[Pairing] = &[
         prefix: "verbs.escalation_reason.",
         enum_name: "EscalationTrigger",
     },
+    Pairing {
+        registry: "enum-verbs.toml",
+        prefix: "verbs.check_outcome.",
+        enum_name: "CheckOutcome",
+    },
 ];
 
-/// The seven vocabularies `enum-verbs.toml` declares in its own header.
+/// The vocabularies `enum-verbs.toml` declares in its own header.
+///
+/// No count in the sentence, because the set grows and a number in a comment
+/// does not.
 ///
 /// Checked because a typo in an outer key — `job_statuses` for `job_status` —
 /// does not fail the pairing above, it empties it. A comparison that silently
@@ -100,6 +117,7 @@ const VOCABULARIES: &[&str] = &[
     "queued_reason",
     "escalation_reason",
     "step_verdict",
+    "check_outcome",
     "criterion_verdict_check",
     "criterion_verdict_judge",
     "criterion_verdict_attested",
@@ -168,7 +186,7 @@ pub fn every_registry_key_is_a_variant(root: &Path) -> Report {
             };
             if !VOCABULARIES.contains(&vocabulary) {
                 report.fail(format!(
-                    "{verbs}:{line} — `{vocabulary}` is not one of the seven vocabularies this \
+                    "{verbs}:{line} — `{vocabulary}` is not one of the vocabularies this \
                      file's header declares. Every variant under it is compared against nothing"
                 ));
             }

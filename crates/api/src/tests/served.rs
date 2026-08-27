@@ -49,6 +49,10 @@ async fn call(app: &Router, method: &str, uri: &str, body: &str) -> (StatusCode,
 async fn every_operation_the_table_names_is_routed() {
     let events = Broadcaster::new();
     let app = wired(FakeDaemon::new(events.clone()), events);
+    // The id the loop substitutes, made real first. A route that is present and
+    // answers "no such Job" is a 404 too, and the assertion below cannot tell
+    // that apart from a route that is not there.
+    call(&app, "POST", "/jobs", A_PROPOSAL).await;
     for route in SERVED {
         let uri = route.path.replace(":job_id", "01JOB0");
         let (status, _) = call(&app, route.method, &uri, A_PROPOSAL).await;

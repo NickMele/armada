@@ -21,6 +21,13 @@
 //! **Nothing here starts an agent.** What a Drone is confined to is a rendering
 //! and is asserted in `adapters`, where no process is involved at all.
 //!
+//! `evidence` is the seventh: a tool call arriving as JSON-RPC over the router
+//! that ships, reaching the inbox, and advancing the step it was for.
+//!
+//! `frozen` is the eighth: what a running Job keeps hold of. Its workflow does
+//! not move under it, it knows which Drone is on it, and its Checks leave their
+//! output on disk.
+//!
 //! `daemon` and `serving` are the sixth, and they are the first that are about
 //! the whole: a Job driven from created to completed against fakes, read back
 //! out of a reopened store, and the same five operations answered over the
@@ -29,13 +36,19 @@
 //! invented.
 
 mod briefing;
+mod checks;
 mod daemon;
 mod detach;
+mod detail;
 mod drone;
+mod evidence;
+mod frozen;
 mod gate;
 mod host;
 mod process;
+mod redispatch;
 mod runtime;
 mod serving;
 mod session;
 mod tmp;
+mod transcript;

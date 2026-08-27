@@ -62,9 +62,12 @@
 //!
 //! [`EvidenceType`] is the set a WorkflowDef's `evidence_type` field already
 //! parses into. A second enum here would be a second vocabulary, and the one
-//! that drifted three times in v1 was deleted for it. The step declares a type
-//! and the Drone submits one; both spell it with the same values because both
-//! read the same enum.
+//! that drifted three times in v1 was deleted for it.
+//!
+//! **The step declares the type and Fleet fills it in.** The Evidence tool has
+//! no parameter for one, for the reason the step id has none: a Drone is never
+//! told which type its step declared, so a Drone naming one would be guessing,
+//! and a guess that disagrees would refuse work that was actually done.
 
 use config::EvidenceType;
 
@@ -118,16 +121,26 @@ pub enum NotASubmission {
 impl core::fmt::Display for NotASubmission {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            NotASubmission::NoteRequired => {
-                write!(f, "a facts_note submission carries no note")
-            }
-            NotASubmission::NoteNotRead { evidence_type } => write!(
+            NotASubmission::NoteRequired => write!(
                 f,
-                "a note was given on a {:?} submission, where nothing reads one",
-                evidence_type
+                "this step's work product is the note itself, and none was \
+                 given. Put the finding in `note` and submit again"
             ),
-            NotASubmission::ClaimedEmpty => write!(f, "the submission claims nothing"),
-            NotASubmission::ShownByEmpty => write!(f, "shown by names no artifact"),
+            NotASubmission::NoteNotRead { .. } => write!(
+                f,
+                "this step's work product is not a note, so nothing would read \
+                 the one given. Remove `note` and submit again"
+            ),
+            NotASubmission::ClaimedEmpty => write!(
+                f,
+                "the submission claims nothing. `claimed` is what the work now \
+                 does, as an observable"
+            ),
+            NotASubmission::ShownByEmpty => write!(
+                f,
+                "shown by names no artifact. Name the test, the command and its \
+                 exit code, or the rendered string that demonstrates the claim"
+            ),
         }
     }
 }

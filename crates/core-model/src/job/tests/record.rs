@@ -241,8 +241,9 @@ fn every_top_level_origin_narrows_back_to_itself() {
 /// registries.
 ///
 /// It was named for one and never performed one: it asserted thirteen against
-/// `EscalationTrigger::ALL` while `escalation-triggers.toml` went to fourteen
-/// keys, and passed, because nothing here reads the file. `core-model` has zero
+/// `EscalationTrigger::ALL` while `escalation-triggers.toml` held thirteen keys
+/// and the enum was missing one of them, and passed, because nothing here reads
+/// the file. `core-model` has zero
 /// dependencies and cannot parse TOML, so nothing here ever will — the
 /// comparison lives in `cargo xtask verify-foundations`, which reads both sides
 /// and fails on either missing the other.
@@ -255,7 +256,7 @@ fn every_top_level_origin_narrows_back_to_itself() {
 fn each_enums_size_is_pinned_here_and_compared_to_no_registry() {
     assert_eq!(JobStatus::ALL.len(), 12);
     assert_eq!(StepState::ALL.len(), 6);
-    assert_eq!(EscalationTrigger::ALL.len(), 13);
+    assert_eq!(EscalationTrigger::ALL.len(), 14);
     assert_eq!(Origin::ALL.len(), 5);
     assert_eq!(PilotReason::ALL.len(), 3);
     assert_eq!(CriterionSource::ALL.len(), 3);

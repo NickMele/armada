@@ -163,6 +163,7 @@ fn the_log_holds_both_machines_in_one_order() {
         .map(|event| match event.moved() {
             Moved::Job { .. } => "job",
             Moved::Step { .. } => "step",
+            Moved::Drone { .. } => "drone",
         })
         .collect();
     assert_eq!(kinds, vec!["job", "job", "step", "step", "step"]);

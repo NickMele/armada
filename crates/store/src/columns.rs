@@ -24,9 +24,10 @@
 //! quietly missing it, which is the failure the version number exists for.
 
 use core_model::{
-    AcceptanceCriterion, Actor, CriteriaOwed, CriterionId, CriterionSource, DependencyDirection,
-    DependencyEdge, EscalationTrigger, JobId, PilotReason, RepoPath, ScopeRevision,
-    ScopeRevisionOutcome, StepId, Timestamp, TransitionReason, Ulid,
+    AcceptanceCriterion, Actor, AdvanceGate, CriteriaOwed, CriterionId, CriterionSource,
+    DependencyDirection, DependencyEdge, EscalationTrigger, EvidenceType, FrozenWorkflow, JobId,
+    PilotReason, RepoPath, ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome,
+    StepId, Timestamp, TransitionReason, Ulid, WorkflowId, DIFF_NONEMPTY, MANIFEST_CHECK,
 };
 use serde_json::{json, Map, Value};
 
@@ -270,4 +271,97 @@ fn read_criteria_owed(stored: &str) -> Result<TransitionReason, Malformed> {
         first,
         ids.collect(),
     )))
+}
+
+// -------------------------------------------------------------- jobs.workflow
+//
+// The whole WorkflowDef a Job froze, in one column. A table would be four more
+// — steps, checks, and their order — for a value that is written once at
+// creation, read whole, and never queried a piece at a time.
+
+/// The frozen workflow, as one JSON object.
+pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
+    json!({
+        "workflow_id": workflow.id().as_str(),
+        "name": workflow.name(),
+        "version": workflow.version(),
+        "steps": workflow.steps().iter().map(|step| json!({
+            "id": step.id().as_str(),
+            "label": step.label(),
+            "evidence_type": step.evidence_type().map(|kind| kind.as_wire()),
+            "advance_gate": step.advance_gate().as_wire(),
+            "checks": step.checks().iter().map(|check| match check {
+                ResolvedCheck::ManifestCheck { name, run, expect_exit_code } => json!({
+                    "type": MANIFEST_CHECK,
+                    "check": name,
+                    "run": run,
+                    "expect_exit_code": expect_exit_code,
+                }),
+                ResolvedCheck::DiffNonempty => json!({ "type": DIFF_NONEMPTY }),
+            }).collect::<Vec<Value>>(),
+        })).collect::<Vec<Value>>(),
+    })
+    .to_string()
+}
+
+pub fn read_workflow(stored: &str) -> Result<FrozenWorkflow, Malformed> {
+    let value = parse(stored)?;
+    let root = object(&value)?;
+    let mut steps = Vec::new();
+    for entry in array(field(root, "steps")?)? {
+        steps.push(read_step(object(entry)?)?);
+    }
+    Ok(FrozenWorkflow::frozen(
+        WorkflowId::carried(Ulid::carried(text(root, "workflow_id")?)),
+        text(root, "name")?,
+        version(root)?,
+        steps,
+    ))
+}
+
+fn read_step(entry: &Map<String, Value>) -> Result<ResolvedStep, Malformed> {
+    let gate = text(entry, "advance_gate")?;
+    let evidence_type = match field(entry, "evidence_type")? {
+        Value::Null => None,
+        Value::String(named) => Some(
+            EvidenceType::from_wire(named)
+                .ok_or_else(|| format!("`evidence_type` holds `{named}`"))?,
+        ),
+        other => return Err(format!("`evidence_type` is {}", kind(other))),
+    };
+    let mut checks = Vec::new();
+    for check in array(field(entry, "checks")?)? {
+        checks.push(read_check(object(check)?)?);
+    }
+    Ok(ResolvedStep::frozen(
+        StepId::new(text(entry, "id")?),
+        text(entry, "label")?,
+        evidence_type,
+        checks,
+        AdvanceGate::from_wire(&gate).ok_or_else(|| format!("`advance_gate` holds `{gate}`"))?,
+    ))
+}
+
+fn read_check(entry: &Map<String, Value>) -> Result<ResolvedCheck, Malformed> {
+    let named = text(entry, "type")?;
+    match named.as_str() {
+        MANIFEST_CHECK => Ok(ResolvedCheck::ManifestCheck {
+            name: text(entry, "check")?,
+            run: text(entry, "run")?,
+            expect_exit_code: field(entry, "expect_exit_code")?
+                .as_i64()
+                .ok_or_else(|| "`expect_exit_code` is not an integer".to_string())?,
+        }),
+        DIFF_NONEMPTY => Ok(ResolvedCheck::DiffNonempty),
+        other => Err(format!("`type` holds `{other}`")),
+    }
+}
+
+/// A definition's own version number. `u32` on the record, so a stored value
+/// outside that range is malformed rather than clamped.
+fn version(root: &Map<String, Value>) -> Result<u32, Malformed> {
+    field(root, "version")?
+        .as_u64()
+        .and_then(|version| u32::try_from(version).ok())
+        .ok_or_else(|| "`version` is not a version number".to_string())
 }

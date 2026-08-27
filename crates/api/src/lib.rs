@@ -21,14 +21,19 @@
 //! crate**, so there is no shape here through which a domain field could reach
 //! the wire unredacted.
 //!
-//! # Five operations, and a stream
+//! # A subset of the inventory, and a stream
 //!
-//! `list_jobs`, `propose_job`, `approve_dispatch`, `kill_drone` and the event
-//! stream — the five M1 needs, named with `crates/ipc/operations.toml`'s own
-//! keys. The other twenty-nine, the `/v0` lifeboat and version-skew handling
-//! belong to Ship and are neither built nor stubbed here.
+//! [`SERVED`] is the operations M1 needs, named with
+//! `crates/ipc/operations.toml`'s own keys. The rest of the inventory, the
+//! `/v0` lifeboat and version-skew handling belong to Ship and are neither
+//! built nor stubbed here.
+//!
+//! [`MCP_PATH`] is on the listener and on neither seam above: a Drone's
+//! Evidence tool, deliberately absent from [`SERVED`]. See `mcp`.
 
 mod daemon;
+mod mcp;
+mod observing;
 mod routes;
 mod stream;
 
@@ -36,5 +41,7 @@ mod stream;
 mod tests;
 
 pub use daemon::{Daemon, Refusal};
+pub use mcp::MCP_PATH;
+pub use observing::{Feed, Observed, Seen, Turns, Watch, WATCHING};
 pub use routes::{router, Route, Served, SERVED};
 pub use stream::{Broadcaster, Next, Subscription, BACKLOG};

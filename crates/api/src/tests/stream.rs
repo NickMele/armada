@@ -7,38 +7,16 @@
 //! would still be a listener, and would still fail in an environment that has
 //! no networking at all.
 
-use axum::Router;
 use futures_util::StreamExt;
-use hyper::service::service_fn;
-use hyper_util::rt::TokioIo;
 use ipc::{StreamMessage, PROTOCOL_VERSION};
 use std::time::Duration;
 use tokio::io::DuplexStream;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
-use tower::Service;
 
+use crate::tests::connected;
 use crate::tests::fake::{run_id, FakeDaemon};
 use crate::{router, Broadcaster, Served};
-
-/// A connected client, over a pipe. `buffer` is the pipe's capacity, which is
-/// how a test makes a client slow without making it wait.
-async fn connected(app: Router, buffer: usize) -> WebSocketStream<DuplexStream> {
-    let (client_side, server_side) = tokio::io::duplex(buffer);
-    tokio::spawn(async move {
-        let service = service_fn(move |request| app.clone().call(request));
-        let _ = hyper::server::conn::http1::Builder::new()
-            .serve_connection(TokioIo::new(server_side), service)
-            .with_upgrades()
-            .await;
-    });
-    // The host is never resolved — the stream is already open. It exists
-    // because a WebSocket handshake is an HTTP request and one must say so.
-    let (socket, _) = tokio_tungstenite::client_async("ws://fleet.invalid/events", client_side)
-        .await
-        .expect("the upgrade is an extractor on the same router");
-    socket
-}
 
 async fn read(socket: &mut WebSocketStream<DuplexStream>) -> StreamMessage {
     let frame = tokio::time::timeout(Duration::from_secs(5), socket.next())
@@ -58,7 +36,7 @@ async fn a_connection_opens_with_a_resync_and_then_carries_events() {
     let events = Broadcaster::new();
     let daemon = FakeDaemon::new(events.clone());
     let app = router(Served::by(daemon, run_id(), events.clone()));
-    let mut socket = connected(app, 8192).await;
+    let mut socket = connected(app, "/events", 8192).await;
 
     let StreamMessage::Resync(resync) = read(&mut socket).await else {
         panic!("the first message is the resync — a reconnecting client must not have to ask");
@@ -90,7 +68,7 @@ async fn a_client_that_cannot_keep_up_is_told_and_resynced() {
     let daemon = FakeDaemon::new(events.clone());
     let app = router(Served::by(daemon, run_id(), events.clone()));
     // A pipe small enough that the socket stops draining almost at once.
-    let mut socket = connected(app, 256).await;
+    let mut socket = connected(app, "/events", 256).await;
 
     let StreamMessage::Resync(_) = read(&mut socket).await else {
         panic!("the first message is the resync");
@@ -127,7 +105,7 @@ async fn a_daemon_that_cannot_answer_closes_the_socket() {
     let daemon = FakeDaemon::new(events.clone());
     *daemon.mute.lock().expect("not poisoned") = true;
     let app = router(Served::by(daemon, run_id(), events));
-    let mut socket = connected(app, 8192).await;
+    let mut socket = connected(app, "/events", 8192).await;
 
     let ended = tokio::time::timeout(Duration::from_secs(5), socket.next())
         .await

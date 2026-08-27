@@ -76,6 +76,20 @@ pub enum Level {
     Error,
 }
 
+impl Level {
+    /// The spelling a sink writes. Here rather than at the sink, so three
+    /// emitters cannot disagree about the case of `warn`.
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            Level::Trace => "trace",
+            Level::Debug => "debug",
+            Level::Info => "info",
+            Level::Warn => "warn",
+            Level::Error => "error",
+        }
+    }
+}
+
 /// Emitter identity. **A closed set** — a new emitter is a decision, not a
 /// string somebody passed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -84,6 +98,18 @@ pub enum Component {
     BridgeMain,
     BridgeUi,
     Drone,
+}
+
+impl Component {
+    /// The spelling a sink writes, hyphenated as the contract's table has it.
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            Component::Fleet => "fleet",
+            Component::BridgeMain => "bridge-main",
+            Component::BridgeUi => "bridge-ui",
+            Component::Drone => "drone",
+        }
+    }
 }
 
 /// Who caused the line. Three ways, and the separation is baked in now because

@@ -15,7 +15,7 @@ use config::{EvidenceType, ResolvedWorkflow};
 use core_model::{
     AcceptanceCriterion, Actor, CriterionId, CriterionSource, Facts, Job, JobId, JobStatus,
     ManifestId, ModelName, NewJob, StepId, StepSeed, Subject, Target, Timestamp, Title,
-    TopLevelOrigin, Ulid, Urgency, WorkflowId,
+    TopLevelOrigin, Ulid, Urgency,
 };
 use testkit::{FakeWorkProduct, Gate, Sketch};
 use verification::{
@@ -37,12 +37,12 @@ fn job_id() -> JobId {
 
 /// A Job at `running`, reached by walking edges. There is no constructor that
 /// takes a status, which is the point of the machine.
-fn running_job() -> Job {
+pub(super) fn running_job() -> Job {
     let created = Job::create_top_level(
         NewJob {
             id: job_id(),
             title: Title::new("make the suite pass").expect("a title"),
-            workflow_id: WorkflowId::carried(Ulid::carried("01J0000000000000000000WF00")),
+            workflow: workflow("/usr/bin/true").frozen().clone(),
             owner_manifest_id: ManifestId::carried(Ulid::carried("01J0000000000000000000MAN0")),
             urgency: Urgency::Normal,
             atomic: false,
@@ -85,7 +85,7 @@ fn running_job() -> Job {
 
 /// Two steps: one gated on a Check that passes and a non-empty diff, one gated
 /// on nothing at all.
-fn workflow(run: &str) -> ResolvedWorkflow {
+pub(super) fn workflow(run: &str) -> ResolvedWorkflow {
     testkit::resolved(&[
         Sketch {
             id: "implement",
@@ -109,11 +109,11 @@ fn workflow(run: &str) -> ResolvedWorkflow {
     ])
 }
 
-fn worktree() -> Worktree {
+pub(super) fn worktree() -> Worktree {
     Worktree::at("/", "armada/01J0000000000000000000JOB0")
 }
 
-fn diff_evidence() -> Submission {
+pub(super) fn diff_evidence() -> Submission {
     Submission::submitted(
         EvidenceType::Diff,
         Claimed("The loop is a fold."),
@@ -124,7 +124,7 @@ fn diff_evidence() -> Submission {
     .expect("a legal submission")
 }
 
-fn note_evidence() -> Submission {
+pub(super) fn note_evidence() -> Submission {
     Submission::submitted(
         EvidenceType::FactsNote,
         Claimed("The path is derived from the repo name."),
@@ -145,7 +145,7 @@ fn diff_call<'a>() -> Call<'a> {
     }
 }
 
-fn budget() -> CheckBudget {
+pub(super) fn budget() -> CheckBudget {
     CheckBudget::of(Duration::from_secs(20))
 }
 
@@ -215,7 +215,7 @@ fn a_malformed_call_records_nothing() {
 async fn evidence_and_every_check_passing_advances_the_step() {
     let workflow = workflow("/usr/bin/true");
     let worktree = worktree();
-    let at_step = AtStep::first(&workflow, &worktree).expect("a first step");
+    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
     let ruling = rule_on(at_step, &diff_evidence(), &work, budget()).await;
@@ -233,7 +233,7 @@ async fn evidence_and_every_check_passing_advances_the_step() {
 async fn evidence_with_every_check_failing_advances_nothing() {
     let workflow = workflow("/usr/bin/false");
     let worktree = worktree();
-    let at_step = AtStep::first(&workflow, &worktree).expect("a first step");
+    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::untouched();
 
     let ruling = rule_on(at_step, &diff_evidence(), &work, budget()).await;
@@ -259,8 +259,8 @@ async fn evidence_with_every_check_failing_advances_nothing() {
 async fn a_step_with_no_checks_advances_on_evidence_alone() {
     let workflow = workflow("/usr/bin/false");
     let worktree = worktree();
-    let at_step =
-        AtStep::named(&workflow, &StepId::new("summarise"), &worktree).expect("the second step");
+    let at_step = AtStep::named(workflow.frozen(), &StepId::new("summarise"), &worktree)
+        .expect("the second step");
     // Nothing is asked of the worktree, and nothing is run in it.
     let work = FakeWorkProduct::untouched();
 
@@ -278,7 +278,7 @@ async fn a_step_with_no_checks_advances_on_evidence_alone() {
 async fn a_hanging_check_fails_rather_than_hanging() {
     let workflow = workflow("/bin/sleep 3600");
     let worktree = worktree();
-    let at_step = AtStep::first(&workflow, &worktree).expect("a first step");
+    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
     let started = std::time::Instant::now();
@@ -312,7 +312,7 @@ async fn a_hanging_check_fails_rather_than_hanging() {
 async fn a_check_whose_command_does_not_exist_fails_rather_than_passing() {
     let workflow = workflow("armada-no-such-program");
     let worktree = worktree();
-    let at_step = AtStep::first(&workflow, &worktree).expect("a first step");
+    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
     let ruling = rule_on(at_step, &diff_evidence(), &work, budget()).await;
@@ -336,7 +336,7 @@ async fn a_check_whose_command_does_not_exist_fails_rather_than_passing() {
 async fn the_check_output_comes_back_for_a_person_to_read() {
     let workflow = workflow("/bin/sh -c 'echo the suite is unhappy; exit 2'");
     let worktree = worktree();
-    let at_step = AtStep::first(&workflow, &worktree).expect("a first step");
+    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
     let ruling = rule_on(at_step, &diff_evidence(), &work, budget()).await;
@@ -353,7 +353,7 @@ async fn the_check_output_comes_back_for_a_person_to_read() {
 async fn evidence_of_the_wrong_kind_runs_no_checks_and_moves_nothing() {
     let workflow = workflow("/usr/bin/false");
     let worktree = worktree();
-    let at_step = AtStep::first(&workflow, &worktree).expect("a first step");
+    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::untouched();
 
     let ruling = rule_on(at_step, &note_evidence(), &work, budget()).await;
@@ -372,7 +372,7 @@ async fn evidence_of_the_wrong_kind_runs_no_checks_and_moves_nothing() {
 async fn a_diff_that_cannot_be_read_decides_nothing() {
     let workflow = workflow("/usr/bin/true");
     let worktree = worktree();
-    let at_step = AtStep::first(&workflow, &worktree).expect("a first step");
+    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::refusing("a repository that would not open");
 
     let ruling = rule_on(at_step, &diff_evidence(), &work, budget()).await;
@@ -386,7 +386,7 @@ async fn a_diff_that_cannot_be_read_decides_nothing() {
 async fn the_diff_fleet_reads_is_of_the_job_s_own_worktree() {
     let workflow = workflow("/usr/bin/true");
     let worktree = worktree();
-    let at_step = AtStep::first(&workflow, &worktree).expect("a first step");
+    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
     rule_on(at_step, &diff_evidence(), &work, budget()).await;
@@ -400,7 +400,7 @@ async fn the_diff_fleet_reads_is_of_the_job_s_own_worktree() {
 async fn a_failed_check_ends_the_job_and_fleet_is_the_actor() {
     let workflow = workflow("/usr/bin/false");
     let worktree = worktree();
-    let at_step = AtStep::first(&workflow, &worktree).expect("a first step");
+    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
     let ruling = rule_on(at_step, &diff_evidence(), &work, budget()).await;
@@ -421,7 +421,7 @@ async fn a_failed_check_ends_the_job_and_fleet_is_the_actor() {
 async fn an_advancing_step_does_not_move_the_job() {
     let workflow = workflow("/usr/bin/true");
     let worktree = worktree();
-    let at_step = AtStep::first(&workflow, &worktree).expect("a first step");
+    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
     let ruling = rule_on(at_step, &diff_evidence(), &work, budget()).await;
@@ -432,8 +432,8 @@ async fn an_advancing_step_does_not_move_the_job() {
 async fn the_last_step_advancing_completes_the_job() {
     let workflow = workflow("/usr/bin/true");
     let worktree = worktree();
-    let at_step =
-        AtStep::named(&workflow, &StepId::new("summarise"), &worktree).expect("the last step");
+    let at_step = AtStep::named(workflow.frozen(), &StepId::new("summarise"), &worktree)
+        .expect("the last step");
     let work = FakeWorkProduct::untouched();
 
     let ruling = rule_on(at_step, &note_evidence(), &work, budget()).await;
@@ -468,5 +468,5 @@ fn killing_a_job_reaches_killed_rather_than_failed() {
 fn the_gate_cannot_be_pointed_at_a_step_the_workflow_does_not_declare() {
     let workflow = workflow("/usr/bin/true");
     let worktree = worktree();
-    assert!(AtStep::named(&workflow, &StepId::new("invented"), &worktree).is_none());
+    assert!(AtStep::named(workflow.frozen(), &StepId::new("invented"), &worktree).is_none());
 }

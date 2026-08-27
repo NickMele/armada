@@ -13,12 +13,14 @@
 # could not — `evidence_suspect` is a variant of two enums at once, on two
 # different axes, and it is the one collision the nesting exists to hold.
 #
-# The seven enums:
+# The enums, which `xtask`'s `VOCABULARIES` holds the same list of:
 #   job_status                 - where a Job is. Keys match job-statuses.toml
 #   queued_reason              - why a queued Job has not started
 #   escalation_reason          - why a Job stopped and asked. Keys match
 #                                escalation-triggers.toml
 #   step_verdict               - the outcome of one workflow step
+#   check_outcome              - how one declared Check ended. Keys match
+#                                check-outcomes.toml
 #   criterion_verdict_check    - one criterion, as a mechanical Check saw it
 #   criterion_verdict_judge    - one criterion, as the Judge saw it
 #   criterion_verdict_attested - one criterion, as a person attested it
@@ -206,6 +208,14 @@ status_token = "--status-escalated"
 vocabulary = "Escalation reason"
 in_code = "In code"
 
+[verbs.escalation_reason.hatch_unbidden]
+verb = "stalled"
+icon = "octagon-alert"
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "Not yet"
+notes = "Takes no verb of its own, and shares stalled's badge for the reason silent does. A Drone that reached for the escape hatch unbidden has said it has nothing left to try: the Job stops and waits for a person, which is what a stall does. What differs is the payload — the Drone's own narrative, which is why the reason is worth reading — and a badge of its own would say the Job behaves differently when it does not."
+
 [verbs.escalation_reason.interrupted]
 verb = "interrupted"
 icon = "unplug"
@@ -319,3 +329,42 @@ status_token = ""
 vocabulary = "Criterion verdict — attested"
 in_code = ""
 notes = "A person looked and would not put their name to it. Not failed, which is an exit code, and not refused, which is the Judge's veto. No glyph, for the reason confirmed has none."
+
+[verbs.check_outcome.passed]
+verb = "passed"
+icon = "shield-check"
+status_token = "--status-completed-success"
+vocabulary = "Check outcome"
+in_code = "In code"
+
+[verbs.check_outcome.failed]
+verb = "failed"
+icon = "shield-x"
+status_token = "--status-completed-failed"
+vocabulary = "Check outcome"
+in_code = "In code"
+notes = "Shares gate_failure's glyph. It is the same event seen from two distances — the Check that did not pass, and the Job that stopped because of it."
+
+[verbs.check_outcome.signalled]
+verb = "ended by a signal"
+icon = "unplug"
+status_token = "--status-escalated"
+vocabulary = "Check outcome"
+in_code = "In code"
+notes = "The verb says what happened rather than restating the enum: there was no exit code to compare, so the Check neither passed nor failed. Shares interrupted's glyph, which is the same shape of ending."
+
+[verbs.check_outcome.timed_out]
+verb = "outran its budget"
+icon = "clock"
+status_token = "--status-escalated"
+vocabulary = "Check outcome"
+in_code = "In code"
+notes = "Not \"timed out\", which reads as the machine's word for it. The Check did not fail, it did not finish, and retrying reproduces the same hang — which is why check_timeout escalates rather than counting as a failure."
+
+[verbs.check_outcome.never_ran]
+verb = "never started"
+icon = "shield-minus"
+status_token = "--status-not-started"
+vocabulary = "Check outcome"
+in_code = "In code"
+notes = "The token is not a mistake and is the one somebody will later try to correct. A Check whose command is not installed measured nothing: it must not read green, because a missing command is a failure and never a vacuous pass, and it must not read as a failed Check either, because nothing ran to fail. --status-not-started is the only one of the three that says what actually happened."

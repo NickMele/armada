@@ -1,11 +1,13 @@
 //! A WorkflowDef: the M1 slice, the four validations, and the one cross-file
 //! check that is the point of this milestone step.
 
+use core_model::{AdvanceGate, EvidenceType, ResolvedCheck};
+
 use crate::error::{Fault, LoadError, ResolveError};
 use crate::manifest::Manifest;
-use crate::resolve::{ResolvedCheck, ResolvedWorkflow};
+use crate::resolve::ResolvedWorkflow;
 use crate::tests::{fault_at, named, refusals, refused};
-use crate::workflow::{AdvanceGate, EvidenceType, MechanicalCheck, Structure, WorkflowDef};
+use crate::workflow::{MechanicalCheck, Structure, WorkflowDef};
 
 /// The `bug` workflow as the milestone step writes it, verbatim.
 const BUG: &str = r#"

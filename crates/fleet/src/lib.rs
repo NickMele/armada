@@ -51,12 +51,16 @@
 //! is invented — every other crate in the workspace refuses both, and the
 //! refusal needs somewhere to bottom out.
 //!
-//! `fleet-bin` now serves this over the listener it binds. What a Fleet is
+//! `armada serve` now serves this over the listener it binds. What a Fleet is
 //! assembled from comes from the repository it was pointed at — `armada.yml`
 //! at that repository's root and one definition in `.armada/workflows/` beside
 //! it — which is the decision M1 step 13 carries. Nothing on a command line
 //! names either file, so two Fleets over one repository cannot disagree about
 //! it.
+//!
+//! And what a Drone did: [`transcript`](mod@transcript) is the sink behind
+//! Fleet's line loop — one read, fanned out after the parser has taken it, so
+//! rows reach `.armada/transcripts/` without competing for the pipe.
 //!
 //! [`turning`](mod@turning) calls [`Fleet::turn`], which is why a Job approved
 //! from Bridge advances rather than sitting dispatched: the router and the loop
@@ -68,19 +72,23 @@
 
 pub mod adrift;
 pub mod briefing;
+mod check_output;
 pub mod clock;
 pub mod daemon;
 pub mod detach;
 pub mod dispatch;
 pub mod drafting;
 pub mod drone;
+mod drone_moves;
 pub mod evidence;
 pub mod gate;
 pub mod mint;
 pub mod process;
+pub mod redispatch;
 pub mod runtime;
 pub mod serving;
 pub mod session;
+pub mod transcript;
 pub mod turning;
 pub mod watch;
 pub mod working;
@@ -99,10 +107,12 @@ pub use evidence::{Call, EvidenceInbox, EvidenceTool, Landed, Recorded};
 pub use gate::{apply, rule_on, AtStep, CheckBudget, CheckOutput, Ruling};
 pub use mint::{Mint, UlidMint};
 pub use process::{holder_of, Holder, ProbeFailed, StartedAt};
+pub use redispatch::Replacement;
 pub use runtime::{
     machine_path, provisional_address, Presence, PublishError, Published, ReadError, RuntimeFile,
     Staleness, Vacancy, FILE_NAME, PROVISIONAL_PORT,
 };
 pub use session::{DroneSession, LiveSession, Turn};
+pub use transcript::{history, log_of, transcript_of, Live, Recording, Spine, Tap, Taps};
 pub use turning::{keep_turning, Turning};
 pub use watch::Watching;

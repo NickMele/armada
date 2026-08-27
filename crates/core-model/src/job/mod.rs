@@ -35,6 +35,8 @@
 //! transition into it, which is the point: a test that constructs its way there
 //! asserts nothing about the machine it claims to be testing.
 
+mod check;
+mod drone;
 mod escalation;
 mod event;
 mod fields;
@@ -44,16 +46,19 @@ mod status;
 mod step;
 mod step_machine;
 mod transition;
+mod workflow;
 
 #[cfg(test)]
 mod tests;
 
+pub use check::{CheckOutcome, StepCheck};
+pub use drone::{DroneAssigned, DroneMoved, DronePresence, IllegalDroneMove};
 pub use escalation::{EscalationTrigger, TriggerKind, TriggerLevel};
 pub use event::{JobEvent, StepEvent};
 pub use fields::{
-    AcceptanceCriterion, CriterionSource, DependencyDirection, DependencyEdge, DispatchOrigin,
-    Facts, GateManifest, GateOutcome, NotRunDisposition, NotRunReason, Origin, ScopeRevision,
-    ScopeRevisionOutcome, Subject, TopLevelOrigin, Urgency, WriteTargets,
+    AcceptanceCriterion, BlankBranch, Branch, CriterionSource, DependencyDirection, DependencyEdge,
+    DispatchOrigin, Facts, GateManifest, GateOutcome, NotRunDisposition, NotRunReason, Origin,
+    ScopeRevision, ScopeRevisionOutcome, Subject, TopLevelOrigin, Urgency, WriteTargets,
 };
 pub use ids::{
     BlankModel, BlankTitle, CriterionId, DroneId, JobId, ManifestId, ModelName, RepoPath, StepId,
@@ -67,4 +72,8 @@ pub use step_machine::{
 };
 pub use transition::{
     CriteriaOwed, Edge, IllegalTransition, PilotReason, Target, TransitionReason, EDGES,
+};
+pub use workflow::{
+    AdvanceGate, EvidenceType, FrozenWorkflow, ResolvedCheck, ResolvedStep, DIFF_NONEMPTY,
+    MANIFEST_CHECK,
 };

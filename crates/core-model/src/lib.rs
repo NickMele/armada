@@ -43,12 +43,15 @@ pub use envelope::{
     env_keys, Actor, AuditLine, Component, Envelope, FieldValue, Level, Timestamp, Ulid,
 };
 pub use job::{
-    AcceptanceCriterion, BlankModel, BlankTitle, CriteriaOwed, CriterionId, CriterionSource,
-    DependencyDirection, DependencyEdge, DispatchOrigin, DroneId, Edge, EscalationTrigger, Facts,
-    GateManifest, GateOutcome, IllegalStepTransition, IllegalTransition, Job, JobEvent, JobId,
-    JobStatus, JobStep, ManifestId, ModelName, NewJob, NotRunDisposition, NotRunReason, Origin,
-    PilotReason, RepoPath, ScopeRevision, ScopeRevisionOutcome, StepEdge, StepEvent, StepId,
-    StepSeed, StepState, StepTarget, StepTransitioned, StepVerdict, Subject, Target, Title,
-    TopLevelOrigin, TransitionReason, Transitioned, TriggerKind, TriggerLevel, Urgency, WorkflowId,
-    WriteTargets, ADVANCING_STATUSES, EDGES, STEP_EDGES,
+    AcceptanceCriterion, AdvanceGate, BlankBranch, BlankModel, BlankTitle, Branch, CheckOutcome,
+    CriteriaOwed, CriterionId, CriterionSource, DependencyDirection, DependencyEdge,
+    DispatchOrigin, DroneAssigned, DroneId, DroneMoved, DronePresence, Edge, EscalationTrigger,
+    EvidenceType, Facts, FrozenWorkflow, GateManifest, GateOutcome, IllegalDroneMove,
+    IllegalStepTransition, IllegalTransition, Job, JobEvent, JobId, JobStatus, JobStep, ManifestId,
+    ModelName, NewJob, NotRunDisposition, NotRunReason, Origin, PilotReason, RepoPath,
+    ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepCheck, StepEdge,
+    StepEvent, StepId, StepSeed, StepState, StepTarget, StepTransitioned, StepVerdict, Subject,
+    Target, Title, TopLevelOrigin, TransitionReason, Transitioned, TriggerKind, TriggerLevel,
+    Urgency, WorkflowId, WriteTargets, ADVANCING_STATUSES, DIFF_NONEMPTY, EDGES, MANIFEST_CHECK,
+    STEP_EDGES,
 };

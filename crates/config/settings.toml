@@ -560,7 +560,7 @@ lifetime = "Daemon start"
 merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Fleet"
-read_by = "fleet-bin"
+read_by = "armada"
 notes = """
 How many times Fleet auto-restarts after a crash before falling back to a manual Restart Fleet. Distinct from the network-loss retry policy, which is Job/Drone reconnection.
 """
@@ -688,9 +688,9 @@ lifetime = "Daemon start"
 merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Fleet"
-read_by = "adapters, fleet-bin"
+read_by = "adapters, armada"
 notes = """
-Added by the Aug 2026 config review. Which Secrets implementation the composition root wires. Adding a second provider changes this row and fleet-bin — nothing else.
+Added by the Aug 2026 config review. Which Secrets implementation the composition root wires. Adding a second provider changes this row and the `armada` crate — nothing else.
 """
 
 [settings.secrets-provider-account-vault-reference]
@@ -714,7 +714,7 @@ lifetime = "Daemon start"
 merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Fleet"
-read_by = "adapters, fleet-bin"
+read_by = "adapters, armada"
 notes = """
 Added by the Aug 2026 config review. Fleet-level worktree/branch/PR orchestration, separate from the Drone's own in-session git usage.
 """

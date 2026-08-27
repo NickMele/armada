@@ -29,11 +29,36 @@ fn title(text: &str) -> Title {
     Title::new(text).expect("a fixture title is never blank")
 }
 
+/// The two steps the fixture Job follows, frozen as a real Job's would be.
+fn workflow() -> FrozenWorkflow {
+    FrozenWorkflow::frozen(
+        WorkflowId::carried(id("01J0000000000000000000WF00")),
+        "bug".into(),
+        1,
+        vec![
+            ResolvedStep::frozen(
+                StepId::new("repro"),
+                "Reproduce".into(),
+                Some(EvidenceType::FailingTest),
+                Vec::new(),
+                AdvanceGate::Auto,
+            ),
+            ResolvedStep::frozen(
+                StepId::new("fix"),
+                "Fix".into(),
+                Some(EvidenceType::Diff),
+                vec![ResolvedCheck::DiffNonempty],
+                AdvanceGate::Auto,
+            ),
+        ],
+    )
+}
+
 fn draft() -> NewJob {
     NewJob {
         id: JobId::carried(id("01J0000000000000000000JOB0")),
         title: title("fix the parser's off-by-one"),
-        workflow_id: WorkflowId::carried(id("01J0000000000000000000WF00")),
+        workflow: workflow(),
         owner_manifest_id: ManifestId::carried(id("01J0000000000000000000MAN0")),
         urgency: Urgency::Normal,
         atomic: false,

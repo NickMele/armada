@@ -15,16 +15,18 @@
 
 mod corrupt;
 mod cursor;
+mod forget;
 mod migrate;
 mod reconstruct;
 mod roundtrip;
 mod tmp;
 
 use core_model::{
-    AcceptanceCriterion, Actor, CriterionId, CriterionSource, DependencyDirection, DependencyEdge,
-    DispatchOrigin, Facts, GateManifest, GateOutcome, Job, JobId, ManifestId, ModelName, NewJob,
-    NotRunReason, RepoPath, ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject,
-    Timestamp, Title, TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
+    AcceptanceCriterion, Actor, AdvanceGate, CriterionId, CriterionSource, DependencyDirection,
+    DependencyEdge, DispatchOrigin, EvidenceType, Facts, FrozenWorkflow, GateManifest, GateOutcome,
+    Job, JobId, ManifestId, ModelName, NewJob, NotRunReason, RepoPath, ResolvedCheck, ResolvedStep,
+    ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject, Timestamp, Title,
+    TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
 };
 
 use crate::Store;
@@ -58,12 +60,45 @@ pub fn open(dir: &TempDir) -> Store {
     Store::open(&dir.db()).expect("a fresh store opens")
 }
 
+/// The workflow every fixture Job freezes: the two steps its `job_steps` rows
+/// name, one of them gated, so a round trip carries a Check declaration too.
+pub fn workflow() -> FrozenWorkflow {
+    FrozenWorkflow::frozen(
+        WorkflowId::carried(ulid("01WORKFLOW")),
+        "bug".to_string(),
+        1,
+        vec![
+            ResolvedStep::frozen(
+                StepId::new("reproduce"),
+                "Reproduce".to_string(),
+                Some(EvidenceType::FailingTest),
+                Vec::new(),
+                AdvanceGate::Auto,
+            ),
+            ResolvedStep::frozen(
+                StepId::new("fix"),
+                "Fix".to_string(),
+                Some(EvidenceType::Diff),
+                vec![
+                    ResolvedCheck::ManifestCheck {
+                        name: "build".to_string(),
+                        run: "cargo build".to_string(),
+                        expect_exit_code: 0,
+                    },
+                    ResolvedCheck::DiffNonempty,
+                ],
+                AdvanceGate::Auto,
+            ),
+        ],
+    )
+}
+
 /// A Job with nothing left null: every `Option` filled, every array non-empty.
 pub fn full_new_job(id: &str) -> NewJob {
     NewJob {
         id: job_id(id),
         title: title("fix the off-by-one in the log reader"),
-        workflow_id: WorkflowId::carried(ulid("01WORKFLOW")),
+        workflow: workflow(),
         owner_manifest_id: ManifestId::carried(ulid("01OWNERMANIFEST")),
         urgency: Urgency::Incident,
         atomic: true,

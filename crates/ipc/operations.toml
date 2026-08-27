@@ -70,7 +70,12 @@ The one call that must work when Fleet is down. The probe count is not stated he
 kind = "query"
 transport = "HTTP"
 helm_access = "Yes"
-description = "One Job in full, including Facts and shape"
+description = "One Job in full, including Facts, shape, and each step's Checks with what they did"
+notes = """
+A step carries both what it declares and what ran: `checks` is the workflow's declaration and `check_runs` is what the gate found. Empty `checks` is an ungated step and an absent `checks` is Fleet unable to say — the Job named a workflow this Fleet does not hold, or holds one that no longer declares the step. Those are different sentences and a client that saw a gap either way could not tell them apart.
+
+The declaration is read from the workflow and never from the Job's frozen rows, which carry where a step got to and nothing about what gates it. Two sources for one fact is how a registry drifts.
+"""
 
 [operations.get_job_events]
 kind = "query"
@@ -151,13 +156,30 @@ description = "Jobs awaiting sign-off"
 kind = "query"
 transport = "HTTP"
 helm_access = "Yes"
-description = "The workflows Fleet holds, with their steps and the Manifest they resolved against"
+description = "The workflows Fleet holds, with each step's declared Checks and the Manifest they resolved against"
 notes = """
 Added because nothing joined a Job's `workflow_id` to a workflow. `ResolvedWorkflow` carried a name and a version and no id, a proposal named one anyway, and the id was written onto the record unverified — so a Job could sit on the board claiming a workflow that does not exist. The refusal at creation is the fix; this is what lets a composer name a workflow that will not be refused.
 
 It also makes the row readable. Bridge showed a ULID where it should have said `bug`, and resolving the id here is why the Job row does not have to carry a denormalised name.
 
 One workflow at M1 — `Fittings` holds exactly one — and the row is still a list, because the reason there is one is that nothing could look a second one up, and that reason has now gone.
+
+A step was a bare id until `mechanical_checks` was added to it. Bridge printed "No operation serves this step's checks" under every step because nothing on the wire could say otherwise, and for the `bug` workflow the truth is that none of its four steps declares one. `get_job` answers from these same values rather than a second copy.
+"""
+
+[operations.observe_job]
+kind = "query"
+transport = "WebSocket"
+helm_access = "No"
+description = "One Job's turns, the history and then the live ones, on a socket of its own"
+notes = """
+The one query on the socket, and the row that makes `kind` decide `transport` a rule with an exception rather than a law. Who initiates is still the whole rule — a viewer opens this deliberately on one Job — but the answer does not end: it is the turns already taken followed by the ones that follow, which no request-response shape carries. A poll would have to choose between missing rows between calls and re-sending them.
+
+It does not travel `/events`. That stream is one drop-oldest channel of fixed capacity carrying every Job, so transcript rows at Drone speed would evict the state changes Bridge draws the Board from — and an eviction there is not a lost row but a full resync of every Job, paid continuously for as long as anybody is watching anything.
+
+`helm_access` is `No` for the reason `get_events_since` gives about tokens: a Drone's whole transcript streamed into a Helm session stays in that session for its remainder, and Helm has `get_drone` for the snapshot. The viewer this is for is a person.
+
+Not `get_drone`, which is a snapshot of one Drone over HTTP. This is one Job across every Drone it has had, and it continues.
 """
 
 

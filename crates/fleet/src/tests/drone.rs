@@ -32,7 +32,9 @@ use crate::LiveSession;
 
 const PLANTED: &str = "ARMADA_TEST_PLANTED_CREDENTIAL";
 
-fn config(at: &TempDir) -> DroneSpawnConfig {
+/// Shared with `crate::tests::transcript`, which needs a real child on a real
+/// pipe for the same reason this module does.
+pub fn config(at: &TempDir) -> DroneSpawnConfig {
     DroneSpawnConfig::spawn_in(
         &Worktree::at(at.path().to_string_lossy(), "armada/01AAA"),
         Model::named("a-model").expect("a named model"),
@@ -42,6 +44,7 @@ fn config(at: &TempDir) -> DroneSpawnConfig {
         environment(HostPaths {
             path: "/usr/bin:/bin",
             home: "/Users/user",
+            user: "someone",
         })
         .expect("a legal environment"),
     )
@@ -65,10 +68,15 @@ fn fleet_names_every_variable_a_drone_gets() {
     let built = environment(HostPaths {
         path: "/usr/bin:/bin",
         home: "/Users/user",
+        user: "someone",
     })
     .expect("a legal environment");
 
-    assert_eq!(built.names(), vec!["PATH", "HOME", "LANG", "TERM"]);
+    // **Five, and `USER` is the fifth.** Without it the agent CLI answers its
+    // first turn with `Not logged in`, measured against a live Drone: same
+    // binary, same `HOME`, credentials readable from the Keychain either way,
+    // `USER` the only difference. `LOGNAME` does not substitute.
+    assert_eq!(built.names(), vec!["PATH", "HOME", "LANG", "TERM", "USER"]);
     assert!(
         !built.names().contains(&"SSH_AUTH_SOCK"),
         "no credential, and no agent to ask one of — the second half of a \
@@ -118,7 +126,7 @@ async fn the_drone_gets_the_environment_fleet_built_and_not_the_one_fleet_had() 
         .collect();
     assert_eq!(
         inherited,
-        vec!["TERM", "PATH", "LANG", "HOME"],
+        vec!["TERM", "USER", "PATH", "LANG", "HOME"],
         "something reached the Drone that Fleet did not name:\n{said}"
     );
 }
@@ -242,7 +250,7 @@ async fn fleet_starts_exactly_what_the_harness_rendered() {
     assert_eq!(rendered[0].directory(), at.path().to_string_lossy());
     assert_eq!(
         rendered[0].environment().names(),
-        vec!["PATH", "HOME", "LANG", "TERM"]
+        vec!["PATH", "HOME", "LANG", "TERM", "USER"]
     );
 }
 
