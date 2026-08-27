@@ -7,6 +7,12 @@ to make a document nobody indexed impossible to leave lying around.
 A directory that carries its own `INDEX.md` is listed as a directory — its
 contents are indexed there, by the same rule.
 
+## Before you propose anything
+
+- [`scope.md`](scope.md) — what Armada is for and what it is not, in the
+  owner's words. A proposal that serves neither the seven steps nor the four
+  pains is a rabbit hole, and one has already cost a night.
+
 ## Before you write here
 
 - [`CLAUDE.md`](CLAUDE.md) — the rules for writing in this directory, and where
