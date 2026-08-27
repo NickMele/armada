@@ -283,6 +283,16 @@ fn envelope(spine: &Spine, at: Timestamp, msg: &str) -> Envelope {
         .at_step(spine.step.as_str())
 }
 
+/// Write one Fleet-authored line into a Job's log.
+///
+/// The Job log is otherwise written by the transcript's own writer task. This
+/// is the other author: something Fleet observed about a Job that no Drone
+/// event carries — a step editing outside its declared scope is the first.
+pub fn note(repo_root: &str, job: &JobId, envelope: &Envelope) -> Result<(), io::Error> {
+    let mut log = appending(&log_of(repo_root, job))?;
+    write_line(&mut log, envelope)
+}
+
 /// Open for appending, making the directory if it is not there.
 ///
 /// Append rather than truncate: a Job log outlives any one Drone, and a

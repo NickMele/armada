@@ -23,6 +23,7 @@ use alloc::vec::Vec;
 
 use crate::job::ids::{StepId, WorkflowId};
 use crate::job::judge::JudgeCheck;
+use crate::job::scope::EvidenceScope;
 
 /// What a step produces as its work product.
 ///
@@ -137,6 +138,11 @@ pub struct ResolvedStep {
     checks: Vec<ResolvedCheck>,
     advance_gate: AdvanceGate,
     judge_checks: Vec<JudgeCheck>,
+    /// What the Judge, or the person at the gate, may read — and, where
+    /// `scope_diff_check` is on, what bounds this step's own footprint.
+    /// **`None` on a step that declared none**, which behaves exactly as every
+    /// step did before an evidence scope existed.
+    evidence_scope: Option<EvidenceScope>,
 }
 
 impl ResolvedStep {
@@ -153,6 +159,7 @@ impl ResolvedStep {
         checks: Vec<ResolvedCheck>,
         advance_gate: AdvanceGate,
         judge_checks: Vec<JudgeCheck>,
+        evidence_scope: Option<EvidenceScope>,
     ) -> ResolvedStep {
         ResolvedStep {
             id,
@@ -161,6 +168,7 @@ impl ResolvedStep {
             checks,
             advance_gate,
             judge_checks,
+            evidence_scope,
         }
     }
 
@@ -196,6 +204,12 @@ impl ResolvedStep {
     /// a step declaring no criterion spends nothing.
     pub fn asks_the_judge(&self) -> bool {
         self.judge_checks.iter().any(JudgeCheck::fires)
+    }
+
+    /// What this step's evidence is scoped to. **`None` is the common case**,
+    /// and a step carrying none is neither watched nor asked for a declaration.
+    pub fn evidence_scope(&self) -> Option<&EvidenceScope> {
+        self.evidence_scope.as_ref()
     }
 
     /// How many model calls one pass over this step makes. Latency rather than

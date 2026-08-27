@@ -42,6 +42,7 @@ fn workflow() -> FrozenWorkflow {
             Vec::new(),
             AdvanceGate::Auto,
             Vec::new(),
+            None,
         )],
     )
 }

@@ -64,6 +64,7 @@ fn a_workflow() -> core_model::FrozenWorkflow {
                 expect_exit_code: 0,
             }],
             judged_on: &[],
+            scope: None,
         },
         Sketch {
             id: "summarise",
@@ -71,6 +72,7 @@ fn a_workflow() -> core_model::FrozenWorkflow {
             evidence_type: Some("facts_note"),
             gates: &[],
             judged_on: &[],
+            scope: None,
         },
     ])
 }
@@ -145,4 +147,49 @@ fn the_brief_carries_the_facts_and_the_criteria() {
     assert!(said.contains("fix the off-by-one"));
     assert!(said.contains("the reader is off by one"));
     assert!(said.contains("the log reader stops one line later"));
+}
+
+/// A step that asks for no scope gets no block, because there is no call it
+/// could make — telling every Drone about a tool most of them cannot use is how
+/// an instruction stops being read.
+#[test]
+fn a_step_with_no_scope_is_told_nothing_about_declaring_one() {
+    for step in ["implement", "summarise"] {
+        assert!(!turn_at(step).contains("BEFORE YOU START"));
+    }
+}
+
+/// A step that asks for one says so, and says what a plan that turned out wrong
+/// is fixed by. **The obligation is in the prompt** rather than only in the
+/// tool description, for the reason the reporting clause is: spike 6 measured
+/// that a description alone does not make a Drone call a tool.
+#[test]
+fn a_scoped_step_is_told_to_declare_before_it_starts() {
+    let workflow = testkit::frozen(&[Sketch {
+        id: "implement",
+        label: "Implement",
+        evidence_type: Some("diff"),
+        gates: &[],
+        judged_on: &[],
+        scope: Some(testkit::Scoped {
+            diff_check: true,
+            at_step_start: true,
+            exclude: &["secrets"],
+        }),
+    }]);
+    let said = first_turn(&a_job(), &workflow, &StepId::new("implement"))
+        .expect("a prompt")
+        .as_str()
+        .to_string();
+
+    assert!(said.contains("BEFORE YOU START"));
+    assert!(
+        said.contains("call the tool"),
+        "a wrong plan has a way out: {said}"
+    );
+    assert!(said.contains("secrets"), "the denylist is named: {said}");
+    assert!(
+        !said.contains("mcp__") && !said.to_lowercase().contains("declare_scope"),
+        "described rather than named, like the Evidence tool: {said}"
+    );
 }

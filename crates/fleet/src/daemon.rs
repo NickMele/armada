@@ -60,6 +60,7 @@ use crate::evidence::EvidenceInbox;
 use crate::gate::{CheckBudget, Ruling};
 use crate::judging::{JudgeBudget, Judging};
 use crate::mint::Mint;
+use crate::scope::Drifting;
 use crate::working::Working;
 
 /// What Fleet knows about the machine it runs on.
@@ -161,6 +162,10 @@ pub struct Turned {
     /// What became of a finished Job's branch. Present on the turn that
     /// finished one and empty on every other, like the two fields above it.
     pub delivered: Option<Delivered>,
+    /// Work seen outside the step's declared scope, on the turn it was first
+    /// seen. **It fails nothing here** — the Drone may declare again, and the
+    /// gate reads the footprint for itself when the step ends.
+    pub drifting: Option<Drifting>,
 }
 
 /// The daemon core: **the only writer of Job state.**
@@ -281,6 +286,11 @@ where
     /// that holds one Job.
     pub async fn turn(&self) -> Result<Turned, Adrift> {
         let mut working = self.working.lock().await;
+        // Before the gate, so a step whose evidence lands this turn has its
+        // last live reading taken while its Drone is still the one being
+        // watched — and after nothing, because the check reads a worktree and
+        // must not run against a slot the gate has just cleared.
+        let drifting = self.watch_scope(&mut working).await;
         let ruled = self.settle(&mut working).await?;
         let delivered = self.delivered.lock().await.take();
         let after = self.reap(&mut working).await?;
@@ -290,6 +300,7 @@ where
             after,
             admitted,
             delivered,
+            drifting,
         })
     }
 

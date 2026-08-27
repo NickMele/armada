@@ -57,6 +57,25 @@ pub struct Sketch<'a> {
     /// and the criteria disagree — the fixture cannot produce a combination an
     /// `armada.yml` could not.
     pub judged_on: &'a [(&'a str, &'a str)],
+    /// What the step's evidence is scoped to. `None` is a step declaring no
+    /// `evidence_scope`, which is the common shape and the one every fixture
+    /// written before scopes existed has.
+    pub scope: Option<Scoped<'a>>,
+}
+
+/// A step's `evidence_scope`, as a fixture writes it.
+///
+/// `context_source` is fixed at `drone_declared` because it is the only value
+/// a scope check is about: the paths the Manifest could default are not the
+/// ones a Drone is measured against.
+#[derive(Debug, Clone, Copy)]
+pub struct Scoped<'a> {
+    /// Whether the footprint is checked against the declaration at the gate.
+    pub diff_check: bool,
+    /// Whether the plan is declared at step start, which is what makes the
+    /// live check possible.
+    pub at_step_start: bool,
+    pub exclude: &'a [&'a str],
 }
 
 /// Build a workflow and the Manifest its Checks resolve against.
@@ -96,6 +115,19 @@ fn workflow_text(steps: &[Sketch<'_>]) -> String {
         ));
         if let Some(evidence) = step.evidence_type {
             text.push_str(&format!("    evidence_type: {evidence}\n"));
+        }
+        if let Some(scope) = step.scope {
+            if scope.at_step_start {
+                text.push_str("    declare_plan_at: step_start\n");
+            }
+            text.push_str("    evidence_scope:\n      context_source: drone_declared\n");
+            text.push_str(&format!("      scope_diff_check: {}\n", scope.diff_check));
+            if !scope.exclude.is_empty() {
+                text.push_str("      exclude_paths:\n");
+                for path in scope.exclude {
+                    text.push_str(&format!("        - \"{path}\"\n"));
+                }
+            }
         }
         if !step.judged_on.is_empty() {
             text.push_str("    judge_checks:\n      - criteria:\n");

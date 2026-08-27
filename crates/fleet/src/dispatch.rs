@@ -321,7 +321,16 @@ where
             job: job_id.clone(),
             cause,
         })?;
-        let ruling = rule_on(at, &landed.submission, self.work(), self.budget(), &judging).await;
+        let declared = at_work.declared().cloned();
+        let ruling = rule_on(
+            at,
+            &landed.submission,
+            declared.as_ref(),
+            self.work(),
+            self.budget(),
+            &judging,
+        )
+        .await;
         // Before the Job or the step moves. A recorded result the transition
         // then failed to make is readable; a transition whose evidence was
         // never written down is a verdict with no trace.

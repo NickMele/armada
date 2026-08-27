@@ -104,6 +104,7 @@ fn two_steps() -> config::ResolvedWorkflow {
             evidence_type: Some("diff"),
             gates: &[Gate::DiffNonempty],
             judged_on: &[],
+            scope: None,
         },
         Sketch {
             id: "summarise",
@@ -111,6 +112,7 @@ fn two_steps() -> config::ResolvedWorkflow {
             evidence_type: Some("facts_note"),
             gates: &[],
             judged_on: &[],
+            scope: None,
         },
     ])
 }

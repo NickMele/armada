@@ -13,14 +13,14 @@
 //!
 //! The contract names six layers: baseline, Kit, Manifest, WorkflowDef framing,
 //! the Job brief, and the step. **M1 has no Kit and no Manifest layer**, which
-//! the contract's own M1 rendering says in as many words, so what is assembled
-//! here is baseline, job brief, where-you-are, step — the four blocks the
-//! rendering shows.
+//! the contract's own M1 rendering says, so what is assembled here is baseline,
+//! job brief, where-you-are, step — the four blocks the rendering shows.
 //!
-//! What is not assembled: the exemplar corpus, `context_paths`, the injected
-//! reference material a review step needs, and what the previous step produced.
-//! Each needs a record M1 has no type for, and a block rendered empty reads to a
-//! Drone as a block that was answered.
+//! What is not assembled: the exemplar corpus, the injected reference material
+//! a review step needs, and what the previous step produced. Each needs a
+//! record M1 has no type for, and a block rendered empty reads to a Drone as a
+//! block that was answered. The scope block is written **only** where the step
+//! declares one — the only step where the call exists.
 //!
 //! # A Drone is never told what the Checks are
 //!
@@ -75,8 +75,49 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId) -> String {
     if let Some(step) = workflow.steps().iter().find(|step| step.id() == at) {
         text.push_str("\n\n");
         text.push_str(&step_block(step));
+        if let Some(block) = scope_block(step) {
+            text.push_str("\n\n");
+            text.push_str(&block);
+        }
     }
     text
+}
+
+/// What to declare before starting, where the step asks the Drone to.
+///
+/// **The obligation is here rather than in the tool's description**, for the
+/// reason the baseline carries the Evidence obligation: spike 6 measured that a
+/// description alone does not make a Drone call a tool.
+///
+/// The consequence is stated plainly and without a threat: a plan that turns
+/// out wrong is fixed by declaring again, and work belonging to a later part
+/// does not become this part's by being named.
+fn scope_block(step: &ResolvedStep) -> Option<String> {
+    let scope = step.evidence_scope()?;
+    if !scope.wants_a_declaration() {
+        return None;
+    }
+    let mut block = String::from(
+        "BEFORE YOU START\n\nCall the scope tool with the repository-relative \
+         paths this part's work will be in. Include what you will change and \
+         what has to be read to judge the change.",
+    );
+    if scope.scope_diff_check() {
+        block.push_str(
+            " Files you change outside them are compared against what you \
+             declared. If the work turns out to be somewhere else, call the tool \
+             again — a plan that changed is fine, and a file changed for the \
+             next part is not.",
+        );
+    }
+    if !scope.exclude_paths().is_empty() {
+        block.push_str("\n\nDo not name these, and do not change them:");
+        for path in scope.exclude_paths() {
+            block.push_str("\n  - ");
+            block.push_str(path.as_str());
+        }
+    }
+    Some(block)
 }
 
 /// What the Job is about, in the requester's own words.

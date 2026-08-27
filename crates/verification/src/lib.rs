@@ -44,12 +44,15 @@
 //!
 //! The raw diff-computation adapter method is exposed **only** here, so exactly
 //! one place decides whether files changed outside their declared scope. Two
-//! places deciding that is two answers.
+//! places deciding that is two answers. [`scope`](mod@scope) is that place:
+//! [`InScope::resolved`] at the gate, and [`drifted`] on every turn of a step
+//! that declared its plan up front.
 
 mod gate;
 mod judge;
 mod mechanical;
 mod outcome;
+mod scope;
 mod submission;
 
 #[cfg(test)]
@@ -57,6 +60,9 @@ mod tests;
 
 pub use gate::{decide, Accepted, NotWhatTheStepAsked, Verdict};
 pub use judge::{Brief, Refusals, Unreadable};
-pub use mechanical::{CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran};
+pub use mechanical::{
+    CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran, EVIDENCE_SCOPE,
+};
 pub use outcome::{OutcomeTurn, TheBaseMoved};
+pub use scope::{drifted, InScope, OutsideScope};
 pub use submission::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};

@@ -9,7 +9,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
-use ipc::mcp::{NotRecorded, Receipt, SubmitEvidence};
+use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
     Actor, Event, Instant, JobCreated, JobDetail, JobId, JobList, JobStateChanged, JobStatus,
     JobSummary, ManifestId, ManifestSummary, ModelChoices, Origin, ProposeJob, Redispatched, RunId,
@@ -44,6 +44,8 @@ pub struct FakeDaemon {
     /// Every submission taken, so a test can assert that a refused call left
     /// nothing behind.
     pub submitted: Mutex<Vec<SubmitEvidence>>,
+    /// Every scope declaration taken, in arrival order.
+    pub declared: Mutex<Vec<DeclareScope>>,
     /// When set, every call answers with a fault. The stream closing on a
     /// daemon that cannot answer is a behaviour worth a test.
     pub mute: Mutex<bool>,
@@ -60,6 +62,7 @@ impl FakeDaemon {
             skipped: Mutex::new(0),
             minted: AtomicU64::new(0),
             submitted: Mutex::new(Vec::new()),
+            declared: Mutex::new(Vec::new()),
             mute: Mutex::new(false),
         }
     }
@@ -403,6 +406,29 @@ impl Daemon for FakeDaemon {
             .push(submission);
         Ok(Receipt {
             word: "recorded".to_string(),
+        })
+    }
+
+    async fn declare_scope(&self, declaration: DeclareScope) -> Result<Receipt, NotRecorded> {
+        let running = self
+            .jobs
+            .lock()
+            .expect("not poisoned")
+            .iter()
+            .any(|job| job.status.as_wire() == "running");
+        if !running {
+            return Err(NotRecorded {
+                because: "no Job is being worked, so there is no step for this \
+                          declaration to be about"
+                    .to_string(),
+            });
+        }
+        self.declared
+            .lock()
+            .expect("not poisoned")
+            .push(declaration);
+        Ok(Receipt {
+            word: "declared".to_string(),
         })
     }
 }

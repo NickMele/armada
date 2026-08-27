@@ -22,11 +22,12 @@ mod roundtrip;
 mod tmp;
 
 use core_model::{
-    AcceptanceCriterion, Actor, AdvanceGate, CriterionId, CriterionSource, DependencyDirection,
-    DependencyEdge, DispatchOrigin, EvidenceType, Facts, FrozenWorkflow, GateManifest, GateOutcome,
-    Job, JobId, JudgeCheck, JudgeCriterion, ManifestId, ModelName, NewJob, NotRunReason, RepoPath,
-    ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject,
-    Timestamp, Title, TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
+    AcceptanceCriterion, Actor, AdvanceGate, ContextSource, CriterionId, CriterionSource,
+    DeclarePlanAt, DependencyDirection, DependencyEdge, DispatchOrigin, EvidenceScope,
+    EvidenceType, Facts, FrozenWorkflow, GateManifest, GateOutcome, Job, JobId, JudgeCheck,
+    JudgeCriterion, ManifestId, ModelName, NewJob, NotRunReason, RepoPath, ResolvedCheck,
+    ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject, Timestamp, Title,
+    TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
 };
 
 use crate::Store;
@@ -76,6 +77,7 @@ pub fn workflow() -> FrozenWorkflow {
                 Vec::new(),
                 AdvanceGate::Auto,
                 Vec::new(),
+                None,
             ),
             ResolvedStep::frozen(
                 StepId::new("fix"),
@@ -98,6 +100,15 @@ pub fn workflow() -> FrozenWorkflow {
                         question: "Does the fix address the cause the note names?".to_string(),
                     }],
                 )],
+                // One step carries a scope and one carries none, so a round
+                // trip proves both the value and its absence survive the
+                // column rather than only the value.
+                Some(EvidenceScope::declared(
+                    ContextSource::DroneDeclared,
+                    vec![RepoPath::new("secrets")],
+                    true,
+                    Some(DeclarePlanAt::StepStart),
+                )),
             ),
         ],
     )

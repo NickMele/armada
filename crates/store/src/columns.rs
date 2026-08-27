@@ -24,11 +24,11 @@
 //! quietly missing it, which is the failure the version number exists for.
 
 use core_model::{
-    AcceptanceCriterion, Actor, AdvanceGate, CriteriaOwed, CriterionId, CriterionSource,
-    DependencyDirection, DependencyEdge, EscalationTrigger, EvidenceType, FrozenWorkflow, JobId,
-    JudgeCheck, JudgeCriterion, ModelName, PilotReason, RepoPath, ResolvedCheck, ResolvedStep,
-    ScopeRevision, ScopeRevisionOutcome, StepId, Timestamp, TransitionReason, Ulid, WorkflowId,
-    DIFF_NONEMPTY, MANIFEST_CHECK,
+    AcceptanceCriterion, Actor, AdvanceGate, ContextSource, CriteriaOwed, CriterionId,
+    CriterionSource, DeclarePlanAt, DependencyDirection, DependencyEdge, EscalationTrigger,
+    EvidenceScope, EvidenceType, FrozenWorkflow, JobId, JudgeCheck, JudgeCriterion, ModelName,
+    PilotReason, RepoPath, ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome,
+    StepId, Timestamp, TransitionReason, Ulid, WorkflowId, DIFF_NONEMPTY, MANIFEST_CHECK,
 };
 use serde_json::{json, Map, Value};
 
@@ -291,6 +291,13 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
             "label": step.label(),
             "evidence_type": step.evidence_type().map(|kind| kind.as_wire()),
             "advance_gate": step.advance_gate().as_wire(),
+            "evidence_scope": step.evidence_scope().map(|scope| json!({
+                "context_source": scope.context_source().as_wire(),
+                "exclude_paths": scope.exclude_paths().iter()
+                    .map(|path| path.as_str()).collect::<Vec<&str>>(),
+                "scope_diff_check": scope.scope_diff_check(),
+                "declare_plan_at": scope.declare_plan_at().map(|at| at.as_wire()),
+            })),
             "judge_checks": step.judge_checks().iter().map(|judge| json!({
                 "model": judge.model().map(|model| model.as_str()),
                 "panel_size": judge.panel_size(),
@@ -349,7 +356,46 @@ fn read_step(entry: &Map<String, Value>) -> Result<ResolvedStep, Malformed> {
         checks,
         AdvanceGate::from_wire(&gate).ok_or_else(|| format!("`advance_gate` holds `{gate}`"))?,
         read_judge_checks(entry)?,
+        read_evidence_scope(entry)?,
     ))
+}
+
+/// What the step's evidence is scoped to.
+///
+/// **Absent reads as none**, for the reason [`read_judge_checks`] gives: every
+/// workflow written before a scope existed declared none, and none is what
+/// those steps meant.
+fn read_evidence_scope(entry: &Map<String, Value>) -> Result<Option<EvidenceScope>, Malformed> {
+    let Some(Value::Object(scope)) = entry.get("evidence_scope") else {
+        return Ok(None);
+    };
+    let source = text(scope, "context_source")?;
+    let declare_plan_at = match scope.get("declare_plan_at") {
+        Some(Value::String(at)) => Some(
+            DeclarePlanAt::from_wire(at)
+                .ok_or_else(|| format!("`declare_plan_at` holds `{at}`"))?,
+        ),
+        _ => None,
+    };
+    let mut exclude_paths = Vec::new();
+    if let Some(Value::Array(excluded)) = scope.get("exclude_paths") {
+        for path in excluded {
+            exclude_paths
+                .push(RepoPath::new(path.as_str().ok_or_else(|| {
+                    "an excluded path is not a string".to_string()
+                })?));
+        }
+    }
+    Ok(Some(EvidenceScope::declared(
+        ContextSource::from_wire(&source)
+            .ok_or_else(|| format!("`context_source` holds `{source}`"))?,
+        exclude_paths,
+        scope
+            .get("scope_diff_check")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        declare_plan_at,
+    )))
 }
 
 /// What the step asks the Judge.

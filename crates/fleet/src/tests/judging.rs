@@ -47,6 +47,7 @@ fn judged_workflow() -> ResolvedWorkflow {
             Gate::DiffNonempty,
         ],
         judged_on: &[("c1", THE_QUESTION)],
+        scope: None,
     }])
 }
 
@@ -63,7 +64,15 @@ async fn ruled(judge: FakeJudge, worktree: &Worktree) -> Ruling {
     let workflow = judged_workflow();
     let at = AtStep::first(workflow.frozen(), worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/log.rs"]).showing("+    let n = n - 1;\n");
-    rule_on(at, &diff_evidence(), &work, budget(), &judged_by(judge)).await
+    rule_on(
+        at,
+        &diff_evidence(),
+        None,
+        &work,
+        budget(),
+        &judged_by(judge),
+    )
+    .await
 }
 
 // ------------------------------------------------------------- the three
@@ -137,12 +146,14 @@ async fn a_failed_check_still_ends_the_job_where_a_refusal_does_not() {
             expect_exit_code: 0,
         }],
         judged_on: &[("c1", THE_QUESTION)],
+        scope: None,
     }]);
     let at = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/log.rs"]);
     let ruling = rule_on(
         at,
         &diff_evidence(),
+        None,
         &work,
         budget(),
         &judged_by(FakeJudge::with_no_objection()),
@@ -314,7 +325,7 @@ async fn a_step_that_declares_no_criterion_never_asks() {
         environment: Environment::nothing(),
     };
 
-    let ruling = rule_on(at, &diff_evidence(), &work, budget(), &judging).await;
+    let ruling = rule_on(at, &diff_evidence(), None, &work, budget(), &judging).await;
 
     assert!(ruling.advanced());
     assert!(
@@ -336,6 +347,7 @@ async fn a_failing_check_never_reaches_the_judge() {
             expect_exit_code: 0,
         }],
         judged_on: &[("c1", THE_QUESTION)],
+        scope: None,
     }]);
     let worktree = worktree();
     let at = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
@@ -348,7 +360,7 @@ async fn a_failing_check_never_reaches_the_judge() {
         environment: Environment::nothing(),
     };
 
-    let ruling = rule_on(at, &diff_evidence(), &work, budget(), &judging).await;
+    let ruling = rule_on(at, &diff_evidence(), None, &work, budget(), &judging).await;
 
     let Ruling::Failed { checks, .. } = &ruling else {
         panic!("expected a check failure, got {ruling:?}");
@@ -376,7 +388,7 @@ async fn the_call_carries_the_patch_and_the_facts_and_nothing_the_drone_wrote() 
         environment: Environment::nothing(),
     };
 
-    rule_on(at, &diff_evidence(), &work, budget(), &judging).await;
+    rule_on(at, &diff_evidence(), None, &work, budget(), &judging).await;
 
     let asked = judge.asked();
     assert_eq!(asked.len(), 1, "one criterion is one call");

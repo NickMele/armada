@@ -31,6 +31,12 @@
 //! `landing` is the ninth: a finished Job's work reaches its branch. Most of its
 //! cases are ones where no commit is made, which is where the rule is.
 //!
+//! `scope` is the eleventh: evidence bound to what the step actually touched.
+//! Its cases are the two moments the comparison runs at — the gate, where a
+//! footprint outside the declaration fails the step, and the turn, where it is
+//! recorded and the Drone may declare again — plus the case that asserts
+//! nothing new, a step with no scope behaving exactly as it always did.
+//!
 //! `judging` is the tenth: the semantic tier, run through Fleet's own process
 //! runner against a shell that prints a scripted verdict. Its three cases are
 //! the milestone's claim — a veto stops a step whose Check passed, a
@@ -59,6 +65,7 @@ mod landing;
 mod process;
 mod redispatch;
 mod runtime;
+mod scope;
 mod serving;
 mod session;
 mod tmp;

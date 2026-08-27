@@ -30,6 +30,15 @@ use std::time::Duration;
 use config::{ResolvedCheck, ResolvedStep};
 use core_model::{CheckOutcome, StepCheck};
 
+use crate::scope::OutsideScope;
+
+/// What the scope check is written down as, where a step declares one.
+///
+/// Not a Manifest Check and not a `mechanical_checks` entry — it is the step's
+/// `evidence_scope` answering — so it is named by the field that asked for it,
+/// the way `diff_nonempty` is named by its kind.
+pub const EVIDENCE_SCOPE: &str = "evidence_scope";
+
 /// How a Check's process ended. The fact, before anything decides what it
 /// means.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -113,6 +122,13 @@ pub enum CheckFailed {
     NeverRan { check: String, why: NeverRan },
     /// The step declares `diff_nonempty` and the worktree holds no change.
     DiffEmpty,
+    /// The step's footprint disagreed with what the Drone declared.
+    ///
+    /// **A mechanical gate failure, and a Drone-behaviour red flag** — the
+    /// registry's own reading. It is not a Judge question: work whose footprint
+    /// is outside this step's scope belongs to some other step, and no model
+    /// call is needed to see that.
+    OutOfScope(OutsideScope),
 }
 
 impl CheckFailed {
@@ -123,7 +139,9 @@ impl CheckFailed {
     /// each needs a different thing done about it.
     pub fn outcome(&self) -> CheckOutcome {
         match self {
-            CheckFailed::WrongExitCode { .. } | CheckFailed::DiffEmpty => CheckOutcome::Failed,
+            CheckFailed::WrongExitCode { .. }
+            | CheckFailed::DiffEmpty
+            | CheckFailed::OutOfScope(_) => CheckOutcome::Failed,
             CheckFailed::Signalled { .. } => CheckOutcome::Signalled,
             CheckFailed::TimedOut { .. } => CheckOutcome::TimedOut,
             CheckFailed::NeverRan { .. } => CheckOutcome::NeverRan,
@@ -141,6 +159,10 @@ impl CheckFailed {
             }
             CheckFailed::NeverRan { check, .. } => format!("`{check}` can be run"),
             CheckFailed::DiffEmpty => "the step changes at least one file".to_string(),
+            CheckFailed::OutOfScope(OutsideScope::NothingDeclared) => {
+                "the step declares which paths its work is in".to_string()
+            }
+            CheckFailed::OutOfScope(_) => "the step changes only what it declared".to_string(),
         }
     }
 
@@ -167,6 +189,23 @@ impl CheckFailed {
                 }
             },
             CheckFailed::DiffEmpty => "the worktree holds no change".to_string(),
+            CheckFailed::OutOfScope(outside) => outside.to_string(),
+        }
+    }
+
+    /// The row this failure is written down as. **`None` for every failure of a
+    /// declared check**, which already has a row of its own from
+    /// [`Ran::recorded`]; the scope check declares no entry and so brings one.
+    pub fn recorded(&self) -> Option<StepCheck> {
+        match self {
+            CheckFailed::OutOfScope(_) => Some(StepCheck {
+                name: EVIDENCE_SCOPE.to_string(),
+                outcome: CheckOutcome::Failed,
+                expected: Some(self.expected()),
+                produced: Some(self.produced()),
+                output_path: None,
+            }),
+            _ => None,
         }
     }
 }

@@ -37,12 +37,12 @@ use std::time::Duration;
 use adapter_traits::{WorkProduct, Worktree};
 use checks_runner::Output;
 use core_model::{
-    Actor, EscalationTrigger, FrozenWorkflow, IllegalTransition, Job, Judgment, ResolvedCheck,
-    ResolvedStep, StepCheck, StepId, Target, Timestamp, Transitioned,
+    Actor, DeclaredPaths, EscalationTrigger, FrozenWorkflow, IllegalTransition, Job, Judgment,
+    ResolvedCheck, ResolvedStep, StepCheck, StepId, Target, Timestamp, Transitioned,
 };
 use verification::{
-    decide, Accepted, CheckFailed, NotWhatTheStepAsked, Observed, OutcomeTurn, Ran, Refusals,
-    Submission, Verdict,
+    decide, Accepted, CheckFailed, InScope, NotWhatTheStepAsked, Observed, OutcomeTurn, Ran,
+    Refusals, Submission, Verdict,
 };
 
 use crate::judging::{self, Judging};
@@ -305,6 +305,7 @@ impl Ruling {
 pub async fn rule_on<W>(
     at: AtStep<'_>,
     evidence: &Submission,
+    declared: Option<&DeclaredPaths>,
     work: &W,
     budget: CheckBudget,
     judging: &Judging,
@@ -365,8 +366,30 @@ where
         }
     };
 
-    let checks = ran.recorded();
+    let mut checks = ran.recorded();
     let mechanical = decide(accepted, &ran);
+    // The scope tier, between the mechanical one and the Judge — the order the
+    // registry gives, so a step that did another step's work never reaches a
+    // model call. **Cold unless the step declares an evidence scope**, which is
+    // what leaves a step without one behaving exactly as it did before.
+    let scope = match step.evidence_scope() {
+        None => None,
+        Some(scope) => match work.changed_files(at.worktree()) {
+            Ok(changed) => InScope::resolved(scope, declared, changed.paths())
+                .err()
+                .map(CheckFailed::OutOfScope),
+            Err(cause) => {
+                return Ruling::CouldNotDecide {
+                    artifact: "the Job's changed files",
+                    cause: Box::new(cause),
+                    checks,
+                    output,
+                }
+            }
+        },
+    };
+    checks.extend(scope.as_ref().and_then(CheckFailed::recorded));
+    let mechanical = mechanical.and_also(scope);
     // **The trigger, and the whole of it.** The Judge is asked only where the
     // mechanical tier already held and the step declares a criterion — so a
     // failing Check spends nothing, an ordinary step spends nothing, and no

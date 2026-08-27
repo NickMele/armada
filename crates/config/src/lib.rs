@@ -43,6 +43,7 @@ mod error;
 mod judge;
 mod manifest;
 mod resolve;
+mod scope;
 mod workflow;
 mod yaml;
 
@@ -58,6 +59,6 @@ pub use workflow::{MechanicalCheck, Step, Structure, WorkflowDef};
 // four are spelled in `core-model` where the record is — and every caller that
 // already said `config::ResolvedStep` still means the same type.
 pub use core_model::{
-    AdvanceGate, EvidenceType, FrozenWorkflow, JudgeCheck, JudgeCriterion, ResolvedCheck,
-    ResolvedStep,
+    AdvanceGate, ContextSource, DeclarePlanAt, DeclaredPaths, EvidenceScope, EvidenceType,
+    FrozenWorkflow, JudgeCheck, JudgeCriterion, ResolvedCheck, ResolvedStep,
 };

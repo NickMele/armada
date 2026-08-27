@@ -47,8 +47,8 @@ fn a_call_id_comes_back_the_type_it_arrived_as() {
     }
 }
 
-/// **The tool takes four fields and refuses a fifth by name.** Dropping one
-/// would leave a Drone believing something it sent was read.
+/// **A tool takes the fields it takes and refuses another by name.** Dropping
+/// one would leave a Drone believing something it sent was read.
 #[test]
 fn a_field_the_tool_does_not_take_is_named_rather_than_dropped() {
     use crate::mcp::{read, Incoming, NotAnArgument};
@@ -60,7 +60,7 @@ fn a_field_the_tool_does_not_take_is_named_rather_than_dropped() {
     assert!(matches!(
         called,
         Incoming::NotASubmission {
-            why: NotAnArgument::NotAField { ref named },
+            why: NotAnArgument::NotAField { ref named, .. },
             ..
         } if named == "source"
     ));
@@ -150,4 +150,84 @@ fn a_turn_message_carries_a_row_under_its_own_tag() {
     let json = crate::encode(&message).expect("a message encodes");
     let back: crate::TurnMessage = crate::decode("turn", json.as_bytes()).expect("it decodes");
     assert_eq!(back, message);
+}
+
+/// **A declaration is not a submission**, and the transport says so: a call of
+/// the scope tool reaches a different variant, so nothing downstream can
+/// mistake a plan for a report.
+#[test]
+fn a_scope_call_reads_as_a_declaration_and_not_as_evidence() {
+    use crate::mcp::{read, DeclareScope, Incoming};
+
+    let called = read(
+        br#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"declare_scope",
+            "arguments":{"context_paths":["docs","crates/config/src"]}}}"#,
+    );
+    assert!(matches!(
+        called,
+        Incoming::Declare {
+            declaration: DeclareScope { ref context_paths },
+            ..
+        } if context_paths == &["docs".to_string(), "crates/config/src".to_string()]
+    ));
+}
+
+/// Declaring nothing is a legal answer — a part that changes nothing has said
+/// so — and it is a different answer from not calling at all.
+#[test]
+fn an_empty_path_list_is_a_declaration_rather_than_a_refusal() {
+    use crate::mcp::{read, DeclareScope, Incoming};
+
+    let called = read(
+        br#"{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"declare_scope",
+            "arguments":{"context_paths":[]}}}"#,
+    );
+    assert!(matches!(
+        called,
+        Incoming::Declare {
+            declaration: DeclareScope { ref context_paths },
+            ..
+        } if context_paths.is_empty()
+    ));
+}
+
+/// A string where a list belongs is refused with the thing to do about it,
+/// because a Drone that sent one path as text believes it declared one path.
+#[test]
+fn a_path_list_that_is_not_a_list_is_refused_by_name() {
+    use crate::mcp::{read, Incoming, NotAnArgument};
+
+    let called = read(
+        br#"{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"declare_scope",
+            "arguments":{"context_paths":"docs"}}}"#,
+    );
+    assert!(matches!(
+        called,
+        Incoming::NotASubmission {
+            why: NotAnArgument::NotAList {
+                field: "context_paths"
+            },
+            ..
+        }
+    ));
+}
+
+/// The refusal for a third tool names both real ones, so a Drone that guessed
+/// is told what it may call rather than only that it guessed.
+#[test]
+fn a_tool_that_is_neither_names_both() {
+    use crate::mcp::{read, Incoming};
+
+    let called = read(
+        br#"{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"ReportFindings",
+            "arguments":{}}}"#,
+    );
+    let Incoming::NotASubmission { why, .. } = called else {
+        panic!("a tool nobody serves is refused as a tool error");
+    };
+    let said = why.to_string();
+    assert!(
+        said.contains("submit_evidence") && said.contains("declare_scope"),
+        "{said}"
+    );
 }

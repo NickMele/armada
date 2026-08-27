@@ -108,6 +108,14 @@ pub enum Fault {
     /// believes is linear is legal config that surfaces as a Job which never
     /// terminates.
     ContradictsStructure { structure: &'static str },
+    /// **`context_paths` in a definition.** The schema puts it on the resolved
+    /// object: the Drone supplies the paths at declaration time and Fleet
+    /// validates them, so at definition time there is nothing to author.
+    BelongsToTheResolvedObject,
+    /// **`declare_plan_at` with no `evidence_scope`.** The key says when the
+    /// plan is declared and the block says what it is measured against; one
+    /// without the other declares a plan nothing reads.
+    PlanWithoutAScope,
     /// **A step's `advance_gate` and its `judge_checks` say different things.**
     /// The two are one statement made twice, and a file where they disagree has
     /// no reading that is not a guess about which the author meant.
@@ -145,6 +153,17 @@ impl fmt::Display for Fault {
             Fault::ContradictsStructure { structure } => write!(
                 f,
                 "declares a routing edge, and the workflow declares `structure: {structure}`"
+            ),
+            Fault::BelongsToTheResolvedObject => write!(
+                f,
+                "is a field of the resolved evidence scope and not of the \
+                 definition. The Drone declares the paths and Fleet validates \
+                 them, so nothing can be authored here"
+            ),
+            Fault::PlanWithoutAScope => write!(
+                f,
+                "says when the plan is declared and the step declares no \
+                 `evidence_scope` for it to be measured against"
             ),
             Fault::GateAndJudgeDisagree { gate: "auto" } => write!(
                 f,

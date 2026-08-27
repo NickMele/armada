@@ -97,6 +97,7 @@ pub mod process;
 pub mod redispatch;
 mod review;
 pub mod runtime;
+pub mod scope;
 pub mod serving;
 pub mod session;
 pub mod transcript;
@@ -107,7 +108,7 @@ pub mod working;
 #[cfg(test)]
 mod tests;
 
-pub use adrift::{Adrift, NotSubmitted};
+pub use adrift::{Adrift, NotDeclared, NotSubmitted};
 pub use clock::{Clock, SystemClock};
 pub use daemon::{Fittings, Fleet, Host, Reconciled, Turned};
 pub use delivery::Delivered;
@@ -125,6 +126,7 @@ pub use runtime::{
     machine_path, provisional_address, Presence, PublishError, Published, ReadError, RuntimeFile,
     Staleness, Vacancy, FILE_NAME, PROVISIONAL_PORT,
 };
+pub use scope::{Declared, Drifting};
 pub use session::{DroneSession, LiveSession, Turn};
 pub use transcript::{history, log_of, transcript_of, Live, Recording, Spine, Tap, Taps};
 pub use turning::{keep_turning, Turning};

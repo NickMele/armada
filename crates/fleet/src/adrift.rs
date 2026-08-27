@@ -387,6 +387,64 @@ impl fmt::Display for NotSubmitted {
     }
 }
 
+/// Why a scope declaration was not taken.
+///
+/// **No variant is a gate failure.** Nothing has been verified: the call was
+/// aimed at nothing, at a step that asks for no scope, or at paths the step's
+/// own denylist refuses.
+#[derive(Debug)]
+pub enum NotDeclared {
+    /// No Job is being worked. The tool is bound to a Job at construction, so
+    /// this is a call that arrived after its Drone's Job ended.
+    NothingIsWorking,
+    /// The Job is standing at a step its frozen workflow does not name. **A
+    /// fault in Fleet, not in the call.**
+    NoSuchStep { step: StepId },
+    /// The step declares no evidence scope, so there is nothing a declaration
+    /// would be measured against. Refused rather than stored: a plan nothing
+    /// reads is a plan the Drone believes is being checked.
+    StepHasNoScope { step: StepId },
+    /// The declaration names paths the step's `exclude_paths` denies.
+    Outside(verification::OutsideScope),
+}
+
+impl fmt::Display for NotDeclared {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            NotDeclared::NothingIsWorking => out.write_str(
+                "no Job is being worked, so there is no step for this declaration \
+                 to be about. Stop — the Job this Drone was started for has \
+                 already ended",
+            ),
+            NotDeclared::NoSuchStep { step } => write!(
+                out,
+                "the Job is standing at step `{}`, which its workflow does not \
+                 name. This is a fault in Fleet and not in the declaration",
+                step.as_str()
+            ),
+            NotDeclared::StepHasNoScope { step } => write!(
+                out,
+                "step `{}` declares no evidence scope, so a declaration would be \
+                 measured against nothing. Get on with the work and submit when \
+                 it is done",
+                step.as_str()
+            ),
+            NotDeclared::Outside(why) => write!(out, "{why}. Declare again without them"),
+        }
+    }
+}
+
+impl Error for NotDeclared {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            NotDeclared::NothingIsWorking
+            | NotDeclared::NoSuchStep { .. }
+            | NotDeclared::StepHasNoScope { .. } => None,
+            NotDeclared::Outside(why) => Some(why),
+        }
+    }
+}
+
 impl Error for NotSubmitted {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {

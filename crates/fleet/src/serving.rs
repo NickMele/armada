@@ -37,7 +37,7 @@
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Daemon, Observed, Refusal};
 use core_model::Job;
-use ipc::mcp::{NotRecorded, Receipt, SubmitEvidence};
+use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
     CheckRun, DeclaredCheck, JobDetail, JobId, JobList, JobSummary, Judged, ManifestId,
     ManifestSummary, ModelChoices, ProposeJob, Redispatched, RunId, StepFacts, StepId, WireError,
@@ -259,6 +259,23 @@ where
                 word: recorded.word().to_string(),
             }),
             Err(why) => Err(told(why)),
+        }
+    }
+
+    /// Where the working Drone says this step's work will be.
+    ///
+    /// The same shape as the call above and the same reason for it: the binding
+    /// — which Job, which step — is `Fleet::declare_scope`'s, under the slot
+    /// lock, and every refusal answers 200 with `isError` so a Drone can read
+    /// it and declare again.
+    async fn declare_scope(&self, declaration: DeclareScope) -> Result<Receipt, NotRecorded> {
+        match Fleet::declare_scope(self, &declaration).await {
+            Ok(declared) => Ok(Receipt {
+                word: declared.word().to_string(),
+            }),
+            Err(why) => Err(NotRecorded {
+                because: why.to_string(),
+            }),
         }
     }
 }

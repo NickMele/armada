@@ -25,7 +25,7 @@
 use std::future::Future;
 
 use crate::observing::Observed;
-use ipc::mcp::{NotRecorded, Receipt, SubmitEvidence};
+use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
     JobDetail, JobId, JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redispatched,
     WireError, WorkflowSummary,
@@ -144,9 +144,9 @@ pub trait Daemon: Send + Sync + 'static {
     fn observe_job(&self, job_id: JobId) -> impl Future<Output = Result<Observed, Refusal>> + Send;
 
     /// `submit_evidence` — the Evidence tool, called by the Drone that is
-    /// working. **Not an inventory operation and not Bridge's**: it is the one
-    /// method on this trait whose caller is a Drone, which is why its refusal
-    /// is [`NotRecorded`] rather than [`Refusal`].
+    /// working. **Not an inventory operation and not Bridge's**: its caller is
+    /// a Drone rather than Bridge, which is why its refusal is [`NotRecorded`]
+    /// rather than [`Refusal`]. [`Daemon::declare_scope`] is the other.
     ///
     /// # The submission is bound to a Job the caller never names
     ///
@@ -167,6 +167,19 @@ pub trait Daemon: Send + Sync + 'static {
     fn submit_evidence(
         &self,
         submission: SubmitEvidence,
+    ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
+
+    /// `declare_scope` — where the working Drone says its work for this step
+    /// will be. **The Drone's other call, and the only other one.**
+    ///
+    /// Bound to a Job and a step the caller never names, for
+    /// [`submit_evidence`](Daemon::submit_evidence)'s reason. It moves nothing:
+    /// what comes back is a receipt, and what the declaration does is give
+    /// Fleet something to compare the worktree against — while the step runs,
+    /// and again at the gate.
+    fn declare_scope(
+        &self,
+        declaration: DeclareScope,
     ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
 }
 

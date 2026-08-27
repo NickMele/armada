@@ -110,6 +110,25 @@ impl Verdict {
         matches!(self, Verdict::Advance)
     }
 
+    /// Fold in a failure that no declared check produced — today, the step's
+    /// evidence scope.
+    ///
+    /// **Nothing here constructs [`Verdict::Advance`]**, which is what it has
+    /// in common with [`Verdict::but_for`]: it can only narrow. The scope tier
+    /// sits between the mechanical one and the Judge for the reason the
+    /// registry gives — the footprint is verified before the Judge runs, so a
+    /// step that did another step's work never reaches a model call.
+    pub fn and_also(self, failed: Option<CheckFailed>) -> Verdict {
+        match (self, failed) {
+            (Verdict::Advance, Some(failed)) => Verdict::Failed(vec![failed]),
+            (Verdict::Failed(mut failures), Some(failed)) => {
+                failures.push(failed);
+                Verdict::Failed(failures)
+            }
+            (verdict, _) => verdict,
+        }
+    }
+
     /// Apply the Judge's answer. **A veto, and there is no arm that grants.**
     ///
     /// Read the four cases: a mechanical pass the Judge refused becomes a

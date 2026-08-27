@@ -1,4 +1,4 @@
-//! The Evidence endpoint: one path, one tool, on the listener that was already
+//! The Drone endpoint: one path, two tools, on the listener that was already
 //! there.
 //!
 //! # Why this is not in the route table
@@ -68,6 +68,12 @@ async fn called<D: Daemon>(State(served): State<Served<D>>, body: Bytes) -> Resp
         },
         Incoming::Submit { id, submission } => {
             match served.daemon().submit_evidence(submission).await {
+                Ok(receipt) => Answered::Recorded { id, receipt },
+                Err(why) => Answered::Refused { id, why },
+            }
+        }
+        Incoming::Declare { id, declaration } => {
+            match served.daemon().declare_scope(declaration).await {
                 Ok(receipt) => Answered::Recorded { id, receipt },
                 Err(why) => Answered::Refused { id, why },
             }

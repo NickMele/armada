@@ -52,4 +52,4 @@ pub use harness::{FakeHarness, FakeHarnessRefused};
 pub use judge::FakeJudge;
 pub use vcs::{Delivered, Delivering, FakeCommit, FakeVcs, FakeVcsError};
 pub use work_product::{FakeDiffRefused, FakeWorkProduct};
-pub use workflow::{frozen, resolved, Gate, Sketch};
+pub use workflow::{frozen, resolved, Gate, Scoped, Sketch};

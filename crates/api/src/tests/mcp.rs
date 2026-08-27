@@ -114,16 +114,18 @@ async fn a_notification_is_acknowledged_and_not_answered() {
     assert!(answered.body.is_empty());
 }
 
-/// One tool, named as the allowlist names it and as `adapters` joins it.
+/// Two tools, named as the allowlist names them and as `adapters` joins them.
 #[tokio::test]
-async fn the_tool_list_carries_the_one_tool() {
+async fn the_tool_list_carries_both_tools_and_no_third() {
     let app = wired(FakeDaemon::new(Broadcaster::new()));
     let answered = call(&app, r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#).await;
     assert_eq!(answered.status, StatusCode::OK);
     assert!(answered.body.contains("\"name\":\"submit_evidence\""));
-    // One tool and no second: the count is the guarantee, and a Drone choosing
-    // between reporting-shaped tools is spike 6's one miss.
-    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 1);
+    assert!(answered.body.contains("\"name\":\"declare_scope\""));
+    // Two, and no third. **Only one of them reports** — the count matters
+    // because a Drone choosing between reporting-shaped tools is spike 6's one
+    // miss, and a declaration is not a report.
+    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 2);
 }
 
 /// The happy path, end to end through the router: a call becomes a receipt and
@@ -289,4 +291,41 @@ async fn there_is_no_stream_to_open_and_no_session_to_end() {
 #[test]
 fn the_evidence_endpoint_is_not_a_bridge_operation() {
     assert!(SERVED.iter().all(|route| route.path != MCP_PATH));
+}
+
+/// The scope tool, end to end through the router that ships: a declaration is
+/// taken and answers with its own receipt word, so a Drone can tell which call
+/// landed.
+#[tokio::test]
+async fn a_declaration_is_taken_and_answers_with_its_own_receipt() {
+    let daemon = FakeDaemon::new(Broadcaster::new());
+    running(&daemon, "01JOB0");
+    let app = wired(daemon);
+
+    let answered = call(
+        &app,
+        r#"{"jsonrpc":"2.0","id":8,"method":"tools/call",
+            "params":{"name":"declare_scope","arguments":{
+                "context_paths":["docs","crates/config/src"]}}}"#,
+    )
+    .await;
+    assert_eq!(answered.status, StatusCode::OK);
+    assert!(!answered.is_error());
+    assert_eq!(answered.text(), "declared");
+}
+
+/// A declaration arriving when nothing is being worked is a tool error the
+/// Drone reads, never a status code it can only retry.
+#[tokio::test]
+async fn a_declaration_with_nothing_working_is_a_tool_error() {
+    let app = wired(FakeDaemon::new(Broadcaster::new()));
+
+    let answered = call(
+        &app,
+        r#"{"jsonrpc":"2.0","id":8,"method":"tools/call",
+            "params":{"name":"declare_scope","arguments":{"context_paths":["docs"]}}}"#,
+    )
+    .await;
+    assert_eq!(answered.status, StatusCode::OK);
+    assert!(answered.is_error());
 }

@@ -42,16 +42,18 @@ mod job;
 pub use envelope::{
     env_keys, Actor, AuditLine, Component, Envelope, FieldValue, Level, Timestamp, Ulid,
 };
+pub use job::under;
 pub use job::{
     AcceptanceCriterion, AdvanceGate, BlankBranch, BlankModel, BlankTitle, Branch, CheckOutcome,
-    CriteriaOwed, CriterionId, CriterionSource, DependencyDirection, DependencyEdge,
-    DispatchOrigin, DroneAssigned, DroneId, DroneMoved, DronePresence, Edge, EscalationTrigger,
-    EvidenceType, Facts, FrozenWorkflow, GateManifest, GateOutcome, IllegalDroneMove,
-    IllegalStepTransition, IllegalTransition, Job, JobEvent, JobId, JobStatus, JobStep, JudgeCheck,
-    JudgeCriterion, JudgeVerdict, Judgment, ManifestId, ModelName, NewJob, NotRunDisposition,
-    NotRunReason, Origin, PilotReason, RepoPath, ResolvedCheck, ResolvedStep, ScopeRevision,
-    ScopeRevisionOutcome, StepCheck, StepEdge, StepEvent, StepId, StepSeed, StepState, StepTarget,
-    StepTransitioned, StepVerdict, Subject, Target, Title, TopLevelOrigin, TransitionReason,
-    Transitioned, TriggerKind, TriggerLevel, Urgency, WorkflowId, WriteTargets, ADVANCING_STATUSES,
-    DIFF_NONEMPTY, EDGES, MANIFEST_CHECK, STEP_EDGES,
+    ContextSource, CriteriaOwed, CriterionId, CriterionSource, DeclarePlanAt, DeclaredPaths,
+    DependencyDirection, DependencyEdge, DispatchOrigin, DroneAssigned, DroneId, DroneMoved,
+    DronePresence, Edge, EscalationTrigger, EvidenceScope, EvidenceType, Facts, FrozenWorkflow,
+    GateManifest, GateOutcome, IllegalDroneMove, IllegalStepTransition, IllegalTransition, Job,
+    JobEvent, JobId, JobStatus, JobStep, JudgeCheck, JudgeCriterion, JudgeVerdict, Judgment,
+    ManifestId, ModelName, NewJob, NotRunDisposition, NotRunReason, Origin, PilotReason, RepoPath,
+    ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepCheck, StepEdge,
+    StepEvent, StepId, StepSeed, StepState, StepTarget, StepTransitioned, StepVerdict, Subject,
+    Target, Title, TopLevelOrigin, TransitionReason, Transitioned, TriggerKind, TriggerLevel,
+    Urgency, WorkflowId, WriteTargets, ADVANCING_STATUSES, DIFF_NONEMPTY, EDGES, MANIFEST_CHECK,
+    STEP_EDGES,
 };

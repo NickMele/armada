@@ -12,6 +12,7 @@
 
 mod manifest;
 mod samples;
+mod scope;
 mod workflow;
 
 use std::path::{Path, PathBuf};

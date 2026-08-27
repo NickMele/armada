@@ -15,27 +15,24 @@
 //! log names those and nothing else. An MCP crate would put a codegen-shaped
 //! dependency under the one path a Job cannot finish without.
 //!
-//! # The tool takes three prose fields, on every step
+//! # The tools are next door
 //!
-//! No job id, no step id, no evidence type: Fleet knows all three, and a value
-//! a Drone supplies is a value a Drone chose. A call carrying one is refused by
-//! name rather than ignored — a field nothing reads is a promise the call makes
-//! and the system does not keep. `note` was a fourth field and is one of these
-//! now: what it held is what `shown_by` is for.
+//! What a tool takes, and what it is described as, is [`tools`](mod@tools).
+//! This module decides which method a message is and what is answered; it
+//! never decides what a field means.
+mod tools;
+
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 
 use crate::codec::{encode, Unencodable};
+
+pub use tools::{DeclareScope, NotAnArgument, SubmitEvidence, SCOPE_TOOL, TOOL};
 
 /// The name Armada's server is registered under in a Drone's MCP
 /// configuration, and therefore the middle of the tool name a Drone is
 /// allowed to call.
 pub const SERVER: &str = "armada";
-
-/// The tool's own name, bare. The client joins it to [`SERVER`] to make the
-/// allowlist entry, and `adapters` spells that joined form — the one place a
-/// vendor's joining convention is allowed to live.
-pub const TOOL: &str = "submit_evidence";
 
 /// The MCP revision answered when a client names none.
 ///
@@ -78,8 +75,8 @@ pub enum Incoming {
     Ping {
         id: CallId,
     },
-    /// The tool list. There is one tool and there is no parameter through
-    /// which a second could arrive.
+    /// The tool list. Both tools, always — there is no parameter through
+    /// which a client could ask for a subset.
     Tools {
         id: CallId,
     },
@@ -88,6 +85,12 @@ pub enum Incoming {
     Submit {
         id: CallId,
         submission: SubmitEvidence,
+    },
+    /// A call of the scope tool that read as a declaration. **Not evidence**:
+    /// it arrives before the work rather than after it, and it moves no step.
+    Declare {
+        id: CallId,
+        declaration: DeclareScope,
     },
     /// A tool call this server would not take. **Answered as a tool error and
     /// never as a transport failure** — a Drone reads a tool error and can act
@@ -107,95 +110,8 @@ pub enum Incoming {
     },
 }
 
-/// What a Drone hands over. **The Agent Copy Contract's Work submission
-/// fields, spelled as the Drone is asked for them**, and nothing else.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SubmitEvidence {
-    pub claimed: String,
-    pub shown_by: String,
-    /// Required, and legitimately empty — which is why it is not an `Option`
-    /// here either. A Drone that left nothing behind has answered; a Drone
-    /// that omitted the field has not, and is refused by name.
-    pub not_claimed: String,
-}
-
-/// Why a tool call did not read as a submission.
-///
-/// **None of these is a gate failure.** Nothing was verified and the step has
-/// neither advanced nor failed; the call was malformed and what the Drone is
-/// told is to fix it and submit again.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum NotAnArgument {
-    /// A tool that is not the one tool.
-    NoSuchTool {
-        named: String,
-    },
-    /// `arguments` was absent, or was not an object.
-    NoArguments,
-    Missing {
-        field: &'static str,
-    },
-    NotText {
-        field: &'static str,
-    },
-    /// A field the tool does not take. Named rather than dropped.
-    NotAField {
-        named: String,
-    },
-}
-
-impl core::fmt::Display for NotAnArgument {
-    fn fmt(&self, out: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            NotAnArgument::NoSuchTool { named } => write!(
-                out,
-                "there is no tool called `{named}`. The one tool is `{TOOL}`"
-            ),
-            NotAnArgument::NoArguments => write!(
-                out,
-                "the call carried no arguments. `{TOOL}` takes claimed, shown_by \
-                 and not_claimed"
-            ),
-            NotAnArgument::Missing { field } => write!(
-                out,
-                "`{field}` is missing. It is required and may be empty only \
-                 where it is not_claimed — submit again with it"
-            ),
-            NotAnArgument::NotText { field } => {
-                write!(out, "`{field}` is not text. Submit again with a string")
-            }
-            // The three a Drone is likeliest to invent get the reason, because
-            // "no such field" reads as an oversight it should work around.
-            NotAnArgument::NotAField { named } if named == "job_id" || named == "step_id" => {
-                write!(
-                    out,
-                    "`{named}` is not a field of this tool. Fleet knows which Job \
-                 and which step you are on and binds your submission to them; \
-                 remove it and submit again"
-                )
-            }
-            // `note` was a field until every step was given the same three, so
-            // a Drone carrying an older habit is told where the content goes
-            // rather than only that the field is gone.
-            NotAnArgument::NotAField { named } if named == "note" => write!(
-                out,
-                "`note` is not a field of this tool. Put the finding in the file \
-                 or artifact you name in `shown_by`, and what it shows in \
-                 `claimed` — then submit again"
-            ),
-            NotAnArgument::NotAField { named } => write!(
-                out,
-                "`{named}` is not a field of this tool. It takes claimed, \
-                 shown_by and not_claimed — remove it and submit again"
-            ),
-        }
-    }
-}
-
-impl std::error::Error for NotAnArgument {}
-
 /// The receipt, as the daemon answers it. **One word**, and the type carries
-/// no room for a verdict — the outcome is not known when this returns.
+/// no room for a verdict — the outcome is not known when either call returns.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Receipt {
     pub word: String,
@@ -308,59 +224,34 @@ fn revision(params: Option<&Value>) -> String {
 }
 
 fn called(id: CallId, params: Option<&Value>) -> Incoming {
-    let named = params
-        .and_then(|params| params.get("name"))
-        .and_then(|name| name.as_str())
-        .unwrap_or_default();
-    if named != TOOL {
-        return Incoming::NotASubmission {
-            id,
-            why: NotAnArgument::NoSuchTool {
-                named: named.to_string(),
-            },
-        };
-    }
+    let tool = match tools::named(
+        params
+            .and_then(|params| params.get("name"))
+            .and_then(|name| name.as_str())
+            .unwrap_or_default(),
+    ) {
+        Ok(tool) => tool,
+        Err(why) => return Incoming::NotASubmission { id, why },
+    };
     let Some(arguments) = params
         .and_then(|params| params.get("arguments"))
         .and_then(|arguments| arguments.as_object())
     else {
         return Incoming::NotASubmission {
             id,
-            why: NotAnArgument::NoArguments,
+            why: tools::argumentless(tool),
         };
     };
-    match submission(arguments) {
+    if tool == SCOPE_TOOL {
+        return match tools::declaration(arguments) {
+            Ok(declaration) => Incoming::Declare { id, declaration },
+            Err(why) => Incoming::NotASubmission { id, why },
+        };
+    }
+    match tools::submission(arguments) {
         Ok(submission) => Incoming::Submit { id, submission },
         Err(why) => Incoming::NotASubmission { id, why },
     }
-}
-
-/// The three prose fields, and a refusal for anything else.
-const FIELDS: &[&str] = &["claimed", "shown_by", "not_claimed"];
-
-fn submission(arguments: &Map<String, Value>) -> Result<SubmitEvidence, NotAnArgument> {
-    for named in arguments.keys() {
-        if !FIELDS.contains(&named.as_str()) {
-            return Err(NotAnArgument::NotAField {
-                named: named.clone(),
-            });
-        }
-    }
-    Ok(SubmitEvidence {
-        claimed: text(arguments, "claimed")?,
-        shown_by: text(arguments, "shown_by")?,
-        not_claimed: text(arguments, "not_claimed")?,
-    })
-}
-
-fn text(arguments: &Map<String, Value>, field: &'static str) -> Result<String, NotAnArgument> {
-    let value = arguments
-        .get(field)
-        .ok_or(NotAnArgument::Missing { field })?;
-    Ok(value
-        .as_str()
-        .ok_or(NotAnArgument::NotText { field })?
-        .to_string())
 }
 
 /// Write one answer. The JSON shapes live here and nowhere else.
@@ -375,7 +266,7 @@ pub fn answer(answered: Answered) -> Result<String, Unencodable> {
             }),
         ),
         Answered::Ping { id } => result(id, json!({})),
-        Answered::Tools { id } => result(id, json!({ "tools": [tool()] })),
+        Answered::Tools { id } => result(id, json!({ "tools": tools::listed() })),
         Answered::Recorded { id, receipt } => result(id, said(&receipt.word, false)),
         Answered::Refused { id, why } => result(id, said(&why.because, true)),
         Answered::NoSuchMethod { id, named } => {
@@ -404,54 +295,5 @@ fn said(text: &str, is_error: bool) -> Value {
     json!({
         "content": [{ "type": "text", "text": text }],
         "isError": is_error,
-    })
-}
-
-/// The one tool, as the client is shown it.
-///
-/// The description is the wording spike 6 measured — the `silent` arm proved a
-/// description alone does not make a Drone call the tool, which is why the
-/// obligation is in the baseline prompt; what the description still has to do
-/// is say what the call is for and that the receipt is not a verdict.
-///
-/// **`additionalProperties` is false and the server checks it anyway.** The
-/// schema is advice a client may enforce; the check in [`submission`] is what
-/// makes a forged field a named refusal rather than a silently accepted one.
-fn tool() -> Value {
-    json!({
-        "name": TOOL,
-        "description":
-            "Report the outcome of the step you were given. This is the only way \
-             to report: the result is not read from anything you write in prose. \
-             Returns a receipt, not a verdict — the receipt does not mean the \
-             step passed.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "claimed": {
-                    "type": "string",
-                    "description":
-                        "What the work now does, as an observable. Behaviour, not \
-                         a description of the change you made.",
-                },
-                "shown_by": {
-                    "type": "string",
-                    "description":
-                        "The artifact that demonstrates it — a named test, a \
-                         command and its exit code, a rendered string, or a \
-                         file you wrote. Every step names one here, including a \
-                         step that changed nothing in the repository.",
-                },
-                "not_claimed": {
-                    "type": "string",
-                    "description":
-                        "Everything the claim does not assert: the gap you left \
-                         and the side effect you caused. Empty is a legal answer; \
-                         omitting it is not.",
-                },
-            },
-            "required": ["claimed", "shown_by", "not_claimed"],
-            "additionalProperties": false,
-        },
     })
 }

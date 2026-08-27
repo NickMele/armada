@@ -4,8 +4,9 @@
 //! round-trip over an empty record exercises almost nothing and passes anyway.
 
 use core_model::{
-    Actor, AdvanceGate, CheckOutcome, CriterionId, DroneId, Job, JobStatus, JudgeVerdict, Judgment,
-    ModelName, RepoPath, ResolvedCheck, StepCheck, StepId, Target, Ulid, WriteTargets,
+    Actor, AdvanceGate, CheckOutcome, ContextSource, CriterionId, DeclarePlanAt, DroneId, Job,
+    JobStatus, JudgeVerdict, Judgment, ModelName, RepoPath, ResolvedCheck, StepCheck, StepId,
+    Target, Ulid, WriteTargets,
 };
 
 use crate::tests::{created_at, job_id, open, sub_dispatched, top_level, TempDir};
@@ -413,11 +414,19 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
         "the per-step model dial"
     );
     assert_eq!(fix.judge_calls(), 2, "one criterion, two judges");
+    // Absence is a value too: a column reading as an empty scope would put a
+    // footprint check on a step that asked for none.
+    let scope = fix.evidence_scope().expect("the step declared one");
+    assert_eq!(scope.context_source(), ContextSource::DroneDeclared);
+    assert_eq!(scope.declare_plan_at(), Some(DeclarePlanAt::StepStart));
+    assert_eq!(scope.exclude_paths(), &[RepoPath::new("secrets")]);
+    assert!(scope.scope_diff_check());
+    let reproduce = workflow
+        .step(&StepId::new("reproduce"))
+        .expect("the first step");
+    assert!(reproduce.evidence_scope().is_none());
     assert!(
-        !workflow
-            .step(&StepId::new("reproduce"))
-            .expect("the first step")
-            .asks_the_judge(),
+        !reproduce.asks_the_judge(),
         "a step that declared no criterion did not gain one"
     );
     assert!(

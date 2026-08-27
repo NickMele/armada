@@ -21,6 +21,7 @@ fn workflow() -> ResolvedWorkflow {
             evidence_type: None,
             gates: &[],
             judged_on: &[],
+            scope: None,
         },
         Sketch {
             id: "review",
@@ -28,6 +29,7 @@ fn workflow() -> ResolvedWorkflow {
             evidence_type: None,
             gates: &[],
             judged_on: &[],
+            scope: None,
         },
     ])
 }

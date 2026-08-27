@@ -102,6 +102,7 @@ fn a_job(id: &str, manifest: &str) -> Job {
                 evidence_type: Some("diff"),
                 gates: &[],
                 judged_on: &[],
+                scope: None,
             }]),
             owner_manifest_id: ManifestId::carried(Ulid::carried(manifest)),
             urgency: Urgency::Normal,

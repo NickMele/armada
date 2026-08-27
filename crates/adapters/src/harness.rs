@@ -49,12 +49,15 @@ use adapter_traits::{
 use crate::mcp::EVIDENCE_SERVER;
 use crate::transcript;
 
-/// The tool the Evidence server exposes, as the harness names it: the server's
-/// registered name and the tool's own, joined the way MCP tools are.
+/// The tools the Evidence server exposes, as the harness names them: the
+/// server's registered name and each tool's own, joined the way MCP tools are.
 ///
-/// **In every toolbelt.** It is prepended here rather than being a `Grant`,
-/// because a list is something a caller can build empty.
+/// **Both in every toolbelt.** They are prepended here rather than being a
+/// `Grant`, because a list is something a caller can build empty — and a Drone
+/// denied one of them is denied silently, which reads as a Drone that went
+/// quiet rather than as an argument-list fault.
 const EVIDENCE_TOOL: &str = "mcp__armada__submit_evidence";
+const SCOPE_TOOL: &str = "mcp__armada__declare_scope";
 
 /// The program name `crates/config/settings.toml` gives as the default for the
 /// AgentHarness binary path: `claude (on PATH)`.
@@ -195,13 +198,13 @@ impl AgentHarness for HeadlessAgent {
     }
 }
 
-/// The `--allowedTools` value: the Evidence tool first, then each grant.
+/// The `--allowedTools` value: Armada's own tools first, then each grant.
 ///
-/// The Evidence tool leads deliberately. It is the one entry that is there on
-/// every spawn, and a reader checking an argument list by eye sees it before
-/// anything that varies.
+/// They lead deliberately. They are the entries that are there on every spawn,
+/// and a reader checking an argument list by eye sees them before anything that
+/// varies.
 fn allowlist(config: &DroneSpawnConfig) -> Result<String, HarnessRefused> {
-    let mut allowed = vec![String::from(EVIDENCE_TOOL)];
+    let mut allowed = vec![String::from(EVIDENCE_TOOL), String::from(SCOPE_TOOL)];
     for grant in config.toolbelt().granted() {
         match grant {
             // Reading is three tools, because a search and a listing are reads
@@ -326,7 +329,14 @@ pub fn evidence_tool() -> &'static str {
     EVIDENCE_TOOL
 }
 
-/// The server the tool above is served from.
+/// The scope tool's name, for the same callers. **Both are needed**: a
+/// toolbelt missing either one denies the Drone silently, and a Job that goes
+/// quiet is an argument-list fault rather than a prompt one.
+pub fn scope_tool() -> &'static str {
+    SCOPE_TOOL
+}
+
+/// The server both tools above are served from.
 pub fn evidence_server() -> &'static str {
     EVIDENCE_SERVER
 }

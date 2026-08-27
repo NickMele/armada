@@ -38,7 +38,7 @@ async fn a_check_that_passes_is_written_down_as_a_pass() {
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
-    let ruling = rule_on(at_step, &diff_evidence(), &work, budget(), &judging()).await;
+    let ruling = rule_on(at_step, &diff_evidence(), None, &work, budget(), &judging()).await;
 
     assert_eq!(
         recorded(&ruling),
@@ -62,7 +62,7 @@ async fn a_check_that_fails_records_the_code_it_returned() {
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
-    let ruling = rule_on(at_step, &diff_evidence(), &work, budget(), &judging()).await;
+    let ruling = rule_on(at_step, &diff_evidence(), None, &work, budget(), &judging()).await;
 
     let checks = ruling.checks();
     assert_eq!(checks[0].outcome, CheckOutcome::Failed);
@@ -87,6 +87,7 @@ async fn a_hanging_check_is_recorded_as_timed_out_and_not_as_failed() {
     let ruling = rule_on(
         at_step,
         &diff_evidence(),
+        None,
         &work,
         CheckBudget::of(Duration::from_millis(300)),
         &judging(),
@@ -111,7 +112,7 @@ async fn a_check_whose_command_does_not_exist_is_recorded_as_never_ran() {
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
-    let ruling = rule_on(at_step, &diff_evidence(), &work, budget(), &judging()).await;
+    let ruling = rule_on(at_step, &diff_evidence(), None, &work, budget(), &judging()).await;
 
     let checks = ruling.checks();
     assert_eq!(checks[0].outcome, CheckOutcome::NeverRan);
@@ -131,7 +132,7 @@ async fn an_ungated_step_records_nothing_because_there_was_nothing_to_run() {
         .expect("the second step");
     let work = FakeWorkProduct::untouched();
 
-    let ruling = rule_on(at_step, &note_evidence(), &work, budget(), &judging()).await;
+    let ruling = rule_on(at_step, &note_evidence(), None, &work, budget(), &judging()).await;
 
     assert!(ruling.advanced());
     assert!(

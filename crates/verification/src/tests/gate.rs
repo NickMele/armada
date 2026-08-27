@@ -198,6 +198,7 @@ fn a_signalled_check_is_not_compared_against_an_expected_code() {
             expect_exit_code: 137,
         }],
         judged_on: &[],
+        scope: None,
     }]);
     let step = &workflow.steps()[0];
     let ran =
@@ -223,6 +224,7 @@ fn a_step_expecting_a_non_zero_code_passes_on_that_code() {
             expect_exit_code: 1,
         }],
         judged_on: &[],
+        scope: None,
     }]);
     let step = &workflow.steps()[0];
     let ran = Ran::of(step, &[Observed::Command(Exit::Code(1))]).expect("the check ran");
@@ -260,6 +262,7 @@ fn a_step_declaring_no_evidence_type_accepts_what_arrives() {
         evidence_type: None,
         gates: &[],
         judged_on: &[],
+        scope: None,
     }]);
     let step = &workflow.steps()[0];
     let evidence = diff_evidence();

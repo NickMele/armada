@@ -29,10 +29,10 @@ use std::sync::Arc;
 use adapter_traits::{Environment, Model, Vcs, Worktree, WorktreeSpec};
 use config::{EvidenceType, ResolvedWorkflow};
 use core_model::{
-    AcceptanceCriterion, Actor, CriterionId, CriterionSource, Facts, IllegalStepTransition,
-    IllegalTransition, Job, JobEvent, JobId, JobStatus, JobStep, ManifestId, ModelName, NewJob,
-    StepEvent, StepId, StepSeed, StepState, StepTarget, Target, Timestamp, Title, TopLevelOrigin,
-    TransitionReason, Ulid, Urgency,
+    AcceptanceCriterion, Actor, CriterionId, CriterionSource, DeclaredPaths, Facts,
+    IllegalStepTransition, IllegalTransition, Job, JobEvent, JobId, JobStatus, JobStep, ManifestId,
+    ModelName, NewJob, StepEvent, StepId, StepSeed, StepState, StepTarget, Target, Timestamp,
+    Title, TopLevelOrigin, TransitionReason, Ulid, Urgency,
 };
 use fleet::{apply, rule_on, AtStep, CheckBudget, Clock, JudgeBudget, Judging, Mint, Ruling};
 use testkit::{resolved, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch};
@@ -103,6 +103,7 @@ pub fn bug_workflow_as_far_as_m1_expresses_it() -> ResolvedWorkflow {
             evidence_type: Some("facts_note"),
             gates: &[],
             judged_on: &[],
+            scope: None,
         },
         Sketch {
             id: "fix",
@@ -110,6 +111,7 @@ pub fn bug_workflow_as_far_as_m1_expresses_it() -> ResolvedWorkflow {
             evidence_type: Some("diff"),
             gates: &[Gate::DiffNonempty],
             judged_on: &[],
+            scope: None,
         },
     ])
 }
@@ -125,6 +127,7 @@ pub fn bug_workflow_with_the_fix_judged() -> ResolvedWorkflow {
             evidence_type: Some("facts_note"),
             gates: &[],
             judged_on: &[],
+            scope: None,
         },
         Sketch {
             id: "fix",
@@ -132,6 +135,7 @@ pub fn bug_workflow_with_the_fix_judged() -> ResolvedWorkflow {
             evidence_type: Some("diff"),
             gates: &[Gate::DiffNonempty],
             judged_on: &[("c1", "Does the fix address the cause the note names?")],
+            scope: None,
         },
     ])
 }
@@ -180,6 +184,9 @@ pub fn a_fix_diff() -> Submission {
 pub struct Run {
     pub job: Job,
     pub worktree: Worktree,
+    /// What the Drone declared this step's work would be in. `None` on a step
+    /// that asks for no scope, which is every step of the bug workflow.
+    pub declared: Option<DeclaredPaths>,
 }
 
 /// Everything the run needs, with no process, no repository and no network
@@ -273,7 +280,11 @@ impl Bench {
             scope_revisions: Vec::new(),
         };
         let job = Job::create_top_level(new, TopLevelOrigin::Manual, self.clock.now());
-        Run { job, worktree }
+        Run {
+            job,
+            worktree,
+            declared: None,
+        }
     }
 
     /// Move the Job, and record the event the machine returned.
@@ -327,7 +338,15 @@ impl Bench {
     pub async fn gate(&self, run: &Run, step: &StepId, submitted: &Submission) -> Ruling {
         let at = AtStep::named(self.workflow.frozen(), step, &run.worktree)
             .expect("a step of the workflow");
-        rule_on(at, submitted, &self.work, self.budget, &self.judging).await
+        rule_on(
+            at,
+            submitted,
+            run.declared.as_ref(),
+            &self.work,
+            self.budget,
+            &self.judging,
+        )
+        .await
     }
 
     /// The moves a ruling implies, in the one order the two machines admit.

@@ -43,6 +43,7 @@ mod fields;
 mod ids;
 mod judge;
 mod record;
+mod scope;
 mod status;
 mod step;
 mod step_machine;
@@ -67,6 +68,7 @@ pub use ids::{
 };
 pub use judge::{JudgeCheck, JudgeCriterion, JudgeVerdict, Judgment};
 pub use record::{Job, NewJob, StepTransitioned, Transitioned};
+pub use scope::{under, ContextSource, DeclarePlanAt, DeclaredPaths, EvidenceScope};
 pub use status::{JobStatus, StepState};
 pub use step::{JobStep, StepSeed, StepVerdict};
 pub use step_machine::{

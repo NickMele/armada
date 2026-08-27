@@ -23,6 +23,7 @@ fn workflow() -> ResolvedWorkflow {
             evidence_type: Some("diff"),
             gates: &[Gate::DiffNonempty],
             judged_on: &[("c1", "Does the fix address the cause the note names?")],
+            scope: None,
         },
         Sketch {
             id: "merge",
@@ -30,6 +31,7 @@ fn workflow() -> ResolvedWorkflow {
             evidence_type: None,
             gates: &[],
             judged_on: &[],
+            scope: None,
         },
     ])
 }

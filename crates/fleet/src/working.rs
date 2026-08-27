@@ -26,7 +26,7 @@
 use std::sync::Arc;
 
 use adapter_traits::{AgentHarness, DroneEvent, Worktree};
-use core_model::{DroneId, JobId, StepId};
+use core_model::{DeclaredPaths, DroneId, JobId, RepoPath, StepId};
 use tokio::process::ChildStderr;
 
 use crate::drone::Started;
@@ -52,6 +52,14 @@ pub(crate) struct Working {
     /// dropped: dropping it closes the pipe, and a Drone writing to a closed
     /// stderr takes a signal for it.
     _complaints: ChildStderr,
+    /// Where the Drone said this step's work would be. **`None` until it
+    /// declares**, which is a different answer from an empty declaration.
+    declared: Option<DeclaredPaths>,
+    /// Every file seen changed outside the declaration while the step ran, in
+    /// the order first seen. **It does not fail the step** — the Drone may
+    /// declare again — and it survives a revert, which is the only thing the
+    /// live check sees that the gate cannot.
+    drifted: Vec<RepoPath>,
 }
 
 impl Working {
@@ -78,6 +86,8 @@ impl Working {
             session: started.session,
             transcript: Watching::reading(started.transcript, harness, taps.each()),
             _complaints: started.complaints,
+            declared: None,
+            drifted: Vec::new(),
         }
     }
 
@@ -97,8 +107,37 @@ impl Working {
         (self.job.clone(), self.drone.clone())
     }
 
+    /// Move to the next step, **and forget the last one's plan**. A
+    /// declaration is about one step; carrying it forward would let step two's
+    /// footprint be measured against step one's promise.
     pub(crate) fn now_on(&mut self, step: StepId) {
         self.step = step;
+        self.declared = None;
+        self.drifted.clear();
+    }
+
+    /// Record what the Drone declared for the step it is on. **Replaces**, so a
+    /// plan that turned out wrong is corrected by declaring again rather than
+    /// by widening one that already exists.
+    pub(crate) fn declares(&mut self, paths: DeclaredPaths) {
+        self.declared = Some(paths);
+        self.drifted.clear();
+    }
+
+    pub(crate) fn declared(&self) -> Option<&DeclaredPaths> {
+        self.declared.as_ref()
+    }
+
+    /// Add paths seen outside the plan, and answer with the ones that are new.
+    /// Empty on every turn after the first that saw them, which is what keeps
+    /// the live check from saying the same thing every tick.
+    pub(crate) fn drifting(&mut self, seen: Vec<RepoPath>) -> Vec<RepoPath> {
+        let fresh: Vec<RepoPath> = seen
+            .into_iter()
+            .filter(|path| !self.drifted.contains(path))
+            .collect();
+        self.drifted.extend(fresh.iter().cloned());
+        fresh
     }
 
     /// Whether the Drone has exited, **and reap it if it has**. See

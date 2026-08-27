@@ -6,9 +6,10 @@
 //! `evidence_type`, `mechanical_checks[]`, `judge_checks[]` and `advance_gate`.
 //! The rest of the schema — `evidence_scope`, `retry_limit`, `verdict_routing`,
 //! `iteration_cap`, `hard_prerequisite`, `default_gate_policy`, `on_fail`,
-//! `on_gaming_flag`, `declare_plan_at` — is refused, because there is no retry
-//! ledger and no loop. A field nothing reads is a promise the file makes and
-//! the system does not keep.
+//! `on_gaming_flag` — is refused, because there is no retry ledger and no loop.
+//! A field nothing reads is a promise the file makes and the system does not
+//! keep. `evidence_scope` and `declare_plan_at` are read; see [`crate::scope`]
+//! for the two keys inside the block that are not.
 //!
 //! # Three closed sets, each narrowed
 //!
@@ -39,12 +40,14 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use core_model::{
-    AdvanceGate, EvidenceType, JudgeCheck, StepId, Ulid, WorkflowId, DIFF_NONEMPTY, MANIFEST_CHECK,
+    AdvanceGate, EvidenceScope, EvidenceType, JudgeCheck, StepId, Ulid, WorkflowId, DIFF_NONEMPTY,
+    MANIFEST_CHECK,
 };
 use serde_yaml_ng::Value;
 
 use crate::error::{Fault, LoadError, Refusal};
 use crate::judge;
+use crate::scope;
 use crate::yaml::{self, Table};
 
 /// The keys M1 reads at the top level of a WorkflowDef.
@@ -57,6 +60,8 @@ const STEP_KEYS: &[&str] = &[
     "mechanical_checks",
     "judge_checks",
     "advance_gate",
+    "evidence_scope",
+    "declare_plan_at",
 ];
 
 /// How the steps are wired. **One variant, of two.**
@@ -139,6 +144,7 @@ pub struct Step {
     mechanical_checks: Vec<MechanicalCheck>,
     judge_checks: Vec<JudgeCheck>,
     advance_gate: AdvanceGate,
+    evidence_scope: Option<EvidenceScope>,
 }
 
 impl Step {
@@ -172,6 +178,12 @@ impl Step {
 
     pub fn advance_gate(&self) -> AdvanceGate {
         self.advance_gate
+    }
+
+    /// What the step's evidence is scoped to. **`None` on a step that declared
+    /// no block**, which is every step written before one existed.
+    pub fn evidence_scope(&self) -> Option<&EvidenceScope> {
+        self.evidence_scope.as_ref()
     }
 }
 
@@ -376,6 +388,7 @@ fn step(
         })
         .unwrap_or_default();
     let judge_checks = judge::checks(&mut table, out);
+    let evidence_scope = scope::evidence_scope(&mut table, out);
     let gate_key = table.at("advance_gate");
     let advance_gate = table
         .required("advance_gate", out)
@@ -411,6 +424,7 @@ fn step(
         mechanical_checks,
         judge_checks,
         advance_gate: advance_gate?,
+        evidence_scope,
     })
 }
 
