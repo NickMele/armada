@@ -49,6 +49,14 @@ pub struct Sketch<'a> {
     /// and therefore accepts whatever arrives.
     pub evidence_type: Option<&'a str>,
     pub gates: &'a [Gate<'a>],
+    /// The narrow questions the step puts to the Judge, as `(criterion_id,
+    /// question)`. Empty is the common case.
+    ///
+    /// A step with any of them is written with `advance_gate:
+    /// auto_if_judge_passes`, because the parser refuses a file where the gate
+    /// and the criteria disagree — the fixture cannot produce a combination an
+    /// `armada.yml` could not.
+    pub judged_on: &'a [(&'a str, &'a str)],
 }
 
 /// Build a workflow and the Manifest its Checks resolve against.
@@ -78,12 +86,24 @@ fn workflow_text(steps: &[Sketch<'_>]) -> String {
         "version: 1\nworkflow_id: fixture-workflow\nname: fixture\nstructure: linear\nsteps:\n",
     );
     for step in steps {
+        let gate = match step.judged_on.is_empty() {
+            true => "auto",
+            false => "auto_if_judge_passes",
+        };
         text.push_str(&format!(
-            "  - id: {}\n    label: \"{}\"\n    advance_gate: auto\n",
+            "  - id: {}\n    label: \"{}\"\n    advance_gate: {gate}\n",
             step.id, step.label
         ));
         if let Some(evidence) = step.evidence_type {
             text.push_str(&format!("    evidence_type: {evidence}\n"));
+        }
+        if !step.judged_on.is_empty() {
+            text.push_str("    judge_checks:\n      - criteria:\n");
+            for (id, question) in step.judged_on {
+                text.push_str(&format!(
+                    "          - criterion_id: {id}\n            question: \"{question}\"\n"
+                ));
+            }
         }
         if step.gates.is_empty() {
             continue;

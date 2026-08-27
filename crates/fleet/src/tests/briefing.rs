@@ -63,12 +63,14 @@ fn a_workflow() -> core_model::FrozenWorkflow {
                 run: "cargo nextest run --workspace",
                 expect_exit_code: 0,
             }],
+            judged_on: &[],
         },
         Sketch {
             id: "summarise",
             label: "Summarise",
             evidence_type: Some("facts_note"),
             gates: &[],
+            judged_on: &[],
         },
     ])
 }

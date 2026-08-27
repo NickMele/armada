@@ -314,11 +314,19 @@ where
                 step: Some(step),
             });
         };
-        let ruling = rule_on(at, &landed.submission, self.work(), self.budget()).await;
+        // Assembled here rather than inside the gate: a Judge call
+        // authenticates as Fleet, and a value that could not be built is a
+        // configuration failure against this Job rather than a verdict.
+        let judging = self.judging().map_err(|cause| Adrift::NotConfigurable {
+            job: job_id.clone(),
+            cause,
+        })?;
+        let ruling = rule_on(at, &landed.submission, self.work(), self.budget(), &judging).await;
         // Before the Job or the step moves. A recorded result the transition
         // then failed to make is readable; a transition whose evidence was
         // never written down is a verdict with no trace.
         self.recorded_checks(&job_id, &step, &ruling).await?;
+        self.recorded_judgments(&job_id, &step, &ruling).await?;
         self.act_on(&ruling, &job_id, &step, working).await?;
         Ok(Some(ruling))
     }
@@ -352,7 +360,12 @@ where
             // The whole of what finishing a Job is, including the commit that
             // makes its branch mergeable, is `landing`'s.
             Ruling::Finished { tell, .. } => self.finish(ruling, tell, job_id, step, working).await,
-            Ruling::Failed { .. } => {
+            // Both end the Job, and neither tells the Drone. A refusal is a
+            // Check failure's sibling here: the citation is on the record and
+            // the person who opens the branch reads it. The refusal reprompt
+            // the prompt contract specifies arrives with the retry ledger,
+            // which is what would give a Drone somewhere to go with it.
+            Ruling::Failed { .. } | Ruling::Refused { .. } => {
                 let job = self.load(job_id).await?;
                 self.applied(&job, ruling).await?;
                 // Terminated without a turn, and the worktree is kept. The

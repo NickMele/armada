@@ -26,8 +26,9 @@
 use core_model::{
     AcceptanceCriterion, Actor, AdvanceGate, CriteriaOwed, CriterionId, CriterionSource,
     DependencyDirection, DependencyEdge, EscalationTrigger, EvidenceType, FrozenWorkflow, JobId,
-    PilotReason, RepoPath, ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome,
-    StepId, Timestamp, TransitionReason, Ulid, WorkflowId, DIFF_NONEMPTY, MANIFEST_CHECK,
+    JudgeCheck, JudgeCriterion, ModelName, PilotReason, RepoPath, ResolvedCheck, ResolvedStep,
+    ScopeRevision, ScopeRevisionOutcome, StepId, Timestamp, TransitionReason, Ulid, WorkflowId,
+    DIFF_NONEMPTY, MANIFEST_CHECK,
 };
 use serde_json::{json, Map, Value};
 
@@ -290,6 +291,14 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
             "label": step.label(),
             "evidence_type": step.evidence_type().map(|kind| kind.as_wire()),
             "advance_gate": step.advance_gate().as_wire(),
+            "judge_checks": step.judge_checks().iter().map(|judge| json!({
+                "model": judge.model().map(|model| model.as_str()),
+                "panel_size": judge.panel_size(),
+                "criteria": judge.criteria().iter().map(|criterion| json!({
+                    "criterion_id": criterion.criterion_id.as_str(),
+                    "question": criterion.question,
+                })).collect::<Vec<Value>>(),
+            })).collect::<Vec<Value>>(),
             "checks": step.checks().iter().map(|check| match check {
                 ResolvedCheck::ManifestCheck { name, run, expect_exit_code } => json!({
                     "type": MANIFEST_CHECK,
@@ -339,7 +348,47 @@ fn read_step(entry: &Map<String, Value>) -> Result<ResolvedStep, Malformed> {
         evidence_type,
         checks,
         AdvanceGate::from_wire(&gate).ok_or_else(|| format!("`advance_gate` holds `{gate}`"))?,
+        read_judge_checks(entry)?,
     ))
+}
+
+/// What the step asks the Judge.
+///
+/// **Absent reads as none**, which is the one backfill this column needs: every
+/// workflow written before the semantic tier existed declared no criterion, and
+/// no criterion is exactly what those steps meant.
+fn read_judge_checks(entry: &Map<String, Value>) -> Result<Vec<JudgeCheck>, Malformed> {
+    let Some(Value::Array(declared)) = entry.get("judge_checks") else {
+        return Ok(Vec::new());
+    };
+    let mut checks = Vec::new();
+    for judge in declared {
+        checks.push(read_judge(object(judge)?)?);
+    }
+    Ok(checks)
+}
+
+fn read_judge(judge: &Map<String, Value>) -> Result<JudgeCheck, Malformed> {
+    let model = match judge.get("model") {
+        Some(Value::String(named)) => {
+            Some(ModelName::new(named).map_err(|blank| format!("`judge.model` {blank}"))?)
+        }
+        _ => None,
+    };
+    let panel_size = judge
+        .get("panel_size")
+        .and_then(Value::as_u64)
+        .and_then(|size| u32::try_from(size).ok())
+        .ok_or_else(|| "`judge.panel_size` is not a panel size".to_string())?;
+    let mut criteria = Vec::new();
+    for criterion in array(field(judge, "criteria")?)? {
+        let criterion = object(criterion)?;
+        criteria.push(JudgeCriterion {
+            criterion_id: CriterionId::new(text(criterion, "criterion_id")?),
+            question: text(criterion, "question")?,
+        });
+    }
+    Ok(JudgeCheck::declared(model, panel_size, criteria))
 }
 
 fn read_check(entry: &Map<String, Value>) -> Result<ResolvedCheck, Malformed> {

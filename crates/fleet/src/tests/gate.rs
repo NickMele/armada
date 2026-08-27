@@ -10,20 +10,23 @@
 
 use std::time::Duration;
 
-use adapter_traits::Worktree;
+use std::sync::Arc;
+
+use adapter_traits::{Environment, Model, Worktree};
 use config::{EvidenceType, ResolvedWorkflow};
 use core_model::{
     AcceptanceCriterion, Actor, CriterionId, CriterionSource, Facts, Job, JobId, JobStatus,
     ManifestId, ModelName, NewJob, StepId, StepSeed, Subject, Target, Timestamp, Title,
     TopLevelOrigin, Ulid, Urgency,
 };
-use testkit::{FakeWorkProduct, Gate, Sketch};
+use testkit::{FakeJudge, FakeWorkProduct, Gate, Sketch};
 use verification::{
     CheckFailed, Claimed, NeverRan, NotASubmission, NotClaimed, ShownBy, Submission,
 };
 
 use crate::evidence::{Call, EvidenceInbox, EvidenceTool};
 use crate::gate::{apply, rule_on, AtStep, CheckBudget, Ruling};
+use crate::judging::{JudgeBudget, Judging};
 
 const NOW: &str = "2026-08-26T09:00:00.000Z";
 
@@ -99,12 +102,14 @@ pub(super) fn workflow(run: &str) -> ResolvedWorkflow {
                 },
                 Gate::DiffNonempty,
             ],
+            judged_on: &[],
         },
         Sketch {
             id: "summarise",
             label: "Summarise",
             evidence_type: Some("facts_note"),
             gates: &[],
+            judged_on: &[],
         },
     ])
 }
@@ -144,6 +149,25 @@ fn diff_call<'a>() -> Call<'a> {
 
 pub(super) fn budget() -> CheckBudget {
     CheckBudget::of(Duration::from_secs(20))
+}
+
+/// A Judge that fails every call it is given.
+///
+/// **The default for every case in this file**, because every step in them
+/// declares no criterion. A gate that asked anyway would produce
+/// `CouldNotDecide` rather than quietly advancing, so the cold-by-default rule
+/// is a case that would break rather than a comment.
+pub(super) fn judging() -> Judging {
+    judged_by(FakeJudge::that_fails("a Judge that should never be asked"))
+}
+
+pub(super) fn judged_by(client: FakeJudge) -> Judging {
+    Judging {
+        client: Arc::new(client),
+        budget: JudgeBudget::of(Duration::from_secs(20)),
+        default_model: Model::named("the-cheap-model").expect("a model name"),
+        environment: Environment::nothing(),
+    }
 }
 
 // ------------------------------------------------------------------ the tool
@@ -214,7 +238,7 @@ async fn evidence_and_every_check_passing_advances_the_step() {
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
-    let ruling = rule_on(at_step, &diff_evidence(), &work, budget()).await;
+    let ruling = rule_on(at_step, &diff_evidence(), &work, budget(), &judging()).await;
 
     assert!(ruling.advanced(), "the ruling was {ruling:?}");
     assert!(matches!(ruling, Ruling::Advanced { .. }));
@@ -232,7 +256,7 @@ async fn evidence_with_every_check_failing_advances_nothing() {
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::untouched();
 
-    let ruling = rule_on(at_step, &diff_evidence(), &work, budget()).await;
+    let ruling = rule_on(at_step, &diff_evidence(), &work, budget(), &judging()).await;
 
     assert!(!ruling.advanced());
     let Ruling::Failed { failures, .. } = &ruling else {
@@ -260,7 +284,7 @@ async fn a_step_with_no_checks_advances_on_evidence_alone() {
     // Nothing is asked of the worktree, and nothing is run in it.
     let work = FakeWorkProduct::untouched();
 
-    let ruling = rule_on(at_step, &note_evidence(), &work, budget()).await;
+    let ruling = rule_on(at_step, &note_evidence(), &work, budget(), &judging()).await;
 
     assert!(ruling.advanced());
     assert!(matches!(ruling, Ruling::Finished { .. }));
@@ -283,6 +307,7 @@ async fn a_hanging_check_fails_rather_than_hanging() {
         &diff_evidence(),
         &work,
         CheckBudget::of(Duration::from_millis(300)),
+        &judging(),
     )
     .await;
     let took = started.elapsed();
@@ -311,7 +336,7 @@ async fn a_check_whose_command_does_not_exist_fails_rather_than_passing() {
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
-    let ruling = rule_on(at_step, &diff_evidence(), &work, budget()).await;
+    let ruling = rule_on(at_step, &diff_evidence(), &work, budget(), &judging()).await;
 
     assert!(!ruling.advanced());
     let Ruling::Failed { failures, .. } = &ruling else {
@@ -335,7 +360,7 @@ async fn the_check_output_comes_back_for_a_person_to_read() {
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
-    let ruling = rule_on(at_step, &diff_evidence(), &work, budget()).await;
+    let ruling = rule_on(at_step, &diff_evidence(), &work, budget(), &judging()).await;
 
     let Ruling::Failed { output, .. } = &ruling else {
         panic!("the ruling was {ruling:?}");
@@ -352,7 +377,7 @@ async fn evidence_of_the_wrong_kind_runs_no_checks_and_moves_nothing() {
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::untouched();
 
-    let ruling = rule_on(at_step, &note_evidence(), &work, budget()).await;
+    let ruling = rule_on(at_step, &note_evidence(), &work, budget(), &judging()).await;
 
     assert!(matches!(ruling, Ruling::NotWhatTheStepAsked(_)));
     assert!(
@@ -371,7 +396,7 @@ async fn a_diff_that_cannot_be_read_decides_nothing() {
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::refusing("a repository that would not open");
 
-    let ruling = rule_on(at_step, &diff_evidence(), &work, budget()).await;
+    let ruling = rule_on(at_step, &diff_evidence(), &work, budget(), &judging()).await;
 
     assert!(!ruling.advanced());
     assert!(matches!(ruling, Ruling::CouldNotDecide { .. }));
@@ -385,7 +410,7 @@ async fn the_diff_fleet_reads_is_of_the_job_s_own_worktree() {
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
-    rule_on(at_step, &diff_evidence(), &work, budget()).await;
+    rule_on(at_step, &diff_evidence(), &work, budget(), &judging()).await;
 
     assert_eq!(work.asked(), [worktree.path().to_string()]);
 }
@@ -399,7 +424,7 @@ async fn a_failed_check_ends_the_job_and_fleet_is_the_actor() {
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
-    let ruling = rule_on(at_step, &diff_evidence(), &work, budget()).await;
+    let ruling = rule_on(at_step, &diff_evidence(), &work, budget(), &judging()).await;
     let moved = apply(&running_job(), &ruling, at(NOW))
         .expect("the Job moves")
         .expect("a legal move");
@@ -420,7 +445,7 @@ async fn an_advancing_step_does_not_move_the_job() {
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
-    let ruling = rule_on(at_step, &diff_evidence(), &work, budget()).await;
+    let ruling = rule_on(at_step, &diff_evidence(), &work, budget(), &judging()).await;
     assert!(apply(&running_job(), &ruling, at(NOW)).is_none());
 }
 
@@ -432,7 +457,7 @@ async fn the_last_step_advancing_completes_the_job() {
         .expect("the last step");
     let work = FakeWorkProduct::untouched();
 
-    let ruling = rule_on(at_step, &note_evidence(), &work, budget()).await;
+    let ruling = rule_on(at_step, &note_evidence(), &work, budget(), &judging()).await;
     let moved = apply(&running_job(), &ruling, at(NOW))
         .expect("the Job moves")
         .expect("a legal move");

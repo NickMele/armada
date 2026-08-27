@@ -1,19 +1,19 @@
 //! A WorkflowDef, in the slice M1 reads.
 //!
-//! # Five fields, of nine
+//! # Six fields, of nine
 //!
 //! `version`, `name`, `structure`, `steps[]`, and within a step `id`, `label`,
-//! `evidence_type`, `mechanical_checks[]` and `advance_gate`. The rest of the
-//! schema — `judge_checks`, `evidence_scope`, `retry_limit`, `verdict_routing`,
+//! `evidence_type`, `mechanical_checks[]`, `judge_checks[]` and `advance_gate`.
+//! The rest of the schema — `evidence_scope`, `retry_limit`, `verdict_routing`,
 //! `iteration_cap`, `hard_prerequisite`, `default_gate_policy`, `on_fail`,
-//! `on_gaming_flag`, `declare_plan_at` — is refused, because there is no Judge
-//! at M1, no retry ledger and no loop. A field nothing reads is a promise the
-//! file makes and the system does not keep.
+//! `on_gaming_flag`, `declare_plan_at` — is refused, because there is no retry
+//! ledger and no loop. A field nothing reads is a promise the file makes and
+//! the system does not keep.
 //!
 //! # Three closed sets, each narrowed
 //!
-//! [`Structure`], `AdvanceGate` and [`MechanicalCheck`] each carry one or two
-//! variants where the schema has more, and each is an enum rather than a string
+//! [`Structure`], `AdvanceGate` and [`MechanicalCheck`] each carry fewer
+//! variants than the schema has, and each is an enum rather than a string
 //! so that widening one is a compile error at every `match` that reads it. A
 //! `String` here would widen silently. The two a Job freezes —
 //! [`AdvanceGate`] and [`EvidenceType`] — are `core-model`'s, because the
@@ -39,11 +39,12 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use core_model::{
-    AdvanceGate, EvidenceType, StepId, Ulid, WorkflowId, DIFF_NONEMPTY, MANIFEST_CHECK,
+    AdvanceGate, EvidenceType, JudgeCheck, StepId, Ulid, WorkflowId, DIFF_NONEMPTY, MANIFEST_CHECK,
 };
 use serde_yaml_ng::Value;
 
 use crate::error::{Fault, LoadError, Refusal};
+use crate::judge;
 use crate::yaml::{self, Table};
 
 /// The keys M1 reads at the top level of a WorkflowDef.
@@ -54,6 +55,7 @@ const STEP_KEYS: &[&str] = &[
     "label",
     "evidence_type",
     "mechanical_checks",
+    "judge_checks",
     "advance_gate",
 ];
 
@@ -78,7 +80,7 @@ const GATE_LEGAL: &[&str] = &[
     "human_always",
     "manifest_rule:<key>",
 ];
-const GATE_M1: &[&str] = &["auto"];
+const GATE_CARRIED: &[&str] = &["auto", "auto_if_judge_passes"];
 
 const EVIDENCE_CARRIED: &[(&str, EvidenceType)] = &[
     ("diff", EvidenceType::Diff),
@@ -135,6 +137,7 @@ pub struct Step {
     label: String,
     evidence_type: Option<EvidenceType>,
     mechanical_checks: Vec<MechanicalCheck>,
+    judge_checks: Vec<JudgeCheck>,
     advance_gate: AdvanceGate,
 }
 
@@ -159,6 +162,12 @@ impl Step {
     /// All entries must pass. Routinely empty.
     pub fn mechanical_checks(&self) -> &[MechanicalCheck] {
         &self.mechanical_checks
+    }
+
+    /// What the step asks the Judge. **Routinely empty**, which is what makes
+    /// the semantic tier cold by default.
+    pub fn judge_checks(&self) -> &[JudgeCheck] {
+        &self.judge_checks
     }
 
     pub fn advance_gate(&self) -> AdvanceGate {
@@ -366,16 +375,41 @@ fn step(
                 .collect::<Vec<MechanicalCheck>>()
         })
         .unwrap_or_default();
+    let judge_checks = judge::checks(&mut table, out);
+    let gate_key = table.at("advance_gate");
     let advance_gate = table
         .required("advance_gate", out)
-        .and_then(|value| gate(&table.at("advance_gate"), value, out));
+        .and_then(|value| gate(&gate_key, value, out));
+
+    // The gate and the checks are two statements of one thing, so a file that
+    // makes them disagree is refused rather than resolved. A step gated on a
+    // Judge that asks nothing would advance on the mechanical tier alone while
+    // reading as verified; a step that asks and is gated `auto` spends money on
+    // an answer nothing reads.
+    let judged = judge_checks.iter().any(JudgeCheck::fires);
+    let disagrees = matches!(
+        (advance_gate, judged),
+        (Some(AdvanceGate::AutoIfJudgePasses), false) | (Some(AdvanceGate::Auto), true)
+    );
+    if disagrees {
+        out.push(Refusal::new(
+            &gate_key,
+            Fault::GateAndJudgeDisagree {
+                gate: advance_gate.map(|gate| gate.as_wire()).unwrap_or("auto"),
+            },
+        ));
+    }
     table.close(STEP_KEYS, out);
+    if disagrees {
+        return None;
+    }
 
     Some(Step {
         id: StepId::new(id?),
         label: label?,
         evidence_type,
         mechanical_checks,
+        judge_checks,
         advance_gate: advance_gate?,
     })
 }
@@ -389,13 +423,14 @@ fn gate(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<AdvanceGate> 
     if found == "auto" {
         return Some(AdvanceGate::Auto);
     }
-    let deferred = found.starts_with("manifest_rule:")
-        || found == "auto_if_judge_passes"
-        || found == "human_always";
+    if found == "auto_if_judge_passes" {
+        return Some(AdvanceGate::AutoIfJudgePasses);
+    }
+    let deferred = found.starts_with("manifest_rule:") || found == "human_always";
     let fault = if deferred {
         Fault::OutsideM1 {
             value: found,
-            carried: GATE_M1,
+            carried: GATE_CARRIED,
         }
     } else {
         Fault::NotInTheSchema {

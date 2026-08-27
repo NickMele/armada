@@ -35,6 +35,7 @@ mod commit;
 mod delivery;
 mod event;
 mod harness;
+mod judge;
 mod secret;
 mod work_product;
 mod worktree;
@@ -49,8 +50,9 @@ pub use harness::{
     AmbientServers, DroneHandle, DroneSpawnConfig, Environment, Grant, Launch, McpConfig, Model,
     Prompt, Prompting, SpawnConfigRefused, Toolbelt,
 };
+pub use judge::{Ask, JudgeCall, ModelClient};
 pub use secret::Secret;
-pub use work_product::{Changed, WorkProduct};
+pub use work_product::{Changed, Patch, WorkProduct};
 pub use worktree::{derived, Worktree, WorktreeSpec, WorktreeSpecRefused};
 
 /// The agent harness: what a Drone is started as, and what its output means.
@@ -175,14 +177,6 @@ pub trait Secrets {
     fn resolve(&self, key: &str) -> Result<Secret<alloc::string::String>, Self::Error>;
 }
 
-/// A model call that carries no toolset — the Judge, the Job-shape classifier,
-/// and generated copy. Distinct from [`AgentHarness`], which carries one.
-pub trait ModelClient {
-    type Error;
-
-    fn complete(&self, request: ModelRequest) -> Result<ModelResponse, Self::Error>;
-}
-
 /// One thing that can be up or down: version control, the container runtime,
 /// the agent CLI, the credential store, the database, the host's own resources.
 ///
@@ -221,6 +215,10 @@ mod placeholders {
     //! step 8 in [`harness`](super::harness), for the same reason and in the
     //! same place: what a Drone is confined to is derived from a worktree and a
     //! toolbelt, and neither is a domain fact.
+    //!
+    //! **`ModelRequest` and `ModelResponse` are gone**, replaced by
+    //! [`judge`](super::judge)'s `Ask` and `JudgeCall`: what a one-shot call
+    //! carries is a rendering question, not a domain one.
 
     macro_rules! not_yet {
         ($($name:ident),* $(,)?) => {$(
@@ -229,5 +227,5 @@ mod placeholders {
         )*};
     }
 
-    not_yet!(ModelRequest, ModelResponse, HealthReport);
+    not_yet!(HealthReport);
 }

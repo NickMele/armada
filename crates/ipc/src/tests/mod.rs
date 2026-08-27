@@ -41,6 +41,7 @@ fn workflow() -> FrozenWorkflow {
             Some(EvidenceType::FailingTest),
             Vec::new(),
             AdvanceGate::Auto,
+            Vec::new(),
         )],
     )
 }

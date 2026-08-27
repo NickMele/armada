@@ -36,9 +36,12 @@
 //!   while a Job waits at the approval gate changes the bar that Job faces,
 //!   which is what `fleet::drafting` says freezing prevents. Asserted below as
 //!   far as it holds, and no further.
-//! - **A Judge, a retry and a human advance gate are not built at M1**, so
-//!   nothing here asserts about them. What the earlier draft of this file
-//!   claimed about each is recorded in the step that reconciled it.
+//! - **A retry and a human advance gate are not built**, so nothing here
+//!   asserts about them. A Judge now is: the case below shows the semantic
+//!   tier stopping a step the mechanical tier had cleared. What it does not
+//!   show is a live model — the call is made through Fleet's own runner
+//!   against a scripted verdict, because a suite that reached a model would
+//!   cost money and need a network.
 //!
 //! Everything below is an assertion. The apparatus — the planted clock and
 //! mint, the workflow fixture, and the Job that can only be moved by
@@ -53,9 +56,11 @@ use core_model::{
     Target,
 };
 use fleet::{aftermath, Aftermath, Ending, Left, Ruling};
-use testkit::FakeWorkProduct;
+use testkit::{FakeJudge, FakeWorkProduct};
 
-use bench::{a_fix_diff, a_root_cause_note, states, Bench, REPO_ROOT};
+use bench::{
+    a_fix_diff, a_root_cause_note, bug_workflow_with_the_fix_judged, states, Bench, REPO_ROOT,
+};
 
 // ---------------------------------------------------------------------------
 // The run itself
@@ -273,6 +278,125 @@ async fn a_failed_check_ends_the_job_and_the_branch_survives() {
         bench.vcs.created(),
         vec![run.worktree.clone()],
         "the worktree is kept — nothing in this workspace can remove one"
+    );
+}
+
+/// **The second tier.** A Judge stops a step every Check passed.
+///
+/// This is the difference between running the checks and deciding the work was
+/// worth a person's time, and it is the one thing a mechanical tier
+/// structurally cannot do: the diff is non-empty, so `diff_nonempty` holds, and
+/// the change is still not the change that was asked for.
+///
+/// The direction that matters is the one that is missing. A Judge can take this
+/// advance away and there is no answer it could give that would grant one —
+/// `Verdict::but_for` has no arm that constructs `Advance`, so the only Judge
+/// input to the gate narrows.
+#[tokio::test]
+async fn a_judge_stops_a_step_whose_checks_all_passed() {
+    let bench = Bench::judged_by(
+        FakeWorkProduct::changed(&["crates/store/src/read.rs"]),
+        bug_workflow_with_the_fix_judged(),
+        FakeJudge::refusing(
+            "the reader stopping before `end`",
+            "the caller's bound widened to match the reader",
+            "every other caller of `read_to` now reads one row too many",
+        ),
+    );
+    let mut run = bench.created("widen the bound instead of fixing it");
+    bench.approved_and_dispatched(&mut run);
+
+    let ruling = bench.gate(&run, &bench.step(0), &a_root_cause_note()).await;
+    bench.settled(&mut run, &bench.step(0), &ruling);
+
+    let ruling = bench.gate(&run, &bench.step(1), &a_fix_diff()).await;
+    let Ruling::Refused {
+        ref refusals,
+        ref checks,
+        ..
+    } = ruling
+    else {
+        panic!("the Judge refused and the gate did not say so: {ruling:?}");
+    };
+    assert!(
+        checks.iter().all(|check| check.outcome.passed()),
+        "the mechanical tier is what the Judge is being asked past"
+    );
+    assert_eq!(
+        refusals.cited()[0].produced.as_deref(),
+        Some("the caller's bound widened to match the reader"),
+        "a refusal names the evidence it refuses on"
+    );
+    bench.settled(&mut run, &bench.step(1), &ruling);
+
+    assert_eq!(run.job.status(), JobStatus::CompletedFailed);
+    assert_eq!(
+        states(&run.job),
+        [
+            ("root_cause", StepState::Advanced),
+            ("fix", StepState::Running)
+        ],
+        "the refused step never advanced"
+    );
+}
+
+/// A no-objection is not an approval — it is the mechanical pass, left alone.
+#[tokio::test]
+async fn a_judge_that_declines_to_refuse_leaves_the_mechanical_pass_standing() {
+    let bench = Bench::judged_by(
+        FakeWorkProduct::changed(&["crates/store/src/read.rs"]),
+        bug_workflow_with_the_fix_judged(),
+        FakeJudge::with_no_objection(),
+    );
+    let mut run = bench.created("fix the bound");
+    bench.approved_and_dispatched(&mut run);
+
+    let ruling = bench.gate(&run, &bench.step(0), &a_root_cause_note()).await;
+    bench.settled(&mut run, &bench.step(0), &ruling);
+
+    let ruling = bench.gate(&run, &bench.step(1), &a_fix_diff()).await;
+    assert!(matches!(ruling, Ruling::Finished { .. }), "{ruling:?}");
+    assert_eq!(ruling.judged().len(), 1, "the record says the Judge ran");
+    bench.settled(&mut run, &bench.step(1), &ruling);
+
+    assert_eq!(run.job.status(), JobStatus::CompletedSuccess);
+}
+
+/// **A verification that could not run is not a refusal**, and it is not a pass
+/// either. The Job stays where it is and a person is left something to read.
+#[tokio::test]
+async fn a_judge_call_that_fails_neither_advances_the_step_nor_fails_it() {
+    let bench = Bench::judged_by(
+        FakeWorkProduct::changed(&["crates/store/src/read.rs"]),
+        bug_workflow_with_the_fix_judged(),
+        FakeJudge::that_fails("a quota that ran out mid-Job"),
+    );
+    let mut run = bench.created("fix the bound while the quota is gone");
+    bench.approved_and_dispatched(&mut run);
+
+    let ruling = bench.gate(&run, &bench.step(0), &a_root_cause_note()).await;
+    bench.settled(&mut run, &bench.step(0), &ruling);
+
+    let ruling = bench.gate(&run, &bench.step(1), &a_fix_diff()).await;
+    assert!(
+        matches!(ruling, Ruling::CouldNotDecide { .. }),
+        "{ruling:?}"
+    );
+    assert!(!ruling.advanced());
+    assert!(
+        !ruling.ends_the_drone(),
+        "a failed verification ended the Job"
+    );
+    bench.settled(&mut run, &bench.step(1), &ruling);
+
+    assert_eq!(run.job.status(), JobStatus::Running);
+    assert_eq!(
+        states(&run.job),
+        [
+            ("root_cause", StepState::Advanced),
+            ("fix", StepState::Running)
+        ],
+        "the step neither advanced nor failed"
     );
 }
 

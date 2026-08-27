@@ -28,7 +28,7 @@
 
 use std::path::{Path, PathBuf};
 
-use adapter_traits::{Changed, WorkProduct, Worktree};
+use adapter_traits::{Changed, Patch, WorkProduct, Worktree};
 use git2::{Diff, DiffOptions, Oid, Repository};
 
 use crate::error::ReadWorkProductError;
@@ -38,14 +38,8 @@ impl WorkProduct for GitVcs {
     type Error = ReadWorkProductError;
 
     fn changed_files(&self, worktree: &Worktree) -> Result<Changed, Self::Error> {
+        let (repo, base) = opened(worktree)?;
         let path = worktree.path();
-        let repo =
-            Repository::open(path).map_err(|cause| ReadWorkProductError::WorktreeUnreadable {
-                worktree: path.to_string(),
-                cause,
-            })?;
-
-        let base = base_of(&repo, worktree)?;
         let tree = repo
             .find_commit(base)
             .and_then(|commit| commit.tree())
@@ -69,6 +63,61 @@ impl WorkProduct for GitVcs {
 
         Ok(Changed::of(paths(&diff)))
     }
+
+    fn patch(&self, worktree: &Worktree) -> Result<Patch, Self::Error> {
+        let (repo, base) = opened(worktree)?;
+        let path = worktree.path();
+        let tree = repo
+            .find_commit(base)
+            .and_then(|commit| commit.tree())
+            .map_err(|cause| ReadWorkProductError::BaseUnreadable {
+                worktree: path.to_string(),
+                base: base.to_string(),
+                cause,
+            })?;
+
+        let mut options = DiffOptions::new();
+        options
+            .include_untracked(true)
+            .recurse_untracked_dirs(true)
+            .include_typechange(true);
+        let diff = repo
+            .diff_tree_to_workdir_with_index(Some(&tree), Some(&mut options))
+            .map_err(|cause| ReadWorkProductError::DiffFailed {
+                worktree: path.to_string(),
+                cause,
+            })?;
+
+        // Whole-diff rendering, patches and headers together, in git's own
+        // text. A structured walk would be Armada deciding what a hunk means,
+        // and what the Judge is handed is the diff a person would read.
+        let mut text = String::new();
+        diff.print(git2::DiffFormat::Patch, |_, _, line| {
+            if matches!(line.origin(), '+' | '-' | ' ') {
+                text.push(line.origin());
+            }
+            text.push_str(&String::from_utf8_lossy(line.content()));
+            true
+        })
+        .map_err(|cause| ReadWorkProductError::DiffFailed {
+            worktree: path.to_string(),
+            cause,
+        })?;
+        Ok(Patch::of(text))
+    }
+}
+
+/// The worktree's repository and the commit its branch was cut from — the two
+/// readings both methods above start from.
+fn opened(worktree: &Worktree) -> Result<(Repository, Oid), ReadWorkProductError> {
+    let path = worktree.path();
+    let repo =
+        Repository::open(path).map_err(|cause| ReadWorkProductError::WorktreeUnreadable {
+            worktree: path.to_string(),
+            cause,
+        })?;
+    let base = base_of(&repo, worktree)?;
+    Ok((repo, base))
 }
 
 /// The commit the Job's branch was cut from.

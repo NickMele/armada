@@ -108,6 +108,10 @@ pub enum Fault {
     /// believes is linear is legal config that surfaces as a Job which never
     /// terminates.
     ContradictsStructure { structure: &'static str },
+    /// **A step's `advance_gate` and its `judge_checks` say different things.**
+    /// The two are one statement made twice, and a file where they disagree has
+    /// no reading that is not a guess about which the author meant.
+    GateAndJudgeDisagree { gate: &'static str },
 }
 
 impl fmt::Display for Fault {
@@ -141,6 +145,16 @@ impl fmt::Display for Fault {
             Fault::ContradictsStructure { structure } => write!(
                 f,
                 "declares a routing edge, and the workflow declares `structure: {structure}`"
+            ),
+            Fault::GateAndJudgeDisagree { gate: "auto" } => write!(
+                f,
+                "is `auto`, which is the mechanical tier alone, and the step \
+                 declares `judge_checks` criteria nothing would read"
+            ),
+            Fault::GateAndJudgeDisagree { gate } => write!(
+                f,
+                "is `{gate}`, and the step declares no `judge_checks` criterion \
+                 for a Judge to read"
             ),
         }
     }

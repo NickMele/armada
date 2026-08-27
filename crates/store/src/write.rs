@@ -31,7 +31,7 @@
 //! could not be tested.
 
 use core_model::{
-    DroneAssigned, DronePresence, GateManifest, Job, JobId, JobStep, StepCheck, StepId,
+    DroneAssigned, DronePresence, GateManifest, Job, JobId, JobStep, Judgment, StepCheck, StepId,
     StepTransitioned, Timestamp, Transitioned, WriteTargets,
 };
 use rusqlite::Transaction;
@@ -403,6 +403,59 @@ impl Store {
 
         tx.commit()
             .map_err(fault("committing the check record"))
+            .map_err(WriteError::Database)
+    }
+
+    /// Record what the Judge said about one step, replacing whatever a previous
+    /// pass over the same step wrote.
+    ///
+    /// Same shape as [`record_step_checks`](Store::record_step_checks) and for
+    /// the same reason: a step is judged afresh each time it is submitted, and
+    /// two passes' judgments interleaved would read as a panel.
+    pub fn record_step_judgments(
+        &mut self,
+        job_id: &JobId,
+        step_id: &StepId,
+        judgments: &[Judgment],
+        at: &Timestamp,
+    ) -> Result<(), WriteError> {
+        let tx = self
+            .conn
+            .transaction()
+            .map_err(fault("starting the judgment record"))
+            .map_err(WriteError::Database)?;
+
+        tx.execute(
+            "DELETE FROM job_step_judgments WHERE job_id = ?1 AND step_id = ?2",
+            (job_id.as_str(), step_id.as_str()),
+        )
+        .map_err(fault("clearing the previous pass"))
+        .map_err(WriteError::Database)?;
+
+        for (ordinal, judgment) in judgments.iter().enumerate() {
+            tx.execute(
+                "INSERT INTO job_step_judgments (
+                     job_id, step_id, ordinal, criterion, verdict, expected, produced,
+                     consequence, judged_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                rusqlite::params![
+                    job_id.as_str(),
+                    step_id.as_str(),
+                    ordinal as i64,
+                    judgment.criterion_id.as_str(),
+                    judgment.verdict.as_wire(),
+                    judgment.expected.as_deref(),
+                    judgment.produced.as_deref(),
+                    judgment.consequence.as_deref(),
+                    at.as_str(),
+                ],
+            )
+            .map_err(fault("writing a judgment"))
+            .map_err(WriteError::Database)?;
+        }
+
+        tx.commit()
+            .map_err(fault("committing the judgment record"))
             .map_err(WriteError::Database)
     }
 }

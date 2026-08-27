@@ -39,12 +39,14 @@ fn two_steps_edited() -> config::ResolvedWorkflow {
                 run: "/usr/bin/false",
                 expect_exit_code: 0,
             }],
+            judged_on: &[],
         },
         Sketch {
             id: "summarise",
             label: "Summarise",
             evidence_type: Some("facts_note"),
             gates: &[],
+            judged_on: &[],
         },
     ])
 }
@@ -139,6 +141,7 @@ fn gated_on(label: &str, run: &str) -> config::ResolvedWorkflow {
             run,
             expect_exit_code: 0,
         }],
+        judged_on: &[],
     }])
 }
 
@@ -277,6 +280,7 @@ async fn a_failed_checks_output_is_readable_from_its_file_afterwards() {
                 run: "/bin/sh -c 'echo the suite is unhappy 1>&2; exit 2'",
                 expect_exit_code: 0,
             }],
+            judged_on: &[],
         }]),
         1,
     );
@@ -334,12 +338,14 @@ async fn a_check_that_passed_keeps_its_output_and_a_built_in_has_none() {
                     },
                     Gate::DiffNonempty,
                 ],
+                judged_on: &[],
             },
             Sketch {
                 id: "summarise",
                 label: "Summarise",
                 evidence_type: Some("facts_note"),
                 gates: &[],
+                judged_on: &[],
             },
         ]),
         1,

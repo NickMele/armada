@@ -65,6 +65,25 @@ fn bug_with(extra: &str) -> Result<WorkflowDef, LoadError> {
     parse(&format!("{BUG}{extra}"))
 }
 
+/// A fifth step that puts one question to the Judge, at the gate and panel
+/// given. Built line by line because the indentation is the syntax.
+fn judged(gate: &str, panel_size: u32, enabled: bool) -> String {
+    [
+        "  - id: review".to_string(),
+        "    label: Review".to_string(),
+        format!("    advance_gate: {gate}"),
+        "    judge_checks:".to_string(),
+        format!("      - enabled: {enabled}"),
+        "        model: haiku".to_string(),
+        format!("        panel_size: {panel_size}"),
+        "        criteria:".to_string(),
+        "          - criterion_id: c1".to_string(),
+        "            question: Does the fix address the cause?".to_string(),
+        String::new(),
+    ]
+    .join("\n")
+}
+
 #[test]
 fn the_worked_example_loads() {
     let def = parse(BUG).expect("the worked example");
@@ -167,15 +186,11 @@ fn verdict_routing_on_a_linear_workflow_is_refused_and_names_the_step() {
 }
 
 #[test]
-fn an_advance_gate_other_than_auto_is_refused() {
-    // There is no Judge at M1 and no Manifest-level gate policy among the five
-    // keys, so three of the schema's four values have nothing to resolve
-    // through.
-    for gate in [
-        "auto_if_judge_passes",
-        "human_always",
-        "manifest_rule:review_gate",
-    ] {
+fn a_gate_needing_a_manifest_policy_is_refused() {
+    // Two of the schema's four values resolve through a Manifest-level policy
+    // that does not exist. The other two — `auto` and `auto_if_judge_passes` —
+    // are carried, because both tiers they name are built.
+    for gate in ["human_always", "manifest_rule:review_gate"] {
         let refused = refusals(bug_with(&format!(
             "  - id: review\n    label: Review\n    advance_gate: {gate}\n"
         )));
@@ -183,10 +198,53 @@ fn an_advance_gate_other_than_auto_is_refused() {
             fault_at(&refused, "steps[4].advance_gate"),
             &Fault::OutsideM1 {
                 value: gate.to_string(),
-                carried: &["auto"],
+                carried: &["auto", "auto_if_judge_passes"],
             }
         );
     }
+}
+
+#[test]
+fn a_judge_gate_with_no_criterion_is_refused_and_so_is_a_criterion_with_no_judge_gate() {
+    let no_criterion = refusals(bug_with(
+        "  - id: review\n    label: Review\n    advance_gate: auto_if_judge_passes\n",
+    ));
+    assert_eq!(
+        fault_at(&no_criterion, "steps[4].advance_gate"),
+        &Fault::GateAndJudgeDisagree {
+            gate: "auto_if_judge_passes",
+        }
+    );
+
+    let no_gate = refusals(bug_with(&judged("auto", 1, true)));
+    assert_eq!(
+        fault_at(&no_gate, "steps[4].advance_gate"),
+        &Fault::GateAndJudgeDisagree { gate: "auto" }
+    );
+}
+
+#[test]
+fn a_step_carries_the_criteria_it_declares_and_the_panel_it_asks_for() {
+    let def = bug_with(&judged("auto_if_judge_passes", 3, true)).expect("a step the Judge reads");
+    let judge = &def.steps()[4].judge_checks()[0];
+    assert_eq!(judge.panel_size(), 3);
+    assert_eq!(judge.criteria().len(), 1);
+    assert_eq!(
+        judge.criteria()[0].question,
+        "Does the fix address the cause?"
+    );
+    // Three judges on one criterion, and a step that asks nothing makes none.
+    assert_eq!(judge.calls(), 3);
+    assert_eq!(def.steps()[0].judge_checks().len(), 0);
+}
+
+#[test]
+fn a_disabled_judge_check_asks_nothing_and_reads_as_a_step_that_declares_none() {
+    // `enabled: false` and an absent check are the registry's own synonyms, so
+    // the gate has to stay `auto` — which is what says the two really are one.
+    let def =
+        bug_with(&judged("auto", 1, false)).expect("a step whose Judge check is switched off");
+    assert!(!def.steps()[4].judge_checks()[0].fires());
 }
 
 #[test]
@@ -245,9 +303,9 @@ fn diff_nonempty_carries_nothing_else() {
 #[test]
 fn a_step_key_m1_does_not_read_hard_fails() {
     let refused = refusals(bug_with(
-        "  - id: review\n    label: Review\n    advance_gate: auto\n    judge_checks: []\n    retry_limit: 3\n    hard_prerequisite: true\n",
+        "  - id: review\n    label: Review\n    advance_gate: auto\n    retry_limit: 3\n    hard_prerequisite: true\n",
     ));
-    for key in ["judge_checks", "retry_limit", "hard_prerequisite"] {
+    for key in ["retry_limit", "hard_prerequisite"] {
         assert!(
             refused
                 .iter()

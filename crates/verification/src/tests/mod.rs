@@ -3,9 +3,11 @@
 //! Split in two because the two halves refuse different things. [`submission`]
 //! is about the call a Drone makes — what it may say, and what it has no field
 //! to say. [`gate`] is about the decision Fleet then takes, and most of its
-//! cases are cases where nothing advances.
+//! cases are cases where nothing advances. [`judge`] is the third tier and its
+//! cases each name the constitutional rule they hold.
 
 mod gate;
+mod judge;
 mod submission;
 
 use config::{ResolvedStep, ResolvedWorkflow};
@@ -28,12 +30,14 @@ pub(crate) fn workflow() -> ResolvedWorkflow {
                 },
                 Gate::DiffNonempty,
             ],
+            judged_on: &[],
         },
         Sketch {
             id: "summarise",
             label: "Summarise",
             evidence_type: Some("facts_note"),
             gates: &[],
+            judged_on: &[],
         },
     ])
 }

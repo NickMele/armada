@@ -90,6 +90,7 @@ pub mod drone;
 mod drone_moves;
 pub mod evidence;
 pub mod gate;
+pub mod judging;
 mod landing;
 pub mod mint;
 pub mod process;
@@ -116,6 +117,7 @@ pub use drone::{
 };
 pub use evidence::{Call, EvidenceInbox, EvidenceTool, Landed, Recorded};
 pub use gate::{apply, rule_on, AtStep, CheckBudget, CheckOutput, Ruling};
+pub use judging::{CallFailed, JudgeBudget, Judging};
 pub use mint::{Mint, UlidMint};
 pub use process::{holder_of, Holder, ProbeFailed, StartedAt};
 pub use redispatch::Replacement;

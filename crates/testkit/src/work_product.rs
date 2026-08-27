@@ -14,7 +14,7 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Mutex;
 
-use adapter_traits::{Changed, WorkProduct, Worktree};
+use adapter_traits::{Changed, Patch, WorkProduct, Worktree};
 
 /// Why the fake would not read the worktree.
 ///
@@ -40,6 +40,7 @@ impl Error for FakeDiffRefused {}
 #[derive(Debug, Default)]
 pub struct FakeWorkProduct {
     changed: Vec<String>,
+    patch: String,
     refuse: Mutex<Option<&'static str>>,
     asked: Mutex<Vec<String>>,
 }
@@ -56,15 +57,27 @@ impl FakeWorkProduct {
     pub fn changed(paths: &[&str]) -> FakeWorkProduct {
         FakeWorkProduct {
             changed: paths.iter().map(|path| path.to_string()).collect(),
+            patch: paths
+                .iter()
+                .map(|path| format!("--- a/{path}\n+++ b/{path}\n"))
+                .collect(),
             refuse: Mutex::new(None),
             asked: Mutex::new(Vec::new()),
         }
+    }
+
+    /// The patch text a Judge will be handed. Scripted, because what a Judge
+    /// reads is the thing under test rather than git's rendering of it.
+    pub fn showing(mut self, patch: &str) -> FakeWorkProduct {
+        self.patch = patch.to_string();
+        self
     }
 
     /// Make every reading fail as an unopenable repository would.
     pub fn refusing(standing_in_for: &'static str) -> FakeWorkProduct {
         FakeWorkProduct {
             changed: Vec::new(),
+            patch: String::new(),
             refuse: Mutex::new(Some(standing_in_for)),
             asked: Mutex::new(Vec::new()),
         }
@@ -89,5 +102,16 @@ impl WorkProduct for FakeWorkProduct {
             return Err(FakeDiffRefused { standing_in_for });
         }
         Ok(Changed::of(self.changed.clone()))
+    }
+
+    fn patch(&self, worktree: &Worktree) -> Result<Patch, Self::Error> {
+        self.asked
+            .lock()
+            .expect("not poisoned")
+            .push(worktree.path().to_string());
+        if let Some(standing_in_for) = *self.refuse.lock().expect("not poisoned") {
+            return Err(FakeDiffRefused { standing_in_for });
+        }
+        Ok(Patch::of(self.patch.clone()))
     }
 }

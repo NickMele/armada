@@ -7,9 +7,8 @@
 //!
 //! The Judge is a veto and not a grant. It fires on mechanical triggers, is
 //! blind to the Drone, and judges whether evidence satisfies the step's intent.
-//! It cannot vouch for something an exit code already contradicted. **There is
-//! no Judge at M1**, so the mechanical tier is the whole gate and a step that
-//! passes it advances.
+//! It cannot vouch for something an exit code already contradicted, and
+//! [`Verdict::but_for`] has no arm that produces an advance.
 //!
 //! # The property this crate exists to hold
 //!
@@ -24,7 +23,9 @@
 //! | [`Submission`] | [`Submission::submitted`] | The fields of the tool call |
 //! | [`Ran`] | [`Ran::of`] | One observation per check the step declared |
 //!
-//! Nothing in that chain accepts a message, a turn, a transcript or a claim.
+//! Nothing in that chain accepts a message, a turn, a transcript or a claim —
+//! and the Judge is not on it, because a Judge answer can only take an advance
+//! away.
 //!
 //! # What the Drone hands over, and what Fleet derives
 //!
@@ -46,6 +47,7 @@
 //! places deciding that is two answers.
 
 mod gate;
+mod judge;
 mod mechanical;
 mod outcome;
 mod submission;
@@ -54,6 +56,7 @@ mod submission;
 mod tests;
 
 pub use gate::{decide, Accepted, NotWhatTheStepAsked, Verdict};
+pub use judge::{Brief, Refusals, Unreadable};
 pub use mechanical::{CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran};
 pub use outcome::{OutcomeTurn, TheBaseMoved};
 pub use submission::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};

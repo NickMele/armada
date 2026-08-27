@@ -31,6 +31,11 @@
 //! `landing` is the ninth: a finished Job's work reaches its branch. Most of its
 //! cases are ones where no commit is made, which is where the rule is.
 //!
+//! `judging` is the tenth: the semantic tier, run through Fleet's own process
+//! runner against a shell that prints a scripted verdict. Its three cases are
+//! the milestone's claim — a veto stops a step whose Check passed, a
+//! no-objection lets it advance, and a call that failed does neither.
+//!
 //! `daemon` and `serving` are the sixth, and they are the first that are about
 //! the whole: a Job driven from created to completed against fakes, read back
 //! out of a reopened store, and the same five operations answered over the
@@ -49,6 +54,7 @@ mod evidence;
 mod frozen;
 mod gate;
 mod host;
+mod judging;
 mod landing;
 mod process;
 mod redispatch;

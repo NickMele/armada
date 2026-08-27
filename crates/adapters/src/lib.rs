@@ -23,6 +23,10 @@
 //! back, and [`mcp`](mod@mcp) writes the one-server configuration file the two
 //! flags that confine it point at.
 //!
+//! And the Judge: [`judge`](mod@judge) renders the same CLI as a one-shot call
+//! — one turn, no tools, no MCP server and no directory — which is how the
+//! semantic tier reaches a model without reaching a session.
+//!
 //! **The harness does not spawn.** Starting a process, detached, is `fleet`'s —
 //! see `adapter_traits::AgentHarness` for the three things that split buys, the
 //! first of which is that every confinement property here is a value a test
@@ -33,6 +37,7 @@ mod commit;
 mod delivery;
 mod error;
 mod harness;
+mod judge;
 mod mcp;
 mod reclaim;
 mod transcript;

@@ -73,6 +73,27 @@ where
             .record_step_checks(job_id, step, &checks, &self.now())
             .map_err(Adrift::Writing)
     }
+
+    /// Write down what the Judge said, where it said anything.
+    ///
+    /// **Written even when nothing was refused.** A step the Judge cleared and
+    /// a step the Judge never ran on are different facts, and only the record
+    /// can tell them apart.
+    pub(crate) async fn recorded_judgments(
+        &self,
+        job_id: &JobId,
+        step: &StepId,
+        ruling: &Ruling,
+    ) -> Result<(), Adrift> {
+        if ruling.judged().is_empty() {
+            return Ok(());
+        }
+        self.store()
+            .lock()
+            .await
+            .record_step_judgments(job_id, step, ruling.judged(), &self.now())
+            .map_err(Adrift::Writing)
+    }
 }
 
 /// Where one step's Check output lives, under the repository it ran in.

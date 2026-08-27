@@ -76,11 +76,11 @@ use std::time::Duration;
 
 use adapters::{GitVcs, HeadlessAgent};
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
-use fleet::{CheckBudget, Fittings, Fleet, Host, Mint, SystemClock, UlidMint};
+use fleet::{CheckBudget, Fittings, Fleet, Host, JudgeBudget, Mint, SystemClock, UlidMint};
 use ipc::PROTOCOL_VERSION;
 use store::Store;
 
-use crate::{agent_binary, model_choices, Setup, AGENT_BINARY, MODEL};
+use crate::{agent_binary, judge_model, model_choices, Setup, AGENT_BINARY, JUDGE_MODEL, MODEL};
 
 /// The store, beside the runtime file rather than inside the repository.
 ///
@@ -116,6 +116,13 @@ const PROVISIONAL_DRONE_PATH: &[&str] = &[
 /// workspace build is minutes, and nothing has measured what the ceiling should
 /// be.
 pub const PROVISIONAL_CHECK_BUDGET: Duration = Duration::from_secs(900);
+
+/// How long one Judge call may take. **Provisional**: the `judge-cost-cap` and
+/// the Judge latency rows in `crates/config/settings.toml` both read
+/// `undecided`, so nothing has measured what the ceiling should be. It is short
+/// because the calls sit at a gate a person is waiting behind — latency is what
+/// this bounds, not money.
+pub const PROVISIONAL_JUDGE_BUDGET: Duration = Duration::from_secs(120);
 
 /// How often Fleet is turned. **Provisional**, and nothing has measured it.
 ///
@@ -344,6 +351,12 @@ fn assemble(
 
     let root = setup.root().to_path_buf();
     let (manifest, workflow) = setup.into_parts();
+    // The Judge runs the program the Drone runs, so a machine that named one
+    // through the override names both — a second variable would let the two
+    // disagree about which binary is installed.
+    let judge_binary = agent.program().to_string();
+    let judge_model =
+        judge_model(std::env::var(JUDGE_MODEL).ok()).map_err(|refused| refused.said())?;
 
     Ok(Fleet::assembled(Fittings {
         store: Store::open(&machine.join(STORE_FILE))?,
@@ -362,6 +375,11 @@ fn assemble(
             mcp_config: mcp_config.to_string_lossy().to_string(),
         },
         budget: CheckBudget::of(PROVISIONAL_CHECK_BUDGET),
+        // The same CLI, invoked as a call rather than as a session. The
+        // spelling of the model is the adapter's; this crate never learns it.
+        judge: Arc::new(HeadlessAgent::at(judge_binary)),
+        judge_budget: JudgeBudget::of(PROVISIONAL_JUDGE_BUDGET),
+        judge_model,
         models,
         events: api::Broadcaster::new(),
     }))

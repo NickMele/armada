@@ -40,6 +40,7 @@
 //! question.
 
 mod error;
+mod judge;
 mod manifest;
 mod resolve;
 mod workflow;
@@ -56,4 +57,7 @@ pub use workflow::{MechanicalCheck, Step, Structure, WorkflowDef};
 // Re-exported, not re-declared. A Job carries its resolved workflow, so these
 // four are spelled in `core-model` where the record is — and every caller that
 // already said `config::ResolvedStep` still means the same type.
-pub use core_model::{AdvanceGate, EvidenceType, FrozenWorkflow, ResolvedCheck, ResolvedStep};
+pub use core_model::{
+    AdvanceGate, EvidenceType, FrozenWorkflow, JudgeCheck, JudgeCriterion, ResolvedCheck,
+    ResolvedStep,
+};

@@ -20,12 +20,14 @@ fn workflow() -> ResolvedWorkflow {
             label: "Implement",
             evidence_type: None,
             gates: &[],
+            judged_on: &[],
         },
         Sketch {
             id: "review",
             label: "Review",
             evidence_type: None,
             gates: &[],
+            judged_on: &[],
         },
     ])
 }

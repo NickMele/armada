@@ -13,6 +13,7 @@
 mod commit;
 mod delivery;
 mod harness;
+mod judge;
 mod reclaim;
 pub mod repo;
 mod transcript;

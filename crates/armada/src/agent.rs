@@ -1,9 +1,9 @@
-//! What a Drone is started as: which binary, and which model.
+//! Which binary a Drone is started as, and which model it and a Judge run on.
 //!
-//! **One reader, because they are one missing piece.** Both were "nothing reads
-//! configuration yet", and both are answered the same way — a default the
+//! **One reader, because they are one missing piece.** Each was "nothing reads
+//! configuration yet", and each is answered the same way — a default the
 //! adapter states, an environment variable that overrides it, read here before
-//! anything is bound. Nothing below Fleet reads either.
+//! anything is bound. Nothing below Fleet reads any of them.
 //!
 //! # The default is the adapter's, and this file cannot spell it
 //!
@@ -29,6 +29,7 @@ use std::fmt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
+use adapter_traits::{Model, SpawnConfigRefused};
 use adapters::HeadlessAgent;
 
 /// The environment variable naming the headless agent CLI.
@@ -44,6 +45,28 @@ pub const AGENT_BINARY: &str = "ARMADA_AGENT_BINARY";
 /// model name is one this account may use is a question only the vendor can
 /// answer, and asking it would put a network call before the bind.
 pub const MODEL: &str = "ARMADA_MODEL";
+
+/// The environment variable naming the model a Judge call is made on.
+///
+/// A second variable rather than a reuse of [`MODEL`], because the two are
+/// opposite dials: the Drone's is what does the work and the Judge's is the
+/// cheap one checking it. A machine that raised one by raising the other would
+/// pay Drone prices on every criterion.
+pub const JUDGE_MODEL: &str = "ARMADA_JUDGE_MODEL";
+
+/// What a step naming no model of its own is judged by.
+///
+/// **`crates/config/settings.toml` supplies none** — the `judge-model` row
+/// reads `undecided` — so the default is the adapter's, the same stand-in
+/// arrangement [`model_choices`] is in, and this module never learns the
+/// spelling of either.
+pub fn judge_model(named: Option<String>) -> Result<Model, SpawnConfigRefused> {
+    let named = named.map(|named| named.trim().to_string());
+    match named {
+        Some(named) if !named.is_empty() => Model::named(&named),
+        _ => Model::named(HeadlessAgent::judge_model()),
+    }
+}
 
 /// The harness to assemble Fleet with: the settings default, or the override.
 /// **Either one is refused if nothing runnable is there.**

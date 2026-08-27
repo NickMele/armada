@@ -4,8 +4,8 @@
 //! round-trip over an empty record exercises almost nothing and passes anyway.
 
 use core_model::{
-    Actor, CheckOutcome, DroneId, Job, JobStatus, RepoPath, ResolvedCheck, StepCheck, StepId,
-    Target, Ulid, WriteTargets,
+    Actor, AdvanceGate, CheckOutcome, CriterionId, DroneId, Job, JobStatus, JudgeVerdict, Judgment,
+    ModelName, RepoPath, ResolvedCheck, StepCheck, StepId, Target, Ulid, WriteTargets,
 };
 
 use crate::tests::{created_at, job_id, open, sub_dispatched, top_level, TempDir};
@@ -256,6 +256,79 @@ fn what_a_step_s_checks_did_survives_the_process_that_ran_them() {
     );
 }
 
+/// What the Judge said survives the process that asked, refusal and
+/// no-objection alike.
+///
+/// **Both are written.** A step the Judge cleared and a step the Judge never
+/// ran on are different facts about the same green step, and only the record
+/// can tell them apart — which is why a `met` row exists at all.
+#[test]
+fn what_the_judge_said_survives_the_process_that_asked() {
+    let dir = TempDir::new();
+    let stored = top_level("01JDG");
+    let step = StepId::new("fix");
+    let mut store = open(&dir);
+    store.insert_job(&stored, &created_at()).expect("stored");
+    store
+        .record_step_judgments(
+            &job_id("01JDG"),
+            &step,
+            &[
+                Judgment {
+                    criterion_id: CriterionId::new("c1"),
+                    verdict: JudgeVerdict::NotMet,
+                    expected: Some("the reader stopping before `end`".to_string()),
+                    produced: Some("the bound widened to match the reader".to_string()),
+                    consequence: Some("every caller reads one row too many".to_string()),
+                },
+                Judgment {
+                    criterion_id: CriterionId::new("c2"),
+                    verdict: JudgeVerdict::Met,
+                    expected: None,
+                    produced: None,
+                    consequence: None,
+                },
+            ],
+            &created_at(),
+        )
+        .expect("recorded");
+    drop(store);
+
+    let reopened = open(&dir);
+    let read = reopened.step_judgments(&job_id("01JDG")).expect("loads");
+    assert_eq!(read.len(), 1, "one step was judged");
+    assert_eq!(read[0].0, step);
+    assert_eq!(read[0].1.len(), 2, "in the order the criteria were asked");
+    assert_eq!(read[0].1[0].verdict, JudgeVerdict::NotMet);
+    assert_eq!(
+        read[0].1[0].consequence.as_deref(),
+        Some("every caller reads one row too many"),
+        "the field a person triages on"
+    );
+    assert_eq!(read[0].1[1].verdict, JudgeVerdict::Met);
+    assert!(
+        read[0].1[1].expected.is_none(),
+        "there is nothing a no-objection is refusing on"
+    );
+}
+
+/// A step nobody judged has no rows, which is what the cold tier looks like in
+/// the record.
+#[test]
+fn a_job_no_judge_ran_on_carries_no_judgments_at_all() {
+    let dir = TempDir::new();
+    let stored = top_level("01NOJ");
+    let mut store = open(&dir);
+    store.insert_job(&stored, &created_at()).expect("stored");
+    drop(store);
+
+    let reopened = open(&dir);
+    assert!(reopened
+        .step_judgments(&job_id("01NOJ"))
+        .expect("loads")
+        .is_empty());
+}
+
 /// A second run of the same step supersedes the first. A mixture of the two
 /// would be a set of results no single run ever produced.
 #[test]
@@ -327,6 +400,25 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
             ResolvedCheck::DiffNonempty,
         ],
         "the command lifted out of the Manifest, not the name it was written as"
+    );
+    // The bar the Judge measures against is frozen with the rest of the step.
+    // A criterion edited in `.armada/workflows/` changes the next Job, not this
+    // one, which is the whole reason the declaration is on the record.
+    assert_eq!(fix.advance_gate(), AdvanceGate::AutoIfJudgePasses);
+    assert_eq!(fix.judge_checks().len(), 1);
+    assert_eq!(fix.judge_checks()[0].panel_size(), 2);
+    assert_eq!(
+        fix.judge_checks()[0].model().map(ModelName::as_str),
+        Some("haiku"),
+        "the per-step model dial"
+    );
+    assert_eq!(fix.judge_calls(), 2, "one criterion, two judges");
+    assert!(
+        !workflow
+            .step(&StepId::new("reproduce"))
+            .expect("the first step")
+            .asks_the_judge(),
+        "a step that declared no criterion did not gain one"
     );
     assert!(
         workflow

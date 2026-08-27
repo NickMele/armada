@@ -22,6 +22,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::job::ids::{StepId, WorkflowId};
+use crate::job::judge::JudgeCheck;
 
 /// What a step produces as its work product.
 ///
@@ -45,14 +46,19 @@ pub enum EvidenceType {
     Document,
 }
 
-/// What it takes to advance past a step. **One variant, of four.**
+/// What it takes to advance past a step. **Two variants, of four.**
 ///
-/// The schema's other three each need a Judge or a Manifest-level policy, and
-/// neither exists yet. An enum rather than a string so widening it is a compile
-/// error at every `match`.
+/// The schema's other two need a Manifest-level policy, which does not exist
+/// yet. An enum rather than a string so widening it is a compile error at every
+/// `match`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AdvanceGate {
+    /// The mechanical tier is the whole gate.
     Auto,
+    /// The mechanical tier holds **and** the Judge did not refuse. Not a score
+    /// above a bar: there is no such thing as a Judge pass, only a mechanical
+    /// pass a Judge declined to refuse.
+    AutoIfJudgePasses,
 }
 
 /// A deterministic assertion with everything it needs already in hand.
@@ -130,6 +136,7 @@ pub struct ResolvedStep {
     evidence_type: Option<EvidenceType>,
     checks: Vec<ResolvedCheck>,
     advance_gate: AdvanceGate,
+    judge_checks: Vec<JudgeCheck>,
 }
 
 impl ResolvedStep {
@@ -145,6 +152,7 @@ impl ResolvedStep {
         evidence_type: Option<EvidenceType>,
         checks: Vec<ResolvedCheck>,
         advance_gate: AdvanceGate,
+        judge_checks: Vec<JudgeCheck>,
     ) -> ResolvedStep {
         ResolvedStep {
             id,
@@ -152,6 +160,7 @@ impl ResolvedStep {
             evidence_type,
             checks,
             advance_gate,
+            judge_checks,
         }
     }
 
@@ -175,6 +184,25 @@ impl ResolvedStep {
 
     pub fn advance_gate(&self) -> AdvanceGate {
         self.advance_gate
+    }
+
+    /// What this step asks the Judge. **Empty on most steps**, which is what
+    /// makes the semantic tier cold by default.
+    pub fn judge_checks(&self) -> &[JudgeCheck] {
+        &self.judge_checks
+    }
+
+    /// Whether the Judge fires on this step at all. The cold-by-default switch:
+    /// a step declaring no criterion spends nothing.
+    pub fn asks_the_judge(&self) -> bool {
+        self.judge_checks.iter().any(JudgeCheck::fires)
+    }
+
+    /// How many model calls one pass over this step makes. Latency rather than
+    /// money is what this counts — every call sits at a gate a person is
+    /// waiting behind.
+    pub fn judge_calls(&self) -> u32 {
+        self.judge_checks.iter().map(JudgeCheck::calls).sum()
     }
 }
 
@@ -275,12 +303,14 @@ impl AdvanceGate {
     pub fn as_wire(&self) -> &'static str {
         match self {
             AdvanceGate::Auto => "auto",
+            AdvanceGate::AutoIfJudgePasses => "auto_if_judge_passes",
         }
     }
 
     pub fn from_wire(value: &str) -> Option<AdvanceGate> {
         match value {
             "auto" => Some(AdvanceGate::Auto),
+            "auto_if_judge_passes" => Some(AdvanceGate::AutoIfJudgePasses),
             _ => None,
         }
     }

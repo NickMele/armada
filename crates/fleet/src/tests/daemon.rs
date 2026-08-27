@@ -27,17 +27,18 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use adapter_traits::WorktreeSpec;
+use adapter_traits::{Model, WorktreeSpec};
 use config::{EvidenceType, Manifest};
 use core_model::{JobStatus, StepState, Timestamp, Ulid};
 use store::Store;
-use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Gate, Sketch};
+use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch};
 use verification::{Claimed, NotClaimed, ShownBy};
 
 use crate::clock::Clock;
 use crate::daemon::{Fittings, Fleet, Host};
 use crate::evidence::Call;
 use crate::gate::{CheckBudget, Ruling};
+use crate::judging::JudgeBudget;
 use crate::mint::Mint;
 use crate::tests::tmp::TempDir;
 
@@ -102,12 +103,14 @@ fn two_steps() -> config::ResolvedWorkflow {
             label: "Implement",
             evidence_type: Some("diff"),
             gates: &[Gate::DiffNonempty],
+            judged_on: &[],
         },
         Sketch {
             id: "summarise",
             label: "Summarise",
             evidence_type: Some("facts_note"),
             gates: &[],
+            judged_on: &[],
         },
     ])
 }
@@ -151,6 +154,12 @@ fn fitted_with(
             mcp_config: "/etc/armada/mcp.json".to_string(),
         },
         budget: CheckBudget::of(Duration::from_secs(5)),
+        // A Judge that fails every call, because no step in these fixtures
+        // declares a criterion. One that answered would let a cold-by-default
+        // regression pass unseen.
+        judge: Arc::new(FakeJudge::that_fails("a Judge that should never be asked")),
+        judge_budget: JudgeBudget::of(Duration::from_secs(5)),
+        judge_model: Model::named("the-cheap-model").expect("a model name"),
         // Planted, not read. The composition root resolves these from the
         // environment and the adapter; a test that read the same sources would
         // be asserting against a machine rather than against Fleet.

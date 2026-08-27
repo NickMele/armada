@@ -32,6 +32,7 @@
 
 use config::{EvidenceType, ResolvedStep};
 
+use crate::judge::Refusals;
 use crate::mechanical::{CheckFailed, Ran};
 use crate::submission::Submission;
 
@@ -97,14 +98,31 @@ pub enum Verdict {
     /// Evidence was submitted and every declared check passed. The step
     /// advances.
     Advance,
-    /// At least one declared check did not pass. The list is never empty, and
-    /// at M1 this ends the Job: no Judge, no retry, no escalation.
+    /// At least one declared check did not pass. The list is never empty.
     Failed(Vec<CheckFailed>),
+    /// The mechanical tier held and the Judge refused. **Only reachable from
+    /// [`Verdict::but_for`]**, which cannot produce anything else.
+    Refused(Refusals),
 }
 
 impl Verdict {
     pub fn advanced(&self) -> bool {
         matches!(self, Verdict::Advance)
+    }
+
+    /// Apply the Judge's answer. **A veto, and there is no arm that grants.**
+    ///
+    /// Read the four cases: a mechanical pass the Judge refused becomes a
+    /// refusal; a mechanical pass it did not refuse is unchanged; a mechanical
+    /// failure is unchanged either way. Nothing here constructs
+    /// [`Verdict::Advance`], so no Judge answer can produce one — which is what
+    /// "there is no such thing as a Judge pass" means when it is a type rather
+    /// than a rule.
+    pub fn but_for(self, refused: Option<Refusals>) -> Verdict {
+        match (self, refused) {
+            (Verdict::Advance, Some(refusals)) => Verdict::Refused(refusals),
+            (verdict, _) => verdict,
+        }
     }
 }
 

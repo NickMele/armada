@@ -41,6 +41,7 @@ mod escalation;
 mod event;
 mod fields;
 mod ids;
+mod judge;
 mod record;
 mod status;
 mod step;
@@ -64,6 +65,7 @@ pub use ids::{
     BlankModel, BlankTitle, CriterionId, DroneId, JobId, ManifestId, ModelName, RepoPath, StepId,
     Title, WorkflowId,
 };
+pub use judge::{JudgeCheck, JudgeCriterion, JudgeVerdict, Judgment};
 pub use record::{Job, NewJob, StepTransitioned, Transitioned};
 pub use status::{JobStatus, StepState};
 pub use step::{JobStep, StepSeed, StepVerdict};

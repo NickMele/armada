@@ -24,9 +24,9 @@ mod tmp;
 use core_model::{
     AcceptanceCriterion, Actor, AdvanceGate, CriterionId, CriterionSource, DependencyDirection,
     DependencyEdge, DispatchOrigin, EvidenceType, Facts, FrozenWorkflow, GateManifest, GateOutcome,
-    Job, JobId, ManifestId, ModelName, NewJob, NotRunReason, RepoPath, ResolvedCheck, ResolvedStep,
-    ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject, Timestamp, Title,
-    TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
+    Job, JobId, JudgeCheck, JudgeCriterion, ManifestId, ModelName, NewJob, NotRunReason, RepoPath,
+    ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject,
+    Timestamp, Title, TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
 };
 
 use crate::Store;
@@ -61,7 +61,8 @@ pub fn open(dir: &TempDir) -> Store {
 }
 
 /// The workflow every fixture Job freezes: the two steps its `job_steps` rows
-/// name, one of them gated, so a round trip carries a Check declaration too.
+/// name, one of them gated, so a round trip carries a Check declaration and a
+/// Judge criterion too.
 pub fn workflow() -> FrozenWorkflow {
     FrozenWorkflow::frozen(
         WorkflowId::carried(ulid("01WORKFLOW")),
@@ -74,6 +75,7 @@ pub fn workflow() -> FrozenWorkflow {
                 Some(EvidenceType::FailingTest),
                 Vec::new(),
                 AdvanceGate::Auto,
+                Vec::new(),
             ),
             ResolvedStep::frozen(
                 StepId::new("fix"),
@@ -87,7 +89,15 @@ pub fn workflow() -> FrozenWorkflow {
                     },
                     ResolvedCheck::DiffNonempty,
                 ],
-                AdvanceGate::Auto,
+                AdvanceGate::AutoIfJudgePasses,
+                vec![JudgeCheck::declared(
+                    Some(ModelName::new("haiku").expect("a model name")),
+                    2,
+                    vec![JudgeCriterion {
+                        criterion_id: CriterionId::new("c1"),
+                        question: "Does the fix address the cause the note names?".to_string(),
+                    }],
+                )],
             ),
         ],
     )

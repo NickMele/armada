@@ -37,13 +37,15 @@ use std::time::Duration;
 use adapter_traits::{WorkProduct, Worktree};
 use checks_runner::Output;
 use core_model::{
-    Actor, FrozenWorkflow, IllegalTransition, Job, ResolvedCheck, ResolvedStep, StepCheck, StepId,
-    Target, Timestamp, Transitioned,
+    Actor, FrozenWorkflow, IllegalTransition, Job, Judgment, ResolvedCheck, ResolvedStep,
+    StepCheck, StepId, Target, Timestamp, Transitioned,
 };
 use verification::{
-    decide, Accepted, CheckFailed, NotWhatTheStepAsked, Observed, OutcomeTurn, Ran, Submission,
-    Verdict,
+    decide, Accepted, CheckFailed, NotWhatTheStepAsked, Observed, OutcomeTurn, Ran, Refusals,
+    Submission, Verdict,
 };
+
+use crate::judging::{self, Judging};
 
 /// How long a Check may run before it is a failure.
 ///
@@ -152,6 +154,9 @@ pub enum Ruling {
         checks: Vec<StepCheck>,
         /// What each Manifest Check printed, in the step's order.
         output: Vec<CheckOutput>,
+        /// Every criterion the Judge answered. Empty on the ordinary step,
+        /// which asks nothing.
+        judged: Vec<Judgment>,
     },
     /// The last step passed. The Drone is told, then terminated, and the Job
     /// reaches `completed_success`.
@@ -159,16 +164,29 @@ pub enum Ruling {
         tell: OutcomeTurn,
         checks: Vec<StepCheck>,
         output: Vec<CheckOutput>,
+        judged: Vec<Judgment>,
     },
-    /// A Check did not pass. **The Job ends**: no Judge, no retry, no
-    /// escalation. The worktree is kept, the output below is readable, and the
-    /// Drone is terminated without a turn.
+    /// A Check did not pass. **The Job ends**, and **the Judge never ran** —
+    /// the semantic tier is asked only after the mechanical one holds, so a
+    /// failing Check costs nothing. The worktree is kept, the output below is
+    /// readable, and the Drone is terminated without a turn.
     Failed {
         /// Never empty.
         failures: Vec<CheckFailed>,
         /// Every declared Check with what it did, passes included.
         checks: Vec<StepCheck>,
         output: Vec<CheckOutput>,
+    },
+    /// Every Check passed and the Judge refused. **The Job ends**, the same as
+    /// a Check failure and for the same reason: there is no retry ledger yet,
+    /// so a refusal surfaces to the person who opens the branch rather than
+    /// going back to the Drone. The citation is on the record.
+    Refused {
+        /// Never empty.
+        refusals: Refusals,
+        checks: Vec<StepCheck>,
+        output: Vec<CheckOutput>,
+        judged: Vec<Judgment>,
     },
     /// The submission was not the kind of work product the step declared.
     /// **Nothing ran and nothing moved** — the Checks are not spent on it, and
@@ -185,6 +203,11 @@ pub enum Ruling {
     CouldNotDecide {
         artifact: &'static str,
         cause: Box<dyn Error + Send + Sync>,
+        /// Whatever had been established before the reading failed. Carried
+        /// because a Judge call that could not be made happens *after* every
+        /// Check ran, and those results are real.
+        checks: Vec<StepCheck>,
+        output: Vec<CheckOutput>,
     },
 }
 
@@ -213,8 +236,24 @@ impl Ruling {
         match self {
             Ruling::Advanced { checks, .. }
             | Ruling::Finished { checks, .. }
-            | Ruling::Failed { checks, .. } => checks,
-            Ruling::NotWhatTheStepAsked(_) | Ruling::CouldNotDecide { .. } => &[],
+            | Ruling::Failed { checks, .. }
+            | Ruling::Refused { checks, .. }
+            | Ruling::CouldNotDecide { checks, .. } => checks,
+            Ruling::NotWhatTheStepAsked(_) => &[],
+        }
+    }
+
+    /// Every criterion the Judge answered, in the order asked. **Empty on most
+    /// rulings**, because most steps ask nothing and a failing Check never
+    /// reaches the Judge at all.
+    pub fn judged(&self) -> &[Judgment] {
+        match self {
+            Ruling::Advanced { judged, .. }
+            | Ruling::Finished { judged, .. }
+            | Ruling::Refused { judged, .. } => judged,
+            Ruling::Failed { .. }
+            | Ruling::NotWhatTheStepAsked(_)
+            | Ruling::CouldNotDecide { .. } => &[],
         }
     }
 
@@ -228,15 +267,20 @@ impl Ruling {
         match self {
             Ruling::Advanced { output, .. }
             | Ruling::Finished { output, .. }
-            | Ruling::Failed { output, .. } => output,
-            Ruling::NotWhatTheStepAsked(_) | Ruling::CouldNotDecide { .. } => &[],
+            | Ruling::Failed { output, .. }
+            | Ruling::Refused { output, .. }
+            | Ruling::CouldNotDecide { output, .. } => output,
+            Ruling::NotWhatTheStepAsked(_) => &[],
         }
     }
 
     /// Whether the Drone's session ends here. True where the Job is over, in
     /// either direction, and false everywhere else.
     pub fn ends_the_drone(&self) -> bool {
-        matches!(self, Ruling::Finished { .. } | Ruling::Failed { .. })
+        matches!(
+            self,
+            Ruling::Finished { .. } | Ruling::Failed { .. } | Ruling::Refused { .. }
+        )
     }
 }
 
@@ -250,6 +294,7 @@ pub async fn rule_on<W>(
     evidence: &Submission,
     work: &W,
     budget: CheckBudget,
+    judging: &Judging,
 ) -> Ruling
 where
     W: WorkProduct,
@@ -283,6 +328,8 @@ where
                     return Ruling::CouldNotDecide {
                         artifact: "the Job's diff",
                         cause: Box::new(cause),
+                        checks: Vec::new(),
+                        output,
                     }
                 }
             },
@@ -299,28 +346,73 @@ where
             return Ruling::CouldNotDecide {
                 artifact: "the step's checks",
                 cause: Box::new(cause),
+                checks: Vec::new(),
+                output,
             }
         }
     };
 
     let checks = ran.recorded();
-    match decide(accepted, &ran) {
+    let mechanical = decide(accepted, &ran);
+    // **The trigger, and the whole of it.** The Judge is asked only where the
+    // mechanical tier already held and the step declares a criterion — so a
+    // failing Check spends nothing, an ordinary step spends nothing, and no
+    // timer reaches this line.
+    let (judged, verdict) = match mechanical.advanced() && step.asks_the_judge() {
+        false => (Vec::new(), mechanical),
+        true => {
+            let patch = match work.patch(at.worktree()) {
+                Ok(patch) => patch,
+                Err(cause) => {
+                    return Ruling::CouldNotDecide {
+                        artifact: "the Job's patch",
+                        cause: Box::new(cause),
+                        checks,
+                        output,
+                    }
+                }
+            };
+            match judging::judged(step, &patch, &checks, judging).await {
+                Ok((judged, refusals)) => (judged, mechanical.but_for(refusals)),
+                // A verification that could not run is not a refusal, and it is
+                // not a pass. The step neither advances nor fails.
+                Err(cause) => {
+                    return Ruling::CouldNotDecide {
+                        artifact: "the Judge's answer",
+                        cause: Box::new(cause),
+                        checks,
+                        output,
+                    }
+                }
+            }
+        }
+    };
+
+    match verdict {
         Verdict::Advance => match at.next() {
             Some(next) => Ruling::Advanced {
                 tell: OutcomeTurn::advanced(step, Some(next)),
                 checks,
                 output,
+                judged,
             },
             None => Ruling::Finished {
                 tell: OutcomeTurn::advanced(step, None),
                 checks,
                 output,
+                judged,
             },
         },
         Verdict::Failed(failures) => Ruling::Failed {
             failures,
             checks,
             output,
+        },
+        Verdict::Refused(refusals) => Ruling::Refused {
+            refusals,
+            checks,
+            output,
+            judged,
         },
     }
 }
@@ -337,7 +429,7 @@ pub fn apply(
 ) -> Option<Result<Transitioned, IllegalTransition>> {
     let target = match ruling {
         Ruling::Finished { .. } => Target::CompletedSuccess,
-        Ruling::Failed { .. } => Target::CompletedFailed,
+        Ruling::Failed { .. } | Ruling::Refused { .. } => Target::CompletedFailed,
         // A step advancing inside a running Job moves the inner machine and not
         // the outer one, and the other two rulings move nothing at all.
         Ruling::Advanced { .. }

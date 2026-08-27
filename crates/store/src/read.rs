@@ -29,9 +29,9 @@
 //! cannot be dispatched against anything.
 
 use core_model::{
-    Branch, CheckOutcome, DispatchOrigin, Facts, GateManifest, GateOutcome, Job, JobId, JobStatus,
-    ManifestId, ModelName, NewJob, Origin, RepoPath, StepCheck, StepId, StepSeed, StepState,
-    Subject, Timestamp, Title, Ulid, Urgency, WriteTargets,
+    Branch, CheckOutcome, CriterionId, DispatchOrigin, Facts, GateManifest, GateOutcome, Job,
+    JobId, JobStatus, JudgeVerdict, Judgment, ManifestId, ModelName, NewJob, Origin, RepoPath,
+    StepCheck, StepId, StepSeed, StepState, Subject, Timestamp, Title, Ulid, Urgency, WriteTargets,
 };
 use rusqlite::Row;
 
@@ -362,6 +362,53 @@ impl Store {
             match grouped.last_mut() {
                 Some((last, checks)) if *last == step_id => checks.push(check),
                 _ => grouped.push((step_id, vec![check])),
+            }
+        }
+        Ok(grouped)
+    }
+
+    /// What the Judge said about each of a Job's steps, in the order asked.
+    ///
+    /// Read beside the record for [`step_checks`](Store::step_checks)'s reason.
+    /// A step with no rows is absent from the list, which is what "the Judge
+    /// never ran on this step" looks like — and it is the ordinary case,
+    /// because most steps ask nothing.
+    pub fn step_judgments(
+        &self,
+        job_id: &JobId,
+    ) -> Result<Vec<(StepId, Vec<Judgment>)>, LoadJobError> {
+        let rows = self
+            .collect(
+                "SELECT step_id, criterion, verdict, expected, produced, consequence
+                 FROM job_step_judgments WHERE job_id = ?1 ORDER BY step_id, ordinal",
+                job_id,
+                "reading judgments",
+                |row| {
+                    let verdict = string(row, "verdict")?;
+                    Ok((
+                        StepId::new(string(row, "step_id")?),
+                        Judgment {
+                            criterion_id: CriterionId::new(string(row, "criterion")?),
+                            verdict: enum_value(
+                                JudgeVerdict::from_wire,
+                                "job_step_judgments",
+                                "verdict",
+                                &verdict,
+                            )?,
+                            expected: maybe(row, "expected")?,
+                            produced: maybe(row, "produced")?,
+                            consequence: maybe(row, "consequence")?,
+                        },
+                    ))
+                },
+            )
+            .map_err(LoadJobError::Unreadable)?;
+
+        let mut grouped: Vec<(StepId, Vec<Judgment>)> = Vec::new();
+        for (step_id, judgment) in rows {
+            match grouped.last_mut() {
+                Some((last, judgments)) if *last == step_id => judgments.push(judgment),
+                _ => grouped.push((step_id, vec![judgment])),
             }
         }
         Ok(grouped)

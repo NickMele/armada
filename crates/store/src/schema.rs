@@ -47,7 +47,7 @@ pub const KNOWN_SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 /// **Nothing is ever edited here.** Changing entry zero changes what an already
 /// migrated file is assumed to contain, which is the one thing the version
 /// number exists to stop.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8];
 
 /// Version 1 — the Job record, the rows beneath it, and the log.
 const V1: &str = r#"
@@ -428,4 +428,38 @@ WHEN NOT (
 BEGIN
     SELECT RAISE(ABORT, 'a job_events row is one whole shape: a job transition with no step or drone columns, a step move beneath an unchanged status, or a drone arriving or leaving beneath one');
 END;
+"#;
+
+/// Version 8 — what the Judge said about a step.
+///
+/// A table of its own rather than more columns on `job_step_checks`: a Check is
+/// a command and an exit code, a judgment is a criterion and a verdict, and
+/// folding them would make "which tier refused this" a nullable column nobody
+/// could rely on.
+///
+/// `verdict` is one of the two in `criterion_verdict_judge` — `met` and
+/// `not_met`. There is no third, and no `source` column: every row here is the
+/// Judge's, and a person attesting a criterion is a different act with a
+/// different writer.
+///
+/// # Nothing to backfill
+///
+/// No Judge ran before this table existed, so every step in every existing
+/// store has none — which is what zero rows says.
+const V8: &str = r#"
+-- One row per criterion a step's Judge answered, in the order asked. `expected`,
+-- `produced` and `consequence` are the three named fields a refusal owes and are
+-- all null on `met`, where nothing is being refused on.
+CREATE TABLE job_step_judgments (
+    job_id      TEXT NOT NULL REFERENCES jobs(job_id),
+    step_id     TEXT NOT NULL,
+    ordinal     INTEGER NOT NULL,
+    criterion   TEXT NOT NULL,
+    verdict     TEXT NOT NULL,
+    expected    TEXT,
+    produced    TEXT,
+    consequence TEXT,
+    judged_at   TEXT NOT NULL,
+    PRIMARY KEY (job_id, step_id, ordinal)
+) STRICT;
 "#;

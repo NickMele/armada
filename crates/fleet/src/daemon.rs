@@ -44,7 +44,9 @@
 
 use std::sync::Arc;
 
-use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
+use adapter_traits::{
+    AgentHarness, Delivery, Model, ModelClient, SpawnConfigRefused, Vcs, WorkProduct,
+};
 use config::{Manifest, ResolvedWorkflow};
 use core_model::{Actor, Job, JobId, JobStatus, Target, Timestamp, TransitionReason, Ulid};
 use store::{LoadAllError, LoadJobError, Loaded, Moved, Store};
@@ -53,9 +55,10 @@ use tokio::sync::Mutex;
 use crate::adrift::Adrift;
 use crate::clock::Clock;
 use crate::delivery::Delivered;
-use crate::drone::{aftermath, Aftermath, Ending};
+use crate::drone::{aftermath, environment, Aftermath, Ending, HostPaths};
 use crate::evidence::EvidenceInbox;
 use crate::gate::{CheckBudget, Ruling};
+use crate::judging::{JudgeBudget, Judging};
 use crate::mint::Mint;
 use crate::working::Working;
 
@@ -109,6 +112,16 @@ pub struct Fittings<H, V, W> {
     pub manifest: Manifest,
     pub host: Host,
     pub budget: CheckBudget,
+    /// What makes a Judge call. **A pointer rather than a type parameter**: the
+    /// seam renders and cannot fail, so nothing about it needs to be generic.
+    pub judge: Arc<dyn ModelClient + Send + Sync>,
+    /// How long one Judge call may take. See [`JudgeBudget`] for why it has no
+    /// default.
+    pub judge_budget: JudgeBudget,
+    /// What a step naming no model of its own is judged by. **Resolved by the
+    /// composition root**, like every other input here — which model is cheap
+    /// is a vendor's fact, and nothing below Fleet may spell one.
+    pub judge_model: Model,
     /// The models a Job may name, and the one it gets when it names none.
     ///
     /// **Resolved by the composition root, like every other input here.**
@@ -162,6 +175,9 @@ pub struct Fleet<H, V, W> {
     manifest: Manifest,
     host: Host,
     budget: CheckBudget,
+    judge: Arc<dyn ModelClient + Send + Sync>,
+    judge_budget: JudgeBudget,
+    judge_model: Model,
     models: ipc::ModelChoices,
     events: api::Broadcaster,
     /// Every Job somebody could be watching. **Minted here, not a fitting** —
@@ -206,6 +222,9 @@ where
             manifest: fittings.manifest,
             host: fittings.host,
             budget: fittings.budget,
+            judge: fittings.judge,
+            judge_budget: fittings.judge_budget,
+            judge_model: fittings.judge_model,
             models: fittings.models,
             events: fittings.events,
             turns: api::Turns::new(),
@@ -443,6 +462,24 @@ where
     }
     pub(crate) fn budget(&self) -> CheckBudget {
         self.budget
+    }
+
+    /// What the gate needs in order to ask the Judge.
+    ///
+    /// The environment is the Drone's own list, built the same way and by the
+    /// same function — a Judge call needs the credential floor for the reason a
+    /// Drone does, and a second list here would be a second answer.
+    pub(crate) fn judging(&self) -> Result<Judging, SpawnConfigRefused> {
+        Ok(Judging {
+            client: Arc::clone(&self.judge),
+            budget: self.judge_budget,
+            default_model: self.judge_model.clone(),
+            environment: environment(HostPaths {
+                path: &self.host.path,
+                user: &self.host.user,
+                home: &self.host.home,
+            })?,
+        })
     }
     /// The models a Job may name. Read at creation and served by
     /// `list_models`; nothing else consults it.

@@ -24,7 +24,9 @@ use std::cell::RefCell;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-use adapter_traits::{Vcs, Worktree, WorktreeSpec};
+use std::sync::Arc;
+
+use adapter_traits::{Environment, Model, Vcs, Worktree, WorktreeSpec};
 use config::{EvidenceType, ResolvedWorkflow};
 use core_model::{
     AcceptanceCriterion, Actor, CriterionId, CriterionSource, Facts, IllegalStepTransition,
@@ -32,8 +34,8 @@ use core_model::{
     StepEvent, StepId, StepSeed, StepState, StepTarget, Target, Timestamp, Title, TopLevelOrigin,
     Ulid, Urgency,
 };
-use fleet::{apply, rule_on, AtStep, CheckBudget, Clock, Mint, Ruling};
-use testkit::{resolved, FakeVcs, FakeWorkProduct, Gate, Sketch};
+use fleet::{apply, rule_on, AtStep, CheckBudget, Clock, JudgeBudget, Judging, Mint, Ruling};
+use testkit::{resolved, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch};
 use verification::{Claimed, NotClaimed, ShownBy, Submission};
 
 /// Absolute, because `WorktreeSpec` refuses a relative root — a derived path
@@ -100,12 +102,36 @@ pub fn bug_workflow_as_far_as_m1_expresses_it() -> ResolvedWorkflow {
             label: "Root cause",
             evidence_type: Some("facts_note"),
             gates: &[],
+            judged_on: &[],
         },
         Sketch {
             id: "fix",
             label: "Fix",
             evidence_type: Some("diff"),
             gates: &[Gate::DiffNonempty],
+            judged_on: &[],
+        },
+    ])
+}
+
+/// The same workflow with the fix step gated on the Judge as well as on a
+/// diff, so a run can show the semantic tier stopping work the mechanical tier
+/// cleared.
+pub fn bug_workflow_with_the_fix_judged() -> ResolvedWorkflow {
+    resolved(&[
+        Sketch {
+            id: "root_cause",
+            label: "Root cause",
+            evidence_type: Some("facts_note"),
+            gates: &[],
+            judged_on: &[],
+        },
+        Sketch {
+            id: "fix",
+            label: "Fix",
+            evidence_type: Some("diff"),
+            gates: &[Gate::DiffNonempty],
+            judged_on: &[("c1", "Does the fix address the cause the note names?")],
         },
     ])
 }
@@ -165,6 +191,7 @@ pub struct Bench {
     pub vcs: FakeVcs,
     pub work: FakeWorkProduct,
     budget: CheckBudget,
+    judging: Judging,
     /// Every event the two machines handed back, in order.
     ///
     /// **This is the whole record.** A `Job` carries no history — the log is
@@ -175,14 +202,33 @@ pub struct Bench {
 }
 
 impl Bench {
+    /// A bench whose Judge fails every call it is given.
+    ///
+    /// **The default**, because no step of the workflow below declares a
+    /// criterion: a gate that asked anyway would answer `CouldNotDecide` and
+    /// the run would stop, rather than advancing and saying nothing.
     pub fn with(work: FakeWorkProduct) -> Bench {
+        Bench::judged_by(
+            work,
+            bug_workflow_as_far_as_m1_expresses_it(),
+            FakeJudge::that_fails("a Judge that should never be asked"),
+        )
+    }
+
+    pub fn judged_by(work: FakeWorkProduct, workflow: ResolvedWorkflow, judge: FakeJudge) -> Bench {
         Bench {
             clock: Ticking(AtomicU64::new(0)),
             mint: Counted(AtomicU64::new(1)),
-            workflow: bug_workflow_as_far_as_m1_expresses_it(),
+            workflow,
             vcs: FakeVcs::new(),
             work,
             budget: CheckBudget::of(Duration::from_secs(5)),
+            judging: Judging {
+                client: Arc::new(judge),
+                budget: JudgeBudget::of(Duration::from_secs(20)),
+                default_model: Model::named("the-cheap-model").expect("a model name"),
+                environment: Environment::nothing(),
+            },
             moves: RefCell::new(Vec::new()),
             step_moves: RefCell::new(Vec::new()),
         }
@@ -281,7 +327,7 @@ impl Bench {
     pub async fn gate(&self, run: &Run, step: &StepId, submitted: &Submission) -> Ruling {
         let at = AtStep::named(self.workflow.frozen(), step, &run.worktree)
             .expect("a step of the workflow");
-        rule_on(at, submitted, &self.work, self.budget).await
+        rule_on(at, submitted, &self.work, self.budget, &self.judging).await
     }
 
     /// The moves a ruling implies, in the one order the two machines admit.

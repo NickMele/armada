@@ -42,6 +42,7 @@ fn workflow() -> FrozenWorkflow {
                 Some(EvidenceType::FailingTest),
                 Vec::new(),
                 AdvanceGate::Auto,
+                Vec::new(),
             ),
             ResolvedStep::frozen(
                 StepId::new("fix"),
@@ -49,6 +50,7 @@ fn workflow() -> FrozenWorkflow {
                 Some(EvidenceType::Diff),
                 vec![ResolvedCheck::DiffNonempty],
                 AdvanceGate::Auto,
+                Vec::new(),
             ),
         ],
     )
