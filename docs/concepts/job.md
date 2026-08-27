@@ -66,7 +66,9 @@ flowchart LR
 
 **Two machines sit on the same row, and one contains the other.** `status` answers who is acting and in what mode; `current_step_id` points into `job_steps`, which answers how far through the WorkflowDef the work got. They are not peers to be kept in agreement — the outer machine gates whether the inner one moves at all, and disagreement between what a rail shows and what a badge shows is the normal case rather than drift.
 
-**The Drone is not a third machine.** It has no independent state of its own, only presence: `assigned_drone` is a nullable pointer and `drone_runs` records spawns with an exit state. Which is why `escalated` holding a live, idle Drone is not a contradiction.
+**The Drone is not a third machine.** It has no independent state of its own, only presence: `assigned_drone` is a nullable pointer, set when a Drone arrives and null again when it leaves, and `drone_runs` records spawns with an exit state. Which is why `escalated` holding a live, idle Drone is not a contradiction — the pointer says a process exists, not what it is doing.
+
+**Watching a Drone work writes nothing here.** [Observe](observe.md) is a read: no status, no transition, no field — unlike [Pilot](pilot.md), which changes who is driving and is therefore a status.
 
 How `status` itself is stored — a column cached over an authoritative log — is part of the Job schema in `crates/core-model/domain/job-fields.toml`.
 

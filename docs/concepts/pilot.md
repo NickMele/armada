@@ -10,6 +10,8 @@ The citable source for the mechanism. The flow lives on the Take Over a Job user
 
 The problem it solves: a Drone runs on a deliberately narrow toolset to stay focused. An engineer taking over needs the opposite. Without a handoff, the engineer abandons the Job and opens a fresh session by hand, losing the Drone's context along with it.
 
+**Pilot is not [Observe](observe.md).** Pilot ends autonomous execution and gives the worktree to a person; Observe reads a running Drone's turns and changes nothing about the Job. Wanting to see what a Drone is doing is Observe's question, and answering it with Pilot costs the Job its Drone.
+
 ## What it is
 
 Pilot moves a Job from Drone execution to human execution. A single MCP tool, `escape_hatch`, is injected into every Drone's toolset. Calling it stops autonomous progress and hands the Job to a person.

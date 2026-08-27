@@ -44,7 +44,7 @@ Six process classes.
 ```mermaid
 flowchart TB
     B["Bridge"]
-    P["fleet-bin doctor --json"]
+    P["armada doctor --json"]
     AS["Armada API"]
     F["Fleet"]
     DB[("SQLite")]
@@ -66,7 +66,7 @@ rejected. It would have moved `store`, `config` and `adapters` across a
 process boundary, needed a 13th crate, and was measured to cause checkpoint
 starvation: 44 MB of WAL in 7 s from one leaked cross-process read
 transaction. Doctor's blind spot, the whole argument for splitting, is
-closed instead by `fleet-bin doctor --json`, a short-lived probe process
+closed instead by `armada doctor --json`, a short-lived probe process
 Bridge spawns. See the decision on Fleet process topology and supervision,
 in Armada Decisions.
 
@@ -77,7 +77,7 @@ in Armada Decisions.
 | Drone | Claude Code CLI, headless | One Job | Fleet, after human approval |
 | Helm | Agent session | One conversation, per Manifest | The user, by selecting a Manifest in Bridge |
 | SQLite | File, WAL mode | Persistent | Fleet, via the `store` crate |
-| `fleet-bin doctor --json` | Rust, same binary as Fleet | ~253 ms warm. One scan, then it exits | Bridge, on demand |
+| `armada doctor --json` | Rust, same binary as Fleet | ~253 ms warm. One scan, then it exits | Bridge, on demand |
 
 **Why Fleet outlives Bridge.** Bridge and Fleet have independent lifetimes,
 which is the load-bearing fact of this section. Jobs keep progressing with
@@ -96,7 +96,8 @@ running" from "running and unreachable" — two states that look identical to
 a connection timeout.
 
 **Bridge never talks to a Drone.** Every Drone interaction is mediated by
-Fleet. Bridge holds one connection, to Armada API.
+Fleet. Bridge talks to one peer, Armada API — the Board's socket, and a second
+opened per Job for observing a Drone's turns.
 
 ---
 
@@ -377,7 +378,7 @@ Decisions.
 | `machine.yml` | Machine — per-install settings. Resources, budget, timing, interface and notification routing | `config` |
 | `armada.db` (+ `-wal`, `-shm`) | Manifests, Jobs, Workflow, Status | `store`, sole writer |
 | `audit.jsonl` | The 3-way actor-separated audit trail. Spans every repo, so it stays here | `fleet` |
-| `fleet.pid` | Pidfile, for crash reconciliation on startup | `fleet-bin` |
+| `fleet.pid` | Pidfile, for crash reconciliation on startup | `armada` |
 
 ### Per-repo — `<repo>/.armada/`
 
@@ -388,6 +389,8 @@ application directory.
 | --- | --- | --- |
 | `worktrees/<job-id>` | The Drone's checkout | `adapters`, via git2 |
 | `logs/<job-id>.jsonl` | That Job's structured log, redacted at three sinks | `fleet` |
+| `transcripts/<drone-id>.jsonl` | One row per event a Drone emitted | `fleet` |
+| `checks/<job-id>/<step-id>.<n>.log` | What one declared Check printed. `<n>` is its position in the step, which is also its key in `job_step_checks` — so a rerun replaces the file and the row together | `fleet` |
 
 **The deciding argument is discoverability.** Rung 3 of the Intervention
 Ladder is a raw terminal takeover in that worktree. Burying it under

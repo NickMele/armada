@@ -70,7 +70,6 @@ on purpose and makes the gate name what was waiting.
 
 - **[log-envelope-name]** Is "Log Envelope" admitted into the sanctioned lexicon as a proper noun, or is this document renamed to something the lexicon already allows? "Log Envelope" is descriptive and currently outside it.
 - **[log-envelope-bridge-ui-emitter]** Does `bridge-ui` emit log lines at all, or does it forward to `bridge-main`? A renderer writing to disk directly would be a second writer for one process class.
-- **[log-envelope-drone-transcript-shape]** How does a Drone's transcript relate to this envelope? Claude Code's `--output-format stream-json` is a different shape from this envelope. Whether it is wrapped per line or stored as a separate artifact keyed by `drone_id` is undecided.
 - **[log-envelope-error-count-source]** Are the error and warn counts shown on a job's log row computed per view, or carried on the job record?
 - **[log-envelope-pruned-log-row]** What does a job's log row say once the log has been pruned? Per-job logs are pruned on terminal status after the retention grace period, so a finished job older than that has a path pointing at nothing.
 
@@ -84,6 +83,11 @@ on purpose and makes the gate name what was waiting.
 - **[manifest-root-lockfile-ownership]** Does the root `armada.yml` *own* a shared lockfile it can gate, as opposed to merely being able to gate it? The nearest-ancestor rule settles gating and not exclusivity.
 - **[manifest-check-timeout-raise-or-lower]** May a per-Check timeout field raise the configured bound, or may it only lower it?
 - **[manifest-kit-merge-rules]** What are the Kit→Manifest merge rules for Skills, MCP and Sub agents? No merge strategy exists in the Configuration Settings registry for any of the three, and Kit and Drone disagree on Sub agents outright — Kit describes them as layered on top, Drone's Convoy table puts them under intersection.
+
+## docs/concepts/observe.md
+
+- **[observe-transcript-sharing]** May an observed transcript leave the machine, and what would have to be true first? Redaction covers credentials Armada brokered, and a transcript carries whatever the Drone read — so the bound today is that the viewer is the operator, on their own machine, reading a Job they dispatched. Attaching a transcript to an escalation, a bug report or a shared Job record would each remove that bound. `../spikes/003-does-headless-output-parse.md` is the worked example: its capture had to be redacted by hand before this repository could hold it, and what needed removing was the session's opening event.
+- **[observe-retention-against-the-log]** Does a Job's transcript live and die with its log, or on its own schedule? Per-Job logs are pruned on terminal status after a retention grace period, which would take the transcript with them — and the transcript is the larger artifact by a wide margin, so the setting that sizes one may be wrong for the other. `log_retention_days` does not exist yet, which is why this is answerable now rather than later.
 
 ## docs/concepts/pilot.md
 

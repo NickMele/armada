@@ -1,6 +1,7 @@
 # Armada's own Manifest — the real one, read by a running Fleet.
 #
-# This is the file `fleet-bin` loads when it is pointed at this repository. It
+# This is the file `armada serve` loads when it is pointed at this repository,
+# and the file `armada check` and `armada run` read to resolve a name. It
 # is not a sample and not a fixture: the two Checks below are the commands this
 # workspace is actually built and tested with, and a Job dispatched here runs
 # them verbatim.

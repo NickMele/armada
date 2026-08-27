@@ -147,3 +147,5 @@ can find them.
 | Building or changing a component | `armada-components` |
 | Writing a commit message | `commit-message` |
 | Writing anything a person reads on a surface | `armada-voice` |
+| Starting, checking or cleaning up a local Fleet | `armada-local` |
+| Reporting something Armada got wrong | `armada-bug` |

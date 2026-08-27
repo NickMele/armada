@@ -1,6 +1,6 @@
 # Armada's concepts
 
-Sixteen documents, one per concept, carried out of the design workspace. Each
+One document per concept, carried out of the design workspace. Each
 opens with a one-sentence **What it is** and then states the concept in full —
 its shape, its rules, and what is still undecided about it, filed under that
 document's own `## Open questions`.
@@ -28,5 +28,6 @@ assuming it is restated here.
 | [log-envelope.md](log-envelope.md) | The field contract every log line carries across Fleet, Bridge and Drone |
 | [machine.md](machine.md) | How this installation behaves — resources, timing, budget, notification routing |
 | [manifest.md](manifest.md) | Per-project config, backed by `armada.yml` |
+| [observe.md](observe.md) | Watching a Drone work while it keeps working — read-only, taking nothing over |
 | [pilot.md](pilot.md) | The escape hatch from a running Job into a human-driven Claude Code session |
 | [workflow.md](workflow.md) | The template a Job runs against — ordered steps, gates and retry policy |

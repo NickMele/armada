@@ -45,6 +45,8 @@ Run and edit a Manifest reads a project's Checks and Commands, runs any one of t
 
 **Redirect, Kill and Pause are all available on a healthy Drone.** A redirect is recorded on the Job.
 
+**Watching a healthy Drone work is [Observe](observe.md)**, opened on one Job and read-only. It is not on the Board and not on Active Jobs, which stay scanning surfaces.
+
 [Job Board](job-board.md) itself is a distinct concept with its own document, surfaced inside Bridge rather than a Bridge sub-page.
 
 ## Top-level shell

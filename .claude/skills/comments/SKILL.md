@@ -88,7 +88,7 @@ needs a practice doc and the module needs a pointer.
 
 Measured, so nobody has to measure it again: **about three lines in ten are
 comments**, and single blocks reach seventy consecutive lines. The largest are
-module headers in `fleet-bin`, `fleet`, `verification` and `store` — several of
+module headers in `armada`, `fleet`, `verification` and `store` — several of
 them longer than the code beneath them.
 
 Most of it is not a document. It is reasoning worth keeping, written at three

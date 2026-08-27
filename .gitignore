@@ -31,3 +31,12 @@ out/
 
 # Storybook builds from source on demand; the output is not a record of anything.
 storybook-static/
+
+# What a Fleet pointed at this repository writes into it. `.armada/workflows/`
+# is checked in and stays; a Job's log and its Drones' transcripts are records
+# of one run on one machine. `.armada/worktrees/` is already untracked here and
+# unignored, which is a leak this does not close.
+.armada/logs/
+.armada/transcripts/
+.armada/checks/
+.armada/worktrees/

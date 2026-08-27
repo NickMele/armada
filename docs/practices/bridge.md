@@ -116,7 +116,14 @@ you're doing something wrong. The rule is about what you do when you hit one.
 
 ## State and data flow
 
-Bridge holds exactly one connection, in the main process, to Armada API:
+Bridge talks to **one peer**, in the main process, to Armada API. That was
+"exactly one connection" until observing a Drone landed, and the number was
+never the point — the rule is that the renderer holds none and main holds all
+of them. A second socket is opened per Job to carry one Drone's turns, because
+the Board's channel is one bounded queue for every Job and transcript rows on it
+would evict state changes. See `protocol.md`, the second socket.
+
+The Board's connection:
 WebSocket for events, HTTP for queries and commands. That's it — there is no
 second connection, no per-component fetch, and **Bridge never talks to a
 Drone**. Every Drone interaction is mediated by Fleet; if a feature seems to
@@ -193,11 +200,24 @@ either." The fix is process, not vibes:
   not eyeballed.** Illegible legend was specific enough to be its own
   complaint, not "hard to use" in general — check contrast against the token
   set, not against whatever the editor's default background happened to be.
-- **Column order and width are stable across a render, not recomputed from
-  data that just arrived.** Flip-flopping columns means something derived
-  layout from the current data snapshot instead of from a stable schema —
-  keep column identity and order in state that doesn't change when new rows
-  arrive, and resize logic separate from data-arrival logic.
+- **Column order is stable across a render.** Column identity and order live
+  in state that does not change when new rows arrive, and resize logic stays
+  separate from data-arrival logic.
+
+  **Width is a different question here, and the v1 entry does not settle it.**
+  That complaint was logged against a ratatui terminal, where a column is a
+  count of characters and a recompute is a hard reflow of a fixed grid with no
+  layout engine underneath it. This app has one. Content-sized tracks are how
+  CSS grid is meant to be used, and forbidding them produces the opposite
+  defect — values truncated to an ellipsis beside empty space, which is what
+  fixed widths transcribed from a drawing actually shipped.
+
+  So: a column carries a **floor**, never a fixed width, and a list sizes its
+  columns **once for the whole list** rather than per row — `subgrid`, with the
+  tracks declared on the list and borrowed by each row. That is what keeps a
+  column aligned down the list without pinning it to a number somebody guessed.
+  A `minmax(0, 1fr)` filler absorbs the slack so growth lands in one deliberate
+  place rather than spreading every value apart.
 
 None of this is generic React advice offered because it's good practice in
 the abstract. It's the specific list of things that were measured to break

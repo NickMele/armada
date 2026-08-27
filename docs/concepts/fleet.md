@@ -18,7 +18,7 @@ Fleet has **no engineer-facing surface** beyond Doctor's module status. It is pu
 
 Every number below was measured on macOS 27.0 / 26A5406e, launchd 7.0.0.
 
-**Fleet and the API are one process.** `api` runs in-process with `fleet`; there is no second daemon. Doctor stays readable when Fleet dies through `fleet-bin doctor --json`, a short-lived probe process Bridge spawns.
+**Fleet and the API are one process.** `api` runs in-process with `fleet`; there is no second daemon. Doctor stays readable when Fleet dies through `armada doctor --json`, a short-lived probe process Bridge spawns.
 
 - **Startup.** Bridge bootstraps a **launchd job**, plist kept at `~/Library/Application Support/Armada/` — deliberately **outside** `~/Library/LaunchAgents`. launchd only auto-loads from the LaunchAgents directories, so a plist elsewhere is never seen at login: **"does not start at boot" becomes structural rather than configured off**. `KeepAlive={SuccessfulExit:false}`, `ThrottleInterval` 2, mode 644. launchd parents Fleet to PID 1 at spawn.
 - **Quitting the app.** Does **not** kill Fleet. Jobs keep progressing, independent of Bridge, because Fleet is not Electron's descendant.

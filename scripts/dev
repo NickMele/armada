@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+#
+# Armada, running against itself, from whatever is in the working tree.
+#
+# Four things in one order, and the order is the whole point: stop the Fleet
+# that is running, rebuild and reinstall `armada`, start Fleet, start Bridge.
+#
+# **Reinstalling is not optional and is the reason this exists.** `cargo
+# install` copies rather than links, so an edit does not reach the installed
+# command until it is run again — and a stale `armada` published protocol 2 to
+# a Bridge built from a tree that had gone to 3, which reads as a version-skew
+# screen rather than as a stale binary. Rebuilding one side and not the other
+# is the mistake this script exists to make impossible.
+#
+# `--debug` because this is the development loop. A release build is a minute
+# every time and buys nothing here; the debug binary is the same program.
+#
+# Fleet goes to the background and Bridge to the foreground, so Ctrl-C lands on
+# Bridge and the trap takes Fleet down with it. Quitting the window leaves no
+# daemon behind, which is what you want from a dev script and emphatically not
+# how Armada behaves in earnest — closing Bridge does not stop Fleet.
+
+set -euo pipefail
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$root"
+
+runtime="$HOME/Library/Application Support/Armada/fleet.json"
+log="${TMPDIR:-/tmp}/armada-fleet.log"
+
+say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+
+# 1. Stop the Fleet that is running, if one is.
+#
+# The runtime file is the only record of the pid. A file naming a pid nothing
+# holds is stale rather than an error — Fleet replaces one on start — so a
+# failed signal is not worth reporting.
+if [[ -f "$runtime" ]]; then
+  pid=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["pid"])' "$runtime" 2>/dev/null || true)
+  if [[ -n "${pid:-}" ]] && kill -0 "$pid" 2>/dev/null; then
+    say "Stopping Fleet, pid $pid"
+    kill -TERM "$pid"
+    # Its guard removes the runtime file on the way out. Wait for that rather
+    # than for the process, because the file is what Bridge reads.
+    for _ in $(seq 20); do [[ -f "$runtime" ]] || break; sleep 0.25; done
+  fi
+fi
+
+# 2. Rebuild and reinstall, so `armada` on the PATH is this working tree.
+say "Installing armada from $root"
+cargo install --path crates/armada --debug --locked --quiet
+
+# 3. Start Fleet, and wait for it to publish before starting anything that
+#    reads what it publishes. Bridge started first has nothing to read.
+say "Starting Fleet"
+armada serve . >"$log" 2>&1 &
+fleet=$!
+
+trap 'kill -TERM "$fleet" 2>/dev/null || true' EXIT INT TERM
+
+for _ in $(seq 40); do
+  [[ -f "$runtime" ]] && break
+  # A Fleet that refused says why on its own output and exits; there is no
+  # runtime file to wait for and no reason to keep waiting.
+  if ! kill -0 "$fleet" 2>/dev/null; then
+    say "Fleet refused to start"
+    cat "$log"
+    exit 1
+  fi
+  sleep 0.25
+done
+
+cat "$log"
+
+# 4. Bridge, in the foreground. `pnpm install` first only when it is needed —
+#    it is the slowest step and is usually already done.
+if [[ ! -d node_modules ]] || [[ package.json -nt node_modules ]]; then
+  say "Installing dependencies"
+  pnpm install
+fi
+
+say "Starting Bridge — Ctrl-C stops both"
+pnpm --filter @armada/desktop dev

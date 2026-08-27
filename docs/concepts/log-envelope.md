@@ -71,11 +71,25 @@ The envelope is the line shape. The sinks and their retention are already decide
 | Sink | Carries the envelope | Owned by |
 | --- | --- | --- |
 | `<repo>/.armada/logs/<job-id>.jsonl` | Yes, in full | `../contracts/system-architecture.md` section 7 |
+| `<repo>/.armada/transcripts/<drone-id>.jsonl` | No. A separate artifact, joined by `drone_id` | [Observe](observe.md) |
+| `<repo>/.armada/checks/<job-id>/<step-id>.<n>.log` | No. What one Check printed, referenced from its `job_step_checks` row | `../contracts/system-architecture.md` section 7 |
 | `~/Library/Application Support/Armada/audit.jsonl` | Yes, plus `actor` | `../contracts/system-architecture.md` section 7 |
 | WebSocket event stream | The ID fields only. Events are typed, not log lines | `../contracts/system-architecture.md` section 6 |
 | `job_events` in SQLite | The ID fields as columns | `../contracts/system-architecture.md` section 5 |
 
 **`Redactor` runs after the envelope is assembled, not before.** It already scrubs three sinks. Nothing in the envelope is exempt, and `fields` is where a leaked credential would most plausibly land.
+
+## A Drone's transcript is a separate artifact
+
+**A transcript is not wrapped into the envelope line by line.** It is written to `<repo>/.armada/transcripts/<drone-id>.jsonl`, one row per line, and the Job log keeps its envelope unchanged.
+
+Why: the transcript is far larger than everything else a Job emits and carries its own retention question, so wrapping it would make the Job log neither readable nor greppable — and a `jq` filter on `job_id` would return mostly turns.
+
+**A retry is a second `drone_id` under one `job_id`, so a retry gets its own file** rather than interleaving with the first. Nothing appends to a transcript whose Drone is gone.
+
+**The join is both a column and a line, and they answer different questions.** `assigned_drone` on the Job record names which Drone is on the Job — folded from the `drone.spawned` and `drone.exited` rows in `job_events`, so it is null again once the Drone is gone. The Job log line names the *file*, which the column does not: it carries `job_id`, `drone_id`, `step_id` and the transcript's path in `fields`, and it is what survives after the column has been cleared.
+
+The row shape and what is in it belong to [Observe](observe.md). This document owns only the fact that the two files are separate and how they join.
 
 ## Where it surfaces
 
@@ -95,6 +109,5 @@ Component row: **Job log reference**, in the Components registry.
 
 - **[log-envelope-name]** Is "Log Envelope" admitted into the sanctioned lexicon as a proper noun, or is this document renamed to something the lexicon already allows? "Log Envelope" is descriptive and currently outside it.
 - **[log-envelope-bridge-ui-emitter]** Does `bridge-ui` emit log lines at all, or does it forward to `bridge-main`? A renderer writing to disk directly would be a second writer for one process class.
-- **[log-envelope-drone-transcript-shape]** How does a Drone's transcript relate to this envelope? Claude Code's `--output-format stream-json` is a different shape from this envelope. Whether it is wrapped per line or stored as a separate artifact keyed by `drone_id` is undecided.
 - **[log-envelope-error-count-source]** Are the error and warn counts shown on a job's log row computed per view, or carried on the job record?
 - **[log-envelope-pruned-log-row]** What does a job's log row say once the log has been pruned? Per-job logs are pruned on terminal status after the retention grace period, so a finished job older than that has a path pointing at nothing.

@@ -313,6 +313,8 @@ Tracked per-Drone while alive, feeds Monitor Active Work's heartbeat and Respond
 
 PID, worktree path, current workflow step, elapsed time, turn count, resource usage, heartbeat timestamp.
 
+**The turns themselves are [Observe](observe.md)'s.** The heartbeat says a Drone is moving; watching what it is actually doing is a read off the transcript Fleet is already parsing, and it takes nothing over.
+
 ## Compliance & policing
 
 Fleet monitors a Drone for a known set of failure modes â€” Silence/Stalled, Claims-done-no-evidence, Claims-done-plain-text-bypass, Thrashing, Evidence gaming. Full detail lives on [Workflow](workflow.md), not duplicated here.
@@ -327,7 +329,7 @@ Not to be confused with the **Sub agents** configuration concept (Kit/Manifest â
 
 ## Escape hatch
 
-Every Drone carries one further injected tool, `escape_hatch`, which ends autonomous execution and hands the Job to a person. Full design lives on [Pilot](pilot.md).
+Every Drone carries one further injected tool, `escape_hatch`, which ends autonomous execution and hands the Job to a person. Full design lives on [Pilot](pilot.md). Reading what a Drone is doing without ending it is [Observe](observe.md).
 
 - **Drone-initiated.** The Drone calls it on its own as a stuck signal, in place of thrashing or claiming a completion it did not reach.
 - **Human-initiated.** Fleet marks the Job, then instructs the Drone to call it once the engineer confirms Pilot in Bridge.

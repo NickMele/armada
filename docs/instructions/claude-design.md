@@ -19,15 +19,19 @@ The repository's own gate refuses a document that is not in that index.
 **The journeys are files now**, at `docs/journeys/`, one per journey. They are
 no longer a database. Each carries its own `## Open questions` section.
 
-**The component registry is a file in the repository**,
-`packages/components/components.toml` — which components exist, their group,
-their kind and their status, and nothing else. No notes, no reasoning, no
-geometry. The component sheet here is the source of truth for how one is drawn
-and why.
+**There is no component registry any more.** `components.toml` was one, and it
+drifted in both directions at once: three rows claimed a component was in the
+kit when no story existed, and twelve stories existed that no row listed. A
+registry of what is built, maintained by hand beside the thing that is built, is
+a second answer to a question the code already answers.
 
-**Nothing sits between this project and the repository.** When a component is
-added or its status changes, propose the row as a diff, the same way a token is
-proposed.
+**Storybook is what exists.** A story imports the component the app imports, so
+the list of stories is the list of components by construction — there is nothing
+to keep in step. The component sheet here stays the source of truth for how one
+is drawn and why; what is built is read, not recorded.
+
+**Nothing sits between this project and the repository.** A component that
+should exist and does not is a GitHub issue, not a row.
 
 **The values moved.** Every token is `packages/tokens/src/*.css` in the
 repository, and the icon set is `packages/icons/icons.toml`. The `tokens/*.css`
@@ -61,7 +65,8 @@ is the built component, rendered from the code the app ships.
 |---|---|
 | What should this component be? | The component sheet, here |
 | What is it, as built? | Storybook, `packages/components` |
-| Which components exist, and their status | `packages/components/components.toml` |
+| Which components exist | Storybook — the stories are the list |
+| One that should exist and does not | A GitHub issue |
 
 **A third rendering is what drifted.** The React reference components and the
 click-through Bridge kit were a hand-maintained *copy* of the design, and were
@@ -136,7 +141,8 @@ row per proposal.
 |---|---|
 | Contracts, concepts, journeys, open questions, tokens, icons | The repository, `NickMele/armada` |
 | Milestones, capabilities and steps | GitHub issues |
-| Which components exist, and their status | `packages/components/components.toml` |
+| Which components exist | Storybook, `packages/components` |
+| A component that should exist and does not | GitHub issues |
 | How a component is drawn, and why | The component sheet here |
 
 **Never write an address into the design workspace anywhere that could reach the
@@ -193,9 +199,9 @@ token names, and an agent reads it directly. A written component spec between
 the sheet and the story would be a third description of one component, and the
 third description is the one that goes stale.
 
-**When a journey needs a component that does not exist**, propose a
-`components.toml` row for it with a status, and an open question for whatever it
-raises. Do not invent one on the spot.
+**When a journey needs a component that does not exist**, say so and propose it
+as a GitHub issue, with an open question for whatever it raises. Do not invent
+one on the spot, and do not record it anywhere as though it were built.
 
 **When prototyping produces a decision that contradicts the journey file, say so
 in the same turn** and give the replacement text. The prototype is not the

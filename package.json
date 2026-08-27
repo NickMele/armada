@@ -5,8 +5,11 @@
   "license": "MIT",
   "description": "Dispatch coding agents against git repositories.",
   "packageManager": "pnpm@11.6.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
+    "dev": "scripts/dev",
     "gate": "cargo xtask verify-foundations"
   }
 }

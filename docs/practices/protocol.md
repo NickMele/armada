@@ -70,10 +70,14 @@ required follow-up, not a someday-nice-to-have.
    change is).
 2. If the change is wire-breaking (see the minor/major table below), bump
    `version` in `protocol-version.toml`.
-3. Run the codegen step to regenerate the TypeScript types and version mirror
-   under `packages/`. *(The exact command isn't decided yet — see Open
-   Questions. Whatever it's called, it runs from the `ipc` source, not by
-   hand-editing the `.ts` output.)*
+3. Regenerate the TypeScript with `pnpm --filter @armada/desktop codegen`. It
+   needs `pnpm install` to have run and nothing else; it rewrites
+   `apps/desktop/src/shared/generated/` from `protocol-version.toml` and
+   `crates/core-model/domain/`, and prints one line per generated file plus any
+   registry row it could not render. **It emits the version mirror and the
+   enum vocabulary, not the DTO types** — nothing generates those from the
+   `ipc` source yet, so a shape change is still hand-mirrored on the TS side
+   and that is the gap `[protocol-codegen]` names.
 4. Run `cargo xtask verify-protocol`. It fails if step 3 was skipped or done
    against a stale build, or if anything still hard-codes the version.
 5. Commit the `ipc` source change and the regenerated files in the same
@@ -255,6 +259,54 @@ If your change touches the event stream, say explicitly whether it makes this
 better (bounds something, adds a resync signal) or worse (adds another
 unbounded queue, another place assuming delivery is complete).
 
+## The second socket: one Job's turns
+
+`GET /jobs/:job_id/observe` is a WebSocket upgrade, and it is the one query in
+`operations.toml` whose transport is the socket. It answers with the turns a
+Job's Drones have already taken and then continues with the ones that follow,
+so joining a Job already running takes one connection rather than a history
+call and a subscription that have to be stitched together.
+
+**Who reads it.** A person, through Bridge, on the machine Fleet is running on.
+`helm_access` is `No`: a Drone's whole transcript streamed into a Helm session
+stays in that session for the rest of it, and Helm has `get_drone` for the
+snapshot.
+
+**What it needs.** A running Fleet and a Job id. Nothing else — a Job with no
+transcript is served, and so is one whose Drone is gone.
+
+**What a viewer sees.** The first message is always `opened`, carrying the
+protocol version, the Job, whether a Drone is writing right now (`live`) and
+how many older rows the history left out (`skipped`, because the backfill is
+bounded). Then the history, oldest first, across every Drone the Job has had —
+a retry is a second `drone_id` under one `job_id` and both are the Job's
+history. Then the live rows. The connection ends with a `closed` message
+saying why, because a socket that simply stops is indistinguishable from one
+that broke.
+
+| What happened | What the viewer is told |
+| --- | --- |
+| A Drone is working | `opened` with `live: true`, the history, then rows, then `closed` / `drone_ended` when the Drone finishes |
+| The Job was never dispatched | `opened` with `live: false`, nothing, `closed` / `nothing_writing` |
+| Fleet restarted under a Drone that outlived it | The same. Fleet's writer does not reattach and `reconcile` escalates the Job as `interrupted`, so the history is whole and nothing is live |
+| The Job id names nothing | **404 before the upgrade**, through the error contract, at the moment they asked |
+
+**Back-pressure, and what is dropped.** Three bounds sit in a row and each is
+stated rather than silent. The transcript's file queue drops a row it cannot
+take and writes a `missed` row into the file among the rows it was lost
+between. The per-Job broadcast channel is drop-oldest, and a viewer that has
+fallen behind gets a `missed` message with the count. Neither can slow Fleet's
+line loop: the file queue is `try_send` and the channel's send is synchronous
+and never blocks, so **watching a Job cannot change its outcome**. What a slow
+viewer slows is its own socket task.
+
+**It is deliberately not `/events`.** That stream is one drop-oldest channel of
+fixed capacity carrying every Job, so transcript rows at Drone speed would
+evict the state changes Bridge draws the Board from — and an eviction there is
+not a lost row but a `Missed` and a full resync of every Job, paid
+continuously. This is the one place a per-Job subscription is right, and
+`docs/concepts/observe.md` is why.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file
@@ -266,6 +318,18 @@ protocol-adjacent change even though it never touches `ipc`: it's still a
 contract two independently-versioned binaries agree on ahead of any
 connection. Treat it with the same "what does an old reader do with an
 unrecognized field" discipline as the DTOs.
+
+**One route on the listener is not on this seam.** `/mcp` serves the Evidence
+tool to a Drone — the only way a Job's work is ever reported. It shares the
+port because a Drone reaches Fleet the same way Bridge does, and it shares
+nothing else: the peer is a process Fleet itself spawned, the vocabulary is
+MCP's rather than `ipc`'s DTOs, and the version negotiated is the MCP revision
+the client asks for rather than `protocol-version.toml`'s. So it is
+deliberately absent from `operations.toml` and from `SERVED`, and a row added
+for either would claim Bridge can call it. It also means the rule below does
+not cover it: the address is written into a Drone's `mcp.json` from `api`'s own
+constant, and that shared value is what stands between a typo and a Drone that
+can never report.
 
 **The route table is hand-written, and that's an accepted cost, not an
 oversight.** A typo in a route path is a runtime 404/500, not a compile error,

@@ -53,7 +53,7 @@ duplicate `adapters` or thinly wrap it. Grouping by surface rather than by
 capability is the shape that grew v1's `core` to 38,470 lines. Merging two
 crates later is an afternoon.
 
-**`fleet-bin doctor --json` invokes the probes** — a short-lived process Bridge spawns, neither Fleet nor a second daemon. Why: Doctor is already specified as a pull, on demand, holding no state, a shape that fits a process existing for a quarter of a second.
+**`armada doctor --json` invokes the probes** — a short-lived process Bridge spawns, neither Fleet nor a second daemon. Why: Doctor is already specified as a pull, on demand, holding no state, a shape that fits a process existing for a quarter of a second.
 
 | Measurement | Result |
 | --- | --- |
@@ -140,7 +140,7 @@ On a Fleet crash, auto-restart is attempted first; if that fails, Doctor shows F
 
 **Fleet against Armada API.** Fleet is the daemon. Armada API is the `api` crate, the transport Bridge reconnects to on reopen. Fleet's module answers whether the daemon is healthy; Armada API's answers whether Bridge can reach it.
 
-**They are one process.** `api` runs in-process with `fleet` — see [Fleet](fleet.md), Daemon Lifecycle. Doctor still reports while Fleet is down, through `fleet-bin doctor --json`, a short-lived probe Bridge spawns rather than a second daemon.
+**They are one process.** `api` runs in-process with `fleet` — see [Fleet](fleet.md), Daemon Lifecycle. Doctor still reports while Fleet is down, through `armada doctor --json`, a short-lived probe Bridge spawns rather than a second daemon.
 
 **Daemon, Armada Server and sidecar are retired names.** Fleet is the daemon and is the sidecar the original architecture decision named; the transport module is Armada API, matching the `api` crate. See `../contracts/system-architecture.md`.
 

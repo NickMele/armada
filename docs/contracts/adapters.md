@@ -97,11 +97,11 @@ adapter — which provider — and nothing else.**
   implementations need.
 - Each implementation in `adapters` owns its own config struct and
   deserializes its own block.
-- **`fleet-bin`, the composition root, is the only place that names a
+- **`armada`, the composition root, is the only place that names a
   concrete implementation.** It reads the provider tag, matches on it, and
   hands the remainder of that block to the implementation to parse.
 
-Everything above `fleet-bin` — `core-model`, `config`, `verification`,
+Everything above `armada` — `core-model`, `config`, `verification`,
 `checks-runner`, `fleet` — sees a trait object and never learns which
 provider is behind it.
 
@@ -110,7 +110,7 @@ provider is behind it.
 | Step | Where |
 | --- | --- |
 | A module implementing `Secrets`, with its own config struct | `adapters` |
-| One new arm in the provider match | `fleet-bin` |
+| One new arm in the provider match | `armada` |
 | One new legal value on **Secrets provider selection** | Guild schema |
 
 Nothing in `core-model`, `config`, `verification` or `fleet` changes.
@@ -118,7 +118,7 @@ Nothing in `core-model`, `config`, `verification` or `fleet` changes.
 assuming: the adapter rule promises no *core* change, not no change
 anywhere. The composition root is precisely the layer that is allowed to
 know every concrete type — naming implementations is its only job. A
-design where even `fleet-bin` did not change would require runtime plugin
+design where even `armada` did not change would require runtime plugin
 loading, which for a single-user single-binary system buys nothing and
 costs a dynamic-dispatch boundary nobody can typecheck.
 
