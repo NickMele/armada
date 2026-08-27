@@ -2990,24 +2990,8 @@ const EveryStepState = {
         elapsed: "6m 12s",
         gates: [{ command: "test", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }]
       },
-      {
-        id: "awaiting_human",
-        label: "awaiting_human",
-        labelIsAnIdentifier: true,
-        activity: "awaiting_human",
-        status: "awaiting_human",
-        elapsed: "1m 04s"
-      },
-      {
-        id: "retrying",
-        label: "retrying",
-        labelIsAnIdentifier: true,
-        activity: "retrying",
-        status: "retrying",
-        elapsed: "3m 41s",
-        verdict: "failed · failed a check",
-        verdictNamed: "failed"
-      },
+      { id: "awaiting_human", label: "awaiting_human", labelIsAnIdentifier: true, activity: "awaiting_human", status: "awaiting_human", elapsed: "1m 04s" },
+      { id: "retrying", label: "retrying", labelIsAnIdentifier: true, activity: "retrying", status: "retrying", elapsed: "3m 41s", verdict: "failed · failed a check", verdictNamed: "failed" },
       {
         id: "advanced",
         label: "advanced",
@@ -3026,9 +3010,7 @@ const EveryStepState = {
         activity: "stopped",
         status: "stopped",
         elapsed: "12m 30s",
-        gates: [
-          { command: "build", result: "failed · exit 0 → exit 101", icon: ShieldX, iconLabel: "failed" }
-        ]
+        gates: [{ command: "build", result: "failed · exit 0 → exit 101", icon: ShieldX, iconLabel: "failed" }]
       }
     ],
     pulsing: true
@@ -3126,12 +3108,64 @@ const AFailedCheckNamesItsOutput = {
     ]
   }
 };
+const FourJobsOverAndOneResumable = {
+  render: () => {
+    const done2 = { id: "implement", label: "Implement", activity: "advanced", status: "advanced", elapsed: "6m 48s" };
+    const failing = { command: "test · cargo test --workspace", result: "failed · exit 0 → exit 101", icon: ShieldX, iconLabel: "failed", outputPath: ".armada/jobs/job_91ab/checks/test.log" };
+    const rails = [
+      [
+        "escalated",
+        "over, and resumable — a redirect resumes exactly this step",
+        { id: "verify", label: "Run tests", activity: "stopped", status: "stopped", current: true, elapsed: "12m 30s", gates: [failing] }
+      ],
+      [
+        "completed_failed",
+        "over, and a dead end. Nothing resumes it",
+        { id: "verify", label: "Run tests", activity: "failed", status: "failed", current: true, elapsed: "12m 30s", gates: [failing] }
+      ],
+      [
+        "killed",
+        "frozen where it stood, and unhued — an operator act carries no verdict",
+        {
+          id: "verify",
+          label: "Run tests",
+          activity: "killed",
+          status: "killed",
+          current: true,
+          elapsed: "4m 09s",
+          gates: [{ command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }]
+        }
+      ],
+      [
+        "completed_success",
+        "frozen, every step advanced. The Job's status says so",
+        {
+          id: "verify",
+          label: "Run tests",
+          activity: "advanced",
+          status: "done",
+          current: true,
+          elapsed: "9m 51s",
+          gates: [{ command: "test · cargo test --workspace", result: "passed", icon: ShieldCheck, iconLabel: "passed" }]
+        }
+      ]
+    ];
+    return /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: "var(--space-6)" }, children: rails.map(([status, reads, step]) => /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "var(--space-2)" }, children: [
+      /* @__PURE__ */ jsxs("span", { style: { fontSize: "var(--text-2xs)", color: "var(--fg-subtle)" }, children: [
+        /* @__PURE__ */ jsx("span", { style: { fontFamily: "var(--font-mono)" }, children: status }),
+        ` — ${reads}`
+      ] }),
+      /* @__PURE__ */ jsx(WorkflowRail, { steps: [done2, step] })
+    ] }, status)) });
+  }
+};
 const __vite_glob_0_16 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AFailedCheckNamesItsOutput,
   AVerdictBesideTheState,
   EveryStepState,
   Failed: Failed$1,
+  FourJobsOverAndOneResumable,
   HardPrerequisite,
   Killed: Killed$3,
   LabelsMissing,
@@ -5552,10 +5586,57 @@ const AJudgeRefusedACriterion = {
     }
   ) })
 };
+const KilledWhileTheStepWasRunning = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    AFailedJobADeadEndReadAsOne,
+    {
+      heading: {
+        status: "killed",
+        statusIcon: Power,
+        statusLabel: "killed",
+        headline: "Cache the manifest read",
+        jobId: "job_91ab",
+        fields: [
+          { label: "Step", value: "3 of 4", mono: true },
+          { label: "at", value: "verify", mono: true, continues: true },
+          { label: "Elapsed", value: "22m 41s", mono: true },
+          { label: "Model", value: "sonnet", mono: true }
+        ]
+      },
+      why: /* @__PURE__ */ jsx(Fragment, { children: "stopped at Run tests" }),
+      steps: [
+        { id: "plan", label: "Plan the change", activity: "advanced", status: "advanced", elapsed: "2m 14s" },
+        { id: "implement", label: "Implement", activity: "advanced", status: "advanced", elapsed: "6m 48s" },
+        {
+          id: "verify",
+          label: "Run tests",
+          // `running` on the wire, `killed` on the rail. The Job's status is
+          // read, not a state Fleet does not have.
+          activity: "killed",
+          status: "killed",
+          current: true,
+          elapsed: "4m 09s",
+          gates: [
+            {
+              command: "test · cargo test --workspace",
+              result: "not reached",
+              icon: ShieldMinus,
+              iconLabel: "Not reached"
+            }
+          ]
+        },
+        { id: "handoff", label: "Summarise", activity: "not_started", status: "not_started" }
+      ],
+      outputAbsent: "Each check names its output file on its own row. Nothing serves the contents.",
+      workAbsent: "Nothing serves this Job's paths, its branch or its brief."
+    }
+  ) })
+};
 const __vite_glob_0_43 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AJudgeRefusedACriterion,
   FailedJob,
+  KilledWhileTheStepWasRunning,
   StoppedAndAsked,
   default: meta$7
 }, Symbol.toStringTag, { value: "Module" }));

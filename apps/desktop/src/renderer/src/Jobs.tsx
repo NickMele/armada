@@ -79,6 +79,7 @@ import { GitBranch, Layers } from "lucide-react";
 import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
 import type { JobSummary, WorkflowSummary } from "../../shared/protocol";
 import { instant, span } from "./duration";
+import { activityFor } from "./frozen";
 import { readingOf } from "./reading";
 
 /**
@@ -288,7 +289,12 @@ function Row({
         <StepBar
           total={Math.max(steps.length, 1)}
           current={at + 1}
-          activity={activityOf(job.status)}
+          // The Job's status, one level down. The rail reads the same mapping
+          // for a terminal Job — a row and a rail saying different things about
+          // one step is the drift keeping it in two files would produce.
+          // Anything the mapping does not name leaves the bar unhued, which is
+          // what the component does for `killed` and `retrying` everywhere else.
+          activity={activityFor(job.status)}
           label={
             job.current_step_id === undefined
               ? `Not started, ${steps.length} steps`
@@ -336,23 +342,6 @@ function Row({
       }
     />
   );
-}
-
-/**
- * The step bar's activity, from the Job's status.
- *
- * **Not a second vocabulary**: the four values are `StepBar`'s own prop, and
- * the mapping is the one sentence the status grammar states about a list row —
- * the current segment takes the Job's hue, and everything else is the bar's
- * own. Anything not one of these four leaves the bar unhued, which is what the
- * component does for `killed` and `retrying` everywhere else.
- */
-function activityOf(status: string): "running" | "failed" | "advanced" | "killed" | undefined {
-  if (status === "running") return "running";
-  if (status === "completed_failed") return "failed";
-  if (status === "completed_success") return "advanced";
-  if (status === "killed") return "killed";
-  return undefined;
 }
 
 /**

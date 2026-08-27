@@ -303,64 +303,16 @@ export const ServedSteps: Story = {
 export const EveryStepState: Story = {
   args: {
     steps: [
-      {
-        id: "not_started",
-        label: "not_started",
-        labelIsAnIdentifier: true,
-        activity: "not_started",
-        status: "not_started",
-        gates: [{ command: "build", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }],
-      },
-      {
-        id: "running",
-        label: "running",
-        labelIsAnIdentifier: true,
-        activity: "running",
-        status: "running",
-        current: true,
-        elapsed: "6m 12s",
-        gates: [{ command: "test", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }],
-      },
-      {
-        id: "awaiting_human",
-        label: "awaiting_human",
-        labelIsAnIdentifier: true,
-        activity: "awaiting_human",
-        status: "awaiting_human",
-        elapsed: "1m 04s",
-      },
-      {
-        id: "retrying",
-        label: "retrying",
-        labelIsAnIdentifier: true,
-        activity: "retrying",
-        status: "retrying",
-        elapsed: "3m 41s",
-        verdict: "failed · failed a check",
-        verdictNamed: "failed",
-      },
-      {
-        id: "advanced",
-        label: "advanced",
-        labelIsAnIdentifier: true,
-        activity: "advanced",
-        status: "advanced",
-        elapsed: "2m 14s",
-        verdict: "passed",
-        verdictNamed: "passed",
-        gates: [{ command: "fmt", result: "passed", icon: ShieldCheck, iconLabel: "passed" }],
-      },
-      {
-        id: "stopped",
-        label: "stopped",
-        labelIsAnIdentifier: true,
-        activity: "stopped",
-        status: "stopped",
-        elapsed: "12m 30s",
-        gates: [
-          { command: "build", result: "failed · exit 0 → exit 101", icon: ShieldX, iconLabel: "failed" },
-        ],
-      },
+      { id: "not_started", label: "not_started", labelIsAnIdentifier: true, activity: "not_started", status: "not_started",
+        gates: [{ command: "build", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }] },
+      { id: "running", label: "running", labelIsAnIdentifier: true, activity: "running", status: "running", current: true, elapsed: "6m 12s",
+        gates: [{ command: "test", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }] },
+      { id: "awaiting_human", label: "awaiting_human", labelIsAnIdentifier: true, activity: "awaiting_human", status: "awaiting_human", elapsed: "1m 04s" },
+      { id: "retrying", label: "retrying", labelIsAnIdentifier: true, activity: "retrying", status: "retrying", elapsed: "3m 41s", verdict: "failed · failed a check", verdictNamed: "failed" },
+      { id: "advanced", label: "advanced", labelIsAnIdentifier: true, activity: "advanced", status: "advanced", elapsed: "2m 14s", verdict: "passed", verdictNamed: "passed",
+        gates: [{ command: "fmt", result: "passed", icon: ShieldCheck, iconLabel: "passed" }] },
+      { id: "stopped", label: "stopped", labelIsAnIdentifier: true, activity: "stopped", status: "stopped", elapsed: "12m 30s",
+        gates: [{ command: "build", result: "failed · exit 0 → exit 101", icon: ShieldX, iconLabel: "failed" }] },
     ],
     pulsing: true,
   },
@@ -494,5 +446,54 @@ export const AFailedCheckNamesItsOutput: Story = {
         ],
       },
     ],
+  },
+};
+
+/**
+ * The four Jobs that are over, and the one stop that is not a dead end.
+ *
+ * **The step reads `running` on the wire in three of these four.**
+ * `job-statuses.toml` freezes the step machine at every terminal status and
+ * declares no step state for it: the step keeps what it had, and the Job being
+ * terminal is what says everything is over. So the rail reads a step's activity
+ * against its Job's status — a rendering rule Bridge holds in `frozen.ts`, not
+ * a seventh state, and nothing here reaches the wire.
+ *
+ * **`escalated` is the one that is not terminal.** A redirect or a restart
+ * resumes exactly its step, so it keeps `flag` and `--step-stopped-bg` while
+ * the dead end takes hued `x` and `--step-failed-bg`; drawing the two alike
+ * would invite a control that cannot work. No row carries a duration that
+ * moves, and a frozen row's word is the Job's own verb — `enum-verbs.toml` has
+ * no `step_state` rows, and the Job's status holds the fact that it is over.
+ */
+export const FourJobsOverAndOneResumable: StoryObj = {
+  render: () => {
+    const done: WorkflowRailStep = { id: "implement", label: "Implement", activity: "advanced", status: "advanced", elapsed: "6m 48s" };
+    const failing = { command: "test · cargo test --workspace", result: "failed · exit 0 → exit 101", icon: ShieldX, iconLabel: "failed", outputPath: ".armada/jobs/job_91ab/checks/test.log" };
+    // The Job's status, what it means for the step, and the step as `railOf` builds it there.
+    const rails: [string, string, WorkflowRailStep][] = [
+      ["escalated", "over, and resumable — a redirect resumes exactly this step",
+        { id: "verify", label: "Run tests", activity: "stopped", status: "stopped", current: true, elapsed: "12m 30s", gates: [failing] }],
+      ["completed_failed", "over, and a dead end. Nothing resumes it",
+        { id: "verify", label: "Run tests", activity: "failed", status: "failed", current: true, elapsed: "12m 30s", gates: [failing] }],
+      ["killed", "frozen where it stood, and unhued — an operator act carries no verdict",
+        { id: "verify", label: "Run tests", activity: "killed", status: "killed", current: true, elapsed: "4m 09s",
+          gates: [{ command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }] }],
+      ["completed_success", "frozen, every step advanced. The Job's status says so",
+        { id: "verify", label: "Run tests", activity: "advanced", status: "done", current: true, elapsed: "9m 51s",
+          gates: [{ command: "test · cargo test --workspace", result: "passed", icon: ShieldCheck, iconLabel: "passed" }] }],
+    ];
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+        {rails.map(([status, reads, step]) => (
+          <div key={status} style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+            <span style={{ fontSize: "var(--text-2xs)", color: "var(--fg-subtle)" }}>
+              <span style={{ fontFamily: "var(--font-mono)" }}>{status}</span>{` — ${reads}`}
+            </span>
+            <WorkflowRail steps={[done, step]} />
+          </div>
+        ))}
+      </div>
+    );
   },
 };

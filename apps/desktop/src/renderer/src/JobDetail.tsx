@@ -37,9 +37,14 @@ import {
   JOB_LIFECYCLE,
   JOB_STATUS,
 } from "../../shared/generated/vocabulary";
-import type { JobSummary, ManifestSummary, WorkflowSummary } from "../../shared/protocol";
+import type {
+  JobDetail as JobWhole,
+  JobSummary,
+  ManifestSummary,
+  WorkflowSummary,
+} from "../../shared/protocol";
 import { factsOf } from "./facts";
-import { railOf } from "./rail";
+import { railOf, stoppedAt } from "./rail";
 import { readingOf } from "./reading";
 import { whyNoWork, workOf } from "./work";
 
@@ -212,7 +217,7 @@ export function JobDetail({
     return (
       <AFailedJobADeadEndReadAsOne
         heading={heading}
-        why={whyOf(job)}
+        why={whyOf(job, whole)}
         steps={rail}
         stepsAbsent={stepsAbsent}
         work={workOf(job, whole, manifest, true)}
@@ -413,21 +418,53 @@ const MENU_LABEL: Record<JobAct, string> = {
 const FACE: readonly JobAct[] = ["redispatch", "kill_job"];
 
 /**
- * Why a Job stopped: the reason's own verb, and the criteria it still owes.
- * The label above it supplies the grammar, so no sentence is composed around a
- * word the registry chose.
+ * Why a Job stopped: the reason's own verb, the criteria it still owes, and
+ * the step it stopped at with what the gate found there. The label above it
+ * supplies the grammar, so no sentence is composed around a word the registry
+ * chose.
+ *
+ * **Where it stopped is stated even where no reason was stored.** Four of the
+ * five statuses this screen draws store none — a failed Job, a killed one, a
+ * rejected one and a superseded one all arrive with `reason` absent — and
+ * without the step they say only that something ended. `stoppedAt` reads the
+ * step and its Check runs, which are served; nothing here is inferred and
+ * nothing is composed beyond the separators the rail already uses.
  */
-function whyOf(job: JobSummary) {
+function whyOf(job: JobSummary, whole: JobWhole | null) {
   const reason = escalation(job);
   const owed = job.reason?.criteria_owed ?? [];
-  if (reason?.verb == null) return undefined;
+  const at = whole === null ? undefined : stoppedAt(whole);
+  if (reason?.verb == null && at === undefined) return undefined;
   return (
     <>
-      {reason.verb}
-      {owed.length === 0 ? null : (
+      {reason?.verb == null ? null : (
         <>
-          {" · owes "}
-          <span className="mono">{owed.join(", ")}</span>
+          {reason.verb}
+          {owed.length === 0 ? null : (
+            <>
+              {" · owes "}
+              <span className="mono">{owed.join(", ")}</span>
+            </>
+          )}
+          {at === undefined ? null : " · "}
+        </>
+      )}
+      {at === undefined ? null : (
+        <>
+          {"stopped at "}
+          {at.labelIsAnIdentifier ? <span className="mono">{at.label}</span> : at.label}
+          {at.check === undefined ? null : (
+            <>
+              {" · "}
+              <span className="mono">{at.check}</span>
+            </>
+          )}
+          {at.outputPath === undefined ? null : (
+            <>
+              {" · "}
+              <span className="mono">{at.outputPath}</span>
+            </>
+          )}
         </>
       )}
     </>

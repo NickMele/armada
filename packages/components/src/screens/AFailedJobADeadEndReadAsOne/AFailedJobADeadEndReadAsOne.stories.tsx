@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { LucideIcon } from "lucide-react";
-import { CircleCheck, CircleX, File, Folder, GitBranch, OctagonAlert, ShieldCheck, ShieldX, X } from "lucide-react";
+import { CircleCheck, CircleX, File, Folder, GitBranch, OctagonAlert, Power, ShieldCheck, ShieldMinus, ShieldX, X } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
 import type { WorkflowRailStep } from "../../compositions/WorkflowRail/WorkflowRail";
 import { AFailedJobADeadEndReadAsOne } from "./AFailedJobADeadEndReadAsOne";
@@ -303,6 +303,71 @@ export const AJudgeRefusedACriterion: Story = {
           { id: "handoff", label: "Summarise", activity: "not_started", status: "not started" },
         ]}
         outputAbsent="Each check names its output file on its own row. Nothing serves the contents."
+      />
+    </div>
+  ),
+};
+
+/**
+ * **Killed while the step was running.** `job_steps.state` still says `running`
+ * on the wire and that is correct — `job-statuses.toml` freezes the step
+ * machine at `killed` and declares no step state for it, because the Job being
+ * terminal is what says everything is over. The rail draws the frozen step
+ * rather than the live one: `power`, **no hue**, and a duration that has
+ * stopped.
+ *
+ * The exclusion is the point. A killed step must not read as a system failure,
+ * so it takes neither the failed row's hue nor its surface — and it is not
+ * `stopped` either, which would say a redirect or a restart resumes it.
+ *
+ * **"Why this stopped" is the step, not a stored reason.** `killed` stores
+ * none, so without the step this region would say only that something ended.
+ * The step's name, the Check that did not pass and the file it wrote are all
+ * served, and Bridge names them in that order.
+ */
+export const KilledWhileTheStepWasRunning: Story = {
+  render: () => (
+    <div className="armada-screen">
+      <AFailedJobADeadEndReadAsOne
+        heading={{
+          status: "killed",
+          statusIcon: Power,
+          statusLabel: "killed",
+          headline: "Cache the manifest read",
+          jobId: "job_91ab",
+          fields: [
+            { label: "Step", value: "3 of 4", mono: true },
+            { label: "at", value: "verify", mono: true, continues: true },
+            { label: "Elapsed", value: "22m 41s", mono: true },
+            { label: "Model", value: "sonnet", mono: true },
+          ],
+        }}
+        why={<>stopped at Run tests</>}
+        steps={[
+          { id: "plan", label: "Plan the change", activity: "advanced", status: "advanced", elapsed: "2m 14s" },
+          { id: "implement", label: "Implement", activity: "advanced", status: "advanced", elapsed: "6m 48s" },
+          {
+            id: "verify",
+            label: "Run tests",
+            // `running` on the wire, `killed` on the rail. The Job's status is
+            // read, not a state Fleet does not have.
+            activity: "killed",
+            status: "killed",
+            current: true,
+            elapsed: "4m 09s",
+            gates: [
+              {
+                command: "test · cargo test --workspace",
+                result: "not reached",
+                icon: ShieldMinus,
+                iconLabel: "Not reached",
+              },
+            ],
+          },
+          { id: "handoff", label: "Summarise", activity: "not_started", status: "not_started" },
+        ]}
+        outputAbsent="Each check names its output file on its own row. Nothing serves the contents."
+        workAbsent="Nothing serves this Job's paths, its branch or its brief."
       />
     </div>
   ),

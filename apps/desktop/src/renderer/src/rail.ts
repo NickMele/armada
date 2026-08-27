@@ -29,6 +29,7 @@ import type {
 } from "../../shared/protocol";
 import { span } from "./duration";
 import { ordered } from "./facts";
+import { frozenBeneath } from "./frozen";
 
 /**
  * The rail, from the served steps.
@@ -45,23 +46,86 @@ import { ordered } from "./facts";
  * row draws what arrived and never composes a name — and it renders in mono
  * only when what arrived *is* the id, which is the one case a reader needs
  * told apart.
+ *
+ * **A step's activity reads against its Job's status, not only its own state.**
+ * `job-statuses.toml` freezes the step machine at every terminal status and
+ * declares no step state for it, so a step still reading `running` beneath a
+ * Job that is over is frozen and draws as frozen. `frozen.ts` holds that rule
+ * and nothing about it reaches the wire.
  */
 export function railOf(whole: JobWhole, now: number): WorkflowRailStep[] {
-  return ordered(whole).map((step) => ({
-    id: step.step_id,
+  return ordered(whole).map((step) => {
+    const frozen = frozenBeneath(whole.job.status, step.state);
+    return {
+      id: step.step_id,
+      label: step.label,
+      labelIsAnIdentifier: step.label === step.step_id || undefined,
+      activity: frozen?.activity ?? activityOf(step.state),
+      status: frozen?.word ?? stateOf(step),
+      current: step.step_id === whole.job.current_step_id || undefined,
+      elapsed: took(step, now, frozen !== undefined),
+      verdict: step.last_verdict === undefined ? undefined : verdictOf(step),
+      verdictNamed: step.last_verdict?.named,
+      gates: gatesOf(step),
+      verdicts: verdictsOf(step, whole.acceptance_criteria),
+      ungatedLabel: ungatedOf(step),
+      evidence: { label: "" },
+    };
+  });
+}
+
+/** Where a Job that is over stopped, and what the gate found there. */
+export type StoppedAt = {
+  /** The step's name, as Fleet gave it. */
+  label: string;
+  /** Whether that name is the `step_id`, so it renders in mono. */
+  labelIsAnIdentifier: boolean;
+  /** The Check that did not pass, and what it did. Absent where none did. */
+  check?: string;
+  /** Where that Check wrote its output. Absent where it wrote no file. */
+  outputPath?: string;
+};
+
+/**
+ * Which step the Job stopped at, and the Check that stopped it there.
+ *
+ * The rail already draws all of this a row at a time. What a Job that is over
+ * owes is the one line saying where it ended, which is the first thing read on
+ * the dead-end screen — and every part of it is served: the step's label, the
+ * run's outcome, and the file it wrote.
+ *
+ * **The step is Fleet's, not a guess.** `current_step_id` is frozen at the
+ * failed step, so a Job whose current step Fleet cannot name says nothing here
+ * rather than picking a row off the states.
+ */
+export function stoppedAt(whole: JobWhole): StoppedAt | undefined {
+  const step = ordered(whole).find((held) => held.step_id === whole.job.current_step_id);
+  if (step === undefined) return undefined;
+  const run = step.check_runs.find(didNotPass);
+  const said = run === undefined ? undefined : resultOf(run);
+  return {
     label: step.label,
-    labelIsAnIdentifier: step.label === step.step_id || undefined,
-    activity: activityOf(step.state),
-    status: stateOf(step),
-    current: step.step_id === whole.job.current_step_id || undefined,
-    elapsed: took(step, now),
-    verdict: step.last_verdict === undefined ? undefined : verdictOf(step),
-    verdictNamed: step.last_verdict?.named,
-    gates: gatesOf(step),
-    verdicts: verdictsOf(step, whole.acceptance_criteria),
-    ungatedLabel: ungatedOf(step),
-    evidence: { label: "" },
-  }));
+    labelIsAnIdentifier: step.label === step.step_id,
+    check: run === undefined ? undefined : said === undefined ? run.name : `${run.name} · ${said}`,
+    outputPath: run?.output_path,
+  };
+}
+
+/** The token the one passing outcome carries. Named once, like `SUCCEEDED`. */
+const PASSED = "--status-completed-success";
+
+/**
+ * A Check that did not pass, read off its token rather than its spelling —
+ * status tokens are the pass and fail palette, so the one that means passed is
+ * what a pass is.
+ *
+ * **A spelling the registry does not hold is claimed neither way.** Calling an
+ * unknown outcome a failure would name a Check as the reason a Job ended on no
+ * evidence at all.
+ */
+function didNotPass(run: CheckRun): boolean {
+  const reading = CHECK_OUTCOME[run.outcome];
+  return reading !== undefined && reading.statusToken !== PASSED;
 }
 
 /**
@@ -172,9 +236,16 @@ function ungatedOf(step: StepDetail): string | undefined {
  * `running` and does not move again while it works, so the served pair would
  * freeze at the moment work started. `now` is injected, which is the same end
  * the whole-Job elapsed already takes.
+ *
+ * **A frozen step measures to nothing that moves.** Beneath a terminal Job the
+ * step is over whatever its state says, so the span ends at the last instant
+ * the record carries — and where the record carries only one instant, the row
+ * shows no duration at all. A climbing elapsed under a Job that ended is the
+ * loudest way a rail reads wrong, and a figure measured to now would keep
+ * being wrong every second after it was drawn.
  */
-function took(step: StepDetail, now: number): string | undefined {
-  if (step.state === "running") return span(step.entered_at, now) ?? undefined;
+function took(step: StepDetail, now: number, frozen: boolean): string | undefined {
+  if (step.state === "running" && !frozen) return span(step.entered_at, now) ?? undefined;
   if (step.state === "not_started" || step.entered_at === step.updated_at) return undefined;
   return span(step.entered_at, step.updated_at) ?? undefined;
 }
