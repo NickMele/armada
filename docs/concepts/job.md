@@ -125,6 +125,42 @@ flowchart LR
   class P worked
 ```
 
+## Recovering an escalated Job
+
+Four acts reach an escalated Job and **none of them is another one wearing a
+different name.** They are ordered here by how much they take away.
+
+| Act | What the Drone is | What survives | Where it lands |
+|---|---|---|---|
+| **Redirect** | Alive and idle | The session, the worktree, every step so far | `running`, the same step |
+| **Restart a step** | Gone | The worktree and the branch; earlier steps' work | `running`, the same step, a new Drone |
+| **Redispatch** | Irrelevant | Nothing. A new Job carries a reference back | A replacement at the approval gate |
+| **Pilot** | Terminated | The worktree, handed to a person | `piloted` |
+
+**An escalated Job keeps its Drone.** `job-statuses.toml` says so —
+`drone_process = "Alive, idle. Gone only on interrupted"` — and the liveness
+clock suspends with it, because a Drone waiting on a person has no activity by
+construction and an unsuspended clock would escalate every open gate as
+`stalled`. That is what makes a redirect cost no respawn: the process is there,
+holding its session, and an instruction is a turn injected into it.
+
+**Each act must not silently become the next one down.** A redirect that
+respawns is a restart that threw away the session. A restart that re-runs the
+earlier steps is a redispatch that lied about its cost. The distinctions are the
+reason there are four rather than one, and each one down loses something the one
+above it kept.
+
+**Which act applies is decided by the Drone, not by the person.** Redirect needs
+one alive; restart is what exists when it is gone. A surface that offers both
+regardless is offering one that will fail.
+
+**Where a step-level escalation pays off.** Only a step-level trigger reaches a
+step's `last_verdict`, so only a step-level escalation names the step that
+stopped — and naming it is what makes restarting or redirecting *that step*
+coherent. A Job-level escalation has no step to resume, which is why
+`interrupted` and `resource_exhausted` leave redispatch and Pilot as the only
+moves.
+
 **How a Job ends** — every edge into a terminal.
 
 ```mermaid
