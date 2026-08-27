@@ -72,6 +72,7 @@ import type { JobRowField } from "@armada/components";
 import { Layers } from "lucide-react";
 
 import type { JobSummary, WorkflowSummary } from "../../shared/protocol";
+import { instant } from "./duration";
 import { readingOf } from "./reading";
 
 /**
@@ -80,6 +81,24 @@ import { readingOf } from "./reading";
  * it left out, which is the honest half of the same rule.
  */
 const DRAWN = 200;
+
+/**
+ * Newest first. A created Job is folded onto whichever end the caller put it
+ * — the store's own order is an implementation detail, not a promise — so the
+ * list orders itself rather than trusting arrival order to stay right.
+ *
+ * A Job whose `created_at` will not parse sorts last, not first: a corrupt
+ * date must not shove real Jobs off the bounded window above.
+ */
+export function newestFirst(jobs: readonly JobSummary[]): JobSummary[] {
+  return [...jobs].sort((a, b) => {
+    const left = instant(a.created_at);
+    const right = instant(b.created_at);
+    if (left === null) return right === null ? 0 : 1;
+    if (right === null) return -1;
+    return right - left;
+  });
+}
 
 export type JobsProps = {
   jobs: readonly JobSummary[];
@@ -111,7 +130,7 @@ export function Jobs({
   onApprove,
   onCopied,
 }: JobsProps) {
-  const bounded = jobs.slice(0, DRAWN);
+  const bounded = newestFirst(jobs).slice(0, DRAWN);
   const drawn = bounded.filter((job) => readingOf(job).as === "badge");
   const undrawable = bounded.filter((job) => readingOf(job).as !== "badge");
 
