@@ -24,12 +24,28 @@
 // existed and the owner decided otherwise. A proposal naming no model still
 // gets the configured default at the Fleet boundary.
 
-import { useEffect, useState } from "react";
-import { Button, Card, CardContent, CardFooter, CardHeader, CardTitle, Checkbox, Input, Select, Textarea } from "@armada/components";
+import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent, ClipboardEvent } from "react";
+import {
+  AttachmentChip,
+  Button,
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  Input,
+  Select,
+  Textarea,
+} from "@armada/components";
 
 import { URGENCIES } from "../../shared/generated/vocabulary";
 import type { Draft } from "../../shared/bridge";
 import type { ManifestSummary, ModelChoices, WorkflowSummary } from "../../shared/protocol";
+
+/** One staged file, as the composer holds it before `propose()` sends it on. */
+type StagedAttachment = { path: string; filename: string; mimeType: string };
 
 /**
  * A person filling in this form by hand is the `manual` origin. The other three
@@ -59,6 +75,10 @@ export function Composer({ workflows, manifest, models, disabled, onPropose }: C
   const [urgency, setUrgency] = useState(URGENCIES[0] ?? "");
   const [atomic, setAtomic] = useState(false);
   const [tried, setTried] = useState(false);
+  const [attachments, setAttachments] = useState<StagedAttachment[]>([]);
+  // The hidden file input the "Attach" button clicks through. A ref rather
+  // than state because nothing here reads its value; `onChange` does.
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Selected as soon as the connection answers, and only while nothing has been
   // chosen — a person who picked something keeps it when the roster is re-read.
@@ -80,6 +100,43 @@ export function Composer({ workflows, manifest, models, disabled, onPropose }: C
   const emptyModel = model === "";
   const refused = emptyTitle || emptyBrief || emptyWorkflow || emptyManifest || emptyModel;
 
+  /**
+   * One file staged and appended to `attachments`. Shared by the picker and
+   * a pasted screenshot — both hand this the same three facts and differ
+   * only in where the bytes came from. Staged before the Job exists, because
+   * there is no Job id yet to key storage on; `propose()` carries the path.
+   */
+  async function stage(file: File): Promise<void> {
+    const bytes = await file.arrayBuffer();
+    const { path } = await window.armada.stageAttachment(bytes, file.name, file.type);
+    setAttachments((current) => [...current, { path, filename: file.name, mimeType: file.type }]);
+  }
+
+  function onFilesPicked(event: ChangeEvent<HTMLInputElement>): void {
+    const files = event.target.files;
+    if (files !== null) for (const file of Array.from(files)) void stage(file);
+    // Cleared so picking the same file again still fires `onChange`.
+    event.target.value = "";
+  }
+
+  /**
+   * A screenshot pasted straight into the Brief field, without a trip to the
+   * file picker — the case a bug brief most needs. `clipboardData.items`
+   * carries every kind a paste can hold; only image entries are staged here,
+   * and plain text still falls through to the field as text.
+   */
+  function onBriefPaste(event: ClipboardEvent<HTMLTextAreaElement>): void {
+    for (const item of Array.from(event.clipboardData.items)) {
+      if (!item.type.startsWith("image/")) continue;
+      const file = item.getAsFile();
+      if (file !== null) void stage(file);
+    }
+  }
+
+  function removeAttachment(path: string): void {
+    setAttachments((current) => current.filter((attachment) => attachment.path !== path));
+  }
+
   function propose(): void {
     setTried(true);
     if (refused) return;
@@ -92,9 +149,11 @@ export function Composer({ workflows, manifest, models, disabled, onPropose }: C
       model,
       atomic,
       brief,
+      attachments,
     });
     setTitle("");
     setBrief("");
+    setAttachments([]);
     setTried(false);
   }
 
@@ -116,9 +175,40 @@ export function Composer({ workflows, manifest, models, disabled, onPropose }: C
             label="Brief"
             value={brief}
             onChange={(event) => setBrief(event.target.value)}
+            onPaste={onBriefPaste}
             invalid={tried && emptyBrief}
             message="A job needs a brief. Write what the work is."
           />
+          {/* Hidden behind the "Attach" button — no file input is ever drawn
+              directly, the platform's own picker chrome is not this app's to
+              style. */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={onFilesPicked}
+          />
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Attach
+            </Button>
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {attachments.map((attachment) => (
+                  <AttachmentChip
+                    key={attachment.path}
+                    filename={attachment.filename}
+                    onRemove={() => removeAttachment(attachment.path)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
           <div className="flex flex-wrap gap-4">
             <Select
               label="Workflow"
