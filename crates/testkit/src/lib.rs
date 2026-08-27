@@ -44,6 +44,6 @@ mod work_product;
 mod workflow;
 
 pub use harness::{FakeHarness, FakeHarnessRefused};
-pub use vcs::{FakeVcs, FakeVcsError};
+pub use vcs::{FakeCommit, FakeVcs, FakeVcsError};
 pub use work_product::{FakeDiffRefused, FakeWorkProduct};
 pub use workflow::{frozen, resolved, Gate, Sketch};

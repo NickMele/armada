@@ -16,7 +16,6 @@ fn diff_evidence() -> Submission {
         Claimed("The loop is a fold."),
         ShownBy("`cargo test -p vcs` exit 0, 34 passing"),
         NotClaimed(""),
-        None,
     )
     .expect("a legal submission")
 }
@@ -27,7 +26,6 @@ fn note_evidence() -> Submission {
         Claimed("The path is derived from the repo name."),
         ShownBy("`worktree.rs:40`"),
         NotClaimed(""),
-        Some("The note."),
     )
     .expect("a legal submission")
 }
@@ -232,7 +230,6 @@ fn a_step_expecting_a_non_zero_code_passes_on_that_code() {
         Claimed("A second Job dies at worktree registration."),
         ShownBy("`test_concurrent_dispatch` fails; `cargo test -p vcs` exit 1"),
         NotClaimed(""),
-        None,
     )
     .unwrap();
     let accepted = Accepted::of(step, &evidence).expect("the right kind of evidence");

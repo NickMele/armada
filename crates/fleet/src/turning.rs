@@ -50,6 +50,7 @@ where
     H::Error: std::error::Error + Send + Sync + 'static,
     V: Vcs + Send + Sync + 'static,
     V::Error: std::error::Error + Send + Sync + 'static,
+    V::CommitError: std::error::Error + Send + Sync + 'static,
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {

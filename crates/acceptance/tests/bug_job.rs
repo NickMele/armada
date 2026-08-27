@@ -44,7 +44,7 @@
 
 mod bench;
 
-use adapter_traits::{DroneEvent, WorktreeSpec};
+use adapter_traits::{CallDetail, DroneEvent, WorktreeSpec};
 use core_model::{
     Actor, IllegalStepTransition, IllegalTransition, JobStatus, StepId, StepState, StepTarget,
     Target,
@@ -93,7 +93,7 @@ async fn a_bug_job_runs_from_awaiting_approval_to_completed_success() {
     assert_eq!(run.job.status(), JobStatus::Running);
     assert_eq!(run.job.current_step_id(), Some(&bench.step(0)));
 
-    // root_cause — a note, on a step that declares no check. It advances on
+    // root_cause — a facts_note step, declaring no check. It advances on
     // evidence alone, which is the common shape rather than the edge.
     let ruling = bench.gate(&run, &bench.step(0), &a_root_cause_note()).await;
     assert!(matches!(ruling, Ruling::Advanced { .. }));
@@ -199,6 +199,7 @@ fn a_drone_that_says_it_is_done_and_leaves_escalates_rather_than_completes() {
         DroneEvent::Called {
             tool: String::from("Edit"),
             call: String::from("c1"),
+            detail: CallDetail::of("crates/store/src/read.rs +6 -6"),
         },
         DroneEvent::Said {
             text: String::from("I have fixed the bug and every test passes."),

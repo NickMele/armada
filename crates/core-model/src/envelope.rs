@@ -64,6 +64,49 @@ impl Timestamp {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Milliseconds since the epoch, or `None` where the text is not the shape
+    /// this type promises.
+    ///
+    /// **The one reader of an instant in the workspace**, and it is here rather
+    /// than beside the clock because the clock's own note says so: the moment
+    /// something wants arithmetic on an instant, the type holding it is what
+    /// changes. git wants a number for a commit's signature, and deriving it
+    /// from the string Fleet was handed is what keeps the clock injected the
+    /// whole way down.
+    pub fn epoch_millis(&self) -> Option<i64> {
+        let text = self.0.as_bytes();
+        // `YYYY-MM-DDTHH:MM:SS` is fixed width; the fraction and the zone that
+        // follow it are read by position for the same reason.
+        if text.len() < 19 {
+            return None;
+        }
+        let field = |from: usize, to: usize| -> Option<i64> {
+            core::str::from_utf8(&text[from..to]).ok()?.parse().ok()
+        };
+        let millis = match text.get(19) {
+            Some(b'.') if text.len() >= 23 => field(20, 23)?,
+            Some(b'.') => return None,
+            _ => 0,
+        };
+        let day = days_from_civil(field(0, 4)?, field(5, 7)?, field(8, 10)?);
+        let seconds = day * 86_400 + field(11, 13)? * 3_600 + field(14, 16)? * 60 + field(17, 19)?;
+        Some(seconds * 1_000 + millis)
+    }
+}
+
+/// Howard Hinnant's `days_from_civil`, the exact inverse of the
+/// `civil_from_days` Fleet's clock formats with. Carried rather than depended
+/// on, for the reason that one is: the whole of it is below.
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    // March-based year, so the leap day falls at the end of a cycle.
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = if year >= 0 { year } else { year - 399 } / 400;
+    let year_of_era = year - era * 400;
+    let shifted_month = if month > 2 { month - 3 } else { month + 9 };
+    let day_of_year = (153 * shifted_month + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146_097 + day_of_era - 719_468
 }
 
 /// Lowercase, always.
@@ -315,4 +358,49 @@ pub mod env_keys {
     pub const JOB_ID: &str = "ARMADA_JOB_ID";
     pub const DRONE_ID: &str = "ARMADA_DRONE_ID";
     pub const STEP_ID: &str = "ARMADA_STEP_ID";
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Timestamp;
+
+    fn millis(text: &str) -> Option<i64> {
+        Timestamp::from_rfc3339(text).epoch_millis()
+    }
+
+    #[test]
+    fn the_epoch_itself_is_zero() {
+        assert_eq!(millis("1970-01-01T00:00:00.000Z"), Some(0));
+    }
+
+    #[test]
+    fn a_reading_carries_its_milliseconds() {
+        assert_eq!(millis("1970-01-01T00:00:01.234Z"), Some(1_234));
+    }
+
+    #[test]
+    fn the_fraction_is_optional_because_the_zone_may_follow_the_seconds() {
+        assert_eq!(millis("1970-01-02T00:00:00Z"), Some(86_400_000));
+    }
+
+    #[test]
+    fn it_is_the_inverse_of_the_formatting_fleet_does() {
+        // Each is a case that goes wrong in hand-written date arithmetic: a
+        // leap day, a century that is not a leap year, and the last
+        // millisecond of a year.
+        for (text, expected) in [
+            ("2024-02-29T12:00:00.000Z", 1_709_208_000_000),
+            ("1900-03-01T00:00:00.000Z", -2_203_891_200_000),
+            ("2026-12-31T23:59:59.999Z", 1_798_761_599_999),
+        ] {
+            assert_eq!(millis(text), Some(expected), "{text}");
+        }
+    }
+
+    #[test]
+    fn text_that_is_not_an_instant_is_none_rather_than_a_guess() {
+        for wrong in ["", "yesterday", "2026-08-23", "2026-08-23T12:00:00.Z"] {
+            assert_eq!(millis(wrong), None, "{wrong}");
+        }
+    }
 }

@@ -87,9 +87,32 @@ fn a_summary_carries_what_a_board_renders_and_nothing_else() {
         !json.contains("repro"),
         "the step rows are not on the wire, only current_step_id: {json}"
     );
+    assert!(
+        json.contains("\"created_at\":\"2026-08-26T09:00:00.000Z\""),
+        "the instant elapsed is measured from is on the row: {json}"
+    );
     assert_eq!(
         decode::<JobSummary>("job summary", json.as_bytes()).expect("it round-trips"),
         summary
+    );
+}
+
+/// **Absent, never present-and-null.** A Job at the approval gate has no
+/// worktree, and a client that received `branch: null` could not tell that from
+/// Fleet having forgotten to say.
+#[test]
+fn a_row_names_its_branch_only_once_a_worktree_exists() {
+    let waiting = encode(&JobSummary::from(&job())).expect("plain data");
+    assert!(
+        !waiting.contains("branch"),
+        "a Job with no worktree claims no branch: {waiting}"
+    );
+
+    let branded = job().on_branch(core_model::Branch::new("armada/01JOB").expect("a branch"));
+    let working = encode(&JobSummary::from(&branded)).expect("plain data");
+    assert!(
+        working.contains("\"branch\":\"armada/01JOB\""),
+        "the branch a person merges is on the row: {working}"
     );
 }
 

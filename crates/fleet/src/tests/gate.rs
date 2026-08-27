@@ -119,7 +119,6 @@ pub(super) fn diff_evidence() -> Submission {
         Claimed("The loop is a fold."),
         ShownBy("`cargo test -p vcs` exit 0, 34 passing"),
         NotClaimed(""),
-        None,
     )
     .expect("a legal submission")
 }
@@ -130,7 +129,6 @@ pub(super) fn note_evidence() -> Submission {
         Claimed("The path is derived from the repo name."),
         ShownBy("`worktree.rs:40`"),
         NotClaimed(""),
-        Some("The note."),
     )
     .expect("a legal submission")
 }
@@ -141,7 +139,6 @@ fn diff_call<'a>() -> Call<'a> {
         claimed: Claimed("The loop is a fold."),
         shown_by: ShownBy("`cargo test -p vcs` exit 0, 34 passing"),
         not_claimed: NotClaimed(""),
-        note: None,
     }
 }
 
@@ -199,8 +196,7 @@ fn a_malformed_call_records_nothing() {
     let tool = EvidenceTool::for_job(job_id(), &inbox);
     let refused = tool.submit(
         Call {
-            evidence_type: EvidenceType::FactsNote,
-            note: None,
+            shown_by: ShownBy("   "),
             ..diff_call()
         },
         at(NOW),

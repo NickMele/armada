@@ -91,9 +91,6 @@ pub struct Call<'a> {
     /// which is why it is not an `Option`: a Drone that left nothing behind
     /// has answered, and there is no way to spell declining to.
     pub not_claimed: NotClaimed<'a>,
-    /// Required only where `evidence_type` is `facts_note`, which is the one
-    /// type whose work product is the call itself.
-    pub note: Option<&'a str>,
 }
 
 /// Evidence that arrived, waiting for the gate to run.
@@ -172,7 +169,7 @@ impl<'a> EvidenceTool<'a> {
     /// `at` is Fleet's reading of the clock, taken by the caller and passed in.
     /// It is not one of the tool's fields and a Drone does not supply it.
     ///
-    /// The error is a malformed call — a `facts_note` with no note, an empty
+    /// The error is a malformed call — an empty `claimed`, an empty
     /// `shown_by`. **It is not a gate failure**: nothing was verified, the step
     /// has neither advanced nor failed, and what the Drone is told is to submit
     /// again.
@@ -182,7 +179,6 @@ impl<'a> EvidenceTool<'a> {
             call.claimed,
             call.shown_by,
             call.not_claimed,
-            call.note,
         )?;
         self.inbox.accept(Landed {
             job: self.job.clone(),
@@ -202,6 +198,7 @@ where
     H::Error: std::error::Error + Send + Sync + 'static,
     V: Vcs + Send + Sync + 'static,
     V::Error: std::error::Error + Send + Sync + 'static,
+    V::CommitError: std::error::Error + Send + Sync + 'static,
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -267,7 +264,6 @@ where
                     claimed: Claimed(&submission.claimed),
                     shown_by: ShownBy(&submission.shown_by),
                     not_claimed: NotClaimed(&submission.not_claimed),
-                    note: submission.note.as_deref(),
                 },
                 at,
             )

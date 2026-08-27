@@ -15,7 +15,7 @@
 //!
 //! # What it is faithful about
 //!
-//! The two refusals a caller has to handle, and the derivation. Paths and
+//! Every refusal a caller has to handle, and the derivation. Paths and
 //! branch names come from the same [`WorktreeSpec`] the real implementation
 //! uses, so a test asserting on a path is asserting on the derivation that
 //! ships rather than on a second copy of it — the second-vocabulary defect.
@@ -28,13 +28,14 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Mutex;
 
-use adapter_traits::{Vcs, Worktree, WorktreeSpec};
+use adapter_traits::{CommitTime, Committed, Vcs, Worktree, WorktreeSpec};
 
 /// Why the fake refused.
 ///
-/// Two variants, matching the split the real error draws: a name already taken,
-/// and the machine not cooperating. A caller that handles both handles the real
-/// implementation's whole surface as far as its own logic is concerned.
+/// One variant per split the real error draws: a name already taken, the
+/// machine not cooperating, and a commit git would not make. A caller that
+/// handles them handles the real implementation's whole surface as far as its
+/// own logic is concerned.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FakeVcsError {
     /// A branch of that name is already there and was refused, never reused.
@@ -42,6 +43,10 @@ pub enum FakeVcsError {
     /// A scripted failure standing in for a disk, a permission or a repository
     /// that would not answer.
     Refused { standing_in_for: &'static str },
+    /// A scripted failure of the commit, which is its own case: it happens
+    /// after a Job's Checks have passed, and the caller must not lose the work
+    /// over it.
+    NotCommitted { standing_in_for: &'static str },
 }
 
 impl fmt::Display for FakeVcsError {
@@ -52,6 +57,9 @@ impl fmt::Display for FakeVcsError {
             }
             FakeVcsError::Refused { standing_in_for } => {
                 write!(f, "refused, standing in for {standing_in_for}")
+            }
+            FakeVcsError::NotCommitted { standing_in_for } => {
+                write!(f, "not committed, standing in for {standing_in_for}")
             }
         }
     }
@@ -71,6 +79,31 @@ pub struct FakeVcs {
     branches: Mutex<BTreeSet<String>>,
     created: Mutex<Vec<Worktree>>,
     refuse_next: Mutex<Option<&'static str>>,
+    committed: Mutex<Vec<FakeCommit>>,
+    /// What the next commit answers. Both halves are scripted rather than
+    /// inferred: a fake that guessed whether a worktree it never created has
+    /// anything in it would be asserting against its own guess.
+    commits: Mutex<Willing>,
+}
+
+/// One commit this fake said it made.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FakeCommit {
+    pub branch: String,
+    pub message: String,
+    pub at: CommitTime,
+}
+
+/// What the fake does when asked to commit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum Willing {
+    /// The ordinary case: a commit is made and recorded.
+    #[default]
+    Yes,
+    /// The worktree held nothing new. A `facts_note` Job's shape.
+    NothingChanged,
+    /// git refused. The work is still there and the caller has to say so.
+    No(&'static str),
 }
 
 impl FakeVcs {
@@ -102,10 +135,29 @@ impl FakeVcs {
     pub fn created(&self) -> Vec<Worktree> {
         self.created.lock().expect("not poisoned").clone()
     }
+
+    /// Make every commit answer `NothingToCommit`, as a Job that wrote no file
+    /// would.
+    pub fn with_nothing_to_commit(self) -> FakeVcs {
+        *self.commits.lock().expect("not poisoned") = Willing::NothingChanged;
+        self
+    }
+
+    /// Make every commit fail as git refusing one would.
+    pub fn refusing_to_commit(self, standing_in_for: &'static str) -> FakeVcs {
+        *self.commits.lock().expect("not poisoned") = Willing::No(standing_in_for);
+        self
+    }
+
+    /// Every commit this fake said it made, in order.
+    pub fn committed(&self) -> Vec<FakeCommit> {
+        self.committed.lock().expect("not poisoned").clone()
+    }
 }
 
 impl Vcs for FakeVcs {
     type Error = FakeVcsError;
+    type CommitError = FakeVcsError;
 
     fn create_worktree(&self, spec: &WorktreeSpec) -> Result<Worktree, Self::Error> {
         if let Some(standing_in_for) = self.refuse_next.lock().expect("not poisoned").take() {
@@ -126,6 +178,29 @@ impl Vcs for FakeVcs {
             .expect("not poisoned")
             .push(made.clone());
         Ok(made)
+    }
+
+    fn commit_all(
+        &self,
+        worktree: &Worktree,
+        message: &str,
+        at: CommitTime,
+    ) -> Result<Committed, Self::CommitError> {
+        match *self.commits.lock().expect("not poisoned") {
+            Willing::NothingChanged => Ok(Committed::NothingToCommit),
+            Willing::No(standing_in_for) => Err(FakeVcsError::NotCommitted { standing_in_for }),
+            Willing::Yes => {
+                let mut made = self.committed.lock().expect("not poisoned");
+                made.push(FakeCommit {
+                    branch: worktree.branch().to_string(),
+                    message: message.to_string(),
+                    at,
+                });
+                Ok(Committed::Made {
+                    commit: format!("{:040x}", made.len()),
+                })
+            }
+        }
     }
 }
 

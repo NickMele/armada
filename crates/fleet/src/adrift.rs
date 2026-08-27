@@ -86,6 +86,20 @@ pub enum Adrift {
     /// hearing it — so this says a session went deaf, not that a verdict was
     /// lost.
     NotTold { job: JobId, cause: io::Error },
+    /// The last step advanced and the work would not commit.
+    ///
+    /// **The Job is `completed_success` anyway**, because its Checks passed and
+    /// that is a fact about the work rather than about git. **Nothing is
+    /// lost**: the worktree holds the change exactly as the Drone left it, and
+    /// the cause below says how to take it by hand.
+    ///
+    /// No trigger names an infrastructure failure at the gate, so this
+    /// escalates nothing rather than borrowing a trigger that means something
+    /// else — the same gap `dispatch` names about its own failures.
+    NotCommitted {
+        job: JobId,
+        cause: Box<dyn Error + Send + Sync>,
+    },
     /// The frozen workflow has no step by this name. A Job dispatched against a
     /// workflow that has since been edited, or a workflow with no steps at all.
     NoSuchStep { job: JobId, step: Option<StepId> },
@@ -93,13 +107,19 @@ pub enum Adrift {
     /// **Not the same as "it is gone"** — folding a failed reading into absence
     /// is how a live Drone gets declared interrupted.
     NotReaped { job: JobId, cause: io::Error },
-    /// A redispatch was asked for on a Job that is not waiting for a person.
+    /// A redispatch was asked for on a Job that has not stopped.
     ///
     /// **Not an illegal transition**, which is why it is its own variant: the
     /// machine was never asked. A redispatch mints a replacement, so it is a
     /// refusal to *create* rather than to move, and there is no edge whose
     /// absence could have said so.
     NotRedispatchable { job: JobId, status: JobStatus },
+    /// A redispatch was asked for on a Job that was rejected before it ran.
+    ///
+    /// **Its own variant because the reason differs in kind.** Every other
+    /// refusal here is about where the Job is; this one is that nothing was
+    /// ever produced to carry into a replacement.
+    NeverRan { job: JobId },
     /// A redispatch was asked for on a Job that is a step of another Job.
     /// Replacing one is the parent's act, and nothing dispatches a sub-Job yet.
     NotReplaceable { job: JobId },
@@ -175,6 +195,12 @@ impl fmt::Display for Adrift {
                 "the gate ruled on {} and the Drone could not be told: {cause}",
                 job.as_str()
             ),
+            Adrift::NotCommitted { job, cause } => write!(
+                out,
+                "{} finished and its work would not commit: {cause}. The Job succeeded and the \
+                 worktree still holds the change",
+                job.as_str()
+            ),
             Adrift::NoSuchStep { job, step } => match step {
                 Some(step) => write!(
                     out,
@@ -191,10 +217,17 @@ impl fmt::Display for Adrift {
             ),
             Adrift::NotRedispatchable { job, status } => write!(
                 out,
-                "{} is {} and cannot be redispatched. Redispatch replaces a Job that stopped and \
-                 is waiting for a person, which is `escalated`",
+                "{} is {} and cannot be redispatched. Redispatch replaces a Job that ran and \
+                 stopped, which is `escalated`, `completed_failed` or `killed`",
                 job.as_str(),
                 status.as_wire()
+            ),
+            Adrift::NeverRan { job } => write!(
+                out,
+                "{} was rejected and never ran, so a redispatch would carry nothing forward — no \
+                 Facts, no Evidence, no worktree. Asking for the work again is proposing a new \
+                 Job, which is what `propose_job` does",
+                job.as_str()
             ),
             Adrift::NotReplaceable { job } => write!(
                 out,
@@ -231,9 +264,9 @@ impl Error for Adrift {
             Adrift::IllegalMove(cause) => Some(cause),
             Adrift::IllegalStepMove(cause) => Some(cause),
             Adrift::IllegalDroneMove(cause) => Some(cause),
-            Adrift::NoWorktree { cause, .. } | Adrift::NoDrone { cause, .. } => {
-                Some(cause.as_ref())
-            }
+            Adrift::NoWorktree { cause, .. }
+            | Adrift::NoDrone { cause, .. }
+            | Adrift::NotCommitted { cause, .. } => Some(cause.as_ref()),
             Adrift::NotTold { cause, .. }
             | Adrift::NotReaped { cause, .. }
             | Adrift::NoTranscript { cause, .. } => Some(cause),
@@ -241,6 +274,7 @@ impl Error for Adrift {
             | Adrift::NotConfigurable { .. }
             | Adrift::NoSuchStep { .. }
             | Adrift::NotRedispatchable { .. }
+            | Adrift::NeverRan { .. }
             | Adrift::NotReplaceable { .. }
             | Adrift::Unnameable
             | Adrift::NoSuchWorkflow { .. }
@@ -277,8 +311,8 @@ pub enum NotSubmitted {
     /// Refused rather than queued — a second submission would be ruled on
     /// against whatever step the first one advanced the Job to.
     AlreadyWaiting { step: StepId },
-    /// The call itself was not a submission — a `facts_note` with no note, an
-    /// empty `shown_by`.
+    /// The call itself was not a submission — an empty `claimed`, an empty
+    /// `shown_by`.
     Malformed(verification::NotASubmission),
 }
 

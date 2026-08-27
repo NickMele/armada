@@ -36,9 +36,11 @@ pub(crate) fn seen(at: &Timestamp, event: &DroneEvent) -> TranscriptRow {
                 model: model.clone(),
                 mcp_servers: *mcp_servers,
             },
-            DroneEvent::Called { tool, call } => Saw::Called {
+            DroneEvent::Called { tool, call, detail } => Saw::Called {
                 tool: tool.clone(),
                 call: call.clone(),
+                detail: String::from(detail.text()),
+                truncated: detail.truncated(),
             },
             DroneEvent::Answered { call, failed } => Saw::Answered {
                 call: call.clone(),

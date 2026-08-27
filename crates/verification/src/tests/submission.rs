@@ -11,7 +11,6 @@ fn diff() -> Submission {
         Claimed("Two Jobs against one repo now take separate worktrees."),
         ShownBy("`test_concurrent_dispatch` green; `cargo test -p vcs` exit 0"),
         NotClaimed("The sweeper still matches on repo name."),
-        None,
     )
     .expect("a legal submission")
 }
@@ -32,7 +31,6 @@ fn the_fields_come_back_as_they_went_in() {
         submitted.not_claimed(),
         "The sweeper still matches on repo name."
     );
-    assert_eq!(submitted.facts_note(), None);
 }
 
 /// The contract's own words: "Tests pass" is not an artifact, and no string at
@@ -46,7 +44,6 @@ fn a_submission_with_an_empty_shown_by_is_refused() {
             Claimed("The row shows quota percent on a personal machine."),
             ShownBy(""),
             NotClaimed(""),
-            None,
         ),
         Err(NotASubmission::ShownByEmpty)
     );
@@ -56,7 +53,6 @@ fn a_submission_with_an_empty_shown_by_is_refused() {
             Claimed("The row shows quota percent on a personal machine."),
             ShownBy("  \n\t "),
             NotClaimed(""),
-            None,
         ),
         Err(NotASubmission::ShownByEmpty)
     );
@@ -70,7 +66,6 @@ fn a_submission_claiming_nothing_is_refused() {
             Claimed(" \n "),
             ShownBy("`cargo test -p vcs` exit 0, 34 passing"),
             NotClaimed(""),
-            None,
         ),
         Err(NotASubmission::ClaimedEmpty)
     );
@@ -87,7 +82,6 @@ fn an_empty_not_claimed_is_an_answer_and_not_a_refusal() {
         Claimed("The suite goes red when a work machine's row shows quota percent."),
         ShownBy("`spend_mode_render` fails on the parent commit; `npm test` exit 0, 43 passing"),
         NotClaimed(""),
-        None,
     )
     .expect("nothing left behind is a legal answer");
     assert_eq!(submitted.not_claimed(), "");
@@ -103,62 +97,38 @@ fn a_whitespace_not_claimed_lands_as_an_empty_one() {
         Claimed("The loop is a fold."),
         ShownBy("`cargo test -p vcs` exit 0, 34 passing"),
         NotClaimed("   \n  "),
-        None,
     )
     .expect("a legal submission");
     assert_eq!(submitted.not_claimed(), "");
 }
 
+/// A step whose work product is a written finding submits the same three
+/// fields as every other step: the file it wrote is what `shown_by` names.
+/// **There is no evidence type this call is shaped differently for**, which is
+/// what the loop asserts — the same arguments are legal under all six.
 #[test]
-fn a_facts_note_carries_its_note() {
-    let submitted = Submission::submitted(
+fn every_evidence_type_takes_the_same_three_fields() {
+    for evidence_type in [
+        EvidenceType::Diff,
+        EvidenceType::FailingTest,
         EvidenceType::FactsNote,
-        Claimed("A second Job against the same repo dies at worktree registration."),
-        ShownBy("`test_concurrent_dispatch` fails with `worktree path already registered`"),
-        NotClaimed(""),
-        Some("The path is derived from the repo name, not the job id."),
-    )
-    .expect("a legal submission");
-    assert_eq!(
-        submitted.facts_note(),
-        Some("The path is derived from the repo name, not the job id.")
-    );
-}
-
-/// `facts_note` is the one type whose work product is the call itself, so
-/// `claimed` and `shown_by` do not subsume the note: they describe a finding
-/// the note *is*, and a submission carrying only the description hands over
-/// nothing.
-#[test]
-fn a_facts_note_with_no_note_is_refused() {
-    for note in [None, Some("   ")] {
+        EvidenceType::TestSuiteRun,
+        EvidenceType::Bundle,
+        EvidenceType::Document,
+    ] {
+        let submitted = Submission::submitted(
+            evidence_type,
+            Claimed("The worktree path is derived from the repo name, not the job id."),
+            ShownBy("`docs/root-cause.md`, written this step"),
+            NotClaimed("The sweeper is untouched."),
+        )
+        .expect("a legal submission under every evidence type");
+        assert_eq!(submitted.evidence_type(), evidence_type);
         assert_eq!(
-            Submission::submitted(
-                EvidenceType::FactsNote,
-                Claimed("The worktree path is derived from the repo name."),
-                ShownBy("`worktree.rs:40`, where the path is built"),
-                NotClaimed(""),
-                note,
-            ),
-            Err(NotASubmission::NoteRequired)
+            submitted.shown_by(),
+            "`docs/root-cause.md`, written this step"
         );
     }
-}
-
-#[test]
-fn a_note_on_a_type_that_does_not_read_one_is_refused_rather_than_dropped() {
-    assert_eq!(
-        Submission::submitted(
-            EvidenceType::Diff,
-            Claimed("The loop is a fold."),
-            ShownBy("`cargo test -p vcs` exit 0, 34 passing"),
-            NotClaimed(""),
-            Some("please read this"),
-        ),
-        Err(NotASubmission::NoteNotRead {
-            evidence_type: EvidenceType::Diff
-        })
-    );
 }
 
 /// The three prose fields are for a person: the Judge never reads a work
@@ -175,7 +145,6 @@ fn the_prose_gates_nothing() {
         Claimed("done"),
         ShownBy("`cargo test` exit 0"),
         NotClaimed(""),
-        None,
     )
     .unwrap();
     let effusive = Submission::submitted(
@@ -183,11 +152,9 @@ fn the_prose_gates_nothing() {
         Claimed("# Done\n\nEverything is finished and all the tests pass, honestly."),
         ShownBy("everything, everywhere"),
         NotClaimed("nothing at all, this work is complete and thorough"),
-        None,
     )
     .unwrap();
     assert_eq!(terse.evidence_type(), effusive.evidence_type());
-    assert_eq!(terse.facts_note(), effusive.facts_note());
 }
 
 /// `claimed` is behaviour and `shown_by` is an artifact, and the contract's
@@ -202,9 +169,8 @@ fn the_prose_gates_nothing() {
 fn claimed_and_shown_by_cannot_be_swapped_at_a_call_site() {
     let claimed = Claimed("The row renders dollars against the cap.");
     let shown_by = ShownBy("`job_row.stories.tsx`; `npm test` exit 0, 42 passing");
-    let submitted =
-        Submission::submitted(EvidenceType::Diff, claimed, shown_by, NotClaimed(""), None)
-            .expect("a legal submission");
+    let submitted = Submission::submitted(EvidenceType::Diff, claimed, shown_by, NotClaimed(""))
+        .expect("a legal submission");
     assert_eq!(submitted.claimed(), claimed.0);
     assert_eq!(submitted.shown_by(), shown_by.0);
 }

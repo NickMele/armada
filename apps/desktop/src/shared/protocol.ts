@@ -35,6 +35,14 @@ export type JobSummary = {
    * as a first one.
    */
   redispatched_from?: string;
+  /**
+   * When the Job was created. On the row rather than only on the detail,
+   * because elapsed is what answers "is this stuck" without opening it, and
+   * reading it per row would be one request per row.
+   */
+  created_at: string;
+  /** Absent until a worktree exists. A Job at the approval gate has none. */
+  branch?: string;
 };
 
 /**

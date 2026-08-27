@@ -6,9 +6,8 @@
 //! Everything that reaches a decision here is derived by Fleet. The Checks are
 //! Fleet's own runs in the Job's worktree, the diff is Fleet's own reading of
 //! that worktree, and the only thing the Drone contributed is that it called
-//! the tool at all — plus, on a `facts_note` step, the note itself. There is no
-//! parameter on any function in this module through which a Drone could supply
-//! a fact that gates its own step.
+//! the tool at all. There is no parameter on any function in this module
+//! through which a Drone could supply a fact that gates its own step.
 //!
 //! # This runs after the tool call has returned
 //!

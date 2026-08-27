@@ -48,6 +48,13 @@ pub enum Saw {
     Called {
         tool: String,
         call: String,
+        /// What the call was on — the path, the command, the pattern. Bounded
+        /// where it is built, in `adapter_traits::CallDetail`; empty where the
+        /// vocabulary had no name for the tool's arguments.
+        detail: String,
+        /// The detail was longer than a row carries. **Said rather than
+        /// implied** — a command can legitimately end in an ellipsis.
+        truncated: bool,
     },
     Answered {
         call: String,

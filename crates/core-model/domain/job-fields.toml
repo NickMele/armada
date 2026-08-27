@@ -264,8 +264,7 @@ nullable = "Yes"
 frozen_at = "Creation"
 purpose = "The Job this one replaces."
 in_code = "Not yet"
-open_questions = ["Can rejected and completed_failed Jobs be redispatched?"]
-notes = "A redispatch is always a new Job carrying a reference back — it never reopens a terminal or escalated Job. Facts and Evidence carry forward reframed as corrective context, not as instructions for the new Drone."
+notes = "A redispatch is always a new Job carrying a reference back — it never reopens a terminal or escalated Job. Facts and Evidence carry forward reframed as corrective context, not as instructions for the new Drone. Legal from `escalated`, `completed_failed` and `killed`: a Job that ran and stopped is the loop this serves — a Check said no, or it was stopped deliberately, and the answer is to change something and go again. An escalated original is killed; a terminal one is left where it stands, since no terminal has an outbound edge. **Refused on `rejected`, which never ran**: there is no Facts and no Evidence to carry forward as corrective context, so asking again is proposing a new Job rather than replacing one."
 why = "A second failure under a new job id would otherwise read as a first failure every time, and repeat counts would mean nothing."
 
 [fields.retry_count]

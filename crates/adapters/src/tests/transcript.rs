@@ -20,7 +20,7 @@
 
 use std::path::PathBuf;
 
-use adapter_traits::DroneEvent;
+use adapter_traits::{CallDetail, DroneEvent};
 
 use crate::transcript::read;
 
@@ -205,14 +205,133 @@ fn a_turn_carrying_two_tool_calls_is_two_events() {
             DroneEvent::Called {
                 tool: String::from("Read"),
                 call: String::from("a"),
+                detail: CallDetail::none(),
             },
             DroneEvent::Called {
                 tool: String::from("Edit"),
                 call: String::from("b"),
+                detail: CallDetail::none(),
             },
         ],
         "answering with only the first would drop work the Drone did"
     );
+}
+
+/// `Bash · toolu_01Haa…` twenty-two times reads the same whether the Drone ran
+/// `ls` or `rm -rf`. These are the three shapes the approved transcript design
+/// shows, read out of the real stream's own keys.
+#[test]
+fn a_call_carries_what_it_did() {
+    let read = read(
+        r#"{"type":"assistant","message":{"content":[
+             {"type":"tool_use","id":"a","name":"Bash",
+              "input":{"command":"cargo build --workspace","timeout":60000}},
+             {"type":"tool_use","id":"b","name":"Read",
+              "input":{"file_path":"/tmp/repo/src/settings.rs"}},
+             {"type":"tool_use","id":"c","name":"Edit",
+              "input":{"file_path":"/tmp/repo/reducer.rs",
+                       "old_string":"one\ntwo","new_string":"a\nb\nc"}}]}}"#,
+    );
+    let shown: Vec<&str> = read
+        .iter()
+        .map(|event| match event {
+            DroneEvent::Called { detail, .. } => detail.text(),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        shown,
+        vec![
+            "cargo build --workspace",
+            "/tmp/repo/src/settings.rs",
+            "/tmp/repo/reducer.rs +3 -2",
+        ]
+    );
+}
+
+/// A `Write` argument is a whole file. The bound is the type's and not this
+/// decoder's, so what is asserted here is that a row says it was cut rather
+/// than leaving a reader to guess from a trailing character.
+#[test]
+fn a_runaway_argument_is_cut_and_the_row_says_so() {
+    let long = "x".repeat(4_000);
+    let read = read(&format!(
+        r#"{{"type":"assistant","message":{{"content":[
+             {{"type":"tool_use","id":"a","name":"Bash","input":{{"command":"{long}"}}}}]}}}}"#
+    ));
+    let DroneEvent::Called { detail, .. } = &read[0] else {
+        panic!("{read:?}")
+    };
+    assert!(detail.truncated(), "a cut row says it was cut");
+    assert!(detail.text().len() < 400, "{}", detail.text().len());
+}
+
+/// A heredoc is many lines and a row is one. Collapsing is what keeps a
+/// transcript readable at Drone speed.
+#[test]
+fn a_multi_line_command_collapses_to_one_line() {
+    let read = read(
+        r#"{"type":"assistant","message":{"content":[
+             {"type":"tool_use","id":"a","name":"Bash",
+              "input":{"command":"cat <<EOF\n  one\n  two\nEOF"}}]}}"#,
+    );
+    let DroneEvent::Called { detail, .. } = &read[0] else {
+        panic!("{read:?}")
+    };
+    assert_eq!(detail.text(), "cat <<EOF one two EOF");
+    assert!(!detail.truncated());
+}
+
+/// Spike 3's capture had to be scrubbed by hand before this repository could
+/// hold it, and what needed removing was the operator's home path. A row naming
+/// a file the Drone read would carry it again on every call.
+#[test]
+fn a_path_under_a_home_directory_does_not_carry_the_operator_s_name() {
+    for path in [
+        "/Users/user/Development/armada/src/lib.rs",
+        "/home/user/Development/armada/src/lib.rs",
+    ] {
+        let read = read(&format!(
+            r#"{{"type":"assistant","message":{{"content":[
+                 {{"type":"tool_use","id":"a","name":"Read","input":{{"file_path":"{path}"}}}}]}}}}"#
+        ));
+        let DroneEvent::Called { detail, .. } = &read[0] else {
+            panic!("{read:?}")
+        };
+        assert_eq!(detail.text(), "~/Development/armada/src/lib.rs");
+    }
+}
+
+/// A tool whose arguments this vocabulary has no name for is still a call. An
+/// empty detail says "nothing to show" without the decoder guessing at a shape.
+#[test]
+fn a_call_whose_arguments_have_no_name_here_is_still_a_call() {
+    let read = read(
+        r#"{"type":"assistant","message":{"content":[
+             {"type":"tool_use","id":"a","name":"TodoWrite","input":{"todos":[]}}]}}"#,
+    );
+    let DroneEvent::Called { detail, tool, .. } = &read[0] else {
+        panic!("{read:?}")
+    };
+    assert_eq!(tool, "TodoWrite");
+    assert_eq!(detail, &CallDetail::none());
+}
+
+/// The captures are the specification, and the largest argument in the stream
+/// is a `Write`'s file body. It has no field on `ToolInput`, so no row can
+/// carry one — asserted against the real capture rather than a written fixture.
+#[test]
+fn a_real_write_call_carries_its_path_and_not_its_content() {
+    let written = all_of("004-transcript-during-tool-call.ndjson")
+        .into_iter()
+        .filter_map(|event| match event {
+            DroneEvent::Called { tool, detail, .. } if tool == "Write" => Some(detail),
+            _ => None,
+        })
+        .next()
+        .expect("the capture writes a file");
+    assert!(written.text().ends_with("POKED2.txt"), "{written:?}");
+    assert!(!written.text().contains("POKED\""), "{written:?}");
 }
 
 #[test]

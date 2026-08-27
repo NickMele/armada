@@ -89,8 +89,8 @@ async fn tool_call(app: &Router, arguments: &str) -> Answered {
     }
 }
 
-/// A well-formed submission for the fixture's first step, which asks for a
-/// diff and therefore has no use for a note.
+/// A well-formed submission. **Every step takes these three and no others**,
+/// so the same bytes are legal against any step of the fixture.
 const A_DIFF: &str = r#"{
     "claimed": "The reader stops one line later.",
     "shown_by": "src/log.rs, six lines",
@@ -253,12 +253,13 @@ async fn a_submission_with_no_job_running_is_refused_by_name() {
     assert_eq!(fleet.evidence_waiting(), 0);
 }
 
-/// **The evidence type is the step's and the Drone never names one.** The
-/// fixture's first step asks for a diff and its second for a note, so the same
-/// bytes that are a submission on step one are refused on step two — and the
-/// refusal says what to do about it.
+/// **The same three fields on every step, whatever it declares.** The fixture's
+/// first step asks for a diff and its second for a `facts_note`, and the same
+/// bytes are a submission on both — a Drone is never told its step's evidence
+/// type, so a rule it could only discover by breaking it is a Drone run spent
+/// on a refusal. That is what happened, and it is why there is no fourth field.
 #[tokio::test]
-async fn fleet_supplies_the_type_the_step_declared_and_says_so_when_it_is_wrong() {
+async fn the_same_submission_is_accepted_whatever_the_step_declares() {
     let home = TempDir::new();
     let (fleet, app) = running(&home).await;
 
@@ -269,27 +270,43 @@ async fn fleet_supplies_the_type_the_step_declared_and_says_so_when_it_is_wrong(
     fleet.turn().await.expect("the gate runs");
 
     let answered = tool_call(&app, A_DIFF).await;
-    assert!(answered.is_error(), "step two's work product is the note");
     assert!(
-        answered.text().contains("Put the finding in `note`"),
-        "{}",
+        !answered.is_error(),
+        "step two declares facts_note and takes the same three fields: {}",
         answered.text()
     );
-
-    let with_note = tool_call(
-        &app,
-        r#"{"claimed":"The cause was an inclusive bound.",
-            "shown_by":"the note below","not_claimed":"",
-            "note":"The bound was inclusive where the caller expected exclusive."}"#,
-    )
-    .await;
-    assert!(!with_note.is_error(), "{}", with_note.text());
     fleet.turn().await.expect("the gate runs");
     let job = only_job(&app).await;
     assert_eq!(
         job.status.as_wire(),
         "completed_success",
         "the last step advanced, and the Job is over"
+    );
+}
+
+/// `note` was a field until every step was given the same three. A Drone
+/// carrying the older habit is refused by name like any other invented field —
+/// and told where the content goes, rather than only that the field is gone.
+#[tokio::test]
+async fn a_call_carrying_a_note_is_refused_by_name() {
+    let home = TempDir::new();
+    let (_fleet, app) = running(&home).await;
+
+    let answered = tool_call(
+        &app,
+        r#"{"claimed":"The cause was an inclusive bound.",
+            "shown_by":"`.armada/root-cause.md`","not_claimed":"",
+            "note":"The bound was inclusive where the caller expected exclusive."}"#,
+    )
+    .await;
+    assert!(answered.is_error(), "{}", answered.text());
+    assert!(
+        answered
+            .text()
+            .contains("`note` is not a field of this tool")
+            && answered.text().contains("`shown_by`"),
+        "{}",
+        answered.text()
     );
 }
 

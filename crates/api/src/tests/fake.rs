@@ -222,6 +222,9 @@ impl Daemon for FakeDaemon {
             // `job.state_changed` here would name a move from a status the Job
             // was never in.
             status: status("awaiting_approval"),
+            created_at: Instant::carried("2026-01-01T00:00:00.000Z"),
+            // No worktree exists at the approval gate, so no branch is claimed.
+            branch: None,
             reason: None,
             workflow_id: proposal.workflow_id,
             owner_manifest_id: proposal.owner_manifest_id,
@@ -295,22 +298,23 @@ impl Daemon for FakeDaemon {
         self.move_to(&job_id, from, "killed", "human")
     }
 
-    /// Kill the failed Job and mint its replacement. **The fake asserts one
-    /// thing about the domain and no more**: only `escalated` is replaceable,
-    /// because that is the whole of what the route refuses on.
+    /// Mint a replacement for a stopped Job. **The fake asserts one thing about
+    /// the domain and no more**: a Job that ran and stopped is replaceable and
+    /// anything else is refused, because that is the whole of what the route
+    /// refuses on.
     async fn redispatch_job(&self, job_id: JobId) -> Result<Redispatched, Refusal> {
         let failed = {
             let jobs = self.jobs.lock().expect("not poisoned");
             let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
                 return Err(self.no_such_job(&job_id));
             };
-            if job.status.as_wire() != "escalated" {
+            if !matches!(
+                job.status.as_wire(),
+                "escalated" | "completed_failed" | "killed"
+            ) {
                 return Err(Refusal::IllegalMove(ipc::WireError::raised(
                     "fake.not_redispatchable",
-                    format!(
-                        "a Job at {} is not waiting for a person",
-                        job.status.as_wire()
-                    ),
+                    format!("a Job at {} has not run and stopped", job.status.as_wire()),
                     run_id(),
                 )));
             }
@@ -320,6 +324,9 @@ impl Daemon for FakeDaemon {
         let dispatched = JobSummary {
             id: JobId::carried(format!("01JOB{minted}")),
             status: status("awaiting_approval"),
+            created_at: Instant::carried("2026-01-01T00:00:00.000Z"),
+            // No worktree exists at the approval gate, so no branch is claimed.
+            branch: None,
             reason: None,
             redispatched_from: Some(failed.id.clone()),
             ..failed.clone()
@@ -333,7 +340,13 @@ impl Daemon for FakeDaemon {
             actor: Actor::from_wire("human").expect("an actor the envelope has"),
             at: Instant::carried("2026-08-26T09:00:00.000Z"),
         }));
-        let replaced = self.move_to(&job_id, "escalated", "killed", "human")?;
+        // Only an escalated original moves. A terminal one has no outbound
+        // edge, and the fake does not invent one.
+        let replaced = if failed.status.as_wire() == "escalated" {
+            self.move_to(&job_id, "escalated", "killed", "human")?
+        } else {
+            failed
+        };
         Ok(Redispatched {
             replaced,
             dispatched,
@@ -403,6 +416,8 @@ pub fn at(daemon: &FakeDaemon, id: &str, spelling: &str) {
         id: JobId::carried(id),
         title: format!("a Job called {id}"),
         status: status(spelling),
+        created_at: Instant::carried("2026-01-01T00:00:00.000Z"),
+        branch: Some(format!("armada/{id}")),
         reason: None,
         workflow_id: WorkflowId::carried("01WF"),
         owner_manifest_id: ManifestId::carried("01MF"),

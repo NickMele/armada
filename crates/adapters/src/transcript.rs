@@ -29,7 +29,7 @@
 //! did nothing — so there is no field on [`DroneEvent::Ended`] to put them in,
 //! and a gate cannot read one by mistake.
 
-use adapter_traits::DroneEvent;
+use adapter_traits::{CallDetail, DroneEvent};
 use serde::Deserialize;
 
 /// How much of an unreadable line is carried back.
@@ -122,7 +122,8 @@ fn blocks(message: MessageLine) -> Vec<DroneEvent> {
     let mut events: Vec<DroneEvent> = blocks
         .into_iter()
         .filter_map(|block| match block {
-            Block::ToolUse { id, name } => Some(DroneEvent::Called {
+            Block::ToolUse { id, name, input } => Some(DroneEvent::Called {
+                detail: detail(&input),
                 tool: name,
                 call: id,
             }),
@@ -144,6 +145,74 @@ fn blocks(message: MessageLine) -> Vec<DroneEvent> {
         });
     }
     events
+}
+
+/// What the call was on, in the words a person would use — a path, a command,
+/// a pattern.
+///
+/// The keys are this stream's tools' and the order is first-present-wins rather
+/// than one arm per tool: a tool the list does not name still shows its path or
+/// its command, and a tool that grows an argument does not need an arm here.
+///
+/// **What is deliberately not read is content.** `Write`'s `content` is not a
+/// field on [`ToolInput`] at all, so the largest argument in the stream has
+/// nowhere to arrive.
+fn detail(input: &ToolInput) -> CallDetail {
+    if let Some(file_path) = &input.file_path {
+        let path = under_home(file_path);
+        return match edited(input) {
+            Some(size) => CallDetail::of(&format!("{path} {size}")),
+            None => CallDetail::of(&path),
+        };
+    }
+    if let Some(command) = &input.command {
+        return CallDetail::of(command);
+    }
+    if let Some(pattern) = &input.pattern {
+        return match &input.path {
+            Some(path) => CallDetail::of(&format!("{pattern} in {}", under_home(path))),
+            None => CallDetail::of(pattern),
+        };
+    }
+    match [&input.query, &input.url, &input.description]
+        .into_iter()
+        .flatten()
+        .next()
+    {
+        Some(text) => CallDetail::of(text),
+        None => CallDetail::none(),
+    }
+}
+
+/// An edit's size, the way a diff states it.
+///
+/// The two strings are read for their line counts and **neither is carried** —
+/// what an edit changed a line to is the work, not the row.
+fn edited(input: &ToolInput) -> Option<String> {
+    let new = input.new_string.as_deref()?;
+    let old = input.old_string.as_deref().unwrap_or_default();
+    Some(format!("+{} -{}", counted(new), counted(old)))
+}
+
+fn counted(text: &str) -> usize {
+    text.lines().count()
+}
+
+/// A path with the operator's home elided to `~`.
+///
+/// Spike 3 measured the concrete leak: the session's opening event carried the
+/// home path and had to be scrubbed by hand before this repository could hold
+/// the capture. A row naming a file the Drone read would carry it again on
+/// every call, so the two leading components of a home-shaped path are replaced
+/// rather than sent.
+fn under_home(path: &str) -> String {
+    let mut parts = path.split('/');
+    match (parts.next(), parts.next(), parts.next()) {
+        (Some(""), Some("Users") | Some("home"), Some(_)) => {
+            format!("~/{}", parts.collect::<Vec<&str>>().join("/"))
+        }
+        _ => String::from(path),
+    }
 }
 
 /// The `type` of a line this vocabulary has no variant for.
@@ -260,7 +329,14 @@ impl Content {
 #[serde(tag = "type")]
 enum Block {
     #[serde(rename = "tool_use")]
-    ToolUse { id: String, name: String },
+    ToolUse {
+        id: String,
+        name: String,
+        /// Boxed: this is the one block with more than two fields, and an enum
+        /// is as large as its largest variant.
+        #[serde(default)]
+        input: Box<ToolInput>,
+    },
     #[serde(rename = "tool_result")]
     ToolResult {
         tool_use_id: String,
@@ -271,6 +347,34 @@ enum Block {
     Text { text: String },
     #[serde(other)]
     Unnamed,
+}
+
+/// The argument keys this stream's tools use, and no others.
+///
+/// **A struct rather than a map**, so what a row can carry is the list below
+/// rather than whatever the tool was given — a `Write` argument is a whole file
+/// and `content` is deliberately not a field here. Every key is one vendor's,
+/// which is why the shape is in this crate.
+#[derive(Deserialize, Default)]
+struct ToolInput {
+    /// Read, Write, Edit.
+    file_path: Option<String>,
+    /// Bash.
+    command: Option<String>,
+    /// Glob, Grep.
+    pattern: Option<String>,
+    /// The path a pattern is searched under.
+    path: Option<String>,
+    /// A search.
+    query: Option<String>,
+    /// A fetch.
+    url: Option<String>,
+    /// Bash's own summary, and a subagent's task.
+    description: Option<String>,
+    /// Edit. Read for its line count and never carried.
+    old_string: Option<String>,
+    /// Edit. Read for its line count and never carried.
+    new_string: Option<String>,
 }
 
 #[derive(Deserialize)]

@@ -28,6 +28,9 @@
 //! not move under it, it knows which Drone is on it, and its Checks leave their
 //! output on disk.
 //!
+//! `landing` is the ninth: a finished Job's work reaches its branch. Most of its
+//! cases are ones where no commit is made, which is where the rule is.
+//!
 //! `daemon` and `serving` are the sixth, and they are the first that are about
 //! the whole: a Job driven from created to completed against fakes, read back
 //! out of a reopened store, and the same five operations answered over the
@@ -45,6 +48,7 @@ mod evidence;
 mod frozen;
 mod gate;
 mod host;
+mod landing;
 mod process;
 mod redispatch;
 mod runtime;

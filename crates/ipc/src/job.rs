@@ -19,6 +19,9 @@
 //! | `acceptance_criteria` | The requester's words. `get_job` returns the Job in full; this is the list |
 //! | `dependencies`, `gate_manifests`, `dispatched_by` | The graph, which the Board does not draw at M1 |
 //!
+//! `branch` crosses too: it is a name in Armada's own namespace, not a path,
+//! and it is what a person merges once the Job is done.
+//!
 //! `title` is the field that goes the other way, and the only free text on the
 //! record that does: `facts` is redacted because it is the likeliest place a
 //! secret lands, and a title is the one string on a Job written to be read off
@@ -36,7 +39,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::event::Reason;
-use crate::ids::{DroneId, JobId, ManifestId, StepId, WorkflowId};
+use crate::ids::{DroneId, Instant, JobId, ManifestId, StepId, WorkflowId};
 
 use crate::enums::{CriterionSource, JobStatus, Origin, TopLevelOrigin, Urgency};
 
@@ -55,6 +58,22 @@ pub struct JobSummary {
     /// copy of the rule.
     pub title: String,
     pub status: JobStatus,
+    /// When the Job was created. **The instant elapsed is measured from**, and
+    /// the reason it is on the row rather than only on the detail: a Board that
+    /// cannot draw how long a Job has been going needs one request per row to
+    /// answer "is this stuck", which is the question the column exists for.
+    ///
+    /// Read from the record, never derived from the id's ULID prefix — that
+    /// would be a second source for an instant that is already stored.
+    pub created_at: Instant,
+    /// The branch the Job's worktree is on. **Absent until a worktree exists**
+    /// — a Job at the approval gate has no branch and does not claim one, and
+    /// absent is never `null`.
+    ///
+    /// It is what a person merges once the Job completes, so a row that names
+    /// it is a row somebody can act on without opening the Job.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
     /// The qualifying reason the Job's last transition stored, where it stored
     /// one. **Absent is not "no reason"** — `queued` computes its readiness
     /// reason at read time from dependencies and live headroom, and it is
@@ -96,6 +115,8 @@ impl JobSummary {
             id: job.id().into(),
             title: job.title().as_str().to_string(),
             status: job.status().into(),
+            created_at: job.created_at().into(),
+            branch: job.branch().map(|branch| branch.as_str().to_string()),
             reason: reason.and_then(Reason::of),
             workflow_id: job.workflow_id().into(),
             owner_manifest_id: job.owner_manifest_id().into(),
@@ -112,13 +133,14 @@ impl JobSummary {
 
 /// What a redispatch did. **Two Jobs, because a redispatch is two acts.**
 ///
-/// The failed Job is killed and a replacement is minted carrying
-/// `redispatched_from`; both are answered so a caller learns the new id
-/// without waiting for the stream and re-reading the Board to find it.
+/// A replacement is minted carrying `redispatched_from`, and the original is
+/// killed where it was still killable; both are answered so a caller learns the
+/// new id without waiting for the stream and re-reading the Board to find it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Redispatched {
-    /// The Job that failed, now `killed`. Its worktree and branch are as its
-    /// Drone left them — nothing in Armada removes either.
+    /// The Job that stopped: `killed` if it was escalated, otherwise where it
+    /// already ended. Its worktree and branch are as its Drone left them —
+    /// nothing in Armada removes either.
     pub replaced: JobSummary,
     /// The replacement, at the approval gate, with `redispatched_from` set to
     /// [`replaced`](Redispatched::replaced)'s id.

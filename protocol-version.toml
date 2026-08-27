@@ -7,4 +7,4 @@
 # Bump this when the wire shape changes in a way an older peer cannot read.
 # A peer that sees a version it does not know refuses the connection rather
 # than guessing.
-version = 3
+version = 4

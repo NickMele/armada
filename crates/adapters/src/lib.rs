@@ -26,6 +26,7 @@
 //! first of which is that every confinement property here is a value a test
 //! reads rather than a process a test has to start.
 
+mod commit;
 mod error;
 mod harness;
 mod mcp;
@@ -37,7 +38,7 @@ mod worktree;
 #[cfg(test)]
 mod tests;
 
-pub use error::{CreateWorktreeError, ReadWorkProductError};
+pub use error::{CommitWorkError, CreateWorktreeError, ReadWorkProductError};
 pub use harness::{evidence_server, evidence_tool, HarnessRefused, HeadlessAgent};
 pub use mcp::only_the_evidence_server;
 pub use reclaim::{reclaim, BranchGone, Reclaimed, RepoUnreadable, WorktreeGone};

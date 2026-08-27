@@ -332,7 +332,7 @@ async fn kill_job<D: Daemon>(
     }
 }
 
-/// Kill the failed Job and mint its replacement. **Two Jobs come back**, and
+/// Mint a replacement for a stopped Job. **Two Jobs come back**, and
 /// the answer is 200 rather than 201 because the act a caller asked for is the
 /// recovery, not the creation — the new Job's id is in the body.
 async fn redispatch_job<D: Daemon>(

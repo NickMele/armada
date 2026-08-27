@@ -130,11 +130,10 @@ pub fn a_root_cause_note() -> Submission {
     Submission::submitted(
         EvidenceType::FactsNote,
         Claimed("The reader's bound is inclusive where the caller expects exclusive."),
-        ShownBy("the note below"),
+        ShownBy("`read_to` stops at `end` rather than before it — read.rs:41"),
         NotClaimed("The writer has the same bound and is untouched."),
-        Some("`read_to` stops at `end` rather than before it."),
     )
-    .expect("a well-formed note")
+    .expect("a well-formed root-cause submission")
 }
 
 pub fn a_fix_diff() -> Submission {
@@ -143,7 +142,6 @@ pub fn a_fix_diff() -> Submission {
         Claimed("The reader stops one line earlier."),
         ShownBy("crates/store/src/read.rs, six lines"),
         NotClaimed("The writer is unchanged."),
-        None,
     )
     .expect("a well-formed diff submission")
 }

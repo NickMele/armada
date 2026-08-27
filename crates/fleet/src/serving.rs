@@ -67,6 +67,7 @@ where
     H::Error: std::error::Error + Send + Sync + 'static,
     V: Vcs + Send + Sync + 'static,
     V::Error: std::error::Error + Send + Sync + 'static,
+    V::CommitError: std::error::Error + Send + Sync + 'static,
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -308,6 +309,7 @@ where
     H::Error: std::error::Error + Send + Sync + 'static,
     V: Vcs + Send + Sync + 'static,
     V::Error: std::error::Error + Send + Sync + 'static,
+    V::CommitError: std::error::Error + Send + Sync + 'static,
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -374,12 +376,12 @@ where
             }
             // The same conflict, from a request the machine never saw: the Job
             // is somewhere a replacement would mean nothing.
-            Adrift::NotRedispatchable { job, .. } | Adrift::NotReplaceable { job } => {
-                Refusal::IllegalMove(
-                    WireError::raised(NOT_REDISPATCHABLE, said, self.run_id())
-                        .about_job(ipc::JobId::from(job)),
-                )
-            }
+            Adrift::NotRedispatchable { job, .. }
+            | Adrift::NeverRan { job }
+            | Adrift::NotReplaceable { job } => Refusal::IllegalMove(
+                WireError::raised(NOT_REDISPATCHABLE, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
             // The request is well-formed and the values in it cannot work. Not
             // a 500: retrying it will fail identically forever, and the message
             // names what to send instead.

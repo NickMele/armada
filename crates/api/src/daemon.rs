@@ -106,9 +106,12 @@ pub trait Daemon: Send + Sync + 'static {
     /// under them, which is why it cannot be spelled as [`Daemon::kill_drone`].
     fn kill_job(&self, job_id: JobId) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
-    /// `redispatch_job` — kills the failed Job and mints its replacement.
-    /// Intervention Ladder rung 2, and the answer to a Job that stopped and
-    /// has no way to be tried again.
+    /// `redispatch_job` — mints a replacement for a Job that ran and stopped,
+    /// and kills the original where it is still killable. Intervention Ladder
+    /// rung 2, and the answer to a Job with no way to be tried again.
+    ///
+    /// **`escalated`, `completed_failed` and `killed`**; a `rejected` Job never
+    /// ran, so there is nothing to carry forward and the act is `propose_job`.
     ///
     /// **It does not reopen the failed Job**, which is why it answers with
     /// [`Redispatched`] rather than a `JobSummary`: the registry's

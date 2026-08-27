@@ -31,13 +31,15 @@
 
 extern crate alloc;
 
+mod commit;
 mod event;
 mod harness;
 mod secret;
 mod work_product;
 mod worktree;
 
-pub use event::DroneEvent;
+pub use commit::{CommitTime, Committed};
+pub use event::{CallDetail, DroneEvent};
 pub use harness::{
     AmbientServers, DroneHandle, DroneSpawnConfig, Environment, Grant, Launch, McpConfig, Model,
     Prompt, Prompting, SpawnConfigRefused, Toolbelt,
@@ -99,11 +101,11 @@ pub trait AgentHarness {
 ///
 /// # It has no push method, and that is not the only thing missing
 ///
-/// **No push.** A Drone commits locally inside its own worktree; push, pull
-/// request and merge are Fleet's, with credentials Fleet holds. A capability
-/// absent from the type cannot be reached by a Drone that reasons its way
-/// around a denial. What a Drone itself is handed is a narrower type again,
-/// which is not this trait.
+/// **No push.** Push, pull request and merge are Fleet's, with credentials
+/// Fleet holds. A capability absent from the type cannot be reached by a Drone
+/// that reasons its way around a denial. What a Drone itself is handed is a
+/// narrower type again, which is not this trait — and it carries no `git` at
+/// all, which is why the commit below is here.
 ///
 /// **No removal, and no way to ask for one.** Removal is driven by Job
 /// retention, never by a process ending — so the caller that would decide is
@@ -118,10 +120,16 @@ pub trait AgentHarness {
 /// refusing; a separate probe would be a check-then-act that two Jobs can
 /// interleave.
 pub trait Vcs {
-    /// Errors this implementation can raise. Named by the implementation, so a
+    /// Errors creating a worktree can raise. Named by the implementation, so a
     /// caller matching a branch collision against a disk failure is matching on
     /// something real rather than on a rendered sentence.
     type Error;
+
+    /// Errors committing can raise, and **a second type rather than more
+    /// variants of the first.** Creation fails at approval with no Drone and no
+    /// work; a commit fails after a Job's Checks have passed and its work is on
+    /// disk. Neither list is a list of things to do about the other.
+    type CommitError;
 
     /// Create a Job's worktree on its own new branch.
     ///
@@ -135,6 +143,23 @@ pub trait Vcs {
     /// commits, and git's own refusal names the operation rather than the
     /// reason.
     fn create_worktree(&self, spec: &WorktreeSpec) -> Result<Worktree, Self::Error>;
+
+    /// Commit everything in a Job's worktree onto the branch checked out in it.
+    ///
+    /// Called when a Job's **last** step advances, by Fleet, which is this
+    /// trait's only holder. It is not on [`WorkProduct`]: the gate holds that
+    /// one, and a gate that could commit could satisfy `diff_nonempty` on the
+    /// Drone's behalf.
+    ///
+    /// Everything git can see is taken, untracked files included and ignored
+    /// files excluded — the same set [`WorkProduct::changed_files`] counts, so
+    /// what made `diff_nonempty` pass is what lands.
+    fn commit_all(
+        &self,
+        worktree: &Worktree,
+        message: &str,
+        at: CommitTime,
+    ) -> Result<Committed, Self::CommitError>;
 }
 
 /// Credential access, brokered. A Drone never holds a secret directly, and what

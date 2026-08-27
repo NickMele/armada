@@ -52,6 +52,7 @@ where
     H::Error: std::error::Error + Send + Sync + 'static,
     V: Vcs + Send + Sync + 'static,
     V::Error: std::error::Error + Send + Sync + 'static,
+    V::CommitError: std::error::Error + Send + Sync + 'static,
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -342,16 +343,9 @@ where
                 }
                 self.tell(job_id, tell, working).await
             }
-            Ruling::Finished { tell, .. } => {
-                let job = self.load(job_id).await?;
-                let job = self.move_step(&job, step, StepTarget::Advanced).await?;
-                // The Job is moved before the Drone is told, so a session that
-                // has gone deaf cannot leave a finished Job at `running`.
-                self.applied(&job, ruling).await?;
-                let told = self.tell(job_id, tell, working).await;
-                self.end_the_drone(working).await;
-                told
-            }
+            // The whole of what finishing a Job is, including the commit that
+            // makes its branch mergeable, is `landing`'s.
+            Ruling::Finished { tell, .. } => self.finish(ruling, tell, job_id, step, working).await,
             Ruling::Failed { .. } => {
                 let job = self.load(job_id).await?;
                 self.applied(&job, ruling).await?;
@@ -436,7 +430,7 @@ where
     /// **Only ever reached from the advance path.** `Ruling::tell` answers
     /// `None` on every ruling that is not an advance, so there is no call here
     /// that could deliver a verdict to a Drone about to be terminated.
-    async fn tell(
+    pub(crate) async fn tell(
         &self,
         job_id: &JobId,
         turn: &OutcomeTurn,
@@ -513,7 +507,7 @@ where
     }
 
     /// The Job move a ruling implies, where it implies one.
-    async fn applied(&self, job: &Job, ruling: &Ruling) -> Result<(), Adrift> {
+    pub(crate) async fn applied(&self, job: &Job, ruling: &Ruling) -> Result<(), Adrift> {
         match apply(job, ruling, self.now()) {
             Some(moved) => {
                 self.record(moved.map_err(Adrift::IllegalMove)?).await?;

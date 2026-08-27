@@ -171,6 +171,18 @@ pub fn a_fleet(
     Fleet::assembled(fittings(home, work))
 }
 
+/// A Fleet whose version control is scripted. What `landing` needs: the commit
+/// a finished Job gets is the fake's to record, refuse, or answer as nothing.
+pub fn a_fleet_committing_through(
+    home: &TempDir,
+    work: FakeWorkProduct,
+    vcs: FakeVcs,
+) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
+    let mut fittings = fittings(home, work);
+    fittings.vcs = vcs;
+    Fleet::assembled(fittings)
+}
+
 /// A Fleet over a store another Fleet wrote to, holding a workflow of its own.
 ///
 /// The pair of arguments is what an edited `.armada/workflows/` looks like from
@@ -246,7 +258,6 @@ pub fn diff_evidence() -> Call<'static> {
         claimed: Claimed("The reader stops one line later."),
         shown_by: ShownBy("src/log.rs, six lines"),
         not_claimed: NotClaimed("The writer has the same bug and is untouched."),
-        note: None,
     }
 }
 
@@ -254,9 +265,8 @@ pub fn note_evidence() -> Call<'static> {
     Call {
         evidence_type: EvidenceType::FactsNote,
         claimed: Claimed("The cause was an inclusive bound."),
-        shown_by: ShownBy("the note below"),
+        shown_by: ShownBy("`.armada/root-cause.md`, written this step"),
         not_claimed: NotClaimed(""),
-        note: Some("The bound was inclusive where the caller expected exclusive."),
     }
 }
 

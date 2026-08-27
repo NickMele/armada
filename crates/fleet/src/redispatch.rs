@@ -1,27 +1,26 @@
-//! Trying a failed Job again, which is minting a new one.
+//! Trying a stopped Job again, which is minting a new one.
 //!
 //! # It does not reopen the Job, and the registry is why
 //!
 //! `job-fields.toml`'s `redispatched_from` row says a redispatch is always a
-//! new Job carrying a reference back and never reopens an escalated one, and
-//! `job-transitions.toml` puts redispatch on `escalated -> killed`. The
-//! `escalated -> running` edge is a redirect's — context injected mid-step —
-//! not this.
+//! new Job carrying a reference back, never a terminal or escalated one
+//! reopened. The `escalated -> running` edge is a redirect's — context
+//! injected mid-step — not this.
 //!
-//! The disk agrees. A worktree is `armada/<job_id>` and
-//! `GitVcs::create_worktree` refuses an existing branch, so a Job moved back to
-//! `running` under its own id could only be dispatched by deleting the branch
-//! its failure is recorded on. **A failed Job's worktree and branch are
-//! evidence** — nothing in the workspace removes either — so the id has to
-//! change.
+//! The disk agrees. `create_worktree` refuses an existing branch, so a Job
+//! moved back to `running` under its own id could only run by deleting the
+//! branch `armada/<job_id>` its failure is recorded on. **A stopped Job's
+//! worktree and branch are evidence**, so the id has to change.
 //!
-//! # The replacement is minted before the failure is killed
+//! An escalated original is killed; a `completed_failed` or `killed` one is
+//! left where it stands, no terminal having an outbound edge.
+//!
+//! # The replacement is minted before the original is killed
 //!
 //! The two writes are not one transaction. Killed first and minting failing
 //! leaves a terminal Job with no replacement and no way to ask again, which is
 //! the complaint this exists to answer. This order leaves, at worst, a Job at
-//! the approval gate beside a still-escalated one: visible, harmless, and
-//! recoverable by hand.
+//! the approval gate beside a still-escalated one: visible and recoverable.
 
 use adapter_traits::{AgentHarness, Vcs, WorkProduct};
 use core_model::{Job, JobId, JobStatus, NewJob, StepSeed};
@@ -32,7 +31,8 @@ use crate::daemon::Fleet;
 /// What a redispatch left behind: the failed Job, and the one replacing it.
 #[derive(Clone, Debug)]
 pub struct Replacement {
-    /// The Job that failed, now `killed`.
+    /// The Job that stopped: `killed` if it was escalated, otherwise unmoved,
+    /// because it was already terminal when the redispatch was asked for.
     pub replaced: Job,
     /// The new Job, at its entry status, carrying `redispatched_from`.
     pub dispatched: Job,
@@ -44,28 +44,45 @@ where
     H::Error: std::error::Error + Send + Sync + 'static,
     V: Vcs + Send + Sync + 'static,
     V::Error: std::error::Error + Send + Sync + 'static,
+    V::CommitError: std::error::Error + Send + Sync + 'static,
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// Replace a Job that stopped and is waiting for a person.
+    /// Replace a Job that ran and stopped.
     ///
-    /// **`escalated` and nothing else.** A running Job is redirected rather
-    /// than replaced, a Job at a gate has not failed, and whether a `rejected`
-    /// or `completed_failed` Job may be redispatched is an open question on
-    /// the `redispatched_from` registry row — refused here rather than decided.
+    /// **`escalated`, `completed_failed` and `killed`.** A Check said no, or
+    /// you stopped it deliberately; either way you change something and go
+    /// again, and that loop is what this is. A running Job is redirected
+    /// instead, and one at a gate has not stopped.
+    ///
+    /// **`rejected` is refused because it never ran.** There is no Facts and no
+    /// Evidence to carry into a replacement, so what is being asked for is a
+    /// new Job — which is `propose_job`.
     ///
     /// The actor is **human**. Fleet never redispatches of its own accord: a
-    /// Job reaches `escalated` precisely because Fleet stopped deciding.
+    /// Job stops precisely where Fleet stopped deciding.
     pub async fn redispatch(&self, job_id: &JobId) -> Result<Replacement, Adrift> {
         let failed = self.load(job_id).await?;
-        if failed.status() != JobStatus::Escalated {
-            return Err(Adrift::NotRedispatchable {
-                job: failed.id().clone(),
-                status: failed.status(),
-            });
+        match failed.status() {
+            JobStatus::Escalated | JobStatus::CompletedFailed | JobStatus::Killed => {}
+            JobStatus::Rejected => {
+                return Err(Adrift::NeverRan {
+                    job: failed.id().clone(),
+                })
+            }
+            status => {
+                return Err(Adrift::NotRedispatchable {
+                    job: failed.id().clone(),
+                    status,
+                })
+            }
         }
         let dispatched = self.mint_replacement(&failed).await?;
-        let replaced = Fleet::kill_job(self, job_id).await?;
+        let replaced = if failed.status().is_terminal() {
+            failed
+        } else {
+            Fleet::kill_job(self, job_id).await?
+        };
         Ok(Replacement {
             replaced,
             dispatched,

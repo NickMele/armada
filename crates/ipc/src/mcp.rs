@@ -15,12 +15,13 @@
 //! log names those and nothing else. An MCP crate would put a codegen-shaped
 //! dependency under the one path a Job cannot finish without.
 //!
-//! # The tool takes three prose fields and an optional note
+//! # The tool takes three prose fields, on every step
 //!
 //! No job id, no step id, no evidence type: Fleet knows all three, and a value
 //! a Drone supplies is a value a Drone chose. A call carrying one is refused by
 //! name rather than ignored — a field nothing reads is a promise the call makes
-//! and the system does not keep.
+//! and the system does not keep. `note` was a fourth field and is one of these
+//! now: what it held is what `shown_by` is for.
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
@@ -116,7 +117,6 @@ pub struct SubmitEvidence {
     /// here either. A Drone that left nothing behind has answered; a Drone
     /// that omitted the field has not, and is refused by name.
     pub not_claimed: String,
-    pub note: Option<String>,
 }
 
 /// Why a tool call did not read as a submission.
@@ -164,7 +164,7 @@ impl core::fmt::Display for NotAnArgument {
             NotAnArgument::NotText { field } => {
                 write!(out, "`{field}` is not text. Submit again with a string")
             }
-            // The two a Drone is likeliest to invent get the reason, because
+            // The three a Drone is likeliest to invent get the reason, because
             // "no such field" reads as an oversight it should work around.
             NotAnArgument::NotAField { named } if named == "job_id" || named == "step_id" => {
                 write!(
@@ -174,10 +174,19 @@ impl core::fmt::Display for NotAnArgument {
                  remove it and submit again"
                 )
             }
+            // `note` was a field until every step was given the same three, so
+            // a Drone carrying an older habit is told where the content goes
+            // rather than only that the field is gone.
+            NotAnArgument::NotAField { named } if named == "note" => write!(
+                out,
+                "`note` is not a field of this tool. Put the finding in the file \
+                 or artifact you name in `shown_by`, and what it shows in \
+                 `claimed` — then submit again"
+            ),
             NotAnArgument::NotAField { named } => write!(
                 out,
                 "`{named}` is not a field of this tool. It takes claimed, \
-                 shown_by, not_claimed and note — remove it and submit again"
+                 shown_by and not_claimed — remove it and submit again"
             ),
         }
     }
@@ -326,8 +335,8 @@ fn called(id: CallId, params: Option<&Value>) -> Incoming {
     }
 }
 
-/// The three prose fields and the note, and a refusal for anything else.
-const FIELDS: &[&str] = &["claimed", "shown_by", "not_claimed", "note"];
+/// The three prose fields, and a refusal for anything else.
+const FIELDS: &[&str] = &["claimed", "shown_by", "not_claimed"];
 
 fn submission(arguments: &Map<String, Value>) -> Result<SubmitEvidence, NotAnArgument> {
     for named in arguments.keys() {
@@ -341,14 +350,6 @@ fn submission(arguments: &Map<String, Value>) -> Result<SubmitEvidence, NotAnArg
         claimed: text(arguments, "claimed")?,
         shown_by: text(arguments, "shown_by")?,
         not_claimed: text(arguments, "not_claimed")?,
-        note: match arguments.get("note") {
-            None | Some(Value::Null) => None,
-            Some(note) => Some(
-                note.as_str()
-                    .ok_or(NotAnArgument::NotText { field: "note" })?
-                    .to_string(),
-            ),
-        },
     })
 }
 
@@ -437,7 +438,9 @@ fn tool() -> Value {
                     "type": "string",
                     "description":
                         "The artifact that demonstrates it — a named test, a \
-                         command and its exit code, a rendered string.",
+                         command and its exit code, a rendered string, or a \
+                         file you wrote. Every step names one here, including a \
+                         step that changed nothing in the repository.",
                 },
                 "not_claimed": {
                     "type": "string",
@@ -445,14 +448,6 @@ fn tool() -> Value {
                         "Everything the claim does not assert: the gap you left \
                          and the side effect you caused. Empty is a legal answer; \
                          omitting it is not.",
-                },
-                "note": {
-                    "type": "string",
-                    "description":
-                        "The finding itself, where this step's work product is a \
-                         written note rather than a change to the repository. A \
-                         step that needs one and does not get it refuses the call \
-                         and says so, and so does a step that has no use for one.",
                 },
             },
             "required": ["claimed", "shown_by", "not_claimed"],

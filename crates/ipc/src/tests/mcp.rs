@@ -106,12 +106,14 @@ fn a_transcript_row_reads_back_as_what_was_written() {
         saw: crate::Saw::Called {
             tool: "Bash".to_string(),
             call: "toolu_1".to_string(),
+            detail: "cargo build --workspace".to_string(),
+            truncated: false,
         },
     };
     let json = crate::encode(&row).expect("a row encodes");
     assert_eq!(
         json,
-        r#"{"ts":"2026-08-26T09:00:00.000Z","event":"called","tool":"Bash","call":"toolu_1"}"#
+        r#"{"ts":"2026-08-26T09:00:00.000Z","event":"called","tool":"Bash","call":"toolu_1","detail":"cargo build --workspace","truncated":false}"#
     );
     let back: crate::TranscriptRow = crate::decode("row", json.as_bytes()).expect("a row decodes");
     assert_eq!(back, row);

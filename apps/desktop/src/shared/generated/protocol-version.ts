@@ -5,4 +5,4 @@
 // TypeScript one. A hand-typed literal in Bridge is a second source of truth the
 // day the file changes.
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;

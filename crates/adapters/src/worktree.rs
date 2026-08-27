@@ -46,10 +46,10 @@
 use std::fs;
 use std::path::Path;
 
-use adapter_traits::{Vcs, Worktree, WorktreeSpec};
+use adapter_traits::{CommitTime, Committed, Vcs, Worktree, WorktreeSpec};
 use git2::{BranchType, ErrorCode, Repository, WorktreeAddOptions};
 
-use crate::error::CreateWorktreeError;
+use crate::error::{CommitWorkError, CreateWorktreeError};
 
 /// Version control against a real repository on this machine.
 ///
@@ -68,6 +68,7 @@ impl GitVcs {
 
 impl Vcs for GitVcs {
     type Error = CreateWorktreeError;
+    type CommitError = CommitWorkError;
 
     fn create_worktree(&self, spec: &WorktreeSpec) -> Result<Worktree, Self::Error> {
         let repo = Repository::open(spec.repo_root()).map_err(|cause| {
@@ -91,6 +92,15 @@ impl Vcs for GitVcs {
         })?;
 
         add(&repo, spec, &branch_name, &path)
+    }
+
+    fn commit_all(
+        &self,
+        worktree: &Worktree,
+        message: &str,
+        at: CommitTime,
+    ) -> Result<Committed, Self::CommitError> {
+        crate::commit::commit_all(worktree, message, at)
     }
 }
 

@@ -48,15 +48,12 @@
 //! [`NotClaimed`] exist so that swap is a compile error rather than a
 //! convention.
 //!
-//! # `note` survives, because `facts_note` has no artifact outside the call
+//! # There is no `note`, and every step submits the same three fields
 //!
-//! Every other evidence type points at something Fleet can reach for itself —
-//! the diff is in the worktree, the test run is its own run, the document is on
-//! disk. `facts_note` is the one type whose work product **is** the submission,
-//! and folding it into `shown_by` would make that field hold an artifact
-//! instead of naming one, which is the circularity the contract rules out.
-//! So `note` stays: required exactly where the type is `facts_note`, refused
-//! everywhere else.
+//! A note was a fourth place to put what the three already hold: what you did
+//! is `claimed`, where to look is `shown_by`, what you left is `not_claimed`.
+//! A step whose work product is a written finding names the file it wrote in
+//! `shown_by`, the same as any other step.
 //!
 //! # Why the vocabulary is `config`'s and not this crate's
 //!
@@ -98,14 +95,6 @@ pub struct NotClaimed<'a>(pub &'a str);
 /// neither advanced nor failed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NotASubmission {
-    /// `facts_note` is the one type whose payload is the Drone's own work, and
-    /// a `facts_note` with no note hands over nothing at all.
-    NoteRequired,
-    /// A note was given on a type that has no use for one. Refused rather than
-    /// ignored: a Drone that wrote a note believing it would be read has been
-    /// misled, and a field nothing reads is a promise the call makes and the
-    /// system does not keep.
-    NoteNotRead { evidence_type: EvidenceType },
     /// `claimed` is empty or whitespace. It gates nothing, but it is the record
     /// — a submission asserting nothing is a blank row a reviewer cannot act
     /// on.
@@ -121,16 +110,6 @@ pub enum NotASubmission {
 impl core::fmt::Display for NotASubmission {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            NotASubmission::NoteRequired => write!(
-                f,
-                "this step's work product is the note itself, and none was \
-                 given. Put the finding in `note` and submit again"
-            ),
-            NotASubmission::NoteNotRead { .. } => write!(
-                f,
-                "this step's work product is not a note, so nothing would read \
-                 the one given. Remove `note` and submit again"
-            ),
             NotASubmission::ClaimedEmpty => write!(
                 f,
                 "the submission claims nothing. `claimed` is what the work now \
@@ -163,10 +142,6 @@ pub struct Submission {
     /// so "nothing left behind" has one representation and a reader's empty
     /// check is total.
     not_claimed: String,
-    /// `Some` exactly when [`Submission::evidence_type`] is
-    /// [`EvidenceType::FactsNote`]. [`NotASubmission::NoteRequired`] and
-    /// [`NotASubmission::NoteNotRead`] exist to hold that.
-    note: Option<String>,
 }
 
 impl Submission {
@@ -179,7 +154,6 @@ impl Submission {
         claimed: Claimed<'_>,
         shown_by: ShownBy<'_>,
         not_claimed: NotClaimed<'_>,
-        note: Option<&str>,
     ) -> Result<Submission, NotASubmission> {
         if claimed.0.trim().is_empty() {
             return Err(NotASubmission::ClaimedEmpty);
@@ -192,23 +166,11 @@ impl Submission {
         } else {
             not_claimed.0
         };
-        let note = note.filter(|text| !text.trim().is_empty());
-        let note = match (evidence_type, note) {
-            (EvidenceType::FactsNote, None) => return Err(NotASubmission::NoteRequired),
-            (EvidenceType::FactsNote, Some(note)) => Some(note.to_string()),
-            (other, Some(_)) => {
-                return Err(NotASubmission::NoteNotRead {
-                    evidence_type: other,
-                })
-            }
-            (_, None) => None,
-        };
         Ok(Submission {
             evidence_type,
             claimed: claimed.0.to_string(),
             shown_by: shown_by.0.to_string(),
             not_claimed: not_claimed.to_string(),
-            note,
         })
     }
 
@@ -232,11 +194,6 @@ impl Submission {
     pub fn not_claimed(&self) -> &str {
         &self.not_claimed
     }
-
-    /// The note, present exactly on a `facts_note`.
-    pub fn facts_note(&self) -> Option<&str> {
-        self.note.as_deref()
-    }
 }
 
 #[cfg(test)]
@@ -258,7 +215,6 @@ mod tests {
             Claimed("The loop is gone."),
             ShownBy("`cargo test -p vcs` exit 0"),
             NotClaimed(""),
-            None,
         )
         .unwrap();
         let Submission {
@@ -266,7 +222,6 @@ mod tests {
             claimed: _,
             shown_by: _,
             not_claimed: _,
-            note: _,
         } = submitted;
     }
 }

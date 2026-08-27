@@ -113,6 +113,8 @@ notes = """
 Values in use across the samples: `diff`, `failing_test`, `facts_note`, `test_suite_run`, `bundle`, `document`. A step may also declare none — Bug's `merge` produces nothing a Judge reads. A step with no gate advances once evidence of its declared `evidence_type` arrives, so on a gateless step this field is the entire advance condition.
 
 What the Judge receives for each value, and what `context_paths` is for in each case, is the per-`evidence_type` table on Workflow under Evidence Scope Object. Code Review is the exception that table cannot fold in — there the diff is the input and the review is the work product.
+
+At the M1 gate this field drives nothing a Drone can observe. The Evidence tool takes the same three prose fields on every step; requiring or refusing a `note` was this field's only behaviour and that field is gone. What is left is a comparison against the step's own declared type which Fleet fills in, so it cannot disagree. Whether the field earns its place is a person's question, open at `[evidence-mcp-submission-schema]`.
 """
 
 [fields.exclude_paths]

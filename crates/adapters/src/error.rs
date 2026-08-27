@@ -261,3 +261,65 @@ impl Error for ReadWorkProductError {
         }
     }
 }
+
+/// Why a finished Job's work was not committed.
+///
+/// **A different shape again.** Creating a worktree fails before a Drone
+/// exists; this fails after every Check has passed, with the work sitting in
+/// the worktree. Nothing here loses that work — the worktree is left exactly as
+/// the Drone left it — so each variant is something to fix and then commit by
+/// hand, not something to redispatch.
+#[derive(Debug)]
+pub enum CommitWorkError {
+    /// The worktree's path is not a repository, or will not open.
+    WorktreeUnreadable {
+        worktree: String,
+        cause: git2::Error,
+    },
+    /// The work would not stage. A file git can see and cannot read.
+    NotStaged {
+        worktree: String,
+        cause: git2::Error,
+    },
+    /// Everything staged and git refused the commit itself. The index is
+    /// written, so the work is staged and a person's `git commit` will take it.
+    NotCommitted {
+        worktree: String,
+        branch: String,
+        cause: git2::Error,
+    },
+}
+
+impl fmt::Display for CommitWorkError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CommitWorkError::WorktreeUnreadable { worktree, cause } => {
+                write!(f, "the worktree at {worktree} would not open: {cause}")
+            }
+            CommitWorkError::NotStaged { worktree, cause } => write!(
+                f,
+                "the work in the worktree at {worktree} would not stage: {cause}. \
+                 Nothing was committed and nothing was lost"
+            ),
+            CommitWorkError::NotCommitted {
+                worktree,
+                branch,
+                cause,
+            } => write!(
+                f,
+                "`{branch}` would not take a commit of the work at {worktree}: \
+                 {cause}. The work is staged — `git -C {worktree} commit` takes it"
+            ),
+        }
+    }
+}
+
+impl Error for CommitWorkError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            CommitWorkError::WorktreeUnreadable { cause, .. }
+            | CommitWorkError::NotStaged { cause, .. }
+            | CommitWorkError::NotCommitted { cause, .. } => Some(cause),
+        }
+    }
+}

@@ -28,11 +28,11 @@
 //!
 //! # What the Drone hands over, and what Fleet derives
 //!
-//! Only `facts_note` hands over something the Drone produced. Every other
-//! gating artifact is Fleet's own reading: the diff is in the worktree and the
-//! Check result is its own run. So [`Submission`] carries no typed exit code,
-//! no file list and no diff — a Drone cannot report a fact that gates its own
-//! step, because there is no field to report it in.
+//! **A Drone hands over prose and nothing else.** Every gating artifact is
+//! Fleet's own reading: the diff is in the worktree and the Check result is its
+//! own run. So [`Submission`] carries no typed exit code, no file list and no
+//! diff — a Drone cannot report a fact that gates its own step, because there
+//! is no field to report it in.
 //!
 //! `shown_by` is not that field. It **names** an artifact, in prose, for a
 //! person who will go and look; nothing in this crate reads it, and a Drone

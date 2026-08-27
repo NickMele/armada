@@ -43,8 +43,11 @@
 //! And the loop that joins them: [`daemon`](mod@daemon) is what Fleet is —
 //! one working slot, the seams it is assembled from, and the five operations
 //! `api::Daemon` names — and [`dispatch`](mod@dispatch) is what happens to a
-//! Job while it is in that slot. [`serving`](mod@serving) is the trait
-//! implementation, so the operations answer from a real Fleet.
+//! Job while it is in that slot. `landing` is the end of that: a Job whose last
+//! step advances has its work committed onto its own branch before it is
+//! recorded complete, because a Drone is denied `git` and a verified change
+//! nobody can merge is not a finished Job. [`serving`](mod@serving) is the
+//! trait implementation, so the operations answer from a real Fleet.
 //!
 //! **Two things enter the process here and nowhere else.** [`clock`](mod@clock)
 //! is the one place a clock is read, and [`mint`](mod@mint) the one place an id
@@ -82,6 +85,7 @@ pub mod drone;
 mod drone_moves;
 pub mod evidence;
 pub mod gate;
+mod landing;
 pub mod mint;
 pub mod process;
 pub mod redispatch;

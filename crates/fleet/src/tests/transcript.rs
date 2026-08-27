@@ -277,6 +277,41 @@ async fn the_history_is_found_through_the_log_that_names_each_transcript() {
     );
 }
 
+/// **The whole point of the row.** A transcript that said `Bash · toolu_01Haa…`
+/// twenty-two times could not tell `ls` from `rm -rf`, so what a call did has
+/// to survive the file and the backfill, not just the event.
+#[tokio::test]
+async fn what_a_call_did_survives_to_the_row_a_viewer_is_sent() {
+    let at = TempDir::new();
+    let recording = recording(&at, "01DRONEKKKKKKKKKKKKKKKKKKK");
+    recording.saw(&[DroneEvent::Called {
+        tool: String::from("Bash"),
+        call: String::from("toolu_01Haa"),
+        detail: adapter_traits::CallDetail::of("cargo build --workspace"),
+    }]);
+    recording.settled().await;
+
+    let (rows, _) = history(
+        &at.path().to_string_lossy(),
+        &JobId::carried(Ulid::carried(JOB)),
+    )
+    .await;
+
+    assert_eq!(
+        rows[0].saw,
+        ipc::Saw::Called {
+            tool: String::from("Bash"),
+            call: String::from("toolu_01Haa"),
+            detail: String::from("cargo build --workspace"),
+            truncated: false,
+        }
+    );
+    assert!(
+        ipc::Shown::of(rows[0].clone()).is_some(),
+        "a call is a row a viewer is shown"
+    );
+}
+
 /// A retry is a second `drone_id` under one `job_id`, and both files are the
 /// one Job's history — read in the order the log named them.
 #[tokio::test]

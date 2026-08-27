@@ -25,6 +25,13 @@ use crate::job::ids::{StepId, WorkflowId};
 
 /// What a step produces as its work product.
 ///
+/// **Nothing a Drone does turns on this.** Requiring or refusing the Evidence
+/// tool's `note` was its only behaviour and that field is gone. What is left is
+/// `verification::Accepted::of`, which matches a submission's type against the
+/// step's — and Fleet fills the submission's from that same step, so the two
+/// cannot disagree. Whether the field still earns its place is a person's
+/// question, open at `[evidence-mcp-submission-schema]` in `docs/OPEN.md`.
+///
 /// `review_findings` is deliberately absent: the registry records it as not
 /// among the legal values, and until that is decided it is refused by name
 /// where a definition is parsed.

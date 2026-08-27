@@ -53,14 +53,17 @@ pub struct StepFacts {
 /// One Job, whole.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JobDetail {
-    /// The Board row, unchanged. Carries id, title, status, reason, origin,
-    /// urgency, model, current step, and `redispatched_from`.
+    /// The Board row, unchanged. Carries id, title, status, when the Job was
+    /// created, its branch, reason, origin, urgency, model, current step, and
+    /// `redispatched_from`.
     pub job: JobSummary,
-    /// When the Job was created. The instant a whole-Job elapsed is measured
-    /// from; no transition carries it, because creation is not a transition.
+    /// When the Job was created. **Also on [`JobSummary`], and kept here
+    /// anyway**: removing a field an old peer already reads is a major bump,
+    /// and both are built from the one record so they cannot disagree. The next
+    /// major bump is where this goes.
     pub created_at: Instant,
-    /// The branch the Job's worktree is on. **Absent until a worktree exists**
-    /// — a Job at the approval gate has no branch and does not claim one.
+    /// The branch the Job's worktree is on. On [`JobSummary`] too, and kept
+    /// here for the same reason `created_at` is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub branch: Option<String>,
     /// One entry per step of the frozen WorkflowDef, in the order they were
