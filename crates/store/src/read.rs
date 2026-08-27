@@ -522,7 +522,7 @@ impl Store {
         Ok(Some(WriteTargets::of(paths)))
     }
 
-    fn collect<T>(
+    pub(crate) fn collect<T>(
         &self,
         sql: &str,
         job_id: &JobId,

@@ -54,6 +54,9 @@ pub struct StepFacts {
     /// What the Judge answered, in the order asked. Empty on a step that asks
     /// nothing, which is most of them.
     pub judged: Vec<Judged>,
+    /// What the gaming check flagged, in the order it answered. Empty on a step
+    /// that declares none and on a step nothing was found on.
+    pub flagged: Vec<Flagged>,
 }
 
 /// One Job, whole.
@@ -167,6 +170,13 @@ pub struct StepDetail {
     /// the gate stopped, and only these say what was wrong with the work.
     /// Empty on a step that asks nothing and on a step the Judge never reached.
     pub judged: Vec<Judged>,
+    /// Every gaming pattern this step's evidence tripped, with what each cites.
+    ///
+    /// **This is what `evidence_suspect` does not say.** The trigger says the
+    /// evidence is not to be trusted; only these say which shape of gaming was
+    /// found and where — the same relation `judged` has to a `gate_failure`.
+    /// Empty on every step nothing was flagged on, which is nearly all of them.
+    pub flagged: Vec<Flagged>,
     /// When the step was entered. Stamped at creation and moved on entering
     /// `running`, so `entered_at` to `updated_at` is how long the step took.
     pub entered_at: Instant,
@@ -187,6 +197,7 @@ impl StepDetail {
             check_runs: facts.map(|facts| facts.ran.clone()).unwrap_or_default(),
             last_verdict: step.last_verdict().map(Verdict::of),
             judged: facts.map(|facts| facts.judged.clone()).unwrap_or_default(),
+            flagged: facts.map(|facts| facts.flagged.clone()).unwrap_or_default(),
             entered_at: step.entered_at().into(),
             updated_at: step.updated_at().into(),
         }
@@ -225,6 +236,34 @@ impl From<&core_model::Judgment> for Judged {
             expected: judgment.expected.clone(),
             produced: judgment.produced.clone(),
             consequence: judgment.consequence.clone(),
+        }
+    }
+}
+
+/// One gaming pattern found, and what it was found in.
+///
+/// **Never a verdict**, the property `core_model::GamingFlag` has: a flag says
+/// the evidence is suspect and does not say the step failed.
+///
+/// `pattern` is a string rather than a mirrored enum, for the reason
+/// [`Verdict::trigger`] is one: no domain registry declares the set — it comes
+/// from what a workflow's `flag_if` names — so an enum here would be a second
+/// authority for a list that has none.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Flagged {
+    /// The pattern, spelled as `flag_if` spells it.
+    pub pattern: String,
+    /// The file, line or assertion the flag is about. **The whole value of the
+    /// finding** — an uncited flag is unactionable, exactly as an uncited
+    /// refusal is.
+    pub cited: String,
+}
+
+impl From<&core_model::GamingFlag> for Flagged {
+    fn from(flag: &core_model::GamingFlag) -> Flagged {
+        Flagged {
+            pattern: flag.pattern.as_wire().to_string(),
+            cited: flag.cited.clone(),
         }
     }
 }

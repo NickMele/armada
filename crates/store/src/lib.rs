@@ -56,6 +56,7 @@ mod columns;
 mod error;
 mod fold;
 mod forget;
+mod gaming;
 mod open;
 mod read;
 mod row;

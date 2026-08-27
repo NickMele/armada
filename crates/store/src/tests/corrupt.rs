@@ -317,7 +317,7 @@ fn a_step_state_column_this_build_cannot_spell_is_refused() {
     }
 }
 
-/// The three states M1 cannot reach have no `StepTarget`, so a logged move into
+/// The two states M1 cannot reach have no `StepTarget`, so a logged move into
 /// one is a machine this build does not have. Refused, never folded as
 /// something else.
 #[test]
@@ -348,6 +348,57 @@ fn a_logged_step_state_nothing_reaches_is_named_rather_than_folded() {
         }
         other => panic!("expected a refusal, found {other:?}"),
     }
+}
+
+/// `last_verdict` admits step-level triggers only, and the shape trigger cannot
+/// check a level. So the narrowing is paid on the way in, and a stop logged
+/// with a Job-level trigger is refused rather than folded.
+#[test]
+fn a_stop_logged_with_a_job_level_trigger_is_refused() {
+    let dir = TempDir::new();
+    let store = seeded(&dir, "01FANOUT");
+    store
+        .conn
+        .execute(
+            "INSERT INTO job_events (
+                 kind, job_id, status_from, status_to, reason_kind, reason_value,
+                 step_id, state_from, state_to, actor, at
+             ) VALUES ('step_transition', '01FANOUT', 'awaiting_approval',
+                 'awaiting_approval', 'escalation', 'fan_out', 'fix', 'running',
+                 'stopped', 'fleet', '2026-08-26T10:00:00.000Z')",
+            [],
+        )
+        .expect("the shape trigger admits the row; the level is not its business");
+
+    match store.load_job(&job_id("01FANOUT")) {
+        Err(crate::LoadJobError::Unreadable(RowError::MalformedColumn {
+            table,
+            column,
+            detail,
+        })) => {
+            assert_eq!((table, column), ("job_events", "reason_value"));
+            assert!(detail.contains("fan_out"), "{detail}");
+        }
+        other => panic!("expected a refusal, found {other:?}"),
+    }
+}
+
+/// A step cannot stop without saying why. The schema holds it, so a row that
+/// would fold into a stopped step with no verdict never lands.
+#[test]
+fn a_stop_with_no_trigger_is_refused_by_the_database() {
+    let dir = TempDir::new();
+    let store = seeded(&dir, "01SILENTSTOP");
+    let refused = store.conn.execute(
+        "INSERT INTO job_events (
+             kind, job_id, status_from, status_to, reason_kind, reason_value,
+             step_id, state_from, state_to, actor, at
+         ) VALUES ('step_transition', '01SILENTSTOP', 'awaiting_approval',
+             'awaiting_approval', 'unqualified', NULL, 'fix', 'running',
+             'stopped', 'fleet', '2026-08-26T10:00:00.000Z')",
+        [],
+    );
+    assert!(refused.is_err(), "a stop that says nothing is not a shape");
 }
 
 /// The shape trigger, which is the schema holding a rule rather than a

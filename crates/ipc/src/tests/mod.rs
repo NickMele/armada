@@ -135,6 +135,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             declares: Some(Vec::new()),
             ran: Vec::new(),
             judged: Vec::new(),
+            flagged: Vec::new(),
         }],
     );
     let json = encode(&ungated).expect("a detail is plain data");
@@ -149,6 +150,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             declares: None,
             ran: Vec::new(),
             judged: Vec::new(),
+            flagged: Vec::new(),
         }],
     );
     let json = encode(&unanswerable).expect("a detail is plain data");
@@ -176,6 +178,7 @@ fn a_step_with_no_label_reads_as_its_id() {
             declares: None,
             ran: Vec::new(),
             judged: Vec::new(),
+            flagged: Vec::new(),
         }],
     );
     assert_eq!(detail.steps[0].label, "repro");
@@ -207,6 +210,7 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
                 output_path: Some(".armada/checks/01JOB/repro.0.log".to_string()),
             }],
             judged: Vec::new(),
+            flagged: Vec::new(),
         }],
     );
     let json = encode(&detail).expect("a detail is plain data");
@@ -253,6 +257,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
                     consequence: None,
                 },
             ],
+            flagged: Vec::new(),
         }],
     );
     let json = encode(&detail).expect("a detail is plain data");

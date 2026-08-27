@@ -18,12 +18,11 @@
 //!
 //! # The inner machine's writer is here now, and it is the second mutator
 //!
-//! [`transition_step`](Job::transition_step) advances a step and moves
-//! `current_step_id`, and it obeys the same rule as
-//! [`transition`](Job::transition): `&self` in, a new [`Job`] out. What it may
-//! do is narrowed by [`StepTarget`], which names two destinations of the six
-//! states — so the three M1 cannot reach are not refused at runtime, they
-//! cannot be asked for.
+//! [`transition_step`](Job::transition_step) moves a step and the cursor, and
+//! it obeys the same rule as [`transition`](Job::transition): `&self` in, a new
+//! [`Job`] out. What it may do is narrowed by [`StepTarget`], which names three
+//! destinations of the six states — so the two M1 cannot reach are not refused
+//! at runtime, they cannot be asked for.
 //!
 //! # The other mutators, and what each may touch
 //!
@@ -244,23 +243,6 @@ impl Job {
         Ok(Transitioned { job, event })
     }
 
-    /// Move one step of the frozen WorkflowDef, or say why it cannot move.
-    ///
-    /// The second and last mutator. Three things can refuse it: the Job has no
-    /// such step, the Job is not in a status the inner machine advances
-    /// beneath, or no edge joins the two states. A fourth refusal is absent
-    /// because it is unrepresentable — [`StepTarget`] names no state a step
-    /// may not be moved to.
-    ///
-    /// **Entering `running` is what moves `current_step_id`, and nothing
-    /// clears it.** `job-fields.toml` says the nested machine is "frozen
-    /// otherwise, never cleared, still rendered", so a Job that advanced its
-    /// last step still points at the step it finished on — which is what a rail
-    /// renders. A cursor cleared on advance would leave a completed Job
-    /// pointing at nothing between steps.
-    ///
-    /// `at` is a parameter and never a clock reading, for the reason
-    /// [`transition`](Job::transition) gives.
     /// Record the branch the Job's worktree was made on.
     ///
     /// **The third mutator, and the only one the log does not describe.** No
@@ -336,6 +318,22 @@ impl Job {
         DroneAssigned { job, event }
     }
 
+    /// Move one step of the frozen WorkflowDef, or say why it cannot move.
+    ///
+    /// The second and last mutator. Three things can refuse it: the Job has no
+    /// such step, the Job is not in a status the inner machine advances
+    /// beneath, or no edge joins the two states. A fourth refusal is absent
+    /// because it is unrepresentable — [`StepTarget`] names no state a step
+    /// may not be moved to.
+    ///
+    /// **Entering `running` is what moves `current_step_id`, and nothing
+    /// clears it.** `job-fields.toml` says the nested machine is "frozen
+    /// otherwise, never cleared, still rendered", so a Job that advanced or
+    /// stopped its last step still points at it — which is what a rail renders,
+    /// and what lets an escalated Job say which step stopped.
+    ///
+    /// `at` is a parameter and never a clock reading, for the reason
+    /// [`transition`](Job::transition) gives.
     pub fn transition_step(
         &self,
         step_id: &StepId,
@@ -357,7 +355,7 @@ impl Job {
             self.id.clone(),
             step_id.clone(),
             from,
-            to.state(),
+            &to,
             self.status,
             by,
             at.clone(),

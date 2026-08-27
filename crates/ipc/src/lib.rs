@@ -63,7 +63,9 @@ mod tests;
 
 pub use checks::{CheckRun, DeclaredCheck};
 pub use codec::{decode, encode, Undecodable, Unencodable};
-pub use detail::{Criterion, Dependency, JobDetail, Judged, StepDetail, StepFacts, Verdict};
+pub use detail::{
+    Criterion, Dependency, Flagged, JobDetail, Judged, StepDetail, StepFacts, Verdict,
+};
 pub use enums::{
     Actor, CheckOutcome, CriterionSource, DependencyDirection, JobStatus, JudgeVerdict, Origin,
     StepState, TopLevelOrigin, Urgency,

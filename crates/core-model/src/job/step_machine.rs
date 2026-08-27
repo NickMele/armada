@@ -1,65 +1,52 @@
-//! The inner machine: the three step states M1 reaches, and the two edges
-//! between them.
+//! The inner machine: the four step states M1 reaches, and the edges between.
 //!
 //! # There is no registry edge table, and this does not invent one
 //!
-//! `domain/step-states.toml` declares six states and their meanings and says
-//! nothing about which moves are legal. The Job record refused to build this
-//! machine for that reason. What is built here is not a transcription of a
-//! table that does not exist — it is **the three states M1 reaches and the two
-//! edges it walks**, named as such:
+//! `domain/step-states.toml` declares six states and says nothing about which
+//! moves are legal. Built here are the edges M1 walks: `not_started -> running`,
+//! `running -> advanced`, and `running -> stopped`, which is the one a refusal
+//! needs — `job-statuses.toml` gives `escalated` the step state `stopped`, and
+//! without the edge a refused step stayed `running` with no writer for
+//! `last_verdict` at all.
 //!
-//! - `not_started -> running` — the step starts being worked;
-//! - `running -> advanced` — the step passed its advance gate.
+//! `awaiting_human` needs a human advance gate and `retrying` a retry budget,
+//! and M1 has neither. Both stay declared on [`StepState`], because a stored
+//! row may render any of the six, and **neither is reachable**: [`StepTarget`]
+//! has no variant naming one. `stopped -> running` is missing too and is named
+//! rather than added — redirect and restart both resume the step a Job stopped
+//! on, and the edge lands with whichever is built first.
 //!
-//! `awaiting_human` needs a human advance gate and M1's gates are `auto`.
-//! `retrying` and `stopped` need a retry budget M1 does not have. All three
-//! stay declared on [`StepState`], because the registry declares six and a
-//! stored row may render any of them — and **none of them is reachable**, in
-//! the only way that lasts: [`StepTarget`] has no variant naming one, so no
-//! call moving a step there can be written. Not a check that refuses; a call
-//! that does not exist.
+//! # The outer machine gates the inner one
 //!
-//! The remaining edges are an honest gap. `advanced -> running` in particular
-//! is implied by `job-fields.toml`'s reason for storing `state` at all — "a
-//! loop workflow, where a step can have advanced and then be re-entered" — and
-//! is *not* here, because implied by a `why` is not declared, and no workflow
-//! loops at M1.
-//!
-//! # The outer machine gates the inner one, and the registry says so
-//!
-//! `job-fields.toml`'s `workflow_status` row: "Advances only while the Job is
-//! `running` or `awaiting_review`; frozen otherwise, never cleared, still
-//! rendered." [`ADVANCING_STATUSES`] is that sentence, and
-//! [`Job::transition_step`](crate::Job::transition_step) refuses beneath any
-//! other status.
-//!
-//! That gate is why a step move and a status move belong in **one log in one
-//! order**: replaying a step move requires knowing which status the Job stood
-//! in when it happened, and two independently keyed logs cannot be interleaved
-//! to answer that.
+//! `job-fields.toml`'s `workflow_status` row: a step "advances only while the
+//! Job is `running` or `awaiting_review`; frozen otherwise, never cleared,
+//! still rendered." [`ADVANCING_STATUSES`] is that sentence — which is why a
+//! step stops *before* the Job escalates, and why a step move and a status move
+//! belong in one log in one order.
 
 use core::fmt;
 
+use crate::job::escalation::StepLevelTrigger;
 use crate::job::ids::StepId;
 use crate::job::status::{JobStatus, StepState};
 
 /// One legal move of a step.
 ///
-/// No trigger and no reason field: neither reachable destination stores a
-/// qualifying reason, and a field that is always `None` reads as a field that
-/// is working.
+/// No trigger and no reason field: what qualifies a stop travels on
+/// [`StepTarget::Stopped`], because it is the destination that decides whether
+/// there is a reason at all.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StepEdge {
     pub from: StepState,
     pub to: StepState,
 }
 
-/// The two edges M1 walks. Nothing else in this crate decides what is legal
+/// The three edges M1 walks. Nothing else in this crate decides what is legal
 /// for a step.
 pub static STEP_EDGES: &[StepEdge] = &[
     step_edge(StepState::NotStarted, StepState::Running),
     step_edge(StepState::Running, StepState::Advanced),
+    step_edge(StepState::Running, StepState::Stopped),
 ];
 
 const fn step_edge(from: StepState, to: StepState) -> StepEdge {
@@ -77,10 +64,9 @@ pub const ADVANCING_STATUSES: &[JobStatus] = &[JobStatus::Running, JobStatus::Aw
 
 /// Where a step is going.
 ///
-/// Two variants for the two destinations M1 reaches. [`StepState`] has six and
-/// this has two on purpose: the four that are not here — `not_started`, which
-/// is written at creation and is not a destination, and the three that need a
-/// human gate or a retry budget — cannot be passed to
+/// Three variants for the three destinations M1 reaches. `not_started` is
+/// written at creation and is not a destination; `awaiting_human` and
+/// `retrying` need a human gate or a retry budget, and cannot be passed to
 /// [`Job::transition_step`](crate::Job::transition_step) because there is
 /// nothing to pass.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -94,6 +80,17 @@ pub enum StepTarget {
     /// means the same thing said about the ruling. A caller choosing one
     /// independently of the other could make the two disagree.
     Advanced,
+    /// The step's retries are spent. It is neither retrying nor waiting on a
+    /// person — folding either of those into this one would make a designed
+    /// human gate and a dead stop render alike.
+    ///
+    /// **It carries the trigger and not a verdict**, which is the same rule
+    /// [`Advanced`](StepTarget::Advanced) states from the other side: the
+    /// destination fixes that the verdict is `failed`, so no caller can stop a
+    /// step and call it passed. What the state cannot say is *why*, and that is
+    /// exactly the payload. [`StepLevelTrigger`] is why the reason cannot be a
+    /// Job-level one, which `last_verdict` does not admit.
+    Stopped(StepLevelTrigger),
 }
 
 impl StepTarget {
@@ -102,22 +99,32 @@ impl StepTarget {
         match self {
             StepTarget::Running => StepState::Running,
             StepTarget::Advanced => StepState::Advanced,
+            StepTarget::Stopped(_) => StepState::Stopped,
         }
     }
 
-    /// The target that arrives at a stored state, where one exists.
+    /// What qualifies the move, where the destination stores one. `None` on the
+    /// two that do not, for [`StepEdge`]'s reason.
+    pub fn why(&self) -> Option<StepLevelTrigger> {
+        match self {
+            StepTarget::Running | StepTarget::Advanced => None,
+            StepTarget::Stopped(why) => Some(*why),
+        }
+    }
+
+    /// The target that arrives at a stored state carrying a stored reason,
+    /// where one exists.
     ///
-    /// `None` for the four states no target names. Coming off disk a state is
-    /// data and can be any of the six, so this is where the narrowing the type
-    /// system does at every call site is paid — once, on the way in.
-    pub fn arriving_at(state: StepState) -> Option<StepTarget> {
-        match state {
-            StepState::Running => Some(StepTarget::Running),
-            StepState::Advanced => Some(StepTarget::Advanced),
-            StepState::NotStarted
-            | StepState::AwaitingHuman
-            | StepState::Retrying
-            | StepState::Stopped => None,
+    /// Coming off disk the pair is data and can be anything, so this is where
+    /// the narrowing the type system does at every call site is paid — once, on
+    /// the way in. A reason on a destination that stores none is refused rather
+    /// than dropped, the same way a missing one on `stopped` is.
+    pub fn arriving_at(state: StepState, why: Option<StepLevelTrigger>) -> Option<StepTarget> {
+        match (state, why) {
+            (StepState::Running, None) => Some(StepTarget::Running),
+            (StepState::Advanced, None) => Some(StepTarget::Advanced),
+            (StepState::Stopped, Some(why)) => Some(StepTarget::Stopped(why)),
+            _ => None,
         }
     }
 }

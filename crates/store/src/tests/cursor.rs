@@ -16,7 +16,10 @@
 //! test that wrote `state = 'advanced'` into the row and reopened would prove
 //! that SQLite stores strings.
 
-use core_model::{Actor, Job, JobStatus, StepId, StepState, StepTarget, StepVerdict, Target};
+use core_model::{
+    Actor, EscalationTrigger, Job, JobStatus, StepId, StepLevelTrigger, StepState, StepTarget,
+    StepVerdict, Target,
+};
 
 use crate::tests::{at, created_at, job_id, open, top_level, TempDir};
 use crate::{Moved, Store};
@@ -144,6 +147,53 @@ fn the_cursor_and_both_step_rows_survive_the_drop_and_the_reopen() {
     assert_eq!(current.last_verdict(), None, "nothing has ruled on it");
 }
 
+/// A refused step stops, and the trigger that stopped it is on the log rather
+/// than only in the daemon's memory. `job_steps.last_verdict` is a cache of the
+/// fold, so a stop written without its reason would rebuild as a stopped step
+/// nobody could ask why about.
+#[test]
+fn a_stopped_step_comes_back_saying_why_it_stopped() {
+    let dir = TempDir::new();
+    let why = StepLevelTrigger::of(EscalationTrigger::GateFailure).expect("step-level");
+
+    let expected = {
+        let mut store = open(&dir);
+        let job = running(&mut store, "01STOPPED");
+        let job = step(
+            &mut store,
+            &job,
+            &first(),
+            StepTarget::Running,
+            "2026-08-26T10:02:00.000Z",
+        );
+        step(
+            &mut store,
+            &job,
+            &first(),
+            StepTarget::Stopped(why),
+            "2026-08-26T10:03:00.000Z",
+        )
+    };
+
+    let reopened = open(&dir);
+    let rebuilt = reopened.load_job(&job_id("01STOPPED")).expect("it folds");
+    assert_eq!(rebuilt, expected);
+
+    let stopped = rebuilt.step(&first()).expect("the first row");
+    assert_eq!(stopped.state(), StepState::Stopped);
+    assert_eq!(stopped.last_verdict(), Some(StepVerdict::Failed(why)));
+    assert_eq!(
+        rebuilt.current_step_id(),
+        Some(&first()),
+        "the Job still points at the step that stopped"
+    );
+    assert_eq!(
+        rebuilt.step(&second()).expect("the second row").state(),
+        StepState::NotStarted,
+        "a step that never ran is still not_started"
+    );
+}
+
 #[test]
 fn the_log_holds_both_machines_in_one_order() {
     let dir = TempDir::new();
@@ -174,6 +224,7 @@ fn the_log_holds_both_machines_in_one_order() {
             step_id: first(),
             from: StepState::NotStarted,
             to: StepState::Running,
+            why: None,
         }
     );
     assert_eq!(

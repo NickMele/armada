@@ -53,8 +53,8 @@ pub use job::{
     JobEvent, JobId, JobStatus, JobStep, JudgeCheck, JudgeCriterion, JudgeVerdict, Judgment,
     ManifestId, ModelName, NewJob, NotRunDisposition, NotRunReason, Origin, PilotReason, RepoPath,
     ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepCheck, StepEdge,
-    StepEvent, StepEvidence, StepId, StepSeed, StepState, StepTarget, StepTransitioned,
-    StepVerdict, Subject, Target, Title, TopLevelOrigin, TransitionReason, Transitioned,
-    TriggerKind, TriggerLevel, Urgency, WorkflowId, WriteTargets, ADVANCING_STATUSES,
+    StepEvent, StepEvidence, StepId, StepLevelTrigger, StepSeed, StepState, StepTarget,
+    StepTransitioned, StepVerdict, Subject, Target, Title, TopLevelOrigin, TransitionReason,
+    Transitioned, TriggerKind, TriggerLevel, Urgency, WorkflowId, WriteTargets, ADVANCING_STATUSES,
     DIFF_NONEMPTY, EDGES, MANIFEST_CHECK, STEP_EDGES,
 };

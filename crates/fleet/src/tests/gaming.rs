@@ -11,14 +11,19 @@ use adapter_traits::{Environment, Model};
 use config::ResolvedWorkflow;
 use core_model::{
     EscalationTrigger, EvidenceRef, EvidenceType, GamingPattern, JobStatus, StepEvidence, StepId,
-    Timestamp, TransitionReason,
+    StepLevelTrigger, StepVerdict, Timestamp, TransitionReason,
 };
+
+use ipc::{JobDetail, RunId};
 use testkit::{FakeJudge, FakeWorkProduct, Gaming, Sketch};
 
 use crate::at_step::AtStep;
 use crate::gate::{apply, rule_on, Ruling};
 use crate::judging::{JudgeBudget, Judging};
+use crate::tests::daemon::{a_fleet_judged_by, a_proposal, worktree_directory};
+use crate::tests::detail::get;
 use crate::tests::gate::{budget, diff_evidence, running_job, worktree};
+use crate::tests::tmp::TempDir;
 
 /// The diff a Drone submits when it narrows the gate instead of fixing the
 /// bug: the `run:` string is untouched and the config it resolves through is
@@ -255,4 +260,110 @@ async fn a_flagged_step_keeps_what_the_judge_said_about_its_criteria() {
     assert!(matches!(ruling, Ruling::Suspect { .. }), "{ruling:?}");
     assert_eq!(ruling.judged().len(), 1, "the criterion was answered");
     assert!(!ruling.judged()[0].verdict.refuses(), "and not refused");
+}
+
+/// **The end of the line for a gaming finding.** The Job escalates as
+/// `evidence_suspect`, the step stops carrying that verdict, and the patterns
+/// that tripped reach the detail view a person opens.
+///
+/// Without the last of those, a person sees that evidence was suspect and not
+/// what about it — which is the whole content of the finding, and the same
+/// defect an uncited refusal would be.
+#[tokio::test]
+async fn a_gaming_finding_names_its_patterns_on_the_detail_view() {
+    let home = TempDir::new();
+    let fleet = a_fleet_judged_by(
+        &home,
+        FakeWorkProduct::changed(&["jest.config.js"]).showing(GAMED),
+        one_step_watching_for_gaming(),
+        // Never reached: `check_config_edited` is answered by the diff.
+        FakeJudge::saying("flag: no"),
+    );
+    let job = fleet
+        .propose(a_proposal("narrow the suite instead of fixing it"))
+        .await
+        .expect("a Job at the gate");
+    let job_id = job.id().clone();
+    worktree_directory(&home, &job_id);
+    fleet.approve(&job_id).await.expect("released to run");
+    fleet
+        .submit_evidence(crate::tests::daemon::diff_evidence())
+        .await
+        .expect("the tool took it");
+    let turned = fleet.turn().await.expect("the gate ruled");
+    assert!(matches!(turned.ruled, Some(Ruling::Suspect { .. })));
+
+    let escalated = fleet.load(&job_id).await.expect("the Job reads");
+    assert_eq!(escalated.status(), JobStatus::Escalated);
+    let stopped = escalated
+        .step(&StepId::new("implement"))
+        .expect("the row is there");
+    assert_eq!(stopped.state(), core_model::StepState::Stopped);
+    assert_eq!(
+        stopped.last_verdict(),
+        StepLevelTrigger::of(EscalationTrigger::EvidenceSuspect).map(StepVerdict::Failed),
+    );
+
+    let events = fleet.events();
+    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+    let (_, body) = get(&app, &format!("/jobs/{}", job_id.as_str())).await;
+    let detail: JobDetail = ipc::decode("a Job in full", &body).expect("a JobDetail");
+
+    assert_eq!(detail.steps[0].state.as_wire(), "stopped");
+    assert_eq!(
+        detail.steps[0].flagged.len(),
+        1,
+        "the finding says which pattern, not only that there was one"
+    );
+    assert_eq!(detail.steps[0].flagged[0].pattern, "check_config_edited");
+    assert!(
+        detail.steps[0].flagged[0].cited.contains("jest.config.js"),
+        "an uncited flag is unactionable: {:?}",
+        detail.steps[0].flagged[0]
+    );
+}
+
+/// One step, gated on nothing a command runs, watching for the one pattern the
+/// diff answers. Nothing here reaches a model.
+fn one_step_watching_for_gaming() -> ResolvedWorkflow {
+    testkit::resolved(&[Sketch {
+        id: "implement",
+        label: "Implement",
+        evidence_type: Some("diff"),
+        gates: &[],
+        judged_on: &[],
+        scope: None,
+        gaming: Some(Gaming {
+            baseline: None,
+            flag_if: &["check_config_edited"],
+        }),
+    }])
+}
+
+/// A step nothing was flagged on carries an empty list, the way an unjudged
+/// step does about its criteria.
+#[tokio::test]
+async fn a_step_nothing_was_flagged_on_carries_an_empty_list() {
+    let home = TempDir::new();
+    let fleet = a_fleet_judged_by(
+        &home,
+        FakeWorkProduct::changed(&["src/limiter.ts"]).showing(HONEST),
+        one_step_watching_for_gaming(),
+        FakeJudge::saying("flag: no"),
+    );
+    let job = fleet
+        .propose(a_proposal("fix it honestly"))
+        .await
+        .expect("a Job at the gate");
+    let job_id = job.id().clone();
+    worktree_directory(&home, &job_id);
+    fleet.approve(&job_id).await.expect("released to run");
+    let events = fleet.events();
+    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+
+    let (_, body) = get(&app, &format!("/jobs/{}", job_id.as_str())).await;
+    let text = String::from_utf8(body.clone()).expect("the body is text");
+    assert!(text.contains("\"flagged\":[]"), "{text}");
+    let detail: JobDetail = ipc::decode("a Job in full", &body).expect("a JobDetail");
+    assert!(detail.steps[0].flagged.is_empty());
 }

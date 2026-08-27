@@ -16,6 +16,7 @@
 mod corrupt;
 mod cursor;
 mod forget;
+mod gaming;
 mod migrate;
 mod reconstruct;
 mod roundtrip;

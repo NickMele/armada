@@ -16,8 +16,8 @@ use std::time::Duration;
 use adapter_traits::{Environment, Model, Worktree};
 use config::ResolvedWorkflow;
 use core_model::{
-    CheckOutcome, CriterionId, EscalationTrigger, JobStatus, JudgeVerdict, Timestamp,
-    TransitionReason,
+    CheckOutcome, CriterionId, EscalationTrigger, JobStatus, JudgeVerdict, StepLevelTrigger,
+    StepState, StepVerdict, Timestamp, TransitionReason,
 };
 use testkit::{FakeJudge, FakeWorkProduct, Gate, Sketch};
 
@@ -245,6 +245,18 @@ async fn a_refusal_escalates_the_job_and_its_citation_reaches_the_detail_view() 
         !escalated.status().is_terminal(),
         "a refusal leaves something to answer"
     );
+    // **The step stops, and it says why.** `job-statuses.toml` gives an
+    // escalated Job the step state `stopped`; a step left `running` beneath a
+    // status the inner machine freezes would be a step nothing could ever
+    // write a verdict onto.
+    let stopped = escalated
+        .step(&core_model::StepId::new("implement"))
+        .expect("the row is there");
+    assert_eq!(stopped.state(), StepState::Stopped);
+    assert_eq!(
+        stopped.last_verdict(),
+        StepLevelTrigger::of(EscalationTrigger::GateFailure).map(StepVerdict::Failed),
+    );
 
     let events = fleet.events();
     let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
@@ -260,6 +272,15 @@ async fn a_refusal_escalates_the_job_and_its_citation_reaches_the_detail_view() 
             .and_then(|reason| reason.named.as_deref()),
         Some("gate_failure"),
         "the Board reads the trigger, and it is not a Check's failure"
+    );
+    assert_eq!(detail.steps[0].state.as_wire(), "stopped");
+    assert_eq!(
+        detail.steps[0]
+            .last_verdict
+            .as_ref()
+            .map(|verdict| (verdict.named.as_str(), verdict.trigger.as_deref())),
+        Some(("failed", Some("gate_failure"))),
+        "the step's own verdict crosses, not only the Job's reason"
     );
     let refused = &detail.steps[0].judged[0];
     assert_eq!(refused.verdict.as_wire(), "not_met");

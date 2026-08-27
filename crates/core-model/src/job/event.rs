@@ -25,8 +25,10 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use crate::envelope::{Actor, FieldValue, Timestamp};
+use crate::job::escalation::StepLevelTrigger;
 use crate::job::ids::{JobId, StepId};
 use crate::job::status::{JobStatus, StepState};
+use crate::job::step_machine::StepTarget;
 use crate::job::transition::TransitionReason;
 
 /// One transition, recorded.
@@ -137,17 +139,26 @@ pub struct StepEvent {
     step_id: StepId,
     from: StepState,
     to: StepState,
+    /// Why the step stopped, on the one move that stops it.
+    ///
+    /// The log is the authority and `job_steps.last_verdict` is a cache of the
+    /// fold over it, so a stop recorded without its trigger would rebuild as a
+    /// stopped step nobody could ask why about.
+    why: Option<StepLevelTrigger>,
     under: JobStatus,
     actor: Actor,
     at: Timestamp,
 }
 
 impl StepEvent {
+    /// Takes the whole [`StepTarget`] rather than a state and a reason, for the
+    /// reason [`Target`](crate::Target) fuses the two: apart, a destination
+    /// could be recorded beside a reason it does not store.
     pub(crate) fn recorded(
         job_id: JobId,
         step_id: StepId,
         from: StepState,
-        to: StepState,
+        to: &StepTarget,
         under: JobStatus,
         actor: Actor,
         at: Timestamp,
@@ -156,7 +167,8 @@ impl StepEvent {
             job_id,
             step_id,
             from,
-            to,
+            to: to.state(),
+            why: to.why(),
             under,
             actor,
             at,
@@ -174,6 +186,11 @@ impl StepEvent {
     }
     pub fn to(&self) -> StepState {
         self.to
+    }
+    /// What qualified the move. `Some` only on a stop, which is the one
+    /// destination that stores a reason.
+    pub fn why(&self) -> Option<StepLevelTrigger> {
+        self.why
     }
     /// The Job status this move happened beneath. Always one of
     /// [`ADVANCING_STATUSES`](crate::ADVANCING_STATUSES), and the Job does not
@@ -208,6 +225,12 @@ impl StepEvent {
             "job_status".to_string(),
             FieldValue::Str(self.under.as_wire().to_string()),
         );
+        if let Some(why) = self.why {
+            fields.insert(
+                "step_stop_trigger".to_string(),
+                FieldValue::Str(why.as_wire().to_string()),
+            );
+        }
         fields
     }
 }

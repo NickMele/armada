@@ -69,7 +69,10 @@ fn every_edge_in_the_table_is_admitted() {
             StepState::Running => step(&running(), &first(), StepTarget::Running),
             other => panic!("no way to reach {} by transitioning", other.as_wire()),
         };
-        let target = StepTarget::arriving_at(edge.to).expect("a table edge names a target");
+        // The reason follows the destination, which is the rule
+        // `arriving_at` holds: only a stop carries one, and it must.
+        let target = StepTarget::arriving_at(edge.to, stopping(edge.to))
+            .expect("a table edge names a target");
         let moved = step(&job, &first(), target);
         assert_eq!(
             moved.step(&first()).expect("the row is there").state(),
@@ -122,6 +125,63 @@ fn advancing_a_step_records_that_it_passed() {
         "advancing does not re-enter the step"
     );
     assert_eq!(advanced.updated_at(), &when());
+}
+
+#[test]
+fn stopping_a_step_records_that_it_failed_and_why() {
+    let job = step(&running(), &first(), StepTarget::Running);
+    let started = job.step(&first()).expect("the row is there").clone();
+
+    let why = gate_failure().expect("gate_failure is step-level");
+    let job = step(&job, &first(), StepTarget::Stopped(why));
+    let stopped = job.step(&first()).expect("the row is there");
+    assert_eq!(stopped.state(), StepState::Stopped);
+    assert_eq!(
+        stopped.last_verdict(),
+        Some(StepVerdict::Failed(why)),
+        "`stopped` says the retries are spent; the verdict says what spent them"
+    );
+    assert_eq!(
+        stopped.entered_at(),
+        started.entered_at(),
+        "stopping does not re-enter the step"
+    );
+    assert_eq!(
+        job.current_step_id(),
+        Some(&first()),
+        "an escalated Job points at the step it stopped on"
+    );
+}
+
+/// The trigger travels on the event as well as on the row, because the log is
+/// the authority and the column is a cache of the fold over it.
+#[test]
+fn the_move_that_stops_a_step_records_why_and_no_other_move_does() {
+    let job = step(&running(), &first(), StepTarget::Running);
+    let why = gate_failure().expect("gate_failure is step-level");
+    let stopped = job
+        .transition_step(&first(), StepTarget::Stopped(why), Actor::Fleet, when())
+        .expect("running -> stopped is an edge");
+    assert_eq!(stopped.event.why(), Some(why));
+    assert_eq!(stopped.event.to(), StepState::Stopped);
+
+    let advanced = job
+        .transition_step(&first(), StepTarget::Advanced, Actor::Fleet, when())
+        .expect("running -> advanced is an edge");
+    assert_eq!(advanced.event.why(), None, "an advance qualifies nothing");
+}
+
+/// A step that never ran cannot stop: `stopped` means the retries are spent,
+/// and a step nothing attempted has spent none.
+#[test]
+fn a_step_that_never_started_cannot_be_stopped() {
+    let why = gate_failure().expect("gate_failure is step-level");
+    match running().transition_step(&first(), StepTarget::Stopped(why), Actor::Fleet, when()) {
+        Err(IllegalStepTransition::NoSuchEdge { from, to, .. }) => {
+            assert_eq!((from, to), (StepState::NotStarted, StepState::Stopped));
+        }
+        other => panic!("expected a refusal, found {other:?}"),
+    }
 }
 
 #[test]
@@ -225,22 +285,63 @@ fn naming_a_step_the_job_does_not_have_is_refused_rather_than_ignored() {
 // ------------------------------------------------- what cannot be asked for
 
 #[test]
-fn the_three_states_m1_cannot_reach_have_no_target_to_arrive_by() {
-    for state in [
-        StepState::AwaitingHuman,
-        StepState::Retrying,
-        StepState::Stopped,
-    ] {
+fn the_two_states_m1_cannot_reach_have_no_target_to_arrive_by() {
+    for state in [StepState::AwaitingHuman, StepState::Retrying] {
         assert!(
-            StepTarget::arriving_at(state).is_none(),
+            StepTarget::arriving_at(state, None).is_none(),
             "{} needs a human gate or a retry budget, and M1 has neither",
+            state.as_wire()
+        );
+        assert!(
+            StepTarget::arriving_at(state, gate_failure()).is_none(),
+            "and a trigger does not buy one: {}",
             state.as_wire()
         );
     }
     assert!(
-        StepTarget::arriving_at(StepState::NotStarted).is_none(),
+        StepTarget::arriving_at(StepState::NotStarted, None).is_none(),
         "not_started is written at creation and is not a destination"
     );
+}
+
+/// The pair is read as a whole. A stop with no trigger names no target, and a
+/// trigger on a destination that stores none names no target either — which is
+/// what stops a stored row folding into a step that stopped for no reason.
+#[test]
+fn a_stored_state_and_its_reason_are_read_as_one_value() {
+    assert!(StepTarget::arriving_at(StepState::Stopped, None).is_none());
+    assert!(StepTarget::arriving_at(StepState::Advanced, gate_failure()).is_none());
+    assert!(StepTarget::arriving_at(StepState::Running, gate_failure()).is_none());
+    assert_eq!(
+        StepTarget::arriving_at(StepState::Stopped, gate_failure()),
+        gate_failure().map(StepTarget::Stopped)
+    );
+}
+
+/// `last_verdict` admits step-level triggers only, and the payload cannot be
+/// built from a Job-level one at all.
+#[test]
+fn a_job_level_trigger_cannot_be_made_into_a_step_stop() {
+    for trigger in EscalationTrigger::ALL {
+        assert_eq!(
+            StepLevelTrigger::of(*trigger).is_some(),
+            trigger.level() == TriggerLevel::Step,
+            "{}",
+            trigger.as_wire()
+        );
+    }
+}
+
+fn gate_failure() -> Option<StepLevelTrigger> {
+    StepLevelTrigger::of(EscalationTrigger::GateFailure)
+}
+
+/// The reason a table edge's destination requires, where it requires one.
+fn stopping(to: StepState) -> Option<StepLevelTrigger> {
+    match to {
+        StepState::Stopped => gate_failure(),
+        _ => None,
+    }
 }
 
 #[test]

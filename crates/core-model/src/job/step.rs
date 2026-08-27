@@ -23,7 +23,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::envelope::Timestamp;
-use crate::job::escalation::EscalationTrigger;
+use crate::job::escalation::StepLevelTrigger;
 use crate::job::ids::{JobId, StepId};
 use crate::job::status::StepState;
 use crate::job::step_machine::StepTarget;
@@ -44,11 +44,13 @@ use crate::job::workflow::EvidenceType;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StepVerdict {
     Passed,
-    /// The registry says only step-level triggers may appear here. Four
-    /// triggers carry no level at all, so the constraint is unenforceable until
-    /// those four are decided, and this accepts any trigger rather than
-    /// deciding them.
-    Failed(EscalationTrigger),
+    /// **[`StepLevelTrigger`] and not [`EscalationTrigger`]**, which is the
+    /// registry's own rule that only step-level triggers appear here, held by
+    /// the type rather than by a check. Every trigger now carries a level, so
+    /// the constraint that was unenforceable is enforceable.
+    ///
+    /// [`EscalationTrigger`]: crate::EscalationTrigger
+    Failed(StepLevelTrigger),
     NotReached,
 }
 
@@ -126,9 +128,10 @@ impl JobStep {
     ///
     /// `last_verdict` follows the destination rather than a caller:
     /// `advanced`'s meaning is "the step passed its advance gate", which is
-    /// what `passed` records. Entering `running` leaves the previous verdict
-    /// standing — the registry is explicit that activity and verdict are
-    /// separate fields, so starting work does not erase the last ruling.
+    /// what `passed` records, and `stopped` is `failed` carrying the trigger
+    /// the target already had to name. Entering `running` leaves the previous
+    /// verdict standing — the registry is explicit that activity and verdict
+    /// are separate fields, so starting work does not erase the last ruling.
     pub(crate) fn moved_to(&self, to: &StepTarget, at: Timestamp) -> JobStep {
         JobStep {
             job_id: self.job_id.clone(),
@@ -138,10 +141,11 @@ impl JobStep {
             last_verdict: match to {
                 StepTarget::Running => self.last_verdict,
                 StepTarget::Advanced => Some(StepVerdict::Passed),
+                StepTarget::Stopped(why) => Some(StepVerdict::Failed(*why)),
             },
             entered_at: match to {
                 StepTarget::Running => at.clone(),
-                StepTarget::Advanced => self.entered_at.clone(),
+                StepTarget::Advanced | StepTarget::Stopped(_) => self.entered_at.clone(),
             },
             updated_at: at,
         }

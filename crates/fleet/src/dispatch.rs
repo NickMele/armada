@@ -362,6 +362,7 @@ where
         self.recorded_judgments(&job_id, &step, &ruling).await?;
         self.recorded_evidence(&job_id, &step, &landed.submission, &ruling)
             .await?;
+        self.recorded_gaming(&job_id, &step, &ruling).await?;
         self.act_on(&ruling, &job_id, &step, working).await?;
         Ok(Some(ruling))
     }
@@ -395,18 +396,25 @@ where
             // The whole of what finishing a Job is, including the commit that
             // makes its branch mergeable, is `landing`'s.
             Ruling::Finished { tell, .. } => self.finish(ruling, tell, job_id, step, working).await,
-            // Both stop the step and neither tells the Drone, and there the
-            // two part: `Failed` ends the Job, `Refused` escalates it. The
-            // refusal reprompt the prompt contract specifies arrives with the
-            // retry ledger, which is what would give a Drone somewhere to go
-            // with a citation; until then it goes to the person, and `apply`
-            // is where the two destinations are decided.
-            // Three endings, one shape: the step stops, the Drone is not told,
-            // and `apply` decides which status and which trigger. `Suspect`
-            // joins them because a person is being asked either way — what
-            // differs is the claim being made, which is the trigger's to say.
+            // Three endings, one shape: the work stops here, the Drone is not
+            // told, and `apply` decides which status and which trigger.
+            // `Suspect` joins them because a person is being asked either way —
+            // what differs is the claim being made, which is the trigger's to
+            // say. The refusal reprompt the prompt contract specifies arrives
+            // with the retry ledger, which is what would give a Drone somewhere
+            // to go with a citation; until then it goes to the person.
             Ruling::Failed { .. } | Ruling::Refused { .. } | Ruling::Suspect { .. } => {
                 let job = self.load(job_id).await?;
+                // **Before the Job moves, and it cannot be after.** The inner
+                // machine is frozen beneath every status but `running` and
+                // `awaiting_review`, so a step stopped after the escalation
+                // would be refused and `last_verdict` would stay unwritten —
+                // which is exactly what left an escalated Job's step reading
+                // `running` with nothing saying why.
+                let job = match ruling.stops_the_step() {
+                    Some(why) => self.move_step(&job, step, StepTarget::Stopped(why)).await?,
+                    None => job,
+                };
                 self.applied(&job, ruling).await?;
                 // Terminated without a turn, and the worktree is kept. See
                 // `Ruling::ends_the_drone` for why an escalated Job's Drone

@@ -1,38 +1,31 @@
-//! The four writes, and the fact that each writes one thing.
+//! The writes, and the fact that each writes one thing.
 //!
 //! # There is no method here that sets a status, or a step state
 //!
-//! [`Store::record_transition`] takes a [`Transitioned`], and a `Transitioned`
-//! holds a [`JobEvent`](core_model::JobEvent) whose only constructor is
-//! `pub(crate)` inside `core-model`. **Nothing outside `Job::transition` can
-//! produce one.** So "the status column and the event row always agree" is not
-//! a rule this crate follows carefully; it is the only call that exists.
-//!
-//! [`Store::record_step_transition`] is the same shape for the inner machine:
-//! it takes a [`StepTransitioned`], which only `Job::transition_step` mints,
-//! and writes the `job_steps` row, the Job's cursor and the log entry together.
+//! [`Store::record_transition`] takes a [`Transitioned`], whose
+//! [`JobEvent`](core_model::JobEvent) has no constructor outside
+//! `Job::transition`; [`Store::record_step_transition`] takes a
+//! [`StepTransitioned`], which only `Job::transition_step` mints, and writes
+//! the `job_steps` row, the Job's cursor and the log entry together. So "the
+//! column and the event row always agree" is not a rule this crate follows
+//! carefully; it is the only call that exists.
 //!
 //! The alternatives were an `update_status` plus an `append_event`, which makes
 //! forgetting the second the easy path, or one function taking both halves
 //! separately, which makes passing mismatched halves possible. Both are runtime
-//! checks waiting to be written. This is neither.
+//! checks waiting to be written.
 //!
-//! # One transaction, both rows
+//! # One transaction, and no clock
 //!
-//! `job-fields.toml` requires it: the column is a cache of the fold, and a
-//! cache written outside the transaction that wrote the log is a cache that can
-//! outlive a crash on its own.
-//!
-//! # Time is injected
-//!
-//! Nothing here reads a clock. The transition's instant arrives on the event,
-//! stamped by whoever called `Job::transition`; creation's arrives as an
-//! argument. A store that timestamped its own writes could not be replayed and
-//! could not be tested.
-
+//! `job-fields.toml` requires the row and its log entry to land together: the
+//! column is a cache of the fold, and a cache written outside the transaction
+//! that wrote the log can outlive a crash on its own. Nothing here reads a
+//! clock either — a store that timestamped its own writes could not be replayed
+//! and could not be tested.
 use core_model::{
     Attachment, DroneAssigned, DronePresence, GateManifest, Job, JobId, JobStep, Judgment,
-    StepCheck, StepEvidence, StepId, StepTransitioned, Timestamp, Transitioned, WriteTargets,
+    StepCheck, StepEvidence, StepId, StepLevelTrigger, StepTransitioned, Timestamp,
+    TransitionReason, Transitioned, WriteTargets,
 };
 use rusqlite::Transaction;
 
@@ -270,14 +263,17 @@ impl Store {
         .map_err(fault("updating the cached cursor"))
         .map_err(WriteError::Database)?;
 
+        let (reason_kind, reason_value) = columns::write_reason(&stop_reason(event.why()));
         tx.execute(
             "INSERT INTO job_events (
                  kind, job_id, status_from, status_to, reason_kind, reason_value,
                  step_id, state_from, state_to, actor, at
-             ) VALUES ('step_transition', ?1, ?2, ?2, 'unqualified', NULL, ?3, ?4, ?5, ?6, ?7)",
+             ) VALUES ('step_transition', ?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             rusqlite::params![
                 job_id,
                 event.under().as_wire(),
+                reason_kind,
+                reason_value,
                 step_id,
                 event.from().as_wire(),
                 event.to().as_wire(),
@@ -530,9 +526,19 @@ fn write_steps(tx: &Transaction<'_>, job: &Job) -> Result<(), WriteError> {
     Ok(())
 }
 
-/// `None` until a gate has ruled on the step. Advancing is what writes one.
+/// `None` until a gate has ruled on the step. Advancing or stopping writes one.
 fn verdict(step: &JobStep) -> Option<&'static str> {
     step.last_verdict().map(|verdict| verdict.as_wire())
+}
+
+/// A step stop's trigger, in the same two columns a status transition uses.
+/// One `reason_kind` vocabulary across both machines rather than a second
+/// spelling for the inner one.
+fn stop_reason(why: Option<StepLevelTrigger>) -> TransitionReason {
+    match why {
+        Some(why) => TransitionReason::Escalation(why.trigger()),
+        None => TransitionReason::Unqualified,
+    }
 }
 
 /// One row per declared path. Zero rows is ambiguous on its own — null is not

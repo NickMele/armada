@@ -99,6 +99,33 @@ pub enum TriggerLevel {
     Job,
 }
 
+/// A trigger the registry types step-level, and the only thing `last_verdict`
+/// admits.
+///
+/// A newtype over [`EscalationTrigger`] rather than a second enum of the seven:
+/// the mapping already exists on [`EscalationTrigger::level`], and a copy of it
+/// would be the second vocabulary this crate keeps refusing. The narrowing is
+/// paid once, here, and every call site downstream is total — a step cannot be
+/// stopped with `fan_out` because there is no way to build the argument.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StepLevelTrigger(EscalationTrigger);
+
+impl StepLevelTrigger {
+    /// `None` where the registry types the trigger Job-level. A sub-kind reads
+    /// its parent's level, so it narrows exactly as its parent does.
+    pub fn of(trigger: EscalationTrigger) -> Option<StepLevelTrigger> {
+        matches!(trigger.level(), TriggerLevel::Step).then_some(StepLevelTrigger(trigger))
+    }
+
+    pub fn trigger(&self) -> EscalationTrigger {
+        self.0
+    }
+
+    pub fn as_wire(&self) -> &'static str {
+        self.0.as_wire()
+    }
+}
+
 impl EscalationTrigger {
     /// Every variant, in registry order.
     pub const ALL: &'static [EscalationTrigger] = &[

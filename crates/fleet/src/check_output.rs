@@ -97,6 +97,32 @@ where
             .map_err(Adrift::Writing)
     }
 
+    /// Write down which gaming patterns the step's evidence tripped.
+    ///
+    /// **Only where something was flagged.** A step whose gaming check found
+    /// nothing has nothing to say and nothing to clear; the writer replaces a
+    /// step's rows whole, so an empty write on an ordinary pass would erase the
+    /// finding a resubmission had not answered.
+    ///
+    /// Without this the escalation says the evidence is suspect and not what
+    /// about it, which is the whole content of the finding — the same defect an
+    /// uncited refusal would be.
+    pub(crate) async fn recorded_gaming(
+        &self,
+        job_id: &JobId,
+        step: &StepId,
+        ruling: &Ruling,
+    ) -> Result<(), Adrift> {
+        let Some(flagged) = ruling.flagged() else {
+            return Ok(());
+        };
+        self.store()
+            .lock()
+            .await
+            .record_step_gaming_flags(job_id, step, flagged.cited(), &self.now())
+            .map_err(Adrift::Writing)
+    }
+
     /// Write down the evidence the gate ruled on.
     ///
     /// **Written whatever the ruling**, for the reason a Check result is: a

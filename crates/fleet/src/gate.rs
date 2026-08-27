@@ -38,7 +38,7 @@ use adapter_traits::WorkProduct;
 use checks_runner::Output;
 use core_model::{
     Actor, DeclaredPaths, EscalationTrigger, IllegalTransition, Job, Judgment, ResolvedCheck,
-    StepCheck, StepEvidence, StepId, Target, Timestamp, Transitioned,
+    StepCheck, StepEvidence, StepId, StepLevelTrigger, Target, Timestamp, Transitioned,
 };
 use verification::{
     decide, Accepted, Baseline, CheckFailed, Flagged, InScope, NotWhatTheStepAsked, Observed,
@@ -244,6 +244,25 @@ impl Ruling {
             | Ruling::Suspect { output, .. }
             | Ruling::CouldNotDecide { output, .. } => output,
             Ruling::NotWhatTheStepAsked(_) => &[],
+        }
+    }
+
+    /// The trigger a ruling stops the step with, and `None` where it stops no
+    /// step.
+    ///
+    /// **The one place either trigger is named**, and what [`apply`] derives
+    /// the escalation from — so the step's `last_verdict` and the Job's stored
+    /// reason cannot come to disagree about why the same gate stopped.
+    ///
+    /// [`Ruling::Failed`] answers `None`: `job-statuses.toml` gives `stopped`
+    /// to `escalated` alone, and `completed_failed`'s step machine is "frozen
+    /// at the failed step" with no state named. Stopping a step under a
+    /// terminal status would be this file deciding that.
+    pub fn stops_the_step(&self) -> Option<StepLevelTrigger> {
+        match self {
+            Ruling::Refused { .. } => StepLevelTrigger::of(EscalationTrigger::GateFailure),
+            Ruling::Suspect { .. } => StepLevelTrigger::of(EscalationTrigger::EvidenceSuspect),
+            _ => None,
         }
     }
 
@@ -516,14 +535,13 @@ where
 /// answer — so it is `escalated`, from which redispatch and Pilot are both
 /// reachable and `completed_failed` still is, once a person agrees.
 ///
-/// The trigger is `gate_failure`, which `docs/concepts/judge.md` picks for the
-/// step evidence gate in as many words: evidence was submitted, it honestly did
-/// not pass, and the retry budget — none, at this milestone — is spent.
-///
-/// **Not `evidence_suspect`**, which the same table gives to the gaming check
-/// alone. It means the evidence was likely gamed, and a Judge that refused a
-/// criterion accused nobody; it is also the one trigger whose `level` the
-/// registry leaves undecided, so it could not legally reach `last_verdict`.
+/// The trigger comes from [`Ruling::stops_the_step`] and is not spelled here:
+/// the step that stopped and the Job that escalated are stating one fact, and
+/// two spellings of it could drift. `gate_failure` is what
+/// `docs/concepts/judge.md` picks for the step evidence gate in as many words;
+/// `evidence_suspect` is the gaming check's alone, because a Judge that refused
+/// a criterion accused nobody. Both are step-level, which is what lets each
+/// reach `last_verdict`.
 pub fn apply(
     job: &Job,
     ruling: &Ruling,
@@ -532,19 +550,12 @@ pub fn apply(
     let target = match ruling {
         Ruling::Finished { .. } => Target::CompletedSuccess,
         Ruling::Failed { .. } => Target::CompletedFailed,
-        Ruling::Refused { .. } => Target::Escalated(EscalationTrigger::GateFailure),
-        // **`evidence_suspect`, and this is the one thing that reaches it.**
-        // A Judge refusing a criterion has accused nobody; the gaming check
-        // says the evidence itself is not to be trusted, which is a different
-        // claim and needs a person rather than another attempt at the same
-        // work. The registry types it step-level, which is what lets it name
-        // which step's evidence is in question.
-        Ruling::Suspect { .. } => Target::Escalated(EscalationTrigger::EvidenceSuspect),
-        // A step advancing inside a running Job moves the inner machine and not
-        // the outer one, and the other two rulings move nothing at all.
-        Ruling::Advanced { .. }
-        | Ruling::NotWhatTheStepAsked(_)
-        | Ruling::CouldNotDecide { .. } => return None,
+        // **The rulings that escalate are exactly the rulings that stop the
+        // step**, which is why this reads the trigger off that answer instead
+        // of naming one. `None` covers the three that move nothing: a step
+        // advancing inside a running Job moves the inner machine and not the
+        // outer one, and the other two move neither.
+        _ => Target::Escalated(ruling.stops_the_step()?.trigger()),
     };
     Some(job.transition(target, Actor::Fleet, at))
 }

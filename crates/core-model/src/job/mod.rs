@@ -56,7 +56,7 @@ mod tests;
 
 pub use check::{CheckOutcome, StepCheck};
 pub use drone::{DroneAssigned, DroneMoved, DronePresence, IllegalDroneMove};
-pub use escalation::{EscalationTrigger, TriggerKind, TriggerLevel};
+pub use escalation::{EscalationTrigger, StepLevelTrigger, TriggerKind, TriggerLevel};
 pub use event::{JobEvent, StepEvent};
 pub use fields::{
     AcceptanceCriterion, Attachment, BlankBranch, Branch, CriterionSource, DependencyDirection,

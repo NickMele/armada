@@ -38,7 +38,8 @@
 
 use core_model::{
     Actor, CriteriaOwed, DroneId, DronePresence, EscalationTrigger, Job, JobId, JobStatus,
-    PilotReason, StepId, StepState, StepTarget, Target, Timestamp, TransitionReason, Ulid,
+    PilotReason, StepId, StepLevelTrigger, StepState, StepTarget, Target, Timestamp,
+    TransitionReason, Ulid,
 };
 use rusqlite::Row;
 
@@ -80,6 +81,9 @@ pub enum Moved {
         step_id: StepId,
         from: StepState,
         to: StepState,
+        /// Why the step stopped, on the one move that stops it. The column pair
+        /// is the same one a Job row's reason uses.
+        why: Option<StepLevelTrigger>,
     },
     /// A Drone arrived on the Job or left it, and the Job did not move either.
     /// The pointer this folds to is `assigned_drone`, which has no states of
@@ -149,7 +153,12 @@ pub(crate) fn replay(created: Job, events: &[RecordedEvent]) -> Result<Job, RowE
                     })?
                     .job
             }
-            Moved::Step { step_id, from, to } => step(&job, event, step_id, *from, *to)?,
+            Moved::Step {
+                step_id,
+                from,
+                to,
+                why,
+            } => step(&job, event, step_id, *from, *to, *why)?,
             Moved::Drone { drone_id, presence } => drone(&job, event, drone_id, *presence)?,
         };
     }
@@ -168,6 +177,7 @@ fn step(
     step_id: &StepId,
     from: StepState,
     to: StepState,
+    why: Option<StepLevelTrigger>,
 ) -> Result<Job, RowError> {
     let folded = job.step(step_id).map(|row| row.state());
     if folded != Some(from) {
@@ -179,12 +189,13 @@ fn step(
             recorded: from,
         });
     }
-    let target = StepTarget::arriving_at(to).ok_or_else(|| RowError::StepStateNotReachable {
-        job_id: event.job_id.clone(),
-        seq: event.seq,
-        step_id: step_id.clone(),
-        state: to,
-    })?;
+    let target =
+        StepTarget::arriving_at(to, why).ok_or_else(|| RowError::StepStateNotReachable {
+            job_id: event.job_id.clone(),
+            seq: event.seq,
+            step_id: step_id.clone(),
+            state: to,
+        })?;
     Ok(job
         .transition_step(step_id, target, event.actor, event.at.clone())
         .map_err(|cause| RowError::IllegalRecordedStepTransition {
@@ -296,6 +307,24 @@ fn attestation(reason: &TransitionReason) -> Option<CriteriaOwed> {
     }
 }
 
+/// A step row's stored reason, narrowed to what `last_verdict` admits.
+///
+/// A step move stores either nothing or the trigger that stopped it. A pilot
+/// reason or an attestation debt on a step row is a shape the schema's trigger
+/// refuses to write, so one arriving here came from outside this crate.
+fn stop_reason(reason: TransitionReason) -> Result<Option<StepLevelTrigger>, String> {
+    match reason {
+        TransitionReason::Unqualified => Ok(None),
+        TransitionReason::Escalation(trigger) => StepLevelTrigger::of(trigger).map(Some).ok_or(
+            format!("`{}` is not a step-level trigger", trigger.as_wire()),
+        ),
+        other => Err(format!(
+            "`{}` is not a reason a step move stores",
+            kind(&other)
+        )),
+    }
+}
+
 /// What a stored reason is, for a refusal to name. The same five spellings
 /// `columns::write_reason` puts in the column.
 fn kind(reason: &TransitionReason) -> &'static str {
@@ -395,21 +424,33 @@ fn moved(row: &Row<'_>) -> Result<Moved, RowError> {
                 )?,
             })
         }
-        "step_transition" => Ok(Moved::Step {
-            step_id: StepId::new(present(row, "step_id")?),
-            from: enum_value(
-                StepState::from_wire,
-                "job_events",
-                "state_from",
-                &present(row, "state_from")?,
-            )?,
-            to: enum_value(
-                StepState::from_wire,
-                "job_events",
-                "state_to",
-                &present(row, "state_to")?,
-            )?,
-        }),
+        "step_transition" => {
+            let reason_kind = string(row, "reason_kind")?;
+            let reason_value: Option<String> = maybe(row, "reason_value")?;
+            let reason = columns::read_reason(&reason_kind, reason_value.as_deref());
+            Ok(Moved::Step {
+                step_id: StepId::new(present(row, "step_id")?),
+                from: enum_value(
+                    StepState::from_wire,
+                    "job_events",
+                    "state_from",
+                    &present(row, "state_from")?,
+                )?,
+                to: enum_value(
+                    StepState::from_wire,
+                    "job_events",
+                    "state_to",
+                    &present(row, "state_to")?,
+                )?,
+                why: reason
+                    .and_then(stop_reason)
+                    .map_err(|detail| RowError::MalformedColumn {
+                        table: "job_events",
+                        column: "reason_value",
+                        detail,
+                    })?,
+            })
+        }
         // The `kind` column is the presence, spelled by the domain enum itself,
         // so the trigger's `IN` list and this arm cannot drift apart.
         other if DronePresence::from_wire(other).is_some() => Ok(Moved::Drone {

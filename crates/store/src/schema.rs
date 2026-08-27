@@ -47,7 +47,7 @@ pub const KNOWN_SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 /// **Nothing is ever edited here.** Changing entry zero changes what an already
 /// migrated file is assumed to contain, which is the one thing the version
 /// number exists to stop.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12];
 
 /// Version 1 — the Job record, the rows beneath it, and the log.
 const V1: &str = r#"
@@ -516,5 +516,80 @@ CREATE TABLE job_step_evidence (
     not_claimed   TEXT NOT NULL,
     recorded_at   TEXT NOT NULL,
     PRIMARY KEY (job_id, step_id)
+) STRICT;
+"#;
+
+/// Version 11 — a step move may carry why the step stopped.
+///
+/// V3 pinned every step row to `reason_kind = 'unqualified'`, which held while
+/// `advanced` was the only destination that said anything. `running -> stopped`
+/// says why, and `job_steps.last_verdict` is a cache of the fold, so a stop
+/// written without its trigger rebuilds as a stopped step nobody can ask why
+/// about.
+///
+/// The reason is bound to `state_to = 'stopped'` both ways, which is
+/// `StepTarget::arriving_at` said in SQL. The trigger is rewritten whole
+/// because `SQLite` cannot alter one. **Nothing to backfill**: no step could
+/// stop before this, so every existing row satisfies the unqualified arm.
+const V11: &str = r#"
+DROP TRIGGER job_events_hold_one_whole_shape;
+
+CREATE TRIGGER job_events_hold_one_whole_shape
+BEFORE INSERT ON job_events
+WHEN NOT (
+    (NEW.kind = 'job_transition'
+        AND NEW.step_id IS NULL
+        AND NEW.state_from IS NULL
+        AND NEW.state_to IS NULL
+        AND NEW.drone_id IS NULL
+        AND NEW.status_from <> NEW.status_to)
+ OR (NEW.kind = 'step_transition'
+        AND NEW.step_id IS NOT NULL
+        AND NEW.state_from IS NOT NULL
+        AND NEW.state_to IS NOT NULL
+        AND NEW.drone_id IS NULL
+        AND NEW.status_from = NEW.status_to
+        AND ((NEW.state_to <> 'stopped'
+                AND NEW.reason_kind = 'unqualified'
+                AND NEW.reason_value IS NULL)
+          OR (NEW.state_to = 'stopped'
+                AND NEW.reason_kind = 'escalation'
+                AND NEW.reason_value IS NOT NULL)))
+ OR (NEW.kind IN ('drone_spawned', 'drone_exited')
+        AND NEW.step_id IS NULL
+        AND NEW.state_from IS NULL
+        AND NEW.state_to IS NULL
+        AND NEW.drone_id IS NOT NULL
+        AND NEW.status_from = NEW.status_to
+        AND NEW.reason_kind = 'unqualified'
+        AND NEW.reason_value IS NULL)
+)
+BEGIN
+    SELECT RAISE(ABORT, 'a job_events row is one whole shape: a job transition with no step or drone columns, a step move beneath an unchanged status carrying a trigger only where it stops the step, or a drone arriving or leaving beneath one');
+END;
+"#;
+
+/// Version 12 — which gaming patterns a step's evidence tripped.
+///
+/// `evidence_suspect` on its own says the evidence is not to be trusted and not
+/// what about it, which is the whole content of the finding. Shaped like
+/// `job_step_judgments`, and replaced whole per step for its reason: two passes
+/// interleaved would read as one that found twice as much.
+///
+/// **Nothing to backfill** — no flag was written down before this table
+/// existed, which is what zero rows says, the same refusal V6, V8, V9 and V10
+/// make.
+const V12: &str = r#"
+-- One row per pattern flagged, in the order the check answered them. `cited`
+-- names the file, line or assertion the flag is about and is the whole value of
+-- the row; a flag that cited nothing would be unactionable.
+CREATE TABLE job_step_gaming_flags (
+    job_id     TEXT NOT NULL REFERENCES jobs(job_id),
+    step_id    TEXT NOT NULL,
+    ordinal    INTEGER NOT NULL,
+    pattern    TEXT NOT NULL,
+    cited      TEXT NOT NULL,
+    flagged_at TEXT NOT NULL,
+    PRIMARY KEY (job_id, step_id, ordinal)
 ) STRICT;
 "#;
