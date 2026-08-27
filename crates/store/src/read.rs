@@ -53,7 +53,33 @@ pub struct Loaded {
 
 /// A Job as the log says it is, beside the status its row claimed. The pair
 /// travels together so the boot read can tell a stale cache from a good one.
-type Rebuilt = Result<(Job, JobStatus), RowError>;
+///
+/// Boxed on the `Err` side: the identity and the refusal together are wide
+/// enough that every `Ok` would otherwise carry the width.
+type Rebuilt = Result<(Job, JobStatus), Box<UnreadableRow>>;
+
+/// A row the fold refused, and what the row still says about itself.
+///
+/// **A row that will not rebuild still has an id**, and removing one needs no
+/// more than that — so the identity travels with the refusal rather than the
+/// refusal alone. `armada clean` is what reads it.
+#[derive(Debug)]
+pub struct UnreadableRow {
+    /// `None` only when `job_id` itself did not read, which leaves nothing to
+    /// derive from and nothing safe to remove.
+    pub row: Option<RowIdentity>,
+    pub why: RowError,
+}
+
+/// The two columns a rebuild never has to get past: which Job, and whose.
+///
+/// Both have been `TEXT NOT NULL` since the first migration, so a row orphaned
+/// by a later one still carries them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RowIdentity {
+    pub job_id: JobId,
+    pub owner_manifest_id: ManifestId,
+}
 
 /// A cached status column that disagreed with the log, and was corrected.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -84,7 +110,7 @@ impl Store {
     /// not dropped either: the error carries both halves, so a caller cannot
     /// end up holding a short list with nothing saying so.
     pub fn load_all_jobs(&mut self) -> Result<Loaded, LoadAllError> {
-        let attempts = self.rebuild_every_job()?;
+        let attempts: Vec<Rebuilt> = self.rebuild_every_job()?;
         let mut loaded = Loaded::default();
         let mut failed = Vec::new();
         for attempt in attempts {
@@ -99,7 +125,7 @@ impl Store {
                     }
                     loaded.jobs.push(job);
                 }
-                Err(error) => failed.push(error),
+                Err(error) => failed.push(*error),
             }
         }
         for repair in &loaded.repaired {
@@ -125,7 +151,7 @@ impl Store {
             .map_err(fault("preparing the job read"))
             .map_err(LoadAllError::Database)?;
         let rows = statement
-            .query_map([], |row| Ok(self.rebuild(row)))
+            .query_map([], |row| Ok(self.attempt(row)))
             .map_err(fault("reading job rows"))
             .map_err(LoadAllError::Database)?;
         let mut attempts = Vec::new();
@@ -138,8 +164,18 @@ impl Store {
         Ok(attempts)
     }
 
+    /// One rebuild, with the row's own identity kept where it failed.
+    fn attempt(&self, row: &Row<'_>) -> Rebuilt {
+        self.rebuild(row).map_err(|why| {
+            Box::new(UnreadableRow {
+                row: identifies(row),
+                why,
+            })
+        })
+    }
+
     /// The Job as its log says it is, and the status its row claimed.
-    fn rebuild(&self, row: &Row<'_>) -> Rebuilt {
+    fn rebuild(&self, row: &Row<'_>) -> Result<(Job, JobStatus), RowError> {
         let job_id = JobId::carried(Ulid::carried(string(row, "job_id")?));
         let cached = enum_value(
             JobStatus::from_wire,
@@ -403,6 +439,19 @@ impl Store {
 
 const SELECT_JOB: &str = "SELECT * FROM jobs WHERE job_id = ?1";
 const SELECT_ALL_JOBS: &str = "SELECT * FROM jobs ORDER BY job_id";
+
+/// Who the row is, read without folding anything.
+///
+/// Deliberately tolerant of everything but its own two columns: this is the one
+/// read that has to work on a row the rebuild has already refused.
+fn identifies(row: &Row<'_>) -> Option<RowIdentity> {
+    Some(RowIdentity {
+        job_id: JobId::carried(Ulid::carried(string(row, "job_id").ok()?)),
+        owner_manifest_id: ManifestId::carried(Ulid::carried(
+            string(row, "owner_manifest_id").ok()?,
+        )),
+    })
+}
 
 fn subject(row: &Row<'_>) -> Result<Option<Subject>, RowError> {
     match (maybe(row, "subject_kind")?, maybe(row, "subject_ref")?) {

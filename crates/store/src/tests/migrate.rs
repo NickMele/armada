@@ -91,6 +91,11 @@ fn a_job_written_before_the_workflow_was_frozen_is_named_rather_than_guessed_at(
             assert_eq!(loaded.jobs.len(), 1, "the readable Job still comes back");
             assert_eq!(loaded.jobs[0].id().as_str(), "01NEWONE");
             assert_eq!(failed.len(), 1, "and the unreadable one is carried out");
+            // The seam `armada clean` removes it through: no fold, no rebuild,
+            // just the two columns every migration keeps.
+            let named = failed[0].row.as_ref().expect("the row still names itself");
+            assert_eq!(named.job_id.as_str(), "01OLDONE");
+            assert_eq!(named.owner_manifest_id.as_str(), "01OWNERMANIFEST");
         }
         other => panic!("expected a partial failure, found {other:?}"),
     }

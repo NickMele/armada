@@ -64,11 +64,25 @@ pub fn cleaned(cleaned: &Cleaned) {
             println!("  {}", path.display());
         }
     }
-    if cleaned.unreadable > 0 {
+    for row in &cleaned.unreadable {
+        println!("\n{} — a row that would not rebuild", row.job_id);
+        // Before the removals, not after: it is the last time anything can say
+        // why, and a person reading this is deciding whether to stop.
+        println!("  {}", row.why);
+        println!("  {}", worktree(&row.reclaimed.worktree));
+        println!("  {}", branch(&row.reclaimed.branch));
+        if row.forgotten.existed {
+            println!(
+                "  row cleared: {} event(s), {} step(s)",
+                row.forgotten.events, row.forgotten.steps
+            );
+        }
+    }
+    if cleaned.unreadable_elsewhere > 0 {
         println!(
-            "\n{} row(s) in the store would not rebuild, so nothing here \
-             could derive a worktree for them",
-            cleaned.unreadable
+            "\n{} row(s) would not rebuild and belong to another Manifest. \
+             Run `armada clean` in that repository to clear them.",
+            cleaned.unreadable_elsewhere
         );
     }
 
@@ -85,7 +99,7 @@ pub fn cleaned(cleaned: &Cleaned) {
         }
     }
 
-    if cleaned.jobs.is_empty() && cleaned.unclaimed.is_empty() {
+    if cleaned.jobs.is_empty() && cleaned.unclaimed.is_empty() && cleaned.unreadable.is_empty() {
         println!("\nno Jobs and no worktrees — there was nothing to give back");
     }
     // Last, because it is the only part of this a person still has to act on.

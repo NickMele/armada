@@ -8,6 +8,11 @@ publish = false
 [lints]
 workspace = true
 
+# `wreckage` compiles one method that damages a store, for the tests that
+# recover from one. Only `testkit` turns it on, and nothing that ships does.
+[features]
+wreckage = []
+
 [dependencies]
 core-model = { path = "../core-model" }
 rusqlite = { version = "0.32", features = ["bundled"] }

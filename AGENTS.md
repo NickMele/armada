@@ -13,6 +13,7 @@ their work before advancing them. Rust daemon, Electron app, one repo.
 
 | Looking for | Go to |
 |---|---|
+| **What Armada is for, and what it is not** | **`docs/scope.md`** |
 | A binding rule — architecture, errors, config, design, prompts | `docs/contracts/` |
 | Rust, Bridge, or the seam between them | `docs/practices/` |
 | What is open, and what is waiting on it | `docs/OPEN.md`, generated |
@@ -22,9 +23,8 @@ their work before advancing them. Rust daemon, Electron app, one repo.
 | What a thing is, and how it is used | `docs/concepts/`, `docs/journeys/` |
 | Skills and subagents | `.claude/skills/`, `.claude/agents/` |
 
-Everything written down is in `docs/INDEX.md`; the gate refuses a document that
-is not. `ARCHITECTURE.md` is the map. `CLAUDE.md` is a symlink to this file —
-two copies of one routing table drift, a link cannot.
+Everything written down is in `docs/INDEX.md`, and the gate refuses one that is
+not. `ARCHITECTURE.md` is the map. `CLAUDE.md` symlinks here — a copy drifts.
 
 **This file routes. It does not explain.** Anything longer than a pointer
 belongs in a contract, a practice doc or a skill. 50 lines is refused, 30 asks.

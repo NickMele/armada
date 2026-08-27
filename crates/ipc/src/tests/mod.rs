@@ -128,6 +128,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
         None,
         &[StepFacts {
             step_id: crate::StepId::carried("repro"),
+            label: Some("Reproduce it".to_string()),
             declares: Some(Vec::new()),
             ran: Vec::new(),
         }],
@@ -140,6 +141,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
         None,
         &[StepFacts {
             step_id: crate::StepId::carried("repro"),
+            label: None,
             declares: None,
             ran: Vec::new(),
         }],
@@ -155,6 +157,27 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
     );
 }
 
+/// **The fallback is deliberate, and a blank is not a state.** A step Fleet
+/// cannot name reads as its id, so nothing downstream has to decide what an
+/// empty label draws as.
+#[test]
+fn a_step_with_no_label_reads_as_its_id() {
+    let detail = JobDetail::of(
+        &job(),
+        None,
+        &[StepFacts {
+            step_id: crate::StepId::carried("repro"),
+            label: Some("   ".to_string()),
+            declares: None,
+            ran: Vec::new(),
+        }],
+    );
+    assert_eq!(detail.steps[0].label, "repro");
+
+    let unanswerable = JobDetail::of(&job(), None, &[]);
+    assert_eq!(unanswerable.steps[0].label, "repro");
+}
+
 /// A recorded run round-trips, and a pass carries neither sentence.
 #[test]
 fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
@@ -163,9 +186,11 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
         None,
         &[StepFacts {
             step_id: crate::StepId::carried("repro"),
+            label: Some("Reproduce it".to_string()),
             declares: Some(vec![DeclaredCheck {
                 kind: "manifest_check".to_string(),
                 name: Some("suite".to_string()),
+                run: Some("cargo nextest run --workspace".to_string()),
                 expect_exit_code: Some(0),
             }]),
             ran: vec![CheckRun {
@@ -181,8 +206,8 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
 
     assert!(json.contains("\"outcome\":\"never_ran\""), "{json}");
     assert!(
-        !json.contains("\"run\":"),
-        "the Manifest's command does not cross: {json}"
+        json.contains("\"run\":\"cargo nextest run --workspace\""),
+        "the command the workflow froze crosses whole: {json}"
     );
     assert_eq!(
         decode::<JobDetail>("a Job in full", json.as_bytes()).expect("it round-trips"),

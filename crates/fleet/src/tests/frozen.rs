@@ -122,6 +122,64 @@ async fn what_a_person_is_shown_is_what_the_job_froze() {
         checks[0].kind, "diff_nonempty",
         "the frozen declaration, not the edited file's `suite`"
     );
+    assert_eq!(
+        detail.steps[0].label, "Implement",
+        "the word the Job froze, not the one on disk"
+    );
+}
+
+/// One step gated on a named Check, so the command has somewhere to come from.
+fn gated_on(label: &str, run: &str) -> config::ResolvedWorkflow {
+    testkit::resolved(&[Sketch {
+        id: "implement",
+        label,
+        evidence_type: Some("diff"),
+        gates: &[Gate::Check {
+            name: "build",
+            run,
+            expect_exit_code: 0,
+        }],
+    }])
+}
+
+/// **What the rail draws is what ran.** The label and the command both come off
+/// the Job's frozen workflow — never off the live Manifest, which is read at
+/// Fleet start and can be edited under a Job that is already running.
+#[tokio::test]
+async fn a_steps_label_and_its_checks_command_are_the_ones_the_job_froze() {
+    let home = TempDir::new();
+    let job_id = {
+        let fleet = a_fleet_holding(
+            &home,
+            changed(),
+            gated_on("Implement the change", "cargo build --workspace --locked"),
+            1,
+        );
+        let job = fleet
+            .propose(a_proposal("fix the off-by-one"))
+            .await
+            .unwrap();
+        job.id().clone()
+    };
+
+    let after = a_fleet_holding(
+        &home,
+        changed(),
+        gated_on("Renamed since", "cargo build --some-other-way"),
+        100,
+    );
+    let detail = api::Daemon::get_job(&after, ipc::JobId::from(&job_id))
+        .await
+        .expect("the Job reads");
+
+    assert_eq!(detail.steps[0].label, "Implement the change");
+    let checks = detail.steps[0].checks.as_ref().expect("Fleet can say");
+    assert_eq!(checks[0].name.as_deref(), Some("build"));
+    assert_eq!(
+        checks[0].run.as_deref(),
+        Some("cargo build --workspace --locked"),
+        "the command the gate ran, not the one the file now holds"
+    );
 }
 
 /// A Job that has a Drone says so, and still says so in a process that did not

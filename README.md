@@ -262,6 +262,15 @@ a name pattern — **a worktree with no Job behind it is reported and left where
 it is.** It prints what it removed item by item, including the commit each
 deleted branch pointed at, which is the only thing that makes one recoverable.
 
+**A row the store cannot rebuild is cleared too**, by the id it still carries.
+A migration can leave a Job the current build no longer folds — Fleet reports
+those on start as *unreadable* — and clearing one needs no rebuild, so `clean`
+removes its worktree, its branch and its row like any other, says why the row
+would not rebuild while the row is still there to say it, and keeps the branch
+if it holds unmerged work. That is still deriving from a record and not from a
+pattern: the id came out of this store, and a row belonging to another Manifest
+is counted and left for the repository that owns it.
+
 **It will not delete a branch whose commits nobody has taken.** Fleet commits a
 finished Job's work, so that branch is the only copy of it. A branch the base
 branch cannot reach is named, counted — *2 commit(s) of its own are not on

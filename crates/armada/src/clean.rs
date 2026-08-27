@@ -1,27 +1,24 @@
 //! Giving a repository's worktrees, branches and Jobs back.
 //!
-//! # It deletes what a Job derives, and never what a pattern matches
+//! # It deletes what a record derives, never what a pattern matches
 //!
-//! Cleaning by hand with `git branch -D $(git branch --list 'armada/*')`
-//! destroyed nine unmerged branches that belonged to no Job. So the list of
-//! branches here is not a list at all: each one is derived from a Job that is
-//! being forgotten, through the same `WorktreeSpec` that derived it in the
-//! first place. **No Job, no delete.** A worktree on disk with nothing behind
-//! it is reported and left alone, because it is evidence rather than litter.
+//! A hand-run `git branch -D` over the `armada/*` glob destroyed nine unmerged
+//! branches belonging to no Job. So the branches here are not a list: each is
+//! derived from a record being forgotten, through the `WorktreeSpec` that
+//! derived it in the first place. **No record, no delete.** A worktree with
+//! nothing behind it is reported and left: evidence, not litter.
+//!
+//! **A row that will not rebuild is still a record.** It carries its id and its
+//! Manifest and is cleared through that same `WorktreeSpec` — the id came out
+//! of this store, not off a glob. Confusing the two left `--all` as the only
+//! recovery from a migration that orphaned four rows.
 //!
 //! # A branch holding work nothing has taken is kept
 //!
 //! Fleet commits a finished Job's work, so its branch is the only copy. A
-//! branch whose commits are not on the base branch is named and left, on the
-//! same grounds as an unclaimed worktree. Its worktree still goes — the
-//! checkout is reproducible and the commit is not. `--force` deletes it.
-//!
-//! # Two scopes, and why the second refuses more
-//!
-//! Bare, this is a repository's own state: its worktrees, their branches, its
-//! Jobs. `--all` additionally removes the machine's store and the two files
-//! beside it. Both refuse while a Fleet is running, and for one reason — the
-//! Jobs being forgotten are the Jobs that Fleet is holding in memory.
+//! branch the base cannot reach is named and left, on the same grounds as an
+//! unclaimed worktree; its worktree still goes, the checkout being reproducible
+//! and the commit not. `--force` deletes it.
 
 use std::path::{Path, PathBuf};
 
@@ -50,6 +47,9 @@ const MACHINE_FILES: &[&str] = &[
 
 /// How far one clean reaches. `--all` is a different question from `--force`
 /// and is kept a different type, so neither can be passed for the other.
+///
+/// Both scopes refuse while a Fleet is running, because it holds the records
+/// being forgotten in memory.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Scope {
     /// This repository's worktrees, branches and Jobs.
@@ -63,6 +63,21 @@ pub enum Scope {
 pub struct JobCleaned {
     pub job_id: String,
     pub title: String,
+    pub reclaimed: Reclaimed,
+    pub forgotten: Forgotten,
+}
+
+/// What clearing one unreadable row did.
+///
+/// **Not a [`JobCleaned`].** Nothing here folded into a Job, so there is no
+/// title and no history to report — a row cleared and a Job forgotten are
+/// different events and are said differently.
+#[derive(Debug)]
+pub struct RowCleared {
+    pub job_id: String,
+    /// Why it would not rebuild. Said as it goes, because after this the row is
+    /// gone and the reason with it.
+    pub why: String,
     pub reclaimed: Reclaimed,
     pub forgotten: Forgotten,
 }
@@ -85,9 +100,12 @@ pub struct Cleaned {
     pub unclaimed: Vec<PathBuf>,
     /// Only with `--all`.
     pub machine: Vec<FileGone>,
-    /// Jobs the store holds and could not rebuild. Their worktrees show up as
-    /// unclaimed, which is the honest reading — nothing knows they were Jobs.
-    pub unreadable: usize,
+    /// Rows this Manifest owns that would not rebuild, cleared by id.
+    pub unreadable: Vec<RowCleared>,
+    /// Rows that would not rebuild and belong to some other Manifest. Left for
+    /// the repository that owns them, and counted so a person is not told
+    /// nothing about rows they can see in Fleet's boot line.
+    pub unreadable_elsewhere: usize,
     /// Things that went wrong and did not stop the rest.
     pub faults: Vec<String>,
 }
@@ -101,6 +119,7 @@ impl Cleaned {
         self.jobs
             .iter()
             .map(|job| &job.reclaimed.branch)
+            .chain(self.unreadable.iter().map(|row| &row.reclaimed.branch))
             .filter(|branch| {
                 matches!(
                     branch,
@@ -114,6 +133,7 @@ impl Cleaned {
     /// rather than printing an empty list.
     pub fn touched_nothing(&self) -> bool {
         self.jobs.is_empty()
+            && self.unreadable.is_empty()
             && self
                 .machine
                 .iter()
@@ -219,14 +239,11 @@ fn forget_this_manifests_jobs(
     unmerged: UnmergedWork,
     cleaned: &mut Cleaned,
 ) {
-    let loaded = match store.load_all_jobs() {
-        Ok(loaded) => loaded,
-        // A row that will not rebuild does not hide the rows that will, and the
-        // count is carried out rather than dropped.
-        Err(store::LoadAllError::SomeJobsUnreadable { loaded, failed }) => {
-            cleaned.unreadable = failed.len();
-            loaded
-        }
+    let (loaded, unreadable) = match store.load_all_jobs() {
+        Ok(loaded) => (loaded, Vec::new()),
+        // A row that will not rebuild does not hide the rows that will, and it
+        // is not dropped either — it is cleared below, by the id it still has.
+        Err(store::LoadAllError::SomeJobsUnreadable { loaded, failed }) => (loaded, failed),
         Err(why) => {
             cleaned
                 .faults
@@ -239,6 +256,7 @@ fn forget_this_manifests_jobs(
     // what merged means, and a clean that guessed would keep a branch that had
     // just been merged into the branch the file names.
     let declared_base = manifest.base().map(str::to_string);
+    let base = declared_base.as_deref();
 
     let mine: Vec<(JobId, String)> = loaded
         .jobs
@@ -248,47 +266,132 @@ fn forget_this_manifests_jobs(
         .collect();
 
     for (job_id, title) in mine {
-        let spec = match WorktreeSpec::for_job(&root.to_string_lossy(), job_id.as_str()) {
-            Ok(spec) => spec,
-            Err(refused) => {
-                cleaned
-                    .faults
-                    .push(format!("{}: {}", job_id.as_str(), refused.said()));
-                continue;
-            }
-        };
-        let reclaimed = match adapters::reclaim(&spec, declared_base.as_deref(), unmerged) {
-            Ok(reclaimed) => reclaimed,
-            Err(why) => {
-                cleaned
-                    .faults
-                    .push(format!("{} could not be opened: {}", why.repo, why.why));
-                return;
-            }
-        };
-        // The worktree first, the record second. A Job forgotten before its
-        // worktree failed to go is a worktree nothing can derive a branch for.
-        // A *kept* branch is not a fault: the worktree went, the record goes,
-        // and the branch is a git branch a person merges with git.
-        if reclaimed.faulted() {
-            cleaned.jobs.push(JobCleaned {
-                job_id: job_id.as_str().to_string(),
-                title,
+        match give_back(store, root, &job_id, base, unmerged, cleaned) {
+            GaveBack::Done {
                 reclaimed,
-                forgotten: Forgotten::default(),
-            });
-            continue;
-        }
-        match store.forget_job(&job_id) {
-            Ok(forgotten) => cleaned.jobs.push(JobCleaned {
+                forgotten,
+            } => cleaned.jobs.push(JobCleaned {
                 job_id: job_id.as_str().to_string(),
                 title,
                 reclaimed,
                 forgotten,
             }),
-            Err(why) => cleaned
+            GaveBack::Skipped => continue,
+            GaveBack::RepositoryClosed => return,
+        }
+    }
+
+    clear_this_manifests_unreadable_rows(
+        store, manifest, root, base, unmerged, unreadable, cleaned,
+    );
+}
+
+/// The rows this store holds and could not fold, removed by the id they carry.
+///
+/// **The Manifest on the row is what selects them**, exactly as the owner on a
+/// rebuilt Job selects it above — a clean in one repository never reaches
+/// another's rows, which is the whole reason `--all` was the wrong recovery.
+fn clear_this_manifests_unreadable_rows(
+    store: &mut Store,
+    manifest: &Manifest,
+    root: &Path,
+    base: Option<&str>,
+    unmerged: UnmergedWork,
+    unreadable: Vec<store::UnreadableRow>,
+    cleaned: &mut Cleaned,
+) {
+    for row in unreadable {
+        let why = row.why.to_string();
+        let Some(named) = row.row else {
+            // Nothing to derive from and nothing to select on. Reported, never
+            // guessed at.
+            cleaned.faults.push(format!(
+                "a row would not rebuild and does not name a Job: {why}"
+            ));
+            continue;
+        };
+        if named.owner_manifest_id.as_str() != manifest.id().as_str() {
+            cleaned.unreadable_elsewhere += 1;
+            continue;
+        }
+        match give_back(store, root, &named.job_id, base, unmerged, cleaned) {
+            GaveBack::Done {
+                reclaimed,
+                forgotten,
+            } => cleaned.unreadable.push(RowCleared {
+                job_id: named.job_id.as_str().to_string(),
+                why,
+                reclaimed,
+                forgotten,
+            }),
+            GaveBack::Skipped => continue,
+            GaveBack::RepositoryClosed => return,
+        }
+    }
+}
+
+/// What one id's clean did, and whether the next one is worth attempting.
+enum GaveBack {
+    Done {
+        reclaimed: Reclaimed,
+        forgotten: Forgotten,
+    },
+    /// This id did not come back; the next may.
+    Skipped,
+    /// The repository itself would not open, so no id will do better.
+    RepositoryClosed,
+}
+
+/// One id's worktree and branch given back, and then its row.
+///
+/// Both callers reach here holding an id this store handed out — a Job that
+/// folded, or a row that would not. Neither holds a name it matched.
+fn give_back(
+    store: &mut Store,
+    root: &Path,
+    job_id: &JobId,
+    base: Option<&str>,
+    unmerged: UnmergedWork,
+    cleaned: &mut Cleaned,
+) -> GaveBack {
+    let spec = match WorktreeSpec::for_job(&root.to_string_lossy(), job_id.as_str()) {
+        Ok(spec) => spec,
+        Err(refused) => {
+            cleaned
                 .faults
-                .push(format!("{} was not forgotten: {why}", job_id.as_str())),
+                .push(format!("{}: {}", job_id.as_str(), refused.said()));
+            return GaveBack::Skipped;
+        }
+    };
+    let reclaimed = match adapters::reclaim(&spec, base, unmerged) {
+        Ok(reclaimed) => reclaimed,
+        Err(why) => {
+            cleaned
+                .faults
+                .push(format!("{} could not be opened: {}", why.repo, why.why));
+            return GaveBack::RepositoryClosed;
+        }
+    };
+    // The worktree first, the record second. A record forgotten before its
+    // worktree failed to go is a worktree nothing can derive a branch for. A
+    // *kept* branch is not a fault: the worktree went, the record goes, and the
+    // branch is a git branch a person merges with git.
+    if reclaimed.faulted() {
+        return GaveBack::Done {
+            reclaimed,
+            forgotten: Forgotten::default(),
+        };
+    }
+    match store.forget_job(job_id) {
+        Ok(forgotten) => GaveBack::Done {
+            reclaimed,
+            forgotten,
+        },
+        Err(why) => {
+            cleaned
+                .faults
+                .push(format!("{} was not forgotten: {why}", job_id.as_str()));
+            GaveBack::Skipped
         }
     }
 }
@@ -303,7 +406,12 @@ fn report_what_no_job_claims(root: &Path, cleaned: &mut Cleaned) {
     let Ok(entries) = std::fs::read_dir(&parent) else {
         return;
     };
-    let accounted: Vec<&str> = cleaned.jobs.iter().map(|job| job.job_id.as_str()).collect();
+    let accounted: Vec<&str> = cleaned
+        .jobs
+        .iter()
+        .map(|job| job.job_id.as_str())
+        .chain(cleaned.unreadable.iter().map(|row| row.job_id.as_str()))
+        .collect();
     for entry in entries.flatten() {
         let path = entry.path();
         let named = path

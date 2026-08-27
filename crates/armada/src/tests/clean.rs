@@ -227,6 +227,123 @@ fn a_worktree_with_no_job_behind_it_is_reported_and_left_alone() {
     assert!(orphan.is_dir(), "it is still there");
 }
 
+// ------------------------------- rows the store holds and cannot rebuild
+
+/// A stored Job whose `workflow` column is null, exactly as V7 left the four
+/// real ones. The row still names its Job and its Manifest; nothing folds it.
+fn a_row_that_will_not_rebuild(machine: &Path, repo: &Path, job: &str, manifest: &str) {
+    a_job_with_a_worktree(machine, repo, job, manifest);
+    let mut store = Store::open(&machine.join(STORE_FILE)).expect("a store");
+    store
+        .unfreeze_a_jobs_workflow(job)
+        .expect("the column is now null, as the migration left it");
+}
+
+/// **The helplessness this closes.** Recovery from four such rows took `--all`,
+/// which wipes every Manifest's Jobs on the machine, and then git by hand.
+#[test]
+fn a_row_that_will_not_rebuild_is_cleared_from_its_own_repository() {
+    let repo = a_repository();
+    let machine = TempDir::new();
+    a_row_that_will_not_rebuild(machine.path(), repo.path(), JOB, MANIFEST_ID);
+
+    let cleaned = clean(
+        repo.path(),
+        machine.path(),
+        Scope::Repository,
+        UnmergedWork::Keep,
+    )
+    .expect("a clean");
+
+    assert!(cleaned.jobs.is_empty(), "nothing folded into a Job");
+    assert_eq!(cleaned.unreadable.len(), 1);
+    assert_eq!(cleaned.unreadable[0].job_id, JOB);
+    assert!(
+        cleaned.unreadable[0].why.contains("workflow"),
+        "it says why, while the row still exists to say it: {}",
+        cleaned.unreadable[0].why
+    );
+    assert!(cleaned.unreadable[0].forgotten.existed);
+    assert!(!repo.path().join(".armada/worktrees").join(JOB).exists());
+    assert!(!branches(repo.path()).contains(&format!("armada/{JOB}")));
+    assert!(
+        cleaned.unclaimed.is_empty(),
+        "the row accounted for its worktree: {:?}",
+        cleaned.unclaimed
+    );
+
+    let mut store = Store::open(&machine.path().join(STORE_FILE)).expect("the store");
+    assert!(
+        store
+            .load_all_jobs()
+            .expect("nothing is left to refuse")
+            .jobs
+            .is_empty(),
+        "and the row is gone, so the next boot has nothing to report"
+    );
+}
+
+/// **Knowing less is a reason to be more careful, not less.** An unreadable row
+/// is a row Armada cannot say anything about, and its branch may be the only
+/// copy of the work.
+#[test]
+fn an_unreadable_rows_branch_is_kept_when_it_holds_unmerged_work() {
+    let repo = a_repository();
+    let machine = TempDir::new();
+    a_job_that_finished(machine.path(), repo.path(), JOB);
+    Store::open(&machine.path().join(STORE_FILE))
+        .expect("a store")
+        .unfreeze_a_jobs_workflow(JOB)
+        .expect("the migration's damage");
+
+    let cleaned = clean(
+        repo.path(),
+        machine.path(),
+        Scope::Repository,
+        UnmergedWork::Keep,
+    )
+    .expect("a clean");
+
+    assert_eq!(cleaned.unreadable.len(), 1);
+    assert!(branches(repo.path()).contains(&format!("armada/{JOB}")));
+    let left = cleaned.branches_left();
+    assert_eq!(left.len(), 1, "and it is named at the end, like any other");
+    let BranchGone::Kept { base, commits, .. } = left[0] else {
+        panic!("it says how much is unmerged: {:?}", left[0]);
+    };
+    assert_eq!((base.as_str(), *commits), ("main", 1));
+    assert!(!repo.path().join(".armada/worktrees").join(JOB).exists());
+}
+
+/// The Manifest on the row selects it, exactly as the owner on a folded Job
+/// does. `--all` was the wrong recovery because it ignored this.
+#[test]
+fn another_manifests_unreadable_row_is_left_where_it_is() {
+    let repo = a_repository();
+    let machine = TempDir::new();
+    a_row_that_will_not_rebuild(machine.path(), repo.path(), OTHER_JOB, "another-project");
+
+    let cleaned = clean(
+        repo.path(),
+        machine.path(),
+        Scope::Repository,
+        UnmergedWork::Keep,
+    )
+    .expect("a clean");
+
+    assert!(cleaned.unreadable.is_empty());
+    assert_eq!(
+        cleaned.unreadable_elsewhere, 1,
+        "counted, not silently dropped"
+    );
+    assert!(branches(repo.path()).contains(&format!("armada/{OTHER_JOB}")));
+    assert!(repo
+        .path()
+        .join(".armada/worktrees")
+        .join(OTHER_JOB)
+        .is_dir());
+}
+
 // ------------------------------------------ what it refuses to throw away
 
 const NINE: CommitTime = CommitTime::seconds_since_epoch(1_787_734_800);

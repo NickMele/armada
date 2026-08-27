@@ -156,6 +156,10 @@ async fn the_workflow_list_carries_the_checks_each_step_declares() {
 
     let steps = &workflows[0].steps;
     assert_eq!(steps[0].step_id.as_str(), "implement");
+    assert_eq!(
+        steps[0].label, "Implement",
+        "a picker offers the word, not the key"
+    );
     assert_eq!(steps[0].checks[0].kind, "diff_nonempty");
     assert!(
         steps[0].checks[0].name.is_none(),

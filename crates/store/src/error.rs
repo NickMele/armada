@@ -30,7 +30,7 @@ use core_model::{
     IllegalDroneMove, IllegalStepTransition, IllegalTransition, JobId, JobStatus, StepId, StepState,
 };
 
-use crate::read::Loaded;
+use crate::read::{Loaded, UnreadableRow};
 
 /// A fault that belongs to SQLite. The cause is carried rather than formatted,
 /// so the chain stays traversable up to the wire, where it is flattened once.
@@ -258,7 +258,7 @@ pub enum LoadAllError {
     /// it cannot pretend they were never there.
     SomeJobsUnreadable {
         loaded: Loaded,
-        failed: Vec<RowError>,
+        failed: Vec<UnreadableRow>,
     },
 }
 
@@ -418,6 +418,8 @@ display!(LoadJobError, |self, f| match self {
     LoadJobError::NoSuchJob { job_id } => write!(f, "no job {}", job_id.as_str()),
     LoadJobError::Unreadable(cause) => write!(f, "{cause}"),
 });
+
+display!(UnreadableRow, |self, f| write!(f, "{}", self.why));
 
 display!(LoadAllError, |self, f| match self {
     LoadAllError::Database(fault) => write!(f, "{fault}"),

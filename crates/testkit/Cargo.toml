@@ -14,3 +14,6 @@ workspace = true
 adapter-traits = { path = "../adapter-traits" }
 config = { path = "../config" }
 core-model = { path = "../core-model" }
+# For `wreckage` only. A test that has to clear a row the store cannot rebuild
+# has to make one first, and the making stays behind `store`'s own door.
+store = { path = "../store", features = ["wreckage"] }

@@ -95,6 +95,15 @@ impl ResolvedCheck {
         }
     }
 
+    /// The command the Check resolved to, as this Job froze it. **`None` on a
+    /// built-in**, which runs nothing.
+    pub fn run(&self) -> Option<&str> {
+        match self {
+            ResolvedCheck::ManifestCheck { run, .. } => Some(run),
+            ResolvedCheck::DiffNonempty => None,
+        }
+    }
+
     /// What the check is written down as: its name, or its kind where it has
     /// no name. The one label a recorded result and a served declaration both
     /// use, so a person reading the two sees the same word.

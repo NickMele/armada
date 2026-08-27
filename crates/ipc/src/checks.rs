@@ -7,12 +7,19 @@
 //! apart. [`DeclaredCheck`] answers the first question and [`CheckRun`] the
 //! second, and neither can be inferred from the other.
 //!
-//! # No command string crosses here
+//! # The command crosses, and it comes off the workflow
 //!
-//! A `ResolvedCheck` carries the `run` lifted out of the Manifest. What is
-//! served is the Check's **name**, which is what `ManifestSummary::checks`
-//! already carries and what an escalation cites — a bare command line tells
-//! nobody which gate it was.
+//! `build` tells a reader nothing; `cargo build --workspace --locked` tells
+//! them what gated the step and what to run to reproduce it. Both travel, name
+//! first, because an escalation cites the name and a bare command line says
+//! nothing about which gate it was.
+//!
+//! **The `run` served is always the resolved workflow's, never the live
+//! Manifest's.** A Job froze its workflow at creation and the gate runs what it
+//! froze; reading the Manifest again would show a command that is not what ran
+//! the moment somebody edits `armada.yml` mid-Job. `ManifestSummary::checks`
+//! stays names only for that reason — the Manifest declares Checks, and the
+//! workflow is what resolved one.
 
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +37,10 @@ pub struct DeclaredCheck {
     /// built-in assertion and names no Check.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// The command the Check resolved to, as the workflow serving this froze
+    /// it. **Absent on `diff_nonempty`**, which runs nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run: Option<String>,
     /// The exit code the step expects. Absent where there is no command to
     /// return one.
     #[serde(default, skip_serializing_if = "Option::is_none")]

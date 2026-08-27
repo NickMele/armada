@@ -39,6 +39,9 @@ use crate::job::{JobSummary, Subject};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StepFacts {
     pub step_id: StepId,
+    /// What the workflow calls this step. `None` where Fleet cannot say, on
+    /// the same grounds as `declares`.
+    pub label: Option<String>,
     /// The Checks the workflow declares for this step.
     ///
     /// **`None` is "Fleet cannot say", not "none declared"** — the Job named a
@@ -130,6 +133,13 @@ impl JobDetail {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StepDetail {
     pub step_id: StepId,
+    /// What a person reads — `Plan the change`, not `plan`.
+    ///
+    /// **Never absent and never blank**: where the workflow declares no label,
+    /// or Fleet cannot say which workflow this is, the id stands in. A client
+    /// that had to choose would make that choice differently in each place it
+    /// draws a step, and the id is already on the row above.
+    pub label: String,
     /// Position in the frozen WorkflowDef, so a rail draws past, current and
     /// future without reading the workflow.
     pub ordinal: u32,
@@ -157,6 +167,10 @@ impl StepDetail {
     fn of(step: &core_model::JobStep, facts: Option<&StepFacts>) -> StepDetail {
         StepDetail {
             step_id: step.step_id().into(),
+            label: facts
+                .and_then(|facts| facts.label.clone())
+                .filter(|label| !label.trim().is_empty())
+                .unwrap_or_else(|| step.step_id().as_str().to_string()),
             ordinal: step.ordinal(),
             state: step.state().into(),
             checks: facts.and_then(|facts| facts.declares.clone()),

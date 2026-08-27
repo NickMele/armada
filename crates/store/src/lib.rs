@@ -60,6 +60,8 @@ mod open;
 mod read;
 mod row;
 mod schema;
+#[cfg(feature = "wreckage")]
+mod wreckage;
 mod write;
 
 #[cfg(test)]
@@ -69,5 +71,5 @@ pub use error::{DatabaseFault, LoadAllError, LoadJobError, OpenError, RowError, 
 pub use fold::{Moved, RecordedEvent};
 pub use forget::Forgotten;
 pub use open::Store;
-pub use read::{Loaded, StatusRepair};
+pub use read::{Loaded, RowIdentity, StatusRepair, UnreadableRow};
 pub use schema::KNOWN_SCHEMA_VERSION;

@@ -38,6 +38,10 @@ use crate::ids::{ManifestId, StepId, WorkflowId};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkflowStep {
     pub step_id: StepId,
+    /// What a person reads. **Never absent and never blank** — the id stands in
+    /// where the definition declares no label, for the reason
+    /// [`StepDetail::label`](crate::StepDetail::label) does the same.
+    pub label: String,
     /// The Checks the step declares, in the order it declares them.
     ///
     /// **Empty is the sentence "this step declares no check."** A WorkflowDef
@@ -49,10 +53,9 @@ pub struct WorkflowStep {
 
 /// One workflow Fleet holds, as a picker offers it.
 ///
-/// The steps are their ids and their Checks rather than the whole definition: a
-/// composer needs the count and the names to say "4 steps, ending at close",
-/// and the labels, the gates and the evidence types are still `get_job`'s
-/// business.
+/// The steps are their ids, labels and Checks rather than the whole definition:
+/// a composer needs the count and the words to say "4 steps, ending at close",
+/// and the gates and the evidence types are still `get_job`'s business.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkflowSummary {
     /// What a proposal's `workflow_id` must name. **The only value Fleet

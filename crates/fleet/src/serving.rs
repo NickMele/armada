@@ -265,14 +265,27 @@ where
 /// `core-model` and could hold this, but a `DeclaredCheck` is assembled from a
 /// step rather than converted from one, and the assembly is Fleet's.
 ///
-/// **The command does not cross.** A `ResolvedCheck` holds the `run` lifted out
-/// of the Manifest; what is served is the name, which is what an escalation
-/// cites and what `ManifestSummary` already carries.
+/// **The command crosses, and it comes off the resolved workflow.** A
+/// `ResolvedCheck` holds the `run` this workflow froze, which is what the gate
+/// runs; serving it from the live Manifest instead would show a command that is
+/// not what ran the moment somebody edits `armada.yml` under a Job.
 fn declared_check(check: &core_model::ResolvedCheck) -> DeclaredCheck {
     DeclaredCheck {
         kind: check.kind().to_string(),
         name: check.name().map(str::to_string),
+        run: check.run().map(str::to_string),
         expect_exit_code: check.expects(),
+    }
+}
+
+/// The word a step is drawn as, with its id standing in where there is none.
+///
+/// A blank label is a definition that declared the key and left it empty, and a
+/// blank on the rail reads as a Fleet that lost the value.
+fn reads_as(label: &str, step_id: &str) -> String {
+    match label.trim().is_empty() {
+        true => step_id.to_string(),
+        false => label.to_string(),
     }
 }
 
@@ -288,6 +301,7 @@ fn declared(workflow: &config::ResolvedWorkflow) -> Vec<WorkflowStep> {
         .iter()
         .map(|step| WorkflowStep {
             step_id: StepId::from(step.id()),
+            label: reads_as(step.label(), step.id().as_str()),
             checks: step.checks().iter().map(declared_check).collect(),
         })
         .collect()
@@ -343,6 +357,10 @@ where
             .iter()
             .map(|step| StepFacts {
                 step_id: StepId::from(step.step_id()),
+                label: job
+                    .workflow()
+                    .step(step.step_id())
+                    .map(|declared| declared.label().to_string()),
                 declares: job
                     .workflow()
                     .step(step.step_id())

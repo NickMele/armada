@@ -174,14 +174,17 @@ impl Daemon for FakeDaemon {
                 // rail turns on, so the fake carries both rather than one.
                 ipc::WorkflowStep {
                     step_id: StepId::carried("implement"),
+                    label: "Implement the change".to_string(),
                     checks: vec![ipc::DeclaredCheck {
                         kind: "manifest_check".to_string(),
                         name: Some("build".to_string()),
+                        run: Some("cargo build --workspace --locked".to_string()),
                         expect_exit_code: Some(0),
                     }],
                 },
                 ipc::WorkflowStep {
                     step_id: StepId::carried("summarise"),
+                    label: "Summarise".to_string(),
                     checks: Vec::new(),
                 },
             ],
