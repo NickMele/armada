@@ -1,5 +1,7 @@
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
+import { useCallback } from "react";
+import { CriterionVerdicts, type CriterionVerdict } from "../CriterionVerdicts/CriterionVerdicts";
 import { StepActivityMark, type StepActivity } from "../StepActivityMark/StepActivityMark";
 
 /**
@@ -47,6 +49,16 @@ export type WorkflowRailGate = {
   icon?: LucideIcon;
   /** The accessible name for the glyph. */
   iconLabel?: string;
+  /**
+   * Where the Check's stdout and stderr were written, relative to the
+   * repository root. **The path, never the contents** — Bridge does not read
+   * the filesystem, and a Check that failed is unreadable without this.
+   *
+   * Machine-derived, so it is mono and copies on click with no `copy` glyph:
+   * the affordance token is the affordance, and a glyph repeated down a rail
+   * of gate rows is noise. Absent where the Check wrote no file.
+   */
+  outputPath?: string;
 };
 
 export type WorkflowRailStep = {
@@ -94,6 +106,16 @@ export type WorkflowRailStep = {
    */
   ungatedLabel?: ReactNode;
   /**
+   * What the Judge answered on this step, beneath the gate rows.
+   *
+   * **A refusal sits under the step it judged and never on it.** Verdict hue
+   * is per criterion and never sums onto the step or the Job, so a red cross
+   * can sit under a running step beneath an escalated badge without any of the
+   * three contradicting the others. Empty on the steps that ask nothing, which
+   * is most of them.
+   */
+  verdicts?: CriterionVerdict[];
+  /**
    * The evidence submission on an ungated step, in mono, sitting where a Check
    * would. A step with no gate still produced something, and the row that says
    * "no check on this step" is where that fact belongs.
@@ -119,6 +141,8 @@ export type WorkflowRailProps = {
    * rail rendered anywhere a more specific mark is present.
    */
   pulsing?: boolean;
+  /** A clipboard write is silent, so the surface confirms every one with a toast. */
+  onCopied?: (value: string) => void;
 };
 
 /** Gate glyphs are 12px at strokeWidth 2, like every mark below Job level. */
@@ -130,7 +154,20 @@ function named(step: WorkflowRailStep): boolean {
   return (step.evidence?.label ?? "") !== "";
 }
 
-export function WorkflowRail({ steps, pulsing = false }: WorkflowRailProps) {
+export function WorkflowRail({ steps, pulsing = false, onCopied }: WorkflowRailProps) {
+  const copy = useCallback(
+    (event: MouseEvent<HTMLSpanElement>, value: string) => {
+      event.stopPropagation();
+      void navigator.clipboard.writeText(value).then(
+        // A failed clipboard write is otherwise indistinguishable from a dead
+        // element, so the surface is told either way.
+        () => onCopied?.(value),
+        () => onCopied?.(value),
+      );
+    },
+    [onCopied],
+  );
+
   return (
     <ol className="armada-rail">
       {steps.map((step, i) => {
@@ -179,6 +216,21 @@ export function WorkflowRail({ steps, pulsing = false }: WorkflowRailProps) {
                     {gate.result ? (
                       <span className="armada-rail__gate-result">{gate.result}</span>
                     ) : null}
+                    {gate.outputPath === undefined ? null : (
+                      // The whole path is on the clipboard and in the title
+                      // however narrow the row gets: a copy truncated with the
+                      // display would be worse than the overflow it fixed.
+                      // `data-copies` carries a value rather than standing bare,
+                      // the way `Job row (stacked)` writes it.
+                      <span
+                        className="armada-rail__gate-output"
+                        title={gate.outputPath}
+                        data-copies="true"
+                        onClick={(e) => copy(e, gate.outputPath as string)}
+                      >
+                        {gate.outputPath}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -207,6 +259,11 @@ export function WorkflowRail({ steps, pulsing = false }: WorkflowRailProps) {
                   </span>
                 </li>
               </ul>
+            )}
+            {step.verdicts === undefined || step.verdicts.length === 0 ? null : (
+              <div className="armada-rail__verdicts">
+                <CriterionVerdicts rows={step.verdicts} />
+              </div>
             )}
           </li>
         );

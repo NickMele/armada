@@ -249,3 +249,38 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* Where the Check wrote its output. A path is machine-derived, so mono and one
+   step down from the command beside it — and it copies on click with no `copy`
+   glyph, because the affordance token is the affordance and a glyph repeated
+   down every gate row is noise. Neutral like the exit code: the step's state is
+   hued, what the Check left behind is measured. */
+.armada-rail__gate-output {
+  flex: none;
+  max-width: 40%;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-rail__gate-output[data-copies="true"] {
+  cursor: pointer;
+}
+
+.armada-rail__gate-output[data-copies="true"]:hover {
+  color: var(--accent);
+}
+
+/* --- Criterion verdicts --------------------------------------------------- */
+
+/* Indented to the same edge as the gate rows, so what the Judge answered reads
+   as belonging to the step above it — and set apart from them by nothing but
+   position, because the difference between a Check and a refusal is carried by
+   the rows themselves rather than by a frame around them. */
+.armada-rail__verdicts {
+  padding: 0 0 0 calc(var(--space-4) + var(--space-2) * 2);
+}

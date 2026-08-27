@@ -476,3 +476,23 @@ export const TheFiveCheckOutcomes: Story = {
     ],
   },
 };
+
+/**
+ * **A failed Check names the file it wrote.** Bridge does not read the
+ * filesystem, so it names the file and copies it on click — no `copy` glyph, a
+ * toast confirms, and it stays neutral like the exit code beside it. A Check
+ * that never ran wrote nothing and names no file.
+ */
+export const AFailedCheckNamesItsOutput: Story = {
+  args: {
+    steps: [
+      {
+        id: "verify", label: "Run tests", activity: "failed", status: "failed a check", current: true,
+        gates: [
+          { command: "test · cargo test --workspace", result: "failed · exit 0 → exit 101", icon: ShieldX, iconLabel: "Failed", outputPath: ".armada/jobs/job_2d90bb/checks/test.log" },
+          { command: "diff_nonempty", result: "never started", icon: ShieldMinus, iconLabel: "Never started" },
+        ],
+      },
+    ],
+  },
+};

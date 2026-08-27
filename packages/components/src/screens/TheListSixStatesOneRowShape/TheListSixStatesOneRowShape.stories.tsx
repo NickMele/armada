@@ -218,18 +218,23 @@ export const Done: Story = { render: () => one(done) };
 export const Killed: Story = { render: () => one(killed) };
 
 /**
- * **The same six rows, carrying only what Fleet serves a list.** Three of the
- * drawing's five fields survive the trip, and this story is here so the gap is
- * something you can see rather than something you have to be told.
+ * **The same six rows, carrying only what Fleet serves a list.** Four of the
+ * drawing's five fields survive the trip now, and this story is here so what
+ * does not is something you can see rather than something you have to be told.
+ *
+ * `branch` and `created_at` are on `JobSummary`, so track one makes the
+ * drawing's switch — the branch the moment a worktree exists, the workflow
+ * until then — and elapsed is measured from creation to now.
  *
  * | Field | Why it is not here |
  * |---|---|
- * | Branch | `JobDetail`, not `JobSummary`. One request per row is the failure `docs/practices/bridge.md` names first |
- * | Elapsed, `created 09:12`, `approved 09:20` | `created_at` is `JobDetail` too, and no instant on the summary stands in for it |
- * | `Dispatched by you` | No actor on the row, and `origin` has no verb in `enum-verbs.toml` |
  * | Spend | Measured nowhere — not on the wire, not in the store, not computed |
+ * | `Dispatched by you` | No actor on the row, and `origin` has no verb in `enum-verbs.toml` |
+ * | Elapsed on a Job that is over | `JobSummary` carries no instant the Job stopped at, and a terminal elapsed running to now would read as still working |
  *
- * The step's name is its id, because `StepDetail` carries no label. Issue #109.
+ * The step is its `step_id`, in mono: `StepDetail` carries a label, but a list
+ * row holds `JobSummary` and the summary carries only the id. The name is one
+ * click away, on the rail.
  *
  * Absent rather than blank, in every case: a labelled gap on every row of the
  * list reads as a value that failed to load, which is worse than a shorter row.
@@ -243,19 +248,28 @@ export const WhatTheWireServes: Story = {
         rows={SIX.map((row) => ({
           ...row,
           tracks: undefined,
-          // Track one is the workflow on every row, because the field that
-          // would make it the branch is not on the summary. The third field is
-          // `Not started` wherever no step has been entered — the queued row's
-          // reason is the badge's verb, and saying it twice is saying it twice.
+          // Track one is the branch where the row has one and the workflow
+          // where it does not; the step is the id it was dispatched on; and
+          // elapsed is only on a Job still working. Spend is dropped, never
+          // drawn empty.
           fields: [
-            { value: workflow },
+            row === awaitingApproval || row === queued ? { value: workflow } : row.fields[0]!,
             row.fields[1]!,
             row === awaitingApproval || row === queued
               ? { value: "Not started", quiet: true }
-              : row.fields[2]!,
+              : { ...row.fields[2]!, mono: true },
+            ...(row === awaitingApproval || row === queued || row === running
+              ? [{ value: STILL_RUNNING[SIX.indexOf(row)] ?? "", mono: true, quiet: true }]
+              : []),
           ],
         }))}
       />
     </div>
   ),
 };
+
+/**
+ * How long each row has been alive, for the three that are not over. Written
+ * here because a story is a fixture; the app measures it from `created_at`.
+ */
+const STILL_RUNNING: Record<number, string> = { 0: "1h 04m", 1: "38m 12s", 2: "11m 03s" };

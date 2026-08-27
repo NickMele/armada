@@ -75,7 +75,7 @@ export function AFailedJobADeadEndReadAsOne({
               <Absent name="What ran" note={stepsAbsent} />
             </div>
           ) : (
-            <WorkflowRail steps={steps} />
+            <WorkflowRail steps={steps} onCopied={onCopied} />
           )}
         </div>
 

@@ -1,21 +1,30 @@
 // The workflow rail, from the steps `GET /jobs/:job_id` serves.
 //
-// Three things the M1 drawing shows are not on the wire, and each renders as
-// what is rather than as a guess: the step's `label`, a Check's command, and a
-// verb per step state. Each is named where it is worked around below.
+// The step's name and a Check's command are served now, so the rail reads
+// `Plan the change · cargo build --workspace` rather than `plan · build`. One
+// thing the drawing shows is still not on the wire — a verb per step state —
+// and it is named where it is worked around below.
 
-import type { StepActivity, WorkflowRailGate, WorkflowRailStep } from "@armada/components";
+import type {
+  CriterionVerdict,
+  StepActivity,
+  WorkflowRailGate,
+  WorkflowRailStep,
+} from "@armada/components";
 
 import {
   CHECK_OUTCOME,
   CRITERION_VERDICT_CHECK,
+  CRITERION_VERDICT_JUDGE,
   ESCALATION_REASON,
   STEP_STATE,
 } from "../../shared/generated/vocabulary";
 import type {
   CheckRun,
+  Criterion,
   DeclaredCheck,
   JobDetail as JobWhole,
+  Judged,
   StepDetail,
 } from "../../shared/protocol";
 import { span } from "./duration";
@@ -30,17 +39,18 @@ import { ordered } from "./facts";
  * not spell renders as `not_started`, which is the mark that draws its own
  * ordinal and claims nothing.
  *
- * **A workflow serves ids and no names.** `WorkflowDef` declares a `label` per
- * step and `core-model` has a reader for it, but neither `StepDetail` nor
- * `WorkflowStep` carries one on the wire — so every row is the `step_id`, in
- * mono, saying it is an identifier. Nothing composes a name out of the id.
- * Reported.
+ * **The label is Fleet's, and the id is Fleet's fallback.** `StepDetail.label`
+ * is never absent and never blank: where the workflow declares no label, or
+ * Fleet cannot say which workflow this is, Fleet substitutes the id. So the
+ * row draws what arrived and never composes a name — and it renders in mono
+ * only when what arrived *is* the id, which is the one case a reader needs
+ * told apart.
  */
 export function railOf(whole: JobWhole, now: number): WorkflowRailStep[] {
   return ordered(whole).map((step) => ({
     id: step.step_id,
-    label: step.step_id,
-    labelIsAnIdentifier: true,
+    label: step.label,
+    labelIsAnIdentifier: step.label === step.step_id || undefined,
     activity: activityOf(step.state),
     status: stateOf(step),
     current: step.step_id === whole.job.current_step_id || undefined,
@@ -48,6 +58,7 @@ export function railOf(whole: JobWhole, now: number): WorkflowRailStep[] {
     verdict: step.last_verdict === undefined ? undefined : verdictOf(step),
     verdictNamed: step.last_verdict?.named,
     gates: gatesOf(step),
+    verdicts: verdictsOf(step, whole.acceptance_criteria),
     ungatedLabel: ungatedOf(step),
     evidence: { label: "" },
   }));
@@ -80,13 +91,18 @@ function gatesOf(step: StepDetail): WorkflowRailGate[] | undefined {
     const run = step.check_runs.find((ran) => ran.name === nameOf(check));
     const reading = run === undefined ? NOT_REACHED : CHECK_OUTCOME[run.outcome];
     return {
-      // The Check's name, and never its command: the `run` string lives in the
-      // Manifest and `GET /manifests` serves check names only. The design draws
-      // `build · cargo build --workspace`; the wire carries `build`. Reported.
-      command: nameOf(check),
+      // Name first, then the command the Job's frozen workflow resolved it to.
+      // `build` says nothing about what gated the step; the command says what
+      // to run to reproduce it. `diff_nonempty` runs nothing and carries none.
+      command: check.run === undefined ? nameOf(check) : `${nameOf(check)} · ${check.run}`,
       result: run === undefined ? (reading?.verb ?? undefined) : resultOf(run),
       icon: reading?.icon ?? undefined,
       iconLabel: reading?.verb ?? undefined,
+      // Where the Check wrote its stdout and stderr. **The path, never the
+      // contents** — Bridge does not read the filesystem, so naming the file
+      // is the whole of what it can do, and without it a failed Check is
+      // unreadable without going and finding it.
+      outputPath: run?.output_path,
     };
   });
 }
@@ -188,4 +204,50 @@ const ACTIVITIES: readonly StepActivity[] = [
 
 function activityOf(state: string): StepActivity {
   return ACTIVITIES.find((known) => known === state) ?? "not_started";
+}
+
+/**
+ * What the Judge answered on one step, as criterion rows beneath it.
+ *
+ * **A refusal is not a failed Check and does not render as one.** The verb and
+ * the glyph come from `criterion_verdict_judge`, whose `circle-*` family the
+ * icon registry reserves to the Judge — a Check takes `shield-*` — so the
+ * silhouette says which source produced the verdict before the word is read.
+ *
+ * **The number is the criterion's frozen position, not the row's.** A citation
+ * names "criterion 4" against `acceptance_criteria[]`, which is frozen at Job
+ * creation and only ever appended to, so the ordinal is looked up there rather
+ * than counted off this list. A verdict citing an id the Job does not carry
+ * keeps its id and loses its number, which is visible; guessing a position
+ * would silently break the one reference the Drone retries against.
+ */
+function verdictsOf(step: StepDetail, criteria: Criterion[]): CriterionVerdict[] {
+  return step.judged.map((judged) => {
+    const at = criteria.findIndex((c) => c.criterion_id === judged.criterion_id);
+    const reading = CRITERION_VERDICT_JUDGE[judged.verdict];
+    return {
+      ordinal: at < 0 ? undefined : at + 1,
+      criterionId: judged.criterion_id,
+      text: at < 0 ? undefined : criteria[at]?.text,
+      named: judged.verdict,
+      // The wire spelling where the registry has no verb, which is recoverable.
+      // A word chosen here would be the second vocabulary.
+      verdict: reading?.verb ?? judged.verdict,
+      icon: reading?.icon ?? undefined,
+      ...cited(judged),
+    };
+  });
+}
+
+/**
+ * The three fields a refusal owes. Passed through, never joined into a
+ * sentence: they arrive named from the Judge record, and composing prose out of
+ * them here would be writing copy the Judge did not.
+ */
+function cited(judged: Judged): Pick<Judged, "expected" | "produced" | "consequence"> {
+  return {
+    expected: judged.expected,
+    produced: judged.produced,
+    consequence: judged.consequence,
+  };
 }

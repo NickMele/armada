@@ -63,7 +63,7 @@ export function ARunningJob({
               <Absent name="What ran" note={stepsAbsent} />
             </div>
           ) : (
-            <WorkflowRail steps={steps} pulsing />
+            <WorkflowRail steps={steps} pulsing onCopied={onCopied} />
           )}
         </div>
 

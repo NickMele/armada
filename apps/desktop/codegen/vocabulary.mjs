@@ -30,8 +30,16 @@ const OUT = join(here, "..", "src", "shared", "generated", "vocabulary.ts");
 // component — across the process boundary to get at a number.
 const OUT_VERSION = join(here, "..", "src", "shared", "generated", "protocol-version.ts");
 
-// The vocabularies a surface renders. The Judge's and the attested criterion
-// verdicts are left out because no screen draws one.
+// The vocabularies a surface renders. `criterion_verdict_attested` is left out
+// because nothing serves an attestation.
+//
+// `criterion_verdict_judge` is here because job detail draws a Judge's citation
+// beneath the step it judged. Both its rows carry a verb and a glyph and
+// neither carries a status token: the hue is `--verdict-met` and
+// `--verdict-not-met`, which are their own axis in `tokens/status.css` and not
+// a Job status. So both land in `GAPS` as missing a token, which is accurate —
+// there is no `--status-` stem to give `Badge`, and a criterion row is not a
+// badge.
 //
 // `criterion_verdict_check` is here for one variant. The rail says `not reached`
 // beside a declared Check the gate has not run, and `check_outcome` has no such
@@ -49,6 +57,7 @@ const WANTED = [
   "escalation_reason",
   "check_outcome",
   "criterion_verdict_check",
+  "criterion_verdict_judge",
   "step_state",
 ];
 

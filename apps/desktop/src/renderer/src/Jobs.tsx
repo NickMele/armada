@@ -25,28 +25,33 @@
 // `Screens/The list — six states, one row shape` is what they are measured
 // against. Nothing here draws a cell, a column or a border.
 //
-// # The field run is three of the drawing's five, and the two missing ones are
-// missing because nothing serves them to a list
+// # The field run is four of the drawing's five, and the fifth is left out
+// rather than drawn empty
 //
 // The drawing's row is the branch or the workflow, the step bar, the step,
-// elapsed, spend. Three of those reach here.
+// elapsed, spend. Four of those reach here now.
 //
-// **The drawing switches track one from the workflow to the branch the moment a
-// worktree exists, and Bridge cannot make that switch.** `branch` is a
-// `JobDetail` field, served by `GET /jobs/:job_id`. This list holds
-// `JobSummary`, which carries no branch and no `created_at` — so both the
-// branch and elapsed would cost one request per row, which is the failure
-// `docs/practices/bridge.md` names first. There is therefore one field set here
-// and not two: the field that decides between them is not on the wire. Reported.
+// **Track one switches from the workflow to the branch the moment a worktree
+// exists**, which is the drawing's own rule and was unreachable while `branch`
+// was a `JobDetail` field: reading it per row would have been one request per
+// row, the failure `docs/practices/bridge.md` names first. It is on
+// `JobSummary` now, so the switch is a field the row already holds. A Job at
+// the approval gate has no worktree and keeps the workflow.
 //
-// **Elapsed is left out rather than drawn empty**, for the reason spend is:
-// a labelled gap on every row reads as a value that failed to load. Spend is
-// measured nowhere at all — not on the wire, not in the store, not computed.
-// Elapsed needs `created_at` on `JobSummary`; both tracks go in the day their
-// field does.
+// **Elapsed is measured from `created_at`**, also on the summary now. It is the
+// track that answers "is this stuck" without opening the Job, which was the
+// whole reason it was drawn. It runs to now while the Job is working and stops
+// at the Job's own last movement once it is over — a terminal Job whose elapsed
+// kept climbing would read as still running.
 //
-// **The step's name is its id**, because `StepDetail` carries no label. Issue
-// #109. The id is what the record holds, so it is what renders.
+// **Spend stays out of the row entirely.** Nothing measures it — not on the
+// wire, not in the store, not computed — and a labelled gap on every row reads
+// as a value that failed to load rather than one nothing serves.
+//
+// **The step reads its name**, since `StepDetail` carries a label Fleet fills
+// from the frozen workflow. A list row holds `JobSummary` and not the steps, so
+// what it has is `current_step_id` — the id, in mono. The name is on the detail
+// one click away, where the rail draws it.
 //
 // # One state the row shape cannot draw, said out loud
 //
@@ -69,10 +74,11 @@
 
 import { ActiveJobsList, BoardEmptyState, Button, JobRowStacked, StepBar } from "@armada/components";
 import type { JobRowField } from "@armada/components";
-import { Layers } from "lucide-react";
+import { GitBranch, Layers } from "lucide-react";
 
+import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
 import type { JobSummary, WorkflowSummary } from "../../shared/protocol";
-import { instant } from "./duration";
+import { instant, span } from "./duration";
 import { readingOf } from "./reading";
 
 /**
@@ -106,6 +112,8 @@ export type JobsProps = {
   approving: readonly string[];
   /** True while what is shown is not live. Every row reads as de-emphasised. */
   stale: boolean;
+  /** Now, injected. Elapsed on a working Job runs to it, so it has to move. */
+  now: number;
   /** What Fleet holds, so a row can say `bug` where it carried a ULID. */
   workflows: readonly WorkflowSummary[];
   /** The whole reading of the connection, for the empty state that is a fault. */
@@ -123,6 +131,7 @@ export function Jobs({
   jobs,
   approving,
   stale,
+  now,
   workflows,
   disconnected,
   selected,
@@ -164,6 +173,7 @@ export function Jobs({
             job={job}
             approving={approving.includes(job.id)}
             stale={stale}
+            now={now}
             workflows={workflows}
             selected={job.id === selected}
             onOpen={onOpen}
@@ -222,6 +232,7 @@ function Row({
   job,
   approving,
   stale,
+  now,
   workflows,
   selected,
   onOpen,
@@ -231,6 +242,7 @@ function Row({
   job: JobSummary;
   approving: boolean;
   stale: boolean;
+  now: number;
   workflows: readonly WorkflowSummary[];
   selected: boolean;
   onOpen: (jobId: string) => void;
@@ -253,15 +265,21 @@ function Row({
   const at = steps.findIndex((step) => step.step_id === job.current_step_id);
 
   const fields: JobRowField[] = [
-    {
-      // Track one. The drawing's branch, until `JobSummary` carries one — the
-      // workflow's name where Fleet holds it, the id where it does not, which
-      // after the refusal at creation means a Job older than the check.
-      icon: Layers,
-      value: workflow === undefined ? job.workflow_id : `${workflow.name}, ${steps.length} steps`,
-      mono: workflow === undefined,
-      copyValue: job.workflow_id,
-    },
+    // Track one, the drawing's switch: the branch the moment a worktree exists,
+    // and the workflow until then. Two glyphs because they are two different
+    // facts — a branch is where the work is and a workflow is what it will do —
+    // and the row never draws both, so the track stays one column wide.
+    job.branch === undefined
+      ? {
+          // The workflow's name where Fleet holds it, the id where it does not,
+          // which after the refusal at creation means a Job older than the check.
+          icon: Layers,
+          value:
+            workflow === undefined ? job.workflow_id : `${workflow.name}, ${steps.length} steps`,
+          mono: workflow === undefined,
+          copyValue: job.workflow_id,
+        }
+      : { icon: GitBranch, value: job.branch, mono: true, copyValue: job.branch },
     {
       // An empty bar, never no bar. A Job at the gate has its ordinals and no
       // progress, and a row that dropped the bar there would read as a workflow
@@ -285,8 +303,14 @@ function Row({
     // than in the run — so repeating it here would say one thing twice.
     job.current_step_id === undefined
       ? { value: "Not started", quiet: true }
-      : { value: job.current_step_id, emphasis: true },
+      : { value: job.current_step_id, mono: true, emphasis: true },
   ];
+
+  // Track four, appended rather than always drawn: a Job with no elapsed to
+  // state loses the field, for the reason spend is not on the row at all. An
+  // empty slot in a shared column reads as a value that failed to load.
+  const elapsed = elapsedOf(job, now);
+  if (elapsed !== undefined) fields.push({ value: elapsed, mono: true, quiet: true });
 
   return (
     <JobRowStacked
@@ -329,4 +353,19 @@ function activityOf(status: string): "running" | "failed" | "advanced" | "killed
   if (status === "completed_success") return "advanced";
   if (status === "killed") return "killed";
   return undefined;
+}
+
+/**
+ * How long this Job has been alive.
+ *
+ * **A working Job runs to now; a Job that is over stops.** `JobSummary` carries
+ * no ended-at, so a terminal Job would otherwise keep counting and read as
+ * still running. There is nothing on the row to stop it against, so a terminal
+ * Job shows no elapsed at all rather than a figure that is wrong every second
+ * after it is drawn. Reported: the row wants the instant the Job stopped.
+ */
+function elapsedOf(job: JobSummary, now: number): string | undefined {
+  return JOB_LIFECYCLE[job.status]?.terminal === false
+    ? (span(job.created_at, now) ?? undefined)
+    : undefined;
 }

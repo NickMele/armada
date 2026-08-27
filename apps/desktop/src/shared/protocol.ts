@@ -80,6 +80,14 @@ export type JobDetail = {
 /** One step: which, where in the order, and where it got to. */
 export type StepDetail = {
   step_id: string;
+  /**
+   * What a person reads — `Plan the change`, not `plan`.
+   *
+   * **Never absent and never blank.** Where the workflow declares no label, or
+   * Fleet cannot say which workflow this is, Fleet substitutes the id, so no
+   * client picks its own fallback and no two surfaces pick different ones.
+   */
+  label: string;
   /** Position in the frozen WorkflowDef, so a rail draws past and future. */
   ordinal: number;
   /** `job_steps.state`, served rather than inferred from the Job's status. */
@@ -97,6 +105,15 @@ export type StepDetail = {
   check_runs: CheckRun[];
   /** Absent until a gate has ruled on the step. */
   last_verdict?: Verdict;
+  /**
+   * Every criterion the Judge answered on this step, in the order asked.
+   *
+   * **Always present, empty on a step that asks nothing** — which is most of
+   * them, and also every step the Judge never reached. This is where a
+   * refusal's citation arrives, and it is the only thing that says what was
+   * wrong with the work: the trigger says the gate stopped.
+   */
+  judged: Judged[];
   /** Entered, then moved on entering `running`. To `updated_at` is how long. */
   entered_at: string;
   updated_at: string;
@@ -108,6 +125,11 @@ export type DeclaredCheck = {
   kind: string;
   /** The Manifest Check's name. Absent on `diff_nonempty`, which names none. */
   name?: string;
+  /** The command the Check resolved to, as the Job's frozen workflow holds it.
+   * **Absent on `diff_nonempty`**, which runs nothing. Always the frozen
+   * workflow's and never the live Manifest's — editing `armada.yml` mid-Job
+   * must not change what a finished step says it ran. */
+  run?: string;
   /** The exit code the step expects, where there is a command to return one. */
   expect_exit_code?: number;
 };
@@ -135,6 +157,29 @@ export type CheckRun = {
    * started printed nothing.
    */
   output_path?: string;
+};
+
+/**
+ * One criterion the Judge answered.
+ *
+ * **A refusal is not a failed Check and does not read as one.** A Check says
+ * the work is broken; a refusal says the work runs and is not what was asked
+ * for, which is why one ends the Job and the other escalates it. The three
+ * optional fields are what a refusal owes and a no-objection does not: there is
+ * nothing to cite where nothing was refused, and `""` would read as a citation
+ * somebody lost.
+ */
+export type Judged = {
+  /** Which criterion was asked. Joins to `JobDetail.acceptance_criteria`. */
+  criterion_id: string;
+  /** `criterion_verdict_judge`: `met` or `not_met`. */
+  verdict: string;
+  /** What should be seen if the work were right. */
+  expected?: string;
+  /** What is seen instead. */
+  produced?: string;
+  /** What that difference does to whoever consumes it. The triage line. */
+  consequence?: string;
 };
 
 /** The last ruling against a step. `failed` carries its trigger; the rest do not. */

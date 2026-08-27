@@ -420,6 +420,7 @@ export function App() {
                   jobs={state.jobs}
                   approving={state.approving}
                   stale={!live}
+                  now={now}
                   workflows={state.holds.workflows}
                   disconnected={live ? null : statement.headline}
                   selected={openJob}

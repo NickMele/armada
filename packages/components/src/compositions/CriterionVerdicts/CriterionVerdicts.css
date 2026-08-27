@@ -1,0 +1,157 @@
+/* Criterion verdicts — the Judge's answers, beneath the step it judged.
+
+   Flat by default. A criterion is met or it is not, and that is a measured
+   fact, so the hue sits on the glyph and the verb and nowhere else. No
+   surface: --step-failed-bg belongs to the step row that ended the Job, and a
+   second red ground beneath it would say the Job failed, which a refusal does
+   not. */
+.armada-verdicts {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+}
+
+.armada-verdicts__label {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+.armada-verdicts__list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.armada-verdicts__row {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+}
+
+.armada-verdicts__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: calc(var(--space-1) / 2) var(--space-2);
+}
+
+.armada-verdicts__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-4);
+  flex: none;
+  /* Neither verdict is neutral: circle-* is the Judge's own family and the hue
+     is what says which way it went, on a row that carries no surface. */
+  align-self: center;
+}
+
+.armada-verdicts__row[data-verdict="met"] .armada-verdicts__mark,
+.armada-verdicts__row[data-verdict="met"] .armada-verdicts__verb {
+  color: var(--verdict-met);
+}
+
+.armada-verdicts__row[data-verdict="not_met"] .armada-verdicts__mark,
+.armada-verdicts__row[data-verdict="not_met"] .armada-verdicts__verb {
+  color: var(--verdict-not-met);
+}
+
+/* The frozen position. Mono and tabular so a column of them lines up, and
+   never dropped — a citation names the number, not the row's place on screen. */
+.armada-verdicts__ordinal {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The requester's own words. Sans, because a criterion is a sentence somebody
+   wrote rather than a value the system reported — which is the difference from
+   the gate row above, where a Check is a command. */
+.armada-verdicts__text {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+/* Where the criterion's words did not reach the screen, the id stands in — in
+   mono, saying it is an identifier rather than a name. */
+.armada-verdicts__id {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* A refused criterion is the row the screen was opened for. */
+.armada-verdicts__row[data-verdict="not_met"] .armada-verdicts__text {
+  color: var(--fg-default);
+}
+
+.armada-verdicts__verb {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  white-space: nowrap;
+}
+
+/* The citation. Indented to the criterion's own left edge — the mark's slot
+   plus the gap and the head's padding — so it reads as belonging to the row
+   above rather than to the step. */
+.armada-verdicts__cited {
+  /* One grid for all three pairs, so the values start on one edge and the
+     block reads down. `max-content` is the longest label rather than a width
+     transcribed from a drawing — a column carries a floor, never a fixed
+     number somebody guessed. */
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: calc(var(--space-1) / 2) var(--space-2);
+  align-items: baseline;
+  padding: var(--space-2);
+  margin: 0 0 0 calc(var(--space-4) + var(--space-2));
+  border-radius: var(--radius-sm);
+  border-left: var(--row-focus-bar);
+  border-left-color: var(--verdict-not-met);
+  background: var(--bg-raised);
+}
+
+.armada-verdicts__cite-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* The Judge's words, wrapping. Sans: a Judge summary is prose, and the value
+   it quotes is inside that prose rather than a field the system measured. */
+.armada-verdicts__cite-value {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The line a person triages on. It is the reason the block is on screen, so it
+   carries the weight the two facts above it do not. */
+.armada-verdicts__cite-value[data-field="consequence"] {
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+}

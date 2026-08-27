@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { LucideIcon } from "lucide-react";
-import { File, Folder, GitBranch, OctagonAlert, ShieldCheck, ShieldX, X } from "lucide-react";
+import { CircleCheck, CircleX, File, Folder, GitBranch, OctagonAlert, ShieldCheck, ShieldX, X } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
 import type { WorkflowRailStep } from "../../compositions/WorkflowRail/WorkflowRail";
 import { AFailedJobADeadEndReadAsOne } from "./AFailedJobADeadEndReadAsOne";
@@ -218,6 +218,91 @@ export const StoppedAndAsked: Story = {
           ungatedLabel: "Fleet serves no check result for this step",
           evidence: { label: "" },
         }))}
+      />
+    </div>
+  ),
+};
+
+/**
+ * **A Judge refused a criterion, and the whole screen says so.** The step ran,
+ * its Check passed, and the work is not what was asked for — the citation
+ * beneath the step is the only thing on the screen that says which criterion
+ * and why, and it is what a person triages on.
+ *
+ * **The band at the top reads "failed a check", and that is wrong here.** A
+ * refusal escalates on `gate_failure` — `crates/fleet/src/gate.rs` picks it
+ * deliberately — and `enum-verbs.toml` gives that trigger a Check's verb and a
+ * Check's `shield-x` glyph, from a time when only a Check could fire it. A
+ * status label is never written by hand, so the registry's word renders and the
+ * disagreement is a finding rather than something worked around here. The rail
+ * is what carries the truth in the meantime.
+ */
+export const AJudgeRefusedACriterion: Story = {
+  render: () => (
+    <div className="armada-screen">
+      <AFailedJobADeadEndReadAsOne
+        heading={{
+          status: "escalated",
+          statusIcon: ShieldX,
+          statusLabel: "failed a check",
+          headline: "Sign a revoked device out on refresh failure",
+          jobId: "job_2d90bb",
+          fields: [
+            { label: "Stopped at", value: "Implement" },
+            { label: "step", value: "2 of 4", mono: true, continues: true },
+            { label: "Elapsed", value: "11m 03s", mono: true },
+            { label: "Model", value: "sonnet", mono: true },
+          ],
+          actions: <Button>Redispatch as a new job</Button>,
+        }}
+        why="failed a check · owes c2"
+        ranLabel="What ran"
+        steps={[
+          { id: "plan", label: "Plan the change", activity: "advanced", status: "advanced" },
+          {
+            id: "implement",
+            label: "Implement",
+            activity: "stopped",
+            status: "stopped",
+            current: true,
+            gates: [
+              {
+                command: "build · cargo build --workspace",
+                result: "passed",
+                icon: ShieldCheck,
+                iconLabel: "Passed",
+                outputPath: ".armada/jobs/job_2d90bb/checks/build.log",
+              },
+            ],
+            verdicts: [
+              {
+                ordinal: 1,
+                criterionId: "c1",
+                text: "Expired tokens refresh once rather than per request.",
+                named: "met",
+                verdict: "no objection",
+                icon: CircleCheck,
+              },
+              {
+                ordinal: 2,
+                criterionId: "c2",
+                text: "A failed refresh signs the session out.",
+                named: "not_met",
+                verdict: "refused",
+                icon: CircleX,
+                expected:
+                  "A 401 from the refresh endpoint clears the session and returns the caller to sign-in.",
+                produced:
+                  "The refresh error is swallowed in `session.ts:212` and the stale token is retried on the next request.",
+                consequence:
+                  "A revoked device keeps a working-looking session until the next full reload, so signing a device out does not sign it out.",
+              },
+            ],
+          },
+          { id: "verify", label: "Run tests", activity: "not_started", status: "not started" },
+          { id: "handoff", label: "Summarise", activity: "not_started", status: "not started" },
+        ]}
+        outputAbsent="Each check names its output file on its own row. Nothing serves the contents."
       />
     </div>
   ),

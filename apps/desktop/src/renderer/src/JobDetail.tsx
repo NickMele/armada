@@ -3,7 +3,10 @@
 //
 // # What is served is drawn, and what is not is named
 //
-// The rail is built in `rail.ts`, which says what of it the wire carries.
+// The rail is built in `rail.ts`, which says what of it the wire carries. What
+// the Judge answered is on it too, beneath the step it judged: a refusal is not
+// a failed Check and does not render as one, and `CriterionVerdicts` carries
+// that difference — see its own header for the three ways.
 //
 // Where the work is is the one region built from both: the branch is served,
 // and the worktree, log and transcript paths are derived in `work.ts` from the
@@ -188,14 +191,13 @@ export function JobDetail({
     return (
       <AFinishedJobABranchAndAnEvidenceTrail
         heading={heading}
-        // The branch is served now, so this region only says it is missing
-        // when the Job genuinely has no worktree. No diff stat and no log
-        // beside it: neither is on the wire, and a branch alone is the
-        // handover the screen exists to make.
+        // Read off the row, which carries the branch too and cannot disagree
+        // with the detail: this region says the branch is missing only when the
+        // Job genuinely has no worktree, rather than while the detail is still
+        // being read. No diff stat and no log beside it — neither is on the
+        // wire, and a branch alone is the handover the screen exists to make.
         handover={
-          whole?.branch === undefined
-            ? undefined
-            : { branch: whole.branch, note: HANDOVER_NOTE }
+          job.branch === undefined ? undefined : { branch: job.branch, note: HANDOVER_NOTE }
         }
         handoverAbsent={NOT_SERVED.branch}
         work={workOf(job, whole, manifest, false)}
@@ -242,9 +244,11 @@ export function JobDetail({
 const NOT_SERVED = {
   evidence: "No operation serves a work submission, so there is nothing to draw here.",
   branch: "This Job has no worktree yet, so it has no branch.",
-  // The path is served on a Check run since protocol 3; the contents are not,
-  // and Bridge does not read the filesystem. Naming the file is what there is.
-  output: "A check's output is written beside the job. Nothing serves its contents.",
+  // The path is served per Check run and is drawn on the gate row that owns
+  // it — a step with three Checks wrote three files, and one region can only
+  // hold one. The contents are not served, and Bridge does not read the
+  // filesystem, so naming the file is the whole of what it can do.
+  output: "Each check names its output file on its own row. Nothing serves the contents.",
 } as const;
 
 /**

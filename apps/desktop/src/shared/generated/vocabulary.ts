@@ -10,7 +10,7 @@
 // one is listed in `GAPS` so a surface can say what it could not render instead
 // of inventing copy for it.
 
-import { Archive, ArrowUpToLine, Ban, Check, CircleDot, Clock, Cpu, Eye, FileQuestionMark, Link, OctagonAlert, Power, RefreshCw, ShieldCheck, ShieldMinus, ShieldX, Split, Stamp, Terminal, Unplug, UserCheck, X } from "lucide-react";
+import { Archive, ArrowUpToLine, Ban, Check, CircleCheck, CircleDot, CircleX, Clock, Cpu, Eye, FileQuestionMark, Link, OctagonAlert, Power, RefreshCw, ShieldCheck, ShieldMinus, ShieldX, Split, Stamp, Terminal, Unplug, UserCheck, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /** How one variant reads. `null` where the registry carries no answer. */
@@ -78,6 +78,12 @@ export const CRITERION_VERDICT_CHECK: Readonly<Record<string, Rendering | undefi
   "passed": { verb: "passed", icon: null, badgeStatus: null, statusToken: null },
 };
 
+/** `criterion_verdict_judge`, keyed by the wire value. */
+export const CRITERION_VERDICT_JUDGE: Readonly<Record<string, Rendering | undefined>> = {
+  "met": { verb: "no objection", icon: CircleCheck, badgeStatus: null, statusToken: null },
+  "not_met": { verb: "refused", icon: CircleX, badgeStatus: null, statusToken: null },
+};
+
 /** `step_state` — **no rows in `enum-verbs.toml`.** Every variant is a gap. */
 export const STEP_STATE: Readonly<Record<string, Rendering | undefined>> = {};
 
@@ -125,4 +131,6 @@ export const GAPS: readonly Gap[] = [
   { vocabulary: "criterion_verdict_check", variant: "failed", missing: ["icon", "token"] },
   { vocabulary: "criterion_verdict_check", variant: "not_reached", missing: ["token"] },
   { vocabulary: "criterion_verdict_check", variant: "passed", missing: ["icon", "token"] },
+  { vocabulary: "criterion_verdict_judge", variant: "met", missing: ["token"] },
+  { vocabulary: "criterion_verdict_judge", variant: "not_met", missing: ["token"] },
 ];

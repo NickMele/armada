@@ -34,8 +34,8 @@ export function factsOf(
 ): JobDetailField[] {
   return [
     ...stepFacts(job, whole),
-    ...elapsedFact(whole, now),
-    ...branchFact(whole),
+    ...elapsedFact(job, now),
+    ...branchFact(job),
     {
       // The workflow's name where Fleet holds it, the id where it does not —
       // which after the refusal at creation means a Job older than the check.
@@ -112,10 +112,16 @@ function stepFacts(job: JobSummary, whole: JobWhole | null): JobDetailField[] {
   ];
 }
 
-/** How long the Job has been alive, from `created_at`. Measured, so it is flat. */
-function elapsedFact(whole: JobWhole | null, now: number): JobDetailField[] {
-  if (whole === null) return [];
-  const alive = span(whole.created_at, now);
+/**
+ * How long the Job has been alive, from `created_at`.
+ *
+ * **Read off the row rather than off the detail.** Both carry it and cannot
+ * disagree — the detail's is built from the same record — and the row is
+ * already in hand, so the fact is there on the first frame instead of appearing
+ * when `GET /jobs/:job_id` lands.
+ */
+function elapsedFact(job: JobSummary, now: number): JobDetailField[] {
+  const alive = span(job.created_at, now);
   return alive === null ? [] : [{ label: "Elapsed", value: alive, mono: true }];
 }
 
@@ -124,10 +130,9 @@ function elapsedFact(whole: JobWhole | null, now: number): JobDetailField[] {
  * blank: a Job at the approval gate has no worktree, and saying so is different
  * from leaving the row out and letting somebody wonder.
  */
-function branchFact(whole: JobWhole | null): JobDetailField[] {
-  if (whole === null) return [];
-  if (whole.branch === undefined) return [{ label: "No worktree yet" }];
-  return [{ label: "Branch", value: whole.branch, mono: true, copyValue: whole.branch }];
+function branchFact(job: JobSummary): JobDetailField[] {
+  if (job.branch === undefined) return [{ label: "No worktree yet" }];
+  return [{ label: "Branch", value: job.branch, mono: true, copyValue: job.branch }];
 }
 
 /**
