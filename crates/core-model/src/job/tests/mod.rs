@@ -89,6 +89,7 @@ fn draft() -> NewJob {
         redispatched_from: None,
         facts: Facts::empty(),
         scope_revisions: Vec::new(),
+        attachments: Vec::new(),
     }
 }
 

@@ -80,6 +80,21 @@ purpose = "When the Job was created. What a whole-Job elapsed is measured from."
 in_code = "Yes"
 notes = "The instant every constructor already takes. It was a column and not a field while nothing read it — the rebuild needed it to stamp the `job_steps` rows — and it is on the record now because creation writes no event, so nothing else on the Job can answer how long it has been open."
 
+[fields.Attachments]
+type = "array<object>"
+table = "job_attachments"
+storage = "Own table"
+nullable = "Yes"
+frozen_at = "Creation"
+purpose = "Files handed to the Job at proposal time — a screenshot, a log capture, whatever a person attached to the brief — so the Drone sees them on its first turn rather than a person reading them later."
+in_code = "Yes"
+notes = """
+`{filename, mime_type, byte_size, storage_ref, created_at}`. Written once, at Job creation, from paths staged before the Job existed — there is no method that adds one afterwards, the way `acceptance_criteria` is frozen and not the way `Facts` is append-only.
+
+`storage_ref` is Fleet's own copy, kept outside any worktree; dispatch copies it again into the worktree a Drone can read, and neither copy is the bytes a person originally picked.
+"""
+why = "Mirrors Evidence's own-table precedent: a blob on the Job row would rewrite whole on every attachment, and the Drone needs a path to open with its own tools, not a value inlined into a field a secret-scan already has to cover."
+
 [fields.atomic]
 type = "bool"
 table = "jobs"

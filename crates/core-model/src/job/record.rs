@@ -39,8 +39,8 @@ use crate::envelope::{Actor, Timestamp};
 use crate::job::drone::{DroneAssigned, DroneMoved, DronePresence, IllegalDroneMove};
 use crate::job::event::{JobEvent, StepEvent};
 use crate::job::fields::{
-    AcceptanceCriterion, Branch, DependencyEdge, DispatchOrigin, Facts, GateManifest, Origin,
-    ScopeRevision, Subject, TopLevelOrigin, Urgency, WriteTargets,
+    AcceptanceCriterion, Attachment, Branch, DependencyEdge, DispatchOrigin, Facts, GateManifest,
+    Origin, ScopeRevision, Subject, TopLevelOrigin, Urgency, WriteTargets,
 };
 use crate::job::ids::{DroneId, JobId, ManifestId, ModelName, StepId, Title, WorkflowId};
 use crate::job::status::JobStatus;
@@ -90,6 +90,11 @@ pub struct NewJob {
     pub facts: Facts,
     /// Entry zero is the initial scope.
     pub scope_revisions: Vec<ScopeRevision>,
+    /// Files handed to the Job at proposal time, promoted from wherever they
+    /// were staged into Fleet's own keeping. Frozen at creation like the rest
+    /// of this constructor's fields — a Job does not grow attachments after it
+    /// exists, it only ever gets copies of the ones it started with.
+    pub attachments: Vec<Attachment>,
 }
 
 /// A Job, and the event that produced it.
@@ -148,6 +153,7 @@ pub struct Job {
     subject: Option<Subject>,
     facts: Facts,
     scope_revisions: Vec<ScopeRevision>,
+    attachments: Vec<Attachment>,
     write_targets: Option<WriteTargets>,
     gate_manifests: Vec<GateManifest>,
     steps: Vec<JobStep>,
@@ -207,6 +213,7 @@ impl Job {
             subject: new.subject,
             facts: new.facts,
             scope_revisions: new.scope_revisions,
+            attachments: new.attachments,
             write_targets: new.write_targets,
             gate_manifests: new.gate_manifests,
             steps,
@@ -437,6 +444,11 @@ impl Job {
     }
     pub fn scope_revisions(&self) -> &[ScopeRevision] {
         &self.scope_revisions
+    }
+    /// Files handed to the Job at proposal time. Frozen at creation — nothing
+    /// on this record adds to the list afterwards.
+    pub fn attachments(&self) -> &[Attachment] {
+        &self.attachments
     }
     pub fn write_targets(&self) -> Option<&WriteTargets> {
         self.write_targets.as_ref()

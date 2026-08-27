@@ -129,7 +129,7 @@ fn a_log_entry_pointing_at_a_job_that_is_gone_is_refused() {
         .expect("off");
     conn.execute_batch(
         "DELETE FROM job_steps; DELETE FROM job_write_targets;
-         DELETE FROM job_manifests; DELETE FROM jobs;",
+         DELETE FROM job_manifests; DELETE FROM job_attachments; DELETE FROM jobs;",
     )
     .expect("the job row removed out from under its log");
     drop(conn);
