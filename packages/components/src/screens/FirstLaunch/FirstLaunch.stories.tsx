@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { BoardEmptyState } from "../../compositions/BoardEmptyState/BoardEmptyState";
 import { Button } from "../../primitives/Button/Button";
+import { FirstLaunch as FirstLaunchScreen } from "./FirstLaunch";
 
 /**
  * Bridge connects to a Fleet that has been running without it, and the list is
@@ -13,34 +13,31 @@ import { Button } from "../../primitives/Button/Button";
  * so a missing file is a Fleet that is not there — which is why the second
  * state can name the command rather than reporting a timeout.
  */
-const meta: Meta = {
+const meta: Meta<typeof FirstLaunchScreen> = {
   title: "Screens/First launch",
+  component: FirstLaunchScreen,
 };
 export default meta;
 
-type Story = StoryObj;
+type Story = StoryObj<typeof FirstLaunchScreen>;
 
 export const FirstLaunch: Story = {
   render: () => (
     <div className="armada-screen">
-      <div className="armada-screen__row">
-        <div className="armada-screen__card" data-width="half">
-          <span className="armada-screen__caption">Fleet running, no jobs</span>
-          <BoardEmptyState quiet action={<Button variant="primary">New job</Button>}>
-            No jobs. Fleet has been up 6 days.
-          </BoardEmptyState>
-        </div>
-
-        <div className="armada-screen__card" data-width="half">
-          <span className="armada-screen__caption">Fleet is not running</span>
-          <BoardEmptyState
-            command="armada-fleet start"
-            note="Run that in a terminal. Bridge connects on its own once the runtime file appears."
-          >
-            Fleet is not running. Bridge has nothing to read.
-          </BoardEmptyState>
-        </div>
-      </div>
+      <FirstLaunchScreen
+        running={{
+          caption: "Fleet running, no jobs",
+          quiet: true,
+          action: <Button variant="primary">New job</Button>,
+          children: "No jobs. Fleet has been up 6 days.",
+        }}
+        notRunning={{
+          caption: "Fleet is not running",
+          command: "armada-fleet start",
+          note: "Run that in a terminal. Bridge connects on its own once the runtime file appears.",
+          children: "Fleet is not running. Bridge has nothing to read.",
+        }}
+      />
     </div>
   ),
 };

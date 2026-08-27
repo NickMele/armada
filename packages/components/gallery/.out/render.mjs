@@ -1,6 +1,6 @@
 import { jsx, jsxs, Fragment } from "react/jsx-runtime";
-import { ChevronDown, UserCheck, Cpu, GitBranch, CircleDot, X, Check, Power, Folder, OctagonAlert, Clock, MessageSquare, ClipboardList, Activity, Bell, Eye, ScrollText, Stethoscope, FileCog, Flag, RotateCw, ShieldCheck, ShieldX, ShieldMinus, Lock, TriangleAlert, Stamp, Terminal, Link, Ban, Archive, RefreshCw, FileQuestionMark, Split, Unplug, ArrowUpToLine, Send, CornerUpRight, Settings } from "lucide-react";
-import { useState, useCallback, useRef, useEffect, useId, Fragment as Fragment$1, useMemo, createElement } from "react";
+import { useState, createContext, useCallback, useContext, useRef, useEffect, Children, cloneElement, Fragment as Fragment$1, useId, useMemo, createElement } from "react";
+import { ChevronDown, UserCheck, Cpu, GitBranch, CircleDot, X, Check, Power, ChevronRight, File, OctagonAlert, Folder, Clock, MessageSquare, ClipboardList, Activity, Bell, Eye, ScrollText, Stethoscope, FileCog, Flag, RotateCw, ShieldMinus, ShieldCheck, ShieldX, FileCheck, Lock, TriangleAlert, Stamp, Terminal, Link, Ban, Archive, RefreshCw, FileQuestionMark, Split, Unplug, ArrowUpToLine, Send, CornerUpRight, Settings } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 function Button({
   variant = "secondary",
@@ -69,7 +69,10 @@ function SplitButton({
         role: "menuitem",
         className: "armada-split-button__item",
         "data-danger": item.danger || void 0,
-        onClick: item.onSelect,
+        onClick: () => {
+          setOpen(false);
+          item.onSelect?.();
+        },
         children: [
           /* @__PURE__ */ jsx("span", { children: item.label }),
           item.shortcut !== void 0 && /* @__PURE__ */ jsx("span", { className: "armada-split-button__shortcut", children: item.shortcut })
@@ -100,6 +103,7 @@ function Badge({ status, icon: Icon, children, pulsing = false }) {
     }
   );
 }
+const RovingOption = createContext(null);
 const FIELD_ICON = 12;
 const FIELD_STROKE = 2;
 function Copyable({
@@ -139,15 +143,31 @@ function JobRowStacked({
   onOpen,
   onCopied
 }) {
+  const handleKeyDown = useCallback(
+    (event) => {
+      if (onOpen === void 0) return;
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      onOpen();
+    },
+    [onOpen]
+  );
+  const opens = onOpen !== void 0;
+  const roving = useContext(RovingOption);
+  const tabIndex = !opens ? void 0 : roving === null || roving.index === roving.active ? 0 : -1;
   return /* @__PURE__ */ jsxs(
     "div",
     {
       className: "armada-job-row",
-      role: "listitem",
+      role: opens ? "option" : "listitem",
+      "aria-selected": opens ? selected ?? false : void 0,
+      tabIndex,
+      "data-job-id": jobId,
       "data-focused": focused || void 0,
       "data-selected": selected || void 0,
       "data-dimmed": dimmed || void 0,
       onClick: onOpen,
+      onKeyDown: opens ? handleKeyDown : void 0,
       children: [
         /* @__PURE__ */ jsx("div", { className: "armada-job-row__badge", children: /* @__PURE__ */ jsx(Badge, { status, icon: statusIcon, pulsing, children: statusLabel }) }),
         /* @__PURE__ */ jsxs("div", { className: "armada-job-row__body", children: [
@@ -167,7 +187,7 @@ function JobRowStacked({
             "div",
             {
               className: "armada-job-row__fields",
-              style: { gridTemplateColumns: tracks ?? trackList(fields.length) },
+              style: { "--armada-row-fallback-tracks": tracks ?? trackList(fields.length) },
               children: fields.map((field, i) => /* @__PURE__ */ jsxs(
                 "span",
                 {
@@ -203,6 +223,7 @@ function JobRowStacked({
     }
   );
 }
+const JOB_ROW_LIST = "armada-job-row-list";
 const DRAWN_TRACKS = [
   "var(--armada-track-origin)",
   "var(--armada-track-bar)",
@@ -273,21 +294,74 @@ function StepBar({ total, current, activity = "not_started", label: label2 }) {
   );
   return label2 ? /* @__PURE__ */ jsx(Tooltip, { label: label2, children: bar }) : bar;
 }
-function ActiveJobsList({ heading, summary, action, children, empty }) {
+const ROVES = /* @__PURE__ */ new Set(["ArrowDown", "ArrowUp", "Home", "End"]);
+function ActiveJobsList({
+  heading: heading2,
+  summary,
+  action,
+  children,
+  empty,
+  selectable = false,
+  label: label2
+}) {
   const rows = Array.isArray(children) ? children.filter(Boolean) : children;
   const isEmpty = rows === void 0 || rows === null || Array.isArray(rows) && rows.length === 0;
+  const frame = useRef(null);
+  const [active, setActive] = useState(0);
+  const options = useCallback(
+    () => Array.from(frame.current?.querySelectorAll(':scope > [role="option"]') ?? []),
+    []
+  );
+  const rove = useCallback(
+    (event) => {
+      if (!ROVES.has(event.key)) return;
+      const found = options();
+      if (found.length === 0) return;
+      const from = Math.min(active, found.length - 1);
+      const to = event.key === "Home" ? 0 : event.key === "End" ? found.length - 1 : Math.min(Math.max(from + (event.key === "ArrowDown" ? 1 : -1), 0), found.length - 1);
+      event.preventDefault();
+      setActive(to);
+      found[to]?.focus();
+    },
+    [active, options]
+  );
+  const followed = useCallback(
+    (event) => {
+      const option = event.target.closest('[role="option"]');
+      if (option === null) return;
+      const at = options().indexOf(option);
+      if (at >= 0) setActive(at);
+    },
+    [options]
+  );
+  const roving = selectable && !isEmpty;
   return /* @__PURE__ */ jsxs("section", { className: "armada-active-jobs", children: [
-    heading || summary || action ? /* @__PURE__ */ jsxs("header", { className: "armada-active-jobs__header", children: [
+    heading2 || summary || action ? /* @__PURE__ */ jsxs("header", { className: "armada-active-jobs__header", children: [
       /* @__PURE__ */ jsxs("div", { className: "armada-active-jobs__titles", children: [
-        heading ? /* @__PURE__ */ jsx("h2", { className: "armada-active-jobs__heading", children: heading }) : null,
+        heading2 ? /* @__PURE__ */ jsx("h2", { className: "armada-active-jobs__heading", children: heading2 }) : null,
         summary ? /* @__PURE__ */ jsx("p", { className: "armada-active-jobs__summary", children: summary }) : null
       ] }),
       action ? /* @__PURE__ */ jsx("div", { className: "armada-active-jobs__action", children: action }) : null
     ] }) : null,
-    /* @__PURE__ */ jsx("div", { className: "armada-active-jobs__frame", role: "list", children: isEmpty ? empty : rows })
+    /* @__PURE__ */ jsx(
+      "div",
+      {
+        ref: frame,
+        className: `armada-active-jobs__frame ${JOB_ROW_LIST}`,
+        role: roving ? "listbox" : "list",
+        "aria-label": label2,
+        onKeyDown: roving ? rove : void 0,
+        onFocus: roving ? followed : void 0,
+        children: isEmpty ? empty : roving ? (
+          // A provider renders no element, so the options stay direct
+          // children of the listbox and `:scope >` still finds them.
+          Children.map(rows, (row, index) => /* @__PURE__ */ jsx(RovingOption.Provider, { value: { index, active }, children: row }))
+        ) : rows
+      }
+    )
   ] });
 }
-const meta$I = {
+const meta$M = {
   title: "Compositions/Active jobs list",
   component: ActiveJobsList
 };
@@ -440,12 +514,43 @@ const EmptyWithNoEmptyState = {
     children: []
   }
 };
+const AtAWideWindow = {
+  render: () => /* @__PURE__ */ jsx("div", { style: { width: "calc(var(--window-floor) * 2)" }, children: /* @__PURE__ */ jsx(ActiveJobsList, { ...SixStates.args }) })
+};
+const Selectable = {
+  args: {
+    ...SixStates.args,
+    selectable: true,
+    label: "Active jobs",
+    children: (SixStates.args?.children).map(
+      (row, i) => cloneElement(row, { onOpen: () => {
+      }, selected: i === 2 })
+    )
+  }
+};
+const OneOption = {
+  args: {
+    heading: "Active jobs",
+    summary: "1 job. 1 awaiting approval.",
+    selectable: true,
+    label: "Active jobs",
+    children: [
+      cloneElement((SixStates.args?.children)[0], {
+        onOpen: () => {
+        }
+      })
+    ]
+  }
+};
 const __vite_glob_0_0 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  AtAWideWindow,
   AtTheWidthFloor: AtTheWidthFloor$1,
   EmptyWithNoEmptyState,
+  OneOption,
+  Selectable,
   SixStates,
-  default: meta$I
+  default: meta$M
 }, Symbol.toStringTag, { value: "Module" }));
 function BoardEmptyState({
   children,
@@ -474,7 +579,7 @@ function BoardEmptyState({
     action
   ] });
 }
-const meta$H = {
+const meta$L = {
   title: "Compositions/Board empty state",
   component: BoardEmptyState
 };
@@ -485,7 +590,7 @@ const FleetRunningNoJobs = {
     action: /* @__PURE__ */ jsx(Button, { variant: "primary", children: "New job" })
   }
 };
-const FleetIsNotRunning = {
+const FleetIsNotRunning$1 = {
   args: {
     children: "Fleet is not running. Bridge has nothing to read.",
     command: "armada-fleet start",
@@ -494,9 +599,280 @@ const FleetIsNotRunning = {
 };
 const __vite_glob_0_1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  FleetIsNotRunning,
+  FleetIsNotRunning: FleetIsNotRunning$1,
   FleetRunningNoJobs,
-  default: meta$H
+  default: meta$L
+}, Symbol.toStringTag, { value: "Module" }));
+function DroneTurns({ turns: turns2, emptyNote, live = false }) {
+  const [open2, setOpen] = useState(() => /* @__PURE__ */ new Set());
+  if (turns2.length === 0) {
+    return /* @__PURE__ */ jsx("p", { className: "armada-turns__empty", role: "note", children: emptyNote });
+  }
+  const entries2 = runs(turns2);
+  return /* @__PURE__ */ jsx("ol", { className: "armada-turns", children: entries2.map(
+    (entry, at) => entry.of === "turn" ? /* @__PURE__ */ jsx(Row$1, { turn: entry.turn }, entry.turn.id) : /* @__PURE__ */ jsx(
+      QuietRun,
+      {
+        turns: entry.turns,
+        working: live && at === entries2.length - 1,
+        open: open2.has(entry.turns[0].id),
+        onToggle: () => setOpen(toggled(open2, entry.turns[0].id))
+      },
+      entry.turns[0].id
+    )
+  ) });
+}
+function runs(turns2) {
+  const entries2 = [];
+  for (const turn of turns2) {
+    const last = entries2[entries2.length - 1];
+    if (turn.quiet !== true) {
+      entries2.push({ of: "turn", turn });
+      continue;
+    }
+    if (last !== void 0 && last.of === "quiet") {
+      last.turns.push(turn);
+      continue;
+    }
+    entries2.push({ of: "quiet", turns: [turn] });
+  }
+  return entries2;
+}
+function toggled(open2, id) {
+  const next = new Set(open2);
+  if (!next.delete(id)) next.add(id);
+  return next;
+}
+const MARK = 12;
+const MARK_STROKE$1 = 2;
+const CARET = 16;
+function QuietRun({ turns: turns2, working, open: open2, onToggle }) {
+  const head = turns2[0];
+  const held = open2 ? turns2.map((turn) => rowId(turn)).join(" ") : void 0;
+  return /* @__PURE__ */ jsxs(Fragment$1, { children: [
+    /* @__PURE__ */ jsxs("li", { className: "armada-turns__turn", "data-quiet": true, "data-open": open2 || void 0, children: [
+      /* @__PURE__ */ jsx("span", { className: "armada-turns__at", children: head.at }),
+      /* @__PURE__ */ jsx("span", { className: "armada-turns__mark", "data-working": working || void 0, children: /* @__PURE__ */ jsx(CircleDot, { size: MARK, strokeWidth: MARK_STROKE$1, "aria-hidden": true }) }),
+      /* @__PURE__ */ jsxs("span", { className: "armada-turns__quiet-body", children: [
+        working ? /* @__PURE__ */ jsx("span", { className: "armada-turns__working", children: "Working" }) : null,
+        /* @__PURE__ */ jsx("span", { className: "armada-turns__count", children: counted(turns2.length) }),
+        /* @__PURE__ */ jsxs(
+          Button,
+          {
+            variant: "ghost",
+            size: "sm",
+            "aria-expanded": open2,
+            "aria-controls": held,
+            onClick: onToggle,
+            children: [
+              open2 ? /* @__PURE__ */ jsx(ChevronDown, { size: CARET, strokeWidth: MARK_STROKE$1, "aria-hidden": true }) : /* @__PURE__ */ jsx(ChevronRight, { size: CARET, strokeWidth: MARK_STROKE$1, "aria-hidden": true }),
+              open2 ? "Hide details" : "Show details"
+            ]
+          }
+        )
+      ] })
+    ] }),
+    open2 ? turns2.map((turn) => /* @__PURE__ */ jsx(Row$1, { turn, nested: true }, turn.id)) : null
+  ] });
+}
+function Row$1({ turn, nested = false }) {
+  return /* @__PURE__ */ jsxs("li", { className: "armada-turns__turn", id: rowId(turn), "data-nested": nested || void 0, children: [
+    /* @__PURE__ */ jsx("span", { className: "armada-turns__at", children: turn.at }),
+    /* @__PURE__ */ jsx("span", { className: "armada-turns__kind", children: turn.kind }),
+    /* @__PURE__ */ jsxs("span", { className: "armada-turns__body", children: [
+      turn.subject === void 0 && turn.detail === void 0 ? null : /* @__PURE__ */ jsxs("span", { className: "armada-turns__head", children: [
+        turn.subject === void 0 ? null : /* @__PURE__ */ jsx("span", { className: "armada-turns__subject", children: turn.subject }),
+        turn.detail === void 0 ? null : /* @__PURE__ */ jsxs("span", { className: "armada-turns__detail", children: [
+          turn.detail,
+          turn.truncated === true ? /* @__PURE__ */ jsx(Cut, {}) : null
+        ] })
+      ] }),
+      turn.answer === void 0 ? null : /* @__PURE__ */ jsx("span", { className: "armada-turns__answer", children: turn.answer }),
+      turn.said === void 0 ? null : /* @__PURE__ */ jsx("span", { className: "armada-turns__said", children: turn.said })
+    ] })
+  ] });
+}
+function Cut() {
+  return /* @__PURE__ */ jsxs("span", { className: "armada-turns__cut", children: [
+    "…",
+    /* @__PURE__ */ jsx("span", { className: "armada-turns__cut-note", children: " cut short" })
+  ] });
+}
+function rowId(turn) {
+  return `armada-turn-${turn.id}`;
+}
+function counted(rows) {
+  return rows === 1 ? "1 turn" : `${rows} turns`;
+}
+const meta$K = {
+  title: "Compositions/Drone turns",
+  component: DroneTurns
+};
+const NOTHING_YET$1 = "This job has no turns. It was never dispatched, so no drone has written one.";
+function thinking$1(from, rows, at) {
+  return Array.from({ length: rows }, (_, n) => ({
+    id: String(from + n),
+    at,
+    kind: "unrecognised",
+    subject: n % 4 === 3 ? "a turn with nothing in it Armada names" : "system/thinking_tokens",
+    quiet: true
+  }));
+}
+const turns$1 = [
+  {
+    id: "1",
+    at: "09:14:02",
+    kind: "started",
+    // The model is whatever the Job named. A vendor spelling belongs in
+    // `adapters` and nowhere else, so the fixture carries a placeholder.
+    subject: "sess_01JB4 · the job's model · 2 mcp servers"
+  },
+  {
+    id: "2",
+    at: "09:14:03",
+    kind: "said",
+    said: "Reading the settings module before I split anything, so the public signature survives."
+  },
+  {
+    id: "3",
+    at: "09:14:04",
+    kind: "called",
+    subject: "Read · call_7f21",
+    answer: "Answered."
+  },
+  {
+    id: "4",
+    at: "09:14:09",
+    kind: "called",
+    subject: "Bash · call_7f22",
+    answer: "Answered, and the tool itself failed."
+  },
+  {
+    id: "5",
+    at: "09:14:11",
+    kind: "called",
+    subject: "Edit · call_7f23",
+    answer: "No answer yet."
+  }
+];
+const ADroneWorking = {
+  args: { turns: turns$1, emptyNote: NOTHING_YET$1 }
+};
+const AJobWithNoTranscript$1 = {
+  args: { turns: [], emptyNote: NOTHING_YET$1 }
+};
+const RefusedUnrecognisedAndUnreadable = {
+  args: {
+    emptyNote: NOTHING_YET$1,
+    turns: [
+      {
+        id: "1",
+        at: "09:15:40",
+        kind: "refused",
+        subject: "Bash · call_7f31",
+        said: "This command is not on the allowlist for this drone."
+      },
+      { id: "2", at: "09:15:41", kind: "unrecognised", subject: "thinking_delta", quiet: true },
+      {
+        id: "3",
+        at: "09:15:42",
+        kind: "unreadable",
+        subject: '{"type":"assistant","message":{"content":[{"type":"to',
+        said: "The line ended mid-object."
+      }
+    ]
+  }
+};
+const WhatEachCallDid = {
+  args: {
+    emptyNote: NOTHING_YET$1,
+    turns: [
+      {
+        id: "1",
+        at: "09:16:02",
+        kind: "called",
+        subject: "Read",
+        detail: "src/settings.rs",
+        answer: "Answered."
+      },
+      {
+        id: "2",
+        at: "09:16:04",
+        kind: "called",
+        subject: "Edit",
+        detail: "reducer.rs +42 -18",
+        answer: "Answered."
+      },
+      {
+        id: "3",
+        at: "09:16:09",
+        kind: "called",
+        subject: "Grep",
+        detail: "fn observe\\( in crates/",
+        answer: "Answered."
+      },
+      {
+        id: "4",
+        at: "09:16:20",
+        kind: "called",
+        subject: "Write",
+        detail: "docs/practices/bridge.md, 412 lines starting # Bridge practices",
+        truncated: true,
+        answer: "No answer yet."
+      }
+    ]
+  }
+};
+const ADroneThinking$1 = {
+  args: {
+    live: true,
+    emptyNote: NOTHING_YET$1,
+    turns: [
+      { id: "1", at: "09:14:02", kind: "said", said: "Starting on the settings split." },
+      ...thinking$1(10, 9, "09:14:03"),
+      { id: "20", at: "09:14:12", kind: "called", subject: "Read", detail: "src/settings.rs", answer: "Answered." },
+      ...thinking$1(30, 14, "09:14:15"),
+      { id: "50", at: "09:14:31", kind: "called", subject: "Edit", detail: "src/settings.rs +42 -18", answer: "Answered." },
+      ...thinking$1(60, 6, "09:14:40")
+    ]
+  }
+};
+const AFinishedRun$1 = {
+  args: {
+    live: false,
+    emptyNote: NOTHING_YET$1,
+    turns: [
+      { id: "1", at: "09:14:02", kind: "said", said: "Starting on the settings split." },
+      ...thinking$1(10, 9, "09:14:03"),
+      { id: "20", at: "09:14:12", kind: "called", subject: "Read", detail: "src/settings.rs", answer: "Answered." },
+      ...thinking$1(30, 14, "09:14:15"),
+      { id: "50", at: "09:14:31", kind: "called", subject: "Edit", detail: "src/settings.rs +42 -18", answer: "Answered." },
+      { id: "60", at: "09:14:44", kind: "said", said: "The public signature is unchanged. Submitting." }
+    ]
+  }
+};
+const NothingButToolCalls$1 = {
+  args: {
+    live: true,
+    emptyNote: NOTHING_YET$1,
+    turns: [
+      { id: "1", at: "09:20:01", kind: "called", subject: "Bash", detail: "cargo xtask verify-foundations", answer: "Answered." },
+      { id: "2", at: "09:20:31", kind: "called", subject: "Bash", detail: "cargo test -p ipc", answer: "Answered, and the tool itself failed." },
+      { id: "3", at: "09:20:48", kind: "called", subject: "Read", detail: "crates/ipc/src/turn.rs", answer: "Answered." },
+      { id: "4", at: "09:20:52", kind: "called", subject: "Grep", detail: "Saw::Called in crates/", answer: "No answer yet." }
+    ]
+  }
+};
+const __vite_glob_0_2 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  ADroneThinking: ADroneThinking$1,
+  ADroneWorking,
+  AFinishedRun: AFinishedRun$1,
+  AJobWithNoTranscript: AJobWithNoTranscript$1,
+  NothingButToolCalls: NothingButToolCalls$1,
+  RefusedUnrecognisedAndUnreadable,
+  WhatEachCallDid,
+  default: meta$K
 }, Symbol.toStringTag, { value: "Module" }));
 const CARD_ICON = 12;
 const CARD_STROKE = 2;
@@ -533,14 +909,14 @@ function EvidenceCard({
     ] })
   ] });
 }
-const meta$G = {
+const meta$J = {
   title: "Compositions/Evidence card",
   component: EvidenceCard
 };
-const NO_GLYPH_IN_REGISTRY$7 = void 0;
+const NO_GLYPH_IN_REGISTRY$5 = void 0;
 const PlanTheChange = {
   args: {
-    icon: NO_GLYPH_IN_REGISTRY$7,
+    icon: NO_GLYPH_IN_REGISTRY$5,
     iconLabel: "Evidence",
     step: "Plan the change",
     time: "09:14",
@@ -551,7 +927,7 @@ const PlanTheChange = {
 };
 const AnArtifactThatIsACommand = {
   args: {
-    icon: NO_GLYPH_IN_REGISTRY$7,
+    icon: NO_GLYPH_IN_REGISTRY$5,
     iconLabel: "Evidence",
     step: "Run tests",
     time: "14:16",
@@ -562,7 +938,7 @@ const AnArtifactThatIsACommand = {
 };
 const NotClaimedEmpty$1 = {
   args: {
-    icon: NO_GLYPH_IN_REGISTRY$7,
+    icon: NO_GLYPH_IN_REGISTRY$5,
     iconLabel: "Evidence",
     step: "Summarise",
     time: "14:20",
@@ -570,12 +946,12 @@ const NotClaimedEmpty$1 = {
     shownBy: "3 files +214 −96 · branch fix/poke-ceiling"
   }
 };
-const __vite_glob_0_2 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_3 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AnArtifactThatIsACommand,
   NotClaimedEmpty: NotClaimedEmpty$1,
   PlanTheChange,
-  default: meta$G
+  default: meta$J
 }, Symbol.toStringTag, { value: "Module" }));
 const ENTRY_ICON = 12;
 const ENTRY_STROKE = 2;
@@ -605,16 +981,16 @@ function EvidenceTrail({ entries: entries2, emptyNotClaimed = "Nothing" }) {
     ] })
   ] }, i)) });
 }
-const meta$F = {
+const meta$I = {
   title: "Compositions/Evidence trail",
   component: EvidenceTrail
 };
-const NO_GLYPH_IN_REGISTRY$6 = void 0;
+const NO_GLYPH_IN_REGISTRY$4 = void 0;
 const AFinishedJob$1 = {
   args: {
     entries: [
       {
-        icon: NO_GLYPH_IN_REGISTRY$6,
+        icon: NO_GLYPH_IN_REGISTRY$4,
         iconLabel: "Evidence",
         step: "Plan the change",
         provenance: "14:02 · facts_note · no check",
@@ -623,7 +999,7 @@ const AFinishedJob$1 = {
         notClaimed: "Does not change the poke interval, and does not decide what happens at the third failure."
       },
       {
-        icon: NO_GLYPH_IN_REGISTRY$6,
+        icon: NO_GLYPH_IN_REGISTRY$4,
         iconLabel: "Evidence",
         step: "Implement",
         provenance: "14:11 · diff · build exit 0 · diff_nonempty passed",
@@ -632,7 +1008,7 @@ const AFinishedJob$1 = {
         notClaimed: "The count is not surfaced in Bridge. Nothing acts on reaching the ceiling yet — the loop exits and the job keeps its status."
       },
       {
-        icon: NO_GLYPH_IN_REGISTRY$6,
+        icon: NO_GLYPH_IN_REGISTRY$4,
         iconLabel: "Evidence",
         step: "Run tests",
         provenance: "14:16 · test_suite_run · test exit 0",
@@ -641,7 +1017,7 @@ const AFinishedJob$1 = {
         notClaimed: "No test covers a drone that answers on the third poke. The suite was green before this change and is green after, so it does not prove the ceiling is reached in practice."
       },
       {
-        icon: NO_GLYPH_IN_REGISTRY$6,
+        icon: NO_GLYPH_IN_REGISTRY$4,
         iconLabel: "Evidence",
         step: "Summarise",
         provenance: "14:20 · facts_note · no check",
@@ -656,7 +1032,7 @@ const NotClaimedEmpty = {
   args: {
     entries: [
       {
-        icon: NO_GLYPH_IN_REGISTRY$6,
+        icon: NO_GLYPH_IN_REGISTRY$4,
         iconLabel: "Evidence",
         step: "Run tests",
         provenance: "14:16 · test_suite_run · test exit 0",
@@ -670,7 +1046,7 @@ const OneEntry = {
   args: {
     entries: [
       {
-        icon: NO_GLYPH_IN_REGISTRY$6,
+        icon: NO_GLYPH_IN_REGISTRY$4,
         iconLabel: "Evidence",
         step: "Plan the change",
         provenance: "09:14 · facts_note · no check",
@@ -681,12 +1057,333 @@ const OneEntry = {
     ]
   }
 };
-const __vite_glob_0_3 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_4 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AFinishedJob: AFinishedJob$1,
   NotClaimedEmpty,
   OneEntry,
-  default: meta$F
+  default: meta$I
+}, Symbol.toStringTag, { value: "Module" }));
+const ROW_ICON$1 = 12;
+const ROW_STROKE = 2;
+function halves(value) {
+  const end = value.endsWith("/") ? value.length - 1 : value.length;
+  const cut = value.lastIndexOf("/", end - 1);
+  return cut <= 0 ? [value, ""] : [value.slice(0, cut + 1), value.slice(cut + 1)];
+}
+function JobLogReference({ rows, children, actions, onCopied }) {
+  const copy = useCallback(
+    (event, value) => {
+      event.stopPropagation();
+      void navigator.clipboard.writeText(value).then(
+        () => onCopied?.(value),
+        // A failed clipboard write is otherwise indistinguishable from a dead
+        // element, so the surface is told either way.
+        () => onCopied?.(value)
+      );
+    },
+    [onCopied]
+  );
+  return /* @__PURE__ */ jsxs("div", { className: "armada-log-ref", children: [
+    rows.map((row, i) => {
+      const [head, tail2] = halves(row.value);
+      return /* @__PURE__ */ jsxs("div", { className: "armada-log-ref__row", "data-separated": row.separated || void 0, children: [
+        /* @__PURE__ */ jsxs("span", { className: "armada-log-ref__mark", children: [
+          row.icon ? /* @__PURE__ */ jsx(row.icon, { size: ROW_ICON$1, strokeWidth: ROW_STROKE, "aria-hidden": true }) : null,
+          row.iconLabel ? /* @__PURE__ */ jsx("span", { className: "armada-log-ref__sr", children: row.iconLabel }) : null
+        ] }),
+        /* @__PURE__ */ jsxs(
+          "span",
+          {
+            className: "armada-log-ref__value",
+            title: row.value,
+            "data-copies": row.copyValue !== void 0 || void 0,
+            onClick: row.copyValue !== void 0 ? (e) => copy(e, row.copyValue) : void 0,
+            children: [
+              /* @__PURE__ */ jsx("span", { className: "armada-log-ref__head", children: head }),
+              tail2 === "" ? null : /* @__PURE__ */ jsx("span", { className: "armada-log-ref__tail", children: tail2 })
+            ]
+          }
+        ),
+        row.meta ? /* @__PURE__ */ jsx("span", { className: "armada-log-ref__meta", children: row.meta }) : null
+      ] }, i);
+    }),
+    children || actions ? /* @__PURE__ */ jsxs("div", { className: "armada-log-ref__foot", children: [
+      children ? /* @__PURE__ */ jsx("p", { className: "armada-log-ref__note", children }) : null,
+      actions ? /* @__PURE__ */ jsx("div", { className: "armada-log-ref__actions", children: actions }) : null
+    ] }) : null
+  ] });
+}
+const FOLD_ICON = 16;
+const FOLD_STROKE = 2;
+function FailureNotice({
+  headline,
+  next,
+  details,
+  detailsLabel = "Details",
+  values,
+  note,
+  actions,
+  onCopied
+}) {
+  const [open2, setOpen] = useState(false);
+  const folded = details !== void 0 && details.length > 0;
+  const referenced = values !== void 0 && values.length > 0 || note !== void 0 || actions !== void 0;
+  return /* @__PURE__ */ jsxs("section", { className: "armada-failure", role: "alert", children: [
+    /* @__PURE__ */ jsxs("div", { className: "armada-failure__copy", children: [
+      /* @__PURE__ */ jsx("span", { className: "armada-failure__headline", children: headline }),
+      /* @__PURE__ */ jsx("span", { className: "armada-failure__next", children: next })
+    ] }),
+    folded ? /* @__PURE__ */ jsxs(
+      "details",
+      {
+        className: "armada-failure__details",
+        onToggle: (event) => setOpen(event.currentTarget.open),
+        children: [
+          /* @__PURE__ */ jsxs("summary", { className: "armada-failure__summary", children: [
+            open2 ? /* @__PURE__ */ jsx(ChevronDown, { size: FOLD_ICON, strokeWidth: FOLD_STROKE, "aria-hidden": true }) : /* @__PURE__ */ jsx(ChevronRight, { size: FOLD_ICON, strokeWidth: FOLD_STROKE, "aria-hidden": true }),
+            detailsLabel
+          ] }),
+          /* @__PURE__ */ jsx("dl", { className: "armada-failure__list", children: details.map((detail, at) => /* @__PURE__ */ jsxs("div", { className: "armada-failure__pair", children: [
+            /* @__PURE__ */ jsx("dt", { className: "armada-failure__label", children: detail.label }),
+            /* @__PURE__ */ jsx("dd", { className: "armada-failure__value", children: detail.value })
+          ] }, at)) })
+        ]
+      }
+    ) : null,
+    referenced ? /* @__PURE__ */ jsx(JobLogReference, { rows: values ?? [], actions, onCopied, children: note }) : null
+  ] });
+}
+const meta$H = {
+  title: "Compositions/Failure notice",
+  component: FailureNotice
+};
+const AUDIT = "/Users/user/Library/Application Support/Armada/audit.jsonl";
+const RUNTIME_FILE = "/Users/user/Library/Application Support/Armada/fleet.json";
+const FLEET_RUN = "01M0ZTNSVD0004FY52G3PP82SJ";
+function Acts({ reload = true, dismiss = false }) {
+  return /* @__PURE__ */ jsxs(Fragment, { children: [
+    reload ? /* @__PURE__ */ jsx(Button, { variant: "ghost", size: "sm", ground: "sunken", children: "Reload Bridge" }) : null,
+    /* @__PURE__ */ jsx(Button, { variant: "ghost", size: "sm", ground: "sunken", children: "Copy report" }),
+    dismiss ? /* @__PURE__ */ jsx(Button, { variant: "ghost", size: "sm", ground: "sunken", children: "Dismiss" }) : null
+  ] });
+}
+const FleetIsNotRunningNoFile = {
+  args: {
+    headline: "Fleet is not running",
+    next: "Start Fleet. Bridge reconnects on its own.",
+    detailsLabel: "What the runtime file answered",
+    details: [
+      { label: "Answer", value: "no_runtime_file" },
+      { label: "Runtime file", value: RUNTIME_FILE }
+    ],
+    values: [
+      { icon: File, iconLabel: "Log", value: AUDIT, copyValue: AUDIT }
+    ],
+    note: "Bridge rereads the file every 2 seconds and connects when one appears. Nothing reached Fleet, so there is no run id to quote.",
+    actions: /* @__PURE__ */ jsx(Acts, {})
+  }
+};
+const FleetIsNotRunningDeadPid = {
+  args: {
+    headline: "Fleet is not running",
+    next: "Start Fleet. Bridge reconnects on its own.",
+    detailsLabel: "What the runtime file answered",
+    details: [
+      { label: "Answer", value: "pid_dead" },
+      { label: "Pid", value: "48221" },
+      { label: "Runtime file", value: RUNTIME_FILE }
+    ],
+    values: [
+      { icon: File, iconLabel: "Log", value: AUDIT, copyValue: AUDIT }
+    ],
+    note: "Fleet exited without cleaning up. The file names a pid nothing holds.",
+    actions: /* @__PURE__ */ jsx(Acts, {})
+  }
+};
+const FleetIsNotRunningPidReused = {
+  args: {
+    headline: "Fleet is not running",
+    next: "Start Fleet. Bridge reconnects on its own.",
+    detailsLabel: "What the runtime file answered",
+    details: [
+      { label: "Answer", value: "pid_held_by_another" },
+      { label: "Pid", value: "48221" },
+      { label: "File wrote", value: "Sat Aug 23 09:14:02 2026" },
+      { label: "Holder started", value: "Sun Aug 24 18:02:55 2026" },
+      { label: "Runtime file", value: RUNTIME_FILE }
+    ],
+    values: [
+      { icon: File, iconLabel: "Log", value: AUDIT, copyValue: AUDIT }
+    ],
+    note: "Bridge did not open a socket. The port in this file is not Fleet's.",
+    actions: /* @__PURE__ */ jsx(Acts, {})
+  }
+};
+const FleetIsUnreachable = {
+  args: {
+    headline: "Fleet unreachable",
+    next: "Fleet is up and not answering. What is on the board is not live.",
+    detailsLabel: "What the connection answered",
+    details: [
+      { label: "Pid", value: "48221" },
+      { label: "Port", value: "7773" },
+      { label: "Silent for", value: "1m" },
+      { label: "Detail", value: "the connection closed" },
+      { label: "Last read", value: "1m ago" }
+    ],
+    values: [
+      { icon: File, iconLabel: "Log", value: AUDIT, copyValue: AUDIT }
+    ],
+    note: "Bridge is retrying every 2 seconds. Jobs keep progressing either way.",
+    actions: /* @__PURE__ */ jsx(Acts, {})
+  }
+};
+const TheRendererThrew = {
+  args: {
+    headline: "Bridge could not draw the job list",
+    next: "Reload Bridge. Fleet keeps running and jobs keep progressing.",
+    detailsLabel: "What threw",
+    details: [
+      { label: "Component", value: "JobRowStacked" },
+      { label: "Message", value: "Cannot read properties of undefined (reading 'steps')" },
+      {
+        label: "Where",
+        value: "    at JobRowStacked\n    at Row\n    at Jobs\n    at Boundary\n    at App"
+      },
+      {
+        label: "Stack",
+        value: "TypeError: Cannot read properties of undefined (reading 'steps')\n    at Row (Jobs.tsx:214:29)\n    at renderWithHooks (react-dom-client.js:5529:24)"
+      }
+    ],
+    values: [
+      { icon: File, iconLabel: "Log", value: AUDIT, copyValue: AUDIT }
+    ],
+    note: "The rest of the window is still usable. Only this region stopped drawing. This never reached Fleet, so there is no run id: the component and the log identify it.",
+    actions: /* @__PURE__ */ jsx(Acts, {})
+  }
+};
+const AJobCannotBeRead = {
+  args: {
+    headline: "Job 01K2Y0X6R4B7QW9V3N5T8CJ1MF did not load",
+    next: "Every other job on the board is unaffected. Read the fault, or read the job's log.",
+    detailsLabel: "What the store refused",
+    details: [
+      { label: "Job", value: "01K2Y0X6R4B7QW9V3N5T8CJ1MF" },
+      {
+        label: "Fault",
+        value: "row 14: status `awaiting_attestation` has no attestation, which the model requires"
+      }
+    ],
+    values: [
+      {
+        icon: File,
+        iconLabel: "Log",
+        value: ".armada/logs/01K2Y0X6R4B7QW9V3N5T8CJ1MF.jsonl",
+        copyValue: ".armada/logs/01K2Y0X6R4B7QW9V3N5T8CJ1MF.jsonl"
+      },
+      { icon: File, iconLabel: "Log", value: AUDIT, copyValue: AUDIT, separated: true }
+    ],
+    note: "The log path is relative to the job's repository. Fleet does not send which one, and it does not send a run id for the read that refused this row.",
+    actions: /* @__PURE__ */ jsx(Acts, {})
+  }
+};
+const FleetRefusedTheCommand = {
+  args: {
+    headline: "Manifest 01K1M8Z5V2 is not one Fleet holds",
+    next: "Nothing was sent. Change what the command names, or read the log.",
+    detailsLabel: "What Fleet refused",
+    details: [
+      { label: "Code", value: "ARM-0412" },
+      { label: "Message", value: "Manifest 01K1M8Z5V2 is not one Fleet holds" },
+      { label: "manifest_id", value: "01K1M8Z5V2QW7H3N9TB4XC6RFD" },
+      { label: "held", value: "3" },
+      {
+        label: "Chain",
+        value: "propose_job\nresolve_manifest\nManifestNotHeld"
+      }
+    ],
+    values: [
+      { icon: File, iconLabel: "Log", value: AUDIT, copyValue: AUDIT },
+      { value: FLEET_RUN, copyValue: FLEET_RUN, meta: "Fleet run" }
+    ],
+    note: "The run names Fleet's process for this session, not this one failure. It is what joins this to Fleet's log lines.",
+    actions: /* @__PURE__ */ jsx(Acts, { reload: false, dismiss: true })
+  }
+};
+const NothingButTheSentence = {
+  args: {
+    headline: "Bridge could not reach the main process",
+    next: "Reload Bridge. If it happens again, quit and reopen."
+  }
+};
+const __vite_glob_0_5 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  AJobCannotBeRead,
+  FleetIsNotRunningDeadPid,
+  FleetIsNotRunningNoFile,
+  FleetIsNotRunningPidReused,
+  FleetIsUnreachable,
+  FleetRefusedTheCommand,
+  NothingButTheSentence,
+  TheRendererThrew,
+  default: meta$H
+}, Symbol.toStringTag, { value: "Module" }));
+function JobBrief({
+  criteria: criteria2,
+  criteriaAbsent,
+  facts: facts2,
+  factsAbsent,
+  criteriaLabel = "Done means",
+  factsLabel = "What it was told"
+}) {
+  return /* @__PURE__ */ jsxs("div", { className: "armada-job-brief", children: [
+    /* @__PURE__ */ jsxs("div", { className: "armada-job-brief__block", children: [
+      /* @__PURE__ */ jsx("span", { className: "armada-job-brief__label", children: criteriaLabel }),
+      criteria2.length === 0 ? /* @__PURE__ */ jsx("p", { className: "armada-job-brief__note", children: criteriaAbsent }) : /* @__PURE__ */ jsx("ol", { className: "armada-job-brief__criteria", children: criteria2.map((criterion, i) => /* @__PURE__ */ jsxs("li", { className: "armada-job-brief__criterion", children: [
+        /* @__PURE__ */ jsx("span", { className: "armada-job-brief__ordinal", children: i + 1 }),
+        /* @__PURE__ */ jsx("span", { className: "armada-job-brief__text", children: criterion.text }),
+        criterion.source === void 0 ? /* @__PURE__ */ jsx("span", {}) : /* @__PURE__ */ jsx("span", { className: "armada-job-brief__source", children: criterion.source })
+      ] }, i)) })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "armada-job-brief__block", children: [
+      /* @__PURE__ */ jsx("span", { className: "armada-job-brief__label", children: factsLabel }),
+      facts2 === void 0 ? /* @__PURE__ */ jsx("p", { className: "armada-job-brief__note", children: factsAbsent }) : /* @__PURE__ */ jsx("p", { className: "armada-job-brief__facts", children: facts2 })
+    ] })
+  ] });
+}
+const meta$G = {
+  title: "Compositions/Job brief",
+  component: JobBrief
+};
+const criteria = [
+  { text: "A burst of 401s produces one refresh call, not one per request.", source: "check" },
+  { text: "The retry ceiling is unchanged.", source: "check" },
+  { text: "No token is written to a log line at any sink.", source: "judge" }
+];
+const facts = "The refresh path is in `auth/session.ts`. Two callers hit it concurrently on a cold start, and the second one wins. Keep the public signature.";
+const Brief = {
+  args: { criteria, facts }
+};
+const NoCriteria = {
+  args: {
+    criteria: [],
+    criteriaAbsent: "This job was proposed with no acceptance criteria, so nothing states what done means for it.",
+    facts
+  }
+};
+const NoFacts = {
+  args: {
+    criteria,
+    factsAbsent: "This job was given no context beyond its title."
+  }
+};
+const __vite_glob_0_6 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  Brief,
+  NoCriteria,
+  NoFacts,
+  default: meta$G
 }, Symbol.toStringTag, { value: "Module" }));
 function joined$1(base, extra) {
   return extra ? `${base} ${extra}` : base;
@@ -815,7 +1512,7 @@ function JobComposer({
     ] })
   ] });
 }
-const meta$E = {
+const meta$F = {
   title: "Compositions/Job composer",
   component: JobComposer
 };
@@ -845,11 +1542,11 @@ const NoChecksOnTheWorkflow = {
     provenance: "Dispatched by you"
   }
 };
-const __vite_glob_0_4 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_7 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   NoChecksOnTheWorkflow,
   WhatM1Renders,
-  default: meta$E
+  default: meta$F
 }, Symbol.toStringTag, { value: "Module" }));
 function JobDetailHeaderActions({
   status,
@@ -873,11 +1570,11 @@ function JobDetailHeaderActions({
     },
     [onCopied]
   );
-  const runs = [];
+  const runs2 = [];
   for (const field of fields) {
-    const previous = runs[runs.length - 1];
+    const previous = runs2[runs2.length - 1];
     if (field.continues && previous) previous.push(field);
-    else runs.push([field]);
+    else runs2.push([field]);
   }
   return /* @__PURE__ */ jsxs("div", { className: "armada-job-head", children: [
     /* @__PURE__ */ jsxs("div", { className: "armada-job-head__ident", children: [
@@ -886,7 +1583,7 @@ function JobDetailHeaderActions({
         /* @__PURE__ */ jsx("span", { className: "armada-job-head__title", children: headline }),
         jobId ? /* @__PURE__ */ jsx("span", { className: "armada-job-head__id", children: jobId }) : null
       ] }),
-      /* @__PURE__ */ jsx("div", { className: "armada-job-head__facts", children: runs.map((run, i) => /* @__PURE__ */ jsx("span", { className: "armada-job-head__fact", children: run.map((field, j) => /* @__PURE__ */ jsxs(Fragment$1, { children: [
+      /* @__PURE__ */ jsx("div", { className: "armada-job-head__facts", children: runs2.map((run, i) => /* @__PURE__ */ jsx("span", { className: "armada-job-head__fact", children: run.map((field, j) => /* @__PURE__ */ jsxs(Fragment$1, { children: [
         j > 0 ? ", " : null,
         field.label ? /* @__PURE__ */ jsxs(Fragment, { children: [
           field.label,
@@ -911,11 +1608,11 @@ function JobDetailHeaderActions({
     actions ? /* @__PURE__ */ jsx("div", { className: "armada-job-head__actions", children: actions }) : null
   ] });
 }
-const meta$D = {
+const meta$E = {
   title: "Compositions/Job detail header actions",
   component: JobDetailHeaderActions
 };
-const ARunningJob = {
+const ARunningJob$1 = {
   args: {
     status: "running",
     statusIcon: CircleDot,
@@ -934,7 +1631,10 @@ const ARunningJob = {
       { label: "Spend, estimated", value: "~$1.80", mono: true },
       { label: "Dispatched by you" }
     ],
-    actions: /* @__PURE__ */ jsx(Button, { variant: "destructive", children: "Kill" })
+    actions: /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsx(Button, { variant: "ghost", children: "Watch the turns" }),
+      /* @__PURE__ */ jsx(Button, { variant: "destructive", children: "Kill job" })
+    ] })
   }
 };
 const AFailedJob = {
@@ -968,61 +1668,119 @@ const AFinishedJob = {
     ]
   }
 };
-const __vite_glob_0_5 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const BothKills = {
+  args: {
+    ...ARunningJob$1.args,
+    fields: [
+      { label: "Step", value: "2 of 4", mono: true },
+      { label: "at", value: "implement", mono: true, continues: true },
+      { label: "Elapsed", value: "11m 03s", mono: true },
+      { label: "Branch", value: "fix/settings-split", mono: true, copyValue: "fix/settings-split" },
+      { label: "Drone", value: "drn_7c21", mono: true, copyValue: "drn_7c21" },
+      { label: "Writes", value: "src/settings/reducer.ts", mono: true }
+    ],
+    actions: /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsx(Button, { variant: "ghost", children: "Watch the turns" }),
+      /* @__PURE__ */ jsx(
+        SplitButton,
+        {
+          variant: "destructive",
+          menuLabel: "What else ends this job",
+          items: [{ label: "Kill drone, the job stays open" }],
+          children: "Kill job"
+        }
+      )
+    ] })
+  }
+};
+const BothKillsMenuOpen = {
+  args: {
+    ...BothKills.args,
+    actions: /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsx(Button, { variant: "ghost", children: "Watch the turns" }),
+      /* @__PURE__ */ jsx(
+        SplitButton,
+        {
+          variant: "destructive",
+          defaultOpen: true,
+          menuLabel: "What else ends this job",
+          items: [{ label: "Kill drone, the job stays open" }],
+          children: "Kill job"
+        }
+      )
+    ] })
+  }
+};
+const StoppedWithARedispatch = {
+  args: {
+    status: "escalated",
+    statusIcon: OctagonAlert,
+    statusLabel: "stalled",
+    headline: "Cache the manifest read",
+    jobId: "job_91ab04",
+    fields: [
+      { label: "Step", value: "3 of 4", mono: true },
+      { label: "at", value: "verify", mono: true, continues: true },
+      { label: "Elapsed", value: "22m 41s", mono: true },
+      { label: "Branch", value: "feat/manifest-cache", mono: true, copyValue: "feat/manifest-cache" },
+      { label: "Scope undetermined" }
+    ],
+    actions: /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsx(Button, { variant: "ghost", children: "Watch the turns" }),
+      /* @__PURE__ */ jsx(
+        SplitButton,
+        {
+          variant: "destructive",
+          defaultOpen: true,
+          menuLabel: "What else ends this job",
+          items: [{ label: "Kill job, it ends here", danger: true }],
+          children: "Redispatch as a new job"
+        }
+      )
+    ] })
+  }
+};
+const AtTheApprovalGate = {
+  args: {
+    status: "awaiting-approval",
+    statusIcon: UserCheck,
+    statusLabel: "needs approval",
+    headline: "Cache the manifest read",
+    jobId: "job_91ab04",
+    fields: [
+      { label: "Step", value: "1 of 4", mono: true },
+      { label: "at", value: "plan", mono: true, continues: true },
+      { label: "Waiting", value: "4m 12s", mono: true },
+      { label: "Writes", value: "crates/config/src/manifest.rs", mono: true }
+    ],
+    actions: /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsx(Button, { variant: "ghost", children: "Watch the turns" }),
+      /* @__PURE__ */ jsx(Button, { variant: "destructive", children: "Kill job" }),
+      /* @__PURE__ */ jsx(Button, { variant: "primary", children: "Approve dispatch" })
+    ] })
+  }
+};
+const __vite_glob_0_8 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AFailedJob,
   AFinishedJob,
-  ARunningJob,
-  default: meta$D
+  ARunningJob: ARunningJob$1,
+  AtTheApprovalGate,
+  BothKills,
+  BothKillsMenuOpen,
+  StoppedWithARedispatch,
+  default: meta$E
 }, Symbol.toStringTag, { value: "Module" }));
-const ROW_ICON = 12;
-const ROW_STROKE = 2;
-function JobLogReference({ rows, children, actions, onCopied }) {
-  const copy = useCallback(
-    (event, value) => {
-      event.stopPropagation();
-      void navigator.clipboard.writeText(value).then(
-        () => onCopied?.(value),
-        // A failed clipboard write is otherwise indistinguishable from a dead
-        // element, so the surface is told either way.
-        () => onCopied?.(value)
-      );
-    },
-    [onCopied]
-  );
-  return /* @__PURE__ */ jsxs("div", { className: "armada-log-ref", children: [
-    rows.map((row, i) => /* @__PURE__ */ jsxs("div", { className: "armada-log-ref__row", "data-separated": row.separated || void 0, children: [
-      /* @__PURE__ */ jsxs("span", { className: "armada-log-ref__mark", children: [
-        row.icon ? /* @__PURE__ */ jsx(row.icon, { size: ROW_ICON, strokeWidth: ROW_STROKE, "aria-hidden": true }) : null,
-        row.iconLabel ? /* @__PURE__ */ jsx("span", { className: "armada-log-ref__sr", children: row.iconLabel }) : null
-      ] }),
-      /* @__PURE__ */ jsx(
-        "span",
-        {
-          className: "armada-log-ref__value",
-          "data-copies": row.copyValue !== void 0 || void 0,
-          onClick: row.copyValue !== void 0 ? (e) => copy(e, row.copyValue) : void 0,
-          children: row.value
-        }
-      ),
-      row.meta ? /* @__PURE__ */ jsx("span", { className: "armada-log-ref__meta", children: row.meta }) : null
-    ] }, i)),
-    children || actions ? /* @__PURE__ */ jsxs("div", { className: "armada-log-ref__foot", children: [
-      children ? /* @__PURE__ */ jsx("p", { className: "armada-log-ref__note", children }) : null,
-      actions ? /* @__PURE__ */ jsx("div", { className: "armada-log-ref__actions", children: actions }) : null
-    ] }) : null
-  ] });
-}
-const meta$C = {
+const meta$D = {
   title: "Compositions/Job log reference",
   component: JobLogReference
 };
-const NO_GLYPH_IN_REGISTRY$5 = void 0;
+const LOG = File;
 const OnARunningJob = {
   args: {
     rows: [
       {
-        icon: NO_GLYPH_IN_REGISTRY$5,
+        icon: LOG,
         iconLabel: "Log",
         value: ".armada/logs/job_2d90bb.jsonl",
         copyValue: ".armada/logs/job_2d90bb.jsonl",
@@ -1045,7 +1803,7 @@ const OnAFailedJob = {
       },
       { icon: Folder, iconLabel: "Worktree", value: "~/.armada/worktrees/job_91ab" },
       {
-        icon: NO_GLYPH_IN_REGISTRY$5,
+        icon: LOG,
         iconLabel: "Log",
         value: ".armada/logs/job_91ab.jsonl",
         copyValue: ".armada/logs/job_91ab.jsonl",
@@ -1064,7 +1822,7 @@ const OnAFinishedJob = {
   args: {
     rows: [
       {
-        icon: NO_GLYPH_IN_REGISTRY$5,
+        icon: LOG,
         iconLabel: "Log",
         value: ".armada/logs/job_4f10.jsonl",
         copyValue: ".armada/logs/job_4f10.jsonl",
@@ -1078,7 +1836,7 @@ const WithErrors = {
   args: {
     rows: [
       {
-        icon: NO_GLYPH_IN_REGISTRY$5,
+        icon: LOG,
         iconLabel: "Log",
         value: ".armada/logs/job_91ab.jsonl",
         copyValue: ".armada/logs/job_91ab.jsonl",
@@ -1089,15 +1847,51 @@ const WithErrors = {
     actions: /* @__PURE__ */ jsx(Button, { ground: "sunken", children: "Open the log" })
   }
 };
-const __vite_glob_0_6 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const LongPaths = {
+  decorators: [
+    (Story) => /* @__PURE__ */ jsx("div", { className: "armada-log-ref-narrow", children: /* @__PURE__ */ jsx(Story, {}) })
+  ],
+  args: {
+    rows: [
+      {
+        icon: Folder,
+        iconLabel: "Worktree",
+        value: "/Users/user/Development/armada/.armada/worktrees/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+        copyValue: "/Users/user/Development/armada/.armada/worktrees/01JQ8ZK4T7WY3N2VXB6RGM5D9C"
+      },
+      {
+        icon: GitBranch,
+        iconLabel: "Branch",
+        value: "armada/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+        copyValue: "armada/01JQ8ZK4T7WY3N2VXB6RGM5D9C"
+      },
+      {
+        icon: LOG,
+        iconLabel: "Log",
+        value: "/Users/user/Development/armada/.armada/logs/01JQ8ZK4T7WY3N2VXB6RGM5D9C.jsonl",
+        copyValue: "/Users/user/Development/armada/.armada/logs/01JQ8ZK4T7WY3N2VXB6RGM5D9C.jsonl",
+        separated: true
+      },
+      {
+        iconLabel: "Transcript",
+        value: "/Users/user/Development/armada/.armada/transcripts/",
+        copyValue: "/Users/user/Development/armada/.armada/transcripts/",
+        meta: "named by a drone id nothing serves"
+      }
+    ],
+    children: "The worktree, the log and the transcripts directory follow from this job's id and the repository its manifest was read from. The branch is served."
+  }
+};
+const __vite_glob_0_9 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  LongPaths,
   OnAFailedJob,
   OnAFinishedJob,
   OnARunningJob,
   WithErrors,
-  default: meta$C
+  default: meta$D
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$B = {
+const meta$C = {
   title: "Compositions/Job row (stacked)",
   component: JobRowStacked
 };
@@ -1292,7 +2086,7 @@ const Convoy = {
     ]
   }
 };
-const __vite_glob_0_7 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_10 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheWidthFloor,
   Convoy,
@@ -1308,7 +2102,7 @@ const __vite_glob_0_7 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   RunningFocused,
   Selected,
   SpendAsQuota,
-  default: meta$B
+  default: meta$C
 }, Symbol.toStringTag, { value: "Module" }));
 function Separator({
   className,
@@ -1399,7 +2193,7 @@ function Sidebar({
     }
   );
 }
-const meta$A = {
+const meta$B = {
   title: "Compositions/Sidebar",
   component: Sidebar
 };
@@ -1419,7 +2213,7 @@ const Expanded = {
 const HelmActive = {
   args: { surfaces, sibling: helm, activeId: "helm", appName: "Armada" }
 };
-const CollapsedRail = {
+const CollapsedRail$1 = {
   args: { surfaces, sibling: helm, activeId: "active", appName: "Armada", collapsed: true }
 };
 const AtMinimumWidth = {
@@ -1439,16 +2233,16 @@ const M1OneSurface = {
 const FlatForContrast = {
   args: { surfaces, activeId: "active", sectionLabel: void 0, appName: "Armada" }
 };
-const __vite_glob_0_8 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_11 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtMaximumWidth,
   AtMinimumWidth,
-  CollapsedRail,
+  CollapsedRail: CollapsedRail$1,
   Expanded,
   FlatForContrast,
   HelmActive,
   M1OneSurface,
-  default: meta$A
+  default: meta$B
 }, Symbol.toStringTag, { value: "Module" }));
 function count(n, one, many) {
   return `${n} ${n === 1 ? one : many}`;
@@ -1476,7 +2270,7 @@ function StatusBar({
     spend ? /* @__PURE__ */ jsx("span", { className: "armada-status-bar__spend", children: spend }) : null
   ] });
 }
-const meta$z = {
+const meta$A = {
   title: "Compositions/StatusBar",
   component: StatusBar
 };
@@ -1555,7 +2349,7 @@ const AtTheItemCeiling = {
     spend: "~$2.40 of $20"
   }
 };
-const __vite_glob_0_9 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_12 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheItemCeiling,
   FleetNotRunning,
@@ -1566,7 +2360,7 @@ const __vite_glob_0_9 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   WithBothCounts,
   WithEscalationsOnly,
   WithOneOfEach,
-  default: meta$z
+  default: meta$A
 }, Symbol.toStringTag, { value: "Module" }));
 const GLYPH = {
   not_started: void 0,
@@ -1588,7 +2382,7 @@ function StepActivityMark({ activity, label: label2, ordinal, pulsing = false })
     /* @__PURE__ */ jsx("span", { className: "armada-step-mark__name", children: label2 })
   ] });
 }
-const meta$y = {
+const meta$z = {
   title: "Compositions/Step activity mark",
   component: StepActivityMark
 };
@@ -1640,7 +2434,7 @@ const EveryValue = {
     ] }, activity)) });
   }
 };
-const __vite_glob_0_10 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_13 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Advanced,
   AwaitingHuman: AwaitingHuman$1,
@@ -1653,9 +2447,9 @@ const __vite_glob_0_10 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Running: Running$3,
   RunningPulsing: RunningPulsing$1,
   Stopped: Stopped$1,
-  default: meta$y
+  default: meta$z
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$x = {
+const meta$y = {
   title: "Compositions/Step bar",
   component: StepBar
 };
@@ -1686,7 +2480,7 @@ const RunningNeverPulses = {
     /* @__PURE__ */ jsx(StepBar, { total: 4, current: 3, activity: "running", label: "Step 3 of 4" })
   ] })
 };
-const __vite_glob_0_11 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_14 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AllAdvanced,
   AwaitingHuman,
@@ -1696,10 +2490,13 @@ const __vite_glob_0_11 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Running: Running$2,
   RunningLongWorkflow,
   RunningNeverPulses,
-  default: meta$x
+  default: meta$y
 }, Symbol.toStringTag, { value: "Module" }));
 const GATE_ICON = 12;
 const GATE_STROKE = 2;
+function named(step) {
+  return (step.evidence?.label ?? "") !== "";
+}
 function WorkflowRail({ steps: steps2, pulsing = false }) {
   return /* @__PURE__ */ jsx("ol", { className: "armada-rail", children: steps2.map((step, i) => {
     const gates = step.gates ?? [];
@@ -1729,6 +2526,8 @@ function WorkflowRail({ steps: steps2, pulsing = false }) {
               }
             ),
             step.trailing,
+            step.verdict ? /* @__PURE__ */ jsx("span", { className: "armada-rail__verdict", "data-verdict": step.verdictNamed, children: step.verdict }) : null,
+            step.elapsed ? /* @__PURE__ */ jsx("span", { className: "armada-rail__elapsed", children: step.elapsed }) : null,
             step.status ? /* @__PURE__ */ jsx("span", { className: "armada-rail__status", children: step.status }) : null
           ]
         }
@@ -1749,25 +2548,25 @@ function WorkflowRail({ steps: steps2, pulsing = false }) {
             step.evidence?.icon ? /* @__PURE__ */ jsx(step.evidence.icon, { size: GATE_ICON, strokeWidth: GATE_STROKE, "aria-hidden": true }) : null,
             step.evidence?.iconLabel ? /* @__PURE__ */ jsx("span", { className: "armada-rail__sr", children: step.evidence.iconLabel }) : null
           ] }),
-          /* @__PURE__ */ jsx("span", { className: "armada-rail__gate-command", children: step.evidence?.label }),
-          /* @__PURE__ */ jsx("span", { className: "armada-rail__gate-ungated", children: step.ungatedLabel ?? "no check on this step" })
+          named(step) ? /* @__PURE__ */ jsx("span", { className: "armada-rail__gate-command", children: step.evidence?.label }) : null,
+          /* @__PURE__ */ jsx("span", { className: "armada-rail__gate-ungated", "data-alone": named(step) ? void 0 : "true", children: step.ungatedLabel ?? "no check on this step" })
         ] }) })
       )
     ] }, step.id);
   }) });
 }
-const meta$w = {
+const meta$x = {
   title: "Compositions/Workflow rail",
   component: WorkflowRail
 };
-const NO_GLYPH_IN_REGISTRY$4 = void 0;
+const EVIDENCE = FileCheck;
 const running = [
   {
     id: "plan",
     label: "Plan the change",
     activity: "advanced",
     status: "advanced",
-    evidence: { icon: NO_GLYPH_IN_REGISTRY$4, iconLabel: "Evidence", label: "evidence · 09:14" }
+    evidence: { icon: EVIDENCE, iconLabel: "Evidence", label: "evidence · 09:14" }
   },
   {
     id: "implement",
@@ -1794,7 +2593,7 @@ const running = [
     label: "Summarise",
     activity: "not_started",
     status: "not started",
-    evidence: { icon: NO_GLYPH_IN_REGISTRY$4, iconLabel: "Evidence", label: "" }
+    evidence: { icon: EVIDENCE, iconLabel: "Evidence", label: "" }
   }
 ];
 const Running$1 = {
@@ -1806,7 +2605,7 @@ const RunningPulseElsewhere = {
 const Failed = {
   args: {
     steps: [
-      { id: "plan", label: "Plan the change", activity: "advanced", status: "advanced", evidence: { icon: NO_GLYPH_IN_REGISTRY$4, label: "evidence · 13:58" } },
+      { id: "plan", label: "Plan the change", activity: "advanced", status: "advanced", evidence: { icon: EVIDENCE, label: "evidence · 13:58" } },
       {
         id: "implement",
         label: "Implement",
@@ -1908,8 +2707,190 @@ const OneStep = {
     pulsing: true
   }
 };
-const __vite_glob_0_12 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const ServedSteps = {
+  args: {
+    steps: [
+      {
+        id: "plan",
+        label: "plan",
+        labelIsAnIdentifier: true,
+        activity: "advanced",
+        status: "advanced",
+        elapsed: "2m 14s",
+        verdict: "passed",
+        verdictNamed: "passed"
+      },
+      {
+        id: "implement",
+        label: "implement",
+        labelIsAnIdentifier: true,
+        activity: "running",
+        status: "running",
+        current: true,
+        elapsed: "11m 03s"
+      },
+      {
+        id: "verify",
+        label: "verify",
+        labelIsAnIdentifier: true,
+        activity: "not_started",
+        status: "not_started"
+      },
+      {
+        id: "handoff",
+        label: "handoff",
+        labelIsAnIdentifier: true,
+        activity: "not_started",
+        status: "not_started"
+      }
+    ],
+    pulsing: true
+  }
+};
+const EveryStepState = {
+  args: {
+    steps: [
+      {
+        id: "not_started",
+        label: "not_started",
+        labelIsAnIdentifier: true,
+        activity: "not_started",
+        status: "not_started",
+        gates: [{ command: "build", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }]
+      },
+      {
+        id: "running",
+        label: "running",
+        labelIsAnIdentifier: true,
+        activity: "running",
+        status: "running",
+        current: true,
+        elapsed: "6m 12s",
+        gates: [{ command: "test", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }]
+      },
+      {
+        id: "awaiting_human",
+        label: "awaiting_human",
+        labelIsAnIdentifier: true,
+        activity: "awaiting_human",
+        status: "awaiting_human",
+        elapsed: "1m 04s"
+      },
+      {
+        id: "retrying",
+        label: "retrying",
+        labelIsAnIdentifier: true,
+        activity: "retrying",
+        status: "retrying",
+        elapsed: "3m 41s",
+        verdict: "failed · failed a check",
+        verdictNamed: "failed"
+      },
+      {
+        id: "advanced",
+        label: "advanced",
+        labelIsAnIdentifier: true,
+        activity: "advanced",
+        status: "advanced",
+        elapsed: "2m 14s",
+        verdict: "passed",
+        verdictNamed: "passed",
+        gates: [{ command: "fmt", result: "passed", icon: ShieldCheck, iconLabel: "passed" }]
+      },
+      {
+        id: "stopped",
+        label: "stopped",
+        labelIsAnIdentifier: true,
+        activity: "stopped",
+        status: "stopped",
+        elapsed: "12m 30s",
+        gates: [
+          { command: "build", result: "failed · exit 0 → exit 101", icon: ShieldX, iconLabel: "failed" }
+        ]
+      }
+    ],
+    pulsing: true
+  }
+};
+const AVerdictBesideTheState = {
+  args: {
+    steps: [
+      {
+        id: "plan",
+        label: "plan",
+        labelIsAnIdentifier: true,
+        activity: "advanced",
+        elapsed: "2m 14s",
+        verdict: "passed",
+        verdictNamed: "passed"
+      },
+      {
+        id: "verify",
+        label: "verify",
+        labelIsAnIdentifier: true,
+        activity: "retrying",
+        current: true,
+        elapsed: "6m 51s",
+        verdict: "failed · failed a check",
+        verdictNamed: "failed"
+      },
+      { id: "handoff", label: "handoff", labelIsAnIdentifier: true, activity: "not_started" }
+    ]
+  }
+};
+const UngatedAndUnanswerable = {
+  args: {
+    steps: [
+      {
+        id: "reproduce",
+        label: "reproduce",
+        labelIsAnIdentifier: true,
+        activity: "advanced",
+        elapsed: "1m 40s",
+        evidence: { label: "" }
+      },
+      {
+        id: "root_cause",
+        label: "root_cause",
+        labelIsAnIdentifier: true,
+        activity: "running",
+        current: true,
+        elapsed: "4m 02s",
+        // What Bridge passes when `checks` is absent from the served step.
+        ungatedLabel: "Fleet cannot say what this step checks",
+        evidence: { label: "" }
+      }
+    ],
+    pulsing: true
+  }
+};
+const TheFiveCheckOutcomes = {
+  args: {
+    steps: [
+      {
+        id: "verify",
+        label: "verify",
+        labelIsAnIdentifier: true,
+        activity: "stopped",
+        current: true,
+        elapsed: "3m 18s",
+        verdict: "failed · failed a check",
+        verdictNamed: "failed",
+        gates: [
+          { command: "fmt", result: "passed" },
+          { command: "build", result: "failed · exit 0 → exit 101" },
+          { command: "test", result: "signalled · SIGKILL" },
+          { command: "audit", result: "timed_out · 120s budget" },
+          { command: "typecheck", result: "never_ran · tsc is not installed" }
+        ]
+      }
+    ]
+  }
+};
+const __vite_glob_0_15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  AVerdictBesideTheState,
+  EveryStepState,
   Failed,
   HardPrerequisite,
   Killed: Killed$2,
@@ -1917,9 +2898,12 @@ const __vite_glob_0_12 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   OneStep,
   Running: Running$1,
   RunningPulseElsewhere,
+  ServedSteps,
   Stopped,
+  TheFiveCheckOutcomes,
+  UngatedAndUnanswerable,
   WaitingAndRetrying,
-  default: meta$w
+  default: meta$x
 }, Symbol.toStringTag, { value: "Module" }));
 function Alert({ tone = "escalated", title, children, icon, action }) {
   return /* @__PURE__ */ jsxs(
@@ -1945,7 +2929,7 @@ function Alert({ tone = "escalated", title, children, icon, action }) {
     }
   );
 }
-const meta$v = {
+const meta$w = {
   title: "Primitives/Alert",
   component: Alert
 };
@@ -1969,13 +2953,13 @@ const Neutral = {
     action: /* @__PURE__ */ jsx("button", { type: "button", className: "armada-alert__button", children: "Open Doctor" })
   }
 };
-const __vite_glob_0_13 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_16 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Escalated: Escalated$1,
   Neutral,
-  default: meta$v
+  default: meta$w
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$u = {
+const meta$v = {
   title: "Primitives/Badge",
   component: Badge
 };
@@ -2039,7 +3023,7 @@ const EscalationReasons = {
     /* @__PURE__ */ jsx(Badge, { status: "escalated", icon: ArrowUpToLine, children: "Reached its ceiling" })
   ] })
 };
-const __vite_glob_0_14 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_17 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AwaitingApproval,
   AwaitingAttestation,
@@ -2058,9 +3042,9 @@ const __vite_glob_0_14 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Running,
   RunningPulsing,
   Superseded,
-  default: meta$u
+  default: meta$v
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$t = {
+const meta$u = {
   title: "Primitives/Button",
   component: Button
 };
@@ -2157,7 +3141,7 @@ const Light$7 = {
     /* @__PURE__ */ jsx(Button, { variant: "secondary", children: "Cancel" })
   ] }) })
 };
-const __vite_glob_0_15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_18 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Destructive,
   Disabled: Disabled$7,
@@ -2170,9 +3154,9 @@ const __vite_glob_0_15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Secondary,
   SecondaryOnASunkenGround,
   Small,
-  default: meta$t
+  default: meta$u
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$s = {
+const meta$t = {
   title: "Primitives/Card",
   component: Card$7,
   decorators: [
@@ -2209,12 +3193,12 @@ const Dimmed$1 = {
     /* @__PURE__ */ jsx(CardDescription, { children: "The work landed outside this job." })
   ] })
 };
-const __vite_glob_0_16 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_19 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$6,
   Dimmed: Dimmed$1,
   WithHeader,
-  default: meta$s
+  default: meta$t
 }, Symbol.toStringTag, { value: "Module" }));
 function Checkbox({ children, ...rest }) {
   return /* @__PURE__ */ jsxs("label", { className: "armada-checkbox", children: [
@@ -2223,7 +3207,7 @@ function Checkbox({ children, ...rest }) {
     /* @__PURE__ */ jsx("span", { children })
   ] });
 }
-const meta$r = {
+const meta$s = {
   title: "Primitives/Checkbox",
   component: Checkbox
 };
@@ -2262,14 +3246,14 @@ const Disabled$6 = {
 const Light$6 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$5, { children: /* @__PURE__ */ jsx(Checkbox, { defaultChecked: true, children: "Run Doctor before dispatch" }) }) })
 };
-const __vite_glob_0_17 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_20 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Checked,
   Disabled: Disabled$6,
   Focused: Focused$6,
   Light: Light$6,
   Unchecked,
-  default: meta$r
+  default: meta$s
 }, Symbol.toStringTag, { value: "Module" }));
 const DEFAULT_SECTIONS = ["Actions", "Navigation", "Jobs", "Settings"];
 function matches(entry, query) {
@@ -2354,10 +3338,10 @@ function CommandPalette({
     /* @__PURE__ */ jsxs("div", { className: "armada-palette__list", id: "armada-palette-list", role: "listbox", children: [
       results.length === 0 ? /* @__PURE__ */ jsx("p", { className: "armada-palette__empty", children: "No match. Every action Armada has is in this list, under the name Armada uses for it." }) : null,
       results.map((entry, n) => {
-        const heading = entry.section !== lastSection ? entry.section : "";
+        const heading2 = entry.section !== lastSection ? entry.section : "";
         lastSection = entry.section;
         return /* @__PURE__ */ jsxs("div", { children: [
-          heading ? /* @__PURE__ */ jsx("div", { className: "armada-palette__section", children: heading }) : null,
+          heading2 ? /* @__PURE__ */ jsx("div", { className: "armada-palette__section", children: heading2 }) : null,
           /* @__PURE__ */ jsxs(
             "button",
             {
@@ -2457,7 +3441,7 @@ function Dialog({
     ] })
   ] }) });
 }
-const meta$q = {
+const meta$r = {
   title: "Primitives/CommandPalette",
   component: CommandPalette
 };
@@ -2591,15 +3575,15 @@ const DestructiveEntryConfirms = {
     ] });
   }
 };
-const __vite_glob_0_18 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_21 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AliasFindsTheLexiconTerm,
   DestructiveEntryConfirms,
   NoMatch,
   Resting: Resting$1,
-  default: meta$q
+  default: meta$r
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$p = {
+const meta$q = {
   title: "Primitives/Dialog",
   component: Dialog
 };
@@ -2623,11 +3607,41 @@ const NeutralConfirm = {
     children: "Ends job 12 and opens a new job on the same workspace and branch. The worktree is kept."
   }
 };
-const __vite_glob_0_19 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const KillTheDrone = {
+  args: {
+    open: true,
+    tone: "destructive",
+    title: "Kill the drone on this job?",
+    confirmLabel: "Kill drone",
+    children: "The process stops and the job stays open. Its worktree is held as the drone left it, so the job can be redispatched from where it got to."
+  }
+};
+const KillTheJob = {
+  args: {
+    open: true,
+    tone: "destructive",
+    title: "Kill this job?",
+    confirmLabel: "Kill job",
+    children: "The job ends at killed. That is terminal and carries no verdict — nothing resumes it, and anything the drone wrote stays on its branch."
+  }
+};
+const RedispatchAsANewJob = {
+  args: {
+    open: true,
+    tone: "destructive",
+    title: "Redispatch this job as a new one?",
+    confirmLabel: "Redispatch as a new job",
+    children: "This job is killed and a replacement is created carrying a reference back to it. Nothing resumes: the new job starts at the approval gate and needs releasing. The failed job's worktree and branch are left as its drone left them."
+  }
+};
+const __vite_glob_0_22 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Confirmation,
+  KillTheDrone,
+  KillTheJob,
   NeutralConfirm,
-  default: meta$p
+  RedispatchAsANewJob,
+  default: meta$q
 }, Symbol.toStringTag, { value: "Module" }));
 function DropdownMenu({
   triggerLabel,
@@ -2691,7 +3705,7 @@ function DropdownMenu({
     }) }) : null
   ] });
 }
-const meta$o = {
+const meta$p = {
   title: "Primitives/DropdownMenu",
   component: DropdownMenu
 };
@@ -2742,16 +3756,16 @@ const AtTheRightEdge$2 = {
 const WithNoRoomBelow$2 = {
   render: () => /* @__PURE__ */ jsx(Frame$2, { edge: "bottom", children: /* @__PURE__ */ jsx(DropdownMenu, { defaultOpen: true, triggerLabel: "More", entries: rowActions }) })
 };
-const __vite_glob_0_20 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_23 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheLeftEdge: AtTheLeftEdge$2,
   AtTheRightEdge: AtTheRightEdge$2,
   RowMenu,
   WithNoRoomBelow: WithNoRoomBelow$2,
   WithSectionLabels,
-  default: meta$o
+  default: meta$p
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$n = {
+const meta$o = {
   title: "Primitives/Input",
   component: Input
 };
@@ -2805,7 +3819,7 @@ const Disabled$5 = {
 const Light$5 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$4, { children: /* @__PURE__ */ jsx(Input, { label: "Job title", defaultValue: "Refresh the auth token flow" }) }) })
 };
-const __vite_glob_0_21 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_24 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$5,
   Disabled: Disabled$5,
@@ -2814,7 +3828,7 @@ const __vite_glob_0_21 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Light: Light$5,
   Mono,
   Placeholder: Placeholder$1,
-  default: meta$n
+  default: meta$o
 }, Symbol.toStringTag, { value: "Module" }));
 function Kbd({ className, ...rest }) {
   return /* @__PURE__ */ jsx("kbd", { className: className ? `armada-kbd ${className}` : "armada-kbd", ...rest });
@@ -2822,7 +3836,7 @@ function Kbd({ className, ...rest }) {
 function KbdChord({ className, ...rest }) {
   return /* @__PURE__ */ jsx("span", { className: className ? `armada-kbd-chord ${className}` : "armada-kbd-chord", ...rest });
 }
-const meta$m = {
+const meta$n = {
   title: "Primitives/kbd",
   component: Kbd
 };
@@ -2846,12 +3860,12 @@ const ContextualKeys = {
     /* @__PURE__ */ jsx(Kbd, { children: "/" })
   ] })
 };
-const __vite_glob_0_22 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_25 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Chord,
   ContextualKeys,
   Default: Default$4,
-  default: meta$m
+  default: meta$n
 }, Symbol.toStringTag, { value: "Module" }));
 function Popover({ trigger: trigger2, children, align = "start", defaultOpen = false }) {
   const [open2, setOpen] = useState(defaultOpen);
@@ -2883,7 +3897,7 @@ function Popover({ trigger: trigger2, children, align = "start", defaultOpen = f
     ) : null
   ] });
 }
-const meta$l = {
+const meta$m = {
   title: "Primitives/Popover",
   component: Popover
 };
@@ -2928,14 +3942,14 @@ const AtTheRightEdge$1 = {
 const WithNoRoomBelow$1 = {
   render: () => /* @__PURE__ */ jsx(Frame$1, { edge: "bottom", children: /* @__PURE__ */ jsx(Popover, { defaultOpen: true, trigger, children: body }) })
 };
-const __vite_glob_0_23 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_26 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AlignedToTheEnd,
   AtTheLeftEdge: AtTheLeftEdge$1,
   AtTheRightEdge: AtTheRightEdge$1,
   Open: Open$1,
   WithNoRoomBelow: WithNoRoomBelow$1,
-  default: meta$l
+  default: meta$m
 }, Symbol.toStringTag, { value: "Module" }));
 function Radio({ children, ...rest }) {
   return /* @__PURE__ */ jsxs("label", { className: "armada-radio", children: [
@@ -2950,7 +3964,7 @@ function RadioGroup({ label: label2, children }) {
     children
   ] });
 }
-const meta$k = {
+const meta$l = {
   title: "Primitives/Radio",
   component: Radio
 };
@@ -2995,13 +4009,13 @@ const Light$4 = {
     /* @__PURE__ */ jsx(Radio, { name: "kit-light", children: "Start fresh" })
   ] }) }) })
 };
-const __vite_glob_0_24 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_27 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$3,
   Disabled: Disabled$4,
   Focused: Focused$4,
   Light: Light$4,
-  default: meta$k
+  default: meta$l
 }, Symbol.toStringTag, { value: "Module" }));
 function joined(base, extra) {
   return extra ? `${base} ${extra}` : base;
@@ -3082,7 +4096,7 @@ function ScrollArea({
     }
   );
 }
-const meta$j = {
+const meta$k = {
   title: "Primitives/ScrollArea",
   component: ScrollArea
 };
@@ -3129,13 +4143,13 @@ const WithinBounds = {
     }
   )
 };
-const __vite_glob_0_25 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_28 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Scrolling,
   WithinBounds,
-  default: meta$j
+  default: meta$k
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$i = {
+const meta$j = {
   title: "Primitives/Select",
   component: Select
 };
@@ -3184,16 +4198,16 @@ const Disabled$3 = {
 const Light$3 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$2, { children: /* @__PURE__ */ jsx(Select, { label: "Concurrency ceiling", children: ceilings }) }) })
 };
-const __vite_glob_0_26 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_29 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$2,
   Disabled: Disabled$3,
   Focused: Focused$3,
   Invalid: Invalid$1,
   Light: Light$3,
-  default: meta$i
+  default: meta$j
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$h = {
+const meta$i = {
   title: "Primitives/Separator",
   component: Separator,
   decorators: [
@@ -3257,12 +4271,12 @@ const Vertical = {
 const Announced = {
   args: { decorative: false }
 };
-const __vite_glob_0_27 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_30 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Announced,
   Horizontal,
   Vertical,
-  default: meta$h
+  default: meta$i
 }, Symbol.toStringTag, { value: "Module" }));
 function Sheet({ open: open2, title, children, side = "right", footer, onClose }) {
   const closeRef = useRef(null);
@@ -3309,7 +4323,7 @@ function Sheet({ open: open2, title, children, side = "right", footer, onClose }
     }
   ) });
 }
-const meta$g = {
+const meta$h = {
   title: "Primitives/Sheet",
   component: Sheet
 };
@@ -3329,11 +4343,11 @@ const Left = {
     children: "The command tripped the allowlist 5 times and was approved every time. Adding it here stops the prompt."
   }
 };
-const __vite_glob_0_28 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_31 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Left,
   Right,
-  default: meta$g
+  default: meta$h
 }, Symbol.toStringTag, { value: "Module" }));
 function Skeleton({ className, width, style, ...rest }) {
   return /* @__PURE__ */ jsx(
@@ -3365,7 +4379,7 @@ function SkeletonText({
     }
   );
 }
-const meta$f = {
+const meta$g = {
   title: "Primitives/Skeleton",
   component: Skeleton,
   decorators: [
@@ -3384,14 +4398,14 @@ const InACard = {
     /* @__PURE__ */ jsx(SkeletonText, { label: "Loading evidence" })
   ] })
 };
-const __vite_glob_0_29 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_32 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   InACard,
   Single,
   Text,
-  default: meta$f
+  default: meta$g
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$e = {
+const meta$f = {
   title: "Primitives/Split button",
   component: SplitButton
 };
@@ -3466,7 +4480,7 @@ const FocusedOnPrimary = {
     /* @__PURE__ */ jsx("div", { "data-preview-focus": "caret", children: /* @__PURE__ */ jsx(SplitButton, { items: reviewActions, variant: "primary", children: "Approve" }) })
   ] })
 };
-const __vite_glob_0_30 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_33 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Closed,
   Disabled: Disabled$2,
@@ -3476,7 +4490,7 @@ const __vite_glob_0_30 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Light: Light$2,
   Open,
   PrimaryOnJobDetail,
-  default: meta$e
+  default: meta$f
 }, Symbol.toStringTag, { value: "Module" }));
 function Switch({ children, description, ...rest }) {
   return /* @__PURE__ */ jsxs("label", { className: "armada-switch", "data-described": description !== void 0 || void 0, children: [
@@ -3488,7 +4502,7 @@ function Switch({ children, description, ...rest }) {
     /* @__PURE__ */ jsx("span", { className: "armada-switch__track", "aria-hidden": "true", children: /* @__PURE__ */ jsx("span", { className: "armada-switch__thumb" }) })
   ] });
 }
-const meta$d = {
+const meta$e = {
   title: "Primitives/Switch",
   component: Switch
 };
@@ -3540,7 +4554,7 @@ const WithADescription = {
 const Light$1 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$1, { children: /* @__PURE__ */ jsx(Switch, { defaultChecked: true, children: "Escalate on stall" }) }) })
 };
-const __vite_glob_0_31 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_34 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Disabled: Disabled$1,
   Focused: Focused$1,
@@ -3548,9 +4562,9 @@ const __vite_glob_0_31 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Off,
   On,
   WithADescription,
-  default: meta$d
+  default: meta$e
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$c = {
+const meta$d = {
   title: "Primitives/Table",
   component: Table
 };
@@ -3660,14 +4674,14 @@ const RowsGrowWithContent = {
     ] })
   ] }) })
 };
-const __vite_glob_0_32 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_35 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$1,
   Dimmed,
   FocusedAndSelected,
   MonoValuesCopy,
   RowsGrowWithContent,
-  default: meta$c
+  default: meta$d
 }, Symbol.toStringTag, { value: "Module" }));
 function Tabs({ items, value, defaultValue, onChange }) {
   const [internal, setInternal] = useState(defaultValue ?? items[0]?.id);
@@ -3704,7 +4718,7 @@ function Tabs({ items, value, defaultValue, onChange }) {
     item.id
   )) });
 }
-const meta$b = {
+const meta$c = {
   title: "Primitives/Tabs",
   component: Tabs
 };
@@ -3728,11 +4742,11 @@ const LastActive = {
     ]
   }
 };
-const __vite_glob_0_33 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_36 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   LastActive,
   SectionsOfOneObject,
-  default: meta$b
+  default: meta$c
 }, Symbol.toStringTag, { value: "Module" }));
 function TabsWithCounts({ items, value, defaultValue, onChange }) {
   const [internal, setInternal] = useState(defaultValue ?? items[0]?.id);
@@ -3772,7 +4786,7 @@ function TabsWithCounts({ items, value, defaultValue, onChange }) {
     item.id
   )) });
 }
-const meta$a = {
+const meta$b = {
   title: "Primitives/Tabs with counts",
   component: TabsWithCounts
 };
@@ -3796,13 +4810,13 @@ const Zero = {
     ]
   }
 };
-const __vite_glob_0_34 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_37 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Queues,
   Zero,
-  default: meta$a
+  default: meta$b
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$9 = {
+const meta$a = {
   title: "Primitives/Textarea",
   component: Textarea
 };
@@ -3856,7 +4870,7 @@ const Overflowing = {
 const Light = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Textarea, { label: "Brief", defaultValue: BRIEF }) }) })
 };
-const __vite_glob_0_35 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_38 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default,
   Disabled,
@@ -3866,7 +4880,7 @@ const __vite_glob_0_35 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Overflowing,
   Placeholder,
   Rows,
-  default: meta$9
+  default: meta$a
 }, Symbol.toStringTag, { value: "Module" }));
 function Toast({ status, children, actionLabel, onAction }) {
   return /* @__PURE__ */ jsxs("div", { className: "armada-toast", role: "status", children: [
@@ -3882,7 +4896,7 @@ function Toast({ status, children, actionLabel, onAction }) {
     actionLabel ? /* @__PURE__ */ jsx("button", { type: "button", className: "armada-toast__action", onClick: onAction, children: actionLabel }) : null
   ] });
 }
-const meta$8 = {
+const meta$9 = {
   title: "Primitives/Toast",
   component: Toast
 };
@@ -3904,14 +4918,14 @@ const Landed = {
     actionLabel: "View"
   }
 };
-const __vite_glob_0_36 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_39 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Copied,
   Killed,
   Landed,
-  default: meta$8
+  default: meta$9
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$7 = {
+const meta$8 = {
   title: "Primitives/Tooltip",
   component: Tooltip
 };
@@ -3949,7 +4963,7 @@ const AtTheRightEdge = {
 const WithNoRoomBelow = {
   render: () => /* @__PURE__ */ jsx(Frame, { edge: "bottom", children: /* @__PURE__ */ jsx(Tooltip, { defaultOpen: true, label: longPath, children: /* @__PURE__ */ jsx("span", { className: "armada-tooltip__truncated", children: longPath }) }) })
 };
-const __vite_glob_0_37 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_40 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheLeftEdge,
   AtTheRightEdge,
@@ -3957,10 +4971,61 @@ const __vite_glob_0_37 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   TruncatedValue,
   WithNoRoomBelow,
   WithShortcut,
-  default: meta$7
+  default: meta$8
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$6 = {
-  title: "Screens/A failed job — a dead end, read as one"
+function Absent({ name, note }) {
+  return /* @__PURE__ */ jsxs("div", { className: "armada-screen-absent", role: "note", children: [
+    /* @__PURE__ */ jsx("span", { className: "armada-screen-absent__name", children: name }),
+    /* @__PURE__ */ jsx("span", { className: "armada-screen-absent__why", children: note })
+  ] });
+}
+function AFailedJobADeadEndReadAsOne({
+  heading: heading2,
+  why,
+  whyAbsent = "The Job carries no stored reason, and none is written here.",
+  steps: steps2,
+  ranLabel = "What ran",
+  stepsAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
+  output,
+  outputAbsent = "Nothing serves a check's output yet.",
+  work,
+  workAbsent = "Nothing serves this Job's paths, its branch or its brief.",
+  onCopied
+}) {
+  return /* @__PURE__ */ jsxs("div", { className: "armada-screen__detail", children: [
+    /* @__PURE__ */ jsx(JobDetailHeaderActions, { ...heading2, onCopied }),
+    /* @__PURE__ */ jsxs("div", { className: "armada-screen__sunken", children: [
+      /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "Why this stopped" }),
+      why === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Why this stopped", note: whyAbsent }) }) : /* @__PURE__ */ jsx("p", { className: "armada-screen__why", children: why })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "armada-screen__split", "data-wide": true, children: [
+      /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
+        /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: ranLabel }),
+        steps2.length === 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "What ran", note: stepsAbsent }) }) : /* @__PURE__ */ jsx(WorkflowRail, { steps: steps2 })
+      ] }),
+      /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", "data-loose": true, children: [
+        /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
+          /* @__PURE__ */ jsxs("div", { className: "armada-screen__head-row", children: [
+            /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "Check output" }),
+            output?.meta ? /* @__PURE__ */ jsx("span", { className: "armada-screen__tag", children: output.meta }) : null
+          ] }),
+          output === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Check output", note: outputAbsent }) }) : /* @__PURE__ */ jsx("pre", { className: "armada-screen__output", children: output.tail })
+        ] }),
+        /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
+          /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "Where the work is" }),
+          work === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Where the work is", note: workAbsent }) }) : /* @__PURE__ */ jsxs(Fragment, { children: [
+            work.brief === void 0 ? null : /* @__PURE__ */ jsx(JobBrief, { ...work.brief }),
+            /* @__PURE__ */ jsx(JobLogReference, { rows: work.rows, onCopied, children: work.note }),
+            work.actions ? /* @__PURE__ */ jsx("div", { className: "armada-screen__actions", children: work.actions }) : null
+          ] })
+        ] })
+      ] })
+    ] })
+  ] });
+}
+const meta$7 = {
+  title: "Screens/A failed job — a dead end, read as one",
+  component: AFailedJobADeadEndReadAsOne
 };
 const NO_GLYPH_IN_REGISTRY$2 = void 0;
 const steps$1 = [
@@ -4034,102 +5099,171 @@ const tail = [
   "",
   "test result: FAILED. 82 passed; 2 failed"
 ].join("\n");
+const heading$3 = {
+  status: "completed-failed",
+  statusIcon: X,
+  statusLabel: "Failed",
+  headline: "Cache the manifest read",
+  jobId: "job_91ab",
+  fields: [
+    // A step name is a label, so it stays sans beside its mono siblings, and
+    // the two halves are one fact joined by a comma.
+    { label: "Stopped at", value: "Run tests" },
+    { label: "step", value: "3 of 4", mono: true, continues: true },
+    { label: "Ran", value: "22m 41s", mono: true },
+    { label: "Spend, estimated", value: "~$2.10", mono: true },
+    { label: "Dispatched by you" }
+  ]
+};
 const FailedJob = {
-  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsxs("div", { className: "armada-screen__detail", children: [
-    /* @__PURE__ */ jsx(
-      JobDetailHeaderActions,
-      {
-        status: "completed-failed",
-        statusIcon: X,
-        statusLabel: "Failed",
-        headline: "Cache the manifest read",
-        jobId: "job_91ab",
-        fields: [
-          // A step name is a label, so it stays sans beside its mono
-          // siblings, and the two halves are one fact joined by a comma.
-          { label: "Stopped at", value: "Run tests" },
-          { label: "step", value: "3 of 4", mono: true, continues: true },
-          { label: "Ran", value: "22m 41s", mono: true },
-          { label: "Spend, estimated", value: "~$2.10", mono: true },
-          { label: "Dispatched by you" }
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxs("div", { className: "armada-screen__sunken", children: [
-      /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "Why this stopped" }),
-      /* @__PURE__ */ jsxs("p", { className: "armada-screen__why", children: [
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    AFailedJobADeadEndReadAsOne,
+    {
+      heading: heading$3,
+      why: /* @__PURE__ */ jsxs(Fragment, { children: [
         "The test check exited 1 at Run tests, on 2 assertions in",
         " ",
         /* @__PURE__ */ jsx("span", { className: "armada-screen__mono", children: "core/manifest" }),
         ". The job is over. Nothing runs from here without you."
-      ] })
-    ] }),
-    /* @__PURE__ */ jsxs("div", { className: "armada-screen__split", "data-wide": true, children: [
-      /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "What ran" }),
-        /* @__PURE__ */ jsx(WorkflowRail, { steps: steps$1 })
       ] }),
-      /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", "data-loose": true, children: [
-        /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
-          /* @__PURE__ */ jsxs("div", { className: "armada-screen__head-row", children: [
-            /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "Check output" }),
-            /* @__PURE__ */ jsx("span", { className: "armada-screen__tag", children: "exit 1 · 4.2s · tail 12 lines" })
-          ] }),
-          /* @__PURE__ */ jsx("pre", { className: "armada-screen__output", children: tail })
-        ] }),
-        /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
-          /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "Where the work is" }),
-          /* @__PURE__ */ jsx(
-            JobLogReference,
-            {
-              rows: [
-                {
-                  icon: GitBranch,
-                  iconLabel: "Branch",
-                  value: "feat/manifest-cache",
-                  copyValue: "feat/manifest-cache",
-                  meta: "2 files +48 −11"
-                },
-                // `folder` means "workspace" in the registry. A worktree is
-                // not a workspace, and the registry has no row for one.
-                // Reported.
-                {
-                  icon: Folder,
-                  iconLabel: "Worktree",
-                  value: "~/.armada/worktrees/job_91ab"
-                },
-                {
-                  icon: NO_GLYPH_IN_REGISTRY$2,
-                  iconLabel: "Log",
-                  value: ".armada/logs/job_91ab.jsonl",
-                  copyValue: ".armada/logs/job_91ab.jsonl",
-                  meta: "318 lines · 4 error",
-                  separated: true
-                }
-              ],
-              children: "The worktree and the branch are left in place. Armada will not touch either. The log holds Fleet, the drone and Bridge in one order, keyed on this job."
-            }
-          ),
-          /* @__PURE__ */ jsxs("div", { className: "armada-screen__actions", children: [
-            /* @__PURE__ */ jsx(Button, { children: "Open the log" }),
-            /* @__PURE__ */ jsx(Button, { children: "Open the worktree" })
-          ] })
+      steps: steps$1,
+      output: { tail, meta: "exit 1 · 4.2s · tail 12 lines" },
+      work: {
+        brief: {
+          criteria: [
+            { text: "The manifest is read once per dispatch, not once per step.", source: "check" },
+            { text: "A changed armada.yml is picked up without restarting Fleet.", source: "judge" }
+          ],
+          facts: "`config::manifest` is the only reader. The cache key is the absolute path."
+        },
+        rows: [
+          {
+            icon: GitBranch,
+            iconLabel: "Branch",
+            value: "feat/manifest-cache",
+            copyValue: "feat/manifest-cache",
+            meta: "2 files +48 −11"
+          },
+          // `folder` means "workspace" in the registry. A worktree is not a
+          // workspace, and the registry has no row for one. Reported.
+          {
+            icon: Folder,
+            iconLabel: "Worktree",
+            value: "/repos/armada/.armada/worktrees/job_91ab",
+            copyValue: "/repos/armada/.armada/worktrees/job_91ab"
+          },
+          {
+            icon: File,
+            iconLabel: "Log",
+            value: "/repos/armada/.armada/logs/job_91ab.jsonl",
+            copyValue: "/repos/armada/.armada/logs/job_91ab.jsonl",
+            separated: true
+          },
+          // No registered glyph means a transcript, so the mark keeps its
+          // column and renders empty rather than borrowing one. Reported.
+          {
+            iconLabel: "Transcript",
+            value: "/repos/armada/.armada/transcripts/",
+            copyValue: "/repos/armada/.armada/transcripts/",
+            meta: "named by a drone id nothing serves"
+          }
+        ],
+        note: "The worktree and the branch are left in place. Armada will not touch either. The log holds Fleet, the drone and Bridge in one order, keyed on this job.",
+        actions: /* @__PURE__ */ jsxs(Fragment, { children: [
+          /* @__PURE__ */ jsx(Button, { children: "Open the log" }),
+          /* @__PURE__ */ jsx(Button, { children: "Open the worktree" })
         ] })
-      ] })
-    ] })
-  ] }) })
+      }
+    }
+  ) })
 };
-const __vite_glob_0_38 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const StoppedAndAsked = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    AFailedJobADeadEndReadAsOne,
+    {
+      heading: {
+        status: "escalated",
+        statusIcon: OctagonAlert,
+        statusLabel: "stalled",
+        headline: "Cache the manifest read",
+        jobId: "job_91ab",
+        fields: [
+          { label: "Stopped at", value: "verify" },
+          { label: "step", value: "3 of 4", mono: true, continues: true },
+          { label: "Model", value: "sonnet", mono: true }
+        ],
+        actions: /* @__PURE__ */ jsx(Button, { children: "Redispatch" })
+      },
+      why: "The job stalled. Nothing runs from here without you.",
+      steps: steps$1.map((step) => ({
+        id: step.id,
+        label: step.id,
+        labelIsAnIdentifier: true,
+        activity: step.activity,
+        ungatedLabel: "Fleet serves no check result for this step",
+        evidence: { label: "" }
+      }))
+    }
+  ) })
+};
+const __vite_glob_0_41 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   FailedJob,
-  default: meta$6
+  StoppedAndAsked,
+  default: meta$7
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$5 = {
-  title: "Screens/A finished job — a branch and an evidence trail"
-};
-const NO_GLYPH_IN_REGISTRY$1 = void 0;
 const BRANCH_ICON = 16;
 const BRANCH_STROKE = 2;
+const ROW_ICON = 12;
+function AFinishedJobABranchAndAnEvidenceTrail({
+  heading: heading2,
+  handover,
+  handoverAbsent = "Nothing serves a branch or a worktree yet.",
+  work,
+  workAbsent = "Nothing serves this Job's paths or its brief.",
+  trail,
+  trailMeta,
+  trailAbsent = "Nothing serves a work submission yet.",
+  onCopied
+}) {
+  return /* @__PURE__ */ jsxs("div", { className: "armada-screen__detail", children: [
+    /* @__PURE__ */ jsx(JobDetailHeaderActions, { ...heading2, onCopied }),
+    handover === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Where the work is", note: handoverAbsent }) }) : /* @__PURE__ */ jsxs("div", { className: "armada-screen__sunken", children: [
+      /* @__PURE__ */ jsxs("div", { className: "armada-screen__branch-line", children: [
+        /* @__PURE__ */ jsx("span", { className: "armada-screen__mark", children: /* @__PURE__ */ jsx(GitBranch, { size: BRANCH_ICON, strokeWidth: BRANCH_STROKE, "aria-hidden": true }) }),
+        /* @__PURE__ */ jsx("span", { className: "armada-screen__branch", children: handover.branch }),
+        handover.meta ? /* @__PURE__ */ jsx("span", { className: "armada-screen__tag", children: handover.meta }) : null,
+        handover.action ? /* @__PURE__ */ jsx("div", { className: "armada-screen__push-right", children: handover.action }) : null
+      ] }),
+      handover.log === void 0 ? null : /* @__PURE__ */ jsxs("div", { className: "armada-screen__log-line", children: [
+        /* @__PURE__ */ jsx("span", { className: "armada-screen__mark", children: /* @__PURE__ */ jsx(File, { size: ROW_ICON, strokeWidth: BRANCH_STROKE, "aria-hidden": true }) }),
+        /* @__PURE__ */ jsx("span", { className: "armada-screen__log-path", children: handover.log.path }),
+        handover.log.meta ? /* @__PURE__ */ jsx("span", { className: "armada-screen__tag", children: handover.log.meta }) : null,
+        handover.log.action ? /* @__PURE__ */ jsx("div", { className: "armada-screen__push-right", children: handover.log.action }) : null
+      ] }),
+      handover.note ? /* @__PURE__ */ jsx("p", { className: "armada-screen__handover", children: handover.note }) : null
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
+      /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "Where the work is" }),
+      work === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Where the work is", note: workAbsent }) }) : /* @__PURE__ */ jsxs(Fragment, { children: [
+        work.brief === void 0 ? null : /* @__PURE__ */ jsx(JobBrief, { ...work.brief }),
+        /* @__PURE__ */ jsx(JobLogReference, { rows: work.rows, actions: work.actions, onCopied, children: work.note })
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
+      /* @__PURE__ */ jsxs("div", { className: "armada-screen__head-row", children: [
+        /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "Evidence" }),
+        trailMeta ? /* @__PURE__ */ jsx("span", { className: "armada-screen__tag", children: trailMeta }) : null
+      ] }),
+      trail === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Evidence trail", note: trailAbsent }) }) : /* @__PURE__ */ jsx(EvidenceTrail, { entries: trail })
+    ] })
+  ] });
+}
+const meta$6 = {
+  title: "Screens/A finished job — a branch and an evidence trail",
+  component: AFinishedJobABranchAndAnEvidenceTrail
+};
+const NO_GLYPH_IN_REGISTRY$1 = void 0;
 const entries = [
   {
     step: "Plan the change",
@@ -4168,57 +5302,131 @@ const entries = [
     notClaimed: "The value 3 is a constant rather than config. Whether it is the right number is not established by anything here."
   }
 ];
+const heading$2 = {
+  status: "completed-success",
+  statusIcon: Check,
+  statusLabel: "Done",
+  headline: "Add a retry ceiling to the poke loop",
+  jobId: "job_4f10",
+  fields: [
+    // The fact reads as a sentence around its value, which is what `suffix` is
+    // for: `All 4 of 4 steps advanced`.
+    { label: "All", value: "4 of 4", mono: true, suffix: "steps advanced" },
+    { label: "Ran", value: "18m 22s", mono: true },
+    { label: "Spend, estimated", value: "~$2.40", mono: true },
+    { label: "Dispatched by you" }
+  ]
+};
+const WORK = {
+  brief: {
+    criteria: [
+      { text: "The poke loop stops after the configured number of attempts.", source: "check" },
+      { text: "A ceiling of zero is refused at load rather than at run.", source: "check" }
+    ],
+    facts: "The loop is in `fleet::poke`. The ceiling is a Machine setting, not a Kit one."
+  },
+  rows: [
+    {
+      icon: Folder,
+      iconLabel: "Worktree",
+      value: "/repos/armada/.armada/worktrees/job_4f10",
+      copyValue: "/repos/armada/.armada/worktrees/job_4f10"
+    },
+    {
+      icon: File,
+      iconLabel: "Log",
+      value: "/repos/armada/.armada/logs/job_4f10.jsonl",
+      copyValue: "/repos/armada/.armada/logs/job_4f10.jsonl"
+    },
+    {
+      iconLabel: "Transcript",
+      value: "/repos/armada/.armada/transcripts/",
+      copyValue: "/repos/armada/.armada/transcripts/",
+      meta: "named by a drone id nothing serves"
+    }
+  ],
+  note: "The worktree and the log are derived from the job id and the repository the manifest was read from."
+};
 const FinishedJob = {
-  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsxs("div", { className: "armada-screen__detail", children: [
-    /* @__PURE__ */ jsx(
-      JobDetailHeaderActions,
-      {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    AFinishedJobABranchAndAnEvidenceTrail,
+    {
+      heading: heading$2,
+      handover: {
+        branch: "fix/poke-ceiling",
+        meta: "from main · 3 files +214 −96",
+        action: /* @__PURE__ */ jsx(Button, { ground: "sunken", children: "Open the worktree" }),
+        // No `log` here: the region beneath names the log along with the
+        // worktree and the transcript, and one path drawn twice is two
+        // places to keep in step.
+        // Operator copy, not commentary: it is addressed to the person using
+        // the app and states the one thing this screen exists to say.
+        note: "The branch is unpushed and unmerged. Armada does not push and has no merge action — read the diff in your own tools and land it yourself."
+      },
+      work: WORK,
+      trail: entries,
+      trailMeta: "4 submissions · in order"
+    }
+  ) })
+};
+const AsBridgeDrawsItToday$1 = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    AFinishedJobABranchAndAnEvidenceTrail,
+    {
+      heading: {
         status: "completed-success",
         statusIcon: Check,
-        statusLabel: "Done",
+        statusLabel: "done",
         headline: "Add a retry ceiling to the poke loop",
         jobId: "job_4f10",
         fields: [
-          // The fact reads as a sentence around its value, which is what
-          // `suffix` is for: `All 4 of 4 steps advanced`.
           { label: "All", value: "4 of 4", mono: true, suffix: "steps advanced" },
-          { label: "Ran", value: "18m 22s", mono: true },
-          { label: "Spend, estimated", value: "~$2.40", mono: true },
-          { label: "Dispatched by you" }
+          { label: "Model", value: "sonnet", mono: true }
         ]
       }
-    ),
-    /* @__PURE__ */ jsxs("div", { className: "armada-screen__sunken", children: [
-      /* @__PURE__ */ jsxs("div", { className: "armada-screen__branch-line", children: [
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__mark", children: /* @__PURE__ */ jsx(GitBranch, { size: BRANCH_ICON, strokeWidth: BRANCH_STROKE, "aria-hidden": true }) }),
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__branch", children: "fix/poke-ceiling" }),
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__tag", children: "from main · 3 files +214 −96" }),
-        /* @__PURE__ */ jsx("div", { className: "armada-screen__push-right", children: /* @__PURE__ */ jsx(Button, { ground: "sunken", children: "Open the worktree" }) })
-      ] }),
-      /* @__PURE__ */ jsxs("div", { className: "armada-screen__log-line", children: [
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__mark", "aria-hidden": true }),
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__log-path", children: ".armada/logs/job_4f10.jsonl" }),
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__tag", children: "204 lines · 0 error" }),
-        /* @__PURE__ */ jsx("div", { className: "armada-screen__push-right", children: /* @__PURE__ */ jsx(Button, { ground: "sunken", children: "Open the log" }) })
-      ] }),
-      /* @__PURE__ */ jsx("p", { className: "armada-screen__handover", children: "The branch is unpushed and unmerged. Armada does not push and has no merge action — read the diff in your own tools and land it yourself." })
-    ] }),
-    /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
-      /* @__PURE__ */ jsxs("div", { className: "armada-screen__head-row", children: [
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "Evidence" }),
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__tag", children: "4 submissions · in order" })
-      ] }),
-      /* @__PURE__ */ jsx(EvidenceTrail, { entries })
-    ] })
-  ] }) })
+    }
+  ) })
 };
-const __vite_glob_0_39 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_42 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  AsBridgeDrawsItToday: AsBridgeDrawsItToday$1,
   FinishedJob,
-  default: meta$5
+  default: meta$6
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$4 = {
-  title: "Screens/A running job"
+function ARunningJob({
+  heading: heading2,
+  steps: steps2,
+  ranLabel = "What ran",
+  stepsAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
+  evidence,
+  evidenceAbsent = "Nothing serves a work submission yet.",
+  log,
+  logLabel = "Where the work is",
+  logAbsent = "Nothing serves this Job's paths, its branch or its brief.",
+  onCopied
+}) {
+  return /* @__PURE__ */ jsxs("div", { className: "armada-screen__detail", children: [
+    /* @__PURE__ */ jsx(JobDetailHeaderActions, { ...heading2, onCopied }),
+    /* @__PURE__ */ jsxs("div", { className: "armada-screen__split", children: [
+      /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
+        /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: ranLabel }),
+        steps2.length === 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "What ran", note: stepsAbsent }) }) : /* @__PURE__ */ jsx(WorkflowRail, { steps: steps2, pulsing: true })
+      ] }),
+      /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
+        /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "Evidence so far" }),
+        evidence === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Evidence", note: evidenceAbsent }) }) : /* @__PURE__ */ jsx(EvidenceCard, { ...evidence }),
+        /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", "data-spaced": true, children: logLabel }),
+        log === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Where the work is", note: logAbsent }) }) : /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
+          log.brief === void 0 ? null : /* @__PURE__ */ jsx(JobBrief, { ...log.brief }),
+          /* @__PURE__ */ jsx(JobLogReference, { rows: log.rows, actions: log.actions, onCopied, children: log.note })
+        ] })
+      ] })
+    ] })
+  ] });
+}
+const meta$5 = {
+  title: "Screens/A running job",
+  component: ARunningJob
 };
 const NO_GLYPH_IN_REGISTRY = void 0;
 const steps = [
@@ -4274,77 +5482,165 @@ const steps = [
     evidence: { icon: NO_GLYPH_IN_REGISTRY, iconLabel: "Evidence", label: "" }
   }
 ];
+const WORK_ROWS = [
+  {
+    icon: Folder,
+    iconLabel: "Worktree",
+    value: "/repos/armada/.armada/worktrees/job_2d90bb",
+    copyValue: "/repos/armada/.armada/worktrees/job_2d90bb"
+  },
+  {
+    icon: GitBranch,
+    iconLabel: "Branch",
+    value: "fix/settings-split",
+    copyValue: "fix/settings-split"
+  },
+  {
+    icon: File,
+    iconLabel: "Log",
+    value: "/repos/armada/.armada/logs/job_2d90bb.jsonl",
+    copyValue: "/repos/armada/.armada/logs/job_2d90bb.jsonl",
+    separated: true
+  },
+  {
+    iconLabel: "Transcript",
+    value: "/repos/armada/.armada/transcripts/",
+    copyValue: "/repos/armada/.armada/transcripts/",
+    meta: "named by a drone id nothing serves"
+  }
+];
+const heading$1 = {
+  status: "running",
+  statusIcon: CircleDot,
+  statusLabel: "Running",
+  headline: "Split the settings reducer",
+  jobId: "job_2d90bb",
+  fields: [
+    { label: "Step", value: "2 of 4", mono: true },
+    { label: "Branch", value: "fix/settings-split", mono: true, copyValue: "fix/settings-split" },
+    { label: "Elapsed", value: "11m 03s", mono: true },
+    { label: "Spend, estimated", value: "~$1.80", mono: true },
+    { label: "Dispatched by you" }
+  ],
+  actions: /* @__PURE__ */ jsx(Button, { variant: "destructive", children: "Kill" })
+};
 const RunningJob = {
-  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsxs("div", { className: "armada-screen__detail", children: [
-    /* @__PURE__ */ jsx(
-      JobDetailHeaderActions,
-      {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    ARunningJob,
+    {
+      heading: heading$1,
+      steps,
+      evidence: {
+        icon: NO_GLYPH_IN_REGISTRY,
+        iconLabel: "Evidence",
+        step: "Plan the change",
+        time: "09:14",
+        claimed: "settings.rs is split into a reducer and a selector module, with no change in behaviour.",
+        shownBy: "src/settings.rs → src/settings/reducer.rs, src/settings/selectors.rs",
+        notClaimed: "Nothing about the settings UI, and no new tests — the existing suite is the only cover."
+      },
+      log: {
+        brief: {
+          criteria: [
+            {
+              text: "settings.rs is split into a reducer and a selector module.",
+              source: "check"
+            },
+            { text: "No change in behaviour, and the existing suite still passes.", source: "judge" }
+          ],
+          facts: "The reducer is the only caller of `apply_defaults`. Keep the public signature."
+        },
+        rows: WORK_ROWS,
+        note: "The log is Fleet, the drone and Bridge in one order, keyed on this job. The transcript is named by a drone id nothing serves — the log above is the only record of it.",
+        actions: /* @__PURE__ */ jsx(Button, { ground: "sunken", size: "sm", children: "Open the log" })
+      }
+    }
+  ) })
+};
+const UNGATED = "No operation serves this step's checks";
+const AsBridgeDrawsItToday = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    ARunningJob,
+    {
+      heading: {
         status: "running",
         statusIcon: CircleDot,
-        statusLabel: "Running",
+        statusLabel: "running",
         headline: "Split the settings reducer",
         jobId: "job_2d90bb",
         fields: [
           { label: "Step", value: "2 of 4", mono: true },
-          {
-            label: "Branch",
-            value: "fix/settings-split",
-            mono: true,
-            copyValue: "fix/settings-split"
-          },
+          { label: "at", value: "implement", mono: true, continues: true },
           { label: "Elapsed", value: "11m 03s", mono: true },
-          { label: "Spend, estimated", value: "~$1.80", mono: true },
-          { label: "Dispatched by you" }
+          { label: "Branch", value: "fix/settings-split", mono: true, copyValue: "fix/settings-split" },
+          { label: "Workflow", value: "bug" },
+          { label: "Model", value: "sonnet", mono: true },
+          { label: "Drone", value: "drn_7c21", mono: true, copyValue: "drn_7c21" },
+          { label: "Writes", value: "src/settings/reducer.ts", mono: true }
         ],
-        actions: /* @__PURE__ */ jsx(Button, { variant: "destructive", children: "Kill" })
+        actions: /* @__PURE__ */ jsxs(Fragment, { children: [
+          /* @__PURE__ */ jsx(Button, { variant: "destructive", children: "Kill drone" }),
+          /* @__PURE__ */ jsx(Button, { variant: "destructive", children: "Kill job" })
+        ] })
+      },
+      steps: [
+        {
+          id: "plan",
+          label: "plan",
+          labelIsAnIdentifier: true,
+          activity: "advanced",
+          elapsed: "2m 14s",
+          verdict: "passed",
+          verdictNamed: "passed",
+          ungatedLabel: UNGATED,
+          evidence: { label: "" }
+        },
+        {
+          id: "implement",
+          label: "implement",
+          labelIsAnIdentifier: true,
+          activity: "running",
+          current: true,
+          elapsed: "8m 49s",
+          ungatedLabel: UNGATED,
+          evidence: { label: "" }
+        },
+        {
+          id: "verify",
+          label: "verify",
+          labelIsAnIdentifier: true,
+          activity: "not_started",
+          ungatedLabel: UNGATED,
+          evidence: { label: "" }
+        },
+        {
+          id: "handoff",
+          label: "handoff",
+          labelIsAnIdentifier: true,
+          activity: "not_started",
+          ungatedLabel: UNGATED,
+          evidence: { label: "" }
+        }
+      ],
+      log: {
+        brief: {
+          criteria: [],
+          criteriaAbsent: "This job was proposed with no acceptance criteria, so nothing states what done means for it.",
+          facts: "The reducer is the only caller of `apply_defaults`. Keep the public signature."
+        },
+        rows: WORK_ROWS,
+        note: "The worktree and the log are derived from the job id and the repository the manifest was read from. The branch is served."
       }
-    ),
-    /* @__PURE__ */ jsxs("div", { className: "armada-screen__split", children: [
-      /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "What ran" }),
-        /* @__PURE__ */ jsx(WorkflowRail, { steps, pulsing: true })
-      ] }),
-      /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "Evidence so far" }),
-        /* @__PURE__ */ jsx(
-          EvidenceCard,
-          {
-            icon: NO_GLYPH_IN_REGISTRY,
-            iconLabel: "Evidence",
-            step: "Plan the change",
-            time: "09:14",
-            claimed: "settings.rs is split into a reducer and a selector module, with no change in behaviour.",
-            shownBy: "src/settings.rs → src/settings/reducer.rs, src/settings/selectors.rs",
-            notClaimed: "Nothing about the settings UI, and no new tests — the existing suite is the only cover."
-          }
-        ),
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", "data-spaced": true, children: "Log" }),
-        /* @__PURE__ */ jsx(
-          JobLogReference,
-          {
-            rows: [
-              {
-                icon: NO_GLYPH_IN_REGISTRY,
-                iconLabel: "Log",
-                value: ".armada/logs/job_2d90bb.jsonl",
-                copyValue: ".armada/logs/job_2d90bb.jsonl",
-                meta: "142 lines · 0 error"
-              }
-            ],
-            actions: /* @__PURE__ */ jsx(Button, { ground: "sunken", size: "sm", children: "Open the log" }),
-            children: "Fleet, the drone and Bridge in one order, keyed on this job. It is being written now."
-          }
-        )
-      ] })
-    ] })
-  ] }) })
+    }
+  ) })
 };
-const __vite_glob_0_40 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_43 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  AsBridgeDrawsItToday,
   RunningJob,
-  default: meta$4
+  default: meta$5
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$3 = {
+const meta$4 = {
   title: "Screens/Dispatch a job — full, with the M1 subset marked"
 };
 const Dispatch = {
@@ -4363,12 +5659,12 @@ const Dispatch = {
     }
   ) }) }) })
 };
-const __vite_glob_0_41 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_44 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Dispatch,
-  default: meta$3
+  default: meta$4
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$2 = {
+const meta$3 = {
   title: "Screens/First launch"
 };
 const FirstLaunch = {
@@ -4390,12 +5686,12 @@ const FirstLaunch = {
     ] })
   ] }) })
 };
-const __vite_glob_0_42 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_45 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   FirstLaunch,
-  default: meta$2
+  default: meta$3
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$1 = {
+const meta$2 = {
   title: "Screens/The list — six states, one row shape"
 };
 const menu = [
@@ -4564,103 +5860,341 @@ const TheList = {
     }
   ) })
 };
-const __vite_glob_0_43 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_46 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   TheList,
-  default: meta$1
+  default: meta$2
 }, Symbol.toStringTag, { value: "Module" }));
-const meta = {
-  title: "Screens/The shell"
+function TheShell({
+  appName = "Armada",
+  railHeader,
+  surfaces: surfaces2,
+  activeId,
+  collapsed,
+  onSelect,
+  title,
+  summary,
+  actions,
+  children,
+  status
+}) {
+  return /* @__PURE__ */ jsxs("div", { className: "armada-shell", children: [
+    /* @__PURE__ */ jsxs("div", { className: "armada-shell__body", children: [
+      /* @__PURE__ */ jsx(
+        Sidebar,
+        {
+          appName,
+          header: railHeader,
+          surfaces: surfaces2,
+          activeId,
+          collapsed,
+          onSelect
+        }
+      ),
+      /* @__PURE__ */ jsxs("div", { className: "armada-shell__panel", children: [
+        /* @__PURE__ */ jsxs("div", { className: "armada-screen__panel-head", children: [
+          /* @__PURE__ */ jsxs("div", { className: "armada-screen__titles", children: [
+            /* @__PURE__ */ jsx("span", { className: "armada-screen__title", children: title }),
+            summary === void 0 ? null : /* @__PURE__ */ jsx("span", { className: "armada-screen__summary", children: summary })
+          ] }),
+          actions === void 0 ? null : /* @__PURE__ */ jsx("div", { className: "armada-shell__actions", children: actions })
+        ] }),
+        /* @__PURE__ */ jsx("div", { className: "armada-shell__mount", children })
+      ] })
+    ] }),
+    /* @__PURE__ */ jsx(StatusBar, { ...status })
+  ] });
+}
+const meta$1 = {
+  title: "Screens/The shell",
+  component: TheShell
+};
+const shell = {
+  railHeader: /* @__PURE__ */ jsx(Select, { "aria-label": "Project", children: /* @__PURE__ */ jsx("option", { children: "armada" }) }),
+  // The drawing's rail row carries a label and a count and no glyph. Sidebar
+  // requires one, and `activity` is what the registry assigns to Active jobs,
+  // so that is the glyph. Reported.
+  surfaces: [{ id: "active", label: "Active jobs", icon: Activity, count: 6 }],
+  activeId: "active",
+  title: "Active jobs",
+  summary: "6 jobs. 1 awaiting approval.",
+  actions: /* @__PURE__ */ jsx(Button, { variant: "primary", children: "New job" }),
+  children: /* @__PURE__ */ jsx("div", { className: "armada-screen__mount", children: "The list mounts here — 1d" }),
+  status: {
+    fleet: "running",
+    fleetLabel: "Fleet running",
+    detail: "pid 4417 · port 7411",
+    items: ["6 jobs"],
+    approvals: 1
+  }
 };
 const Shell = {
-  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsxs("div", { className: "armada-screen__window", children: [
-    /* @__PURE__ */ jsx(
-      Sidebar,
-      {
-        appName: "Armada",
-        sectionLabel: "Bridge",
-        activeId: "active",
-        header: /* @__PURE__ */ jsx(Select, { "aria-label": "Project", children: /* @__PURE__ */ jsx("option", { children: "armada" }) }),
-        surfaces: [
-          // The drawing's rail row carries a label and a count and no glyph.
-          // Sidebar requires one, and `activity` is what the registry assigns
-          // to Active jobs, so that is the glyph. Reported.
-          { id: "active", label: "Active jobs", icon: Activity, count: 6 }
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxs("div", { className: "armada-screen__panel", children: [
-      /* @__PURE__ */ jsxs("div", { className: "armada-screen__panel-head", children: [
-        /* @__PURE__ */ jsxs("div", { className: "armada-screen__titles", children: [
-          /* @__PURE__ */ jsx("span", { className: "armada-screen__title", children: "Active jobs" }),
-          /* @__PURE__ */ jsx("span", { className: "armada-screen__summary", children: "6 jobs. 1 awaiting approval." })
-        ] }),
-        /* @__PURE__ */ jsx(Button, { variant: "primary", children: "New job" })
-      ] }),
-      /* @__PURE__ */ jsx("div", { className: "armada-screen__mount", children: "The list mounts here — 1d" }),
-      /* @__PURE__ */ jsx(
-        StatusBar,
-        {
-          fleet: "running",
-          fleetLabel: "Fleet running",
-          detail: "pid 4417 · port 7411 · 1 drone",
-          spend: "today ~$4.80"
-        }
-      )
-    ] })
-  ] }) })
+  args: shell,
+  render: (args) => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx("div", { className: "armada-screen__window", children: /* @__PURE__ */ jsx(TheShell, { ...args }) }) })
 };
-const __vite_glob_0_44 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const CollapsedRail = {
+  args: { ...shell, collapsed: true },
+  render: Shell.render
+};
+const FleetIsNotRunning = {
+  args: {
+    ...shell,
+    summary: "No jobs.",
+    surfaces: [{ id: "active", label: "Active jobs", icon: Activity, count: 0 }],
+    status: {
+      fleet: "not-running",
+      fleetLabel: "Fleet is not running",
+      detail: "no runtime file at ~/Library/Application Support/Armada/fleet.json",
+      advice: "Start Fleet. Bridge reconnects on its own."
+    }
+  },
+  render: Shell.render
+};
+const __vite_glob_0_47 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  CollapsedRail,
+  FleetIsNotRunning,
   Shell,
+  default: meta$1
+}, Symbol.toStringTag, { value: "Module" }));
+function WatchingADroneWork({
+  heading: heading2,
+  turns: turns2,
+  emptyNote,
+  turnsLabel = "The drone's turns",
+  readOnlyNote = "Watching only. The drone is not told, nothing about the job changes, and closing this view ends nothing.",
+  live = false,
+  liveNote = "A drone is writing now.",
+  quietNote = "Nothing is writing. This is the whole history.",
+  skipped = 0,
+  missed = 0,
+  closedBecause,
+  failure
+}) {
+  return /* @__PURE__ */ jsxs("div", { className: "armada-screen__detail", children: [
+    /* @__PURE__ */ jsx(JobDetailHeaderActions, { ...heading2 }),
+    /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
+      /* @__PURE__ */ jsxs("div", { className: "armada-screen__head-row", children: [
+        /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: turnsLabel }),
+        /* @__PURE__ */ jsx("span", { className: "armada-screen__caption", children: live ? liveNote : quietNote })
+      ] }),
+      /* @__PURE__ */ jsx("p", { className: "armada-screen__caption", "data-note": true, children: readOnlyNote }),
+      missed > 0 ? /* @__PURE__ */ jsx(Alert, { tone: "escalated", title: "Rows were dropped before this window saw them", children: `${missed} turns will never arrive. What follows is everything else, in order.` }) : null,
+      skipped > 0 ? /* @__PURE__ */ jsx(Alert, { tone: "neutral", title: "Older turns are not shown", children: `${skipped} earlier turns are on disk and were left out of this history.` }) : null,
+      failure === void 0 ? /* @__PURE__ */ jsx(DroneTurns, { turns: turns2, emptyNote, live }) : /* @__PURE__ */ jsx(Alert, { tone: "escalated", title: "This job's turns could not be read", children: failure }),
+      closedBecause === void 0 ? null : /* @__PURE__ */ jsxs("p", { className: "armada-screen__caption", "data-note": true, children: [
+        "Nothing more is coming: ",
+        /* @__PURE__ */ jsx("span", { className: "armada-screen__mono", children: closedBecause })
+      ] })
+    ] })
+  ] });
+}
+const meta = {
+  title: "Screens/Watching a drone work",
+  component: WatchingADroneWork
+};
+const NOTHING_YET = "This job has no turns. It was never dispatched, so no drone has written one.";
+const heading = {
+  status: "running",
+  statusIcon: CircleDot,
+  statusLabel: "Running",
+  headline: "Split the settings reducer",
+  jobId: "job_2d90bb",
+  fields: [
+    { label: "Step", value: "2 of 4", mono: true },
+    { label: "Drone", value: "drone_9c41", mono: true, copyValue: "drone_9c41" },
+    { label: "Elapsed", value: "11m 03s", mono: true }
+  ],
+  // Leaves the view. Never an act on the Drone.
+  actions: /* @__PURE__ */ jsx(Button, { variant: "ghost", children: "Back to the job" })
+};
+const turns = [
+  {
+    id: "1",
+    at: "09:14:02",
+    kind: "started",
+    // The model is whatever the Job named. A vendor spelling belongs in
+    // `adapters` and nowhere else, so the fixture carries a placeholder.
+    subject: "sess_01JB4 · the job's model · 2 mcp servers"
+  },
+  {
+    id: "2",
+    at: "09:14:03",
+    kind: "said",
+    said: "Reading the settings module before I split anything, so the public signature survives."
+  },
+  { id: "3", at: "09:14:04", kind: "called", subject: "Read · call_7f21", answer: "Answered." },
+  {
+    id: "4",
+    at: "09:14:11",
+    kind: "called",
+    subject: "Edit · call_7f23",
+    answer: "No answer yet."
+  }
+];
+const ADroneWriting = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(WatchingADroneWork, { heading, turns, emptyNote: NOTHING_YET, live: true }) })
+};
+const AJobWithNoTranscript = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    WatchingADroneWork,
+    {
+      heading: { ...heading, statusLabel: "Needs approval", status: "awaiting-approval" },
+      turns: [],
+      emptyNote: NOTHING_YET,
+      closedBecause: "nothing_writing"
+    }
+  ) })
+};
+const AViewerThatMissedRows = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    WatchingADroneWork,
+    {
+      heading,
+      turns,
+      emptyNote: NOTHING_YET,
+      live: true,
+      missed: 34
+    }
+  ) })
+};
+const ADroneThatOutlivedItsFleet = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    WatchingADroneWork,
+    {
+      heading,
+      turns,
+      emptyNote: NOTHING_YET,
+      skipped: 128,
+      closedBecause: "drone_ended"
+    }
+  ) })
+};
+const TheTurnsCouldNotBeRead = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    WatchingADroneWork,
+    {
+      heading,
+      turns: [],
+      emptyNote: NOTHING_YET,
+      failure: "Fleet did not answer on this job's observe socket: connect ECONNREFUSED 127.0.0.1:7777"
+    }
+  ) })
+};
+function thinking(from, rows, at) {
+  return Array.from({ length: rows }, (_, n) => ({
+    id: String(from + n),
+    at,
+    kind: "unrecognised",
+    subject: n % 4 === 3 ? "a turn with nothing in it Armada names" : "system/thinking_tokens",
+    quiet: true
+  }));
+}
+const withThinking = [
+  { id: "1", at: "09:14:02", kind: "started", subject: "sess_01JB4 · the job's model · 1 mcp server" },
+  ...thinking(10, 3, "09:14:03"),
+  { id: "20", at: "09:14:05", kind: "said", said: "Reading the settings module before I split anything." },
+  ...thinking(30, 9, "09:14:06"),
+  { id: "50", at: "09:14:12", kind: "called", subject: "Read", detail: "src/settings.rs", answer: "Answered." },
+  ...thinking(60, 14, "09:14:15"),
+  { id: "80", at: "09:14:31", kind: "called", subject: "Edit", detail: "src/settings.rs +42 -18", answer: "Answered." },
+  ...thinking(90, 6, "09:14:40")
+];
+const ADroneThinking = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(WatchingADroneWork, { heading, turns: withThinking, emptyNote: NOTHING_YET, live: true }) })
+};
+const AFinishedRun = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    WatchingADroneWork,
+    {
+      heading: { ...heading, statusLabel: "Awaiting review", status: "awaiting-review", statusIcon: Eye },
+      turns: [
+        ...withThinking,
+        { id: "120", at: "09:14:47", kind: "said", said: "The public signature is unchanged. Submitting." }
+      ],
+      emptyNote: NOTHING_YET,
+      closedBecause: "drone_ended"
+    }
+  ) })
+};
+const NothingButToolCalls = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    WatchingADroneWork,
+    {
+      heading,
+      turns: [
+        { id: "1", at: "09:20:01", kind: "called", subject: "Bash", detail: "cargo xtask verify-foundations", answer: "Answered." },
+        { id: "2", at: "09:20:31", kind: "called", subject: "Bash", detail: "cargo test -p ipc", answer: "Answered, and the tool itself failed." },
+        { id: "3", at: "09:20:48", kind: "called", subject: "Read", detail: "crates/ipc/src/turn.rs", answer: "Answered." },
+        { id: "4", at: "09:20:52", kind: "called", subject: "Write", detail: "crates/ipc/src/turn.rs, 214 lines starting //! One Drone's turns", truncated: true, answer: "No answer yet." }
+      ],
+      emptyNote: NOTHING_YET,
+      live: true
+    }
+  ) })
+};
+const __vite_glob_0_48 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  ADroneThatOutlivedItsFleet,
+  ADroneThinking,
+  ADroneWriting,
+  AFinishedRun,
+  AJobWithNoTranscript,
+  AViewerThatMissedRows,
+  NothingButToolCalls,
+  TheTurnsCouldNotBeRead,
   default: meta
 }, Symbol.toStringTag, { value: "Module" }));
 const stories = /* @__PURE__ */ Object.assign({
   "../src/compositions/ActiveJobsList/ActiveJobsList.stories.tsx": __vite_glob_0_0,
   "../src/compositions/BoardEmptyState/BoardEmptyState.stories.tsx": __vite_glob_0_1,
-  "../src/compositions/EvidenceCard/EvidenceCard.stories.tsx": __vite_glob_0_2,
-  "../src/compositions/EvidenceTrail/EvidenceTrail.stories.tsx": __vite_glob_0_3,
-  "../src/compositions/JobComposer/JobComposer.stories.tsx": __vite_glob_0_4,
-  "../src/compositions/JobDetailHeaderActions/JobDetailHeaderActions.stories.tsx": __vite_glob_0_5,
-  "../src/compositions/JobLogReference/JobLogReference.stories.tsx": __vite_glob_0_6,
-  "../src/compositions/JobRowStacked/JobRowStacked.stories.tsx": __vite_glob_0_7,
-  "../src/compositions/Sidebar/Sidebar.stories.tsx": __vite_glob_0_8,
-  "../src/compositions/StatusBar/StatusBar.stories.tsx": __vite_glob_0_9,
-  "../src/compositions/StepActivityMark/StepActivityMark.stories.tsx": __vite_glob_0_10,
-  "../src/compositions/StepBar/StepBar.stories.tsx": __vite_glob_0_11,
-  "../src/compositions/WorkflowRail/WorkflowRail.stories.tsx": __vite_glob_0_12,
-  "../src/primitives/Alert/Alert.stories.tsx": __vite_glob_0_13,
-  "../src/primitives/Badge/Badge.stories.tsx": __vite_glob_0_14,
-  "../src/primitives/Button/Button.stories.tsx": __vite_glob_0_15,
-  "../src/primitives/Card/Card.stories.tsx": __vite_glob_0_16,
-  "../src/primitives/Checkbox/Checkbox.stories.tsx": __vite_glob_0_17,
-  "../src/primitives/CommandPalette/CommandPalette.stories.tsx": __vite_glob_0_18,
-  "../src/primitives/Dialog/Dialog.stories.tsx": __vite_glob_0_19,
-  "../src/primitives/DropdownMenu/DropdownMenu.stories.tsx": __vite_glob_0_20,
-  "../src/primitives/Input/Input.stories.tsx": __vite_glob_0_21,
-  "../src/primitives/Kbd/Kbd.stories.tsx": __vite_glob_0_22,
-  "../src/primitives/Popover/Popover.stories.tsx": __vite_glob_0_23,
-  "../src/primitives/Radio/Radio.stories.tsx": __vite_glob_0_24,
-  "../src/primitives/ScrollArea/ScrollArea.stories.tsx": __vite_glob_0_25,
-  "../src/primitives/Select/Select.stories.tsx": __vite_glob_0_26,
-  "../src/primitives/Separator/Separator.stories.tsx": __vite_glob_0_27,
-  "../src/primitives/Sheet/Sheet.stories.tsx": __vite_glob_0_28,
-  "../src/primitives/Skeleton/Skeleton.stories.tsx": __vite_glob_0_29,
-  "../src/primitives/SplitButton/SplitButton.stories.tsx": __vite_glob_0_30,
-  "../src/primitives/Switch/Switch.stories.tsx": __vite_glob_0_31,
-  "../src/primitives/Table/Table.stories.tsx": __vite_glob_0_32,
-  "../src/primitives/Tabs/Tabs.stories.tsx": __vite_glob_0_33,
-  "../src/primitives/TabsWithCounts/TabsWithCounts.stories.tsx": __vite_glob_0_34,
-  "../src/primitives/Textarea/Textarea.stories.tsx": __vite_glob_0_35,
-  "../src/primitives/Toast/Toast.stories.tsx": __vite_glob_0_36,
-  "../src/primitives/Tooltip/Tooltip.stories.tsx": __vite_glob_0_37,
-  "../src/screens/AFailedJobADeadEndReadAsOne/AFailedJobADeadEndReadAsOne.stories.tsx": __vite_glob_0_38,
-  "../src/screens/AFinishedJobABranchAndAnEvidenceTrail/AFinishedJobABranchAndAnEvidenceTrail.stories.tsx": __vite_glob_0_39,
-  "../src/screens/ARunningJob/ARunningJob.stories.tsx": __vite_glob_0_40,
-  "../src/screens/DispatchAJobFullWithTheM1SubsetMarked/DispatchAJobFullWithTheM1SubsetMarked.stories.tsx": __vite_glob_0_41,
-  "../src/screens/FirstLaunch/FirstLaunch.stories.tsx": __vite_glob_0_42,
-  "../src/screens/TheListSixStatesOneRowShape/TheListSixStatesOneRowShape.stories.tsx": __vite_glob_0_43,
-  "../src/screens/TheShell/TheShell.stories.tsx": __vite_glob_0_44
+  "../src/compositions/DroneTurns/DroneTurns.stories.tsx": __vite_glob_0_2,
+  "../src/compositions/EvidenceCard/EvidenceCard.stories.tsx": __vite_glob_0_3,
+  "../src/compositions/EvidenceTrail/EvidenceTrail.stories.tsx": __vite_glob_0_4,
+  "../src/compositions/FailureNotice/FailureNotice.stories.tsx": __vite_glob_0_5,
+  "../src/compositions/JobBrief/JobBrief.stories.tsx": __vite_glob_0_6,
+  "../src/compositions/JobComposer/JobComposer.stories.tsx": __vite_glob_0_7,
+  "../src/compositions/JobDetailHeaderActions/JobDetailHeaderActions.stories.tsx": __vite_glob_0_8,
+  "../src/compositions/JobLogReference/JobLogReference.stories.tsx": __vite_glob_0_9,
+  "../src/compositions/JobRowStacked/JobRowStacked.stories.tsx": __vite_glob_0_10,
+  "../src/compositions/Sidebar/Sidebar.stories.tsx": __vite_glob_0_11,
+  "../src/compositions/StatusBar/StatusBar.stories.tsx": __vite_glob_0_12,
+  "../src/compositions/StepActivityMark/StepActivityMark.stories.tsx": __vite_glob_0_13,
+  "../src/compositions/StepBar/StepBar.stories.tsx": __vite_glob_0_14,
+  "../src/compositions/WorkflowRail/WorkflowRail.stories.tsx": __vite_glob_0_15,
+  "../src/primitives/Alert/Alert.stories.tsx": __vite_glob_0_16,
+  "../src/primitives/Badge/Badge.stories.tsx": __vite_glob_0_17,
+  "../src/primitives/Button/Button.stories.tsx": __vite_glob_0_18,
+  "../src/primitives/Card/Card.stories.tsx": __vite_glob_0_19,
+  "../src/primitives/Checkbox/Checkbox.stories.tsx": __vite_glob_0_20,
+  "../src/primitives/CommandPalette/CommandPalette.stories.tsx": __vite_glob_0_21,
+  "../src/primitives/Dialog/Dialog.stories.tsx": __vite_glob_0_22,
+  "../src/primitives/DropdownMenu/DropdownMenu.stories.tsx": __vite_glob_0_23,
+  "../src/primitives/Input/Input.stories.tsx": __vite_glob_0_24,
+  "../src/primitives/Kbd/Kbd.stories.tsx": __vite_glob_0_25,
+  "../src/primitives/Popover/Popover.stories.tsx": __vite_glob_0_26,
+  "../src/primitives/Radio/Radio.stories.tsx": __vite_glob_0_27,
+  "../src/primitives/ScrollArea/ScrollArea.stories.tsx": __vite_glob_0_28,
+  "../src/primitives/Select/Select.stories.tsx": __vite_glob_0_29,
+  "../src/primitives/Separator/Separator.stories.tsx": __vite_glob_0_30,
+  "../src/primitives/Sheet/Sheet.stories.tsx": __vite_glob_0_31,
+  "../src/primitives/Skeleton/Skeleton.stories.tsx": __vite_glob_0_32,
+  "../src/primitives/SplitButton/SplitButton.stories.tsx": __vite_glob_0_33,
+  "../src/primitives/Switch/Switch.stories.tsx": __vite_glob_0_34,
+  "../src/primitives/Table/Table.stories.tsx": __vite_glob_0_35,
+  "../src/primitives/Tabs/Tabs.stories.tsx": __vite_glob_0_36,
+  "../src/primitives/TabsWithCounts/TabsWithCounts.stories.tsx": __vite_glob_0_37,
+  "../src/primitives/Textarea/Textarea.stories.tsx": __vite_glob_0_38,
+  "../src/primitives/Toast/Toast.stories.tsx": __vite_glob_0_39,
+  "../src/primitives/Tooltip/Tooltip.stories.tsx": __vite_glob_0_40,
+  "../src/screens/AFailedJobADeadEndReadAsOne/AFailedJobADeadEndReadAsOne.stories.tsx": __vite_glob_0_41,
+  "../src/screens/AFinishedJobABranchAndAnEvidenceTrail/AFinishedJobABranchAndAnEvidenceTrail.stories.tsx": __vite_glob_0_42,
+  "../src/screens/ARunningJob/ARunningJob.stories.tsx": __vite_glob_0_43,
+  "../src/screens/DispatchAJobFullWithTheM1SubsetMarked/DispatchAJobFullWithTheM1SubsetMarked.stories.tsx": __vite_glob_0_44,
+  "../src/screens/FirstLaunch/FirstLaunch.stories.tsx": __vite_glob_0_45,
+  "../src/screens/TheListSixStatesOneRowShape/TheListSixStatesOneRowShape.stories.tsx": __vite_glob_0_46,
+  "../src/screens/TheShell/TheShell.stories.tsx": __vite_glob_0_47,
+  "../src/screens/WatchingADroneWork/WatchingADroneWork.stories.tsx": __vite_glob_0_48
 });
 function label(key) {
   return key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim();

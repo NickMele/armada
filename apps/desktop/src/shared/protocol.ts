@@ -372,7 +372,26 @@ export type Closed = {
  */
 export type Saw =
   | { event: "started"; session: string; model: string; mcp_servers: number }
-  | { event: "called"; tool: string; call: string }
+  /**
+   * The Drone reached for a tool.
+   *
+   * **`detail` is not on the wire yet, and the name here is a placeholder.**
+   * `Saw::Called` carries a tool and an opaque call id, so a pane reads
+   * `Bash · toolu_01Haa…` twenty-two times over — measured on one transcript.
+   * What the call did is being added on Fleet's side; this is the field the
+   * renderer reads when it lands, and nothing fakes it from the tool name in
+   * the meantime. Reconcile the spelling against `crates/ipc/src/turn.rs`.
+   *
+   * It is bounded and may be cut: a `Write` argument is a whole file.
+   */
+  | {
+      event: "called";
+      tool: string;
+      call: string;
+      detail?: string;
+      /** Whether `detail` was cut short. Never rendered as the whole value. */
+      truncated?: boolean;
+    }
   | { event: "answered"; call: string; failed: boolean }
   | { event: "said"; text: string }
   | { event: "refused"; tool: string; call: string; because: string }

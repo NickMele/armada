@@ -67,17 +67,22 @@ function bodyOf(saw: Saw, answers: Map<string, Answer>): Omit<DroneTurn, "id" | 
       return { subject: `${saw.session} · ${saw.model} · ${count(saw.mcp_servers)}` };
     case "called": {
       const answer = answers.get(saw.call);
-      return {
-        subject: `${saw.tool} · ${saw.call}`,
-        answer: answer === undefined ? ANSWER.pending : ANSWER[answer.failed ? "failed" : "ok"],
-      };
+      const said = answer === undefined ? ANSWER.pending : ANSWER[answer.failed ? "failed" : "ok"];
+      // With what the call did in hand, the call id stops being the only thing
+      // telling one `Bash` row from the next and stops leading the row. Without
+      // it the id is all there is, so it stays.
+      if (saw.detail === undefined) return { subject: `${saw.tool} · ${saw.call}`, answer: said };
+      return { subject: saw.tool, detail: saw.detail, truncated: saw.truncated, answer: said };
     }
     case "said":
       return { said: saw.text };
     case "refused":
       return { subject: `${saw.tool} · ${saw.call}`, said: saw.because };
+    // The Drone thinking. Collapsed by the pane into one line carrying the
+    // count, because naming these by the decoder's failure to place them
+    // describes the plumbing rather than what is happening.
     case "unrecognised":
-      return { subject: saw.kind };
+      return { subject: saw.kind, quiet: true };
     case "unreadable":
       return { subject: saw.line, said: saw.why };
     // An `answered` reaching here is folded above; the arm exists so a kind

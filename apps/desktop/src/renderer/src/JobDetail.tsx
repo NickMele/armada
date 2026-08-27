@@ -78,6 +78,23 @@ function escalation(job: JobSummary) {
 /** What the two kills and the redispatch are called, and what each one does. */
 export type JobAct = "kill_drone" | "kill_job" | "redispatch";
 
+/**
+ * The statuses a redispatch is offered on. Three, and **`rejected` is not one**:
+ * a rejected Job never ran, so it has no Facts and no Evidence to carry
+ * forward, and redispatching it would only be proposing a new Job — which the
+ * composer already does.
+ *
+ * Written here rather than read from the generated vocabulary because no
+ * registry file carries the set: `job-fields.toml` still asks it as an open
+ * question on `redispatched_from`. Fleet's route is the authority and refuses
+ * anything else; this only keeps a button off the screen that would be.
+ */
+const REDISPATCHABLE: ReadonlySet<string> = new Set([
+  "escalated",
+  "completed_failed",
+  "killed",
+]);
+
 export type JobDetailProps = {
   job: JobSummary;
   /** `GET /jobs/:job_id` for this Job, as main published it. */
@@ -262,7 +279,7 @@ function whyNoSteps(watched: Watched, jobId: string): string | undefined {
  * | Act | Drawn on | Confirms |
  * |---|---|---|
  * | `approve` | `awaiting_approval` | no — see `onApprove` |
- * | `redispatch` | `escalated` | yes |
+ * | `redispatch` | `escalated`, `completed_failed`, `killed` | yes |
  * | `kill_drone` | a Job holding an `assigned_drone` | yes |
  * | `kill_job` | every non-terminal status | yes |
  *
@@ -295,9 +312,11 @@ function Acts({
   const over = life?.terminal ?? true;
   // Menu order, mildest first — the split button puts destructive last.
   const acts: JobAct[] = [
-    // Only from `escalated`; anything else is Fleet's 409 and this does not
+    // Only where Fleet accepts one; anything else is its 409, and this does not
     // offer a button that is refused on press.
-    ...(render === "stopped" && job.status === "escalated" ? (["redispatch"] as JobAct[]) : []),
+    ...(render === "stopped" && REDISPATCHABLE.has(job.status)
+      ? (["redispatch"] as JobAct[])
+      : []),
     // `assigned_drone` is presence rather than state: there is nothing to kill
     // without one.
     ...(job.assigned_drone === undefined ? [] : (["kill_drone"] as JobAct[])),

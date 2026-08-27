@@ -59,6 +59,13 @@ export * from "./screens/ARunningJob/ARunningJob";
 // closed, which is the shape the turn-level detail rule already has.
 export * from "./screens/WatchingADroneWork/WatchingADroneWork";
 
+// The three journey screens, lifted for the reason the job detail three were:
+// a story with hardcoded fixtures is a screen nothing outside Storybook can
+// render. Each takes the regions it composes as props.
+export * from "./screens/DispatchAJobFullWithTheM1SubsetMarked/DispatchAJobFullWithTheM1SubsetMarked";
+export * from "./screens/FirstLaunch/FirstLaunch";
+export * from "./screens/TheListSixStatesOneRowShape/TheListSixStatesOneRowShape";
+
 // The shell. Rail, panel and status bar — the frame the three above mount
 // inside. A screen like them, and lifted for the same reason: Bridge needs the
 // frame as a component, and the story renders it from the drawing's fixture.

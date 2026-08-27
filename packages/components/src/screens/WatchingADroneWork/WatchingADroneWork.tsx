@@ -20,6 +20,10 @@ import type { JobDetailHeading } from "../detail";
  * rows out; a viewer that fell behind lost rows it will not get back. All three
  * are stated, because a transcript with a silent gap reads as a Drone that went
  * quiet — the one thing this record exists to tell apart.
+ *
+ * **`live` reaches the transcript as well as the caption.** A run of the Drone
+ * thinking collapses to one line, and whether that line moves is the same fact
+ * the caption states — a finished history must not show a working mark.
  */
 export type WatchingADroneWorkProps = {
   heading: JobDetailHeading;
@@ -94,7 +98,7 @@ export function WatchingADroneWork({
         ) : null}
 
         {failure === undefined ? (
-          <DroneTurns turns={turns} emptyNote={emptyNote} />
+          <DroneTurns turns={turns} emptyNote={emptyNote} live={live} />
         ) : (
           <Alert tone="escalated" title="This job's turns could not be read">
             {failure}

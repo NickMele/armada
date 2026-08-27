@@ -25,12 +25,28 @@
 // `Screens/The list — six states, one row shape` is what they are measured
 // against. Nothing here draws a cell, a column or a border.
 //
-// # The field run is the field set, not a fixed list
+// # The field run is three of the drawing's five, and the two missing ones are
+// missing because nothing serves them to a list
 //
-// Two field sets, because the drawing has two: a Job that has not run carries
-// no branch, no step and no elapsed, so it gets the approval track list. Both
-// carry the workflow and the Manifest — those are the fields that used to be
-// two columns of raw ULID, and the row's field run is where they belong.
+// The drawing's row is the branch or the workflow, the step bar, the step,
+// elapsed, spend. Three of those reach here.
+//
+// **The drawing switches track one from the workflow to the branch the moment a
+// worktree exists, and Bridge cannot make that switch.** `branch` is a
+// `JobDetail` field, served by `GET /jobs/:job_id`. This list holds
+// `JobSummary`, which carries no branch and no `created_at` — so both the
+// branch and elapsed would cost one request per row, which is the failure
+// `docs/practices/bridge.md` names first. There is therefore one field set here
+// and not two: the field that decides between them is not on the wire. Reported.
+//
+// **Elapsed is left out rather than drawn empty**, for the reason spend is:
+// a labelled gap on every row reads as a value that failed to load. Spend is
+// measured nowhere at all — not on the wire, not in the store, not computed.
+// Elapsed needs `created_at` on `JobSummary`; both tracks go in the day their
+// field does.
+//
+// **The step's name is its id**, because `StepDetail` carries no label. Issue
+// #109. The id is what the record holds, so it is what renders.
 //
 // # One state the row shape cannot draw, said out loud
 //
@@ -55,7 +71,7 @@ import { ActiveJobsList, BoardEmptyState, Button, JobRowStacked, StepBar } from 
 import type { JobRowField } from "@armada/components";
 import { Layers } from "lucide-react";
 
-import type { JobSummary, ManifestSummary, WorkflowSummary } from "../../shared/protocol";
+import type { JobSummary, WorkflowSummary } from "../../shared/protocol";
 import { readingOf } from "./reading";
 
 /**
@@ -65,20 +81,6 @@ import { readingOf } from "./reading";
  */
 const DRAWN = 200;
 
-/**
- * The needs-approval track list, from the screen story. A Job at the gate has
- * no branch, no step and no elapsed yet, and the track list belongs to the
- * field set — 168px 72px 108px 100px 128px, composed from the spacing scale
- * rather than written as literals.
- */
-const APPROVAL_TRACKS = [
-  "calc(var(--space-12) * 3 + var(--space-6))",
-  "calc(var(--space-12) + var(--space-6))",
-  "calc(var(--space-12) * 2 + var(--space-3))",
-  "calc(var(--space-12) * 2 + var(--space-1))",
-  "calc(var(--space-12) * 2 + var(--space-8))",
-].join(" ");
-
 export type JobsProps = {
   jobs: readonly JobSummary[];
   /** Jobs with an approval in flight. A second click on one does not dispatch twice. */
@@ -87,7 +89,6 @@ export type JobsProps = {
   stale: boolean;
   /** What Fleet holds, so a row can say `bug` where it carried a ULID. */
   workflows: readonly WorkflowSummary[];
-  manifests: readonly ManifestSummary[];
   /** The whole reading of the connection, for the empty state that is a fault. */
   disconnected: string | null;
   /** The Job whose detail is open, where one is. */
@@ -104,7 +105,6 @@ export function Jobs({
   approving,
   stale,
   workflows,
-  manifests,
   disconnected,
   selected,
   onOpen,
@@ -146,7 +146,6 @@ export function Jobs({
             approving={approving.includes(job.id)}
             stale={stale}
             workflows={workflows}
-            manifests={manifests}
             selected={job.id === selected}
             onOpen={onOpen}
             onApprove={onApprove}
@@ -205,7 +204,6 @@ function Row({
   approving,
   stale,
   workflows,
-  manifests,
   selected,
   onOpen,
   onApprove,
@@ -215,7 +213,6 @@ function Row({
   approving: boolean;
   stale: boolean;
   workflows: readonly WorkflowSummary[];
-  manifests: readonly ManifestSummary[];
   selected: boolean;
   onOpen: (jobId: string) => void;
   onApprove: (jobId: string) => void;
@@ -230,7 +227,6 @@ function Row({
   // nothing to hit even before the guard in the main process refuses it.
   const waiting = job.status === "awaiting_approval";
   const workflow = workflows.find((held) => held.id === job.workflow_id);
-  const manifest = manifests.find((held) => held.id === job.owner_manifest_id);
   const steps = workflow?.steps ?? [];
   // Matched on `step_id`, because a workflow's steps are objects carrying their
   // Checks since protocol 3. Compared against the whole step this silently
@@ -239,26 +235,18 @@ function Row({
 
   const fields: JobRowField[] = [
     {
-      // The workflow's name where Fleet holds it, the id where it does not —
-      // which after the refusal at creation means a Job older than the check.
+      // Track one. The drawing's branch, until `JobSummary` carries one — the
+      // workflow's name where Fleet holds it, the id where it does not, which
+      // after the refusal at creation means a Job older than the check.
       icon: Layers,
       value: workflow === undefined ? job.workflow_id : `${workflow.name}, ${steps.length} steps`,
       mono: workflow === undefined,
       copyValue: job.workflow_id,
     },
     {
-      // **No glyph, and that is the gate's doing rather than a choice.** The
-      // registry's folder-and-branch mark is the obvious one for a repository,
-      // and the vendor rule refuses its lucide export name outside `adapters` —
-      // the two collide on a spelling. Reported; the field reads fine without a
-      // glyph, and reaching for a different one would be inventing a mark.
-      // The value is the repository, because `armada.yml` declares no name.
-      // Also reported.
-      value: manifest?.repository ?? job.owner_manifest_id,
-      mono: manifest === undefined,
-      copyValue: job.owner_manifest_id,
-    },
-    {
+      // An empty bar, never no bar. A Job at the gate has its ordinals and no
+      // progress, and a row that dropped the bar there would read as a workflow
+      // with no steps rather than as one that has not started.
       value: (
         <StepBar
           total={Math.max(steps.length, 1)}
@@ -272,10 +260,13 @@ function Row({
         />
       ),
     },
+    // The step's id, because nothing serves its name (#109). `Not started` is
+    // the same sentence at the gate and in the queue: the queued row's reason
+    // is already the badge's verb, and the status grammar puts it there rather
+    // than in the run — so repeating it here would say one thing twice.
     job.current_step_id === undefined
       ? { value: "Not started", quiet: true }
       : { value: job.current_step_id, emphasis: true },
-    { label: "Model", value: job.model, mono: true },
   ];
 
   return (
@@ -289,7 +280,6 @@ function Row({
       headline={job.title}
       jobId={job.id}
       fields={fields}
-      tracks={waiting ? APPROVAL_TRACKS : undefined}
       pulsing={job.status === "running" && !stale}
       dimmed={stale}
       action={

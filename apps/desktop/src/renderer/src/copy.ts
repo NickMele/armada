@@ -59,11 +59,15 @@ export const CONFIRM: Record<JobAct, { title: string; body: string }> = {
       "The job ends at killed. That is terminal and carries no verdict — nothing resumes it, " +
       "and anything the drone wrote stays on its branch.",
   },
+  // Offered on three statuses, two of them already terminal — so the body can
+  // neither call this "the failed job" nor promise a kill that already
+  // happened. Fleet rewrites no terminal status.
   redispatch: {
     title: "Redispatch this job as a new one?",
     body:
-      "This job is killed and a replacement is created carrying a reference back to it. " +
-      "Nothing resumes: the new job starts at the approval gate and needs releasing. " +
-      "The failed job's worktree and branch are left as its drone left them.",
+      "A replacement is created carrying a reference back to this job, and this job does not " +
+      "continue: one still open is killed, and one that already ended is left as it stands. " +
+      "Nothing resumes — the new job starts at the approval gate and needs releasing, and this " +
+      "job's worktree and branch stay as its drone left them.",
   },
 };

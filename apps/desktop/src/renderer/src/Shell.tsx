@@ -48,6 +48,10 @@ export type ShellProps = {
   summary?: string;
   /** The head's trailing controls. `New job` is the one primary. */
   actions?: ReactNode;
+  /** Selecting the rail's surface returns to it. The rail is the one thing
+   *  present on every view, so it is where a person looks to get back —
+   *  Escape and Cancel both work and neither is what they reach for. */
+  onSurface?: () => void;
   children: ReactNode;
 };
 
@@ -61,6 +65,7 @@ export function Shell({
   title,
   summary,
   actions,
+  onSurface,
   children,
 }: ShellProps) {
   const collapsed = useNarrow();
@@ -71,6 +76,7 @@ export function Shell({
         { id: ACTIVE_JOBS, label: "Active jobs", icon: Activity, count: jobs.length },
       ]}
       activeId={ACTIVE_JOBS}
+      onSelect={onSurface === undefined ? undefined : () => onSurface()}
       collapsed={collapsed}
       railHeader={
         <Select

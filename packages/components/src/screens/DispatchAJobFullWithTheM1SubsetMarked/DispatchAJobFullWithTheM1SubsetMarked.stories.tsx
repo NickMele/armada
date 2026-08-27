@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { JobComposer } from "../../compositions/JobComposer/JobComposer";
+import { DispatchAJobFullWithTheM1SubsetMarked } from "./DispatchAJobFullWithTheM1SubsetMarked";
 
 /**
  * Journey · Dispatch a Job. What M1 renders where the approval card goes.
@@ -15,31 +15,31 @@ import { JobComposer } from "../../compositions/JobComposer/JobComposer";
  * **Approve lands the job in `queued`, not `running`**, and **Cancel writes
  * `killed`** — a job you never dispatched was not stopped, it was abandoned.
  */
-const meta: Meta = {
+const meta: Meta<typeof DispatchAJobFullWithTheM1SubsetMarked> = {
   title: "Screens/Dispatch a job — full, with the M1 subset marked",
+  component: DispatchAJobFullWithTheM1SubsetMarked,
 };
 export default meta;
 
-type Story = StoryObj;
+type Story = StoryObj<typeof DispatchAJobFullWithTheM1SubsetMarked>;
 
 export const Dispatch: Story = {
   render: () => (
     <div className="armada-screen">
-      <div className="armada-screen__row">
-        <div className="armada-screen__col" data-width="card">
-          <JobComposer
-            title="Coalesce concurrent token refreshes"
-            brief="A burst of 401s should produce one refresh call, not one per request. Keep the retry ceiling where it is."
-            workflows={<option>bug — 4 steps</option>}
-            project="armada"
-            glance={[
-              { label: "Steps", value: "4 · 2 gated" },
-              { label: "Checks", value: "build, test" },
-            ]}
-            provenance="Dispatched by you"
-          />
-        </div>
-      </div>
+      <DispatchAJobFullWithTheM1SubsetMarked
+        composer={{
+          title: "Coalesce concurrent token refreshes",
+          brief:
+            "A burst of 401s should produce one refresh call, not one per request. Keep the retry ceiling where it is.",
+          workflows: <option>bug — 4 steps</option>,
+          project: "armada",
+          glance: [
+            { label: "Steps", value: "4 · 2 gated" },
+            { label: "Checks", value: "build, test" },
+          ],
+          provenance: "Dispatched by you",
+        }}
+      />
     </div>
   ),
 };

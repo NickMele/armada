@@ -165,7 +165,8 @@ export function App() {
   /**
    * Do the confirmed act. **The three are three preload calls**, not one call
    * with a discriminator — killing a Drone leaves the Job, killing the Job ends
-   * it, and a redispatch ends it and mints a replacement.
+   * it, and a redispatch mints a replacement — killing the original where it
+   * was still open, and leaving an already-terminal one exactly as it stands.
    *
    * A redispatch answers with the replacement's id, and the detail follows it:
    * the Job that was open is over, and the one worth reading is the new one.
@@ -294,6 +295,12 @@ export function App() {
         title={head.title}
         summary={head.summary}
         actions={head.actions}
+        // The rail returns to the list from wherever you are. Both views it
+        // closes are single pieces of state, so there is no history to unwind.
+        onSurface={() => {
+          setOpenJob(null);
+          setComposing(false);
+        }}
       >
         <div className="flex flex-col gap-6">
           {/* Fleet, when the one connection is not one. The status bar keeps the
@@ -414,7 +421,6 @@ export function App() {
                   approving={state.approving}
                   stale={!live}
                   workflows={state.holds.workflows}
-                  manifests={state.holds.manifests}
                   disconnected={live ? null : statement.headline}
                   selected={openJob}
                   onOpen={setOpenJob}
