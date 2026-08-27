@@ -29,10 +29,10 @@
 //! cannot be dispatched against anything.
 
 use core_model::{
-    Attachment, Branch, CheckOutcome, CriterionId, DispatchOrigin, Facts, GateManifest,
-    GateOutcome, Job, JobId, JobStatus, JudgeVerdict, Judgment, ManifestId, ModelName, NewJob,
-    Origin, RepoPath, StepCheck, StepId, StepSeed, StepState, Subject, Timestamp, Title, Ulid,
-    Urgency, WriteTargets,
+    Attachment, Branch, CheckOutcome, CriterionId, DispatchOrigin, EvidenceType, Facts,
+    GateManifest, GateOutcome, Job, JobId, JobStatus, JudgeVerdict, Judgment, ManifestId,
+    ModelName, NewJob, Origin, RepoPath, StepCheck, StepEvidence, StepId, StepSeed, StepState,
+    Subject, Timestamp, Title, Ulid, Urgency, WriteTargets,
 };
 use rusqlite::Row;
 
@@ -414,6 +414,43 @@ impl Store {
             }
         }
         Ok(grouped)
+    }
+
+    /// The evidence each of a Job's steps had accepted, keyed by step.
+    ///
+    /// Shaped like [`step_judgments`](Store::step_judgments): a step that has
+    /// submitted none is absent rather than present and blank. **A gaming
+    /// check whose `baseline_ref` names an absent step runs with no baseline**
+    /// and says so, where a blank one would read as a comparison against
+    /// nothing.
+    pub fn step_evidence(
+        &self,
+        job_id: &JobId,
+    ) -> Result<Vec<(StepId, StepEvidence)>, LoadJobError> {
+        self.collect(
+            "SELECT step_id, evidence_type, claimed, shown_by, not_claimed
+             FROM job_step_evidence WHERE job_id = ?1 ORDER BY step_id",
+            job_id,
+            "reading step evidence",
+            |row| {
+                let kind = string(row, "evidence_type")?;
+                Ok((
+                    StepId::new(string(row, "step_id")?),
+                    StepEvidence {
+                        evidence_type: enum_value(
+                            EvidenceType::from_wire,
+                            "job_step_evidence",
+                            "evidence_type",
+                            &kind,
+                        )?,
+                        claimed: string(row, "claimed")?,
+                        shown_by: string(row, "shown_by")?,
+                        not_claimed: string(row, "not_claimed")?,
+                    },
+                ))
+            },
+        )
+        .map_err(LoadJobError::Unreadable)
     }
 
     fn gate_manifests(&self, job_id: &JobId) -> Result<Vec<GateManifest>, RowError> {

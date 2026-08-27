@@ -26,9 +26,10 @@
 use core_model::{
     AcceptanceCriterion, Actor, AdvanceGate, ContextSource, CriteriaOwed, CriterionId,
     CriterionSource, DeclarePlanAt, DependencyDirection, DependencyEdge, EscalationTrigger,
-    EvidenceScope, EvidenceType, FrozenWorkflow, JobId, JudgeCheck, JudgeCriterion, ModelName,
-    PilotReason, RepoPath, ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome,
-    StepId, Timestamp, TransitionReason, Ulid, WorkflowId, DIFF_NONEMPTY, MANIFEST_CHECK,
+    EvidenceRef, EvidenceScope, EvidenceType, FrozenWorkflow, GamingCheck, GamingPattern, JobId,
+    JudgeCheck, JudgeCriterion, ModelName, PilotReason, RepoPath, ResolvedCheck, ResolvedStep,
+    ScopeRevision, ScopeRevisionOutcome, StepId, Timestamp, TransitionReason, Ulid, WorkflowId,
+    DIFF_NONEMPTY, MANIFEST_CHECK,
 };
 use serde_json::{json, Map, Value};
 
@@ -305,6 +306,11 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
                     "criterion_id": criterion.criterion_id.as_str(),
                     "question": criterion.question,
                 })).collect::<Vec<Value>>(),
+                "gaming_check": judge.gaming().map(|gaming| json!({
+                    "baseline_ref": gaming.baseline().map(EvidenceRef::as_wire),
+                    "flag_if": gaming.flag_if().iter()
+                        .map(|pattern| pattern.as_wire()).collect::<Vec<&str>>(),
+                })),
             })).collect::<Vec<Value>>(),
             "checks": step.checks().iter().map(|check| match check {
                 ResolvedCheck::ManifestCheck { name, run, expect_exit_code } => json!({
@@ -434,7 +440,39 @@ fn read_judge(judge: &Map<String, Value>) -> Result<JudgeCheck, Malformed> {
             question: text(criterion, "question")?,
         });
     }
-    Ok(JudgeCheck::declared(model, panel_size, criteria))
+    Ok(JudgeCheck::declared(
+        model,
+        panel_size,
+        criteria,
+        read_gaming_check(judge)?,
+    ))
+}
+
+/// The second look, where the step declared one. **Absent reads as none**, for
+/// the reason `judge_checks` itself does: every workflow frozen before this
+/// existed declared no gaming check.
+fn read_gaming_check(judge: &Map<String, Value>) -> Result<Option<GamingCheck>, Malformed> {
+    let Some(Value::Object(gaming)) = judge.get("gaming_check") else {
+        return Ok(None);
+    };
+    let baseline = match gaming.get("baseline_ref") {
+        Some(Value::String(named)) => Some(
+            EvidenceRef::parse(named)
+                .ok_or_else(|| format!("`gaming_check.baseline_ref` holds `{named}`"))?,
+        ),
+        _ => None,
+    };
+    let mut flag_if = Vec::new();
+    for pattern in array(field(gaming, "flag_if")?)? {
+        let named = pattern
+            .as_str()
+            .ok_or_else(|| "`gaming_check.flag_if` holds something that is not a pattern")?;
+        flag_if.push(
+            GamingPattern::from_wire(named)
+                .ok_or_else(|| format!("`gaming_check.flag_if` holds `{named}`"))?,
+        );
+    }
+    Ok(Some(GamingCheck::declared(baseline, flag_if)))
 }
 
 fn read_check(entry: &Map<String, Value>) -> Result<ResolvedCheck, Malformed> {

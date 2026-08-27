@@ -41,6 +41,7 @@ fn two_steps_edited() -> config::ResolvedWorkflow {
             }],
             judged_on: &[],
             scope: None,
+            gaming: None,
         },
         Sketch {
             id: "summarise",
@@ -49,6 +50,7 @@ fn two_steps_edited() -> config::ResolvedWorkflow {
             gates: &[],
             judged_on: &[],
             scope: None,
+            gaming: None,
         },
     ])
 }
@@ -145,6 +147,7 @@ fn gated_on(label: &str, run: &str) -> config::ResolvedWorkflow {
         }],
         judged_on: &[],
         scope: None,
+        gaming: None,
     }])
 }
 
@@ -285,6 +288,7 @@ async fn a_failed_checks_output_is_readable_from_its_file_afterwards() {
             }],
             judged_on: &[],
             scope: None,
+            gaming: None,
         }]),
         1,
     );
@@ -344,6 +348,7 @@ async fn a_check_that_passed_keeps_its_output_and_a_built_in_has_none() {
                 ],
                 judged_on: &[],
                 scope: None,
+                gaming: None,
             },
             Sketch {
                 id: "summarise",
@@ -352,6 +357,7 @@ async fn a_check_that_passed_keeps_its_output_and_a_built_in_has_none() {
                 gates: &[],
                 judged_on: &[],
                 scope: None,
+                gaming: None,
             },
         ]),
         1,

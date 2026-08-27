@@ -31,11 +31,11 @@ use config::{EvidenceType, ResolvedWorkflow};
 use core_model::{
     AcceptanceCriterion, Actor, CriterionId, CriterionSource, DeclaredPaths, Facts,
     IllegalStepTransition, IllegalTransition, Job, JobEvent, JobId, JobStatus, JobStep, ManifestId,
-    ModelName, NewJob, StepEvent, StepId, StepSeed, StepState, StepTarget, Target, Timestamp,
-    Title, TopLevelOrigin, TransitionReason, Ulid, Urgency,
+    ModelName, NewJob, StepEvent, StepEvidence, StepId, StepSeed, StepState, StepTarget, Target,
+    Timestamp, Title, TopLevelOrigin, TransitionReason, Ulid, Urgency,
 };
 use fleet::{apply, rule_on, AtStep, CheckBudget, Clock, JudgeBudget, Judging, Mint, Ruling};
-use testkit::{resolved, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch};
+use testkit::{resolved, FakeJudge, FakeVcs, FakeWorkProduct, Gaming, Gate, Sketch};
 use verification::{Claimed, NotClaimed, ShownBy, Submission};
 
 /// Absolute, because `WorktreeSpec` refuses a relative root — a derived path
@@ -104,6 +104,7 @@ pub fn bug_workflow_as_far_as_m1_expresses_it() -> ResolvedWorkflow {
             gates: &[],
             judged_on: &[],
             scope: None,
+            gaming: None,
         },
         Sketch {
             id: "fix",
@@ -112,6 +113,7 @@ pub fn bug_workflow_as_far_as_m1_expresses_it() -> ResolvedWorkflow {
             gates: &[Gate::DiffNonempty],
             judged_on: &[],
             scope: None,
+            gaming: None,
         },
     ])
 }
@@ -128,6 +130,7 @@ pub fn bug_workflow_with_the_fix_judged() -> ResolvedWorkflow {
             gates: &[],
             judged_on: &[],
             scope: None,
+            gaming: None,
         },
         Sketch {
             id: "fix",
@@ -136,9 +139,47 @@ pub fn bug_workflow_with_the_fix_judged() -> ResolvedWorkflow {
             gates: &[Gate::DiffNonempty],
             judged_on: &[("c1", "Does the fix address the cause the note names?")],
             scope: None,
+            gaming: None,
         },
     ])
 }
+
+/// The same workflow again, with the fix step watching for evidence that games
+/// its Check rather than satisfying it. `check_config_edited` is the pattern
+/// the diff answers, so this run reaches no model at all.
+pub fn bug_workflow_watching_for_gaming() -> ResolvedWorkflow {
+    resolved(&[
+        Sketch {
+            id: "root_cause",
+            label: "Root cause",
+            evidence_type: Some("facts_note"),
+            gates: &[],
+            judged_on: &[],
+            scope: None,
+            gaming: None,
+        },
+        Sketch {
+            id: "fix",
+            label: "Fix",
+            evidence_type: Some("diff"),
+            gates: &[Gate::DiffNonempty],
+            judged_on: &[],
+            scope: None,
+            gaming: Some(Gaming {
+                baseline: Some("root_cause.evidence"),
+                flag_if: &["check_config_edited", "test_deleted"],
+            }),
+        },
+    ])
+}
+
+/// A diff that honours the frozen `run:` string exactly and narrows what it
+/// runs. **The mechanical tier passes this by design.**
+pub const A_NARROWED_GATE: &str = "diff --git a/jest.config.js b/jest.config.js\n\
+     --- a/jest.config.js\n\
+     +++ b/jest.config.js\n\
+     -  testPathIgnorePatterns: [\"/node_modules/\"],\n\
+     +  testPathIgnorePatterns: [\"/node_modules/\", \"/tests/edge-cases/\"],\n";
 
 /// The yardstick, frozen at creation and never editable afterwards.
 pub fn criteria() -> Vec<AcceptanceCriterion> {
@@ -206,6 +247,11 @@ pub struct Bench {
     /// a test assert that a Job arrived somewhere rather than was put there.
     pub moves: RefCell<Vec<JobEvent>>,
     step_moves: RefCell<Vec<StepEvent>>,
+    /// What each step has submitted, which is what `store` holds for a real
+    /// Job. A later step's gaming check reads it as its baseline, so a bench
+    /// that dropped it would run every gaming check baseline-less and prove
+    /// less than it looks like it does.
+    recorded: RefCell<Vec<(StepId, StepEvidence)>>,
 }
 
 impl Bench {
@@ -238,6 +284,7 @@ impl Bench {
             },
             moves: RefCell::new(Vec::new()),
             step_moves: RefCell::new(Vec::new()),
+            recorded: RefCell::new(Vec::new()),
         }
     }
 
@@ -339,15 +386,23 @@ impl Bench {
     pub async fn gate(&self, run: &Run, step: &StepId, submitted: &Submission) -> Ruling {
         let at = AtStep::named(self.workflow.frozen(), step, &run.worktree)
             .expect("a step of the workflow");
-        rule_on(
+        let recorded = self.recorded.borrow().clone();
+        let ruling = rule_on(
             at,
             submitted,
             run.declared.as_ref(),
+            &recorded,
             &self.work,
             self.budget,
             &self.judging,
         )
-        .await
+        .await;
+        // What `fleet::dispatch` does with the store, done with a list: the
+        // evidence the gate ruled on is written down before anything moves.
+        let mut held = self.recorded.borrow_mut();
+        held.retain(|(id, _)| id != step);
+        held.push((step.clone(), submitted.recorded()));
+        ruling
     }
 
     /// The moves a ruling implies, in the one order the two machines admit.

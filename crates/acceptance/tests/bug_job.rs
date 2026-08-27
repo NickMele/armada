@@ -59,7 +59,8 @@ use fleet::{aftermath, Aftermath, Ending, Left, Ruling};
 use testkit::{FakeJudge, FakeWorkProduct};
 
 use bench::{
-    a_fix_diff, a_root_cause_note, bug_workflow_with_the_fix_judged, states, Bench, REPO_ROOT,
+    a_fix_diff, a_root_cause_note, bug_workflow_watching_for_gaming,
+    bug_workflow_with_the_fix_judged, states, Bench, A_NARROWED_GATE, REPO_ROOT,
 };
 
 // ---------------------------------------------------------------------------
@@ -381,6 +382,70 @@ async fn a_judge_that_declines_to_refuse_leaves_the_mechanical_pass_standing() {
     bench.settled(&mut run, &bench.step(1), &ruling);
 
     assert_eq!(run.job.status(), JobStatus::CompletedSuccess);
+}
+
+/// Work that satisfies its Check by weakening it is detected rather than
+/// passed, and the Job says so in different words from a failure.
+///
+/// The diff edits the configuration a Check's command resolves through: the
+/// frozen `run:` string is honoured exactly and the gate it resolves to is
+/// narrower afterwards. Every Check passes — that is the condition, not an
+/// accident of the fixture — and the Job stops anyway.
+#[tokio::test]
+async fn evidence_that_narrows_its_own_check_is_caught_rather_than_advanced() {
+    let bench = Bench::judged_by(
+        FakeWorkProduct::changed(&["jest.config.js"]).showing(A_NARROWED_GATE),
+        bug_workflow_watching_for_gaming(),
+        // A judge that fails every call. Nothing here may reach it: the pattern
+        // this run declares is one the diff answers, and a call made would come
+        // back as `CouldNotDecide` rather than as a finding.
+        FakeJudge::that_fails("a model no diff-answered pattern may reach"),
+    );
+    let mut run = bench.created("silence the rollover tests instead of fixing the window");
+    bench.approved_and_dispatched(&mut run);
+
+    let ruling = bench.gate(&run, &bench.step(0), &a_root_cause_note()).await;
+    bench.settled(&mut run, &bench.step(0), &ruling);
+
+    let ruling = bench.gate(&run, &bench.step(1), &a_fix_diff()).await;
+    let Ruling::Suspect { ref flagged, .. } = ruling else {
+        panic!("the gaming check let it through: {ruling:?}");
+    };
+    assert!(
+        ruling.checks().iter().all(|check| check.outcome.passed()),
+        "the mechanical tier is what this is being caught past"
+    );
+    assert!(
+        ruling.judged().is_empty(),
+        "no model was asked about a pattern the diff answers"
+    );
+    assert!(
+        flagged.cited()[0].cited.contains("jest.config.js"),
+        "the flag names what a person is being asked to look at: {:?}",
+        flagged.cited()[0]
+    );
+    bench.settled(&mut run, &bench.step(1), &ruling);
+
+    // **`evidence_suspect`, not `gate_failure`.** A Judge refusing a criterion
+    // has accused nobody and the Drone can retry against the citation; this
+    // says the evidence itself is not to be trusted, and resubmitting under
+    // the same instructions would reproduce it.
+    assert_eq!(run.job.status(), JobStatus::Escalated);
+    assert!(!run.job.status().is_terminal());
+    assert_eq!(
+        bench.reasons().last(),
+        Some(&TransitionReason::Escalation(
+            EscalationTrigger::EvidenceSuspect
+        ))
+    );
+    assert_eq!(
+        states(&run.job),
+        [
+            ("root_cause", StepState::Advanced),
+            ("fix", StepState::Running)
+        ],
+        "the flagged step never advanced"
+    );
 }
 
 /// **A verification that could not run is not a refusal**, and it is not a pass

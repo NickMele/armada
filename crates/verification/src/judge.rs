@@ -141,7 +141,7 @@ impl Brief {
 ///
 /// Leading prose is tolerated and a blank value is not: a model that wrote
 /// `expected:` and stopped has cited nothing.
-fn field(answer: &str, name: &str) -> Option<String> {
+pub(crate) fn field(answer: &str, name: &str) -> Option<String> {
     answer.lines().find_map(|line| {
         let rest = line.trim().strip_prefix(name)?.strip_prefix(':')?.trim();
         (!rest.is_empty()).then(|| rest.to_string())
@@ -158,6 +158,10 @@ pub enum Unreadable {
     NoVerdict,
     /// A refusal with no `expected`, `produced` or `consequence`.
     RefusalCitesNothing,
+    /// No `flag:` line on a gaming answer, or one saying neither yes nor no.
+    NoFlag,
+    /// A gaming answer that flags and cites nothing.
+    FlagCitesNothing,
 }
 
 impl core::fmt::Display for Unreadable {
@@ -169,6 +173,13 @@ impl core::fmt::Display for Unreadable {
             Unreadable::RefusalCitesNothing => f.write_str(
                 "the answer refuses and cites nothing, and an uncited refusal is \
                  unactionable for the Drone and for the person",
+            ),
+            Unreadable::NoFlag => {
+                f.write_str("the answer says neither yes nor no, so nothing was checked")
+            }
+            Unreadable::FlagCitesNothing => f.write_str(
+                "the answer flags the evidence and cites nothing, which is not \
+                 something a person can look at",
             ),
         }
     }

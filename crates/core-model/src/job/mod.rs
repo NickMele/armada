@@ -40,6 +40,7 @@ mod drone;
 mod escalation;
 mod event;
 mod fields;
+mod gaming;
 mod ids;
 mod judge;
 mod record;
@@ -63,6 +64,7 @@ pub use fields::{
     NotRunReason, Origin, ScopeRevision, ScopeRevisionOutcome, Subject, TopLevelOrigin, Urgency,
     WriteTargets,
 };
+pub use gaming::{DecidedBy, EvidenceRef, GamingCheck, GamingFlag, GamingPattern};
 pub use ids::{
     BlankModel, BlankTitle, CriterionId, DroneId, JobId, ManifestId, ModelName, RepoPath, StepId,
     Title, WorkflowId,
@@ -71,7 +73,7 @@ pub use judge::{JudgeCheck, JudgeCriterion, JudgeVerdict, Judgment};
 pub use record::{Job, NewJob, StepTransitioned, Transitioned};
 pub use scope::{under, ContextSource, DeclarePlanAt, DeclaredPaths, EvidenceScope};
 pub use status::{JobStatus, StepState};
-pub use step::{JobStep, StepSeed, StepVerdict};
+pub use step::{JobStep, StepEvidence, StepSeed, StepVerdict};
 pub use step_machine::{
     IllegalStepTransition, StepEdge, StepTarget, ADVANCING_STATUSES, STEP_EDGES,
 };

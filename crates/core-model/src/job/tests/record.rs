@@ -276,26 +276,32 @@ fn silent_is_carried_as_a_sub_kind_rather_than_resolved() {
     assert!(EscalationTrigger::Stalled.sub_kind_of().is_none());
 }
 
+/// `last_verdict` admits step-level triggers only, so a trigger with no level
+/// is one nothing can check against that rule. There is none.
 #[test]
-fn five_triggers_carry_no_level_and_that_is_the_registrys_gap() {
-    let undecided: Vec<&str> = EscalationTrigger::ALL
+fn every_trigger_says_whether_it_is_about_a_step_or_about_the_job() {
+    let step: Vec<&str> = EscalationTrigger::ALL
         .iter()
-        .filter(|t| t.level().is_none())
+        .filter(|t| t.level() == TriggerLevel::Step)
         .map(|t| t.as_wire())
         .collect();
     assert_eq!(
-        undecided,
+        step,
         vec![
+            "blocked_by_policy",
+            "check_timeout",
             "evidence_suspect",
-            "fan_out",
-            "silent",
-            "stalled",
+            "evidence_too_large",
+            "gate_failure",
+            "loop_cap",
             "thrashing"
         ]
     );
+    assert_eq!(EscalationTrigger::Interrupted.level(), TriggerLevel::Job);
+    // A sub-kind reads its parent's rather than carrying a second answer.
     assert_eq!(
-        EscalationTrigger::Interrupted.level(),
-        Some(TriggerLevel::Job)
+        EscalationTrigger::Silent.level(),
+        EscalationTrigger::Stalled.level()
     );
 }
 
@@ -310,4 +316,39 @@ fn an_attestation_debt_is_never_empty() {
     let owed = CriteriaOwed::one(CriterionId::new("c1"));
     assert_eq!(owed.len(), 1);
     assert!(!owed.is_empty());
+}
+
+/// Every `flag_if` value reads back as the one it was written as. A pattern
+/// whose wire value did not round-trip would come off a frozen workflow as a
+/// pattern nothing looks for, which reads exactly like a step that never asked.
+#[test]
+fn every_gaming_pattern_survives_the_wire() {
+    for pattern in GamingPattern::ALL {
+        assert_eq!(
+            GamingPattern::from_wire(pattern.as_wire()),
+            Some(*pattern),
+            "{}",
+            pattern.as_wire()
+        );
+    }
+    assert!(GamingPattern::from_wire("looks_dodgy").is_none());
+}
+
+/// A gaming check with no pattern is a check that does not fire, which is the
+/// same representation an absent one has — one way to be off, as everywhere
+/// else in this file.
+#[test]
+fn a_gaming_check_naming_no_pattern_does_not_fire_and_costs_nothing() {
+    let silent = GamingCheck::declared(EvidenceRef::parse("scope.evidence"), Vec::new());
+    assert!(!silent.fires());
+    assert_eq!(silent.calls(), 0);
+
+    // Two patterns, one call: the diff answers `test_deleted` for free.
+    let watching = GamingCheck::declared(
+        None,
+        vec![GamingPattern::TestDeleted, GamingPattern::TautologicalTest],
+    );
+    assert!(watching.fires());
+    assert_eq!(watching.calls(), 1);
+    assert!(watching.baseline().is_none(), "a first step has none");
 }

@@ -24,10 +24,11 @@ mod tmp;
 use core_model::{
     AcceptanceCriterion, Actor, AdvanceGate, Attachment, ContextSource, CriterionId,
     CriterionSource, DeclarePlanAt, DependencyDirection, DependencyEdge, DispatchOrigin,
-    EvidenceScope, EvidenceType, Facts, FrozenWorkflow, GateManifest, GateOutcome, Job, JobId,
-    JudgeCheck, JudgeCriterion, ManifestId, ModelName, NewJob, NotRunReason, RepoPath,
-    ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject,
-    Timestamp, Title, TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
+    EvidenceRef, EvidenceScope, EvidenceType, Facts, FrozenWorkflow, GamingCheck, GamingPattern,
+    GateManifest, GateOutcome, Job, JobId, JudgeCheck, JudgeCriterion, ManifestId, ModelName,
+    NewJob, NotRunReason, RepoPath, ResolvedCheck, ResolvedStep, ScopeRevision,
+    ScopeRevisionOutcome, StepId, StepSeed, Subject, Timestamp, Title, TopLevelOrigin, Ulid,
+    Urgency, WorkflowId, WriteTargets,
 };
 
 use crate::Store;
@@ -99,6 +100,13 @@ pub fn workflow() -> FrozenWorkflow {
                         criterion_id: CriterionId::new("c1"),
                         question: "Does the fix address the cause the note names?".to_string(),
                     }],
+                    Some(GamingCheck::declared(
+                        EvidenceRef::parse("root_cause.evidence"),
+                        vec![
+                            GamingPattern::AssertionWeakened,
+                            GamingPattern::CheckConfigEdited,
+                        ],
+                    )),
                 )],
                 // One step carries a scope and one carries none, so a round
                 // trip proves both the value and its absence survive the

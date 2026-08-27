@@ -67,6 +67,7 @@
 //! and a guess that disagrees would refuse work that was actually done.
 
 use config::EvidenceType;
+use core_model::StepEvidence;
 
 /// What the work now does, as an observable.
 ///
@@ -193,6 +194,22 @@ impl Submission {
     /// behind, which is an answer.
     pub fn not_claimed(&self) -> &str {
         &self.not_claimed
+    }
+
+    /// The row `store` writes, which is this record and nothing added.
+    ///
+    /// The same shape [`Ran::recorded`](crate::Ran::recorded) has, and for the
+    /// same reason: the tool-call type cannot cross into `store`, so the record
+    /// half lives in `core-model` and this is the one place the two meet.
+    /// **`source` is absent on both sides**, so no path through the store can
+    /// mark a Drone's evidence human-attested.
+    pub fn recorded(&self) -> StepEvidence {
+        StepEvidence {
+            evidence_type: self.evidence_type,
+            claimed: self.claimed.clone(),
+            shown_by: self.shown_by.clone(),
+            not_claimed: self.not_claimed.clone(),
+        }
     }
 }
 

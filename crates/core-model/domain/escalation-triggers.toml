@@ -20,7 +20,9 @@
 #
 # Fields:
 #   kind            - Trigger | Sub-kind
-#   level           - Step | Job. Empty where the source left it undecided
+#   level           - Step | Job. Empty on a sub-kind, which takes its parent's.
+#                     `last_verdict` admits step-level triggers only, so a
+#                     step-level row is one that can name which step stopped
 #   meaning         - the condition, in one sentence
 #   job_transitions - the edge this trigger fires. A "from -> to" pair whose
 #                     ends are keys in job-statuses.toml
@@ -65,11 +67,13 @@ Leaving the Job queued under a new readiness reason fails differently: CPU headr
 
 [triggers.evidence_suspect]
 kind = "Trigger"
+level = "Step"
 meaning = "Mechanically passed, semantically flagged as likely gamed."
 in_code = "Not yet"
-open_questions = ["Are fan_out, stalled, thrashing and evidence_suspect step-level or Job-level escalations?"]
 notes = """
 Distinct from `gate_failure`: resubmission under the same instructions would likely reproduce the same gaming, so the retry flow is the wrong destination and a person needs to look. Raised by `judge_check.gaming_check`, optionally against an earlier step's evidence named by `baseline_ref`; Judge owns the routing.
+
+Step-level, because evidence is submitted per step: evidence suspected of gaming is suspect on the step that submitted it, and that step is the one whose gate was gutted. So it may appear in `last_verdict`, which admits step-level triggers only — that is what lets a gaming finding say which step's evidence is not to be trusted.
 
 Renders as "evidence disputed," with Judge in the verification-source field rather than the headline.
 """
@@ -89,10 +93,12 @@ Not fully closed: the cap is authored per step by someone who cannot know how wi
 
 [triggers.fan_out]
 kind = "Trigger"
+level = "Job"
 meaning = "A Job tripped the sub-dispatch cap or the sub-dispatch rate threshold."
 in_code = "Not yet"
-open_questions = ["Are fan_out, stalled, thrashing and evidence_suspect step-level or Job-level escalations?"]
-notes = "Volume itself is the signal, not any single dispatch: it escalates rather than gating each sub-dispatch, and sub-dispatches inside an already-approved Job need no separate approval. It counts Jobs only — a Judge call is not a sub-dispatch, since it has no worktree, no rail, and no Job Board row."
+notes = "Volume itself is the signal, not any single dispatch: it escalates rather than gating each sub-dispatch, and sub-dispatches inside an already-approved Job need no separate approval. It counts Jobs only — a Judge call is not a sub-dispatch, since it has no worktree, no rail, and no Job Board row.
+
+Job-level: fan-out is about the Job's shape rather than about whichever step the dispatches happened under, so there is no step for it to attach to."
 why = "Counting Judge calls would make \"2 of 5\" meaningless, since one step at `panel_size: 3` would burn three of five on its own; `spawned_jobs` and `judge_calls` are counted separately for that reason. Judge owns the argument."
 
 [triggers.gate_failure]
@@ -167,20 +173,24 @@ No `fleet.verdict`, no `fleet.report`, no question raised — the Drone ran to c
 
 [triggers.stalled]
 kind = "Trigger"
+level = "Job"
 meaning = "Fleet has no signal despite the Job having been active — the Drone process died mid-work, or the relay never fired."
 in_code = "Not yet"
-open_questions = ["Are fan_out, stalled, thrashing and evidence_suspect step-level or Job-level escalations?"]
-notes = "Detected by the heartbeat/liveness timer, which runs only while the Job is `running` — Drone owns that decision and the reasoning behind it. The response is a poke, then escalation once `poke_limit` is spent. Carries a `silent` sub-kind, which pauses the Job identically and differs only in what the payload recommends."
+notes = "Detected by the heartbeat/liveness timer, which runs only while the Job is `running` — Drone owns that decision and the reasoning behind it. The response is a poke, then escalation once `poke_limit` is spent. Carries a `silent` sub-kind, which pauses the Job identically and differs only in what the payload recommends.
+
+Job-level: a Drone that stopped producing anything at all is a fact about the Drone, not about the step it happened to be on. `silent` takes its parent's level, since a sub-kind pauses the Job exactly as its parent does."
 
 [triggers.thrashing]
 kind = "Trigger"
+level = "Step"
 meaning = "Active but not converging, and the forced report also failed."
 in_code = "Not yet"
-open_questions = ["Are fan_out, stalled, thrashing and evidence_suspect step-level or Job-level escalations?"]
 notes = """
 Detected mechanically — turn count against the step norm, wall-clock against an expected ceiling, and where `declare_plan_at: step_start` is set, a file-plan-versus-live-diff check. No model judgement is needed to *detect* it.
 
 A mid-step Judge pass runs only once a mechanical trigger fires, never on a schedule. It judges the work product so far, never the Drone's turns. If it finds thrashing, the Drone is force-interrupted with a "stop, report current state now" directive; this trigger fires when that also fails.
+
+Step-level: it is measured against a step's turn count and a step's wall-clock, and the mid-step Judge look judges that step's work product.
 
 Judge owns the routing.
 """

@@ -19,6 +19,7 @@
 //! over other rows, and a column would be a denormalisation needing its own
 //! source-wins rule.
 
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::envelope::Timestamp;
@@ -26,6 +27,7 @@ use crate::job::escalation::EscalationTrigger;
 use crate::job::ids::{JobId, StepId};
 use crate::job::status::StepState;
 use crate::job::step_machine::StepTarget;
+use crate::job::workflow::EvidenceType;
 
 /// The last verdict against a step.
 ///
@@ -182,4 +184,27 @@ pub(crate) fn rows_at_creation(
         .into_iter()
         .map(|seed| JobStep::written_at_creation(job_id.clone(), seed, at.clone()))
         .collect()
+}
+
+/// One step's evidence, as `store` holds it.
+///
+/// The record half of `verification`'s `Submission`, the way [`StepCheck`] is
+/// the record half of a Check's run: the tool-call type cannot reach `store`,
+/// because `config` sits between them and depends on it. The field names are
+/// the same three the Agent Copy Contract defines, so the two are one
+/// vocabulary rather than two.
+///
+/// **There is no `source` field here either.** A Drone marking its own evidence
+/// human-attested has to be impossible on both sides of the write.
+///
+/// [`StepCheck`]: crate::StepCheck
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StepEvidence {
+    pub evidence_type: EvidenceType,
+    /// What the work now does, as an observable.
+    pub claimed: String,
+    /// The artifact demonstrating it.
+    pub shown_by: String,
+    /// Everything the claim does not assert. Legitimately empty.
+    pub not_claimed: String,
 }

@@ -23,6 +23,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::job::gaming::GamingCheck;
 use crate::job::ids::{CriterionId, ModelName};
 
 /// One criterion, as the Judge saw it.
@@ -84,6 +85,10 @@ pub struct JudgeCheck {
     model: Option<ModelName>,
     panel_size: u32,
     criteria: Vec<JudgeCriterion>,
+    /// The second look, which asks whether the evidence was gamed rather than
+    /// whether it satisfies the step. It does not gate — see
+    /// [`GamingCheck`](crate::GamingCheck).
+    gaming: Option<GamingCheck>,
 }
 
 impl JudgeCheck {
@@ -94,11 +99,13 @@ impl JudgeCheck {
         model: Option<ModelName>,
         panel_size: u32,
         criteria: Vec<JudgeCriterion>,
+        gaming: Option<GamingCheck>,
     ) -> JudgeCheck {
         JudgeCheck {
             model,
             panel_size: panel_size.max(1),
             criteria,
+            gaming,
         }
     }
 
@@ -116,9 +123,21 @@ impl JudgeCheck {
         &self.criteria
     }
 
+    /// What this check compares against a baseline, where it declares one.
+    /// **`None` on most steps**, and on every step before this existed.
+    pub fn gaming(&self) -> Option<&GamingCheck> {
+        self.gaming.as_ref()
+    }
+
     /// Whether this step fires the Judge at all. **The cold-by-default
     /// switch**: false on a step that declares no criterion, which is most of
     /// them.
+    ///
+    /// **The gaming check is deliberately not counted here.** This answers
+    /// whether the semantic tier gates advancement, which is what
+    /// `advance_gate: auto_if_judge_passes` is checked against; a gaming check
+    /// gates nothing, and folding it in would make a step declaring only a
+    /// second look read as a step whose gate the Judge holds.
     pub fn fires(&self) -> bool {
         !self.criteria.is_empty()
     }
@@ -128,6 +147,7 @@ impl JudgeCheck {
     /// gate a person is waiting behind.
     pub fn calls(&self) -> u32 {
         self.panel_size * self.criteria.len() as u32
+            + self.gaming.as_ref().map_or(0, GamingCheck::calls)
     }
 }
 

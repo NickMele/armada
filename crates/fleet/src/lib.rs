@@ -78,6 +78,7 @@
 //! [`Fleet::turn`]: crate::Fleet::turn
 
 pub mod adrift;
+pub mod at_step;
 pub mod briefing;
 mod check_output;
 pub mod clock;
@@ -109,6 +110,7 @@ pub mod working;
 mod tests;
 
 pub use adrift::{Adrift, NotDeclared, NotSubmitted};
+pub use at_step::AtStep;
 pub use clock::{Clock, SystemClock};
 pub use daemon::{Fittings, Fleet, Host, Reconciled, Turned};
 pub use delivery::Delivered;
@@ -117,7 +119,7 @@ pub use drone::{
     aftermath, environment, Aftermath, DroneNotStarted, Ending, HostPaths, Left, Started,
 };
 pub use evidence::{Call, EvidenceInbox, EvidenceTool, Landed, Recorded};
-pub use gate::{apply, rule_on, AtStep, CheckBudget, CheckOutput, Ruling};
+pub use gate::{apply, rule_on, CheckBudget, CheckOutput, Ruling};
 pub use judging::{CallFailed, JudgeBudget, Judging};
 pub use mint::{Mint, UlidMint};
 pub use process::{holder_of, Holder, ProbeFailed, StartedAt};

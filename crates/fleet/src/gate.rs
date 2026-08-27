@@ -34,17 +34,18 @@ use std::error::Error;
 use std::path::Path;
 use std::time::Duration;
 
-use adapter_traits::{WorkProduct, Worktree};
+use adapter_traits::WorkProduct;
 use checks_runner::Output;
 use core_model::{
-    Actor, DeclaredPaths, EscalationTrigger, FrozenWorkflow, IllegalTransition, Job, Judgment,
-    ResolvedCheck, ResolvedStep, StepCheck, StepId, Target, Timestamp, Transitioned,
+    Actor, DeclaredPaths, EscalationTrigger, IllegalTransition, Job, Judgment, ResolvedCheck,
+    StepCheck, StepEvidence, StepId, Target, Timestamp, Transitioned,
 };
 use verification::{
-    decide, Accepted, CheckFailed, InScope, NotWhatTheStepAsked, Observed, OutcomeTurn, Ran,
-    Refusals, Submission, Verdict,
+    decide, Accepted, Baseline, CheckFailed, Flagged, InScope, NotWhatTheStepAsked, Observed,
+    OutcomeTurn, Ran, Refusals, Submission, Verdict,
 };
 
+use crate::at_step::AtStep;
 use crate::judging::{self, Judging};
 
 /// How long a Check may run before it is a failure.
@@ -63,68 +64,6 @@ impl CheckBudget {
 
     pub fn duration(&self) -> Duration {
         self.0
-    }
-}
-
-/// Where a Job is: which step of its frozen workflow, and the worktree the work
-/// is in.
-///
-/// **There is no constructor taking a step index.** A position comes from a
-/// step id the workflow actually declares, so a gate cannot be pointed at a
-/// step that is not in the definition the Job froze.
-#[derive(Clone, Copy, Debug)]
-pub struct AtStep<'a> {
-    workflow: &'a FrozenWorkflow,
-    at: usize,
-    worktree: &'a Worktree,
-}
-
-impl<'a> AtStep<'a> {
-    /// The first step, where a Job starts. `None` for a workflow with no steps.
-    pub fn first(workflow: &'a FrozenWorkflow, worktree: &'a Worktree) -> Option<AtStep<'a>> {
-        (!workflow.steps().is_empty()).then_some(AtStep {
-            workflow,
-            at: 0,
-            worktree,
-        })
-    }
-
-    /// A named step. `None` where the workflow declares no step by that id.
-    pub fn named(
-        workflow: &'a FrozenWorkflow,
-        step: &StepId,
-        worktree: &'a Worktree,
-    ) -> Option<AtStep<'a>> {
-        let at = workflow.steps().iter().position(|s| s.id() == step)?;
-        Some(AtStep {
-            workflow,
-            at,
-            worktree,
-        })
-    }
-
-    /// The step being gated.
-    pub fn step(&self) -> &'a ResolvedStep {
-        &self.workflow.steps()[self.at]
-    }
-
-    /// The step after it, or `None` at the last one.
-    pub fn next(&self) -> Option<&'a ResolvedStep> {
-        self.workflow.steps().get(self.at + 1)
-    }
-
-    /// Where the Job is once this step has advanced. `None` at the last step,
-    /// which is the workflow being finished rather than a position.
-    pub fn advanced(&self) -> Option<AtStep<'a>> {
-        self.next().map(|_| AtStep {
-            workflow: self.workflow,
-            at: self.at + 1,
-            worktree: self.worktree,
-        })
-    }
-
-    pub fn worktree(&self) -> &'a Worktree {
-        self.worktree
     }
 }
 
@@ -194,6 +133,21 @@ pub enum Ruling {
         output: Vec<CheckOutput>,
         judged: Vec<Judgment>,
     },
+    /// Every Check passed, the Judge did not refuse, and the gaming check
+    /// flagged the evidence. **The Job escalates as `evidence_suspect`**, which
+    /// is a different claim from a refusal: the work satisfies the step as
+    /// written, and the way it satisfies it is not to be trusted.
+    ///
+    /// It is not a gate failure and does not route to the retry flow, because
+    /// resubmission under the same instructions would reproduce the same
+    /// gaming.
+    Suspect {
+        /// Never empty.
+        flagged: Flagged,
+        checks: Vec<StepCheck>,
+        output: Vec<CheckOutput>,
+        judged: Vec<Judgment>,
+    },
     /// The submission was not the kind of work product the step declared.
     /// **Nothing ran and nothing moved** — the Checks are not spent on it, and
     /// the Drone is asked again.
@@ -244,8 +198,19 @@ impl Ruling {
             | Ruling::Finished { checks, .. }
             | Ruling::Failed { checks, .. }
             | Ruling::Refused { checks, .. }
+            | Ruling::Suspect { checks, .. }
             | Ruling::CouldNotDecide { checks, .. } => checks,
             Ruling::NotWhatTheStepAsked(_) => &[],
+        }
+    }
+
+    /// What the gaming check flagged. `None` on every ruling but one — the
+    /// evidence is suspect or it is not, and there is no ruling that is both
+    /// suspect and something else.
+    pub fn flagged(&self) -> Option<&Flagged> {
+        match self {
+            Ruling::Suspect { flagged, .. } => Some(flagged),
+            _ => None,
         }
     }
 
@@ -256,7 +221,8 @@ impl Ruling {
         match self {
             Ruling::Advanced { judged, .. }
             | Ruling::Finished { judged, .. }
-            | Ruling::Refused { judged, .. } => judged,
+            | Ruling::Refused { judged, .. }
+            | Ruling::Suspect { judged, .. } => judged,
             Ruling::Failed { .. }
             | Ruling::NotWhatTheStepAsked(_)
             | Ruling::CouldNotDecide { .. } => &[],
@@ -275,6 +241,7 @@ impl Ruling {
             | Ruling::Finished { output, .. }
             | Ruling::Failed { output, .. }
             | Ruling::Refused { output, .. }
+            | Ruling::Suspect { output, .. }
             | Ruling::CouldNotDecide { output, .. } => output,
             Ruling::NotWhatTheStepAsked(_) => &[],
         }
@@ -292,7 +259,10 @@ impl Ruling {
     pub fn ends_the_drone(&self) -> bool {
         matches!(
             self,
-            Ruling::Finished { .. } | Ruling::Failed { .. } | Ruling::Refused { .. }
+            Ruling::Finished { .. }
+                | Ruling::Failed { .. }
+                | Ruling::Refused { .. }
+                | Ruling::Suspect { .. }
         )
     }
 }
@@ -302,10 +272,15 @@ impl Ruling {
 /// The evidence comes first because nothing else happens without it: a Check is
 /// not run for a submission the step did not ask for, and no path in this
 /// function reaches a verdict without one.
+///
+/// `recorded` is what every step of this Job has submitted so far. **The
+/// gaming check is its only reader**, through [`AtStep::baseline`], which will
+/// not answer with anything but a strictly earlier step's.
 pub async fn rule_on<W>(
     at: AtStep<'_>,
     evidence: &Submission,
     declared: Option<&DeclaredPaths>,
+    recorded: &[(StepId, StepEvidence)],
     work: &W,
     budget: CheckBudget,
     judging: &Judging,
@@ -424,6 +399,18 @@ where
         }
     };
 
+    // **The gaming check, and the only place it fires.** It runs where the step
+    // would otherwise advance, because that is the case it exists for: a
+    // Mechanical Check passes gamed evidence by design, and a step already
+    // stopped needs no second reason. It cannot take an advance away by
+    // failing the step — it routes elsewhere entirely.
+    if verdict.advanced() {
+        if let Some(suspect) = suspect(at, work, recorded, judging, &checks, &output, &judged).await
+        {
+            return suspect;
+        }
+    }
+
     match verdict {
         Verdict::Advance => match at.next() {
             Some(next) => Ruling::Advanced {
@@ -450,6 +437,69 @@ where
             output,
             judged,
         },
+    }
+}
+
+/// The gaming look, where the step declares one. `None` is nothing flagged.
+///
+/// Its own function because it is the one part of the gate whose answer is not
+/// a [`Verdict`]: it returns a whole [`Ruling`] or nothing, and there is no
+/// value it could hand back that `Verdict::but_for` would accept.
+async fn suspect<W>(
+    at: AtStep<'_>,
+    work: &W,
+    recorded: &[(StepId, StepEvidence)],
+    judging: &Judging,
+    checks: &[StepCheck],
+    output: &[CheckOutput],
+    // `judged` is carried onto the ruling because a step whose Judge cleared
+    // it and a step whose Judge never ran are different facts, and a gaming
+    // flag must not erase the first.
+    judged: &[Judgment],
+) -> Option<Ruling>
+where
+    W: WorkProduct,
+    W::Error: Error + Send + Sync + 'static,
+{
+    let step = at.step();
+    if !step.asks_about_gaming() {
+        return None;
+    }
+    let patch = match work.patch(at.worktree()) {
+        Ok(patch) => patch,
+        Err(cause) => {
+            return Some(Ruling::CouldNotDecide {
+                artifact: "the Job's patch",
+                cause: Box::new(cause),
+                checks: checks.to_vec(),
+                output: output.to_vec(),
+            })
+        }
+    };
+    // A step may name a baseline and have none: the named step may not have
+    // recorded evidence, and a first step has no earlier step at all. The
+    // check still runs, and the brief says so.
+    let named = step
+        .judge_checks()
+        .iter()
+        .filter_map(|check| check.gaming())
+        .find_map(|gaming| gaming.baseline())
+        .and_then(|reference| at.baseline(reference, recorded));
+    let baseline = named.map(|(step, evidence)| Baseline::of(step.as_str(), evidence));
+    match judging::gaming(step, &patch, baseline, judging).await {
+        Ok(None) => None,
+        Ok(Some(flagged)) => Some(Ruling::Suspect {
+            flagged,
+            checks: checks.to_vec(),
+            output: output.to_vec(),
+            judged: judged.to_vec(),
+        }),
+        Err(cause) => Some(Ruling::CouldNotDecide {
+            artifact: "the gaming check's answer",
+            cause: Box::new(cause),
+            checks: checks.to_vec(),
+            output: output.to_vec(),
+        }),
     }
 }
 
@@ -483,6 +533,13 @@ pub fn apply(
         Ruling::Finished { .. } => Target::CompletedSuccess,
         Ruling::Failed { .. } => Target::CompletedFailed,
         Ruling::Refused { .. } => Target::Escalated(EscalationTrigger::GateFailure),
+        // **`evidence_suspect`, and this is the one thing that reaches it.**
+        // A Judge refusing a criterion has accused nobody; the gaming check
+        // says the evidence itself is not to be trusted, which is a different
+        // claim and needs a person rather than another attempt at the same
+        // work. The registry types it step-level, which is what lets it name
+        // which step's evidence is in question.
+        Ruling::Suspect { .. } => Target::Escalated(EscalationTrigger::EvidenceSuspect),
         // A step advancing inside a running Job moves the inner machine and not
         // the outer one, and the other two rulings move nothing at all.
         Ruling::Advanced { .. }

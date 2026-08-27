@@ -24,6 +24,8 @@ use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use checks_runner::Output;
 use core_model::{JobId, StepCheck, StepId};
 
+use verification::Submission;
+
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::gate::Ruling;
@@ -92,6 +94,33 @@ where
             .lock()
             .await
             .record_step_judgments(job_id, step, ruling.judged(), &self.now())
+            .map_err(Adrift::Writing)
+    }
+
+    /// Write down the evidence the gate ruled on.
+    ///
+    /// **Written whatever the ruling**, for the reason a Check result is: a
+    /// step that submitted and was refused and a step that submitted nothing
+    /// are different facts. It is skipped only where nothing was ruled on —
+    /// a submission of the wrong kind spends nothing and records nothing.
+    ///
+    /// A later step's gaming check reads this as its baseline, which is why it
+    /// goes to disk rather than staying in the daemon: a baseline that
+    /// evaporates on restart would take the check quietly with it.
+    pub(crate) async fn recorded_evidence(
+        &self,
+        job_id: &JobId,
+        step: &StepId,
+        submission: &Submission,
+        ruling: &Ruling,
+    ) -> Result<(), Adrift> {
+        if matches!(ruling, Ruling::NotWhatTheStepAsked(_)) {
+            return Ok(());
+        }
+        self.store()
+            .lock()
+            .await
+            .record_step_evidence(job_id, step, &submission.recorded(), &self.now())
             .map_err(Adrift::Writing)
     }
 }

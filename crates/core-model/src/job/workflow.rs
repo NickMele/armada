@@ -21,6 +21,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::job::gaming::GamingCheck;
 use crate::job::ids::{StepId, WorkflowId};
 use crate::job::judge::JudgeCheck;
 use crate::job::scope::EvidenceScope;
@@ -201,9 +202,20 @@ impl ResolvedStep {
     }
 
     /// Whether the Judge fires on this step at all. The cold-by-default switch:
-    /// a step declaring no criterion spends nothing.
+    /// a step declaring no criterion and no gaming pattern spends nothing.
     pub fn asks_the_judge(&self) -> bool {
         self.judge_checks.iter().any(JudgeCheck::fires)
+    }
+
+    /// Whether this step declares a gaming check that fires. Asked separately
+    /// from [`asks_the_judge`](ResolvedStep::asks_the_judge) because the two
+    /// look at different moments: the criteria decide whether the step
+    /// advances, and this decides whether the evidence is trusted.
+    pub fn asks_about_gaming(&self) -> bool {
+        self.judge_checks
+            .iter()
+            .filter_map(JudgeCheck::gaming)
+            .any(GamingCheck::fires)
     }
 
     /// What this step's evidence is scoped to. **`None` is the common case**,

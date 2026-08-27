@@ -6,6 +6,7 @@
 //! cases are cases where nothing advances. [`judge`] is the third tier and its
 //! cases each name the constitutional rule they hold.
 
+mod gaming;
 mod gate;
 mod judge;
 mod submission;
@@ -32,6 +33,7 @@ pub(crate) fn workflow() -> ResolvedWorkflow {
             ],
             judged_on: &[],
             scope: None,
+            gaming: None,
         },
         Sketch {
             id: "summarise",
@@ -40,6 +42,7 @@ pub(crate) fn workflow() -> ResolvedWorkflow {
             gates: &[],
             judged_on: &[],
             scope: None,
+            gaming: None,
         },
     ])
 }

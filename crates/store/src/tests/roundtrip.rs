@@ -5,8 +5,9 @@
 
 use core_model::{
     Actor, AdvanceGate, Attachment, CheckOutcome, ContextSource, CriterionId, DeclarePlanAt,
-    DroneId, Job, JobStatus, JudgeVerdict, Judgment, ModelName, RepoPath, ResolvedCheck, StepCheck,
-    StepId, Target, Ulid, WriteTargets,
+    DroneId, EvidenceRef, EvidenceType, GamingPattern, Job, JobStatus, JudgeVerdict, Judgment,
+    ModelName, RepoPath, ResolvedCheck, StepCheck, StepEvidence, StepId, Target, Ulid,
+    WriteTargets,
 };
 
 use crate::tests::{created_at, job_id, open, sub_dispatched, top_level, TempDir};
@@ -443,7 +444,27 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
         Some("haiku"),
         "the per-step model dial"
     );
-    assert_eq!(fix.judge_calls(), 2, "one criterion, two judges");
+    assert_eq!(
+        fix.judge_calls(),
+        3,
+        "one criterion at two judges, plus the one gaming pattern the diff cannot answer"
+    );
+    // The gaming check survives the column too, baseline and patterns both —
+    // a step that came back declaring no second look would read as a step that
+    // never asked for one.
+    let gaming = fix.judge_checks()[0].gaming().expect("a gaming check");
+    assert_eq!(
+        gaming.baseline().map(EvidenceRef::as_wire).as_deref(),
+        Some("root_cause.evidence")
+    );
+    assert_eq!(
+        gaming.flag_if(),
+        [
+            GamingPattern::AssertionWeakened,
+            GamingPattern::CheckConfigEdited
+        ]
+    );
+    assert_eq!(gaming.calls(), 1, "the diff answers check_config_edited");
     // Absence is a value too: a column reading as an empty scope would put a
     // footprint check on a step that asked for none.
     let scope = fix.evidence_scope().expect("the step declared one");
@@ -526,4 +547,55 @@ fn a_drone_arriving_and_leaving_folds_back_out_of_the_log() {
         "and a Drone that left is null again, which is what suspends the \
          liveness clock"
     );
+}
+
+/// The baseline a later step's gaming check is measured against outlives the
+/// process that recorded it. **A baseline held only in the daemon's memory
+/// would vanish on restart and take the check quietly with it**, which is the
+/// failure this whole capability exists to catch, happening to Armada itself.
+#[test]
+fn the_evidence_a_step_submitted_survives_the_process_that_gated_it() {
+    let dir = TempDir::new();
+    let stored = top_level("01EVD");
+    let step = StepId::new("root_cause");
+    let note = StepEvidence {
+        evidence_type: EvidenceType::FactsNote,
+        claimed: "the reader stops one row before `end`".to_string(),
+        shown_by: "docs/notes/cursor.md".to_string(),
+        not_claimed: String::new(),
+    };
+    let mut store = open(&dir);
+    store.insert_job(&stored, &created_at()).expect("stored");
+    store
+        .record_step_evidence(&job_id("01EVD"), &step, &note, &created_at())
+        .expect("recorded");
+    // A resubmission replaces rather than appends: a superseded submission is
+    // not a baseline.
+    store
+        .record_step_evidence(
+            &job_id("01EVD"),
+            &step,
+            &StepEvidence {
+                claimed: "the reader stops at `end - 1`".to_string(),
+                ..note.clone()
+            },
+            &created_at(),
+        )
+        .expect("recorded again");
+    drop(store);
+
+    let reopened = open(&dir);
+    let read = reopened.step_evidence(&job_id("01EVD")).expect("loads");
+    assert_eq!(read.len(), 1, "one step, one row");
+    assert_eq!(read[0].0, step);
+    assert_eq!(read[0].1.claimed, "the reader stops at `end - 1`");
+    assert_eq!(read[0].1.evidence_type, EvidenceType::FactsNote);
+    assert!(read[0].1.not_claimed.is_empty(), "empty is a legal answer");
+
+    // A step that submitted nothing is absent rather than present and blank.
+    assert!(reopened
+        .step_evidence(&job_id("01EVD"))
+        .expect("loads")
+        .iter()
+        .all(|(id, _)| id == &step));
 }

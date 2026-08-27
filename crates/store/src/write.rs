@@ -32,7 +32,7 @@
 
 use core_model::{
     Attachment, DroneAssigned, DronePresence, GateManifest, Job, JobId, JobStep, Judgment,
-    StepCheck, StepId, StepTransitioned, Timestamp, Transitioned, WriteTargets,
+    StepCheck, StepEvidence, StepId, StepTransitioned, Timestamp, Transitioned, WriteTargets,
 };
 use rusqlite::Transaction;
 
@@ -458,6 +458,45 @@ impl Store {
         tx.commit()
             .map_err(fault("committing the judgment record"))
             .map_err(WriteError::Database)
+    }
+
+    /// Record the evidence a step's gate accepted, replacing whatever an
+    /// earlier submission against the same step wrote.
+    ///
+    /// One row per step, because a superseded submission is not a baseline: a
+    /// later step's gaming check is judged against what the earlier step
+    /// finally established, not against a draft of it.
+    pub fn record_step_evidence(
+        &mut self,
+        job_id: &JobId,
+        step_id: &StepId,
+        evidence: &StepEvidence,
+        at: &Timestamp,
+    ) -> Result<(), WriteError> {
+        self.conn
+            .execute(
+                "INSERT INTO job_step_evidence (
+                     job_id, step_id, evidence_type, claimed, shown_by, not_claimed, recorded_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 ON CONFLICT (job_id, step_id) DO UPDATE SET
+                     evidence_type = excluded.evidence_type,
+                     claimed       = excluded.claimed,
+                     shown_by      = excluded.shown_by,
+                     not_claimed   = excluded.not_claimed,
+                     recorded_at   = excluded.recorded_at",
+                rusqlite::params![
+                    job_id.as_str(),
+                    step_id.as_str(),
+                    evidence.evidence_type.as_wire(),
+                    evidence.claimed,
+                    evidence.shown_by,
+                    evidence.not_claimed,
+                    at.as_str(),
+                ],
+            )
+            .map_err(fault("writing a step's evidence"))
+            .map_err(WriteError::Database)?;
+        Ok(())
     }
 }
 

@@ -88,10 +88,11 @@ pub enum TriggerKind {
 
 /// Whether a trigger describes one step or the whole Job.
 ///
-/// `None` is not a default — it is the registry's empty `level` field, which
-/// says the source left it undecided. `last_verdict` says only step-level
-/// triggers may appear in it, so every row carrying the gap is one that cannot
-/// be checked against that rule until somebody decides it.
+/// **Total, and deliberately not an `Option`.** `last_verdict` admits
+/// step-level triggers only, so a level that could be absent would be a
+/// trigger nothing could check that rule against. A sub-kind takes its
+/// parent's, which is the registry's own rule that it pauses the Job exactly
+/// as its parent does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TriggerLevel {
     Step,
@@ -162,24 +163,31 @@ impl EscalationTrigger {
         }
     }
 
-    /// Step or Job, where the registry decided. `None` where its `level` field
-    /// is empty, which is a gap rather than a default.
-    pub fn level(&self) -> Option<TriggerLevel> {
+    /// Step or Job, as the registry decides it.
+    ///
+    /// A step-level trigger attaches to a step and can therefore name which
+    /// step stopped, which is what `last_verdict` needs and what makes
+    /// restarting that step later a coherent act. A Job-level one has no step
+    /// to attach to, because no step is the reason.
+    pub fn level(&self) -> TriggerLevel {
         match self {
             EscalationTrigger::BlockedByPolicy
             | EscalationTrigger::CheckTimeout
+            | EscalationTrigger::EvidenceSuspect
             | EscalationTrigger::EvidenceTooLarge
             | EscalationTrigger::GateFailure
-            | EscalationTrigger::LoopCap => Some(TriggerLevel::Step),
+            | EscalationTrigger::LoopCap
+            | EscalationTrigger::Thrashing => TriggerLevel::Step,
             EscalationTrigger::DependencyFailed
+            | EscalationTrigger::FanOut
             | EscalationTrigger::HatchUnbidden
             | EscalationTrigger::Interrupted
-            | EscalationTrigger::ResourceExhausted => Some(TriggerLevel::Job),
-            EscalationTrigger::EvidenceSuspect
-            | EscalationTrigger::FanOut
-            | EscalationTrigger::Silent
-            | EscalationTrigger::Stalled
-            | EscalationTrigger::Thrashing => None,
+            | EscalationTrigger::ResourceExhausted
+            | EscalationTrigger::Stalled => TriggerLevel::Job,
+            // A sub-kind has no level of its own. It pauses the Job exactly as
+            // its parent does, so it reads its parent's rather than declaring
+            // a second answer that could drift from it.
+            EscalationTrigger::Silent => EscalationTrigger::Stalled.level(),
         }
     }
 

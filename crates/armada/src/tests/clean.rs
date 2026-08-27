@@ -103,6 +103,7 @@ fn a_job(id: &str, manifest: &str) -> Job {
                 gates: &[],
                 judged_on: &[],
                 scope: None,
+                gaming: None,
             }]),
             owner_manifest_id: ManifestId::carried(Ulid::carried(manifest)),
             urgency: Urgency::Normal,

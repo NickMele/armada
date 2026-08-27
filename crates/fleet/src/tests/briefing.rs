@@ -66,6 +66,7 @@ fn a_workflow() -> core_model::FrozenWorkflow {
             }],
             judged_on: &[],
             scope: None,
+            gaming: None,
         },
         Sketch {
             id: "summarise",
@@ -74,6 +75,7 @@ fn a_workflow() -> core_model::FrozenWorkflow {
             gates: &[],
             judged_on: &[],
             scope: None,
+            gaming: None,
         },
     ])
 }
@@ -177,6 +179,7 @@ fn a_scoped_step_is_told_to_declare_before_it_starts() {
             at_step_start: true,
             exclude: &["secrets"],
         }),
+        gaming: None,
     }]);
     let said = first_turn(&a_job(), &workflow, &StepId::new("implement"))
         .expect("a prompt")

@@ -105,6 +105,7 @@ fn two_steps() -> config::ResolvedWorkflow {
             gates: &[Gate::DiffNonempty],
             judged_on: &[],
             scope: None,
+            gaming: None,
         },
         Sketch {
             id: "summarise",
@@ -113,6 +114,7 @@ fn two_steps() -> config::ResolvedWorkflow {
             gates: &[],
             judged_on: &[],
             scope: None,
+            gaming: None,
         },
     ])
 }
@@ -154,7 +156,11 @@ fn fitted_with(
             path: "/usr/bin:/bin".to_string(),
             home: root,
             mcp_config: "/etc/armada/mcp.json".to_string(),
-            attachments_dir: home.path().join("attachments").to_string_lossy().to_string(),
+            attachments_dir: home
+                .path()
+                .join("attachments")
+                .to_string_lossy()
+                .to_string(),
         },
         budget: CheckBudget::of(Duration::from_secs(5)),
         // A Judge that fails every call, because no step in these fixtures

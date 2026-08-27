@@ -38,10 +38,11 @@ use store::Moved;
 use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
+use crate::at_step::AtStep;
 use crate::briefing;
 use crate::daemon::Fleet;
 use crate::drone::{self, aftermath, environment, Aftermath, Ending, HostPaths, Left};
-use crate::gate::{apply, rule_on, AtStep, Ruling};
+use crate::gate::{apply, rule_on, Ruling};
 use crate::session::LiveSession;
 use crate::transcript::{Spine, Taps};
 use crate::working::Working;
@@ -336,10 +337,19 @@ where
             cause,
         })?;
         let declared = at_work.declared().cloned();
+        // Read before the gate rather than inside it: `rule_on` reaches no
+        // database, and a baseline is a row like any other.
+        let recorded = self
+            .store()
+            .lock()
+            .await
+            .step_evidence(&job_id)
+            .map_err(Adrift::Reading)?;
         let ruling = rule_on(
             at,
             &landed.submission,
             declared.as_ref(),
+            &recorded,
             self.work(),
             self.budget(),
             &judging,
@@ -350,6 +360,8 @@ where
         // never written down is a verdict with no trace.
         self.recorded_checks(&job_id, &step, &ruling).await?;
         self.recorded_judgments(&job_id, &step, &ruling).await?;
+        self.recorded_evidence(&job_id, &step, &landed.submission, &ruling)
+            .await?;
         self.act_on(&ruling, &job_id, &step, working).await?;
         Ok(Some(ruling))
     }
@@ -389,7 +401,11 @@ where
             // retry ledger, which is what would give a Drone somewhere to go
             // with a citation; until then it goes to the person, and `apply`
             // is where the two destinations are decided.
-            Ruling::Failed { .. } | Ruling::Refused { .. } => {
+            // Three endings, one shape: the step stops, the Drone is not told,
+            // and `apply` decides which status and which trigger. `Suspect`
+            // joins them because a person is being asked either way — what
+            // differs is the claim being made, which is the trigger's to say.
+            Ruling::Failed { .. } | Ruling::Refused { .. } | Ruling::Suspect { .. } => {
                 let job = self.load(job_id).await?;
                 self.applied(&job, ruling).await?;
                 // Terminated without a turn, and the worktree is kept. See

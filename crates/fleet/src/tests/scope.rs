@@ -14,9 +14,10 @@ use testkit::{FakeWorkProduct, Gate, Scoped, Sketch};
 use verification::{CheckFailed, Claimed, NotClaimed, OutsideScope, ShownBy, EVIDENCE_SCOPE};
 
 use crate::adrift::NotDeclared;
+use crate::at_step::AtStep;
 use crate::daemon::Fleet;
 use crate::evidence::Call;
-use crate::gate::{rule_on, AtStep, Ruling};
+use crate::gate::{rule_on, Ruling};
 use crate::tests::daemon::{a_fleet_holding, a_proposal, worktree_directory};
 use crate::tests::gate::{budget, diff_evidence, judging, worktree};
 use crate::tests::tmp::TempDir;
@@ -44,6 +45,7 @@ fn scoped(diff_check: bool, exclude: &[&str]) -> config::ResolvedWorkflow {
             at_step_start: true,
             exclude,
         }),
+        gaming: None,
     }])
 }
 
@@ -63,6 +65,7 @@ async fn ruled_on(
         at_step,
         &diff_evidence(),
         declared,
+        &[],
         &work,
         budget(),
         &judging(),
@@ -335,6 +338,7 @@ async fn the_plan_does_not_survive_the_step_it_was_declared_for() {
                     at_step_start: true,
                     exclude: &[],
                 }),
+                gaming: None,
             },
             Sketch {
                 id: "implement",
@@ -347,6 +351,7 @@ async fn the_plan_does_not_survive_the_step_it_was_declared_for() {
                     at_step_start: true,
                     exclude: &[],
                 }),
+                gaming: None,
             },
         ]),
         1,
@@ -395,12 +400,22 @@ async fn a_step_with_no_scope_is_neither_checked_nor_read() {
         gates: &[Gate::DiffNonempty],
         judged_on: &[],
         scope: None,
+        gaming: None,
     }]);
     let worktree = worktree();
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
-    let ruling = rule_on(at_step, &diff_evidence(), None, &work, budget(), &judging()).await;
+    let ruling = rule_on(
+        at_step,
+        &diff_evidence(),
+        None,
+        &[],
+        &work,
+        budget(),
+        &judging(),
+    )
+    .await;
 
     assert!(ruling.advanced(), "{ruling:?}");
     assert_eq!(
@@ -422,11 +437,21 @@ async fn an_ungated_step_with_no_scope_advances_on_evidence_alone() {
         gates: &[],
         judged_on: &[],
         scope: None,
+        gaming: None,
     }]);
     let worktree = worktree();
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::refusing("a repository nobody should have opened");
 
-    let ruling = rule_on(at_step, &diff_evidence(), None, &work, budget(), &judging()).await;
+    let ruling = rule_on(
+        at_step,
+        &diff_evidence(),
+        None,
+        &[],
+        &work,
+        budget(),
+        &judging(),
+    )
+    .await;
     assert!(ruling.advanced(), "{ruling:?}");
 }

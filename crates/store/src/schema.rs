@@ -47,7 +47,7 @@ pub const KNOWN_SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 /// **Nothing is ever edited here.** Changing entry zero changes what an already
 /// migrated file is assumed to contain, which is the one thing the version
 /// number exists to stop.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10];
 
 /// Version 1 — the Job record, the rows beneath it, and the log.
 const V1: &str = r#"
@@ -488,5 +488,33 @@ CREATE TABLE job_attachments (
     byte_size   INTEGER NOT NULL,
     storage_ref TEXT NOT NULL,
     created_at  TEXT NOT NULL
+) STRICT;
+"#;
+
+/// Version 10 — the evidence a step's gate accepted.
+///
+/// `record.rs` has always said evidence is `store`'s to hold and never a column
+/// on the Job row. This is that table, built when the first reader appeared:
+/// the gaming check's `baseline_ref` names an earlier step's evidence, and a
+/// baseline held only in the daemon's memory would vanish on restart and take
+/// the check quietly with it.
+///
+/// One row per step, replaced on resubmission — the current evidence is what a
+/// later step is judged against, and a superseded submission is not a baseline.
+///
+/// # Nothing to backfill
+///
+/// No step's evidence was written down before this table existed, which is what
+/// zero rows says — the same refusal V6, V8 and V9 make.
+const V10: &str = r#"
+CREATE TABLE job_step_evidence (
+    job_id        TEXT NOT NULL REFERENCES jobs(job_id),
+    step_id       TEXT NOT NULL,
+    evidence_type TEXT NOT NULL,
+    claimed       TEXT NOT NULL,
+    shown_by      TEXT NOT NULL,
+    not_claimed   TEXT NOT NULL,
+    recorded_at   TEXT NOT NULL,
+    PRIMARY KEY (job_id, step_id)
 ) STRICT;
 "#;

@@ -64,6 +64,7 @@ mod detail;
 mod drone;
 mod evidence;
 mod frozen;
+mod gaming;
 mod gate;
 mod host;
 mod judging;

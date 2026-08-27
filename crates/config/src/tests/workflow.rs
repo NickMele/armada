@@ -1,7 +1,7 @@
 //! A WorkflowDef: the M1 slice, the four validations, and the one cross-file
 //! check that is the point of this milestone step.
 
-use core_model::{AdvanceGate, EvidenceType, ResolvedCheck};
+use core_model::{AdvanceGate, EvidenceRef, EvidenceType, GamingPattern, ResolvedCheck};
 
 use crate::error::{Fault, LoadError, ResolveError};
 use crate::manifest::Manifest;
@@ -245,6 +245,79 @@ fn a_disabled_judge_check_asks_nothing_and_reads_as_a_step_that_declares_none() 
     let def =
         bug_with(&judged("auto", 1, false)).expect("a step whose Judge check is switched off");
     assert!(!def.steps()[4].judge_checks()[0].fires());
+}
+
+/// A `gaming_check` on a step that puts no criterion to the Judge, which is
+/// the shape the samples do not have and the design allows: the second look
+/// gates nothing, so it does not make `advance_gate` the Judge's.
+fn gamed(baseline: &str, patterns: &[&str]) -> String {
+    let mut text = [
+        "  - id: review",
+        "    label: Review",
+        "    advance_gate: auto",
+        "    judge_checks:",
+        "      - gaming_check:",
+    ]
+    .join("\n");
+    text.push_str(&format!("\n          baseline_ref: \"{baseline}\"\n"));
+    text.push_str("          flag_if:\n");
+    for pattern in patterns {
+        text.push_str(&format!("            - {pattern}\n"));
+    }
+    text
+}
+
+#[test]
+fn a_step_carries_the_gaming_patterns_it_declares_and_the_baseline_it_names() {
+    let def = bug_with(&gamed(
+        "root_cause.evidence",
+        &["assertion_weakened", "check_config_edited"],
+    ))
+    .expect("a step that asks whether its evidence was gamed");
+    let judge = &def.steps()[4].judge_checks()[0];
+    let gaming = judge.gaming().expect("a gaming check");
+    assert_eq!(
+        gaming.baseline().map(EvidenceRef::as_wire).as_deref(),
+        Some("root_cause.evidence")
+    );
+    assert_eq!(
+        gaming.flag_if(),
+        [
+            GamingPattern::AssertionWeakened,
+            GamingPattern::CheckConfigEdited
+        ]
+    );
+    // One call, not two: the diff answers `check_config_edited`, and a
+    // mechanical pattern that cost a call would be money spent on `git diff`.
+    assert_eq!(gaming.calls(), 1);
+    // The gaming check does not gate, so the step stays `auto` and the Judge
+    // is not what advances it.
+    assert!(!judge.fires());
+}
+
+/// A pattern nothing knows is refused rather than dropped. A silently ignored
+/// `flag_if` entry is a gate the author believes is watching and nothing is.
+#[test]
+fn a_flag_if_naming_a_pattern_nothing_knows_is_refused() {
+    let refused = refusals(bug_with(&gamed("root_cause.evidence", &["looks_dodgy"])));
+    assert!(matches!(
+        fault_at(&refused, "steps[4].judge_checks[0].gaming_check.flag_if[0]"),
+        Fault::NotInTheSchema { .. }
+    ));
+}
+
+/// `baseline_ref` names a step's evidence, not a step. The two are different
+/// things and the second is what an author writes by mistake.
+#[test]
+fn a_baseline_ref_that_is_not_a_step_s_evidence_is_refused() {
+    let refused = refusals(bug_with(&gamed("root_cause", &["test_deleted"])));
+    assert!(matches!(
+        fault_at(
+            &refused,
+            "steps[4].judge_checks[0].gaming_check.baseline_ref"
+        ),
+        Fault::NotInTheSchema { .. }
+    ));
 }
 
 #[test]

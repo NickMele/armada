@@ -24,6 +24,7 @@ fn workflow() -> ResolvedWorkflow {
             gates: &[Gate::DiffNonempty],
             judged_on: &[("c1", "Does the fix address the cause the note names?")],
             scope: None,
+            gaming: None,
         },
         Sketch {
             id: "merge",
@@ -32,6 +33,7 @@ fn workflow() -> ResolvedWorkflow {
             gates: &[],
             judged_on: &[],
             scope: None,
+            gaming: None,
         },
     ])
 }
@@ -225,11 +227,11 @@ fn the_call_count_is_criteria_times_panel_size() {
             question: "Is it right?".to_string(),
         })
         .collect();
-    let check = core_model::JudgeCheck::declared(None, 3, criteria);
+    let check = core_model::JudgeCheck::declared(None, 3, criteria, None);
     assert_eq!(check.calls(), 12);
     // A panel of nobody is not a legal reading of a declared check.
     assert_eq!(
-        core_model::JudgeCheck::declared(None, 0, Vec::new()).panel_size(),
+        core_model::JudgeCheck::declared(None, 0, Vec::new(), None).panel_size(),
         1
     );
 }

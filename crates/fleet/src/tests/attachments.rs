@@ -41,7 +41,11 @@ async fn a_staged_attachment_is_promoted_into_the_job() {
     let home = TempDir::new();
     let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
 
-    let staged_path = staged(&home.path().join("staged"), "before.png", b"not really a png");
+    let staged_path = staged(
+        &home.path().join("staged"),
+        "before.png",
+        b"not really a png",
+    );
     let job = fleet
         .propose(proposal_with(staged_path, "before.png"))
         .await
@@ -49,7 +53,10 @@ async fn a_staged_attachment_is_promoted_into_the_job() {
 
     assert_eq!(job.attachments().len(), 1);
     assert_eq!(job.attachments()[0].filename, "before.png");
-    assert_eq!(job.attachments()[0].byte_size, "not really a png".len() as u64);
+    assert_eq!(
+        job.attachments()[0].byte_size,
+        "not really a png".len() as u64
+    );
 
     let promoted = std::path::Path::new(job.attachments()[0].storage_ref.as_str());
     assert!(

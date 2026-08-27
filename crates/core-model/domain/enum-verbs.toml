@@ -202,10 +202,11 @@ in_code = "In code"
 notes = "One of two verbs not guessable back to its enum name, which is why the raw enum sits in the detail view header."
 
 [verbs.escalation_reason.gate_failure]
-verb = "failed a check"
-icon = "shield-x"
+verb = "refused by the judge"
+icon = "circle-x"
 status_token = "--status-escalated"
 vocabulary = "Escalation reason"
+notes = "Read `failed a check` on `shield-x` until the Judge existed. `crates/fleet/src/gate.rs` produces this trigger from `Ruling::Refused` and from nothing else — a failed mechanical Check ends the Job at `completed_failed` and never escalates — so the Check family's word and glyph described a case that cannot reach this row. `circle-x` is the Judge's, which is what Bridge already draws the citation with, so the badge and the criterion beneath it now agree. The `meaning` was always right: \"honestly did not pass\" is a refusal rather than gaming, which is `evidence_suspect`."
 in_code = "In code"
 
 [verbs.escalation_reason.hatch_unbidden]

@@ -25,10 +25,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::{Ask, Environment, Model, ModelClient, Patch};
-use core_model::{JudgeCheck, Judgment, ResolvedStep, StepCheck};
+use core_model::{GamingFlag, JudgeCheck, Judgment, ResolvedStep, StepCheck};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
-use verification::{Brief, Refusals, Unreadable};
+use verification::{Baseline, Brief, Flagged, GamingBrief, Refusals, Unreadable};
 
 /// How long one Judge call may take before it is a failed call.
 ///
@@ -99,6 +99,41 @@ pub(crate) async fn judged(
     }
     let refusals = Refusals::among(&judgments);
     Ok((judgments, refusals))
+}
+
+/// Look a second time, and answer with what was flagged or with nothing.
+///
+/// **Called only where the step would otherwise advance.** Gaming is what a
+/// Mechanical Check passes by design, so this is the one place it can matter,
+/// and a step already stopped by a Check or a refusal spends nothing here.
+///
+/// The mechanical half runs first and costs nothing. The judged half is one
+/// call per declared pattern the diff cannot answer — **and no panel**, because
+/// this check has no veto for a panel to make stricter.
+pub(crate) async fn gaming(
+    step: &ResolvedStep,
+    patch: &Patch,
+    baseline: Option<Baseline<'_>>,
+    judging: &Judging,
+) -> Result<Option<Flagged>, CallFailed> {
+    let mut flags: Vec<GamingFlag> = Vec::new();
+    for check in step.judge_checks() {
+        let Some(gaming) = check.gaming().filter(|gaming| gaming.fires()) else {
+            continue;
+        };
+        flags.extend(verification::in_the_diff(patch, gaming.flag_if()));
+        let model = model_for(check, &judging.default_model)?;
+        for pattern in verification::judged_patterns(gaming.flag_if()) {
+            let Some(brief) = GamingBrief::about(step, pattern, patch, baseline) else {
+                continue;
+            };
+            let ask = Ask::put(model.clone(), brief.question(), judging.environment.clone())
+                .map_err(|_| CallFailed::NothingToAsk)?;
+            let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
+            flags.extend(brief.read(&said).map_err(CallFailed::Unreadable)?);
+        }
+    }
+    Ok(Flagged::among(flags))
 }
 
 /// The step's own model dial, or the fleet default where it names none.
