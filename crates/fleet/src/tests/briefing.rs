@@ -170,6 +170,67 @@ fn the_brief_carries_the_facts_and_the_criteria() {
     assert!(said.contains("the log reader stops one line later"));
 }
 
+/// **Every other per-Job artifact is keyed by Job id and what a Drone writes
+/// for itself now is too.** A file at the repository root is one slot every
+/// worktree shares, and a plan left in it has no way to say it is finished
+/// with — which is what `PLAN.md` was until it was deleted. The path answers
+/// "is this mine" without anything having to read the file.
+///
+/// On the resuming turn as well: a restarted Drone is the one with no history
+/// at all, and it writes the same notes as any other.
+#[test]
+fn every_turn_says_where_a_drones_own_files_go() {
+    let job = a_job();
+    let keyed = format!(".armada/{}/", job.id().as_str());
+    for step in ["implement", "summarise"] {
+        let said = turn_at(step);
+        assert!(said.contains(&keyed), "the Job's own path: {said}");
+    }
+
+    let resumed = resuming_turn(
+        &job,
+        &a_workflow(),
+        &StepId::new("implement"),
+        &Stopped::default(),
+    )
+    .expect("a prompt");
+    assert!(resumed.as_str().contains(&keyed), "{}", resumed.as_str());
+}
+
+/// Two Jobs, two paths, and neither of them the root. **The staleness question
+/// disappears rather than being answered** — there is no shared slot for a
+/// finished Job's plan to sit in, so nothing has to mark one stale.
+#[test]
+fn what_a_drone_writes_for_itself_cannot_land_where_another_job_would_read_it() {
+    let mine = turn_at("implement");
+    assert!(
+        !mine.contains("PLAN.md"),
+        "nothing points a Drone back at the root slot: {mine}"
+    );
+
+    let other = ".armada/01TEST00000000000000000002/";
+    assert!(
+        !mine.contains(other),
+        "one Job's turn names one Job's path: {mine}"
+    );
+}
+
+/// It offers a place; it does not ask for a plan. A block read as an
+/// instruction would put every Job through a planning step nobody requested,
+/// and the cost lands on the Jobs that had nothing to write down.
+#[test]
+fn where_a_file_goes_is_not_an_instruction_to_write_one() {
+    let said = turn_at("summarise");
+    assert!(
+        said.contains("Nothing here is asking you to write"),
+        "{said}"
+    );
+    assert!(
+        !said.contains("Write a plan") && !said.contains("write a plan before"),
+        "no imperative: {said}"
+    );
+}
+
 /// A step that asks for no scope gets no block, because there is no call it
 /// could make — telling every Drone about a tool most of them cannot use is how
 /// an instruction stops being read.
