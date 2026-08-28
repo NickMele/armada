@@ -475,6 +475,59 @@ Helm does not reach it. Overruling a verifier is the act a verifier exists to
 make somebody take deliberately, and it is not on the Intervention Ladder.
 """
 
+[operations.rerun_gate]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "A person asks the gate again, on the evidence a step already submitted, where the first reading could not decide"
+notes = """
+The sixth act that reaches an escalated Job, and **the one `override_verdict` is
+deliberately not**. `gate_undecided` says Fleet could not derive a gating
+artifact — a worktree it could not read, a Judge it could not hand a patch to —
+so `Ruling::CouldNotDecide` is the machine declining to produce a verdict in
+either direction. There is nothing ruled to overrule, and advancing on it would
+pass a step nothing ever weighed. `overrulable()` in
+`crates/fleet/src/overruling.rs` refuses the trigger for that reason and keeps
+refusing it; this admits exactly what that refuses, so the two acts partition the
+triggers rather than overlapping.
+
+**It re-runs, it does not retry.** The cause is usually transient and sometimes
+permanent, and #156 recorded that the two arrive as the same value and are not
+told apart — guessing would be the machine producing an answer it does not have.
+So nothing loops: a person presses this, reads what came back, and presses it
+again or does not. Where the cause is permanent the gate fails again and says so,
+which is the honest outcome and is the case #153's blind Judge was.
+
+**It takes no body.** An override carries a required reason because a person is
+disagreeing with a machine and the count of overrides needs the cause beside it.
+Nothing is being disagreed with here, so there is no sentence to record that the
+second reading will not say for itself.
+
+**It does not touch the retry budget #63 added.** That budget counts runs of the
+step and hands a *failed Check* back to the Drone that produced it; a gate re-run
+is not a run of the step, because no Drone works and nothing it did is redone. So
+the run the gate is told it is reading is the one the Drone did, read off the
+step's log before anything moves, and the second reading's records are filed under
+that same run.
+
+**Refused four ways, and each names the act that applies instead.** A Job that is
+not `escalated`, an escalation that stopped no step, a step stopped on any trigger
+but `gate_undecided` — that one is an override or nothing — and a Job Fleet is no
+longer standing at. The last is the one that is not obvious: the baseline
+`diff_nonempty` is decided against is what the worktree held when the step began,
+it lives in the working slot, and a Fleet restarted since the escalation has none.
+Reading without it would answer a different question from the first reading, so
+`restart_step` is named instead.
+
+A second reading that also could not decide **moves nothing**. The Job is already
+`escalated` and the step already `stopped` on `gate_undecided`, which is where the
+ruling would put them, and a press that changed nothing is written into the Job's
+own log rather than into the record as a run the Drone never had.
+
+Helm does not reach it, for `override_verdict`'s reason: it is not on the
+Intervention Ladder.
+"""
+
 [operations.restart_fleet]
 kind = "command"
 transport = "HTTP"

@@ -576,6 +576,27 @@ impl Daemon for FakeDaemon {
         Ok(job.clone())
     }
 
+    /// The act on a step nothing ruled on, faked on the one thing the route
+    /// refuses on that the transport can see: **a Job that is not escalated
+    /// reaches no act on a stopped step.** Which trigger stopped the step, and
+    /// whether the daemon is still standing at it, are Fleet's to read off the
+    /// record and the slot; a `JobSummary` carries neither, so the fake does
+    /// not pretend to know them.
+    async fn rerun_gate(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+            return Err(self.no_such_job(&job_id));
+        };
+        if job.status.as_wire() != "escalated" {
+            return Err(Refusal::IllegalMove(ipc::WireError::raised(
+                "fake.not_resumable",
+                format!("a Job at {} has no stopped step", job.status.as_wire()),
+                run_id(),
+            )));
+        }
+        Ok(job.clone())
+    }
+
     async fn redispatch_job(&self, job_id: JobId) -> Result<Redispatched, Refusal> {
         let failed = {
             let jobs = self.jobs.lock().expect("not poisoned");
