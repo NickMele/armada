@@ -34,9 +34,13 @@
 //! which would be a second vocabulary that agrees with the log only until
 //! something changes.
 
+use std::collections::BTreeMap;
+
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Daemon, Observed, Refusal};
-use core_model::Job;
+use core_model::{
+    Job, JobId as CoreJobId, JobStatus as CoreJobStatus, QueuedReason as CoreQueuedReason,
+};
 use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
     ChangesRequested, CheckRun, DeclaredCheck, Flagged, JobDetail, JobDiff, JobEvidence,
@@ -48,6 +52,7 @@ use store::{LoadJobError, Moved, RecordedEvent, WriteError};
 
 use crate::adrift::{Adrift, NotSubmitted};
 use crate::daemon::Fleet;
+use crate::dispatch::clear_to_run;
 // The wire's `Redirection` is a struct with a public field; Fleet's is a
 // newtype that cannot hold an empty instruction. Both names are in scope here,
 // which is the one place they meet.
@@ -134,9 +139,11 @@ where
                 .map_err(|why| self.refusal(Adrift::Reading(why)))?;
             (ran, judged, flagged)
         };
+        let queued = self.queued_reason(&job).await?;
         Ok(JobDetail::of(
             &job,
             reason.as_ref(),
+            queued,
             &self.step_facts(&job, ran, judged, flagged),
         ))
     }
@@ -627,7 +634,40 @@ where
             .last_reason(job.id())
             .await
             .map_err(|why| self.refusal(why))?;
-        Ok(JobSummary::of(job, reason.as_ref()))
+        let queued = self.queued_reason(job).await?;
+        Ok(JobSummary::of(job, reason.as_ref(), queued))
+    }
+
+    /// Why an approved Job has not started, worked out from the board as it
+    /// stands rather than read from anything.
+    ///
+    /// **Nothing is read for a Job that is not `queued`**, which is every row
+    /// but the waiting ones — the board read is the cost, and a status that
+    /// cannot have this reason must not pay it.
+    ///
+    /// The dependency half is [`clear_to_run`], the predicate admission itself
+    /// uses. A second answer here is how a Board comes to say a Job is blocked
+    /// while Fleet is starting it.
+    ///
+    /// **`None` is the registry's `none`** — approved, unblocked, and the slot
+    /// is free, which is a Job about to run rather than one held.
+    async fn queued_reason(&self, job: &Job) -> Result<Option<CoreQueuedReason>, Refusal> {
+        if job.status() != CoreJobStatus::Queued {
+            return Ok(None);
+        }
+        let (loaded, _) = self.every_job().await.map_err(|why| self.refusal(why))?;
+        let standing: BTreeMap<CoreJobId, CoreJobStatus> = loaded
+            .jobs
+            .iter()
+            .map(|held| (held.id().clone(), held.status()))
+            .collect();
+        if !clear_to_run(job, &standing) {
+            return Ok(Some(CoreQueuedReason::BlockedByDependency));
+        }
+        Ok(self
+            .working_on()
+            .await
+            .map(|_| CoreQueuedReason::WaitingOnResources))
     }
 
     /// What Fleet knows about a Job's steps beyond the `job_steps` rows.

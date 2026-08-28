@@ -337,6 +337,7 @@ impl Daemon for FakeDaemon {
             // No worktree exists at the approval gate, so no branch is claimed.
             branch: None,
             reason: None,
+            queued_reason: None,
             workflow_id: proposal.workflow_id,
             owner_manifest_id: proposal.owner_manifest_id,
             origin: Origin::from_wire(proposal.origin.as_wire()).expect("a top-level origin"),
@@ -510,6 +511,7 @@ impl Daemon for FakeDaemon {
             // No worktree exists at the approval gate, so no branch is claimed.
             branch: None,
             reason: None,
+            queued_reason: None,
             redispatched_from: Some(failed.id.clone()),
             ..failed.clone()
         };
@@ -624,6 +626,7 @@ pub fn at(daemon: &FakeDaemon, id: &str, spelling: &str) {
         created_at: Instant::carried("2026-01-01T00:00:00.000Z"),
         branch: Some(format!("armada/{id}")),
         reason: None,
+        queued_reason: None,
         workflow_id: WorkflowId::carried("01WF"),
         owner_manifest_id: ManifestId::carried("01MF"),
         origin: Origin::from_wire("manual").expect("an origin"),

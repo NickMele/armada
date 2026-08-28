@@ -21,6 +21,13 @@ export type JobSummary = {
   title: string;
   status: string;
   reason?: Reason;
+  /**
+   * Why an approved Job has not started. Its own field because it is derived
+   * from the board at read time rather than recorded by a transition, which is
+   * what `reason` carries — absent on every status but `queued`, and absent on
+   * a queued Job that nothing is holding.
+   */
+  queued_reason?: string;
   workflow_id: string;
   owner_manifest_id: string;
   origin: string;

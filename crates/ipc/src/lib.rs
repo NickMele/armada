@@ -77,7 +77,7 @@ pub use detail::{
 };
 pub use enums::{
     Actor, CheckOutcome, CriterionSource, DependencyDirection, DronePresence, EvidenceType,
-    JobStatus, JudgeVerdict, Origin, StepState, TopLevelOrigin, Urgency,
+    JobStatus, JudgeVerdict, Origin, QueuedReason, StepState, TopLevelOrigin, Urgency,
 };
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
