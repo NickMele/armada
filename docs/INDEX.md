@@ -131,6 +131,10 @@ approximations.
 - [`spikes/008-does-v1s-detach-leave-the-secrets-pipe-open.md`](spikes/008-does-v1s-detach-leave-the-secrets-pipe-open.md)
   — whether `setsid` leaves v1's piped-stdin secret handoff readable, and what
   a Drone spawn actually carried. Read rather than measured.
+- [`spikes/009-how-long-does-a-step-take.md`](spikes/009-how-long-does-a-step-take.md)
+  — what a step's wall clock and tool-call count actually are, against the Jobs
+  this repository has run, and why elapsed time does not separate a stuck step
+  from a slow one.
 
 Raw transcripts sit beside each record. A negative result is a result and stays.
 
