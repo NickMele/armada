@@ -205,21 +205,31 @@ impl StepState {
             .find(|s| s.as_wire() == value)
     }
 
-    /// The Job statuses a step in this state is observed beneath, as the
-    /// registry declares them.
+    /// The Job statuses a step in this state is observed beneath, as
+    /// `domain/step-states.toml` declares them. A hand transcription, checked
+    /// against that file by the gate.
     ///
-    /// **[`Advanced`](Self::Advanced) returns nothing, and that is the registry
-    /// speaking, not a bug here.** No status row names `advanced` in its
-    /// `step_states`, which the registry's own README records as a finding
-    /// rather than repairing. An empty slice is that finding, carried.
+    /// **Four of the six answer with every status, and that is the machine.**
+    /// A status change looks at no step — [`admits`](crate::Job::transition)
+    /// takes a from and a to and nothing else — so the only coupling between
+    /// the two levels is [`ADVANCING_STATUSES`](crate::ADVANCING_STATUSES), and
+    /// a frozen step crosses every other edge still holding what it held. Four
+    /// of these answered far more narrowly until issue #184, and `escalated`
+    /// was the one that made it concrete: `stopped` claimed it alone, while a
+    /// Job escalated on `stalled` arrives holding a step that is `running`.
+    ///
+    /// The two narrow answers are the two states nothing reaches yet:
+    /// `awaiting_human` has no [`StepTarget`](crate::StepTarget) and `retrying`
+    /// has no retry budget, so each is where its design puts it rather than
+    /// where a walk found it.
     pub fn seen_under(&self) -> &'static [JobStatus] {
         match self {
-            StepState::Advanced => &[],
+            StepState::Advanced => JobStatus::ALL,
             StepState::AwaitingHuman => &[JobStatus::AwaitingReview],
-            StepState::NotStarted => &[JobStatus::AwaitingApproval, JobStatus::Queued],
+            StepState::NotStarted => JobStatus::ALL,
             StepState::Retrying => &[JobStatus::Running],
-            StepState::Running => &[JobStatus::Running],
-            StepState::Stopped => &[JobStatus::Escalated],
+            StepState::Running => JobStatus::ALL,
+            StepState::Stopped => JobStatus::ALL,
         }
     }
 }

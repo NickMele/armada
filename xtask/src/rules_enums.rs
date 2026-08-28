@@ -21,6 +21,8 @@
 //!
 //! [`edges`] is the same comparison over `domain/job-transitions.toml`, whose
 //! rows are `from`/`to` pairs rather than keys; split out for size only.
+//! [`reachability`] is the one comparison here that is not a set against a set:
+//! it reads what a row *says about* a state rather than which states exist.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -409,6 +411,7 @@ fn tables(text: &str) -> Vec<(String, usize)> {
 }
 
 pub mod edges;
+pub mod reachability;
 
 #[cfg(test)]
 mod tests;

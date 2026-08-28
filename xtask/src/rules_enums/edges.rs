@@ -108,6 +108,37 @@ pub fn the_registry_and_the_edge_table_hold_the_same_edges(root: &Path) -> Repor
     report
 }
 
+/// The `from -> to` pairs `EDGES` wires, in wire spellings.
+///
+/// [`super::reachability`] walks the status machine and needs the edges the
+/// code holds rather than the ones the registry sanctions — the rule above is
+/// what keeps those the same set, and a rule that walked the registry would be
+/// walking a claim rather than the machine.
+///
+/// Its own reading failures belong to the rule above and would be said twice,
+/// so they go to a report that is dropped. What the caller needs to know is
+/// only whether anything arrived: nothing to walk is a rule comparing nothing.
+pub(super) fn wired_status_edges(
+    root: &Path,
+    statuses: &BTreeMap<String, String>,
+    triggers: &BTreeMap<String, String>,
+    report: &mut Report,
+) -> Vec<(String, String)> {
+    let Ok(text) = fs::read_to_string(root.join(TABLE)) else {
+        report.fail(format!("{TABLE} — the source `EDGES` is declared in"));
+        return Vec::new();
+    };
+    let mut reading = Report::new("reading the edge table");
+    let rows = read_table(&text, statuses, triggers, &mut reading);
+    if rows.is_empty() {
+        report.fail(format!(
+            "{TABLE} has no `EDGES` entry this rule could read — the status machine \
+             was walked over no edges at all"
+        ));
+    }
+    rows.iter().map(EdgeRow::pair).collect()
+}
+
 /// The values inside a registry row, against the spellings an `Edge` can hold.
 ///
 /// Only the registry side needs this: an `EDGES` entry names a variant, and a

@@ -306,10 +306,22 @@ fn every_trigger_says_whether_it_is_about_a_step_or_about_the_job() {
     );
 }
 
+/// The assertion this replaces was `advanced_is_a_step_state_no_status_names`,
+/// and it held `Stopped.seen_under()` to `[escalated]` alone — which is issue
+/// #184: a Job escalated on `stalled` holds a step that is still `running`, so
+/// `escalated` is not the only status a stopped step is seen beneath and was
+/// never the only one. A status change looks at no step, so a frozen step
+/// crosses every edge holding what it held.
 #[test]
-fn advanced_is_a_step_state_no_status_names() {
-    assert!(StepState::Advanced.seen_under().is_empty());
-    assert_eq!(StepState::Stopped.seen_under(), &[JobStatus::Escalated]);
+fn a_step_state_the_machine_reaches_is_seen_beneath_every_status() {
+    assert_eq!(StepState::Stopped.seen_under(), JobStatus::ALL);
+    assert_eq!(StepState::Advanced.seen_under(), JobStatus::ALL);
+    // The two nothing reaches yet are where their design puts them.
+    assert_eq!(
+        StepState::AwaitingHuman.seen_under(),
+        &[JobStatus::AwaitingReview]
+    );
+    assert_eq!(StepState::Retrying.seen_under(), &[JobStatus::Running]);
 }
 
 #[test]
