@@ -28,46 +28,30 @@ type Story = StoryObj<typeof WorkflowRail>;
 const EVIDENCE = FileCheck;
 
 const running: WorkflowRailStep[] = [
-  {
-    id: "plan",
-    label: "Plan the change",
-    activity: "advanced",
-    status: "advanced",
-    evidence: { icon: EVIDENCE, iconLabel: "Evidence", label: "evidence · 09:14" },
-  },
-  {
-    id: "implement",
-    label: "Implement",
-    activity: "running",
-    status: "running · 6m 12s",
-    current: true,
+  { id: "plan", label: "Plan the change", activity: "advanced", status: "advanced",
+    evidence: { icon: EVIDENCE, iconLabel: "Evidence", label: "evidence · 09:14" } },
+  { id: "implement", label: "Implement", activity: "running", status: "running · 6m 12s", current: true,
     gates: [
       { command: "build · cargo build --workspace", result: "not reached", icon: ShieldMinus, iconLabel: "Not reached" },
       { command: "diff_nonempty", result: "not reached", icon: ShieldMinus, iconLabel: "Not reached" },
     ],
-  },
-  {
-    id: "verify",
-    label: "Run tests",
-    activity: "not_started",
-    status: "not started",
-    gates: [
-      { command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus, iconLabel: "Not reached" },
-    ],
-  },
-  {
-    id: "handoff",
-    label: "Summarise",
-    activity: "not_started",
-    status: "not started",
-    evidence: { icon: EVIDENCE, iconLabel: "Evidence", label: "" },
-  },
+    declarations: [{ label: "judge · 2 criteria", result: "not reached" }, { label: "advance_gate · auto_if_judge_passes" }] },
+  { id: "verify", label: "Run tests", activity: "not_started", status: "not started",
+    gates: [{ command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus, iconLabel: "Not reached" }],
+    declarations: [{ label: "judge · 1 criterion · gaming check", result: "not reached" }, { label: "advance_gate · auto_if_judge_passes" }] },
+  { id: "handoff", label: "Summarise", activity: "not_started", status: "not started",
+    declarations: [{ label: "advance_gate · human_always" }] },
 ];
 
 /**
- * A running Job. The rail is the most specific running mark on job detail, so
- * the current step's dot pulses and the header's Running badge goes static.
- * Two of the four steps carry no Check and say so.
+ * A running Job — the `feature` workflow, as Fleet serves it. The rail is the
+ * most specific running mark on job detail, so the current step's dot pulses
+ * and the header's Running badge goes static.
+ *
+ * **Every tier a step declares is on it, including the two that have not run.**
+ * `implement` and `tests` each hide a Judge behind their mechanical Checks, and
+ * `handoff` gates on a person and nothing else — the step the Job halts on, and
+ * the one that read "no check on this step" until its declaration crossed.
  */
 export const Running: Story = {
   args: { steps: running, pulsing: true },
@@ -247,39 +231,10 @@ export const OneStep: Story = {
 export const ServedSteps: Story = {
   args: {
     steps: [
-      {
-        id: "plan",
-        label: "plan",
-        labelIsAnIdentifier: true,
-        activity: "advanced",
-        status: "advanced",
-        elapsed: "2m 14s",
-        verdict: "passed",
-        verdictNamed: "passed",
-      },
-      {
-        id: "implement",
-        label: "implement",
-        labelIsAnIdentifier: true,
-        activity: "running",
-        status: "running",
-        current: true,
-        elapsed: "11m 03s",
-      },
-      {
-        id: "verify",
-        label: "verify",
-        labelIsAnIdentifier: true,
-        activity: "not_started",
-        status: "not_started",
-      },
-      {
-        id: "handoff",
-        label: "handoff",
-        labelIsAnIdentifier: true,
-        activity: "not_started",
-        status: "not_started",
-      },
+      { id: "plan", label: "plan", labelIsAnIdentifier: true, activity: "advanced", status: "advanced", elapsed: "2m 14s", verdict: "passed", verdictNamed: "passed" },
+      { id: "implement", label: "implement", labelIsAnIdentifier: true, activity: "running", status: "running", current: true, elapsed: "11m 03s" },
+      { id: "verify", label: "verify", labelIsAnIdentifier: true, activity: "not_started", status: "not_started" },
+      { id: "handoff", label: "handoff", labelIsAnIdentifier: true, activity: "not_started", status: "not_started" },
     ],
     pulsing: true,
   },
@@ -495,5 +450,39 @@ export const FourJobsOverAndOneResumable: StoryObj = {
         ))}
       </div>
     );
+  },
+};
+
+/**
+ * What a step declares, before any of it has run.
+ *
+ * **This is the tier a rail could not draw.** A step's Checks are mechanical, a
+ * `judge_checks[]` entry is semantic, and `advance_gate` says which of them
+ * actually lets the step past — so a step with three gates rendered as a step
+ * with two, and `handoff`, which stops and waits for a person, rendered as a
+ * step with none.
+ *
+ * **Counts, never questions.** `DeclaredJudge` carries how many criteria are
+ * asked, how many judges answer and whether a gaming check rides along, and
+ * carries no prompt at all: a question drawn here is a prompt in a screenshot.
+ * `panel_size` is absent at one, so a value always means a panel.
+ *
+ * **`advance_gate` reads as the wire spells it.** `enum-verbs.toml` has no
+ * `advance_gate` rows, so there is no sanctioned verb for `human_always` and
+ * the underscored value renders — the same fallback `step_state` takes.
+ * Reported. `auto` draws no row: the Checks above it are the whole gate, and a
+ * row on every step would displace the sentence an ungated step owes.
+ */
+export const WhatAStepDeclares: Story = {
+  args: {
+    steps: [
+      { id: "scope", label: "scope", labelIsAnIdentifier: true, activity: "advanced", status: "advanced", elapsed: "1m 12s", evidence: { label: "" } },
+      { id: "implement", label: "implement", labelIsAnIdentifier: true, activity: "not_started", status: "not_started",
+        declarations: [{ label: "judge · 2 criteria · panel of 3", result: "not reached" }, { label: "advance_gate · auto_if_judge_passes" }] },
+      { id: "tests", label: "tests", labelIsAnIdentifier: true, activity: "not_started", status: "not_started",
+        declarations: [{ label: "judge · gaming check", result: "not reached" }] },
+      { id: "handoff", label: "handoff", labelIsAnIdentifier: true, activity: "not_started", status: "not_started",
+        declarations: [{ label: "advance_gate · human_always" }] },
+    ],
   },
 };

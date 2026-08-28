@@ -61,6 +61,31 @@ export type WorkflowRailGate = {
   outputPath?: string;
 };
 
+/**
+ * One thing that will look at a step beyond its Checks: the semantic tier the
+ * workflow declares, and what it takes to advance past the step.
+ *
+ * **A declaration, never a result.** Both are knowable from the frozen
+ * workflow before anything runs, which is the whole reason the row exists — a
+ * step that will halt for a person has to say so before it halts, and a rail
+ * that drew only the mechanical tier rendered a step with three gates as a
+ * step with two. What the Judge then answered arrives as `verdicts`.
+ *
+ * **Label-only, by rule 1 of the iconography contract.** `circle-*` is
+ * reserved to Judge verdicts and `shield-*` to Checks; a declaration is
+ * neither, and the label alone is unambiguous, so no glyph is spent. The mark
+ * column stays empty so the row still aligns with the gate rows above it.
+ */
+export type WorkflowRailDeclaration = {
+  /**
+   * What is declared, in mono beside the gate rows — counts and an enum
+   * spelling, which is machinery rather than a sentence about the workflow.
+   */
+  label: string;
+  /** Whether it has been reached yet. Absent once there is more to read. */
+  result?: string;
+};
+
 export type WorkflowRailStep = {
   id: string;
   /**
@@ -101,7 +126,14 @@ export type WorkflowRailStep = {
    */
   gates?: WorkflowRailGate[];
   /**
-   * What an ungated step's row says instead of a Check. Defaults to the
+   * What will look at this step beyond its Checks — the Judge the workflow
+   * declares, and the gate the step advances through. Drawn beneath the gate
+   * rows and counted with them: a step carrying one of these is not ungated,
+   * and must not say it is.
+   */
+  declarations?: WorkflowRailDeclaration[];
+  /**
+   * What a step with no Check and no declaration says instead. Defaults to the
    * contract's own sentence.
    */
   ungatedLabel?: ReactNode;
@@ -172,6 +204,11 @@ export function WorkflowRail({ steps, pulsing = false, onCopied }: WorkflowRailP
     <ol className="armada-rail">
       {steps.map((step, i) => {
         const gates = step.gates ?? [];
+        // A declaration is a row beneath the step exactly as a Check is, so it
+        // counts towards whether the step has anything beneath it at all. The
+        // step that halts the Job read "no check on this step" while a person
+        // was what it was waiting for, and this is the sum that was missing.
+        const declarations = step.declarations ?? [];
         return (
           <li className="armada-rail__step" key={step.id}>
             <div
@@ -200,7 +237,7 @@ export function WorkflowRail({ steps, pulsing = false, onCopied }: WorkflowRailP
               {step.elapsed ? <span className="armada-rail__elapsed">{step.elapsed}</span> : null}
               {step.status ? <span className="armada-rail__status">{step.status}</span> : null}
             </div>
-            {gates.length > 0 ? (
+            {gates.length + declarations.length > 0 ? (
               <ul className="armada-rail__gates">
                 {gates.map((gate, g) => (
                   <li className="armada-rail__gate" key={g}>
@@ -231,6 +268,18 @@ export function WorkflowRail({ steps, pulsing = false, onCopied }: WorkflowRailP
                         {gate.outputPath}
                       </span>
                     )}
+                  </li>
+                ))}
+                {declarations.map((declared, d) => (
+                  // No glyph, and the mark column held open anyway: the row
+                  // reads as one of the list it sits in rather than starting a
+                  // second one at a different indent.
+                  <li className="armada-rail__gate" key={`declared-${d}`}>
+                    <span className="armada-rail__gate-mark" />
+                    <span className="armada-rail__gate-command">{declared.label}</span>
+                    {declared.result ? (
+                      <span className="armada-rail__gate-result">{declared.result}</span>
+                    ) : null}
                   </li>
                 ))}
               </ul>

@@ -51,6 +51,14 @@ const OUT_VERSION = join(here, "..", "src", "shared", "generated", "protocol-ver
 // `step_state` has no rows in `enum-verbs.toml` at all, so it emits empty and a
 // rail row renders `job_steps.state`'s own wire spelling until they land. That
 // is visible and recoverable; copy typed into a component is not.
+//
+// `advance_gate` is here on the same terms and for the same reason, and it is
+// wanted before it has a row on purpose: the rail now says whether a step will
+// stop for a person, `auto_if_judge_passes` and `human_always` are the two
+// values that answer that, and neither has a verb anywhere in the repository.
+// Asking for the vocabulary is what puts the gap in this script's own output —
+// `advance_gate (no rows in enum-verbs.toml)` — rather than leaving a renderer
+// to write the missing words itself.
 const WANTED = [
   "job_status",
   "queued_reason",
@@ -59,6 +67,7 @@ const WANTED = [
   "criterion_verdict_check",
   "criterion_verdict_judge",
   "step_state",
+  "advance_gate",
 ];
 
 // A glyph the registry names and this lucide-react version does not export.

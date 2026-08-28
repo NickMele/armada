@@ -88,6 +88,9 @@ export const CRITERION_VERDICT_JUDGE: Readonly<Record<string, Rendering | undefi
 /** `step_state` — **no rows in `enum-verbs.toml`.** Every variant is a gap. */
 export const STEP_STATE: Readonly<Record<string, Rendering | undefined>> = {};
 
+/** `advance_gate` — **no rows in `enum-verbs.toml`.** Every variant is a gap. */
+export const ADVANCE_GATE: Readonly<Record<string, Rendering | undefined>> = {};
+
 /** Where a Job is in its life, from `job-statuses.toml`. Not a rendering. */
 export type Lifecycle = {
   /** Whether the Job is over here. */
