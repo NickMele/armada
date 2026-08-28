@@ -12,7 +12,10 @@ use core_model::{
 use testkit::{Gate, Sketch};
 
 use crate::mechanical::CheckFailed;
-use crate::{Brief, Refusals, Unreadable, Verdict};
+use crate::{
+    Accepted, Brief, Claimed, NotClaimed, Product, Refusals, ShownBy, Submission, Unreadable,
+    Verdict,
+};
 
 /// A step that asks one question, and one that asks none.
 fn workflow() -> ResolvedWorkflow {
@@ -48,12 +51,35 @@ fn checks() -> Vec<StepCheck> {
     }]
 }
 
+/// A `diff` submission, which is the shape the fixture's first step declares.
+///
+/// Its wording is deliberately distinctive, because the assertion that matters
+/// most here is that **none of it** reaches the question.
+fn submitted() -> Submission {
+    Submission::submitted(
+        config::EvidenceType::Diff,
+        Claimed("I fixed the off-by-one and I am confident it is right"),
+        ShownBy("`cargo test -p log` exit 0"),
+        NotClaimed("I did not check the callers"),
+    )
+    .expect("a submission")
+}
+
+fn patch() -> Patch {
+    Patch::of("--- a/src/log.rs\n+++ b/src/log.rs\n+    let n = n - 1;\n".to_string())
+}
+
 fn brief(workflow: &ResolvedWorkflow) -> Brief {
     let step = &workflow.steps()[0];
+    let submitted = submitted();
+    let patch = patch();
+    let accepted = Accepted::of(step, &submitted).expect("the step asks for a diff");
+    let product = Product::of(step, &patch, accepted).expect("the step changed something");
     Brief::about(
         step,
         &step.judge_checks()[0].criteria()[0],
-        &Patch::of("--- a/src/log.rs\n+++ b/src/log.rs\n+    let n = n - 1;\n".to_string()),
+        &product,
+        &[],
         &checks(),
     )
 }
@@ -94,6 +120,19 @@ fn the_question_carries_the_diff_and_the_facts_and_nothing_the_drone_said() {
         question.contains("Does the fix address the cause the note names?"),
         "{question}"
     );
+    // The whole of rule 2, as an assertion: the submission exists, the step is
+    // a `diff` step, and not one word of what the Drone said about its own work
+    // is in the question.
+    for said in [
+        "I am confident it is right",
+        "cargo test -p log",
+        "I did not check the callers",
+    ] {
+        assert!(
+            !question.contains(said),
+            "{said} reached the Judge: {question}"
+        );
+    }
 }
 
 /// Rule 3. One criterion per call, so the answer has a wrong value.

@@ -331,9 +331,10 @@ impl Ruling {
 /// not run for a submission the step did not ask for, and no path in this
 /// function reaches a verdict without one.
 ///
-/// `recorded` is what every step of this Job has submitted so far. **The
-/// gaming check is its only reader**, through [`AtStep::baseline`], which will
-/// not answer with anything but a strictly earlier step's.
+/// `recorded` is what every step of this Job has submitted so far. It has two
+/// readers — the gaming check's baseline and a step's `reference_docs` — and
+/// both reach it through [`AtStep::baseline`], which will not answer with
+/// anything but a strictly earlier step's.
 /// `entered_with` is what the worktree held when this step began — **after the
 /// boundary rebase that started it**, which is `crate::dispatch::Fleet::marked`'s
 /// to place and not this function's. `diff_nonempty` is decided by comparing it
@@ -478,7 +479,8 @@ where
                     }
                 }
             };
-            match judging::judged(step, &patch, &checks, &off_plan, judging).await {
+            match judging::judged(at, accepted, &patch, &checks, &off_plan, recorded, judging).await
+            {
                 Ok((judged, refusals)) => (judged, mechanical.but_for(refusals)),
                 // A verification that could not run is not a refusal, and it is
                 // not a pass. The step neither advances nor fails.

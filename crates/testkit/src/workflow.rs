@@ -92,6 +92,10 @@ pub struct Scoped<'a> {
     /// live check possible.
     pub at_step_start: bool,
     pub exclude: &'a [&'a str],
+    /// What this step's work is measured against, as `<step_id>.evidence`
+    /// entries. Empty is the common shape — most steps are judged on their own
+    /// product and nothing else.
+    pub references: &'a [&'a str],
 }
 
 /// Build a workflow and the Manifest its Checks resolve against.
@@ -142,6 +146,12 @@ fn workflow_text(steps: &[Sketch<'_>]) -> String {
                 text.push_str("      exclude_paths:\n");
                 for path in scope.exclude {
                     text.push_str(&format!("        - \"{path}\"\n"));
+                }
+            }
+            if !scope.references.is_empty() {
+                text.push_str("      reference_docs:\n");
+                for reference in scope.references {
+                    text.push_str(&format!("        - \"{reference}\"\n"));
                 }
             }
         }

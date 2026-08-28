@@ -53,6 +53,7 @@ fn scoped(diff_check: bool, exclude: &[&str]) -> config::ResolvedWorkflow {
             diff_check,
             at_step_start: true,
             exclude,
+            references: &[],
         }),
         gaming: None,
     }])
@@ -480,6 +481,7 @@ async fn the_plan_does_not_survive_the_step_it_was_declared_for() {
                     diff_check: true,
                     at_step_start: true,
                     exclude: &[],
+                    references: &[],
                 }),
                 gaming: None,
             },
@@ -493,6 +495,7 @@ async fn the_plan_does_not_survive_the_step_it_was_declared_for() {
                     diff_check: true,
                     at_step_start: true,
                     exclude: &[],
+                    references: &[],
                 }),
                 gaming: None,
             },

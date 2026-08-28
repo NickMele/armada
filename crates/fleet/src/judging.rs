@@ -13,6 +13,20 @@
 //! [`CallFailed`] rather than as a verdict. A machine that cannot answer must
 //! not produce one, in either direction.
 //!
+//! # What one call is shown, and who decided it
+//!
+//! [`judged`] assembles two things the Judge is not otherwise given. The
+//! **work product** comes from `verification::Product`, which reads the step's
+//! own declared `evidence_type` — a step whose product is a document is shown
+//! the document, and a step whose product is the change is shown the diff. The
+//! **yardstick** comes from `evidence_scope.reference_docs`, resolved through
+//! [`AtStep::baseline`], which answers only with a strictly earlier step that
+//! actually recorded something.
+//!
+//! Neither is a parameter a caller chooses. A definition names what it is
+//! measured against and the step declares what it produces, so nothing here
+//! decides what the Judge may see.
+//!
 //! # Where it runs
 //!
 //! In the process's temporary directory, never the worktree. A `JudgeCall`
@@ -27,12 +41,16 @@ use std::time::Duration;
 use adapter_traits::{Ask, Environment, Model, ModelClient, Patch};
 use core_model::{
     DeclaredPaths, GamingFlag, JudgeCheck, Judgment, RepoPath, ResolvedStep, StepCheck,
+    StepEvidence, StepId,
 };
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use verification::{
-    Baseline, Brief, Convergence, ConvergenceBrief, Flagged, GamingBrief, Refusals, Unreadable,
+    Accepted, Baseline, Brief, Convergence, ConvergenceBrief, Flagged, GamingBrief, NothingToJudge,
+    Product, Reference, Refusals, Unreadable,
 };
+
+use crate::at_step::AtStep;
 
 /// How long one Judge call may take before it is a failed call.
 ///
@@ -83,18 +101,34 @@ pub struct Judging {
 /// `off_plan` is the mandatory drift look. It is one call, on the step's own
 /// model dial, and it asks its question after the step's own criteria so that a
 /// refusal a step declared is not preceded by one Fleet added.
+///
+/// **A step with nothing to show draws no call at all.** Building the work
+/// product is the first thing done here, before a model is named or a budget
+/// spent, and a step that produced nothing the Judge could read comes back as
+/// [`CallFailed::NothingToJudge`] — which the gate turns into a ruling that
+/// decided neither way. It used to come back as a refusal, every time, on every
+/// Job whose first step wrote a note.
 pub(crate) async fn judged(
-    step: &ResolvedStep,
+    at: AtStep<'_>,
+    accepted: Accepted<'_>,
     patch: &Patch,
     checks: &[StepCheck],
     off_plan: &[RepoPath],
+    recorded: &[(StepId, StepEvidence)],
     judging: &Judging,
 ) -> Result<(Vec<Judgment>, Option<Refusals>), CallFailed> {
+    let step = at.step();
+    let product = Product::of(step, patch, accepted).map_err(CallFailed::NothingToJudge)?;
+    let against = measured_against(at, recorded);
+    let references: Vec<Reference<'_>> = against
+        .iter()
+        .map(|(id, evidence)| Reference::to(id.as_str(), evidence))
+        .collect();
     let mut judgments = Vec::new();
     for check in step.judge_checks() {
         let model = model_for(check, &judging.default_model)?;
         for criterion in check.criteria() {
-            let brief = Brief::about(step, criterion, patch, checks);
+            let brief = Brief::about(step, criterion, &product, &references, checks);
             // Every member of a panel answers the same brief and none of them
             // sees another's verdict — there is nothing in this loop that
             // carries one answer into the next call.
@@ -111,7 +145,7 @@ pub(crate) async fn judged(
     // step's own rigour dial bill it for drift.
     if let Some(criterion) = verification::drift_criterion(off_plan) {
         let model = fleets_model(step, &judging.default_model)?;
-        let brief = Brief::about(step, &criterion, patch, checks);
+        let brief = Brief::about(step, &criterion, &product, &references, checks);
         let ask = Ask::put(model, brief.question(), judging.environment.clone())
             .map_err(|_| CallFailed::NothingToAsk)?;
         let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
@@ -119,6 +153,29 @@ pub(crate) async fn judged(
     }
     let refusals = Refusals::among(&judgments);
     Ok((judgments, refusals))
+}
+
+/// Every `reference_docs` entry this step can actually reach.
+///
+/// **A named step that is not strictly earlier, or that recorded nothing, is
+/// silently absent rather than an error.** That is [`AtStep::baseline`]'s rule
+/// and not a second one: a yardstick that does not exist yet is not a yardstick,
+/// and a step is judged on what is there. What a definition may name is
+/// `config`'s to refuse; what a Job can reach is this.
+fn measured_against<'a, 'e>(
+    at: AtStep<'a>,
+    recorded: &'e [(StepId, StepEvidence)],
+) -> Vec<(&'a StepId, &'e StepEvidence)> {
+    at.step()
+        .evidence_scope()
+        .map(|scope| {
+            scope
+                .reference_docs()
+                .iter()
+                .filter_map(|reference| at.baseline(reference, recorded))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// Look a second time, and answer with what was flagged or with nothing.
@@ -279,6 +336,13 @@ pub enum CallFailed {
     SaidNothing,
     /// It answered something this cannot act on.
     Unreadable(Unreadable),
+    /// The step produced nothing a Judge could be shown, so no call was made.
+    ///
+    /// **Not a refusal**, and that is the whole point of it being here: a step
+    /// whose work product was never in front of the Judge has not failed
+    /// verification, it has failed to be verified, and those are read by
+    /// different people.
+    NothingToJudge(NothingToJudge),
 }
 
 impl fmt::Display for CallFailed {
@@ -300,6 +364,7 @@ impl fmt::Display for CallFailed {
             CallFailed::Refused { code: None } => out.write_str("a signal ended the Judge call"),
             CallFailed::SaidNothing => out.write_str("the Judge answered with nothing at all"),
             CallFailed::Unreadable(why) => write!(out, "{why}"),
+            CallFailed::NothingToJudge(why) => write!(out, "{why}"),
         }
     }
 }
