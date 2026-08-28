@@ -278,7 +278,17 @@ export type Turns = {
  * view: joining them in Fleet would mean holding a call open until its result
  * arrived, which is unbounded buffering in the path that must never block.
  */
-export type Turn = { ts: string; seq: number; saw: Saw };
+export type Turn = {
+  ts: string;
+  seq: number;
+  /**
+   * The `step_id` that was running when Fleet saw the row — beside `saw`, since
+   * it is true of every kind. **Absent is not the first step**: it is a row
+   * written before Fleet recorded the field, and nothing recovers which it was.
+   */
+  step?: string;
+  saw: Saw;
+};
 
 /**
  * `GET /jobs/:job_id` for the open Job. Four states, because "no detail on

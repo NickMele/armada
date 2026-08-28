@@ -8,9 +8,10 @@
 // block. Watching a Job cannot be allowed to change its outcome, so the cost of
 // the join lands here, where the worst case is a row that reads "no answer yet".
 
-import type { DroneTurn } from "@armada/components";
+import type { DroneTurn, TurnStep } from "@armada/components";
 
 import type { Turn } from "../../shared/bridge";
+import type { JobDetail as JobWhole } from "../../shared/protocol";
 import { clock } from "./duration";
 
 /**
@@ -21,8 +22,12 @@ import { clock } from "./duration";
  * output by everything that happened while it ran. An answer whose call was
  * never seen — the backfill was bounded and cut between them — keeps its own
  * row rather than being dropped, because a dropped row is a gap nobody can see.
+ *
+ * `whole` is the Job's frozen workflow, and it is what turns a `step_id` into
+ * the name the rail already draws. `null` where the detail has not been read;
+ * the id renders then, in mono, which is the rail's own fallback.
  */
-export function turnsOf(rows: readonly Turn[]): DroneTurn[] {
+export function turnsOf(rows: readonly Turn[], whole: JobWhole | null): DroneTurn[] {
   const answers = new Map<string, Answer>();
   for (const row of rows) {
     if (row.saw.event === "answered") answers.set(row.saw.call, { failed: row.saw.failed });
@@ -39,15 +44,45 @@ export function turnsOf(rows: readonly Turn[]): DroneTurn[] {
         id: String(row.seq),
         at: clock(row.ts),
         kind: saw.event,
+        step: stepOf(row, whole),
         subject: saw.call,
         answer: ANSWER[saw.failed ? "failed" : "ok"],
       });
       continue;
     }
     if (saw.event === "called") seen.add(saw.call);
-    turns.push({ id: String(row.seq), at: clock(row.ts), kind: saw.event, ...bodyOf(saw, answers) });
+    turns.push({
+      id: String(row.seq),
+      at: clock(row.ts),
+      kind: saw.event,
+      step: stepOf(row, whole),
+      ...bodyOf(saw, answers),
+    });
   }
   return turns;
+}
+
+/**
+ * Which step a row ran under, named the way the rail names one.
+ *
+ * **A row carrying no step gets none, and never the first one.** Fleet began
+ * recording the step on 2026-08-28 and wrote no migration, because the step an
+ * older row ran under is unrecoverable — so an absence stays an absence and the
+ * pane says so, rather than a transcript claiming a four-step Job happened
+ * during step one.
+ *
+ * **The label is Fleet's and the id is the fallback**, which is `rail.ts`'s
+ * rule for the same substitution: `StepDetail.label` is never blank because
+ * Fleet substitutes the `step_id` where the workflow declares no name, and a
+ * label that *is* the id renders in mono so a reader can tell. A step the
+ * frozen workflow does not carry, or a detail nobody has read yet, takes the
+ * same fallback — the id is what arrived, and nothing composes a name from it.
+ */
+function stepOf(row: Turn, whole: JobWhole | null): TurnStep | undefined {
+  const id = row.step;
+  if (id === undefined) return undefined;
+  const label = whole?.steps.find((step) => step.step_id === id)?.label ?? id;
+  return { id, label, labelIsAnIdentifier: label === id || undefined };
 }
 
 type Answer = { failed: boolean };

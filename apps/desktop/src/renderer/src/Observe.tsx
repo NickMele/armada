@@ -19,7 +19,12 @@ import type { ReactNode } from "react";
 import { WatchingADroneWork, type JobDetailHeading } from "@armada/components";
 
 import type { Observed } from "../../shared/bridge";
-import type { JobSummary, ManifestSummary, WorkflowSummary } from "../../shared/protocol";
+import type {
+  JobDetail as JobWhole,
+  JobSummary,
+  ManifestSummary,
+  WorkflowSummary,
+} from "../../shared/protocol";
 import { factsOf } from "./facts";
 import { readingOf } from "./reading";
 import { turnsOf } from "./turns";
@@ -30,6 +35,12 @@ const NOTHING_RECORDED =
 
 export type ObserveProps = {
   job: JobSummary;
+  /**
+   * The Job read whole, for the step boundaries in the transcript and nothing
+   * else: the rows carry `step_id`s and the frozen workflow is what names them.
+   * `null` until the read lands, and the ids render in mono until it does.
+   */
+  whole: JobWhole | null;
   observed: Observed;
   workflows: readonly WorkflowSummary[];
   manifests: readonly ManifestSummary[];
@@ -47,6 +58,7 @@ export type ObserveProps = {
 
 export function Observe({
   job,
+  whole,
   observed,
   workflows,
   manifests,
@@ -106,7 +118,7 @@ export function Observe({
   return (
     <WatchingADroneWork
       heading={heading}
-      turns={turnsOf(turns.rows)}
+      turns={turnsOf(turns.rows, whole)}
       emptyNote={NOTHING_RECORDED}
       live={turns.live}
       skipped={turns.skipped}

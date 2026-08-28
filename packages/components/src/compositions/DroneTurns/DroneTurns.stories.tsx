@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { DroneTurns, type DroneTurn } from "./DroneTurns";
+import { DroneTurns, type DroneTurn, type TurnStep } from "./DroneTurns";
 
 /**
  * One Drone's turns, read while it is still working.
@@ -18,6 +18,11 @@ import { DroneTurns, type DroneTurn } from "./DroneTurns";
  * 106 of 149 rows were kinds the decoder could not place, so three lines in
  * four described the plumbing rather than the work. They collapse, keep their
  * count, and open.
+ *
+ * **The step is a boundary, not a column.** One Drone works several steps, and
+ * a name repeated down every row would be the same string forty times over. The
+ * line is drawn where the step changed and every row beneath it is answered by
+ * position — including a step that runs, stops and runs again.
  */
 const meta: Meta<typeof DroneTurns> = {
   title: "Compositions/Drone turns",
@@ -243,6 +248,95 @@ export const NothingButToolCalls: Story = {
       { id: "2", at: "09:20:31", kind: "called", subject: "Bash", detail: "cargo test -p ipc", answer: "Answered, and the tool itself failed." },
       { id: "3", at: "09:20:48", kind: "called", subject: "Read", detail: "crates/ipc/src/turn.rs", answer: "Answered." },
       { id: "4", at: "09:20:52", kind: "called", subject: "Grep", detail: "Saw::Called in crates/", answer: "No answer yet." },
+    ],
+  },
+};
+
+/**
+ * The two steps of the transcript below. A `label` Fleet served, so both read
+ * as names rather than as identifiers.
+ */
+const REPRO: TurnStep = { id: "repro", label: "Reproduce the bug" };
+const FIX: TurnStep = { id: "fix", label: "Fix the root cause" };
+
+/**
+ * One Drone across three runs of two steps.
+ *
+ * **The boundary is drawn where the step changed, and nowhere else.** A label on
+ * every row would be the same string down forty consecutive lines, taking width
+ * from the body that carries what the Drone actually did; the question a reader
+ * asks is where one step stopped and the next began.
+ *
+ * **A step that runs twice draws two boundaries.** The transcript records the
+ * step that was running when each row was written, not a range, so `fix` failing
+ * its gate and being retried is two separate stretches — and a component that
+ * marked only first appearances would fold the retry into the original.
+ *
+ * A boundary also breaks a run of quiet rows, because one collapsed line
+ * spanning two steps would attribute the whole of it to whichever the reader
+ * guessed at.
+ */
+export const TurnsUnderTheirSteps: Story = {
+  args: {
+    live: true,
+    emptyNote: NOTHING_YET,
+    turns: [
+      { id: "1", at: "09:14:02", step: REPRO, kind: "started", subject: "sess_01JB4 · the job's model · 2 mcp servers" },
+      { id: "2", at: "09:14:03", step: REPRO, kind: "said", said: "Writing the failing test before I touch the reducer." },
+      ...thinking(10, 5, "09:14:04").map((turn) => ({ ...turn, step: REPRO })),
+      { id: "20", at: "09:14:22", step: REPRO, kind: "called", subject: "Write", detail: "tests/settings_split.rs", answer: "Answered." },
+      { id: "21", at: "09:15:01", step: FIX, kind: "said", said: "The test reproduces it. Splitting the reducer now." },
+      { id: "22", at: "09:15:09", step: FIX, kind: "called", subject: "Edit", detail: "src/settings.rs +42 -18", answer: "Answered." },
+      { id: "23", at: "09:15:40", step: FIX, kind: "called", subject: "Bash", detail: "cargo test -p settings --lib", answer: "Answered, and the tool itself failed." },
+      { id: "24", at: "09:18:02", step: REPRO, kind: "said", said: "The gate sent this back. Widening the reproduction first." },
+      { id: "25", at: "09:18:30", step: REPRO, kind: "called", subject: "Edit", detail: "tests/settings_split.rs +11 -0", answer: "Answered." },
+      { id: "26", at: "09:19:04", step: FIX, kind: "called", subject: "Edit", detail: "src/settings.rs +6 -2", answer: "No answer yet." },
+    ],
+  },
+};
+
+/**
+ * A step whose workflow declares no name of its own.
+ *
+ * **The `step_id` renders, in mono, and nothing composes a name from it.** That
+ * is the rail's answer to the same substitution: Fleet never sends a blank
+ * label, it sends the id, and mono is how a reader is told which arrived. See
+ * `[workflow-step-human-label]` — no workflow in the repository declares a
+ * label yet, so this is what most transcripts look like today.
+ */
+export const AStepWithNoNameOfItsOwn: Story = {
+  args: {
+    emptyNote: NOTHING_YET,
+    turns: [
+      { id: "1", at: "09:22:01", step: { id: "implement", label: "implement", labelIsAnIdentifier: true }, kind: "called", subject: "Edit", detail: "src/settings.rs +42 -18", answer: "Answered." },
+      { id: "2", at: "09:24:40", step: { id: "regression_verify", label: "regression_verify", labelIsAnIdentifier: true }, kind: "called", subject: "Bash", detail: "cargo nextest run --workspace", answer: "Answered." },
+      { id: "3", at: "09:26:12", step: { id: "write_up", label: "write_up", labelIsAnIdentifier: true }, kind: "said", said: "Submitting the evidence report." },
+    ],
+  },
+};
+
+/**
+ * A transcript that begins before Fleet recorded the step.
+ *
+ * **The leading rows are unlabelled, never the first step.** That is the exact
+ * falsehood the field was added to remove — a four-step Job whose whole
+ * transcript claimed to have happened under step one. The step those rows ran
+ * under cannot be recovered from anything on disk, so no migration invented one
+ * and this pane does not either.
+ *
+ * A transcript where *no* row anywhere carries a step draws no boundary at all:
+ * every row of it predates the field, so the line would contrast with nothing.
+ * Every story above this one is that case.
+ */
+export const RowsWrittenBeforeTheStepWasRecorded: Story = {
+  args: {
+    emptyNote: NOTHING_YET,
+    turns: [
+      { id: "1", at: "08:59:14", kind: "started", subject: "sess_01J9Z · the job's model · 2 mcp servers" },
+      { id: "2", at: "08:59:20", kind: "called", subject: "Read", detail: "src/settings.rs", answer: "Answered." },
+      { id: "3", at: "09:01:02", kind: "said", said: "Reading the reducer before I split it." },
+      { id: "4", at: "09:12:41", step: FIX, kind: "called", subject: "Edit", detail: "src/settings.rs +42 -18", answer: "Answered." },
+      { id: "5", at: "09:13:10", step: FIX, kind: "called", subject: "Bash", detail: "cargo test -p settings --lib", answer: "Answered." },
     ],
   },
 };

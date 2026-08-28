@@ -139,6 +139,65 @@
   border: 0;
 }
 
+/* --- Where the step changed ----------------------------------------------- */
+
+/* A boundary, not a column. One step's turns run to dozens, so a name on every
+   row would be the same string forty times over, taking width from the body
+   that absorbs the list's slack. What a reader asks is where the step changed,
+   and a rule drawn there answers it for every row beneath. */
+.armada-turns__step {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  padding: var(--space-2);
+  margin-top: var(--space-2);
+  border-top: var(--border-width) solid var(--edge-rule);
+}
+
+/* Opening the transcript rather than dividing it: there is nothing above the
+   first boundary for a rule to separate it from. */
+.armada-turns__step:first-child {
+  margin-top: 0;
+  border-top: 0;
+}
+
+/* In the kind column, in the kind's place, so the boundary keeps a row's shape
+   and reads as `step <name>` to a screen reader with no hidden text. */
+.armada-turns__step-tag {
+  grid-column: 2;
+}
+
+/* Sans and medium: the step's name is Fleet's own label for the work, read as
+   language, and it is the one thing in the transcript that is a heading. */
+.armada-turns__step-name {
+  grid-column: 3;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+  text-wrap: pretty;
+  min-width: 0;
+}
+
+/* Where no workflow label is known the step_id renders instead — mono, and one
+   step smaller than the sans it replaces. The rail's rule for the same
+   substitution, and honest in the same useless-to-scan way. */
+.armada-turns__step[data-identifier] .armada-turns__step-name {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+/* Rows written before Fleet recorded a step. Quiet and unemphasised, because it
+   names an absence rather than a step — and it must never read as the first
+   step, which is the claim this whole boundary exists to stop making. */
+.armada-turns__step[data-unrecorded] .armada-turns__step-name {
+  font-weight: var(--weight-body);
+  color: var(--fg-subtle);
+}
+
 /* --- A run of the drone thinking ------------------------------------------ */
 
 /* One line standing for a run of rows, with the rows underneath it when it is

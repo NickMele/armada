@@ -23,6 +23,11 @@ import { Button } from "../../primitives/Button/Button";
  * wire's enum and has no `enum-verbs.toml` rows — so the spelling renders
  * rather than copy invented here. Reported.
  *
+ * **The step is a boundary, not a column.** One step's turns run to dozens, so
+ * a name repeated down every row would be the same string forty times over
+ * competing for the width the body absorbs. The question a reader asks is where
+ * the step changed, and a line drawn there answers it for every row beneath.
+ *
  * **It follows the tail, and stops the moment you scroll away from it.** A
  * pane that pulls you back to the bottom while you are reading is worse than
  * one that never moves. It resumes when you return to the bottom.
@@ -60,6 +65,25 @@ export type DroneTurn = {
    * side it is a model working, which is what the collapsed line says.
    */
   quiet?: boolean;
+  /**
+   * The workflow step the row ran under. Drawn as a boundary above the first
+   * row of each run of it, never on the row itself.
+   *
+   * **Absent is not the first step.** It is a row written before Fleet recorded
+   * which step was running, and nothing can recover which it was — so the
+   * boundary above such rows says they carry none rather than naming one.
+   */
+  step?: TurnStep;
+};
+
+/** One step, named the way the rail names one: Fleet's label, or Fleet's id. */
+export type TurnStep = {
+  /** The `step_id`. What one run of a step is told from the next by. */
+  id: string;
+  /** The step's name, in sans. The `step_id` where no name is known. */
+  label: string;
+  /** Whether `label` is the `step_id` rather than a name, so it renders in mono. */
+  labelIsAnIdentifier?: boolean;
 };
 
 export type DroneTurnsProps = {
@@ -140,7 +164,9 @@ export function DroneTurns({ turns, emptyNote, live = false }: DroneTurnsProps) 
   return (
     <ol className="armada-turns" ref={setList}>
       {entries.map((entry, at) =>
-        entry.of === "turn" ? (
+        entry.of === "step" ? (
+          <StepBoundary key={`step-${entry.above}`} step={entry.step} />
+        ) : entry.of === "turn" ? (
           <Row key={entry.turn.id} turn={entry.turn} />
         ) : (
           <QuietRun
@@ -183,19 +209,39 @@ function scrollerFor(from: Element | null): Element | null {
   return document.scrollingElement;
 }
 
-type Entry = { of: "turn"; turn: DroneTurn } | { of: "quiet"; turns: DroneTurn[] };
+type Entry =
+  | { of: "turn"; turn: DroneTurn }
+  | { of: "quiet"; turns: DroneTurn[] }
+  /** Keyed by the row it stands above, which is stable while rows only append. */
+  | { of: "step"; step?: TurnStep; above: string };
 
 /**
- * The rows, with consecutive quiet ones gathered.
+ * The rows, with consecutive quiet ones gathered and each change of step marked.
  *
  * **A run of one is still a run.** Left alone it renders the decoder's own
  * words for a turn it could not place, which is the reading this collapse
  * exists to remove, and one line that reads like its neighbours beats one that
  * does not.
+ *
+ * **A boundary breaks a run**, because a collapsed line spanning two steps
+ * would attribute the whole of it to whichever the reader guessed.
+ *
+ * **Nothing is marked where no row anywhere carries a step.** Every row of such
+ * a transcript predates the field, so "not recorded" would be the only line on
+ * screen and would contrast with nothing. A transcript that gains a step
+ * part-way through says so at the point it does.
  */
 function runs(turns: DroneTurn[]): Entry[] {
+  const attributed = turns.some((turn) => turn.step !== undefined);
   const entries: Entry[] = [];
+  let under: string | undefined;
+  let opened = false;
   for (const turn of turns) {
+    if (attributed && (!opened || turn.step?.id !== under)) {
+      entries.push({ of: "step", step: turn.step, above: turn.id });
+      under = turn.step?.id;
+      opened = true;
+    }
     const last = entries[entries.length - 1];
     if (turn.quiet !== true) {
       entries.push({ of: "turn", turn });
@@ -272,6 +318,39 @@ function QuietRun({ turns, working, open, onToggle }: QuietRunProps) {
       </li>
       {open ? turns.map((turn) => <Row key={turn.id} turn={turn} nested />) : null}
     </Fragment>
+  );
+}
+
+/**
+ * What rows written before Fleet recorded a step say for themselves.
+ *
+ * **Never the first step.** That is the falsehood a transcript told before the
+ * wire carried this at all: a four-step Job claiming the whole of it happened
+ * under step one. The true step is unrecoverable, so this says so.
+ */
+const UNRECORDED = "Fleet recorded no step for the turns below";
+
+/**
+ * Where the step changed, as a line across the transcript.
+ *
+ * **No glyph.** `circle-*` belongs to Judge verdicts, `shield-*` to Checks and
+ * `file*` to evidence, and a boundary is none of those — the rule and the name
+ * carry it, and a mark spent here would be a mark meaning something else.
+ *
+ * The word `step` sits in the kind column, where every other row's machine word
+ * sits: it keeps the boundary's shape identical to a row's and gives it an
+ * accessible name that says what it is without hidden text.
+ */
+function StepBoundary({ step }: { step?: TurnStep }) {
+  return (
+    <li
+      className="armada-turns__step"
+      data-unrecorded={step === undefined || undefined}
+      data-identifier={step?.labelIsAnIdentifier || undefined}
+    >
+      <span className="armada-turns__kind armada-turns__step-tag">{"step"}</span>
+      <span className="armada-turns__step-name">{step?.label ?? UNRECORDED}</span>
+    </li>
   );
 }
 
