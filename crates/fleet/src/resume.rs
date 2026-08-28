@@ -139,7 +139,7 @@ where
             // stays there until the Drone proves it heard. See
             // [`watch_redirect`](Fleet::watch_redirect).
             if stopped.is_none() {
-                at_work.awaiting_answer(turned);
+                at_work.awaiting_answer(turned, self.now());
             }
         }
         Ok(job)
@@ -186,6 +186,35 @@ where
             at_work.answered();
         }
         Ok(Some(Roused { job, step }))
+    }
+
+    /// The redirect this Job's Drone has not answered yet, for `get_job`.
+    ///
+    /// **The third part of the act, and the one a person reads.** The send is
+    /// [`redirect`](Fleet::redirect) and the return to `running` is
+    /// [`watch_redirect`](Fleet::watch_redirect); between them the Job sits
+    /// `escalated`, looking exactly like a Job nobody has spoken to. This is
+    /// what tells the two apart, and it is on the wire rather than in the window
+    /// that pressed the button because that window's memory of it does not
+    /// survive a reload and never existed in a second one.
+    ///
+    /// **A fact about the last act, and not a status.** The Job stays where the
+    /// escalation put it; nothing mints a seventh status for a Job already in
+    /// the one it belongs in. It says Fleet wrote to the pipe and nothing more
+    /// — whether the Drone read it is the turn `watch_redirect` waits for.
+    ///
+    /// `None` where nothing is outstanding, where the slot holds some other Job,
+    /// and on every redirect that landed on a stopped step: that one moved both
+    /// machines on the send, so there was never anything to wait for.
+    pub(crate) async fn redirect_awaited(&self, job: &JobId) -> Option<ipc::RedirectInFlight> {
+        let working = self.slot().lock().await;
+        working
+            .as_ref()
+            .filter(|at_work| at_work.is(job))
+            .and_then(|at_work| at_work.awaiting_since())
+            .map(|sent_at| ipc::RedirectInFlight {
+                sent_at: sent_at.into(),
+            })
     }
 
     /// Write the answer into the Job's own log. **Fields say who and when; the

@@ -41,7 +41,13 @@
 // a trigger costs the words to describe it.
 
 import { JOB_STATUS } from "../../shared/generated/vocabulary";
-import type { JobDetail as JobWhole, JobSummary, StepDetail } from "../../shared/protocol";
+import type {
+  JobDetail as JobWhole,
+  JobSummary,
+  RedirectInFlight,
+  StepDetail,
+} from "../../shared/protocol";
+import { clock } from "./duration";
 import { ordered } from "./facts";
 
 /**
@@ -146,7 +152,12 @@ export function recourseOf(job: JobSummary, whole: JobWhole | null): Recourse {
     return { note: `${said}${NO_STEP_STOPPED} ${replacement(job)}` };
   }
   if (job.assigned_drone !== undefined) {
-    return { act: "redirect", overrule, note: `${said}${REDIRECT} ${replacement(job)}` };
+    // **The answer to the last press leads.** A redirect that is waiting and one
+    // that never arrived are the same escalated Job, and the person reading this
+    // sentence is usually the person who just sent one — so what happened to it
+    // comes before what may be done next.
+    const sent = whole?.redirecting === undefined ? "" : `${waiting(whole.redirecting)} `;
+    return { act: "redirect", overrule, note: `${sent}${said}${REDIRECT} ${replacement(job)}` };
   }
   return { act: "restart_step", overrule, note: `${said}${RESTART} ${replacement(job)}` };
 }
@@ -311,6 +322,27 @@ function notResumable(job: SummaryStatus): string {
 const NO_STEP_STOPPED =
   "Nothing resumes this job. It escalated without stopping a step, so redirect and restart " +
   "have no step to land on.";
+
+/**
+ * The redirect that is out, in the owner's words: *sent, waiting for the drone*.
+ *
+ * **It is not a status and it does not claim delivery.** The job is escalated
+ * and staying there is the design — it comes back to `running` when the drone
+ * takes a turn, which is evidence it resumed rather than evidence somebody
+ * pressed send. What Fleet knows is that it wrote to the session, and this says
+ * that and no more.
+ *
+ * **The time is a clock, not an age.** Nothing ticks on the wire and nothing
+ * counts up here; a wait that is genuinely long is read off the time it started,
+ * which is the same bargain the transcript and the history make.
+ */
+function waiting(sent: RedirectInFlight): string {
+  return (
+    `Sent, waiting for the drone. The instruction went into its session at ${clock(sent.sent_at)}, ` +
+    "and this job stays escalated until the drone takes a turn — a turn is the evidence it " +
+    "resumed, and sending is not. Redirecting again replaces what is outstanding."
+  );
+}
 
 /** `DroneStillThere` stated as the act it points at rather than as a refusal. */
 const REDIRECT =

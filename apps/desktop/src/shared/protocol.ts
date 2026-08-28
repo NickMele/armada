@@ -92,6 +92,40 @@ export type JobDetail = {
    * that was read and held no change, which is a different sentence.
    */
   footprint?: JobFootprint;
+  /**
+   * The redirect this job's drone has been sent and has not answered yet.
+   * Since protocol 4.14.
+   *
+   * **Absent is the second reading, not a gap.** Where a step had stopped, the
+   * job went back to `running` on the send and there was never anything to wait
+   * for; where none had, the job stays `escalated` until the drone takes a
+   * turn, and this is the only thing on the wire that says so. A window that
+   * remembered having sent one would lose it on a reload and never have it in a
+   * second window, which is why the fact is here and not in Bridge.
+   */
+  redirecting?: RedirectInFlight;
+};
+
+/**
+ * A redirect that has gone into the drone's session and has not been answered.
+ * `crates/ipc/src/detail.rs`.
+ *
+ * **A fact about the last act, not a status.** The job is `escalated` and stays
+ * there — it returns to `running` on the drone taking a turn, which is evidence
+ * it resumed rather than evidence somebody pressed a button. It arrives one way
+ * only, on the open job's detail: the wait ends with the job's own move to
+ * `running`, and that move is already an event.
+ *
+ * It says Fleet wrote to the pipe and no more than that. Whether the drone read
+ * the instruction is answered by the next turn it takes, so there is no
+ * delivery flag here and there is nothing on this seam that could set one.
+ */
+export type RedirectInFlight = {
+  /**
+   * When the instruction went into the session, by Fleet's clock. **A surface
+   * subtracts; nothing ticks on the wire**, as `JudgeInFlight.since` does.
+   */
+  sent_at: string;
 };
 
 /**
