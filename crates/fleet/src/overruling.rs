@@ -178,11 +178,17 @@ where
 
     /// Tell the Drone that is there, and move the slot on to the next step.
     ///
-    /// The same three things `approve_review` does at a human gate, in the same
+    /// The same four things `approve_review` does at a human gate, in the same
     /// order and for the same reasons: `now_on` clears what the step being left
-    /// had declared, `marked` reads the baseline the next step's
-    /// `diff_nonempty` is decided against, and the ask goes out with the
-    /// acceptance because an unasked Drone declares nothing.
+    /// had declared, `caught_up` puts the branch on top of the base the way
+    /// every other step boundary does, `marked` reads the baseline the next
+    /// step's `diff_nonempty` is decided against — after the rebase, never
+    /// before it — and the ask goes out with the acceptance because an unasked
+    /// Drone declares nothing.
+    ///
+    /// **An override is a step boundary and it had the approval one's hole.**
+    /// `crate::reviewing`'s module doc argues why the rebase belongs on this
+    /// side of a person's decision rather than before they read anything.
     async fn carried_on(
         &self,
         job_id: &JobId,
@@ -193,9 +199,12 @@ where
         if let Some(at_work) = working.as_mut() {
             at_work.now_on(next.id().clone(), self.now());
         }
+        let caught_up = self.caught_up(working).await;
         self.marked(working);
-        self.tell(job_id, told, Declaring::at(next).as_ref(), working)
-            .await
+        let told = told.clone().and(caught_up.as_ref().ok().cloned().flatten());
+        self.tell(job_id, &told, Declaring::at(next).as_ref(), working)
+            .await?;
+        caught_up.map(|_| ())
     }
 
     /// The step a person may overrule, and the verdict they are overruling.

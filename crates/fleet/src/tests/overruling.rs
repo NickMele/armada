@@ -9,14 +9,19 @@
 //! where nothing does. An override is one refused step on one Job, and what
 //! keeps it from becoming an approve-anything is the four.
 
+use std::sync::Arc;
+
+use adapter_traits::{BroughtUpToDate, Standing};
 use core_model::{EscalationTrigger, JobStatus, StepId, StepLevelTrigger, StepState, StepVerdict};
 use ipc::{JobDetail, JobHistory, Movement, RunId};
-use testkit::{FakeJudge, FakeWorkProduct, Gaming, Gate, Sketch};
+use testkit::{Delivered, Delivering, FakeJudge, FakeVcs, FakeWorkProduct, Gaming, Gate, Sketch};
 
 use crate::daemon::Fleet;
 use crate::gate::Ruling;
 use crate::overruling::Overruling;
-use crate::tests::daemon::{a_fleet_judged_by, a_proposal, diff_evidence, worktree_directory};
+use crate::tests::daemon::{
+    a_fleet_judged_by, a_proposal, diff_evidence, fittings, one, worktree_directory,
+};
 use crate::tests::http::call;
 use crate::tests::tmp::TempDir;
 use crate::Adrift;
@@ -206,6 +211,47 @@ async fn a_refused_step_advances_when_a_person_overrules_the_judge() {
         reloaded.current_step_id().map(|id| id.as_str()),
         Some("summarise"),
         "the cursor moved to the step that follows, which is what `restart_step` would not do"
+    );
+}
+
+/// **An override is a step boundary, and it had `approve_review`'s hole.**
+/// Neither of the two acts a person takes to advance a step ran the catch-up
+/// that every mechanical advance runs, so the step being advanced to started
+/// from a branch that was two commits behind. #150 names the approval path;
+/// this is the same defect on the other one.
+#[tokio::test]
+async fn an_overruled_step_catches_the_branch_up_like_any_other_boundary() {
+    let home = TempDir::new();
+    let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    fittings.workflows = one(judged_then_summarised());
+    fittings.judge = Arc::new(a_judge_that_refuses());
+    fittings.vcs = FakeVcs::new().delivering(Delivering {
+        standing: Standing::Behind { commits: 2 },
+        rebase: Some(BroughtUpToDate::Clean {
+            base: String::from("main"),
+            commits: 2,
+        }),
+        ..Delivering::default()
+    });
+    let fleet = Fleet::assembled(fittings);
+    let job_id = refused(&fleet, &home).await;
+    assert!(
+        fleet.vcs().delivered().is_empty(),
+        "an escalated Job is standing still — nothing has rebased under the person reading it"
+    );
+
+    fleet
+        .override_verdict(&job_id, &a_reason())
+        .await
+        .expect("the person overrules the verdict");
+
+    assert_eq!(
+        fleet.vcs().delivered(),
+        vec![Delivered::BroughtUpToDate {
+            branch: format!("armada/{}", job_id.as_str()),
+            base: String::from("main"),
+        }],
+        "the step an override advanced to starts where an auto-advanced one would"
     );
 }
 

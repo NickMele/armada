@@ -24,6 +24,19 @@
 //! A step gated `advance_gate: human_always` whose tiers all held: `crate::gate`
 //! rules `HeldForReview` and `apply` takes the edge. The step stays `running`,
 //! which is why the ordering above is what it is.
+//!
+//! # The branch is caught up on the far side of the person's decision
+//!
+//! An approval is a verdict on the step that was worked, not an authorisation
+//! to merge, so the rebase does not touch what was read — it moves the tree the
+//! *next* step starts from, which the reviewer was never shown. Rebasing on the
+//! way *in* to `awaiting_review` buys nothing for it: the base moves while a
+//! person reads, and a conflict would put markers into the diff being judged.
+//!
+//! `HeldForReview` keeps the Drone alive, so a conflict has somebody to go to
+//! and rides the approval turn as it rides a mechanical advance. Where the
+//! Drone has gone the slot is empty and nothing is rebased, as on every other
+//! path onto a worktree whose Drone ended — a wider gap than this one.
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{Actor, Job, JobId, JobStatus, StepId, StepTarget, Target};
 use std::path::Path;
@@ -56,9 +69,15 @@ where
     /// [`finish`](Fleet::finish) does, because a Job whose branch is
     /// uncommitted is correct, verified and unmergeable.
     ///
-    /// **It does not need a Drone.** Where one is gone the turn goes nowhere and
-    /// the Job is still moved: the decision is the person's and is recorded
-    /// either way, and a Drone-less `running` Job is the reaper's to escalate.
+    /// **It does not need a Drone.** Where one is gone the turn goes nowhere,
+    /// nothing is rebased and the Job is still moved: the decision is the
+    /// person's and is recorded either way, and a Drone-less `running` Job is
+    /// the reaper's to escalate.
+    ///
+    /// **A catch-up that would not run is raised after everything has moved**,
+    /// the way [`completed`](Fleet::completed) raises a commit that failed: the
+    /// decision is on the record and the Drone told, and what is left to report
+    /// is that the branch it goes on with is behind.
     pub async fn approve_review(&self, job_id: &JobId) -> Result<Job, Adrift> {
         let mut working = self.slot().lock().await;
         let job = self.load(job_id).await?;
@@ -78,14 +97,25 @@ where
         if let Some(at_work) = working.as_mut() {
             at_work.now_on(next.id().clone(), self.now());
         }
+        // The catch-up a mechanical advance runs, for the module doc's reason.
+        // An empty slot has no worktree, so a Drone that has gone rebases
+        // nothing.
+        let caught_up = self.caught_up(&working).await;
         // The approved step's work is what the next step inherits, read at the
-        // boundary for `crate::dispatch`'s reason.
+        // boundary for `crate::dispatch`'s reason and **after the rebase** for
+        // [`marked`](Fleet::marked)'s: a baseline read before it credits this
+        // step with git's output. #131 is that ordering and it holds here too.
         self.marked(&mut working);
         // The ask the approved step's successor makes, sent with the
         // acceptance: `now_on` above has just cleared whatever the step being
-        // left had declared, and an unasked Drone declares nothing.
+        // left had declared, and an unasked Drone declares nothing. What the
+        // base did rides along, because a Drone going on against a tree that
+        // moved underneath it — or one holding conflict markers it has to
+        // resolve — is being told the same thing a mechanical advance tells it.
+        let told = told.and(caught_up.as_ref().ok().cloned().flatten());
         self.tell(job_id, &told, Declaring::at(&next).as_ref(), &working)
             .await?;
+        caught_up?;
         Ok(job)
     }
 
