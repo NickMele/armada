@@ -1,0 +1,55 @@
+# Feature, reduced to what M1's parser accepts. See `bug.json` beside this
+# file for why a reduced form exists at all, and for the six fields this one
+# also holds to.
+#
+# The designed `feature.json` (`crates/core-model/domain/workflow-samples/`)
+# runs seven steps in a loop, with Judge checks on four of them and a human
+# gate at review. This form keeps `scope` and `implement`, adds `tests` for
+# the step Feature carries that Bug does not, and folds `review`, `merge` and
+# `close` into one auto `handoff` — the same fold `bug.json` makes, for the
+# same reason: none of those three gates run at M1.
+#
+# `tests` carries the designed `regression_verify`'s `test` check itself
+# rather than a separate step — Fleet runs it after the Drone reports the
+# test diff, which is the step whose result the suite run actually answers
+# for; a step blocked until it passes needs no second step to say so again.
+{
+  "version": 1,
+  "workflow_id": "feature",
+  "name": "feature",
+  "structure": "linear",
+  "steps": [
+    {
+      "id": "scope",
+      "label": "Scope the change",
+      "evidence_type": "facts_note",
+      "advance_gate": "auto"
+    },
+    {
+      "id": "implement",
+      "label": "Implement",
+      "evidence_type": "diff",
+      "mechanical_checks": [
+        { "type": "manifest_check", "check": "build", "expect_exit_code": 0 },
+        { "type": "diff_nonempty" }
+      ],
+      "advance_gate": "auto"
+    },
+    {
+      "id": "tests",
+      "label": "Write tests",
+      "evidence_type": "diff",
+      "mechanical_checks": [
+        { "type": "manifest_check", "check": "test", "expect_exit_code": 0 },
+        { "type": "diff_nonempty" }
+      ],
+      "advance_gate": "auto"
+    },
+    {
+      "id": "handoff",
+      "label": "Summarise",
+      "evidence_type": "facts_note",
+      "advance_gate": "auto"
+    }
+  ]
+}

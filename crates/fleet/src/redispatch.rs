@@ -91,25 +91,35 @@ where
 
     /// The new Job, written and published.
     ///
-    /// The workflow and its steps are read from what Fleet holds **now**, not
-    /// copied from the failed Job. A redispatch is a new Job, and a new Job
-    /// freezes the definition as it currently stands — which is how an edit
-    /// made in response to the failure reaches the retry. Everything else is
-    /// carried across unchanged.
+    /// The workflow and its steps are read from what Fleet holds **now**, for
+    /// the failed Job's own `workflow_id` — not copied from the failed Job's
+    /// frozen copy. A redispatch is a new Job, and a new Job freezes the
+    /// definition as it currently stands, which is how an edit made in
+    /// response to the failure reaches the retry. Everything else is carried
+    /// across unchanged.
     async fn mint_replacement(&self, failed: &Job) -> Result<Job, Adrift> {
         let at = self.now();
+        // The file may have been renamed or deleted since the original Job was
+        // created — refused rather than silently falling back to whatever
+        // Fleet happens to hold, which would replace the Job with one running
+        // a different workflow than it asked for.
+        let workflow =
+            self.workflow_named(failed.workflow_id())
+                .ok_or_else(|| Adrift::WorkflowWithdrawn {
+                    job: failed.id().clone(),
+                    workflow_id: failed.workflow_id().as_str().to_string(),
+                })?;
+        let frozen = workflow.frozen();
         let new = NewJob {
             id: JobId::carried(self.mint().ulid()),
             title: failed.title().clone(),
-            workflow: self.workflow().frozen().clone(),
+            workflow: frozen.clone(),
             owner_manifest_id: failed.owner_manifest_id().clone(),
             urgency: failed.urgency(),
             atomic: failed.atomic(),
             model: failed.model().clone(),
             acceptance_criteria: failed.acceptance_criteria().to_vec(),
-            steps: self
-                .workflow()
-                .frozen()
+            steps: frozen
                 .steps()
                 .iter()
                 .enumerate()

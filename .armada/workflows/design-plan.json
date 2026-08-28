@@ -1,0 +1,32 @@
+# Design Plan, reduced to what M1's parser accepts. See `bug.json` beside this
+# file for why a reduced form exists at all, and for the six fields this one
+# also holds to.
+#
+# The designed `design-plan.json` (`crates/core-model/domain/workflow-samples/`)
+# is Armada's only instantiated loop: `draft` and `present`, with
+# `present`'s `request_changes` verdict routing back to `draft`. `structure:
+# loop` is not in M1's carried set, so this form keeps both steps and drops
+# the loop — one pass through `draft` then `present`, both auto, neither
+# gated, since the loop-back edge and the human gate it depends on are both
+# outside this milestone. A workflow this thin is not a defect in the
+# reduction; Design Plan has no mechanical tier even in the designed form.
+{
+  "version": 1,
+  "workflow_id": "design_plan",
+  "name": "design_plan",
+  "structure": "linear",
+  "steps": [
+    {
+      "id": "draft",
+      "label": "Draft",
+      "evidence_type": "document",
+      "advance_gate": "auto"
+    },
+    {
+      "id": "present",
+      "label": "Present",
+      "evidence_type": "document",
+      "advance_gate": "auto"
+    }
+  ]
+}

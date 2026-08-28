@@ -42,18 +42,22 @@
 //! practice: nothing else can be dispatched while `cargo test` runs, and
 //! nothing wants to be.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use adapter_traits::{
     AgentHarness, Delivery, Model, ModelClient, SpawnConfigRefused, Vcs, WorkProduct,
 };
 use config::{Manifest, ResolvedWorkflow};
-use core_model::{Actor, Job, JobId, JobStatus, Target, Timestamp, TransitionReason, Ulid};
+use core_model::{
+    Actor, Job, JobId, JobStatus, Target, Timestamp, TransitionReason, Ulid, WorkflowId,
+};
 use store::{LoadAllError, LoadJobError, Loaded, Moved, Store};
 use tokio::sync::Mutex;
 
 use crate::adrift::Adrift;
 use crate::clock::Clock;
+use crate::converging::{StepNorms, Wandering};
 use crate::delivery::Delivered;
 use crate::drone::{aftermath, environment, Aftermath, Ending, HostPaths};
 use crate::evidence::EvidenceInbox;
@@ -105,18 +109,20 @@ pub struct Fittings<H, V, W> {
     pub work: W,
     pub clock: Arc<dyn Clock>,
     pub mint: Arc<dyn Mint>,
-    /// The workflow every Job runs. **One, at M1** — Fleet is pointed at a
-    /// repository and `.armada/workflows/` holds one definition.
-    ///
-    /// It now carries an id, read from the definition's `workflow_id`, so a
-    /// proposal naming a workflow this Fleet does not hold is refused at
-    /// creation instead of written onto the record unverified.
-    pub workflow: ResolvedWorkflow,
+    /// Every workflow a Job may run, keyed by the `workflow_id` its definition
+    /// carries. Fleet is pointed at a repository and `.armada/workflows/` may
+    /// hold more than one definition — a proposal names which one it wants,
+    /// and a name this map does not hold is refused at creation instead of
+    /// written onto the record unverified.
+    pub workflows: BTreeMap<WorkflowId, ResolvedWorkflow>,
     /// The `armada.yml` that workflow resolved against. Held because a Drone's
     /// toolbelt is built from the commands it declares.
     pub manifest: Manifest,
     pub host: Host,
     pub budget: CheckBudget,
+    /// What a step is expected to cost before the thrashing chain looks at it.
+    /// See [`StepNorms`] for why it has no default.
+    pub norms: StepNorms,
     /// What makes a Judge call. **A pointer rather than a type parameter**: the
     /// seam renders and cannot fail, so nothing about it needs to be generic.
     pub judge: Arc<dyn ModelClient + Send + Sync>,
@@ -170,6 +176,9 @@ pub struct Turned {
     /// seen. **It fails nothing here** — the Drone may declare again, and the
     /// gate reads the footprint for itself when the step ends.
     pub drifting: Option<Drifting>,
+    /// How far the thrashing chain got with the step being worked. Empty on
+    /// every turn of a step inside its norms, which is nearly all of them.
+    pub wandering: Option<Wandering>,
 }
 
 /// The daemon core: **the only writer of Job state.**
@@ -180,10 +189,11 @@ pub struct Fleet<H, V, W> {
     work: W,
     clock: Arc<dyn Clock>,
     mint: Arc<dyn Mint>,
-    workflow: ResolvedWorkflow,
+    workflows: BTreeMap<WorkflowId, ResolvedWorkflow>,
     manifest: Manifest,
     host: Host,
     budget: CheckBudget,
+    norms: StepNorms,
     judge: Arc<dyn ModelClient + Send + Sync>,
     judge_budget: JudgeBudget,
     judge_model: Model,
@@ -227,10 +237,11 @@ where
             work: fittings.work,
             clock: fittings.clock,
             mint: fittings.mint,
-            workflow: fittings.workflow,
+            workflows: fittings.workflows,
             manifest: fittings.manifest,
             host: fittings.host,
             budget: fittings.budget,
+            norms: fittings.norms,
             judge: fittings.judge,
             judge_budget: fittings.judge_budget,
             judge_model: fittings.judge_model,
@@ -275,7 +286,8 @@ where
         for job in held {
             self.drone_left(job.id()).await;
             let job = self.load(job.id()).await?;
-            if let Aftermath::JobMoves(target) = aftermath(job.status(), &Ending::Vanished, self.left())
+            if let Aftermath::JobMoves(target) =
+                aftermath(job.status(), &Ending::Vanished, self.left())
             {
                 self.move_job(&job, target, Actor::Fleet).await?;
                 reconciled.interrupted.push(job.id().clone());
@@ -299,6 +311,10 @@ where
         // watched — and after nothing, because the check reads a worktree and
         // must not run against a slot the gate has just cleared.
         let drifting = self.watch_scope(&mut working).await;
+        // After the drift reading it consumes and before the gate, which is the
+        // one place both are true: a step whose evidence lands this turn is at
+        // the gate rather than thrashing, and `settle` may clear the slot.
+        let wandering = self.watch_convergence(&mut working).await?;
         let ruled = self.settle(&mut working).await?;
         let delivered = self.delivered.lock().await.take();
         let after = self.reap(&mut working).await?;
@@ -309,6 +325,7 @@ where
             admitted,
             delivered,
             drifting,
+            wandering,
         })
     }
 
@@ -471,8 +488,13 @@ where
     pub(crate) fn work(&self) -> &W {
         &self.work
     }
-    pub(crate) fn workflow(&self) -> &ResolvedWorkflow {
-        &self.workflow
+    /// One workflow by id, or `None` where this Fleet holds no such definition.
+    pub(crate) fn workflow_named(&self, id: &WorkflowId) -> Option<&ResolvedWorkflow> {
+        self.workflows.get(id)
+    }
+    /// Every workflow this Fleet holds, for `serving`'s `list_workflows`.
+    pub(crate) fn workflows(&self) -> &BTreeMap<WorkflowId, ResolvedWorkflow> {
+        &self.workflows
     }
     pub(crate) fn manifest(&self) -> &Manifest {
         &self.manifest
@@ -482,6 +504,9 @@ where
     }
     pub(crate) fn budget(&self) -> CheckBudget {
         self.budget
+    }
+    pub(crate) fn norms(&self) -> StepNorms {
+        self.norms
     }
 
     /// What the gate needs in order to ask the Judge.

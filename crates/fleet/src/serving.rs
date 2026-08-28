@@ -40,9 +40,8 @@ use core_model::Job;
 use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
     CheckRun, DeclaredCheck, Flagged, JobDetail, JobId, JobList, JobSummary, Judged, ManifestId,
-    ManifestSummary, ModelChoices, ProposeJob, Redirection, Redispatched, RunId, StepFacts,
-    StepId, WireError,
-    WorkflowId, WorkflowStep, WorkflowSummary,
+    ManifestSummary, ModelChoices, ProposeJob, Redirection, Redispatched, RunId, StepFacts, StepId,
+    WireError, WorkflowId, WorkflowStep, WorkflowSummary,
 };
 use store::{LoadJobError, WriteError};
 
@@ -129,22 +128,20 @@ where
         ))
     }
 
-    /// The one workflow this Fleet holds, so a caller can name one that will
-    /// not be refused.
-    ///
-    /// **A list over a set of one.** The reason there was one is that nothing
-    /// could look a second up — `ResolvedWorkflow` carried no id — and that
-    /// reason has gone, so a query that answered with a single object would
-    /// have to be replaced rather than extended.
+    /// Every workflow this Fleet holds, so a caller can name one that will not
+    /// be refused.
     async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {
-        let workflow = self.workflow();
-        Ok(vec![WorkflowSummary {
-            id: WorkflowId::from(workflow.id()),
-            name: workflow.name().to_string(),
-            version: workflow.version(),
-            steps: declared(workflow),
-            manifest_id: ManifestId::from(self.manifest().id()),
-        }])
+        Ok(self
+            .workflows()
+            .values()
+            .map(|workflow| WorkflowSummary {
+                id: WorkflowId::from(workflow.id()),
+                name: workflow.name().to_string(),
+                version: workflow.version(),
+                steps: declared(workflow),
+                manifest_id: ManifestId::from(self.manifest().id()),
+            })
+            .collect())
     }
 
     /// The one Manifest this Fleet was started against.
@@ -476,7 +473,8 @@ where
             // is somewhere a replacement would mean nothing.
             Adrift::NotRedispatchable { job, .. }
             | Adrift::NeverRan { job }
-            | Adrift::NotReplaceable { job } => Refusal::IllegalMove(
+            | Adrift::NotReplaceable { job }
+            | Adrift::WorkflowWithdrawn { job, .. } => Refusal::IllegalMove(
                 WireError::raised(NOT_REDISPATCHABLE, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
             ),

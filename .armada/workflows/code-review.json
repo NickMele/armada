@@ -1,0 +1,39 @@
+# Code Review, reduced to what M1's parser accepts. See `bug.json` beside this
+# file for why a reduced form exists at all, and for the six fields this one
+# also holds to.
+#
+# The designed `code-review.json` (`crates/core-model/domain/workflow-samples/`)
+# is already linear and already three steps — `read`, `assess`, `deliver` —
+# so nothing here is folded. What is dropped: the Judge panel on `assess`, the
+# `manifest_rule:review_gate` on `deliver`, and every `artifact_exists` check,
+# since that mechanical-check type is not in M1's carried set. `assess`'s
+# `evidence_type` is `facts_note` rather than the designed `review_findings`,
+# which is not a value the schema has. Every step is gateless — auto with no
+# mechanical tier — because this workflow lands nothing and produces no diff
+# for `diff_nonempty` to check.
+{
+  "version": 1,
+  "workflow_id": "code_review",
+  "name": "code_review",
+  "structure": "linear",
+  "steps": [
+    {
+      "id": "read",
+      "label": "Read the diff",
+      "evidence_type": "facts_note",
+      "advance_gate": "auto"
+    },
+    {
+      "id": "assess",
+      "label": "Assess",
+      "evidence_type": "facts_note",
+      "advance_gate": "auto"
+    },
+    {
+      "id": "deliver",
+      "label": "Deliver the review",
+      "evidence_type": "bundle",
+      "advance_gate": "auto"
+    }
+  ]
+}

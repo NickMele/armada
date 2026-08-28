@@ -11,9 +11,13 @@
 #     which is what that routing makes it. It is the authority on what Bug
 #     becomes, and it lives with the registry that records that decision.
 #
-#   - **This one is M1's reduced form, and it is what runs today.** Four steps,
-#     no Judge, no loop, `advance_gate: auto` throughout. Reducing it is the
-#     only way to have a workflow that dispatches at all right now.
+#   - **This one is M1's reduced form, and it is what runs today.** Three
+#     steps, no Judge, no loop, `advance_gate: auto` throughout. Reducing it
+#     is the only way to have a workflow that dispatches at all right now.
+#     `implement` carries the test check itself rather than handing off to a
+#     separate `verify` step — the Drone never runs a Check; Fleet does, after
+#     the Drone reports its diff, and a step the Drone cannot advance past
+#     until build and test both pass needs no second step to say so again.
 #
 #   - **The designed one does not load at M1, and that is not a defect in it.**
 #     `crates/config` carries one of the two structures and one of the four
@@ -60,16 +64,8 @@
       "evidence_type": "diff",
       "mechanical_checks": [
         { "type": "manifest_check", "check": "build", "expect_exit_code": 0 },
+        { "type": "manifest_check", "check": "test", "expect_exit_code": 0 },
         { "type": "diff_nonempty" }
-      ],
-      "advance_gate": "auto"
-    },
-    {
-      "id": "verify",
-      "label": "Run tests",
-      "evidence_type": "test_suite_run",
-      "mechanical_checks": [
-        { "type": "manifest_check", "check": "test", "expect_exit_code": 0 }
       ],
       "advance_gate": "auto"
     },

@@ -32,7 +32,7 @@ A human gate costs no session context, because the PID, the worktree and the ses
 
 **Removal is driven by Job retention, never by process exit.** Deleting on merge would strand a retained Job, because Evidence references paths. A killed Job's worktree is held because it is the record of why the Job stopped: a redispatch mints a new Job, and the replacement works in a worktree of its own.
 
-**An `interrupted` worktree is never swept.** Why: it may hold uncommitted work, and destroying that on a restart is the same class of act as auto-killing, which Fleet never does. A person decides.
+**An `interrupted` worktree is never swept.** Why: it may hold uncommitted work. Fleet stops a Drone only at a cap, and even then the worktree survives — what a cap ends is the spending, never the work. A person decides what happens to it.
 
 **The liveness clock suspends at a human gate.** Why: a Drone waiting on a person has no activity by construction, so every gate that outlasted the heartbeat timeout escalated its own Job as `stalled`. Design Plan gates on a human every iteration, so the loop shape hit it first and hardest.
 

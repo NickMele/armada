@@ -1,0 +1,44 @@
+# Refactor, reduced to what M1's parser accepts. See `bug.json` beside this
+# file for why a reduced form exists at all, and for the six fields this one
+# also holds to.
+#
+# The designed `refactor.json` (`crates/core-model/domain/workflow-samples/`)
+# runs six steps in a loop, with a Judge on three of them, `hard_prerequisite`
+# on `regression_verify`, and a gaming check comparing the test diff against
+# `scope`. None of that is M1's to enforce, which leaves the same shape
+# `bug.json` already reduces to: `scope` renamed `plan`, `refactor` renamed
+# `implement`, and `review` + `merge` + `close` folded into one auto
+# `handoff`. `implement` carries `regression_verify`'s `test` check itself
+# rather than a separate step — Fleet runs it after the Drone reports the
+# diff, and a step blocked until it passes needs no second step to say so
+# again.
+{
+  "version": 1,
+  "workflow_id": "refactor",
+  "name": "refactor",
+  "structure": "linear",
+  "steps": [
+    {
+      "id": "plan",
+      "label": "Scope the refactor",
+      "evidence_type": "facts_note",
+      "advance_gate": "auto"
+    },
+    {
+      "id": "implement",
+      "label": "Restructure",
+      "evidence_type": "diff",
+      "mechanical_checks": [
+        { "type": "manifest_check", "check": "test", "expect_exit_code": 0 },
+        { "type": "diff_nonempty" }
+      ],
+      "advance_gate": "auto"
+    },
+    {
+      "id": "handoff",
+      "label": "Summarise",
+      "evidence_type": "facts_note",
+      "advance_gate": "auto"
+    }
+  ]
+}

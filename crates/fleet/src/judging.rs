@@ -25,10 +25,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::{Ask, Environment, Model, ModelClient, Patch};
-use core_model::{GamingFlag, JudgeCheck, Judgment, ResolvedStep, StepCheck};
+use core_model::{
+    DeclaredPaths, GamingFlag, JudgeCheck, Judgment, RepoPath, ResolvedStep, StepCheck,
+};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
-use verification::{Baseline, Brief, Flagged, GamingBrief, Refusals, Unreadable};
+use verification::{
+    Baseline, Brief, Convergence, ConvergenceBrief, Flagged, GamingBrief, Refusals, Unreadable,
+};
 
 /// How long one Judge call may take before it is a failed call.
 ///
@@ -134,6 +138,43 @@ pub(crate) async fn gaming(
         }
     }
     Ok(Flagged::among(flags))
+}
+
+/// Look part-way through a step, and answer with where the work stands.
+///
+/// **Called only once a mechanical tripwire fired**, which is the caller's to
+/// establish — this function costs money every time it is entered, and a look
+/// on a schedule is the design `docs/concepts/judge.md` rules out.
+///
+/// One call and **no panel**: the answer has no veto for a panel to make
+/// stricter, and unanimity over three opinions about "is this going anywhere"
+/// would fail loudly on a step that is merely slow.
+pub(crate) async fn converging(
+    step: &ResolvedStep,
+    patch: &Patch,
+    declared: Option<&DeclaredPaths>,
+    off_plan: &[RepoPath],
+    judging: &Judging,
+) -> Result<Convergence, CallFailed> {
+    let model = mid_step_model(step, &judging.default_model)?;
+    let brief = ConvergenceBrief::about(step, patch, declared, off_plan);
+    let ask = Ask::put(model, brief.question(), judging.environment.clone())
+        .map_err(|_| CallFailed::NothingToAsk)?;
+    let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
+    brief.read(&said).map_err(CallFailed::Unreadable)
+}
+
+/// Which model the mid-step look runs on.
+///
+/// The step's own dial where it declares one, so a step that pays for a
+/// stronger judge at its gate is looked at by the same one part-way through.
+/// A step declaring no Judge check at all still gets the look, on the default:
+/// converging is Fleet's question rather than something a step opts into.
+fn mid_step_model(step: &ResolvedStep, default: &Model) -> Result<Model, CallFailed> {
+    match step.judge_checks().first() {
+        Some(check) => model_for(check, default),
+        None => Ok(default.clone()),
+    }
 }
 
 /// The step's own model dial, or the fleet default where it names none.

@@ -48,6 +48,7 @@
 //! [`InScope::resolved`] at the gate, and [`drifted`] on every turn of a step
 //! that declared its plan up front.
 
+mod converging;
 mod gaming;
 mod gate;
 mod judge;
@@ -59,6 +60,7 @@ mod submission;
 #[cfg(test)]
 mod tests;
 
+pub use converging::{Convergence, ConvergenceBrief, NotConverging, MID_STEP_CONVERGENCE};
 pub use gaming::{in_the_diff, judged_patterns, Baseline, Flagged, GamingBrief};
 pub use gate::{decide, Accepted, NotWhatTheStepAsked, Verdict};
 pub use judge::{Brief, Refusals, Unreadable};

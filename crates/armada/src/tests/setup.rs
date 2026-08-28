@@ -6,17 +6,45 @@
 //! five operations answer is asserted in `fleet`'s own suite, over the router,
 //! with no socket.
 //!
-//! # These are the tests that stop the two files rotting
+//! # These are the tests that stop the real files rotting
 //!
-//! `armada.yml` and `.armada/workflows/bug.json` are read by nothing else in
-//! the workspace. Without a test over them, a Check renamed in one and not the
-//! other is a daemon that refuses to start, discovered by whoever next tried to
-//! start it.
+//! `armada.yml` and every definition in `.armada/workflows/` are read by
+//! nothing else in the workspace. Without a test over them, a Check renamed in
+//! one and not the other is a daemon that refuses to start, discovered by
+//! whoever next tried to start it.
 
 use config::{Fault, LoadError, ResolvedCheck, WorkflowDef};
 
-use crate::setup::{Setup, MANIFEST, WORKFLOWS};
-use crate::tests::repository;
+use crate::setup::{Setup, SetupRefused, MANIFEST, WORKFLOWS};
+use crate::tests::{repository, TempDir};
+
+/// A repository with an `armada.yml` that declares no Checks, so a workflow
+/// gated on nothing resolves against it without also having to write a Check.
+fn a_repository() -> TempDir {
+    let dir = TempDir::new();
+    dir.write("armada.yml", "version: 1\nid: 01FIXTUREMANIFEST\n");
+    dir
+}
+
+/// A minimal, legal, one-step definition — gated on nothing, so it resolves
+/// against a Manifest that declares no Checks.
+fn a_workflow(id: &str) -> String {
+    format!(
+        "version: 1\nworkflow_id: {id}\nname: {id}\nstructure: linear\nsteps:\n  - id: only\n    \
+         label: \"Only step\"\n    advance_gate: auto\n"
+    )
+}
+
+/// Bug, this repository's one workflow the tests below name by hand. The
+/// other six live beside it and are not this file's business.
+fn bug(setup: &Setup) -> &config::ResolvedWorkflow {
+    setup
+        .workflows()
+        .get(&core_model::WorkflowId::carried(core_model::Ulid::carried(
+            "bug",
+        )))
+        .expect("bug.json declares workflow_id `bug`")
+}
 
 /// **The whole claim of this step, over the real files.** Fleet is pointed at a
 /// repository and the repository's setup is enough to build a workflow that can
@@ -33,17 +61,18 @@ fn this_repositorys_own_setup_loads_and_resolves() {
         vec!["build".to_string(), "test".to_string()],
         "the two Checks this workspace is built and tested with"
     );
-    assert_eq!(setup.workflow().name(), "bug");
-    let steps: Vec<&str> = setup
-        .workflow()
+    assert_eq!(bug(&setup).name(), "bug");
+    let steps: Vec<&str> = bug(&setup)
         .steps()
         .iter()
         .map(|step| step.id().as_str())
         .collect();
     assert_eq!(
         steps,
-        vec!["plan", "implement", "verify", "handoff"],
-        "four steps, which is M1's reduced form of the designed Bug workflow"
+        vec!["plan", "implement", "handoff"],
+        "three steps, which is M1's reduced form of the designed Bug workflow \
+         — `implement` carries the test Check itself rather than handing off \
+         to a separate `verify` step"
     );
 }
 
@@ -56,8 +85,7 @@ fn this_repositorys_own_setup_loads_and_resolves() {
 #[test]
 fn each_named_check_resolved_to_the_command_the_manifest_holds() {
     let setup = Setup::at(&repository()).expect("a setup that loads");
-    let resolved: Vec<(&str, &str)> = setup
-        .workflow()
+    let resolved: Vec<(&str, &str)> = bug(&setup)
         .steps()
         .iter()
         .flat_map(|step| step.checks())
@@ -133,14 +161,15 @@ fn the_designed_bug_workflow_is_refused_for_a_reason_a_later_milestone_removes()
 /// The two definitions are different files with different scope, and nothing
 /// reconciles them by accident.
 ///
-/// M1's reduced form has four steps because M1 has no Judge to answer
-/// `auto_if_judge_passes` and no verdict to route on. The designed one has
-/// seven and loops. A change that made the two the same length would mean one of
-/// them had been quietly rewritten into the other.
+/// M1's reduced form has three steps because M1 has no Judge to answer
+/// `auto_if_judge_passes` and no verdict to route on, and `implement` carries
+/// the test Check itself rather than handing off to a step of its own. The
+/// designed one has seven and loops. A change that made the two the same
+/// length would mean one of them had been quietly rewritten into the other.
 #[test]
 fn the_designed_definition_and_m1s_reduced_form_are_not_the_same_workflow() {
     let setup = Setup::at(&repository()).expect("a setup that loads");
-    assert_eq!(setup.workflow().steps().len(), 4);
+    assert_eq!(bug(&setup).steps().len(), 3);
 
     let designed = repository()
         .join("crates/core-model/domain/workflow-samples")
@@ -153,4 +182,46 @@ fn the_designed_definition_and_m1s_reduced_form_are_not_the_same_workflow() {
         steps, 7,
         "repro, root_cause, fix, regression_verify, review, merge, close"
     );
+}
+
+/// **The whole point of this step.** A repository may declare more than one
+/// workflow, and every one of them loads and is held by its own id.
+#[test]
+fn two_or_more_workflow_definitions_load_and_are_held_by_their_own_ids() {
+    let dir = a_repository();
+    dir.write(".armada/workflows/alpha.yml", &a_workflow("alpha"));
+    dir.write(".armada/workflows/beta.yml", &a_workflow("beta"));
+
+    let setup = Setup::at(dir.path()).expect("two definitions with distinct ids load");
+    let mut ids: Vec<&str> = setup.workflows().keys().map(|id| id.as_str()).collect();
+    ids.sort();
+    assert_eq!(ids, vec!["alpha", "beta"]);
+}
+
+/// Two files naming the same `workflow_id` is refused, and the refusal names
+/// both paths — a person reading it must not have to search the directory to
+/// find the second.
+#[test]
+fn a_duplicate_workflow_id_across_two_files_is_refused_naming_both() {
+    let dir = a_repository();
+    dir.write(".armada/workflows/first.yml", &a_workflow("shared"));
+    dir.write(".armada/workflows/second.yml", &a_workflow("shared"));
+
+    let refused = Setup::at(dir.path()).expect_err("two files agree on one id");
+    assert!(matches!(refused, SetupRefused::DuplicateWorkflowId { .. }));
+    let said = refused.to_string();
+    assert!(said.contains("first.yml"), "{said}");
+    assert!(said.contains("second.yml"), "{said}");
+    assert!(said.contains("shared"), "{said}");
+}
+
+/// An empty `.armada/workflows/` is still refused — a repository is not set up
+/// until at least one workflow is there to dispatch.
+#[test]
+fn zero_workflow_files_is_still_refused() {
+    let dir = a_repository();
+    std::fs::create_dir_all(dir.path().join(WORKFLOWS)).expect("the empty directory");
+
+    let refused = Setup::at(dir.path()).expect_err("no definition is in the directory");
+    assert!(matches!(refused, SetupRefused::NoWorkflow { .. }));
 }

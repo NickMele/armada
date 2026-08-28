@@ -10,8 +10,12 @@
 //! whole process tree, so an undetached Drone dies at every Fleet restart,
 //! silently and mid-Job.
 //!
-//! **Fleet never auto-kills.** Anything escalated is paused with its worktree
-//! held as-is. Killing is exclusively a human action.
+//! **Fleet stops a Drone only at a cap.** Anything escalated is paused with its
+//! worktree held as-is, and killing is otherwise a human action — but a held
+//! Drone still costs money, and one confirmed to be thrashing is spending it
+//! without converging. That one Fleet stops itself: a Drone told to report and
+//! silent afterwards is not waiting for a person, it is burning. The worktree
+//! survives either way, which is what holding was protecting.
 //!
 //! Fleet is also the only writer of Job state, and it reaches the agent only
 //! through `adapter-traits` — never the real CLI directly, anywhere.
@@ -82,6 +86,7 @@ pub mod at_step;
 pub mod briefing;
 mod check_output;
 pub mod clock;
+pub mod converging;
 pub mod daemon;
 pub mod delivery;
 pub mod detach;
@@ -114,6 +119,7 @@ mod tests;
 pub use adrift::{Adrift, NotDeclared, NotSubmitted};
 pub use at_step::AtStep;
 pub use clock::{Clock, SystemClock};
+pub use converging::{ReportNow, Stage, StepNorms, Tripwire, Wandering};
 pub use daemon::{Fittings, Fleet, Host, Reconciled, Turned};
 pub use delivery::Delivered;
 pub use detach::Detached;
@@ -134,4 +140,4 @@ pub use scope::{Declared, Drifting};
 pub use session::{DroneSession, LiveSession, Turn};
 pub use transcript::{history, log_of, transcript_of, Live, Recording, Spine, Tap, Taps};
 pub use turning::{keep_turning, Turning};
-pub use watch::Watching;
+pub use watch::{Progress, Watching};

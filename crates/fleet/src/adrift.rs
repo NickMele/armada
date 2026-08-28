@@ -139,6 +139,11 @@ pub enum Adrift {
     /// A redispatch was asked for on a Job that is a step of another Job.
     /// Replacing one is the parent's act, and nothing dispatches a sub-Job yet.
     NotReplaceable { job: JobId },
+    /// A redispatch was asked for on a Job whose own `workflow_id` this Fleet
+    /// no longer holds. The file it named was renamed or deleted after the
+    /// Job was created — not the case `NoSuchWorkflow` names, which is a
+    /// proposal, at creation, naming an id that never existed.
+    WorkflowWithdrawn { job: JobId, workflow_id: String },
     /// A resume was asked for on a Job that is not waiting for a person.
     ///
     /// **Not an illegal transition.** The machine has `escalated -> running`
@@ -179,7 +184,11 @@ pub enum Adrift {
     /// the proposal's was written onto the record unverified and the Job sat on
     /// the board claiming a workflow Fleet had never heard of — the same class
     /// as the blank model, a value that cannot work accepted where it enters.
-    NoSuchWorkflow { named: String, held: String },
+    ///
+    /// **`held` names every id this Fleet holds**, not one — `.armada/workflows/`
+    /// may declare more than one definition, and a caller needs the whole list
+    /// to pick a name that will not be refused a second time.
+    NoSuchWorkflow { named: String, held: Vec<String> },
     /// A proposal named a Manifest this Fleet does not hold. The same fault as
     /// [`Adrift::NoSuchWorkflow`], for the other id a proposal carries.
     NoSuchManifest { named: String, held: String },
@@ -305,6 +314,12 @@ impl fmt::Display for Adrift {
                  rather than this one's",
                 job.as_str()
             ),
+            Adrift::WorkflowWithdrawn { job, workflow_id } => write!(
+                out,
+                "{} froze workflow `{workflow_id}`, which this Fleet no longer holds — the file \
+                 was renamed or deleted since. Nothing was replaced",
+                job.as_str()
+            ),
             Adrift::NotResumable { job, status } => write!(
                 out,
                 "{} is {} and has no stopped step to resume. Redirect and restart both take a \
@@ -337,11 +352,15 @@ impl fmt::Display for Adrift {
                 job.as_str()
             ),
             Adrift::Unnameable => out.write_str("a Job needs a title somebody can read"),
-            Adrift::NoSuchWorkflow { named, held } => write!(
-                out,
-                "no workflow is named `{named}`. This Fleet holds `{held}` — a proposal may name \
-                 that one, or none at all, and `list_workflows` says what is there"
-            ),
+            Adrift::NoSuchWorkflow { named, held } => {
+                let names: Vec<String> = held.iter().map(|id| format!("`{id}`")).collect();
+                write!(
+                    out,
+                    "no workflow is named `{named}`. This Fleet holds {} — `list_workflows` \
+                     says what each one is",
+                    names.join(", ")
+                )
+            }
             Adrift::NoSuchManifest { named, held } => write!(
                 out,
                 "no Manifest is named `{named}`. This Fleet holds `{held}`, the one declared by \
@@ -403,6 +422,7 @@ impl Error for Adrift {
             | Adrift::NotRedispatchable { .. }
             | Adrift::NeverRan { .. }
             | Adrift::NotReplaceable { .. }
+            | Adrift::WorkflowWithdrawn { .. }
             | Adrift::Unnameable
             | Adrift::NoSuchWorkflow { .. }
             | Adrift::NoSuchManifest { .. }

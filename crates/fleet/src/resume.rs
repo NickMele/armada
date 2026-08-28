@@ -76,12 +76,8 @@ where
     /// told the Judge's citation, because the person read that citation and
     /// wrote the instruction from it; `docs/contracts/agent-prompt.md` gives
     /// this turn no Fleet wording for the same reason.
-    pub async fn redirect(
-        &self,
-        job_id: &JobId,
-        instruction: &Redirection,
-    ) -> Result<Job, Adrift> {
-        let working = self.slot().lock().await;
+    pub async fn redirect(&self, job_id: &JobId, instruction: &Redirection) -> Result<Job, Adrift> {
+        let mut working = self.slot().lock().await;
         let job = self.load(job_id).await?;
         let step = self.resumable(&job)?;
         // The live session, which is the whole difference between the two acts
@@ -99,6 +95,11 @@ where
         // Job then failed to move would be an instruction acted on by a
         // process nobody had unpaused.
         self.instruct(job_id, instruction, &working).await?;
+        // The step is running again, so the thrashing chain is too. Without
+        // this a Drone steered off one loop is never caught in the next.
+        if let Some(at_work) = working.as_mut() {
+            at_work.resumed(self.now());
+        }
         Ok(job)
     }
 
@@ -125,10 +126,12 @@ where
         let stopped = self.what_stopped(&job, &step).await?;
 
         let job = self.resumed(&job, &step, Actor::Human).await?;
-        let brief = briefing::resuming_turn(&job, job.workflow(), &step, &stopped)
-            .map_err(|cause| Adrift::NotConfigurable {
-                job: job_id.clone(),
-                cause,
+        let brief =
+            briefing::resuming_turn(&job, job.workflow(), &step, &stopped).map_err(|cause| {
+                Adrift::NotConfigurable {
+                    job: job_id.clone(),
+                    cause,
+                }
             })?;
         self.put_a_drone_on(&job, &step, worktree, brief, &mut working)
             .await?;
@@ -171,12 +174,13 @@ where
     /// reach, and a worktree can still be reclaimed — at which point the
     /// earlier steps' work is not on disk and there is nothing to resume onto.
     fn surviving_worktree(&self, job: &Job) -> Result<Worktree, Adrift> {
-        let spec = WorktreeSpec::for_job(&self.host().repo_root, job.id().as_str()).map_err(
-            |cause| Adrift::Unworkable {
-                job: job.id().clone(),
-                cause,
-            },
-        )?;
+        let spec =
+            WorktreeSpec::for_job(&self.host().repo_root, job.id().as_str()).map_err(|cause| {
+                Adrift::Unworkable {
+                    job: job.id().clone(),
+                    cause,
+                }
+            })?;
         if !Path::new(&spec.worktree_path()).is_dir() {
             return Err(Adrift::WorktreeGone {
                 job: job.id().clone(),

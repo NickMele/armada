@@ -76,7 +76,9 @@ use std::time::Duration;
 
 use adapters::{GitVcs, HeadlessAgent};
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
-use fleet::{CheckBudget, Fittings, Fleet, Host, JudgeBudget, Mint, SystemClock, UlidMint};
+use fleet::{
+    CheckBudget, Fittings, Fleet, Host, JudgeBudget, Mint, StepNorms, SystemClock, UlidMint,
+};
 use ipc::PROTOCOL_VERSION;
 use store::Store;
 
@@ -124,6 +126,22 @@ pub const PROVISIONAL_CHECK_BUDGET: Duration = Duration::from_secs(900);
 /// this bounds, not money.
 pub const PROVISIONAL_JUDGE_BUDGET: Duration = Duration::from_secs(120);
 
+/// What a step is expected to cost before the thrashing chain looks at it.
+///
+/// **Provisional, and nothing has measured any of the three.** The registry
+/// names a "step norm" and an "expected ceiling" and no value was ever put on
+/// either; these are a first guess in the one place a search will find them,
+/// sized so a step that has genuinely stopped converging is looked at while a
+/// long build is not. Tripping one of them costs a Judge call and nothing else
+/// — see `fleet::converging`, where the escalation is three stages further on.
+///
+/// The grace is the shortest of the three deliberately: spike 4 measured an
+/// injected turn consumed in 1.59s mid-task and 33s against a forty-second
+/// command, so two minutes is a Drone that is not answering rather than one
+/// inside a long call.
+pub const PROVISIONAL_STEP_NORMS: StepNorms =
+    StepNorms::of(60, Duration::from_secs(1_800), Duration::from_secs(120));
+
 /// How often Fleet is turned. **Provisional**, and nothing has measured it.
 ///
 /// It is the latency of a *ruling* rather than of a start — `approve` and each
@@ -164,14 +182,19 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     };
     let setup = Setup::at(&repository)?;
     println!(
-        "{} — workflow `{}` ({}), {} step(s), Checks {} — model {}",
+        "{} — Checks {} — model {}",
         setup.root().display(),
-        setup.workflow().name(),
-        setup.workflow().id().as_str(),
-        setup.workflow().steps().len(),
         setup.manifest().check_names().join(", "),
         machine_facts.models.default
     );
+    for workflow in setup.workflows().values() {
+        println!(
+            "  workflow `{}` ({}), {} step(s)",
+            workflow.name(),
+            workflow.id().as_str(),
+            workflow.steps().len()
+        );
+    }
 
     let vacancy = presence
         .vacancy(&path)
@@ -355,7 +378,7 @@ fn assemble(
     )?;
 
     let root = setup.root().to_path_buf();
-    let (manifest, workflow) = setup.into_parts();
+    let (manifest, workflows) = setup.into_parts();
     // The Judge runs the program the Drone runs, so a machine that named one
     // through the override names both — a second variable would let the two
     // disagree about which binary is installed.
@@ -370,7 +393,7 @@ fn assemble(
         work: GitVcs::new(),
         clock: Arc::new(SystemClock::new()),
         mint: Arc::new(UlidMint::new()),
-        workflow,
+        workflows,
         manifest,
         host: Host {
             repo_root: root.canonicalize()?.to_string_lossy().to_string(),
@@ -381,6 +404,7 @@ fn assemble(
             attachments_dir: attachments_dir.to_string_lossy().to_string(),
         },
         budget: CheckBudget::of(PROVISIONAL_CHECK_BUDGET),
+        norms: PROVISIONAL_STEP_NORMS,
         // The same CLI, invoked as a call rather than as a session. The
         // spelling of the model is the adapter's; this crate never learns it.
         judge: Arc::new(HeadlessAgent::at(judge_binary)),

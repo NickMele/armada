@@ -4,8 +4,10 @@
 //!
 //! Every Drone is spawned into its own session. A supervisor signals a job's
 //! whole process tree, so a Drone spawned as a plain child dies at every Fleet
-//! restart — silently, mid-Job, burning tokens against a real repository, which
-//! is the one thing "Fleet never auto-kills" forbids. A helper that a caller
+//! restart — silently, mid-Job, burning tokens against a real repository. A
+//! Drone killed by a restart it had nothing to do with is the opposite of the
+//! one killing Fleet does do, which is deliberate, at a cap, on a Drone that is
+//! burning without converging. A helper that a caller
 //! remembers to use is exactly the convention failure this codebase is built to
 //! remove, so there is no `Command` in this crate's public surface at all:
 //! [`Detached`] is the only way to start a process from Fleet, and it applies

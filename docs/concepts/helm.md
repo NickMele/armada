@@ -67,7 +67,9 @@ Rung 2 routes through your approval even if Helm drafted the plan. Rung 3 is a h
 
 The line sits at rung 1 because stopping or redirecting something already approved is much lower-stakes than starting something new. Job dispatch is the system's core autonomy control (see [Fleet](fleet.md) — Scheduling and gating) and stays untouched regardless of who is proposing it.
 
-**Pause is not on this ladder.** Anything escalated is already paused — Fleet never auto-kills, so a stalled or thrashing Drone is held with its worktree intact by the time you or Helm see it.
+**Pause is not on this ladder.** Anything escalated is already paused, so a stalled Drone is held with its worktree intact by the time you or Helm see it.
+
+**The one exception is a cap.** A held Drone still costs money, and a Drone confirmed to be thrashing is spending it without converging — so that one is killed rather than held. Holding is for a Drone waiting on a person; a Drone that was told to report and did not is not waiting, it is burning. Its worktree survives either way, which is what the rule was protecting.
 
 **Helm may pause a healthy running Job.** Redirect, Kill and Pause are all available on a healthy Drone: pause is either a healthy-Drone action or it is not an action at all. The rung-1 line is unchanged by that — a Helm-initiated **Redirect** on a healthy Drone is recorded on the Job, the same as a human one.
 

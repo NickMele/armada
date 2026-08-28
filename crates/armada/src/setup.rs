@@ -17,10 +17,18 @@
 //! # Holding one of these is proof the files agree
 //!
 //! [`Setup`] has no constructor but [`Setup::at`], and its fields are private.
-//! The [`ResolvedWorkflow`] inside it can only have been built against the
-//! [`Manifest`] beside it, so every Check the workflow's steps name was
+//! Every [`ResolvedWorkflow`] inside it can only have been built against the
+//! [`Manifest`] beside it, so every Check any workflow's steps name was
 //! declared by that Manifest at the moment the daemon started — checked once,
 //! before a worktree exists and before a Drone is spawned.
+//!
+//! # Every file in `.armada/workflows/`, keyed by its own id
+//!
+//! A repository may declare more than one workflow — Bug and Feature are not
+//! the same shape of work — so [`Setup::workflows`] is a map rather than a
+//! single value, keyed by the `workflow_id` each definition carries. Two files
+//! naming the same id is refused at start: a Fleet that picked one silently
+//! would be choosing on behalf of whoever wrote the second file.
 //!
 //! # Every fault, and never the first one
 //!
@@ -29,6 +37,7 @@
 //! reading the output is the person who wrote the file, and a parser that
 //! reported one fault per run would turn one edit into three.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -50,17 +59,17 @@ pub const WORKFLOWS: &str = ".armada/workflows";
 /// module inventing a rule the parser does not have.
 const DEFINITION_EXTS: &[&str] = &["json", "yml", "yaml"];
 
-/// One repository's Manifest and the workflow its steps resolved against.
+/// One repository's Manifest and every workflow its steps resolved against.
 #[derive(Debug)]
 pub struct Setup {
     root: PathBuf,
     manifest: Manifest,
-    workflow: ResolvedWorkflow,
+    workflows: BTreeMap<core_model::WorkflowId, ResolvedWorkflow>,
 }
 
 impl Setup {
-    /// Read `root`'s Manifest, read its one workflow, and resolve the second
-    /// against the first.
+    /// Read `root`'s Manifest, read every workflow beside it, and resolve each
+    /// against the Manifest.
     ///
     /// **`root` is the repository, not a search hint.** Nothing walks upward
     /// looking for an `armada.yml` in a parent: a daemon that quietly adopted
@@ -80,15 +89,28 @@ impl Setup {
             _ => SetupRefused::ManifestRefused(why),
         })?;
 
-        let workflow_path = one_definition(root)?;
-        let def = WorkflowDef::load(&workflow_path).map_err(SetupRefused::WorkflowRefused)?;
-        let workflow =
-            ResolvedWorkflow::resolve(&def, &manifest).map_err(SetupRefused::ChecksNotDeclared)?;
+        let mut workflows: BTreeMap<core_model::WorkflowId, ResolvedWorkflow> = BTreeMap::new();
+        let mut paths: BTreeMap<core_model::WorkflowId, PathBuf> = BTreeMap::new();
+        for workflow_path in definitions(root)? {
+            let def = WorkflowDef::load(&workflow_path).map_err(SetupRefused::WorkflowRefused)?;
+            let resolved = ResolvedWorkflow::resolve(&def, &manifest)
+                .map_err(SetupRefused::ChecksNotDeclared)?;
+            let id = resolved.id().clone();
+            if let Some(first) = paths.get(&id) {
+                return Err(SetupRefused::DuplicateWorkflowId {
+                    id: id.as_str().to_string(),
+                    first: first.clone(),
+                    second: workflow_path,
+                });
+            }
+            paths.insert(id.clone(), workflow_path);
+            workflows.insert(id, resolved);
+        }
 
         Ok(Setup {
             root: root.to_path_buf(),
             manifest,
-            workflow,
+            workflows,
         })
     }
 
@@ -101,24 +123,23 @@ impl Setup {
         &self.manifest
     }
 
-    pub fn workflow(&self) -> &ResolvedWorkflow {
-        &self.workflow
+    /// Every workflow this repository declares, keyed by its `workflow_id`.
+    pub fn workflows(&self) -> &BTreeMap<core_model::WorkflowId, ResolvedWorkflow> {
+        &self.workflows
     }
 
     /// The two halves, for a `Fittings` that wants both by value.
-    pub fn into_parts(self) -> (Manifest, ResolvedWorkflow) {
-        (self.manifest, self.workflow)
+    pub fn into_parts(self) -> (Manifest, BTreeMap<core_model::WorkflowId, ResolvedWorkflow>) {
+        (self.manifest, self.workflows)
     }
 }
 
-/// The one definition in `.armada/workflows/`, or why there is not one.
+/// Every definition in `.armada/workflows/`, or why there is not one.
 ///
-/// **Exactly one, refused otherwise.** `Fittings` holds a single workflow at
-/// M1. A definition now carries its own `workflow_id`, so a second one *could*
-/// be looked up — what is still missing is a rule for which of several a Fleet
-/// holds and how they are keyed, and a daemon that picked the alphabetically
-/// first of three would be making that choice silently.
-fn one_definition(root: &Path) -> Result<PathBuf, SetupRefused> {
+/// **At least one, refused otherwise.** A directory is a rule until it holds
+/// nothing, and an empty one is a repository not yet set up rather than a
+/// repository with no workflows.
+fn definitions(root: &Path) -> Result<Vec<PathBuf>, SetupRefused> {
     let dir = root.join(WORKFLOWS);
     let entries = std::fs::read_dir(&dir).map_err(|cause| {
         if cause.kind() == std::io::ErrorKind::NotFound {
@@ -143,14 +164,15 @@ fn one_definition(root: &Path) -> Result<PathBuf, SetupRefused> {
         }
     }
     // Read order is the filesystem's and is not stable across machines. Sorted,
-    // so the refusal below names them in an order somebody can compare.
+    // so a refusal that names one of these does so in an order somebody can
+    // compare, and so the duplicate-id refusal above always names the first
+    // occurrence by that same order.
     found.sort();
 
-    match found.len() {
-        1 => Ok(found.remove(0)),
-        0 => Err(SetupRefused::NoWorkflow { path: dir }),
-        _ => Err(SetupRefused::MoreThanOneWorkflow { path: dir, found }),
+    if found.is_empty() {
+        return Err(SetupRefused::NoWorkflow { path: dir });
     }
+    Ok(found)
 }
 
 /// Why a repository's setup could not be read.
@@ -174,8 +196,14 @@ pub enum SetupRefused {
     },
     /// It is there and holds no definition.
     NoWorkflow { path: PathBuf },
-    /// It holds more than one, and M1 dispatches one.
-    MoreThanOneWorkflow { path: PathBuf, found: Vec<PathBuf> },
+    /// Two definitions name the same `workflow_id`. Naming both paths rather
+    /// than picking one — a Fleet that chose silently would be deciding on
+    /// behalf of whoever wrote the second file.
+    DuplicateWorkflowId {
+        id: String,
+        first: PathBuf,
+        second: PathBuf,
+    },
     /// The definition is there and Armada will not have it.
     WorkflowRefused(LoadError),
     /// The two files disagree: a step names a Check the Manifest has not
@@ -191,8 +219,11 @@ impl SetupRefused {
             SetupRefused::NoManifest { path }
             | SetupRefused::NoWorkflowDirectory { path }
             | SetupRefused::WorkflowsUnreadable { path, .. }
-            | SetupRefused::NoWorkflow { path }
-            | SetupRefused::MoreThanOneWorkflow { path, .. } => path,
+            | SetupRefused::NoWorkflow { path } => path,
+            // The first occurrence, by the sorted order `definitions` reads
+            // them in — the file a person would fix, since it was already
+            // there when the second one was added.
+            SetupRefused::DuplicateWorkflowId { first, .. } => first,
             SetupRefused::ManifestRefused(why) | SetupRefused::WorkflowRefused(why) => why.path(),
             SetupRefused::ChecksNotDeclared(ResolveError::ChecksNotDeclared {
                 workflow, ..
@@ -229,18 +260,13 @@ impl fmt::Display for SetupRefused {
                 path.display(),
                 Listed(DEFINITION_EXTS)
             ),
-            SetupRefused::MoreThanOneWorkflow { path, found } => {
-                write!(
-                    f,
-                    "{} holds {} workflow definitions and M1 dispatches one",
-                    path.display(),
-                    found.len()
-                )?;
-                for one in found {
-                    write!(f, "\n  {}", one.display())?;
-                }
-                Ok(())
-            }
+            SetupRefused::DuplicateWorkflowId { id, first, second } => write!(
+                f,
+                "workflow_id `{id}` is declared twice, and Fleet does not pick between them:\n  \
+                 {}\n  {}",
+                first.display(),
+                second.display()
+            ),
             SetupRefused::ManifestRefused(why) | SetupRefused::WorkflowRefused(why) => {
                 loudly(f, why)
             }

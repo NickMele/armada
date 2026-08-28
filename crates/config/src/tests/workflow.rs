@@ -25,13 +25,8 @@ steps:
     evidence_type: diff
     mechanical_checks:
       - { type: manifest_check, check: build, expect_exit_code: 0 }
-      - { type: diff_nonempty }
-    advance_gate: auto
-  - id: verify
-    label: Run tests
-    evidence_type: test_suite_run
-    mechanical_checks:
       - { type: manifest_check, check: test, expect_exit_code: 0 }
+      - { type: diff_nonempty }
     advance_gate: auto
   - id: handoff
     label: Summarise
@@ -65,7 +60,7 @@ fn bug_with(extra: &str) -> Result<WorkflowDef, LoadError> {
     parse(&format!("{BUG}{extra}"))
 }
 
-/// A fifth step that puts one question to the Judge, at the gate and panel
+/// A fourth step that puts one question to the Judge, at the gate and panel
 /// given. Built line by line because the indentation is the syntax.
 fn judged(gate: &str, panel_size: u32, enabled: bool) -> String {
     [
@@ -90,7 +85,7 @@ fn the_worked_example_loads() {
     assert_eq!(def.name(), "bug");
     assert_eq!(def.version(), 1);
     assert_eq!(def.structure(), Structure::Linear);
-    assert_eq!(def.steps().len(), 4);
+    assert_eq!(def.steps().len(), 3);
 
     let plan = &def.steps()[0];
     assert_eq!(plan.id().as_str(), "plan");
@@ -103,30 +98,37 @@ fn the_worked_example_loads() {
 fn order_is_the_semantics_and_there_is_no_field_for_it() {
     let def = parse(BUG).expect("the worked example");
     let ids: Vec<&str> = def.steps().iter().map(|s| s.id().as_str()).collect();
-    assert_eq!(ids, ["plan", "implement", "verify", "handoff"]);
+    assert_eq!(ids, ["plan", "implement", "handoff"]);
 }
 
 #[test]
 fn a_step_with_no_mechanical_checks_is_the_common_case() {
-    // Two of four steps carry none. The field is optional and its absence is an
-    // empty list, never a refusal.
+    // Two of three steps carry none. The field is optional and its absence is
+    // an empty list, never a refusal.
     let def = parse(BUG).expect("the worked example");
     let gated: Vec<usize> = def
         .steps()
         .iter()
         .map(|s| s.mechanical_checks().len())
         .collect();
-    assert_eq!(gated, [0, 2, 1, 0]);
+    assert_eq!(gated, [0, 3, 0]);
 }
 
 #[test]
-fn implement_carries_two_checks_because_a_build_passes_on_an_empty_diff() {
+fn implement_carries_the_test_check_too_because_a_separate_verify_step_said_nothing_more() {
+    // Fleet runs a Check after the Drone reports its diff, never the Drone
+    // itself, so a step blocked until build and test both pass needs no
+    // second step to say so again.
     let def = parse(BUG).expect("the worked example");
     assert_eq!(
         def.steps()[1].mechanical_checks(),
         [
             MechanicalCheck::ManifestCheck {
                 check: "build".to_string(),
+                expect_exit_code: 0,
+            },
+            MechanicalCheck::ManifestCheck {
+                check: "test".to_string(),
                 expect_exit_code: 0,
             },
             MechanicalCheck::DiffNonempty,
@@ -140,7 +142,7 @@ fn two_steps_with_one_id_are_refused_and_the_first_is_named() {
         "  - id: plan\n    label: Plan again\n    advance_gate: auto\n",
     ));
     assert_eq!(
-        fault_at(&refused, "steps[4].id"),
+        fault_at(&refused, "steps[3].id"),
         &Fault::DuplicateStepId { first_at: 0 }
     );
 }
@@ -178,7 +180,7 @@ fn verdict_routing_on_a_linear_workflow_is_refused_and_names_the_step() {
         "  - id: review\n    label: Review\n    advance_gate: auto\n    verdict_routing:\n      request_changes: implement\n",
     ));
     assert_eq!(
-        fault_at(&refused, "steps[4].verdict_routing"),
+        fault_at(&refused, "steps[3].verdict_routing"),
         &Fault::ContradictsStructure {
             structure: "linear"
         }
@@ -195,7 +197,7 @@ fn a_gate_needing_a_manifest_policy_is_refused() {
             "  - id: review\n    label: Review\n    advance_gate: {gate}\n"
         )));
         assert_eq!(
-            fault_at(&refused, "steps[4].advance_gate"),
+            fault_at(&refused, "steps[3].advance_gate"),
             &Fault::OutsideM1 {
                 value: gate.to_string(),
                 carried: &["auto", "auto_if_judge_passes"],
@@ -210,7 +212,7 @@ fn a_judge_gate_with_no_criterion_is_refused_and_so_is_a_criterion_with_no_judge
         "  - id: review\n    label: Review\n    advance_gate: auto_if_judge_passes\n",
     ));
     assert_eq!(
-        fault_at(&no_criterion, "steps[4].advance_gate"),
+        fault_at(&no_criterion, "steps[3].advance_gate"),
         &Fault::GateAndJudgeDisagree {
             gate: "auto_if_judge_passes",
         }
@@ -218,7 +220,7 @@ fn a_judge_gate_with_no_criterion_is_refused_and_so_is_a_criterion_with_no_judge
 
     let no_gate = refusals(bug_with(&judged("auto", 1, true)));
     assert_eq!(
-        fault_at(&no_gate, "steps[4].advance_gate"),
+        fault_at(&no_gate, "steps[3].advance_gate"),
         &Fault::GateAndJudgeDisagree { gate: "auto" }
     );
 }
@@ -226,7 +228,7 @@ fn a_judge_gate_with_no_criterion_is_refused_and_so_is_a_criterion_with_no_judge
 #[test]
 fn a_step_carries_the_criteria_it_declares_and_the_panel_it_asks_for() {
     let def = bug_with(&judged("auto_if_judge_passes", 3, true)).expect("a step the Judge reads");
-    let judge = &def.steps()[4].judge_checks()[0];
+    let judge = &def.steps()[3].judge_checks()[0];
     assert_eq!(judge.panel_size(), 3);
     assert_eq!(judge.criteria().len(), 1);
     assert_eq!(
@@ -244,7 +246,7 @@ fn a_disabled_judge_check_asks_nothing_and_reads_as_a_step_that_declares_none() 
     // the gate has to stay `auto` — which is what says the two really are one.
     let def =
         bug_with(&judged("auto", 1, false)).expect("a step whose Judge check is switched off");
-    assert!(!def.steps()[4].judge_checks()[0].fires());
+    assert!(!def.steps()[3].judge_checks()[0].fires());
 }
 
 /// A `gaming_check` on a step that puts no criterion to the Judge, which is
@@ -274,7 +276,7 @@ fn a_step_carries_the_gaming_patterns_it_declares_and_the_baseline_it_names() {
         &["assertion_weakened", "check_config_edited"],
     ))
     .expect("a step that asks whether its evidence was gamed");
-    let judge = &def.steps()[4].judge_checks()[0];
+    let judge = &def.steps()[3].judge_checks()[0];
     let gaming = judge.gaming().expect("a gaming check");
     assert_eq!(
         gaming.baseline().map(EvidenceRef::as_wire).as_deref(),
@@ -301,7 +303,7 @@ fn a_step_carries_the_gaming_patterns_it_declares_and_the_baseline_it_names() {
 fn a_flag_if_naming_a_pattern_nothing_knows_is_refused() {
     let refused = refusals(bug_with(&gamed("root_cause.evidence", &["looks_dodgy"])));
     assert!(matches!(
-        fault_at(&refused, "steps[4].judge_checks[0].gaming_check.flag_if[0]"),
+        fault_at(&refused, "steps[3].judge_checks[0].gaming_check.flag_if[0]"),
         Fault::NotInTheSchema { .. }
     ));
 }
@@ -314,7 +316,7 @@ fn a_baseline_ref_that_is_not_a_step_s_evidence_is_refused() {
     assert!(matches!(
         fault_at(
             &refused,
-            "steps[4].judge_checks[0].gaming_check.baseline_ref"
+            "steps[3].judge_checks[0].gaming_check.baseline_ref"
         ),
         Fault::NotInTheSchema { .. }
     ));
@@ -326,7 +328,7 @@ fn a_gate_the_schema_never_had_is_a_different_refusal_from_a_deferred_one() {
         "  - id: review\n    label: Review\n    advance_gate: whenever\n",
     ));
     assert!(matches!(
-        fault_at(&refused, "steps[4].advance_gate"),
+        fault_at(&refused, "steps[3].advance_gate"),
         Fault::NotInTheSchema { .. }
     ));
 }
@@ -338,7 +340,7 @@ fn the_three_unimplemented_check_types_are_refused_by_name() {
             "  - id: close\n    label: Close\n    advance_gate: auto\n    mechanical_checks:\n      - {{ type: {kind} }}\n"
         )));
         assert_eq!(
-            fault_at(&refused, "steps[4].mechanical_checks[0].type"),
+            fault_at(&refused, "steps[3].mechanical_checks[0].type"),
             &Fault::OutsideM1 {
                 value: kind.to_string(),
                 carried: &["manifest_check", "diff_nonempty"],
@@ -353,11 +355,11 @@ fn a_manifest_check_needs_both_the_check_name_and_the_expected_code() {
         "  - id: close\n    label: Close\n    advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check }\n",
     ));
     assert_eq!(
-        fault_at(&refused, "steps[4].mechanical_checks[0].check"),
+        fault_at(&refused, "steps[3].mechanical_checks[0].check"),
         &Fault::Missing
     );
     assert_eq!(
-        fault_at(&refused, "steps[4].mechanical_checks[0].expect_exit_code"),
+        fault_at(&refused, "steps[3].mechanical_checks[0].expect_exit_code"),
         &Fault::Missing
     );
 }
@@ -368,7 +370,7 @@ fn diff_nonempty_carries_nothing_else() {
         "  - id: close\n    label: Close\n    advance_gate: auto\n    mechanical_checks:\n      - { type: diff_nonempty, check: build }\n",
     ));
     assert!(matches!(
-        fault_at(&refused, "steps[4].mechanical_checks[0].check"),
+        fault_at(&refused, "steps[3].mechanical_checks[0].check"),
         Fault::Unknown { .. }
     ));
 }
@@ -382,7 +384,7 @@ fn a_step_key_m1_does_not_read_hard_fails() {
         assert!(
             refused
                 .iter()
-                .any(|r| r.key == format!("steps[4].{key}")
+                .any(|r| r.key == format!("steps[3].{key}")
                     && matches!(r.fault, Fault::Unknown { .. })),
             "{key} should be an unknown step key: {refused:?}"
         );
@@ -398,7 +400,7 @@ fn an_evidence_type_outside_the_schema_is_refused() {
         "  - id: assess\n    label: Assess\n    evidence_type: review_findings\n    advance_gate: auto\n",
     ));
     assert!(matches!(
-        fault_at(&refused, "steps[4].evidence_type"),
+        fault_at(&refused, "steps[3].evidence_type"),
         Fault::NotInTheSchema { .. }
     ));
 }
@@ -407,7 +409,7 @@ fn an_evidence_type_outside_the_schema_is_refused() {
 fn a_step_may_declare_no_evidence_type() {
     let def = bug_with("  - id: merge\n    label: Merge\n    advance_gate: auto\n")
         .expect("a step that produces nothing a Judge reads");
-    assert_eq!(def.steps()[4].evidence_type(), None);
+    assert_eq!(def.steps()[3].evidence_type(), None);
 }
 
 // ---- the cross-file check ------------------------------------------------
@@ -425,6 +427,11 @@ fn a_resolved_workflow_carries_the_command_not_the_name() {
             ResolvedCheck::ManifestCheck {
                 name: "build".to_string(),
                 run: "cargo build --workspace".to_string(),
+                expect_exit_code: 0,
+            },
+            ResolvedCheck::ManifestCheck {
+                name: "test".to_string(),
+                run: "cargo nextest run --workspace".to_string(),
                 expect_exit_code: 0,
             },
             ResolvedCheck::DiffNonempty,

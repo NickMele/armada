@@ -15,7 +15,8 @@ use testkit::{FakeWorkProduct, Gate, Sketch};
 
 use crate::gate::Ruling;
 use crate::tests::daemon::{
-    a_fleet, a_fleet_holding, a_proposal, diff_evidence, worktree_directory,
+    a_fleet, a_fleet_holding, a_fleet_holding_all, a_proposal, a_proposal_for, diff_evidence,
+    workflow_named, worktree_directory,
 };
 use crate::tests::tmp::TempDir;
 
@@ -388,6 +389,31 @@ async fn a_check_that_passed_keeps_its_output_and_a_built_in_has_none() {
         ran[1].output_path, None,
         "a built-in assertion runs no command, so there is no file and the row \
          says so by having no path"
+    );
+}
+
+/// **What would have caught the drafting bug.** A Fleet holding more than one
+/// workflow freezes the one the proposal actually named — not whichever one
+/// this map happens to iterate to first.
+#[tokio::test]
+async fn a_job_proposed_against_the_second_workflow_freezes_that_ones_steps() {
+    let home = TempDir::new();
+    let fleet = a_fleet_holding_all(
+        &home,
+        changed(),
+        vec![workflow_named("alpha"), workflow_named("beta")],
+    );
+
+    let job = fleet
+        .propose(a_proposal_for("against beta", "beta"))
+        .await
+        .expect("beta is a workflow this Fleet holds");
+
+    assert_eq!(job.steps().len(), 1);
+    assert_eq!(
+        job.workflow().steps()[0].id().as_str(),
+        "only_in_beta",
+        "the frozen step is beta's own, not alpha's — alpha sorts first in the map"
     );
 }
 

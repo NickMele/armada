@@ -130,7 +130,7 @@ peer_polarity = "Unconstrained — cosmetic"
 owner = "Manifest"
 read_by = "fleet"
 notes = """
-Per-repo disk/audit needs. Resolved Aug 2026: the worktree belongs to the Job, not the Drone — "Drone exited" is never grounds to remove one, since rescope-and-respawn reuses the worktree and Pilot hands a human a terminal in it. Removal is driven by Job retention, which resolves the drift risk this row previously carried: nothing deletes on completion, so a retained Job never points at deleted paths. An interrupted Job's worktree is never swept — it may hold uncommitted work, and destroying it on restart is the same class of act as auto-killing, which Fleet never does.
+Per-repo disk/audit needs. Resolved Aug 2026: the worktree belongs to the Job, not the Drone — "Drone exited" is never grounds to remove one, since rescope-and-respawn reuses the worktree and Pilot hands a human a terminal in it. Removal is driven by Job retention, which resolves the drift risk this row previously carried: nothing deletes on completion, so a retained Job never points at deleted paths. An interrupted Job's worktree is never swept — it may hold uncommitted work. Fleet stops a Drone only at a cap, and the worktree survives that too: a cap ends the spending, never the work.
 """
 
 [settings.drone-job-timeout]

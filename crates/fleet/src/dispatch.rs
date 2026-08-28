@@ -24,9 +24,7 @@
 //! written on the trait. A failed Job's branch is exactly as its Drone left it,
 //! which is what "a person reads the branch" depends on.
 
-use adapter_traits::{
-    AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec,
-};
+use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{
     Actor, Branch, EscalationTrigger, Job, JobId, JobStatus, StepId, StepTarget, Target,
     Transitioned,
@@ -287,7 +285,7 @@ where
                 let next = self.step_after(&job, step)?;
                 self.move_step(&job, &next, StepTarget::Running).await?;
                 if let Some(at_work) = working.as_mut() {
-                    at_work.now_on(next);
+                    at_work.now_on(next, self.now());
                 }
                 // The boundary catch-up is `delivery`'s. It is told either way
                 // — a Drone that never heard the step advanced would sit there,

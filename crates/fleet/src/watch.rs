@@ -45,6 +45,21 @@ struct Heard {
     ended: bool,
 }
 
+/// How far a run has got, in the only two numbers anything asks for.
+///
+/// **Neither is a verdict and neither can become one.** `turns` is what the
+/// harness itself reported and is compared against a step norm; `boundaries` is
+/// how many times the Drone came to rest, which is what says a directive was
+/// acted on rather than what it said in answer.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Progress {
+    /// The turn count the harness last reported. Cumulative over the session,
+    /// so a step's own count is this minus its reading when the step began.
+    pub turns: u32,
+    /// How many terminating events have arrived.
+    pub boundaries: usize,
+}
+
 /// A transcript being read.
 pub struct Watching {
     heard: Arc<Mutex<Heard>>,
@@ -107,6 +122,28 @@ impl Watching {
             .lock()
             .expect("the transcript is not held across a panic")
             .ended
+    }
+
+    /// How far the run has got, as two counts.
+    ///
+    /// **Still not a per-event accessor.** It folds under the lock and answers
+    /// numbers, so there is no way to reach a Drone's claim through it — the
+    /// same property [`events`](Watching::events) has by returning everything.
+    pub fn progress(&self) -> Progress {
+        let heard = self
+            .heard
+            .lock()
+            .expect("the transcript is not held across a panic");
+        heard
+            .events
+            .iter()
+            .fold(Progress::default(), |mut so_far, event| {
+                if let DroneEvent::Ended { turns, .. } = event {
+                    so_far.turns = *turns;
+                    so_far.boundaries += 1;
+                }
+                so_far
+            })
     }
 
     /// Every event so far, in the order the Drone emitted them. What

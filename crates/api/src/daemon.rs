@@ -100,7 +100,8 @@ pub trait Daemon: Send + Sync + 'static {
 
     /// `kill_job` — ends the Job at `killed`, terminal, carrying no verdict.
     /// Not on the Intervention Ladder, and the only thing that ends a Job by
-    /// hand: **Fleet never auto-kills.**
+    /// hand: **Fleet stops a Drone only at a cap**, and a cap ends the
+    /// spending rather than the work — the worktree survives it.
     ///
     /// Legal from every non-terminal status, including those with no Drone
     /// under them, which is why it cannot be spelled as [`Daemon::kill_drone`].

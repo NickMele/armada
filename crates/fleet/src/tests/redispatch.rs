@@ -14,7 +14,8 @@ use testkit::FakeWorkProduct;
 use tower::ServiceExt;
 
 use crate::tests::daemon::{
-    a_fleet, a_fleet_minting_from, a_proposal, diff_evidence, worktree_directory,
+    a_fleet, a_fleet_holding_all, a_fleet_minting_from, a_proposal, a_proposal_for, diff_evidence,
+    workflow_named_gated_on_diff, worktree_directory,
 };
 use crate::tests::tmp::TempDir;
 
@@ -287,6 +288,51 @@ async fn a_job_that_has_not_failed_is_refused_with_the_status_it_is_in() {
     assert_eq!(
         refused.job_id.as_ref().map(|id| id.as_str()),
         Some(job_id.as_str())
+    );
+}
+
+/// **The redispatch half of what would have caught the drafting bug.** The
+/// failed Job's own `workflow_id` is not the first one this Fleet holds, and
+/// the replacement's steps are that workflow's — not whichever one the map
+/// happens to iterate to first.
+#[tokio::test]
+async fn a_redispatch_freezes_the_failed_jobs_own_workflow_not_the_first_one_held() {
+    let home = TempDir::new();
+    let fleet = a_fleet_holding_all(
+        &home,
+        FakeWorkProduct::untouched(),
+        vec![
+            workflow_named_gated_on_diff("alpha"),
+            workflow_named_gated_on_diff("beta"),
+        ],
+    );
+    let job = fleet
+        .propose(a_proposal_for("change nothing", "beta"))
+        .await
+        .expect("beta is a workflow this Fleet holds");
+    let failed = job.id().clone();
+    worktree_directory(&home, &failed);
+    fleet.approve(&failed).await.expect("released to run");
+    fleet
+        .submit_evidence(diff_evidence())
+        .await
+        .expect("evidence taken");
+    fleet.turn().await.expect("a ruling");
+    assert_eq!(
+        fleet.load(&failed).await.expect("the Job").status(),
+        JobStatus::CompletedFailed,
+        "an empty diff fails `diff_nonempty`"
+    );
+
+    let replacement = fleet
+        .redispatch(&failed)
+        .await
+        .expect("a Job that ran and stopped");
+    assert_eq!(
+        replacement.dispatched.workflow().steps()[0].id().as_str(),
+        "only_in_beta",
+        "the replacement freezes beta, the failed Job's own workflow — not \
+         alpha, which sorts first in the map"
     );
 }
 

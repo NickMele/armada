@@ -1,0 +1,36 @@
+# Prototype, reduced to what M1's parser accepts. See `bug.json` beside this
+# file for why a reduced form exists at all, and for the six fields this one
+# also holds to.
+#
+# The designed `prototype.json` (`crates/core-model/domain/workflow-samples/`)
+# is already linear, already three steps, and already the one workflow
+# carrying gateless steps by design — `frame` and `write_up` have no
+# mechanical tier and no Judge in the designed form either. Only `build`'s
+# gate changes here: designed as `human_always`, reduced to `auto` since a
+# human gate is not in M1's carried set.
+{
+  "version": 1,
+  "workflow_id": "prototype",
+  "name": "prototype",
+  "structure": "linear",
+  "steps": [
+    {
+      "id": "frame",
+      "label": "Frame",
+      "evidence_type": "facts_note",
+      "advance_gate": "auto"
+    },
+    {
+      "id": "build",
+      "label": "Build",
+      "evidence_type": "diff",
+      "advance_gate": "auto"
+    },
+    {
+      "id": "write_up",
+      "label": "Write up",
+      "evidence_type": "facts_note",
+      "advance_gate": "auto"
+    }
+  ]
+}

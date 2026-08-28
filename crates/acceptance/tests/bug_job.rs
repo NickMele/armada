@@ -220,7 +220,9 @@ fn a_drone_that_says_it_is_done_and_leaves_escalates_rather_than_completes() {
         },
     ];
 
-    let Aftermath::JobMoves(target) = aftermath(JobStatus::Running, &Ending::of(&said_so), Left::Nothing) else {
+    let Aftermath::JobMoves(target) =
+        aftermath(JobStatus::Running, &Ending::of(&said_so), Left::Nothing)
+    else {
         panic!("a Drone that is gone having submitted nothing moves the Job");
     };
     assert_eq!(target.status(), JobStatus::Escalated);

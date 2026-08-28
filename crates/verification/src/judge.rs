@@ -162,6 +162,10 @@ pub enum Unreadable {
     NoFlag,
     /// A gaming answer that flags and cites nothing.
     FlagCitesNothing,
+    /// No `state:` line on a mid-step answer, or one naming none of the three.
+    NoState,
+    /// A mid-step answer that finds thrashing and cites nothing.
+    FindingCitesNothing,
 }
 
 impl core::fmt::Display for Unreadable {
@@ -180,6 +184,14 @@ impl core::fmt::Display for Unreadable {
             Unreadable::FlagCitesNothing => f.write_str(
                 "the answer flags the evidence and cites nothing, which is not \
                  something a person can look at",
+            ),
+            Unreadable::NoState => f.write_str(
+                "the answer names none of the three states, so nothing was \
+                 established about where the work stands",
+            ),
+            Unreadable::FindingCitesNothing => f.write_str(
+                "the answer finds thrashing and names no observable that has not \
+                 moved, which is nothing the Drone could act on",
             ),
         }
     }

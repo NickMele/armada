@@ -49,6 +49,11 @@
 //! them — what a Drone is told, and the one place a clock is read and an id is
 //! invented.
 //!
+//! `converging` is the twelfth: a Drone working and not getting anywhere. Most
+//! of its cases assert an absence — a tripwire that escalates nothing, a look
+//! that stops the chain, a Drone that reports when told to — because what the
+//! chain is for is refusing to escalate early.
+//!
 //! `attachments` is the eleventh: a file staged before a Job exists, promoted
 //! at creation, refused where the staged path cannot be read, and copied again
 //! into the worktree dispatch makes — proving the same path `briefing` writes
@@ -57,6 +62,7 @@
 mod attachments;
 mod briefing;
 mod checks;
+mod converging;
 mod daemon;
 mod delivery;
 mod detach;

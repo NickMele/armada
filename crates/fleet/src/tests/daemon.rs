@@ -23,6 +23,7 @@
 //! between proposing and approving. Deriving it a second way would be the
 //! second-vocabulary defect in a test.
 
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -35,6 +36,7 @@ use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch};
 use verification::{Claimed, NotClaimed, ShownBy};
 
 use crate::clock::Clock;
+use crate::converging::StepNorms;
 use crate::daemon::{Fittings, Fleet, Host};
 use crate::evidence::Call;
 use crate::gate::{CheckBudget, Ruling};
@@ -119,6 +121,55 @@ fn two_steps() -> config::ResolvedWorkflow {
     ])
 }
 
+/// One workflow, keyed by its own id — what `fittings` holds when a case
+/// wants nothing more than the fixture.
+pub fn one(
+    workflow: config::ResolvedWorkflow,
+) -> BTreeMap<core_model::WorkflowId, config::ResolvedWorkflow> {
+    let mut held = BTreeMap::new();
+    held.insert(workflow.id().clone(), workflow);
+    held
+}
+
+/// A one-step workflow with its own `workflow_id`, gated on nothing but the
+/// evidence arriving — for a case that needs two workflows Fleet can tell
+/// apart by id, and cannot tell apart by step id, since each step is named
+/// for the workflow that declares it.
+pub fn workflow_named(id: &str) -> config::ResolvedWorkflow {
+    workflow_named_and(id, false)
+}
+
+/// The same, gated on a non-empty diff — for a case that needs a Check that
+/// can fail.
+pub fn workflow_named_gated_on_diff(id: &str) -> config::ResolvedWorkflow {
+    workflow_named_and(id, true)
+}
+
+fn workflow_named_and(id: &str, gated: bool) -> config::ResolvedWorkflow {
+    let step_id = format!("only_in_{id}");
+    let mechanical = if gated {
+        "    mechanical_checks:\n      - type: diff_nonempty\n"
+    } else {
+        ""
+    };
+    let def = config::WorkflowDef::parse(
+        std::path::Path::new("fixture.yml"),
+        &format!(
+            "version: 1\nworkflow_id: {id}\nname: {id}\nstructure: linear\nsteps:\n  - id: \
+             {step_id}\n    label: \"{step_id}\"\n    evidence_type: diff\n{mechanical}    \
+             advance_gate: auto\n"
+        ),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
+    let armada_yml = Manifest::parse(
+        std::path::Path::new("fixture-armada.yml"),
+        "version: 1\nid: 01FIXTUREMANIFEST\n",
+    )
+    .expect("the fixture manifest parses");
+    config::ResolvedWorkflow::resolve(&def, &armada_yml)
+        .unwrap_or_else(|refused| panic!("the fixture workflow did not resolve: {refused}"))
+}
+
 fn manifest() -> Manifest {
     Manifest::parse(
         std::path::Path::new("armada.yml"),
@@ -127,15 +178,24 @@ fn manifest() -> Manifest {
     .expect("a manifest that parses")
 }
 
+/// Norms no fixture trips. A step's turn count, its wall clock and the grace
+/// after a forced report are all put out of reach, so every test but
+/// `converging`'s own behaves exactly as it did before the chain existed.
+pub const UNTRIPPABLE: StepNorms = StepNorms::of(
+    u32::MAX,
+    Duration::from_secs(86_400),
+    Duration::from_secs(86_400),
+);
+
 /// Everything a Fleet is assembled from, over one temporary directory.
-fn fittings(
+pub fn fittings(
     home: &TempDir,
     work: FakeWorkProduct,
 ) -> Fittings<FakeHarness, FakeVcs, FakeWorkProduct> {
     fitted_with(home, work, FakeHarness::that_listens())
 }
 
-fn fitted_with(
+pub fn fitted_with(
     home: &TempDir,
     work: FakeWorkProduct,
     harness: FakeHarness,
@@ -148,7 +208,7 @@ fn fitted_with(
         work,
         clock: Arc::new(Ticking::from_nine()),
         mint: Arc::new(Counted::from_one()),
-        workflow: two_steps(),
+        workflows: one(two_steps()),
         manifest: manifest(),
         host: Host {
             user: String::from("someone"),
@@ -163,6 +223,7 @@ fn fitted_with(
                 .to_string(),
         },
         budget: CheckBudget::of(Duration::from_secs(5)),
+        norms: UNTRIPPABLE,
         // A Judge that fails every call, because no step in these fixtures
         // declares a criterion. One that answered would let a cold-by-default
         // regression pass unseen.
@@ -231,9 +292,32 @@ pub fn a_fleet_holding(
     next: u64,
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
-    fittings.workflow = workflow;
+    fittings.workflows = one(workflow);
     fittings.mint = Arc::new(Counted::from_next(next));
     Fleet::assembled(fittings)
+}
+
+/// A Fleet holding every one of these workflows, keyed by each one's own id —
+/// what an `.armada/workflows/` with more than one definition looks like from
+/// inside the process.
+pub fn a_fleet_holding_all(
+    home: &TempDir,
+    work: FakeWorkProduct,
+    workflows: Vec<config::ResolvedWorkflow>,
+) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
+    let mut fittings = fittings(home, work);
+    fittings.workflows = workflows
+        .into_iter()
+        .map(|workflow| (workflow.id().clone(), workflow))
+        .collect();
+    Fleet::assembled(fittings)
+}
+
+/// [`a_proposal`], naming a workflow other than the fixture's own.
+pub fn a_proposal_for(title: &str, workflow_id: &str) -> ipc::ProposeJob {
+    let mut proposal = a_proposal(title);
+    proposal.workflow_id = ipc::WorkflowId::carried(workflow_id);
+    proposal
 }
 
 /// A Fleet whose steps are judged, and by whom.
@@ -248,7 +332,7 @@ pub fn a_fleet_judged_by(
     judge: FakeJudge,
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
-    fittings.workflow = workflow;
+    fittings.workflows = one(workflow);
     fittings.judge = Arc::new(judge);
     Fleet::assembled(fittings)
 }

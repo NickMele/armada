@@ -100,6 +100,7 @@ where
             started,
             Arc::clone(self.harness()),
             recording,
+            self.now(),
         ));
         Ok(())
     }

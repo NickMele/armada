@@ -25,14 +25,18 @@
 //! Drone's claim, which the gate exists to refuse.
 use std::sync::Arc;
 
+use std::time::Duration;
+
 use adapter_traits::{AgentHarness, DroneEvent, Worktree};
-use core_model::{DeclaredPaths, DroneId, JobId, RepoPath, StepId};
+use core_model::{DeclaredPaths, DroneId, JobId, RepoPath, StepId, Timestamp};
 use tokio::process::ChildStderr;
 
+use crate::converging::{elapsed, Chain};
 use crate::drone::Started;
 use crate::session::DroneSession;
 use crate::transcript::Taps;
 use crate::watch::Watching;
+use verification::NotConverging;
 
 /// The Job being worked, and everything holding it up.
 ///
@@ -60,6 +64,17 @@ pub(crate) struct Working {
     /// declare again — and it survives a revert, which is the only thing the
     /// live check sees that the gate cannot.
     drifted: Vec<RepoPath>,
+    /// When the step in this slot started, as the injected clock read it. What
+    /// the wall-clock tripwire is measured from.
+    step_began: Timestamp,
+    /// The harness's cumulative turn count when the step started, so a step's
+    /// own count is a subtraction rather than a second counter to keep true.
+    turns_before: u32,
+    /// How many times the Drone had come to rest by the moment it was told to
+    /// report. The baseline the forced report is read against.
+    rested_before: usize,
+    /// Where this step stands in the thrashing chain.
+    chain: Chain,
 }
 
 impl Working {
@@ -74,6 +89,7 @@ impl Working {
         started: Started,
         harness: Arc<H>,
         taps: Taps,
+        at: Timestamp,
     ) -> Working
     where
         H: AgentHarness + Send + Sync + 'static,
@@ -88,6 +104,10 @@ impl Working {
             _complaints: started.complaints,
             declared: None,
             drifted: Vec::new(),
+            step_began: at,
+            turns_before: 0,
+            rested_before: 0,
+            chain: Chain::Working,
         }
     }
 
@@ -110,10 +130,25 @@ impl Working {
     /// Move to the next step, **and forget the last one's plan**. A
     /// declaration is about one step; carrying it forward would let step two's
     /// footprint be measured against step one's promise.
-    pub(crate) fn now_on(&mut self, step: StepId) {
+    pub(crate) fn now_on(&mut self, step: StepId, at: Timestamp) {
         self.step = step;
         self.declared = None;
         self.drifted.clear();
+        self.step_began = at;
+        self.turns_before = self.transcript.progress().turns;
+        self.chain = Chain::Working;
+    }
+
+    /// The step this Drone is on has been resumed by a person.
+    ///
+    /// **The chain starts again and the declaration does not.** A redirect
+    /// leaves the step and its plan exactly where they were — what is stale is
+    /// how long the step has been running and the look it already spent, and a
+    /// Drone that thrashed once and was steered can thrash again.
+    pub(crate) fn resumed(&mut self, at: Timestamp) {
+        self.step_began = at;
+        self.turns_before = self.transcript.progress().turns;
+        self.chain = Chain::Working;
     }
 
     /// Record what the Drone declared for the step it is on. **Replaces**, so a
@@ -126,6 +161,69 @@ impl Working {
 
     pub(crate) fn declared(&self) -> Option<&DeclaredPaths> {
         self.declared.as_ref()
+    }
+
+    /// What has been seen outside the plan so far. The third tripwire, and the
+    /// observation the mid-step look is given.
+    pub(crate) fn off_plan(&self) -> &[RepoPath] {
+        &self.drifted
+    }
+
+    /// The Drone's own turns since this step started.
+    pub(crate) fn turns_this_step(&self) -> u32 {
+        self.transcript
+            .progress()
+            .turns
+            .saturating_sub(self.turns_before)
+    }
+
+    /// Whether the Drone has come to rest since it was told to report.
+    ///
+    /// **The fact that it happened, never what was said.** A terminating event
+    /// is the Drone finishing a turn, which is what complying with a stop looks
+    /// like from outside — and reading the words would be reading self-report.
+    pub(crate) fn came_to_rest(&self) -> bool {
+        self.transcript.progress().boundaries > self.rested_before
+    }
+
+    pub(crate) fn chain(&self) -> &Chain {
+        &self.chain
+    }
+
+    /// The step's one look has been spent.
+    pub(crate) fn looked(&mut self) {
+        self.chain = Chain::Looked;
+    }
+
+    /// How many times the Drone has come to rest so far.
+    ///
+    /// Read **before** the directive goes down the pipe and handed back to
+    /// [`reporting`](Working::reporting): the answer can arrive between the
+    /// write and the next statement, and a baseline taken after it would count
+    /// the reply as having been there all along.
+    pub(crate) fn rested(&self) -> usize {
+        self.transcript.progress().boundaries
+    }
+
+    /// The Drone has been told to report, from this instant.
+    pub(crate) fn reporting(
+        &mut self,
+        asked_at: Timestamp,
+        rested_before: usize,
+        why: NotConverging,
+    ) {
+        self.rested_before = rested_before;
+        self.chain = Chain::Reporting { asked_at, why };
+    }
+
+    /// The step stopped and the Job escalated.
+    pub(crate) fn stopped(&mut self) {
+        self.chain = Chain::Stopped;
+    }
+
+    /// How long the step has been running, by the instant handed in.
+    pub(crate) fn running_for(&self, now: &Timestamp) -> Duration {
+        elapsed(&self.step_began, now)
     }
 
     /// Add paths seen outside the plan, and answer with the ones that are new.

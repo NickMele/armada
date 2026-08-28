@@ -28,13 +28,18 @@
 //! that cost is zero: a Drone that has just submitted evidence is between turns
 //! by definition, which is exactly the moment the gate speaks.
 //!
-//! # Three methods, and none of them can start anything
+//! # Four methods, and none of them can start anything
 //!
-//! [`tell`](LiveSession::tell), [`redirect`](LiveSession::redirect) and
+//! [`tell`](LiveSession::tell), [`redirect`](LiveSession::redirect),
+//! [`interrupt`](LiveSession::interrupt) and
 //! [`terminate`](LiveSession::terminate). There is no spawn, no respawn and no
 //! restart, because the gate must not be able to produce a Drone — and no way
 //! to remove a worktree, because nothing in this workspace can. A restart is
 //! `crate::resume`'s, and it reaches a spawn rather than this trait.
+//!
+//! Each carries a different authorship, which is why one method taking text
+//! would be wrong: a verdict Fleet reached, a person's own words, and Fleet's
+//! own directive at the third stage of the thrashing chain.
 
 use std::future::Future;
 use std::io;
@@ -45,6 +50,7 @@ use tokio::process::{Child, ChildStdin};
 use tokio::sync::Mutex;
 use verification::OutcomeTurn;
 
+use crate::converging::ReportNow;
 use crate::resume::Redirection;
 
 /// A Drone's live session, from the gate's side.
@@ -76,6 +82,16 @@ pub trait LiveSession {
     fn redirect(
         &self,
         instruction: &Redirection,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// Interrupt with a directive to stop and report.
+    ///
+    /// **Stage three of the thrashing chain and nothing else.** It is not
+    /// [`redirect`](LiveSession::redirect) because no person wrote it, and not
+    /// [`tell`](LiveSession::tell) because no gate ruled — see `crate::converging`.
+    fn interrupt(
+        &self,
+        directive: &ReportNow,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// End the Drone.
@@ -125,6 +141,13 @@ impl Turn {
     /// person.
     pub fn redirection(instruction: &Redirection) -> Turn {
         Turn::of(instruction.text())
+    }
+
+    /// Fleet's own stop-and-report directive, injected into a session already
+    /// running. The wording is `ReportNow`'s and there is no way to send other
+    /// text under it.
+    pub fn reporting(directive: &ReportNow) -> Turn {
+        Turn::of(directive.text())
     }
 
     fn of(content: &str) -> Turn {
@@ -220,6 +243,10 @@ impl LiveSession for DroneSession {
 
     async fn redirect(&self, instruction: &Redirection) -> Result<(), io::Error> {
         self.say(&Turn::redirection(instruction)).await
+    }
+
+    async fn interrupt(&self, directive: &ReportNow) -> Result<(), io::Error> {
+        self.say(&Turn::reporting(directive)).await
     }
 
     /// End the Drone and reap it.

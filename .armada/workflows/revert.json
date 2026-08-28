@@ -1,0 +1,38 @@
+# Revert, reduced to what M1's parser accepts. See `bug.json` beside this
+# file for why a reduced form exists at all, and for the six fields this one
+# also holds to.
+#
+# The designed `revert.json` (`crates/core-model/domain/workflow-samples/`)
+# runs five steps in a loop and opens on `revert` itself — there is no plan
+# step, since a revert's scope is inherited from the Job it undoes rather than
+# classified. This form keeps that shape: `revert` and `review` + `merge` +
+# `close` folded into one auto `handoff`. `revert` carries the designed
+# `regression_verify`'s `test` check itself (dropping its `lint` check, which
+# this repository's Manifest does not declare) rather than a separate step —
+# Fleet runs it after the Drone reports the diff, and a step blocked until it
+# passes needs no second step to say so again.
+{
+  "version": 1,
+  "workflow_id": "revert",
+  "name": "revert",
+  "structure": "linear",
+  "steps": [
+    {
+      "id": "revert",
+      "label": "Undo the change",
+      "evidence_type": "diff",
+      "mechanical_checks": [
+        { "type": "manifest_check", "check": "build", "expect_exit_code": 0 },
+        { "type": "manifest_check", "check": "test", "expect_exit_code": 0 },
+        { "type": "diff_nonempty" }
+      ],
+      "advance_gate": "auto"
+    },
+    {
+      "id": "handoff",
+      "label": "Summarise",
+      "evidence_type": "facts_note",
+      "advance_gate": "auto"
+    }
+  ]
+}

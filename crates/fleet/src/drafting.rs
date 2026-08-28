@@ -81,6 +81,18 @@ where
         let origin = proposal.origin.domain();
         let id = JobId::carried(self.mint().ulid());
         let attachments = self.promoted(&id, proposal.attachments)?;
+        // Read off `workflow` before it moves into the struct below — the
+        // frozen steps are this proposal's own workflow's, not whichever one
+        // Fleet happens to hold first.
+        let steps = workflow
+            .steps()
+            .iter()
+            .enumerate()
+            .map(|(ordinal, step)| StepSeed {
+                step_id: step.id().clone(),
+                ordinal: ordinal as u32,
+            })
+            .collect();
         let new = NewJob {
             id,
             title,
@@ -102,17 +114,7 @@ where
                     source: criterion.source.domain(),
                 })
                 .collect(),
-            steps: self
-                .workflow()
-                .frozen()
-                .steps()
-                .iter()
-                .enumerate()
-                .map(|(ordinal, step)| StepSeed {
-                    step_id: step.id().clone(),
-                    ordinal: ordinal as u32,
-                })
-                .collect(),
+            steps,
             dependencies: Vec::new(),
             gate_manifests: Vec::new(),
             // Null is not empty: absent is scope not yet determined, present
@@ -184,14 +186,17 @@ where
         &self,
         named: &ipc::WorkflowId,
     ) -> Result<core_model::FrozenWorkflow, Adrift> {
-        let held = self.workflow();
-        if named.as_str() != held.id().as_str() {
-            return Err(Adrift::NoSuchWorkflow {
+        match self.workflow_named(&named.to_domain()) {
+            Some(held) => Ok(held.frozen().clone()),
+            None => Err(Adrift::NoSuchWorkflow {
                 named: named.as_str().to_string(),
-                held: held.id().as_str().to_string(),
-            });
+                held: self
+                    .workflows()
+                    .keys()
+                    .map(|id| id.as_str().to_string())
+                    .collect(),
+            }),
         }
-        Ok(held.frozen().clone())
     }
 
     /// The proposal's Manifest, if it is the one this Fleet was started

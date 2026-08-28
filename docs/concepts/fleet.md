@@ -37,7 +37,7 @@ Two plist keys do not mean what they read. **`RunAtLoad=false` is a lie in the p
 
 The Configuration setting *Fleet self-restart attempt limit/backoff* describes a cap and a backoff curve launchd does not offer, and is **not implementable as written** (see Open questions).
 
-**Every Drone is spawned with `setsid`.** launchd signals a job's whole process tree, so a Drone spawned as a plain child of Fleet is **killed every time Fleet restarts** — measured, at both `kickstart -k` and `bootout`; a `setsid` child survived both. Silently, mid-Job, burning tokens against a real repo, which is exactly what "Fleet never auto-kills" forbids.
+**Every Drone is spawned with `setsid`.** launchd signals a job's whole process tree, so a Drone spawned as a plain child of Fleet is **killed every time Fleet restarts** — measured, at both `kickstart -k` and `bootout`; a `setsid` child survived both. Silently, mid-Job, burning tokens against a real repo — a Drone killed by a restart it had nothing to do with, which is the opposite of the one killing Fleet does do: a cap, deliberately, on a Drone that is burning without converging.
 
 `setsid` buys protection against exactly one thing, a group-directed signal. Fleet itself needs none, since launchd parents it to PID 1 at birth and PID-1-parented children are immune. macOS ships no `/usr/bin/setsid`, so this is a `libc::setsid()` call in `Command::pre_exec`.
 
