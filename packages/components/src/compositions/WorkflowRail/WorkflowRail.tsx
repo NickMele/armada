@@ -86,6 +86,38 @@ export type WorkflowRailDeclaration = {
   result?: string;
 };
 
+/**
+ * One pattern the gaming check flagged on a step's evidence, and where.
+ *
+ * **A flag is not a verdict and never borrows one's treatment.** `circle-*` is
+ * reserved to the Judge's criterion verdicts and `shield-*` to Checks; a flag
+ * is neither, so these rows are label-only for the reason a declaration row is,
+ * and `flag` itself is spent one row above on the stopped step's mark.
+ *
+ * **Nor is it a failure.** `evidence_suspect` routes as its own escalation
+ * rather than a gate failure, precisely because resubmission under the same
+ * instructions would likely reproduce the gaming — so the block carries weight
+ * rather than `--step-failed`, and a reader is not told a criterion was
+ * refused when what happened is that the evidence is not trusted.
+ */
+export type WorkflowRailFlag = {
+  /**
+   * The pattern, spelled as the workflow's `flag_if` spells it —
+   * `check_config_edited`, `assertion_weakened`. Mono, because no vocabulary
+   * in the repository carries a verb per gaming pattern and the wire spelling
+   * is what renders. Reported.
+   */
+  pattern: string;
+  /**
+   * The file, line or assertion the flag is about. **The whole value of the
+   * finding** — an uncited flag is unactionable exactly as an uncited refusal
+   * is — which is why it is on the rail rather than a press away in the
+   * override dialog. Absent where Fleet flagged and cited nothing, which draws
+   * no slot rather than an empty one.
+   */
+  cited?: string;
+};
+
 export type WorkflowRailStep = {
   id: string;
   /**
@@ -146,6 +178,18 @@ export type WorkflowRailStep = {
    */
   declarations?: WorkflowRailDeclaration[];
   /**
+   * What the gaming check found on this step's evidence, beneath the gate rows.
+   *
+   * **Counted with the gates, so a flagged step never says nothing checked
+   * it.** A gaming check rides on a `judge_checks[]` entry, so a step carrying
+   * a flag was looked at by definition — and "no check on this step" printed
+   * above what a check found is the contradiction the declaration rows were
+   * added to end, arriving a second time.
+   *
+   * Empty on every step nothing was flagged on, which is nearly all of them.
+   */
+  flags?: WorkflowRailFlag[];
+  /**
    * What a step with no Check and no declaration says instead. Defaults to the
    * contract's own sentence.
    */
@@ -194,6 +238,22 @@ export type WorkflowRailProps = {
 const GATE_ICON = 12;
 const GATE_STROKE = 2;
 
+/**
+ * What the rail says over the flag rows.
+ *
+ * **It names the source and claims no outcome.** The gaming check is a Judge
+ * prompt reading evidence, so by the hedge-by-source rule it says who found
+ * this; and it says "flagged", never "failed" or "refused", because the flag
+ * neither refuses a criterion nor ends the step — `evidence_suspect` is its own
+ * escalation, and #176's control overrules the flag rather than the verdict.
+ *
+ * No registry carries it: `enum-verbs.toml` spells statuses, step states and
+ * verdicts, and a gaming check is none of the three. So it is copy, written
+ * once here rather than in each screen that draws a rail — the same treatment
+ * the overruled note takes.
+ */
+const FLAGGED = "the gaming check flagged this evidence";
+
 /** Whether the ungated row has an evidence submission to name beside it. */
 function named(step: WorkflowRailStep): boolean {
   return (step.evidence?.label ?? "") !== "";
@@ -222,6 +282,9 @@ export function WorkflowRail({ steps, pulsing = false, onCopied }: WorkflowRailP
         // step that halts the Job read "no check on this step" while a person
         // was what it was waiting for, and this is the sum that was missing.
         const declarations = step.declarations ?? [];
+        // Counted with them for the same reason: a gaming check is a declared
+        // judge check, so a step carrying a flag was checked by something.
+        const flags = step.flags ?? [];
         return (
           <li className="armada-rail__step" key={step.id}>
             <div
@@ -256,7 +319,7 @@ export function WorkflowRail({ steps, pulsing = false, onCopied }: WorkflowRailP
               {step.elapsed ? <span className="armada-rail__elapsed">{step.elapsed}</span> : null}
               {step.status ? <span className="armada-rail__status">{step.status}</span> : null}
             </div>
-            {gates.length + declarations.length > 0 ? (
+            {gates.length + declarations.length === 0 ? null : (
               <ul className="armada-rail__gates">
                 {gates.map((gate, g) => (
                   <li className="armada-rail__gate" key={g}>
@@ -302,7 +365,8 @@ export function WorkflowRail({ steps, pulsing = false, onCopied }: WorkflowRailP
                   </li>
                 ))}
               </ul>
-            ) : (
+            )}
+            {gates.length + declarations.length + flags.length > 0 ? null : (
               // An ungated step says so in words. A step carrying no Check is
               // ordinary rather than exceptional, and a blank would read as a
               // gate that failed to render.
@@ -327,6 +391,31 @@ export function WorkflowRail({ steps, pulsing = false, onCopied }: WorkflowRailP
                   </span>
                 </li>
               </ul>
+            )}
+            {/* Above the criterion verdicts, because it governs how they read:
+                a flag says the evidence those verdicts were answered from is
+                not to be trusted, so a person meeting it after them has read
+                the answers before the doubt. One sentence over the rows rather
+                than one on each — a step can trip several patterns, and the
+                source is the same machine every time. */}
+            {flags.length === 0 ? null : (
+              <div className="armada-rail__flags">
+                <span className="armada-rail__flags-said">{FLAGGED}</span>
+                <ul className="armada-rail__flag-list">
+                  {flags.map((flag, f) => (
+                    <li className="armada-rail__flag" key={`flag-${f}`}>
+                      <span className="armada-rail__flag-pattern">{flag.pattern}</span>
+                      {flag.cited === undefined ? null : (
+                        // The whole citation stays in the title however narrow
+                        // the row gets, the way the Check's output path does.
+                        <span className="armada-rail__flag-cited" title={flag.cited}>
+                          {flag.cited}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             {step.verdicts === undefined || step.verdicts.length === 0 ? null : (
               <div className="armada-rail__verdicts">
