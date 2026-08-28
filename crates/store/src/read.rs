@@ -328,6 +328,10 @@ impl Store {
     ///
     /// A step with no rows comes back absent from the list, which is what "the
     /// gate has not run this step's checks" looks like.
+    ///
+    /// **The latest run of each step**, which is what this answered before a
+    /// step could keep more than one. Every run is
+    /// [`step_checks_every_attempt`](Store::step_checks_every_attempt).
     pub fn step_checks(
         &self,
         job_id: &JobId,
@@ -335,7 +339,10 @@ impl Store {
         let rows = self
             .collect(
                 "SELECT step_id, name, outcome, expected, produced, output_path
-                 FROM job_step_checks WHERE job_id = ?1 ORDER BY step_id, ordinal",
+                 FROM job_step_checks AS c WHERE job_id = ?1
+                   AND attempt = (SELECT max(attempt) FROM job_step_checks
+                                  WHERE job_id = c.job_id AND step_id = c.step_id)
+                 ORDER BY step_id, ordinal",
                 job_id,
                 "reading check results",
                 |row| {
@@ -369,12 +376,19 @@ impl Store {
         Ok(grouped)
     }
 
-    /// What the Judge said about each of a Job's steps, in the order asked.
+    /// What the Judge said about each of a Job's steps **on its latest run**,
+    /// in the order asked.
     ///
     /// Read beside the record for [`step_checks`](Store::step_checks)'s reason.
     /// A step with no rows is absent from the list, which is what "the Judge
     /// never ran on this step" looks like — and it is the ordinary case,
     /// because most steps ask nothing.
+    ///
+    /// **This is the wrong read for "did the same note go unaddressed".** It
+    /// answers where the step stands, which is what a resume and a Board row
+    /// want. The question the design asks — four runs, four sets of verdicts —
+    /// is
+    /// [`step_judgments_every_attempt`](Store::step_judgments_every_attempt).
     pub fn step_judgments(
         &self,
         job_id: &JobId,
@@ -382,7 +396,10 @@ impl Store {
         let rows = self
             .collect(
                 "SELECT step_id, criterion, verdict, expected, produced, consequence
-                 FROM job_step_judgments WHERE job_id = ?1 ORDER BY step_id, ordinal",
+                 FROM job_step_judgments AS j WHERE job_id = ?1
+                   AND attempt = (SELECT max(attempt) FROM job_step_judgments
+                                  WHERE job_id = j.job_id AND step_id = j.step_id)
+                 ORDER BY step_id, ordinal",
                 job_id,
                 "reading judgments",
                 |row| {
@@ -416,20 +433,29 @@ impl Store {
         Ok(grouped)
     }
 
-    /// The evidence each of a Job's steps had accepted, keyed by step.
+    /// The evidence each of a Job's steps had accepted **on its latest run**,
+    /// keyed by step.
     ///
     /// Shaped like [`step_judgments`](Store::step_judgments): a step that has
     /// submitted none is absent rather than present and blank. **A gaming
     /// check whose `baseline_ref` names an absent step runs with no baseline**
     /// and says so, where a blank one would read as a comparison against
     /// nothing.
+    ///
+    /// The latest run is the right baseline and stays the one this answers:
+    /// `docs/concepts/workflow.md` carries only the most recent iteration's
+    /// work product forward. Every run is
+    /// [`step_evidence_every_attempt`](Store::step_evidence_every_attempt).
     pub fn step_evidence(
         &self,
         job_id: &JobId,
     ) -> Result<Vec<(StepId, StepEvidence)>, LoadJobError> {
         self.collect(
             "SELECT step_id, evidence_type, claimed, shown_by, not_claimed
-             FROM job_step_evidence WHERE job_id = ?1 ORDER BY step_id",
+             FROM job_step_evidence AS e WHERE job_id = ?1
+               AND attempt = (SELECT max(attempt) FROM job_step_evidence
+                              WHERE job_id = e.job_id AND step_id = e.step_id)
+             ORDER BY step_id",
             job_id,
             "reading step evidence",
             |row| {

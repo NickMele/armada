@@ -29,6 +29,7 @@ use core_model::{
 };
 use rusqlite::Transaction;
 
+use crate::attempt::attempt_now;
 use crate::columns;
 use crate::error::{fault, WriteError};
 use crate::open::Store;
@@ -353,9 +354,15 @@ impl Store {
     /// running is not a transition; it is the evidence one was derived from,
     /// and the transition it led to is already a row in the log.
     ///
-    /// The step's rows are replaced whole rather than appended to. A second run
-    /// of the same step supersedes the first, and a mixture of the two would be
-    /// a set of results no single run ever produced.
+    /// **This run's** rows are replaced whole rather than appended to, and an
+    /// earlier run's are left standing. A second ruling inside one run
+    /// supersedes the first, because a mixture of the two would be a set of
+    /// results no single ruling ever produced; a second *run* of the step is a
+    /// different question and is kept — see [`attempt`](crate::attempt).
+    ///
+    /// The run is [derived from the log](Store::step_attempt) inside this
+    /// transaction rather than passed in, so a caller cannot file rows under a
+    /// run the history does not have.
     pub fn record_step_checks(
         &mut self,
         job_id: &JobId,
@@ -368,23 +375,25 @@ impl Store {
             .transaction()
             .map_err(fault("starting the check record"))
             .map_err(WriteError::Database)?;
+        let attempt = attempt_now(&tx, job_id, step_id).map_err(WriteError::Database)?;
 
         tx.execute(
-            "DELETE FROM job_step_checks WHERE job_id = ?1 AND step_id = ?2",
-            (job_id.as_str(), step_id.as_str()),
+            "DELETE FROM job_step_checks WHERE job_id = ?1 AND step_id = ?2 AND attempt = ?3",
+            (job_id.as_str(), step_id.as_str(), attempt.number()),
         )
-        .map_err(fault("clearing the previous run"))
+        .map_err(fault("clearing this run's previous rows"))
         .map_err(WriteError::Database)?;
 
         for (ordinal, check) in checks.iter().enumerate() {
             tx.execute(
                 "INSERT INTO job_step_checks (
-                     job_id, step_id, ordinal, name, outcome, expected, produced, ran_at,
-                     output_path
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                     job_id, step_id, attempt, ordinal, name, outcome, expected, produced,
+                     ran_at, output_path
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 rusqlite::params![
                     job_id.as_str(),
                     step_id.as_str(),
+                    attempt.number(),
                     ordinal as i64,
                     check.name.as_str(),
                     check.outcome.as_wire(),
@@ -403,12 +412,16 @@ impl Store {
             .map_err(WriteError::Database)
     }
 
-    /// Record what the Judge said about one step, replacing whatever a previous
-    /// pass over the same step wrote.
+    /// Record what the Judge said about one run of one step, replacing whatever
+    /// a previous pass **over that same run** wrote.
     ///
     /// Same shape as [`record_step_checks`](Store::record_step_checks) and for
     /// the same reason: a step is judged afresh each time it is submitted, and
-    /// two passes' judgments interleaved would read as a panel.
+    /// two passes' judgments interleaved would read as a panel. What changed is
+    /// the scope of "afresh" — it is the run and no longer the step, so the
+    /// verdicts a second run produces sit beside the first run's rather than on
+    /// top of them. That is the whole of what `docs/concepts/workflow.md` means
+    /// by carrying every prior verdict.
     pub fn record_step_judgments(
         &mut self,
         job_id: &JobId,
@@ -421,23 +434,25 @@ impl Store {
             .transaction()
             .map_err(fault("starting the judgment record"))
             .map_err(WriteError::Database)?;
+        let attempt = attempt_now(&tx, job_id, step_id).map_err(WriteError::Database)?;
 
         tx.execute(
-            "DELETE FROM job_step_judgments WHERE job_id = ?1 AND step_id = ?2",
-            (job_id.as_str(), step_id.as_str()),
+            "DELETE FROM job_step_judgments WHERE job_id = ?1 AND step_id = ?2 AND attempt = ?3",
+            (job_id.as_str(), step_id.as_str(), attempt.number()),
         )
-        .map_err(fault("clearing the previous pass"))
+        .map_err(fault("clearing this run's previous pass"))
         .map_err(WriteError::Database)?;
 
         for (ordinal, judgment) in judgments.iter().enumerate() {
             tx.execute(
                 "INSERT INTO job_step_judgments (
-                     job_id, step_id, ordinal, criterion, verdict, expected, produced,
-                     consequence, judged_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                     job_id, step_id, attempt, ordinal, criterion, verdict, expected,
+                     produced, consequence, judged_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 rusqlite::params![
                     job_id.as_str(),
                     step_id.as_str(),
+                    attempt.number(),
                     ordinal as i64,
                     judgment.criterion_id.as_str(),
                     judgment.verdict.as_wire(),
@@ -457,11 +472,17 @@ impl Store {
     }
 
     /// Record the evidence a step's gate accepted, replacing whatever an
-    /// earlier submission against the same step wrote.
+    /// earlier submission **within the same run** wrote.
     ///
-    /// One row per step, because a superseded submission is not a baseline: a
+    /// One row per run, because a superseded submission is not a baseline: a
     /// later step's gaming check is judged against what the earlier step
-    /// finally established, not against a draft of it.
+    /// finally established, not against a draft of it. An earlier run's row
+    /// stands, which is the half that was missing — the work product carried
+    /// forward is still the latest, and the record of what each round actually
+    /// submitted is what makes "the same note again" visible at all.
+    ///
+    /// A transaction where there was none, because the run has to be counted
+    /// and the row written under one view of the log.
     pub fn record_step_evidence(
         &mut self,
         job_id: &JobId,
@@ -469,30 +490,41 @@ impl Store {
         evidence: &StepEvidence,
         at: &Timestamp,
     ) -> Result<(), WriteError> {
-        self.conn
-            .execute(
-                "INSERT INTO job_step_evidence (
-                     job_id, step_id, evidence_type, claimed, shown_by, not_claimed, recorded_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-                 ON CONFLICT (job_id, step_id) DO UPDATE SET
-                     evidence_type = excluded.evidence_type,
-                     claimed       = excluded.claimed,
-                     shown_by      = excluded.shown_by,
-                     not_claimed   = excluded.not_claimed,
-                     recorded_at   = excluded.recorded_at",
-                rusqlite::params![
-                    job_id.as_str(),
-                    step_id.as_str(),
-                    evidence.evidence_type.as_wire(),
-                    evidence.claimed,
-                    evidence.shown_by,
-                    evidence.not_claimed,
-                    at.as_str(),
-                ],
-            )
-            .map_err(fault("writing a step's evidence"))
+        let tx = self
+            .conn
+            .transaction()
+            .map_err(fault("starting the evidence record"))
             .map_err(WriteError::Database)?;
-        Ok(())
+        let attempt = attempt_now(&tx, job_id, step_id).map_err(WriteError::Database)?;
+
+        tx.execute(
+            "INSERT INTO job_step_evidence (
+                 job_id, step_id, attempt, evidence_type, claimed, shown_by, not_claimed,
+                 recorded_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT (job_id, step_id, attempt) DO UPDATE SET
+                 evidence_type = excluded.evidence_type,
+                 claimed       = excluded.claimed,
+                 shown_by      = excluded.shown_by,
+                 not_claimed   = excluded.not_claimed,
+                 recorded_at   = excluded.recorded_at",
+            rusqlite::params![
+                job_id.as_str(),
+                step_id.as_str(),
+                attempt.number(),
+                evidence.evidence_type.as_wire(),
+                evidence.claimed,
+                evidence.shown_by,
+                evidence.not_claimed,
+                at.as_str(),
+            ],
+        )
+        .map_err(fault("writing a step's evidence"))
+        .map_err(WriteError::Database)?;
+
+        tx.commit()
+            .map_err(fault("committing the evidence record"))
+            .map_err(WriteError::Database)
     }
 }
 

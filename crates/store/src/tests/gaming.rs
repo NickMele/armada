@@ -51,10 +51,13 @@ fn the_patterns_a_step_tripped_survive_with_what_each_cited() {
     );
 }
 
-/// A second pass replaces the first. Two passes interleaved would read as one
-/// pass that found twice as much.
+/// A second pass **over the same run** replaces the first. Two passes
+/// interleaved would read as one pass that found twice as much.
+///
+/// The step does not move between the two writes here, so both are the same
+/// run. A second run of the step keeps both sets — `tests::attempt`.
 #[test]
-fn a_second_look_at_the_same_step_supersedes_the_first() {
+fn a_second_look_at_the_same_run_of_a_step_supersedes_the_first() {
     let dir = TempDir::new();
     let step = StepId::new("fix");
     let mut store = open(&dir);

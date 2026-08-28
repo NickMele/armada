@@ -361,10 +361,14 @@ fn a_job_no_judge_ran_on_carries_no_judgments_at_all() {
         .is_empty());
 }
 
-/// A second run of the same step supersedes the first. A mixture of the two
-/// would be a set of results no single run ever produced.
+/// A second ruling **on the same run** supersedes the first. A mixture of the
+/// two would be a set of results no single ruling ever produced.
+///
+/// The step never moves here, so both writes land on run one. A second *run* of
+/// the step keeps both, which is `tests::attempt`'s subject and was the defect
+/// this once read as intended behaviour.
 #[test]
-fn a_second_run_of_a_step_replaces_the_first_rather_than_joining_it() {
+fn a_second_ruling_on_one_run_of_a_step_replaces_the_first_rather_than_joining_it() {
     let dir = TempDir::new();
     let stored = top_level("01AGAIN");
     let step = StepId::new("reproduce");

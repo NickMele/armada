@@ -13,6 +13,7 @@
 //! everywhere round-trips through almost no code, and a round-trip test that
 //! passes on an empty record is the kind of green v1 shipped 2,181 of.
 
+mod attempt;
 mod corrupt;
 mod cursor;
 mod forget;
