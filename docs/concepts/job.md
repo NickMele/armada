@@ -147,9 +147,13 @@ override**: the step reads `advanced` with `failed(gate_failure)` still on it,
 so what the Judge said stays beside the fact that it did not stand, and an
 override rate is countable off `job_events`.
 
-**It lifts `gate_failure` and nothing else.** `gate_undecided` means the gate
-never weighed the work, `evidence_suspect` is a claim about the evidence rather
-than an opinion about the work, and a failed mechanical Check ends the Job at
+**It lifts `gate_failure` and `evidence_suspect`, and nothing else.** Both are a
+machine's decision, which is the owner's rule for what a person may overrule —
+one a judgement about the work, one a claim about the evidence, and
+`last_verdict.trigger` is what tells an overruled flag from an overruled
+refusal afterwards. `gate_undecided` stays refused because the gate never
+weighed the work at all, so there is no decision to disagree with; whether that
+wants an act of its own is open. A failed mechanical Check ends the Job at
 `completed_failed` — terminal, stopping no step, and out of reach. `build`
 failing is not a matter of opinion.
 
