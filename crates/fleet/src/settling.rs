@@ -154,13 +154,26 @@ where
             .step_evidence(&job_id)
             .map_err(Adrift::Reading)?;
         let entered_with = at_work.entered_with().cloned();
+        // **Which run of the step this is**, read off the step's own log and
+        // never off a counter here. It decides two things and they must be the
+        // same number: whether a failed Check has budget left to be handed back
+        // with, and which run this turn's checks, judgments and evidence are
+        // filed under. Read before the gate for the reason the baseline is —
+        // `rule_on` reaches no database — and read before `act_on`, which is
+        // what moves it on.
+        let attempt = self
+            .store()
+            .lock()
+            .await
+            .step_attempt(&job_id, &step)
+            .map_err(|cause| Adrift::Reading(store::LoadJobError::Unreadable(cause)))?;
         // Read off the Job that is being ruled on, and off nothing else. The
         // borrow is the whole guarantee: `Request::of` takes a `&Job`, so the
         // yardstick the Judge is shown is the requester's frozen text and there
         // is no arrangement of this call that could substitute the Drone's.
         let request = Request::of(&job);
         let ruling = rule_on(
-            at,
+            at.on_attempt(attempt),
             request,
             &landed.submission,
             declared.as_ref(),
@@ -174,7 +187,7 @@ where
         // Before the Job or the step moves. A recorded result the transition
         // then failed to make is readable; a transition whose evidence was
         // never written down is a verdict with no trace.
-        self.recorded_checks(&job_id, &step, &ruling).await?;
+        self.recorded_checks(&job_id, &step, attempt, &ruling).await?;
         self.recorded_judgments(&job_id, &step, &ruling).await?;
         self.recorded_evidence(&job_id, &step, &landed.submission, &ruling)
             .await?;

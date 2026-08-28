@@ -120,6 +120,7 @@ mod proposing;
 mod queued;
 mod redirect;
 mod redispatch;
+mod retrying;
 mod reviewing;
 mod runtime;
 mod scope;

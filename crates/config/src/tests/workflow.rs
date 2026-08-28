@@ -440,17 +440,56 @@ fn diff_nonempty_carries_nothing_else() {
 #[test]
 fn a_step_key_m1_does_not_read_hard_fails() {
     let refused = refusals(bug_with(
-        "  - id: review\n    label: Review\n    advance_gate: auto\n    retry_limit: 3\n    hard_prerequisite: true\n",
+        "  - id: review\n    label: Review\n    advance_gate: auto\n    hard_prerequisite: true\n",
     ));
-    for key in ["retry_limit", "hard_prerequisite"] {
-        assert!(
-            refused
-                .iter()
-                .any(|r| r.key == format!("steps[3].{key}")
-                    && matches!(r.fault, Fault::Unknown { .. })),
-            "{key} should be an unknown step key: {refused:?}"
-        );
-    }
+    assert!(
+        refused
+            .iter()
+            .any(|r| r.key == "steps[3].hard_prerequisite"
+                && matches!(r.fault, Fault::Unknown { .. })),
+        "hard_prerequisite should be an unknown step key: {refused:?}"
+    );
+}
+
+/// `retry_limit` was one of those keys until there was a ledger to spend it
+/// against. It is read now, and this is what it is read as.
+#[test]
+fn a_step_carries_the_retry_budget_it_declares() {
+    let def = bug_with("  - id: review\n    label: Review\n    advance_gate: auto\n    retry_limit: 3\n")
+        .expect("a step declaring a retry budget loads");
+    assert_eq!(def.steps()[3].retry_limit(), 3);
+}
+
+/// **Absent is none, and none is what every step meant before the key was
+/// read.** A default invented in the parser would put the budget in the one
+/// place an author reading the workflow could not see it.
+#[test]
+fn a_step_that_declares_no_retry_budget_has_none() {
+    let def = parse(BUG).expect("the worked example");
+    assert!(def.steps().iter().all(|step| step.retry_limit() == 0));
+}
+
+/// Zero is a sentence, not an absence: it says the first failure is the last.
+#[test]
+fn a_retry_budget_of_zero_loads_where_a_version_of_zero_would_not() {
+    let def = bug_with("  - id: review\n    label: Review\n    advance_gate: auto\n    retry_limit: 0\n")
+        .expect("zero is a legal budget");
+    assert_eq!(def.steps()[3].retry_limit(), 0);
+}
+
+/// A file that wrote a budget meant to buy retries. Reading it as none would
+/// be the parser quietly deciding the budget.
+#[test]
+fn a_retry_budget_that_is_not_a_count_is_refused_rather_than_read_as_none() {
+    let refused = refusals(bug_with(
+        "  - id: review\n    label: Review\n    advance_gate: auto\n    retry_limit: three\n",
+    ));
+    assert!(
+        refused
+            .iter()
+            .any(|r| r.key == "steps[3].retry_limit" && matches!(r.fault, Fault::WrongType { .. })),
+        "{refused:?}"
+    );
 }
 
 #[test]

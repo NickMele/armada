@@ -104,7 +104,22 @@ pub struct Scoped<'a> {
 /// mistake in the test, and a test that has to unwrap its own fixture reads as
 /// though the parse were the subject.
 pub fn resolved(steps: &[Sketch<'_>]) -> ResolvedWorkflow {
-    let def = WorkflowDef::parse(Path::new("fixture-workflow.yml"), &workflow_text(steps))
+    retried(steps, 0)
+}
+
+/// The same fixture with every step declaring the same retry budget.
+///
+/// **A whole-fixture argument rather than a seventh field on [`Sketch`]**, and
+/// that is not laziness about the sixty-odd literals it would touch. A budget
+/// is what a test about retries is about; on every other fixture it is noise,
+/// and a field would make each of those state a number it does not care about.
+/// A test needing two steps with two different budgets does not exist, and
+/// would be the moment to make it a field.
+pub fn retried(steps: &[Sketch<'_>], retry_limit: u32) -> ResolvedWorkflow {
+    let def = WorkflowDef::parse(
+        Path::new("fixture-workflow.yml"),
+        &workflow_text(steps, retry_limit),
+    )
         .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
     let manifest = Manifest::parse(Path::new("fixture-armada.yml"), &manifest_text(steps))
         .unwrap_or_else(|refused| panic!("the fixture manifest did not parse: {refused}"));
@@ -120,7 +135,7 @@ pub fn frozen(steps: &[Sketch<'_>]) -> FrozenWorkflow {
     resolved(steps).frozen().clone()
 }
 
-fn workflow_text(steps: &[Sketch<'_>]) -> String {
+fn workflow_text(steps: &[Sketch<'_>], retry_limit: u32) -> String {
     let mut text = String::from(
         "version: 1\nworkflow_id: fixture-workflow\nname: fixture\nstructure: linear\nsteps:\n",
     );
@@ -130,7 +145,8 @@ fn workflow_text(steps: &[Sketch<'_>]) -> String {
             false => "auto_if_judge_passes",
         };
         text.push_str(&format!(
-            "  - id: {}\n    label: \"{}\"\n    advance_gate: {gate}\n",
+            "  - id: {}\n    label: \"{}\"\n    advance_gate: {gate}\n    \
+             retry_limit: {retry_limit}\n",
             step.id, step.label
         ));
         if let Some(evidence) = step.evidence_type {

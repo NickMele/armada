@@ -82,6 +82,7 @@ pub fn workflow() -> FrozenWorkflow {
                 AdvanceGate::Auto,
                 Vec::new(),
                 None,
+                0,
             ),
             ResolvedStep::frozen(
                 StepId::new("fix"),
@@ -121,6 +122,7 @@ pub fn workflow() -> FrozenWorkflow {
                     true,
                     Some(DeclarePlanAt::StepStart),
                 )),
+                0,
             ),
         ],
     )

@@ -1,4 +1,4 @@
-//! The inner machine: the four step states M1 reaches, and the edges between.
+//! The inner machine: the five step states M1 reaches, and the edges between.
 //!
 //! # There is no registry edge table, and this does not invent one
 //!
@@ -15,11 +15,33 @@
 //! not this file's. **`stopped -> advanced` is one edge for one**, and the only
 //! edge two targets could reach: [`StepTarget::Overridden`] alone may walk it.
 //!
-//! `retrying` needs a retry budget, which M1 lacks. `awaiting_human` has its
-//! human advance gate now and is **still unreachable**: a step at that gate
-//! stays `running`, since `approve_review` advances it while the Job is still
-//! there. Both stay declared on [`StepState`], because a stored row may render
-//! any of the six, and neither has a [`StepTarget`].
+//! # `retrying` is a pair of edges and not a resting place
+//!
+//! `running -> retrying -> running` is one hand-back. The step passes through
+//! `retrying` rather than sitting in it, and that is forced by two things
+//! already decided elsewhere.
+//!
+//! `store::attempt` counts a step's runs as the entries into `running` in its
+//! own log, and every per-run record — checks, judgments, evidence, gaming
+//! flags — is filed under that count. A reattempt that stayed at `retrying`
+//! would never increment it, so the second run's verdicts would overwrite the
+//! first's and the record would read as one run. `docs/concepts/workflow.md`
+//! wants the opposite: *"keeping all the verdicts is what shows the same note
+//! went unaddressed three times."*
+//!
+//! And there is no self-edge in this table, by design — so a third failure
+//! could not be recorded at all from a step that was already `retrying`.
+//!
+//! What passing through leaves behind is a log that says which entries into
+//! `running` were the machine handing work back, and which were a person
+//! restarting a stopped step. Those are different acts and `stopped -> running`
+//! already spells the second.
+//!
+//! `awaiting_human` has its human advance gate now and is **still
+//! unreachable**: a step at that gate stays `running`, since `approve_review`
+//! advances it while the Job is still there. It stays declared on
+//! [`StepState`], because a stored row may render any of the six, and it has no
+//! [`StepTarget`].
 //!
 //! # The outer machine gates the inner one
 //!
@@ -52,6 +74,8 @@ pub static STEP_EDGES: &[StepEdge] = &[
     step_edge(StepState::NotStarted, StepState::Running),
     step_edge(StepState::Running, StepState::Advanced),
     step_edge(StepState::Running, StepState::Stopped),
+    step_edge(StepState::Running, StepState::Retrying),
+    step_edge(StepState::Retrying, StepState::Running),
     step_edge(StepState::Stopped, StepState::Running),
     step_edge(StepState::Stopped, StepState::Advanced),
 ];
@@ -71,15 +95,13 @@ pub const ADVANCING_STATUSES: &[JobStatus] = &[JobStatus::Running, JobStatus::Aw
 
 /// Where a step is going.
 ///
-/// Four moves across the three destinations M1 reaches — `advanced` is arrived
+/// Five moves across the four destinations M1 reaches — `advanced` is arrived
 /// at two ways and the trigger is what tells them apart. `not_started` is
-/// written at creation and is not a destination. `retrying` needs a retry
-/// budget, and `awaiting_human` needs a variant here plus two edges plus
-/// the matching `CHECK` in `store`'s schema — a step at a human gate stays
-/// `running` instead, which renders less honestly and behaves identically.
-/// Neither can be passed to
-/// [`Job::transition_step`](crate::Job::transition_step), because there is
-/// nothing to pass.
+/// written at creation and is not a destination. `awaiting_human` needs a
+/// variant here plus two edges — a step at a human gate stays `running`
+/// instead, which renders less honestly and behaves identically — and cannot
+/// be passed to [`Job::transition_step`](crate::Job::transition_step), because
+/// there is nothing to pass.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StepTarget {
     /// The step is being worked. Entering it is what moves the Job's cursor.
@@ -126,6 +148,28 @@ pub enum StepTarget {
     /// a failing mechanical Check is not a matter of opinion and this type
     /// cannot see one.
     Overridden(StepLevelTrigger),
+    /// The gate failed, the step's retry budget has room, and the work is
+    /// going back to the Drone that did it.
+    ///
+    /// **It carries the trigger for the same reason
+    /// [`Stopped`](StepTarget::Stopped) does, and it is not that one.** A
+    /// stopped step is a step nothing further will happen to without a person;
+    /// this one is about to be worked again. The two would render alike folded
+    /// together, which is exactly what `step-states.toml` says
+    /// `retrying`/`stopped` exist apart to prevent.
+    ///
+    /// The verdict it writes is `failed(<trigger>)` and the state is
+    /// `retrying`, which is the pair [`StepVerdict`] already describes: activity
+    /// and verdict are separate fields, and a step being reattempted after a
+    /// failure is both at once.
+    ///
+    /// **Whether there is budget for it is not decided here.**
+    /// [`ResolvedStep::may_hand_back`](crate::ResolvedStep::may_hand_back) owns
+    /// the arithmetic and `fleet::gate` asks it; this type cannot see a
+    /// workflow.
+    ///
+    /// [`StepVerdict`]: crate::StepVerdict
+    Retrying(StepLevelTrigger),
 }
 
 impl StepTarget {
@@ -135,6 +179,7 @@ impl StepTarget {
             StepTarget::Running => StepState::Running,
             StepTarget::Advanced | StepTarget::Overridden(_) => StepState::Advanced,
             StepTarget::Stopped(_) => StepState::Stopped,
+            StepTarget::Retrying(_) => StepState::Retrying,
         }
     }
 
@@ -143,7 +188,9 @@ impl StepTarget {
     pub fn why(&self) -> Option<StepLevelTrigger> {
         match self {
             StepTarget::Running | StepTarget::Advanced => None,
-            StepTarget::Stopped(why) | StepTarget::Overridden(why) => Some(*why),
+            StepTarget::Stopped(why) | StepTarget::Overridden(why) | StepTarget::Retrying(why) => {
+                Some(*why)
+            }
         }
     }
 
@@ -164,6 +211,10 @@ impl StepTarget {
             // was overruled; a row without it says the gate cleared the step.
             (StepState::Advanced, Some(why)) => Some(StepTarget::Overridden(why)),
             (StepState::Stopped, Some(why)) => Some(StepTarget::Stopped(why)),
+            // A retry carries the failure it is answering, for the reason a
+            // stop does: without it the row says a step is being reattempted
+            // and nothing says what for.
+            (StepState::Retrying, Some(why)) => Some(StepTarget::Retrying(why)),
             _ => None,
         }
     }

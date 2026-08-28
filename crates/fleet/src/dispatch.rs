@@ -299,13 +299,45 @@ where
                 self.applied(&job, ruling).await?;
                 Ok(())
             }
+            // The gate failed and there is budget left. **Nothing about the
+            // Job moves** — it is still `running`, the Drone still holds its
+            // session and its context, and the only thing that happens is the
+            // step going round again.
+            //
+            // Two step moves, because `retrying` is a pair of edges and not a
+            // resting place. The first writes `retrying` with the trigger, so
+            // the log says this entry into `running` was the machine handing
+            // work back rather than a person restarting a stopped step. The
+            // second is the entry itself, and it is what `store::attempt`
+            // counts — without it the next run's checks and judgments would
+            // overwrite this one's and the record would read as one attempt.
+            // `step_machine` argues the shape at length.
+            //
+            // **Nothing re-reads the baseline and nothing re-asks for a plan.**
+            // The step was entered once and this is still that entry: a
+            // baseline taken here would make `diff_nonempty` ask whether *this
+            // attempt* wrote something rather than whether the step did, and a
+            // second `declare_plan_at` would spend a turn asking a Drone to
+            // restate a plan it never left.
+            Ruling::HandedBack { tell, retrying, .. } => {
+                let job = self.load(job_id).await?;
+                let job = self
+                    .move_step(&job, step, StepTarget::Retrying(*retrying))
+                    .await?;
+                self.move_step(&job, step, StepTarget::Running).await?;
+                self.tell(job_id, tell, None, working).await
+            }
             // Four stops, one shape: the work stops here, the Drone is not
             // told, and `apply` decides which status and which trigger.
             // `Suspect` joins them because a person is being asked either way —
             // what differs is the claim being made, which is the trigger's to
-            // say. The refusal reprompt the prompt contract specifies arrives
-            // with the retry ledger, which is what would give a Drone somewhere
-            // to go with a citation; until then it goes to the person.
+            // say. **A refusal does not reach the retry budget**, though the
+            // budget now exists: it answers a mechanical failure, and what
+            // sends a step back to its Drone is a check that ran and said no.
+            // A refusal says the work runs and is not what was asked for,
+            // which is a person's to answer — resubmitting under the same
+            // instructions would produce the same work. The refusal reprompt
+            // the prompt contract specifies is still unwritten.
             //
             // **`CouldNotDecide` is the fourth, and it is not a verdict.** The
             // shape is shared and the claim is not: the other three weighed the

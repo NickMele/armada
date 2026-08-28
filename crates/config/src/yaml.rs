@@ -191,6 +191,41 @@ pub(crate) fn integer(key: &str, value: &Value, out: &mut Vec<Refusal>) -> Optio
     }
 }
 
+/// A whole number at `key` that may be zero, for `retry_limit`.
+///
+/// Separate from [`positive`] rather than a parameter on it, because the two
+/// disagree about zero and each is right about its own key. A `version: 0` is
+/// a file that was never versioned; a `retry_limit: 0` is a step saying out
+/// loud that its first failure is its last, which is a sentence an author is
+/// entitled to write.
+pub(crate) fn counted(key: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<u32> {
+    match value {
+        Value::Number(found) => match found.as_u64().filter(|n| *n <= u64::from(u32::MAX)) {
+            Some(n) => u32::try_from(n).ok(),
+            None => {
+                out.push(Refusal::new(
+                    key,
+                    Fault::WrongType {
+                        wanted: "a whole number of zero or more",
+                        found: "a number outside that range",
+                    },
+                ));
+                None
+            }
+        },
+        other => {
+            out.push(Refusal::new(
+                key,
+                Fault::WrongType {
+                    wanted: "a whole number of zero or more",
+                    found: kind(other),
+                },
+            ));
+            None
+        }
+    }
+}
+
 /// A positive whole number at `key`, for `version`.
 pub(crate) fn positive(key: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<u32> {
     match value {

@@ -292,6 +292,7 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
             "label": step.label(),
             "evidence_type": step.evidence_type().map(|kind| kind.as_wire()),
             "advance_gate": step.advance_gate().as_wire(),
+            "retry_limit": step.retry_limit(),
             "evidence_scope": step.evidence_scope().map(|scope| json!({
                 "context_source": scope.context_source().as_wire(),
                 "exclude_paths": scope.exclude_paths().iter()
@@ -365,7 +366,25 @@ fn read_step(entry: &Map<String, Value>) -> Result<ResolvedStep, Malformed> {
         AdvanceGate::from_wire(&gate).ok_or_else(|| format!("`advance_gate` holds `{gate}`"))?,
         read_judge_checks(entry)?,
         read_evidence_scope(entry)?,
+        read_retry_limit(entry)?,
     ))
+}
+
+/// How many hand-backs the step declared. **Absent reads as none**, the same
+/// backfill `read_evidence_scope` and `read_judge_checks` get: every workflow
+/// frozen before a retry budget existed had none, and none is what those steps
+/// meant. A value that is there and is not a count is a refusal rather than a
+/// zero — a Job frozen with a budget must not lose it quietly.
+fn read_retry_limit(entry: &Map<String, Value>) -> Result<u32, Malformed> {
+    match entry.get("retry_limit") {
+        None | Some(Value::Null) => Ok(0),
+        Some(Value::Number(found)) => found
+            .as_u64()
+            .filter(|n| *n <= u64::from(u32::MAX))
+            .and_then(|n| u32::try_from(n).ok())
+            .ok_or_else(|| format!("`retry_limit` holds `{found}`")),
+        Some(other) => Err(format!("`retry_limit` is {}", kind(other))),
+    }
 }
 
 /// What the step's evidence is scoped to.

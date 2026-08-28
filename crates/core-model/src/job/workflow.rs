@@ -21,6 +21,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::job::attempt::Attempt;
 use crate::job::gaming::GamingCheck;
 use crate::job::ids::{StepId, WorkflowId};
 use crate::job::judge::JudgeCheck;
@@ -161,6 +162,12 @@ pub struct ResolvedStep {
     /// **`None` on a step that declared none**, which behaves exactly as every
     /// step did before an evidence scope existed.
     evidence_scope: Option<EvidenceScope>,
+    /// How many times a failed mechanical gate hands this step back to its
+    /// Drone before the failure stands. **Zero on a step that declared none**,
+    /// which is what every step meant before a budget existed and is why the
+    /// field is a count rather than an `Option`: absent and `0` are the same
+    /// sentence, and two spellings of it could drift.
+    retry_limit: u32,
 }
 
 impl ResolvedStep {
@@ -178,6 +185,7 @@ impl ResolvedStep {
         advance_gate: AdvanceGate,
         judge_checks: Vec<JudgeCheck>,
         evidence_scope: Option<EvidenceScope>,
+        retry_limit: u32,
     ) -> ResolvedStep {
         ResolvedStep {
             id,
@@ -187,6 +195,7 @@ impl ResolvedStep {
             advance_gate,
             judge_checks,
             evidence_scope,
+            retry_limit,
         }
     }
 
@@ -239,6 +248,28 @@ impl ResolvedStep {
     /// and a step carrying none is neither watched nor asked for a declaration.
     pub fn evidence_scope(&self) -> Option<&EvidenceScope> {
         self.evidence_scope.as_ref()
+    }
+
+    /// How many times a failed mechanical gate may hand this step back before
+    /// the failure stands. **Zero is the ordinary case**, and it is what every
+    /// step did before a budget existed: the first failure is the last.
+    pub fn retry_limit(&self) -> u32 {
+        self.retry_limit
+    }
+
+    /// Whether a failure on the run `spent` may be handed back for another one.
+    ///
+    /// **The arithmetic is here and nowhere else.** `retry_limit` counts
+    /// hand-backs, not attempts, so a step with a limit of two is worked three
+    /// times: the first run plus two. A caller comparing the two itself would
+    /// be a second place the off-by-one lives.
+    ///
+    /// [`Attempt`] is the parameter rather than a bare number because there is
+    /// no constructor that invents one — it is derived from the step's own log
+    /// — so a caller cannot hand this a run count that disagrees with the
+    /// history.
+    pub fn may_hand_back(&self, spent: Attempt) -> bool {
+        spent.number() <= self.retry_limit
     }
 
     /// How many model calls one pass over this step makes. Latency rather than

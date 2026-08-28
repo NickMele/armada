@@ -49,8 +49,9 @@ pub const KNOWN_SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 /// **Nothing is ever edited here.** Changing entry zero changes what an already
 /// migrated file is assumed to contain, which is the one thing the version
 /// number exists to stop.
-pub const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15];
+pub const MIGRATIONS: &[&str] = &[
+    V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16,
+];
 
 /// Every table whose rows belong to one Job, asked of the file rather than
 /// listed here.
@@ -854,4 +855,46 @@ CREATE TABLE job_footprint_files (
     change  TEXT NOT NULL,
     PRIMARY KEY (job_id, ordinal)
 ) STRICT;
+"#;
+
+/// Version 16 — a step may be handed back to its Drone, carrying what failed.
+///
+/// [`V14`] left `retrying` in the unqualified arm because nothing could reach
+/// it. A hand-back does, and it carries the trigger it answers for the reason a
+/// stop does: `job_steps.last_verdict` is a cache of the fold, so a `retrying`
+/// row written without one rebuilds as a step reattempted with nothing saying
+/// what for — and it re-enters `running`, which leaves the previous verdict
+/// standing, so the gap outlives the state.
+///
+/// The step arm is one `CASE` where [`V14`] had four `OR`s: three moves carry a
+/// reason, every other carries none. Written short because this file sits on
+/// the 900 the gate refuses at, and the next migration will not fit in it.
+const V16: &str = r#"
+DROP TRIGGER job_events_hold_one_whole_shape;
+
+CREATE TRIGGER job_events_hold_one_whole_shape
+BEFORE INSERT ON job_events
+WHEN NOT (
+    (NEW.kind = 'job_transition'
+        AND NEW.step_id IS NULL AND NEW.state_from IS NULL
+        AND NEW.state_to IS NULL AND NEW.drone_id IS NULL
+        AND NEW.status_from <> NEW.status_to)
+ OR (NEW.kind = 'step_transition'
+        AND NEW.step_id IS NOT NULL AND NEW.state_from IS NOT NULL
+        AND NEW.state_to IS NOT NULL AND NEW.drone_id IS NULL
+        AND NEW.status_from = NEW.status_to
+        AND (CASE WHEN NEW.state_to IN ('stopped', 'retrying')
+                    OR (NEW.state_to = 'advanced' AND NEW.state_from = 'stopped')
+                  THEN NEW.reason_kind = 'escalation' AND NEW.reason_value IS NOT NULL
+                  ELSE NEW.reason_kind = 'unqualified' AND NEW.reason_value IS NULL
+             END))
+ OR (NEW.kind IN ('drone_spawned', 'drone_exited')
+        AND NEW.step_id IS NULL AND NEW.state_from IS NULL
+        AND NEW.state_to IS NULL AND NEW.drone_id IS NOT NULL
+        AND NEW.status_from = NEW.status_to
+        AND NEW.reason_kind = 'unqualified' AND NEW.reason_value IS NULL)
+)
+BEGIN
+    SELECT RAISE(ABORT, 'a job_events row is one whole shape: a job transition with no step or drone columns, a step move beneath an unchanged status carrying a trigger only where it stops the step, hands it back, or advances one that stopped, or a drone arriving or leaving beneath one');
+END;
 "#;

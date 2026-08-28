@@ -9,10 +9,11 @@
 //!
 //! # No counter columns
 //!
-//! `retry_count` and `iteration_count` are `job_steps` columns in the registry
-//! and both say "arrives with retries, not at M1". They are absent here rather
-//! than present and zero, because a counter that exists and never moves reads
-//! as a counter that is working.
+//! `retry_count` and `iteration_count` are `job_steps` columns in the registry.
+//! Retries exist now and there is still no column: `store::attempt` counts a
+//! step's runs off `job_events`, which is append-only in the database itself,
+//! so a stored count would be a second record of the same fact and a pair that
+//! can disagree. `iteration_count` has no loop to count.
 //!
 //! `judge_calls` and `spawned_jobs` are absent for a different reason: the
 //! registry types both `Derived — not stored`. They are answered by an index
@@ -146,15 +147,30 @@ impl JobStep {
                 // `failed` and a person advanced the step over that ruling; a
                 // row rewritten to `passed` would say the gate cleared the
                 // work, and nothing anywhere would still say it had not.
-                StepTarget::Stopped(why) | StepTarget::Overridden(why) => {
-                    Some(StepVerdict::Failed(*why))
-                }
+                // **A retry writes the failure it is answering**, and the
+                // state says the step is being reattempted. That is the pair
+                // this file's own [`StepVerdict`] comment describes — activity
+                // and verdict are separate fields, so a step going back to its
+                // Drone is `retrying` and `failed(<trigger>)` at once, which
+                // one enum could not say. The verdict then stands through
+                // `retrying -> running`, because entering `running` leaves the
+                // previous one alone.
+                StepTarget::Stopped(why)
+                | StepTarget::Overridden(why)
+                | StepTarget::Retrying(why) => Some(StepVerdict::Failed(*why)),
             },
             entered_at: match to {
                 StepTarget::Running => at.clone(),
-                StepTarget::Advanced | StepTarget::Stopped(_) | StepTarget::Overridden(_) => {
-                    self.entered_at.clone()
-                }
+                // A hand-back does not re-enter the step: the step is still
+                // the one that was entered, and the time it has taken is
+                // measured across every run of it. Only the entry into
+                // `running` on the far side of the retry moves it — which is
+                // the same rule every other arm here follows, applied to the
+                // pair rather than to one edge of it.
+                StepTarget::Advanced
+                | StepTarget::Stopped(_)
+                | StepTarget::Overridden(_)
+                | StepTarget::Retrying(_) => self.entered_at.clone(),
             },
             updated_at: at,
         }

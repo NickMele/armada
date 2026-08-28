@@ -311,8 +311,10 @@ async fn a_failed_checks_output_is_readable_from_its_file_afterwards() {
         .expect("a Manifest Check that ran has a file");
     assert_eq!(
         path,
-        format!(".armada/checks/{}/implement.0.log", job.id().as_str()),
-        "keyed by the row it belongs to, so a rerun replaces both together"
+        format!(".armada/checks/{}/implement.1.0.log", job.id().as_str()),
+        "the whole of the row's key — job, step, attempt, ordinal — so a second \
+         run of the step cannot overwrite the first run's output while `store` \
+         keeps the first run's row"
     );
 
     let read = std::fs::read_to_string(home.path().join(&path)).expect("the file is there");

@@ -83,7 +83,7 @@ pub use judge::{field, Brief, Refusals, Unreadable};
 pub use mechanical::{
     CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran, EVIDENCE_SCOPE,
 };
-pub use outcome::{OutcomeTurn, TheBaseMoved};
+pub use outcome::{OutcomeTurn, Printed, TheBaseMoved};
 pub use product::{NothingToJudge, Product, Reference, Written};
 pub use request::Request;
 pub use scope::{drifted, InScope, OutsideScope};

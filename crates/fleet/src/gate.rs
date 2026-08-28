@@ -27,6 +27,30 @@
 //! nobody can find it. [`CheckBudget`] therefore has one constructor taking a
 //! duration and no `Default`.
 //!
+//! # A failed Check goes back to the Drone before it goes to a person
+//!
+//! [`Ruling::Failed`] used to be every mechanical failure, and it is terminal.
+//! That is the correct verdict with nowhere to go: the Job that produced this
+//! module's newest case failed one Check on a one-line regression and was
+//! thrown away on its first attempt, with a live Drone holding the whole
+//! context needed to fix it.
+//!
+//! [`Ruling::HandedBack`] is the same failure inside a budget. Three things
+//! have to be true for it, and each is decided somewhere that can see the
+//! question:
+//!
+//! | | Asked of | Why there |
+//! |---|---|---|
+//! | the step declares a budget | `ResolvedStep::may_hand_back` | the arithmetic is one place, next to the field |
+//! | this run is inside it | `AtStep::attempt` | derived from the step's log, never from a caller |
+//! | trying again could change the answer | `CheckFailed::the_drone_can_answer` | only that type knows what each failure means |
+//!
+//! **What is exhausted is still [`Ruling::Failed`]**, unchanged, and still ends
+//! the Job at `completed_failed`. Whether that is where a spent budget belongs
+//! is `[retries-exhausted-destination]` in `docs/OPEN.md`, and it is a person's
+//! to answer — this module makes the question askable by making the budget
+//! spendable, and answers none of it.
+//!
 //! # What a ruling does not do
 //!
 //! It does not write anything. [`apply`] turns a ruling into the Job move it
@@ -47,7 +71,7 @@ use core_model::{
 };
 use verification::{
     decide, Accepted, Baseline, CheckFailed, Flagged, InScope, NotWhatTheStepAsked, Observed,
-    OutcomeTurn, OutsideScope, Ran, Refusals, Request, Submission, Verdict,
+    OutcomeTurn, OutsideScope, Printed, Ran, Refusals, Request, Submission, Verdict,
 };
 
 use crate::at_step::AtStep;
@@ -137,7 +161,43 @@ pub enum Ruling {
         output: Vec<CheckOutput>,
         judged: Vec<Judgment>,
     },
-    /// A Check did not pass. **The Job ends**, and **the Judge never ran** —
+    /// A Check did not pass, the step's retry budget has room, and the failure
+    /// goes back to the Drone that produced it.
+    ///
+    /// **Nothing has failed yet in the sense the Job cares about.** The Job
+    /// stays `running`, the step passes through `retrying` and re-enters
+    /// `running`, and the Drone keeps its session and its context — which is
+    /// the whole economy of this: the process that wrote the code is still
+    /// holding everything it knew while writing it, and a respawn would pay for
+    /// that twice.
+    ///
+    /// **The Judge never ran**, exactly as on [`Failed`](Ruling::Failed), so a
+    /// hand-back costs no model call. The mechanical tier is the only tier that
+    /// can produce one.
+    ///
+    /// The `tell` is built here rather than in [`apply`] because it needs the
+    /// failures and the output, and neither survives the ruling.
+    HandedBack {
+        /// Never empty.
+        failures: Vec<CheckFailed>,
+        checks: Vec<StepCheck>,
+        output: Vec<CheckOutput>,
+        tell: OutcomeTurn,
+        /// What the step is written down as being reattempted for.
+        ///
+        /// **Carried rather than derived**, unlike the three on
+        /// [`stops_the_step`](Ruling::stops_the_step). Those are read once at
+        /// the moment of the move and a `None` there means "the Job does not
+        /// move", which is a safe answer. Here a `None` would mean a step that
+        /// re-enters `running` without the record saying why — a silent gap
+        /// rather than a silent no-op. So the narrowing is paid in
+        /// [`handed_back`], where a trigger that is not step-level falls
+        /// through to [`Failed`](Ruling::Failed) instead.
+        retrying: StepLevelTrigger,
+    },
+    /// A Check did not pass and nothing is left to do about it: the step
+    /// declared no retry budget, or spent it, or the failure is one no
+    /// reattempt could answer. **The Job ends**, and **the Judge never ran** —
     /// the semantic tier is asked only after the mechanical one holds, so a
     /// failing Check costs nothing. The worktree is kept, the output below is
     /// readable, and the Drone is terminated without a turn.
@@ -230,11 +290,14 @@ impl Ruling {
         matches!(self, Ruling::Advanced { .. } | Ruling::Finished { .. })
     }
 
-    /// The turn to inject, where there is one. A failure produces none: the
-    /// Job is over and the Drone is terminated rather than told.
+    /// The turn to inject, where there is one. **Two advances and one
+    /// hand-back**, and nothing else — a Job that is over does not tell its
+    /// Drone why, because the Drone is terminated rather than told.
     pub fn tell(&self) -> Option<&OutcomeTurn> {
         match self {
-            Ruling::Advanced { tell, .. } | Ruling::Finished { tell, .. } => Some(tell),
+            Ruling::Advanced { tell, .. }
+            | Ruling::Finished { tell, .. }
+            | Ruling::HandedBack { tell, .. } => Some(tell),
             _ => None,
         }
     }
@@ -249,6 +312,7 @@ impl Ruling {
             Ruling::Advanced { checks, .. }
             | Ruling::Finished { checks, .. }
             | Ruling::HeldForReview { checks, .. }
+            | Ruling::HandedBack { checks, .. }
             | Ruling::Failed { checks, .. }
             | Ruling::Refused { checks, .. }
             | Ruling::Suspect { checks, .. }
@@ -278,6 +342,7 @@ impl Ruling {
             | Ruling::Refused { judged, .. }
             | Ruling::Suspect { judged, .. } => judged,
             Ruling::Failed { .. }
+            | Ruling::HandedBack { .. }
             | Ruling::NotWhatTheStepAsked(_)
             | Ruling::CouldNotDecide { .. } => &[],
         }
@@ -294,6 +359,7 @@ impl Ruling {
             Ruling::Advanced { output, .. }
             | Ruling::Finished { output, .. }
             | Ruling::HeldForReview { output, .. }
+            | Ruling::HandedBack { output, .. }
             | Ruling::Failed { output, .. }
             | Ruling::Refused { output, .. }
             | Ruling::Suspect { output, .. }
@@ -319,7 +385,15 @@ impl Ruling {
     /// [`Ruling::Failed`] answers `None`: `job-statuses.toml` gives `stopped`
     /// to `escalated` alone, and `completed_failed`'s step machine is "frozen
     /// at the failed step" with no state named. Stopping a step under a
-    /// terminal status would be this file deciding that.
+    /// terminal status would be this file deciding that — and now that a budget
+    /// exists, `stopped`'s own registry meaning of *"retries spent"* is finally
+    /// true of the step this ruling leaves behind. Where a spent budget belongs
+    /// is `[retries-exhausted-destination]`, which is a person's question and
+    /// not answered here.
+    ///
+    /// [`Ruling::HandedBack`] answers `None` because it stops nothing: the step
+    /// is about to be worked again. What it moves is
+    /// [`hands_back`](Ruling::hands_back)'s.
     ///
     /// [`Ruling::HeldForReview`] answers `None` for the opposite reason: its
     /// step is not stopped at all. It is still `running` and still the Job's
@@ -330,6 +404,23 @@ impl Ruling {
             Ruling::Refused { .. } => StepLevelTrigger::of(EscalationTrigger::GateFailure),
             Ruling::Suspect { .. } => StepLevelTrigger::of(EscalationTrigger::EvidenceSuspect),
             Ruling::CouldNotDecide { .. } => StepLevelTrigger::of(EscalationTrigger::GateUndecided),
+            _ => None,
+        }
+    }
+
+    /// The trigger a hand-back writes onto the step it is re-entering, and
+    /// `None` on every ruling that hands nothing back.
+    ///
+    /// Separate from [`stops_the_step`](Ruling::stops_the_step) rather than
+    /// folded in, because the two answer different questions and only one of
+    /// them escalates a Job. Both spell `gate_failure`, which is what
+    /// `docs/concepts/judge.md` gives the step evidence gate: the same tier
+    /// failed, and what differs is whether there is anything left to do about
+    /// it. [`apply`] reads the first and never this one, so a hand-back cannot
+    /// move a Job by any path.
+    pub fn hands_back(&self) -> Option<StepLevelTrigger> {
+        match self {
+            Ruling::HandedBack { retrying, .. } => Some(*retrying),
             _ => None,
         }
     }
@@ -589,10 +680,19 @@ where
                 },
             },
         },
-        Verdict::Failed(failures) => Ruling::Failed {
-            failures,
-            checks,
-            output,
+        Verdict::Failed(failures) => match handed_back(step, at.attempt(), &failures, &output) {
+            Some((tell, retrying)) => Ruling::HandedBack {
+                failures,
+                checks,
+                output,
+                tell,
+                retrying,
+            },
+            None => Ruling::Failed {
+                failures,
+                checks,
+                output,
+            },
         },
         Verdict::Refused(refusals) => Ruling::Refused {
             refusals,
@@ -601,6 +701,61 @@ where
             judged,
         },
     }
+}
+
+/// The turn that hands a mechanical failure back, where all three conditions
+/// for one hold. `None` is a failure that stands.
+///
+/// **A free function taking what it needs**, not a method on anything: the
+/// three questions belong to three different types, and this is the one place
+/// their answers meet. Every one of them is a `&&` away from being missed at a
+/// call site, which is why there is only one call site.
+///
+/// The conditions, in the order they are cheapest to ask:
+///
+/// 1. **Every failure is one a reattempt could answer.** `NeverRan` is not —
+///    the command is not installed, or the worktree is gone — and one of those
+///    among five would burn the whole budget reproducing itself. `all` rather
+///    than `any`: a run that would fail identically on one check fails
+///    identically.
+/// 2. **The step declared a budget and this run is inside it.**
+///    `may_hand_back` owns the arithmetic; `attempt` comes off the step's log.
+/// 3. Neither of the above needs the Judge, a model call, or the store.
+fn handed_back(
+    step: &config::ResolvedStep,
+    attempt: core_model::Attempt,
+    failures: &[CheckFailed],
+    output: &[CheckOutput],
+) -> Option<(OutcomeTurn, StepLevelTrigger)> {
+    if !failures.iter().all(CheckFailed::the_drone_can_answer) {
+        return None;
+    }
+    if !step.may_hand_back(attempt) {
+        return None;
+    }
+    // `gate_failure` is what `docs/concepts/judge.md` gives the step evidence
+    // gate, and it is step-level, so this holds. Read rather than asserted
+    // because a registry that moved it to Job level would make a step
+    // reattempted for a reason no step row could hold — and falling through to
+    // a failure that a person sees is the safe direction to be wrong in.
+    let retrying = StepLevelTrigger::of(EscalationTrigger::GateFailure)?;
+    // Both streams, in the order a terminal shows them. A check that failed
+    // usually says why on stderr and what it was doing on stdout, and the
+    // Drone is owed the pair rather than a guess about which mattered.
+    let said: Vec<(String, String)> = output
+        .iter()
+        .map(|kept| {
+            (
+                kept.check.clone(),
+                format!("{}\n{}", kept.output.stdout, kept.output.stderr),
+            )
+        })
+        .collect();
+    let printed: Vec<Printed<'_>> = said
+        .iter()
+        .map(|(check, said)| Printed { check, said })
+        .collect();
+    Some((OutcomeTurn::handed_back(step, failures, &printed), retrying))
 }
 
 /// The gaming look, where the step declares one. `None` is nothing flagged.

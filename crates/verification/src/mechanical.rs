@@ -208,6 +208,27 @@ impl CheckFailed {
         }
     }
 
+    /// Whether working the step again could change this answer.
+    ///
+    /// **The one thing that keeps a retry budget from being spent on a wall.**
+    /// The issue this came from names the risk in as many words: a Drone handed
+    /// a compile error can fix it, and one handed a failure it cannot reach
+    /// will burn the budget producing the identical failure three times.
+    ///
+    /// [`NeverRan`] is the case where that is knowable rather than guessed. The
+    /// command was not run at all — it is not installed, the worktree is gone,
+    /// the step declared an empty command — so nothing a Drone writes in that
+    /// worktree changes what happens next time, and the answer is the same
+    /// answer for ever. Every other variant is a check that *ran* and said no,
+    /// which is the case a Drone can answer.
+    ///
+    /// It is not a judgement about whether the Drone *will* fix it. That is a
+    /// question no mechanical tier can answer, and the budget is what bounds
+    /// the cost of being wrong about it.
+    pub fn the_drone_can_answer(&self) -> bool {
+        !matches!(self, CheckFailed::NeverRan { .. })
+    }
+
     /// The row this failure is written down as. **`None` for every failure of a
     /// declared check**, which already has a row of its own from
     /// [`Ran::recorded`]; the scope check declares no entry and so brings one.

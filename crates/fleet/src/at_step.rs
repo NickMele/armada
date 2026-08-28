@@ -6,7 +6,7 @@
 //! decides anything.
 
 use adapter_traits::Worktree;
-use core_model::{EvidenceRef, FrozenWorkflow, ResolvedStep, StepEvidence, StepId};
+use core_model::{Attempt, EvidenceRef, FrozenWorkflow, ResolvedStep, StepEvidence, StepId};
 
 /// Where a Job is: which step of its frozen workflow, and the worktree the work
 /// is in.
@@ -14,11 +14,25 @@ use core_model::{EvidenceRef, FrozenWorkflow, ResolvedStep, StepEvidence, StepId
 /// **There is no constructor taking a step index.** A position comes from a
 /// step id the workflow actually declares, so a gate cannot be pointed at a
 /// step that is not in the definition the Job froze.
+///
+/// # Which run of the step is part of where the Job is
+///
+/// A step can be worked more than once, so "which step" does not locate a Job
+/// on its own. [`Attempt`] is the third coordinate and it is the same one
+/// `store::attempt` files every per-run record under — derived from the step's
+/// own log, with no constructor that invents a number. A caller cannot tell
+/// this type it is on the fourth run when the log says the second.
+///
+/// Both constructors answer [`Attempt::FIRST`], which is not a default so much
+/// as the only value a position with no history could have — `Attempt`'s own
+/// rule. [`on_attempt`](AtStep::on_attempt) is how the one caller that has read
+/// the log says so.
 #[derive(Clone, Copy, Debug)]
 pub struct AtStep<'a> {
     workflow: &'a FrozenWorkflow,
     at: usize,
     worktree: &'a Worktree,
+    attempt: Attempt,
 }
 
 impl<'a> AtStep<'a> {
@@ -28,6 +42,7 @@ impl<'a> AtStep<'a> {
             workflow,
             at: 0,
             worktree,
+            attempt: Attempt::FIRST,
         })
     }
 
@@ -42,7 +57,22 @@ impl<'a> AtStep<'a> {
             workflow,
             at,
             worktree,
+            attempt: Attempt::FIRST,
         })
+    }
+
+    /// The same position, on the run the step's log says it is on.
+    ///
+    /// One caller: `crate::settling`, which reads it off the store inside the
+    /// same turn it rules. Everything else is standing at a step for the first
+    /// time and says nothing.
+    pub fn on_attempt(self, attempt: Attempt) -> AtStep<'a> {
+        AtStep { attempt, ..self }
+    }
+
+    /// Which run of this step is being ruled on. One-based.
+    pub fn attempt(&self) -> Attempt {
+        self.attempt
     }
 
     /// The step being gated.
@@ -62,6 +92,10 @@ impl<'a> AtStep<'a> {
             workflow: self.workflow,
             at: self.at + 1,
             worktree: self.worktree,
+            // A different step is on its own first run. Carrying this one's
+            // count forward would file the next step's records under a run it
+            // has not had.
+            attempt: Attempt::FIRST,
         })
     }
 

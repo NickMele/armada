@@ -9,30 +9,53 @@
 //! draft in the shape the contract's other drafts take, and it is marked as one
 //! rather than presented as agreed copy.
 //!
-//! # A failure produces no turn
+//! # A failure produces a turn only where there is something to do with it
 //!
-//! At M1 a failed Check ends the Job: there is no retry, no Judge and no
-//! escalation, so the Drone is terminated rather than told. A turn explaining a
-//! verdict to a process about to be killed spends a Drone's remaining tool call
-//! (measured: an injected message is delivered at the next turn boundary, so it
-//! costs whatever is left of the current one) to deliver information nobody
-//! reads. The reason goes to the person who opens the branch — which is what
-//! "a failed step fails the Job and a person reads the branch" means.
+//! A failed Check used to end the Job outright, so the Drone was terminated
+//! rather than told: a turn explaining a verdict to a process about to be
+//! killed spends a Drone's remaining tool call (measured: an injected message
+//! is delivered at the next turn boundary, so it costs whatever is left of the
+//! current one) to deliver information nobody reads.
+//!
+//! That argument holds exactly while the failure is terminal.
+//! [`handed_back`](OutcomeTurn::handed_back) is the case where it is not — the
+//! step's retry budget has room, the Drone is about to work the step again, and
+//! what the check printed is the whole of what it needs. Where the budget is
+//! spent the Job still ends and the Drone is still not told; the reason goes to
+//! the person who opens the branch.
 //!
 //! # No counter, ever
 //!
 //! An injected turn carries no attempt count, no remaining budget and no
 //! consequence. A Drone one attempt from escalation has the strongest possible
 //! incentive to satisfy a bar rather than do the work, and this type has no
-//! constructor that takes a number.
+//! constructor that takes a number. That holds hardest on the hand-back:
+//! "this is your last try" is the sentence most likely to produce a weakened
+//! assertion instead of a fix.
 
 use config::ResolvedStep;
 
+use crate::mechanical::CheckFailed;
+
+/// How much of one Check's output goes into the turn.
+///
+/// `checks_runner` captures 64KB per stream and keeps the tail, which is the
+/// right amount to keep on disk for a person and far too much to inject into a
+/// session — the whole of it would cost more context than the work. This is the
+/// tail of the tail, and it is a tail rather than a head because a failing
+/// command says why at the end.
+///
+/// A number with no measurement behind it, which is why it is spelled once
+/// here rather than at the call site.
+const KEPT_FOR_THE_TURN: usize = 2_000;
+
 /// A turn Fleet injects into a live session.
 ///
-/// **It is not a verdict a Drone can act on selectively.** There is one
-/// constructor and it is reached only from the advance path, so no failure
-/// state can produce one.
+/// **It is not a verdict a Drone can act on selectively.** Three constructors,
+/// each reached from one place in `fleet::gate`: two say the step moved on and
+/// the third says it did not and is being worked again. There is none that
+/// says a step failed and is over — that turn does not exist, because there is
+/// nobody left to read it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OutcomeTurn {
     text: String,
@@ -102,10 +125,95 @@ impl OutcomeTurn {
         }
     }
 
+    /// The step's mechanical gate failed, its budget has room, and the work is
+    /// going back to the Drone that did it.
+    ///
+    /// **The output is the point.** A Drone told only that `test` failed knows
+    /// less than a person reading the same row, and the run it is about to do
+    /// would begin by running the check itself to find out — which is the turn
+    /// paying for information it already had.
+    ///
+    /// `printed` carries what each named check put on its streams. A failure
+    /// with nothing printed — an empty diff, a scope violation — has no entry
+    /// and gets none: the expectation and what was produced already say the
+    /// whole of it.
+    ///
+    /// It ends by naming the one thing a hand-back invites. A Drone that cannot
+    /// make a test pass can always make the test stop asking, and this is the
+    /// moment that becomes tempting; the gaming check catches it afterwards and
+    /// saying so first is cheaper than catching it.
+    pub fn handed_back(
+        failed: &ResolvedStep,
+        failures: &[CheckFailed],
+        printed: &[Printed<'_>],
+    ) -> OutcomeTurn {
+        let label = failed.label();
+        let said = failures
+            .iter()
+            .map(|failure| format!("- expected {}, and {}", failure.expected(), failure.produced()))
+            .collect::<Vec<String>>()
+            .join("\n");
+        let mut text =
+            format!("{label} did not pass. This is what the checks found:\n\n{said}\n\n");
+        for one in printed {
+            text.push_str(&one.quoted());
+        }
+        text.push_str(
+            "Work the same step again and submit when it is done. Fix what the output says is \
+             wrong.\n\nDo not change what a check runs, and do not weaken, narrow, skip or \
+             delete a test to get past it. A check that stops asking is not a check that passed, \
+             and it is looked for.",
+        );
+        OutcomeTurn { text }
+    }
+
     /// The content of the injected message, exactly as it goes to the session.
     pub fn text(&self) -> &str {
         &self.text
     }
+}
+
+/// What one named Check put on its streams, for the turn that hands it back.
+///
+/// Borrowed rather than owned, and `&str` rather than any runner type: this
+/// crate does not depend on `checks-runner` and adding a dependency so that a
+/// turn could be built would put the thing that runs commands underneath the
+/// thing that decides verdicts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Printed<'a> {
+    pub check: &'a str,
+    pub said: &'a str,
+}
+
+impl Printed<'_> {
+    /// The block that goes into the turn: the tail of what was printed, fenced,
+    /// with a line saying it was cut where it was.
+    fn quoted(&self) -> String {
+        let said = self.said.trim();
+        if said.is_empty() {
+            return String::new();
+        }
+        let (cut, kept) = tail(said);
+        let opening = match cut {
+            false => format!("What `{}` printed:", self.check),
+            true => format!("The last of what `{}` printed:", self.check),
+        };
+        format!("{opening}\n\n```\n{kept}\n```\n\n")
+    }
+}
+
+/// The last [`KEPT_FOR_THE_TURN`] bytes, cut at a line boundary so the quote
+/// does not begin mid-word, and whether anything was dropped.
+fn tail(said: &str) -> (bool, &str) {
+    if said.len() <= KEPT_FOR_THE_TURN {
+        return (false, said);
+    }
+    let from = said.len() - KEPT_FOR_THE_TURN;
+    let kept = said
+        .get(from..)
+        .and_then(|tail| tail.find('\n').map(|at| &tail[at + 1..]))
+        .unwrap_or(said);
+    (true, kept)
 }
 
 /// What happened to the branch a Drone is working on while it worked.
