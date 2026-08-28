@@ -293,6 +293,79 @@
   color: var(--accent);
 }
 
+/* --- Gaming flags --------------------------------------------------------- */
+
+/* What the gaming check found on the step's evidence. Indented to the gate
+   rows' edge, so it reads as belonging to the step above it, and set apart from
+   them by position alone — the difference between a Check and a flag is carried
+   by the rows themselves. */
+.armada-rail__flags {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  padding: 0 0 0 calc(var(--space-4) + var(--space-2) * 2);
+}
+
+/* The sentence the rail was withholding, in sans: a statement about what
+   happened rather than a value the system reported.
+
+   Weight, not hue. A flag is not a verdict and not a failed Check —
+   evidence_suspect routes as its own escalation because the work may be sound
+   and the evidence is what is doubted — so --step-failed here would draw a
+   refused criterion. The same argument the overruled note makes for
+   --fg-default against the muted values around it. */
+.armada-rail__flags-said {
+  padding: calc(var(--space-1) / 2) var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+}
+
+.armada-rail__flag-list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+/* One pattern and where it points. No mark column: circle-* is the Judge's
+   family, shield-* the Checks', and flag is spent on the stopped step's own
+   mark a row above, where a second one would say the same thing twice. */
+.armada-rail__flag {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: calc(var(--space-1) / 2) var(--space-2);
+}
+
+/* The pattern a workflow's flag_if named. Machine-derived, so mono. */
+.armada-rail__flag-pattern {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+}
+
+/* Where the flag points — a file, a line, an assertion. Mono and flat, like the
+   exit code beside a Check: the step's state is hued, what was found is
+   measured. */
+.armada-rail__flag-cited {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* --- Criterion verdicts --------------------------------------------------- */
 
 /* Indented to the same edge as the gate rows, so what the Judge answered reads

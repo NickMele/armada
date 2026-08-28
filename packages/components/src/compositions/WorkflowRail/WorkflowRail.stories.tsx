@@ -132,6 +132,65 @@ export const Stopped: Story = {
 };
 
 /**
+ * A step the gaming check flagged, which is not a step that merely stopped.
+ *
+ * **The trigger is not the finding.** `evidence_suspect` beside the verdict
+ * says the evidence is not to be trusted; `StepDetail.flagged` says which shape
+ * of gaming was found and where, and a rail drawing the first without the
+ * second showed that something objected and never what it objected to.
+ *
+ * **Not a verdict, and not a failure.** No glyph — `circle-*` is the Judge's
+ * family, `shield-*` the Checks', and `flag` is already the stopped step's own
+ * mark one row above. No `--step-failed` either: `evidence_suspect` routes as
+ * its own escalation rather than a gate failure, because resubmitting under the
+ * same instructions would likely reproduce the gaming, so the block carries
+ * weight the way the overruled note does.
+ *
+ * **The citation is on the rail, not a press away.** An uncited flag is
+ * unactionable, and the person who can overrule this from the same screen
+ * should not have to open the dialog to see what they are lifting. The patterns
+ * render as `flag_if` spells them: no vocabulary carries a verb per gaming
+ * pattern. Reported.
+ */
+export const EvidenceFlaggedByTheGamingCheck: Story = {
+  args: {
+    steps: [
+      { id: "implement", label: "Implement", activity: "advanced", status: "advanced", elapsed: "6m 48s",
+        verdict: "passed", verdictNamed: "passed",
+        gates: [{ command: "build · cargo build --workspace", result: "passed", icon: ShieldCheck, iconLabel: "passed" }] },
+      { id: "verify", label: "Run tests", activity: "stopped", status: "stopped", current: true, elapsed: "3m 07s",
+        verdict: "failed · evidence disputed", verdictNamed: "failed",
+        gates: [{ command: "test · cargo test --workspace", result: "passed", icon: ShieldCheck, iconLabel: "passed" }],
+        declarations: [{ label: "judge · 2 criteria · gaming check" }, { label: "advance_gate · auto_if_judge_passes" }],
+        flags: [
+          { pattern: "check_config_edited", cited: "package.json · scripts.test now runs vitest run src/unit" },
+          { pattern: "assertion_weakened", cited: "src/parse.test.ts:88 · toEqual replaced by toBeDefined" },
+        ] },
+      { id: "handoff", label: "Summarise", activity: "not_started", status: "not started" },
+    ],
+  },
+};
+
+/**
+ * A flagged step that gates on nothing must not also say nothing checked it.
+ *
+ * A gaming check rides on a `judge_checks[]` entry, so a step carrying a flag
+ * was looked at by definition — and "no check on this step" printed above what
+ * a check found is the contradiction the declaration rows were added to end,
+ * arriving a second time. So a flag counts towards the sum the sentence is
+ * drawn from, exactly as a declaration does.
+ */
+export const AFlaggedStepIsNeverUngated: Story = {
+  args: {
+    steps: [
+      { id: "root_cause", label: "root_cause", labelIsAnIdentifier: true, activity: "stopped", status: "stopped", current: true, elapsed: "8m 22s",
+        evidence: { label: "" },
+        flags: [{ pattern: "findings_generic", cited: "the report names no file and no line" }] },
+    ],
+  },
+};
+
+/**
  * A step waiting on a person, and one retrying. Neither ends the Job, so
  * neither takes a surface — `retrying` takes no hue at all.
  */

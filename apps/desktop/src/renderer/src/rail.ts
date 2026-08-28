@@ -9,6 +9,7 @@ import type {
   CriterionVerdict,
   StepActivity,
   WorkflowRailDeclaration,
+  WorkflowRailFlag,
   WorkflowRailGate,
   WorkflowRailStep,
 } from "@armada/components";
@@ -73,6 +74,7 @@ export function railOf(whole: JobWhole, now: number): WorkflowRailStep[] {
       overridden: step.overridden ? OVERRULED : undefined,
       gates: gatesOf(step),
       declarations: declarationsOf(step),
+      flags: flagsOf(step),
       verdicts: verdictsOf(step, whole.acceptance_criteria),
       ungatedLabel: ungatedOf(step),
       evidence: { label: "" },
@@ -268,6 +270,33 @@ function declarationsOf(step: StepDetail): WorkflowRailDeclaration[] {
   }));
   const advance = advanceOf(step.advance_gate);
   return advance === undefined ? declared : [...declared, advance];
+}
+
+/**
+ * What the gaming check flagged on this step, and where it points.
+ *
+ * **This is what `evidence_suspect` does not say.** The trigger beside the
+ * verdict says the evidence is not to be trusted; only these say which shape of
+ * gaming was found and where — the same relation `judged` has to a
+ * `gate_failure`. A rail that drew the trigger and dropped these rendered a
+ * flagged step as merely stopped, and the person who can now overrule the flag
+ * had to open the dialog to learn what they were lifting.
+ *
+ * **The pattern is the wire's own spelling.** `enum-verbs.toml` carries no
+ * `gaming_pattern` rows, so `check_config_edited` renders underscored — the
+ * fallback `step_state` and `advance_gate` already take. A word chosen here
+ * would be the second vocabulary the generated module exists to prevent.
+ * Reported.
+ *
+ * **A flag citing nothing draws no citation.** `cited` is the whole value of
+ * the finding, and a blank one is a Fleet that flagged without saying where;
+ * an empty slot would read as a citation that failed to render.
+ */
+function flagsOf(step: StepDetail): WorkflowRailFlag[] {
+  return step.flagged.map((flag) => ({
+    pattern: flag.pattern,
+    cited: flag.cited.trim() === "" ? undefined : flag.cited,
+  }));
 }
 
 /**
