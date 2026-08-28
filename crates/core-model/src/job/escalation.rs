@@ -46,6 +46,15 @@ pub enum EscalationTrigger {
     /// Evidence was submitted, honestly did not pass, and the retry limit is
     /// exhausted. The ordinary failure.
     GateFailure,
+    /// Fleet could not read what it needed in order to rule — the Job's diff,
+    /// its changed files, the step's patch, or an answer the Judge never gave.
+    ///
+    /// **The opposite of [`GateFailure`](Self::GateFailure) about the same
+    /// step**: there the machinery worked and the work did not clear the bar,
+    /// here the machinery is what failed and the criteria were never reached.
+    /// A machine that cannot answer must not produce a verdict in either
+    /// direction, so the Job stops and names the artifact instead.
+    GateUndecided,
     /// The Drone called `escape_hatch` on a Job Fleet had not marked for the
     /// handoff. **The pull is refused and the Job surfaces**: a Drone does not
     /// open a terminal on the operator's machine on its own initiative, but a
@@ -136,6 +145,7 @@ impl EscalationTrigger {
         EscalationTrigger::EvidenceTooLarge,
         EscalationTrigger::FanOut,
         EscalationTrigger::GateFailure,
+        EscalationTrigger::GateUndecided,
         EscalationTrigger::HatchUnbidden,
         EscalationTrigger::Interrupted,
         EscalationTrigger::LoopCap,
@@ -155,6 +165,7 @@ impl EscalationTrigger {
             EscalationTrigger::EvidenceTooLarge => "evidence_too_large",
             EscalationTrigger::FanOut => "fan_out",
             EscalationTrigger::GateFailure => "gate_failure",
+            EscalationTrigger::GateUndecided => "gate_undecided",
             EscalationTrigger::HatchUnbidden => "hatch_unbidden",
             EscalationTrigger::Interrupted => "interrupted",
             EscalationTrigger::LoopCap => "loop_cap",
@@ -203,6 +214,7 @@ impl EscalationTrigger {
             | EscalationTrigger::EvidenceSuspect
             | EscalationTrigger::EvidenceTooLarge
             | EscalationTrigger::GateFailure
+            | EscalationTrigger::GateUndecided
             | EscalationTrigger::LoopCap
             | EscalationTrigger::Thrashing => TriggerLevel::Step,
             EscalationTrigger::DependencyFailed
