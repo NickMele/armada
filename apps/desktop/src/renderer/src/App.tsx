@@ -31,7 +31,7 @@ import { headOf } from "./Head";
 import { statementOf } from "./fleet";
 import { Composer } from "./Composer";
 import { ACT_LABEL, JobDetail, type ConfirmableAct } from "./JobDetail";
-import { renderFor } from "./render";
+import { RECORDS_ITS_OWN_TURNS, renderFor } from "./render";
 import { CONFIRM, said } from "./copy";
 import { atTheGate, Jobs, summaryOf } from "./Jobs";
 import { Observe } from "./Observe";
@@ -63,9 +63,9 @@ export function App() {
   // Whether the open Job's turns are being watched. **A second piece of
   // navigation, because watching is a second act** — it is opened on one Job
   // deliberately and closed, and it changes nothing about the Job either way.
-  // It says the socket is open, not which surface is up: a finished Job holds
-  // the turns in its own record, so there the flag is set by a tab and swaps no
-  // screen. `watching` is the one that does.
+  // It says the socket is open, not which surface is up: a finished Job and a
+  // stopped one both hold the turns in their own record, so there the flag is
+  // set by a tab and swaps no screen. `watching` is the one that does.
   const [observing, setObserving] = useState(false);
   // Whether the composer is open. It used to sit permanently above the list;
   // `New job` is what opens it now, so the surface is the list until somebody
@@ -95,10 +95,13 @@ export function App() {
   // leaves the list — superseded, or gone from a resync — closes its own detail
   // rather than leaving a row on screen that Fleet no longer has.
   const reading = openJob === null ? null : (state.jobs.find((job) => job.id === openJob) ?? null);
-  // Whether the turns have a screen of their own up. A finished Job holds them
-  // in its record instead, so the socket being open there must not replace the
-  // page a person is reading — and must not take the Escape that closes it.
-  const watching = reading !== null && observing && renderFor(reading) !== "finished";
+  // Whether the turns have a screen of their own up. The finished and stopped
+  // renders hold them in their own record instead, so the socket being open
+  // there must not replace the page a person is reading — and must not take the
+  // Escape that closes it. Which renders those are is `render.ts`'s answer, so
+  // the header's control and this cannot disagree about it.
+  const watching =
+    reading !== null && observing && !RECORDS_ITS_OWN_TURNS.has(renderFor(reading));
 
   useEffect(() => {
     void window.armada.state().then(setState);

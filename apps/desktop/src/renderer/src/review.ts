@@ -270,9 +270,25 @@ export const NO_WORKTREE =
   "This job has no worktree, so there is nothing to read. Absent is not empty — a drone that " +
   "changed nothing is a different answer, and this is not it.";
 
-/** Where the reading came from, said once beneath the diff rather than on it. */
+/**
+ * Where the reading came from. **True of every reading**, which is why it is
+ * separable from the plan sentence beside it — see `diffNote`.
+ */
+export const DIFF_READ_FROM = "Read from this job's worktree against the branch it was cut from.";
+
+/**
+ * Where the reading came from, and what the drift mark does or does not mean
+ * on it.
+ *
+ * **`plan_declared` is false on every job that has stopped, and that is #157
+ * rather than a fact about the job.** `get_diff` reads the plan declaration out
+ * of the live working slot, which a job that is over no longer holds — so the
+ * second sentence here says "this step declared no plan" about steps that
+ * declared one. A surface drawing a terminal job passes `DIFF_READ_FROM` on its
+ * own instead, which drops a false claim rather than restating it.
+ */
 export function diffNote(work: Work): string {
-  const read = "Read from this job's worktree against the branch it was cut from.";
+  const read = DIFF_READ_FROM;
   if (!work.plan_declared) {
     return `${read} This step declared no plan, so no file is marked.`;
   }

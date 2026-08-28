@@ -322,6 +322,22 @@
   text-wrap: pretty;
 }
 
+/* What still resumes a stopped job, beneath the reason it stopped and inside
+   the same well. A hairline separates them because they are two answers and
+   not one sentence, and the weight drops because the reason is the finding and
+   this is what follows from it. Not a control: the acts are in the header, and
+   a second place to press would be a second place to be refused. */
+.armada-screen__recourse {
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: var(--border-width) solid var(--border-subtle);
+  max-width: 88ch;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  text-wrap: pretty;
+}
+
 .armada-screen__head-row {
   display: flex;
   align-items: baseline;

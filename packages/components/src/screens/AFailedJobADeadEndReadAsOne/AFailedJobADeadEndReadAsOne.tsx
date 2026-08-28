@@ -2,13 +2,25 @@ import type { ReactNode } from "react";
 import { JobBrief } from "../../compositions/JobBrief/JobBrief";
 import { JobDetailHeaderActions } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
 import { JobLogReference } from "../../compositions/JobLogReference/JobLogReference";
+import { JobRecord, type JobRecordSection } from "../../compositions/JobRecord/JobRecord";
 import { WorkflowRail, type WorkflowRailStep } from "../../compositions/WorkflowRail/WorkflowRail";
 import { Absent } from "../absent";
 import type { JobDetailHeading, JobDetailLog } from "../detail";
 
 /**
- * A failed job — a dead end, read as one. Four statements in order: what
- * failed, that the job is over, where the branch is, and where the log is.
+ * A failed job — a dead end, read as one. What stopped it and whether anything
+ * resumes it, then what ran, then where the work is, then the record.
+ *
+ * **This screen is the one a person opens with a question.** A Job that landed
+ * is read once to decide whether to take the work; a Job that stopped is opened
+ * to find out why, and every answer to that is here rather than in a database,
+ * a transcript on disk or the source.
+ *
+ * **It does not take the finished screen's arrangement.** That one leads with
+ * what a Job was and what it produced, and a Job that stopped produced nothing —
+ * so the second region would be empty on every one of them. What leads here is
+ * the pair of questions this state actually raises: what stopped it, and is it
+ * recoverable. The archive comes after both are answered.
  *
  * The header is the same block the running job renders. What changes with the
  * state is the field run and the trailing action — the acts on a dead end are
@@ -22,6 +34,12 @@ export type AFailedJobADeadEndReadAsOneProps = {
   why?: ReactNode;
   /** Why there is no reason to state, where there is none. */
   whyAbsent?: string;
+  /**
+   * What still resumes this Job, or that nothing does. **Read beneath the
+   * reason and never as a control**: the acts live in the header, and this is
+   * what says which of them Fleet will take before one is pressed.
+   */
+  recourse?: ReactNode;
   /** The steps, in order. `GET /workflows` is what fills this. */
   steps: WorkflowRailStep[];
   /** The label over the rail. */
@@ -36,6 +54,22 @@ export type AFailedJobADeadEndReadAsOneProps = {
   work?: JobDetailLog;
   /** Why there is nothing to name there, where there is nothing. */
   workAbsent?: string;
+  /**
+   * Everything the Job left behind, folded: the moves it made, its Drone's
+   * turns, what it changed, what it claimed, what it was told.
+   *
+   * **After the diagnosis and not instead of it.** The rail above stays at full
+   * weight because it is what a person triages on; these are the reads that
+   * answer the next question, and each costs something to make, so only the
+   * open one is drawn.
+   */
+  record?: JobRecordSection[];
+  /** Which section is open. Controlled, so a section can own a subscription. */
+  recordValue?: string;
+  onRecordChange?: (id: string) => void;
+  /** What the record says when it holds no section at all. */
+  recordAbsent?: string;
+  recordLabel?: string;
   onCopied?: (value: string) => void;
 };
 
@@ -43,6 +77,7 @@ export function AFailedJobADeadEndReadAsOne({
   heading,
   why,
   whyAbsent = "The Job carries no stored reason, and none is written here.",
+  recourse,
   steps,
   ranLabel = "What ran",
   stepsAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
@@ -50,12 +85,20 @@ export function AFailedJobADeadEndReadAsOne({
   outputAbsent = "Nothing serves a check's output yet.",
   work,
   workAbsent = "Nothing serves this Job's paths, its branch or its brief.",
+  record,
+  recordValue,
+  onRecordChange,
+  recordAbsent,
+  recordLabel = "What it left behind",
   onCopied,
 }: AFailedJobADeadEndReadAsOneProps) {
   return (
     <div className="armada-screen__detail">
       <JobDetailHeaderActions {...heading} onCopied={onCopied} />
 
+      {/* One block and not two. "Why did it stop" and "does anything resume
+          it" are asked in the same breath, and a person who reads the first
+          and not the second is the person who presses a button to find out. */}
       <div className="armada-screen__sunken">
         <span className="armada-screen__eyebrow">Why this stopped</span>
         {why === undefined ? (
@@ -64,6 +107,9 @@ export function AFailedJobADeadEndReadAsOne({
           </div>
         ) : (
           <p className="armada-screen__why">{why}</p>
+        )}
+        {recourse === undefined ? null : (
+          <p className="armada-screen__recourse">{recourse}</p>
         )}
       </div>
 
@@ -114,6 +160,21 @@ export function AFailedJobADeadEndReadAsOne({
           </div>
         </div>
       </div>
+
+      {/* Omitted rather than drawn empty. A screen that always ends in a tab
+          strip with nothing under it would be the hole this record exists to
+          fill, one level up. */}
+      {record === undefined ? null : (
+        <div className="armada-screen__col">
+          <span className="armada-screen__eyebrow">{recordLabel}</span>
+          <JobRecord
+            sections={record}
+            value={recordValue}
+            onChange={onRecordChange}
+            emptyNote={recordAbsent}
+          />
+        </div>
+      )}
     </div>
   );
 }

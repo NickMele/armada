@@ -10,6 +10,7 @@ import { Button, Dialog, SplitButton, Textarea, type SplitButtonItem } from "@ar
 
 import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
 import type { JobSummary } from "../../shared/protocol";
+import { recourseOf, REDISPATCHABLE } from "./recovery";
 import type { Render } from "./render";
 
 /** What the two kills, the redispatch and the two step-resuming acts are called. */
@@ -21,23 +22,6 @@ export type JobAct = "kill_drone" | "kill_job" | "redispatch" | "redirect" | "re
  * and does not also route through this one.
  */
 export type ConfirmableAct = Exclude<JobAct, "redirect">;
-
-/**
- * The statuses a redispatch is offered on. Three, and **`rejected` is not one**:
- * a rejected Job never ran, so it has no Facts and no Evidence to carry
- * forward, and redispatching it would only be proposing a new Job — which the
- * composer already does.
- *
- * Written here rather than read from the generated vocabulary because no
- * registry file carries the set: `job-fields.toml` still asks it as an open
- * question on `redispatched_from`. Fleet's route is the authority and refuses
- * anything else; this only keeps a button off the screen that would be.
- */
-const REDISPATCHABLE: ReadonlySet<string> = new Set([
-  "escalated",
-  "completed_failed",
-  "killed",
-]);
 
 /**
  * What can be done to this Job from here.
@@ -56,8 +40,8 @@ const REDISPATCHABLE: ReadonlySet<string> = new Set([
  * | `redispatch` | `escalated`, `completed_failed`, `killed` | yes |
  * | `kill_drone` | a Job holding an `assigned_drone` | yes |
  * | `kill_job` | every non-terminal status | yes |
- * | `redirect` | escalated, holding an `assigned_drone` | its own dialog |
- * | `restart_step` | escalated, no `assigned_drone` | yes |
+ * | `redirect` | escalated, a step stopped, holding an `assigned_drone` | its own dialog |
+ * | `restart_step` | escalated, a step stopped, no `assigned_drone` | yes |
  *
  * **The three that end something are one split button, not a row of red.** Two
  * outlined reds side by side read as one control with two labels, which is the
@@ -67,6 +51,11 @@ const REDISPATCHABLE: ReadonlySet<string> = new Set([
  *
  * Redirect and restart sit outside that group: neither ends anything, so
  * neither belongs beside a control whose whole point is announcing what does.
+ *
+ * **Which of the two is offered is `recourseOf`'s answer and not this file's.**
+ * The stopped screen states in words what resumes this Job, and a header that
+ * decided it a second time here could disagree with the sentence a person just
+ * read — so the predicate lives in `recovery.ts` and both sides read it.
  */
 export function Acts({
   job,
@@ -108,11 +97,13 @@ export function Acts({
     ...(job.assigned_drone === undefined ? [] : (["kill_drone"] as ConfirmableAct[])),
     ...(over ? [] : (["kill_job"] as ConfirmableAct[])),
   ];
-  // Which of redirect and restart applies. Decided by the Drone's presence, the
-  // same signal `kill_drone` reads — a surface that offered both regardless
-  // would offer one Fleet always refuses.
-  const canRedirect = render === "stopped" && job.assigned_drone !== undefined;
-  const canRestart = render === "stopped" && job.assigned_drone === undefined;
+  // Which of redirect and restart applies, or neither. Four of Fleet's five
+  // refusals are decidable from what the wire serves, and this is the surface
+  // that has to decide them: a `completed_failed` Job with no Drone on it used
+  // to be offered a restart, which is `NotResumable` on press every time.
+  const recourse = render === "stopped" ? recourseOf(job) : undefined;
+  const canRedirect = recourse?.act === "redirect";
+  const canRestart = recourse?.act === "restart_step";
   // What the state calls for goes on the face: replacing a Job that stopped, and
   // otherwise the kill that ends it. Never the milder kill — the act with the
   // larger consequence does not hide behind a caret.
