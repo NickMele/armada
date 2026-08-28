@@ -10,8 +10,8 @@
 //! so.
 
 use core_model::{
-    Actor, CriteriaOwed, CriterionId, EscalationTrigger, Job, JobStatus, PilotReason, Target,
-    Timestamp, TransitionReason,
+    Actor, CriteriaOwed, CriterionId, EscalationTrigger, Job, JobStatus, PilotReason, StepId,
+    StepTarget, Target, Timestamp, TransitionReason,
 };
 
 use crate::tests::{at, job_id, open, top_level, TempDir};
@@ -73,16 +73,45 @@ fn history() -> Vec<(Target, Actor, Timestamp)> {
 }
 
 /// Drive the Job through `history`, recording each transition as it happens.
+///
+/// **The steps are advanced while the Job is at `running`**, and their moves go
+/// into the same log in the same order. That is not scene-setting: the last
+/// move is guarded on `every_step_advanced`, so a history that skipped them is
+/// a history the machine would not admit — and the fold replays through the
+/// same function, so it would not rebuild either.
 fn drive(store: &mut Store, job: Job) -> Job {
     let mut job = job;
     for (target, actor, when) in history() {
+        let advance = matches!(target, Target::AwaitingReview);
         let moved = job
-            .transition(target, actor, when)
+            .transition(target, actor, when.clone())
             .expect("every move in the history is one the machine admits");
         store
             .record_transition(&moved)
             .expect("the transition is recorded");
         job = moved.job;
+        if advance {
+            job = advance_every_step(store, job, &when);
+        }
+    }
+    job
+}
+
+/// Every step advanced, one `job_events` row per move, beneath a status the
+/// inner machine advances under.
+fn advance_every_step(store: &mut Store, job: Job, when: &Timestamp) -> Job {
+    let mut job = job;
+    let steps: Vec<StepId> = job.steps().iter().map(|r| r.step_id().clone()).collect();
+    for step_id in steps {
+        for target in [StepTarget::Running, StepTarget::Advanced] {
+            let moved = job
+                .transition_step(&step_id, target, Actor::Fleet, when.clone())
+                .expect("the inner machine admits the move beneath awaiting_review");
+            store
+                .record_step_transition(&moved)
+                .expect("the step move is recorded");
+            job = moved.job;
+        }
     }
     job
 }
@@ -161,6 +190,23 @@ fn the_log_holds_every_transition_with_its_reason_actor_and_time() {
         .events_for(&job_id("01LOG"))
         .expect("the events read back");
 
+    // Eight Job moves and four step moves, in one log in one order. The step
+    // rows are here because the last Job move is guarded on them, which is the
+    // point of `drive`'s own comment.
+    assert_eq!(
+        events.len(),
+        12,
+        "one row per move of either machine, and no more"
+    );
+    let steps = events
+        .iter()
+        .filter(|event| matches!(event.moved(), Moved::Step { .. }))
+        .count();
+    assert_eq!(steps, 4, "two steps, entered and advanced");
+    let events: Vec<&RecordedEvent> = events
+        .iter()
+        .filter(|event| matches!(event.moved(), Moved::Job { .. }))
+        .collect();
     assert_eq!(events.len(), 8, "one row per transition, and no more");
     assert_eq!(events[0].under(), JobStatus::AwaitingApproval);
     assert_eq!(events[0].actor(), Actor::Human);
@@ -174,15 +220,15 @@ fn the_log_holds_every_transition_with_its_reason_actor_and_time() {
     );
 
     assert_eq!(
-        reason(&events[3]),
+        reason(events[3]),
         TransitionReason::Escalation(EscalationTrigger::Interrupted),
         "the trigger survives, and it is the only one that edge admits"
     );
     assert_eq!(
-        reason(&events[4]),
+        reason(events[4]),
         TransitionReason::Pilot(PilotReason::TakeOver)
     );
-    match reason(&events[6]) {
+    match reason(events[6]) {
         TransitionReason::Attestation(owed) => {
             let ids: Vec<&str> = owed.ids().map(CriterionId::as_str).collect();
             assert_eq!(ids, vec!["c1", "c2"], "the criteria owed survive in order");

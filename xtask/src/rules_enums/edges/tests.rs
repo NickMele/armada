@@ -42,6 +42,14 @@ fn statuses() -> BTreeMap<String, String> {
     .collect()
 }
 
+/// The `Guard` variants the small table may name.
+fn guards() -> BTreeMap<String, String> {
+    [("EveryStepAdvanced", "every_step_advanced")]
+        .into_iter()
+        .map(|(v, w)| (v.to_string(), w.to_string()))
+        .collect()
+}
+
 fn triggers() -> BTreeMap<String, String> {
     [("Stalled", "stalled"), ("Interrupted", "interrupted")]
         .into_iter()
@@ -54,8 +62,8 @@ fn run(registry: &str, table: &str) -> Vec<String> {
     let mut report = Report::new("test");
     let (statuses, triggers) = (statuses(), triggers());
     let rows = read_registry(registry, &mut report);
-    let entries = read_table(table, &statuses, &triggers, &mut report);
-    check_values(&rows, &statuses, &triggers, &mut report);
+    let entries = read_table(table, &statuses, &triggers, &guards(), &mut report);
+    check_values(&rows, &statuses, &triggers, &guards(), &mut report);
     check_shape(&rows, REGISTRY, &mut report);
     check_shape(&entries, TABLE, &mut report);
     compare(&rows, &entries, &mut report);
@@ -91,7 +99,14 @@ fn a_count_that_still_matches_while_a_value_is_wrong() {
     let table = table(&["edge(Running, Killed)", "edge(Escalated, Killed)"]);
     assert_eq!(
         read_registry(&registry, &mut Report::new("t")).len(),
-        read_table(&table, &statuses(), &triggers(), &mut Report::new("t")).len(),
+        read_table(
+            &table,
+            &statuses(),
+            &triggers(),
+            &guards(),
+            &mut Report::new("t")
+        )
+        .len(),
         "the two sides must hold the same number of edges, or this proves nothing"
     );
 
@@ -121,6 +136,76 @@ fn an_edge_the_table_invents_is_a_move_nothing_sanctions() {
     );
     assert_eq!(found.len(), 1);
     assert!(found[0].contains("The machine admits a move nothing sanctions"));
+}
+
+/// A guard survives transcription in both directions, and nothing else about
+/// the comparison changes.
+#[test]
+fn a_registry_and_a_table_that_agree_on_a_guard_report_nothing() {
+    let found = run(
+        &guarded_registry(&[("running", "killed", "every_step_advanced")]),
+        &table(&["guarded(Running, Killed, Guard::EveryStepAdvanced)"]),
+    );
+    assert_eq!(found, Vec::<String>::new());
+}
+
+/// **The transcription defect a guard makes possible.** The edge is in both
+/// tables and only the condition is gone, so the machine goes on admitting a
+/// move the registry says is conditional — and nothing else notices, because
+/// the pairs match.
+#[test]
+fn a_guard_the_table_drops_is_a_condition_the_machine_stops_enforcing() {
+    let found = run(
+        &guarded_registry(&[("running", "killed", "every_step_advanced")]),
+        &table(&["edge(Running, Killed)"]),
+    );
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].contains("`every_step_advanced`"), "{}", found[0]);
+    assert!(
+        found[0].contains("no guard, admitted unconditionally"),
+        "{}",
+        found[0]
+    );
+}
+
+/// The other direction: a condition the code enforces and nothing sanctions.
+#[test]
+fn a_guard_the_table_invents_is_named_the_same_way() {
+    let found = run(
+        &registry(&[("running", "killed", None)]),
+        &table(&["guarded(Running, Killed, Guard::EveryStepAdvanced)"]),
+    );
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(
+        found[0].contains("no guard, admitted unconditionally"),
+        "{}",
+        found[0]
+    );
+}
+
+/// A guard no `Guard` variant spells cannot be transcribed at all, so the edge
+/// would be wired unconditional. Named on the registry side, where it is.
+#[test]
+fn a_guard_no_variant_spells_is_named_on_the_registry_row() {
+    let found = run(
+        &guarded_registry(&[("running", "killed", "every_step_finished")]),
+        &table(&["edge(Running, Killed)"]),
+    );
+    assert!(
+        found
+            .iter()
+            .any(|f| f.contains("is a spelling no `Guard` variant carries")),
+        "{found:?}"
+    );
+}
+
+/// `[[transitions]]` rows carrying a `guard` key.
+fn guarded_registry(rows: &[(&str, &str, &str)]) -> String {
+    rows.iter()
+        .map(|(from, to, guard)| {
+            format!("[[transitions]]\nfrom = \"{from}\"\nto = \"{to}\"\nguard = \"{guard}\"\n\n")
+        })
+        .collect()
 }
 
 /// The trigger is a value inside a matched edge, not part of its identity: a
@@ -206,6 +291,7 @@ fn an_entry_that_is_not_edge_or_triggered_is_refused_rather_than_skipped() {
         &table(&["Edge { from: Running, to: Killed, escalation_trigger: None }"]),
         &statuses(),
         &triggers(),
+        &guards(),
         &mut report,
     );
     assert!(rows.is_empty());
@@ -219,6 +305,7 @@ fn a_table_variant_with_no_wire_spelling_is_named_rather_than_invented() {
         &table(&["edge(Running, Hatched)"]),
         &statuses(),
         &triggers(),
+        &guards(),
         &mut report,
     );
     assert!(rows.is_empty());
@@ -232,7 +319,7 @@ fn an_entry_wrapped_across_lines_is_read_as_one() {
     let text = "pub static EDGES: &[Edge] = &[\n    triggered(\n        Queued,\n        \
                 Escalated,\n        EscalationTrigger::Interrupted,\n    ),\n];\n";
     let mut report = Report::new("test");
-    let rows = read_table(text, &statuses(), &triggers(), &mut report);
+    let rows = read_table(text, &statuses(), &triggers(), &guards(), &mut report);
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].trigger.as_deref(), Some("interrupted"));
     assert_eq!(rows[0].line, 2);
@@ -246,6 +333,7 @@ fn a_missing_edges_static_is_reported_rather_than_read_as_an_empty_table() {
         "pub struct Edge {}\n",
         &statuses(),
         &triggers(),
+        &guards(),
         &mut report,
     );
     assert!(rows.is_empty());

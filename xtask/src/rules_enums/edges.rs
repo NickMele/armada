@@ -11,11 +11,12 @@
 //! matched edge; as identity it would report a changed trigger as one edge
 //! added and one removed, reading as a redesign rather than a one-word slip.
 //!
-//! `from` and `to` are keys in `job-statuses.toml`, `escalation_trigger` one
-//! in `escalation-triggers.toml`; all are checked against the *enums'* wire
-//! spellings, because [`super::every_registry_key_is_a_variant`] holds those
-//! sets equal and a trigger the enum cannot spell is an edge that cannot be
-//! transcribed at all.
+//! A `guard` is compared the same way and is a key in
+//! `transition-guards.toml`; `from` and `to` are keys in `job-statuses.toml`
+//! and `escalation_trigger` one in `escalation-triggers.toml`. All are checked
+//! against the *enums'* wire spellings, because
+//! [`super::every_registry_key_is_a_variant`] holds those sets equal and a
+//! value the enum cannot spell is an edge that cannot be transcribed at all.
 //!
 //! `EDGES.len() == 34` proved nothing — thirty-four rows with one `from` wrong
 //! is still thirty-four. No `toml` and no `syn`, for the reason [`super`] has
@@ -38,6 +39,7 @@ struct EdgeRow {
     from: String,
     to: String,
     trigger: Option<String>,
+    guard: Option<String>,
     line: usize,
 }
 
@@ -54,6 +56,15 @@ impl EdgeRow {
             None => "no trigger, the default edge".to_string(),
         }
     }
+
+    /// The guard as a finding should say it. The absence is named for the
+    /// reason a missing trigger is: unconditional is a position, not a blank.
+    fn guard_says(&self) -> String {
+        match &self.guard {
+            Some(g) => format!("`{g}`"),
+            None => "no guard, admitted unconditionally".to_string(),
+        }
+    }
 }
 
 /// Every registry edge is in `EDGES`, every `EDGES` entry is in the registry,
@@ -66,13 +77,14 @@ pub fn the_registry_and_the_edge_table_hold_the_same_edges(root: &Path) -> Repor
     // needs to know is only whether the spellings arrived.
     let mut reading = Report::new("reading the enums");
     let spellings = super::wire_spellings(root, &mut reading);
-    let (Some(statuses), Some(triggers)) = (
+    let (Some(statuses), Some(triggers), Some(guards)) = (
         spellings.get("JobStatus"),
         spellings.get("EscalationTrigger"),
+        spellings.get("Guard"),
     ) else {
         report.fail(
-            "`JobStatus` and `EscalationTrigger` did not read — see the rule above. \
-             Nothing can be compared against spellings that were not found",
+            "`JobStatus`, `EscalationTrigger` and `Guard` did not all read — see the rule \
+             above. Nothing can be compared against spellings that were not found",
         );
         return report;
     };
@@ -86,7 +98,7 @@ pub fn the_registry_and_the_edge_table_hold_the_same_edges(root: &Path) -> Repor
     };
 
     let registry = read_registry(&registry_text, &mut report);
-    let table = read_table(&table_text, statuses, triggers, &mut report);
+    let table = read_table(&table_text, statuses, triggers, guards, &mut report);
     if registry.is_empty() {
         report.fail(format!(
             "{REGISTRY} has no `[[transitions]]` row at all — nothing to compare `EDGES` against"
@@ -100,7 +112,7 @@ pub fn the_registry_and_the_edge_table_hold_the_same_edges(root: &Path) -> Repor
         return report;
     }
 
-    check_values(&registry, statuses, triggers, &mut report);
+    check_values(&registry, statuses, triggers, guards, &mut report);
     check_shape(&registry, REGISTRY, &mut report);
     check_shape(&table, TABLE, &mut report);
     compare(&registry, &table, &mut report);
@@ -122,21 +134,24 @@ pub(super) fn wired_status_edges(
     root: &Path,
     statuses: &BTreeMap<String, String>,
     triggers: &BTreeMap<String, String>,
+    guards: &BTreeMap<String, String>,
     report: &mut Report,
-) -> Vec<(String, String)> {
+) -> Vec<(String, String, Option<String>)> {
     let Ok(text) = fs::read_to_string(root.join(TABLE)) else {
         report.fail(format!("{TABLE} — the source `EDGES` is declared in"));
         return Vec::new();
     };
     let mut reading = Report::new("reading the edge table");
-    let rows = read_table(&text, statuses, triggers, &mut reading);
+    let rows = read_table(&text, statuses, triggers, guards, &mut reading);
     if rows.is_empty() {
         report.fail(format!(
             "{TABLE} has no `EDGES` entry this rule could read — the status machine \
              was walked over no edges at all"
         ));
     }
-    rows.iter().map(EdgeRow::pair).collect()
+    rows.iter()
+        .map(|row| (row.from.clone(), row.to.clone(), row.guard.clone()))
+        .collect()
 }
 
 /// The values inside a registry row, against the spellings an `Edge` can hold.
@@ -147,6 +162,7 @@ fn check_values(
     rows: &[EdgeRow],
     statuses: &BTreeMap<String, String>,
     triggers: &BTreeMap<String, String>,
+    guards: &BTreeMap<String, String>,
     report: &mut Report,
 ) {
     let spelled = |variants: &BTreeMap<String, String>, value: &str| {
@@ -167,6 +183,16 @@ fn check_values(
                 report.fail(format!(
                     "{REGISTRY}:{} — `escalation_trigger = \"{trigger}\"` is a spelling no \
                      `EscalationTrigger` variant carries. The edge cannot be transcribed",
+                    row.line
+                ));
+            }
+        }
+        if let Some(guard) = &row.guard {
+            if !spelled(guards, guard) {
+                report.fail(format!(
+                    "{REGISTRY}:{} — `guard = \"{guard}\"` is a spelling no `Guard` variant \
+                     carries. The condition cannot be transcribed, so the edge would be \
+                     admitted unconditionally",
                     row.line
                 ));
             }
@@ -222,6 +248,17 @@ fn compare(registry: &[EdgeRow], table: &[EdgeRow], report: &mut Report) {
                 entry.line,
                 entry.trigger_says()
             )),
+            Some(entry) if entry.guard != row.guard => report.fail(format!(
+                "{REGISTRY}:{} — `{} -> {}` declares {}, and {TABLE}:{} gives it {}. \
+                 A condition the registry names and the table drops is one the machine \
+                 stops enforcing while the registry still claims it",
+                row.line,
+                row.from,
+                row.to,
+                row.guard_says(),
+                entry.line,
+                entry.guard_says()
+            )),
             Some(_) => {}
         }
     }
@@ -259,6 +296,7 @@ fn read_registry(text: &str, report: &mut Report) -> Vec<EdgeRow> {
                 from: String::new(),
                 to: String::new(),
                 trigger: None,
+                guard: None,
                 line: n + 1,
             });
             continue;
@@ -271,6 +309,7 @@ fn read_registry(text: &str, report: &mut Report) -> Vec<EdgeRow> {
             "from" => row.from = value,
             "to" => row.to = value,
             "escalation_trigger" => row.trigger = Some(value),
+            "guard" => row.guard = Some(value),
             _ => {}
         }
     }
@@ -304,6 +343,7 @@ fn read_table(
     text: &str,
     statuses: &BTreeMap<String, String>,
     triggers: &BTreeMap<String, String>,
+    guards: &BTreeMap<String, String>,
     report: &mut Report,
 ) -> Vec<EdgeRow> {
     let header = "pub static EDGES: &[Edge] =";
@@ -334,7 +374,7 @@ fn read_table(
         if pending.matches('(').count() != pending.matches(')').count() {
             continue;
         }
-        if let Some(row) = entry(&pending, began, statuses, triggers, report) {
+        if let Some(row) = entry(&pending, began, statuses, triggers, guards, report) {
             rows.push(row);
         }
         pending.clear();
@@ -347,19 +387,21 @@ fn read_table(
     rows
 }
 
-/// One `edge(From, To)` or `triggered(From, To, EscalationTrigger::Trigger)`.
+/// One `edge(From, To)`, `triggered(From, To, EscalationTrigger::Trigger)` or
+/// `guarded(From, To, Guard::Condition)`.
 fn entry(
     text: &str,
     line: usize,
     statuses: &BTreeMap<String, String>,
     triggers: &BTreeMap<String, String>,
+    guards: &BTreeMap<String, String>,
     report: &mut Report,
 ) -> Option<EdgeRow> {
     let text = text.trim().trim_end_matches(',');
     let unreadable = |report: &mut Report| {
         report.fail(format!(
-            "{TABLE}:{line} — `{text}` is not an `edge(…)` or `triggered(…)` entry. \
-             An entry this rule cannot read is an edge it does not compare"
+            "{TABLE}:{line} — `{text}` is not an `edge(…)`, `triggered(…)` or `guarded(…)` \
+             entry. An entry this rule cannot read is an edge it does not compare"
         ));
     };
     let (constructor, args) = match text.split_once('(') {
@@ -379,7 +421,7 @@ fn entry(
         .collect();
     let expected = match constructor {
         "edge" => 2,
-        "triggered" => 3,
+        "triggered" | "guarded" => 3,
         _ => {
             unreadable(report);
             return None;
@@ -392,14 +434,22 @@ fn entry(
 
     let from = spelled(args[0], "JobStatus", statuses, line, report)?;
     let to = spelled(args[1], "JobStatus", statuses, line, report)?;
-    let trigger = match args.get(2) {
-        Some(arg) => Some(spelled(arg, "EscalationTrigger", triggers, line, report)?),
-        None => None,
+    // The constructor decides which of the two an entry's third argument is,
+    // and no entry has both. An edge needing a trigger and a guard at once is a
+    // fourth constructor, added deliberately rather than arrived at.
+    let (trigger, guard) = match (constructor, args.get(2)) {
+        ("triggered", Some(arg)) => (
+            Some(spelled(arg, "EscalationTrigger", triggers, line, report)?),
+            None,
+        ),
+        ("guarded", Some(arg)) => (None, Some(spelled(arg, "Guard", guards, line, report)?)),
+        _ => (None, None),
     };
     Some(EdgeRow {
         from,
         to,
         trigger,
+        guard,
         line,
     })
 }

@@ -16,8 +16,8 @@ use adapter_traits::{Environment, Footprint, Model, Worktree};
 use config::{EvidenceType, ResolvedWorkflow};
 use core_model::{
     AcceptanceCriterion, Actor, CriterionId, CriterionSource, EscalationTrigger, Facts, Job, JobId,
-    JobStatus, ManifestId, ModelName, NewJob, StepId, StepSeed, Subject, Target, Timestamp, Title,
-    TopLevelOrigin, Ulid, Urgency,
+    JobStatus, ManifestId, ModelName, NewJob, StepId, StepSeed, StepTarget, Subject, Target,
+    Timestamp, Title, TopLevelOrigin, Ulid, Urgency,
 };
 use testkit::{FakeJudge, FakeWorkProduct, Gate, Sketch};
 use verification::{
@@ -87,6 +87,28 @@ pub(super) fn running_job() -> Job {
         .transition(Target::Running, Actor::Fleet, at(NOW))
         .expect("dispatched")
         .job
+}
+
+/// The same Job with every step advanced, which is what `landing::finish`
+/// hands to [`apply`] on the ruling that ends a Job.
+///
+/// **The step moves come first and it is not arbitrary**: `completed_success`
+/// is guarded on `every_step_advanced`, and the inner machine is frozen the
+/// moment the Job leaves `running`. `finish` walks this order for that reason,
+/// so a fixture that skipped it would be asserting against a Job Fleet never
+/// produces.
+pub(super) fn job_with_every_step_advanced() -> Job {
+    let mut job = running_job();
+    let steps: Vec<StepId> = job.steps().iter().map(|r| r.step_id().clone()).collect();
+    for step_id in steps {
+        for target in [StepTarget::Running, StepTarget::Advanced] {
+            job = job
+                .transition_step(&step_id, target, Actor::Fleet, at(NOW))
+                .expect("the inner machine advances beneath running")
+                .job;
+        }
+    }
+    job
 }
 
 /// Two steps: one gated on a Check that passes and a non-empty diff, one gated
@@ -639,7 +661,7 @@ async fn the_last_step_advancing_completes_the_job() {
         &judging(),
     )
     .await;
-    let moved = apply(&running_job(), &ruling, at(NOW))
+    let moved = apply(&job_with_every_step_advanced(), &ruling, at(NOW))
         .expect("the Job moves")
         .expect("a legal move");
 

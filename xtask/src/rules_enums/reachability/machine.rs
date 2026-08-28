@@ -17,7 +17,7 @@ use std::path::Path;
 use crate::Report;
 
 use super::reading::{read, resolve, spelled};
-use super::{Machine, MACHINE, RECORD, STEP};
+use super::{Machine, GUARD, MACHINE, RECORD, STEP};
 
 /// The machine, read out of the three sources that declare it.
 ///
@@ -30,11 +30,13 @@ pub(super) fn read_machine(
     statuses: &BTreeMap<String, String>,
     states: &BTreeMap<String, String>,
     triggers: &BTreeMap<String, String>,
+    guard_names: &BTreeMap<String, String>,
     report: &mut Report,
 ) -> Option<Machine> {
     let machine_text = read(root, MACHINE, "the step machine", report)?;
     let record_text = read(root, RECORD, "where a Job is created", report)?;
     let step_text = read(root, STEP, "where a step row is written", report)?;
+    let guard_text = read(root, GUARD, "where a guard says what it admits", report)?;
 
     let advancing = resolve(
         &qualified_list(
@@ -84,10 +86,31 @@ pub(super) fn read_machine(
         ));
         return None;
     };
-    let status_edges =
-        crate::rules_enums::edges::wired_status_edges(root, statuses, triggers, report);
+    let status_edges = crate::rules_enums::edges::wired_status_edges(
+        root,
+        statuses,
+        triggers,
+        guard_names,
+        report,
+    );
     if status_edges.is_empty() {
         return None;
+    }
+    let guards = holds_arms(&guard_text, guard_names, states);
+    // A guarded edge whose condition this rule cannot read would be walked as
+    // unconditional, which reaches *more* than the machine does and would
+    // report a narrowed row as stale. That is the one wrong answer worth
+    // abandoning the walk for, so it is named rather than assumed away.
+    for (from, to, guard) in &status_edges {
+        let Some(guard) = guard else { continue };
+        if !guards.contains_key(guard) {
+            report.fail(format!(
+                "{GUARD} — `{from} -> {to}` is guarded by `{guard}`, and `Guard::holds` has \
+                 no arm this rule could read for it. The edge would be walked as \
+                 unconditional and every state carried across it"
+            ));
+            return None;
+        }
     }
     Some(Machine {
         entry,
@@ -95,7 +118,61 @@ pub(super) fn read_machine(
         advancing,
         status_edges,
         step_edges,
+        guards,
     })
+}
+
+/// `Guard::holds`'s arms, as `guard -> step states` in wire spellings.
+///
+/// The set a guarded edge carries, read out of the code rather than out of
+/// `transition-guards.toml`, for the reason [`super::super::edges`] reads
+/// `EDGES` rather than the registry: the walk is of the machine, and the
+/// registry is a claim about it. [`super::check_guards`] is what holds the two
+/// together.
+///
+/// An arm is accumulated until its brackets balance, so one `rustfmt` wrapped
+/// is one arm — the same rule [`seen_under_arms`] follows and for the same
+/// reason.
+pub(super) fn holds_arms(
+    text: &str,
+    guards: &BTreeMap<String, String>,
+    states: &BTreeMap<String, String>,
+) -> BTreeMap<String, Vec<String>> {
+    let mut found = BTreeMap::new();
+    let Some(body) = text.split("fn holds").nth(1) else {
+        return found;
+    };
+    let body = body.split("\n    }").next().unwrap_or(body);
+    let mut pending = String::new();
+    for line in body.lines().map(str::trim) {
+        pending.push_str(line);
+        let balanced = pending.matches('[').count() == pending.matches(']').count();
+        if !pending.contains("=>") || !balanced || !pending.ends_with(',') {
+            continue;
+        }
+        let arm = core::mem::take(&mut pending);
+        let Some((variant, listed)) = arm.split_once(" => ") else {
+            continue;
+        };
+        let Some(guard) = spelled(variant, guards) else {
+            continue;
+        };
+        let inner = listed
+            .trim()
+            .trim_end_matches(',')
+            .trim_start_matches("&[")
+            .split(']')
+            .next()
+            .unwrap_or_default();
+        found.insert(
+            guard,
+            inner
+                .split(',')
+                .filter_map(|arg| spelled(arg, states))
+                .collect(),
+        );
+    }
+    found
 }
 
 /// The identifiers in a `const NAME: &[Type] = &[Type::A, Type::B];`.
@@ -210,6 +287,13 @@ pub(super) fn seen_under_arms(
         let listed = listed.trim().trim_end_matches(',');
         let named = if listed.ends_with("::ALL") {
             statuses.values().cloned().collect()
+        } else if !listed.starts_with("&[") {
+            // A named `const NAME: &[JobStatus] = &[…]` in the same file. An
+            // arm that answers with "every status but one" is written out
+            // rather than filtered, so that this rule can read it — and a
+            // constant nothing here resolves would read as an empty answer,
+            // which is why it is looked up rather than skipped.
+            declared_list(text, listed, statuses)
         } else {
             let inner = listed
                 .trim_start_matches("&[")
@@ -224,6 +308,21 @@ pub(super) fn seen_under_arms(
         found.insert(state, named);
     }
     Some(found)
+}
+
+/// A `const NAME: &[Type] = &[Type::A, …];` declared in the same file, as wire
+/// spellings. Empty where there is no such constant, which the caller's
+/// comparison then reports as an arm answering with nothing.
+fn declared_list(text: &str, name: &str, variants: &BTreeMap<String, String>) -> Vec<String> {
+    let header = format!("const {name}:");
+    let Some(start) = text.find(&header) else {
+        return Vec::new();
+    };
+    let body = text[start..].split("];").next().unwrap_or_default();
+    let body = body.split_once("&[").map(|(_, rest)| rest).unwrap_or(body);
+    body.split(',')
+        .filter_map(|arg| spelled(arg, variants))
+        .collect()
 }
 
 /// The `JobStatus` variant each `Job::create(…)` call passes as the entry

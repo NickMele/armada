@@ -18,6 +18,7 @@ files, a rule can — and the rule is the point.
 | `job-statuses.toml` | Where a Job is. The `status` column on `jobs`, and the outer half of the two-level machine |
 | `step-states.toml` | Where one step of the frozen WorkflowDef is. The `state` column on `job_steps`, and the inner half |
 | `job-transitions.toml` | Every legal edge of the status machine, what fires it, and the escalation trigger it belongs to |
+| `transition-guards.toml` | The conditions an edge is admitted under, and the step states each one admits |
 | `job-fields.toml` | What a Job record holds — the `jobs` row, the `job_steps` row, and the three things stored elsewhere |
 | `escalation-triggers.toml` | Why a Job stopped and a person is being asked |
 | `check-outcomes.toml` | What one declared mechanical Check did. The `outcome` column on `job_step_checks` |
@@ -40,6 +41,14 @@ and for `seen_under` on a step state.
 Transitions are an array of tables rather than one table per edge, because an
 edge has no name of its own that a Rust identifier could carry. `from` and `to`
 are the whole identity.
+
+A **guard** is the one thing an edge carries that reads another machine. Its
+`holds_steps` names the step states a Job may hold and still cross the edge, so
+`Guard::holds` in `core-model` is that array transcribed and the predicate is
+written in terms of it — there is no second statement of the condition to
+disagree with the first. That is what lets `completed_success` declare
+`step_states = ["advanced"]` and be checked rather than asserted: the gate
+carries only a guard's admitted states across a guarded edge. Issue #189.
 
 `transitions_in` and `transitions_out` on a status are derivable from
 `job-transitions.toml`, and are carried anyway — for the reason a WorkflowDef

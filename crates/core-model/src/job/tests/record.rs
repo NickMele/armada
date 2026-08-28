@@ -310,12 +310,33 @@ fn every_trigger_says_whether_it_is_about_a_step_or_about_the_job() {
 /// and it held `Stopped.seen_under()` to `[escalated]` alone — which is issue
 /// #184: a Job escalated on `stalled` holds a step that is still `running`, so
 /// `escalated` is not the only status a stopped step is seen beneath and was
-/// never the only one. A status change looks at no step, so a frozen step
-/// crosses every edge holding what it held.
+/// never the only one. A frozen step crosses an unguarded edge holding what it
+/// held.
+///
+/// **`completed_success` is the one status that is not everywhere**, which is
+/// issue #189: every edge arriving there is guarded on `every_step_advanced`,
+/// so no state but `advanced` can be carried across one. That is the whole
+/// difference a guard makes to this relation, stated once.
 #[test]
-fn a_step_state_the_machine_reaches_is_seen_beneath_every_status() {
-    assert_eq!(StepState::Stopped.seen_under(), JobStatus::ALL);
+fn a_step_state_the_machine_reaches_is_seen_beneath_every_status_but_the_guarded_one() {
     assert_eq!(StepState::Advanced.seen_under(), JobStatus::ALL);
+    for state in [
+        StepState::Stopped,
+        StepState::NotStarted,
+        StepState::Running,
+    ] {
+        assert!(
+            !state.seen_under().contains(&JobStatus::CompletedSuccess),
+            "{} is seen beneath a status guarded against it",
+            state.as_wire()
+        );
+        assert_eq!(
+            state.seen_under().len(),
+            JobStatus::ALL.len() - 1,
+            "{} is seen beneath every status but the guarded one",
+            state.as_wire()
+        );
+    }
     // The two nothing reaches yet are where their design puts them.
     assert_eq!(
         StepState::AwaitingHuman.seen_under(),

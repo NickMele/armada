@@ -16,15 +16,21 @@
 #
 # `step_states` is derived the same way and checked the same way, against the
 # step machine rather than against this file's neighbour: STEP_EDGES walked
-# beneath ADVANCING_STATUSES, carried across the status edges. It reads almost
-# identically on every row, and that is the machine rather than a slip — the
-# status machine admits a move without looking at any step, so the only
-# coupling between the two levels is which statuses advance one, and a frozen
-# step crosses every other edge holding whatever it held. `escalated` is the
-# row that made this concrete: it said `stopped`, and a Job escalated on
-# `stalled` arrives holding a step that is `running`. What a status is
-# *characteristically* doing is `step_machine` beside it, which is prose and
-# is not checked.
+# beneath ADVANCING_STATUSES, carried across the status edges. A frozen step
+# crosses an unguarded edge holding whatever it held, which is why most rows
+# read alike — `escalated` is the row that made that concrete: it said
+# `stopped`, and a Job escalated on `stalled` arrives holding a step that is
+# `running`.
+#
+# **A guarded edge is where a row can say more than that.** Since #189 an edge
+# may carry a condition on the Job's step rows — transition-guards.toml — and
+# only the states that condition admits cross it. `completed_success` is the
+# first row to narrow on one: every edge arriving there is guarded on
+# `every_step_advanced`, so the only state beneath it is `advanced`, and the
+# row now says what `step_machine` beside it always claimed. A row still wide
+# is a status whose inbound edges are unguarded, not a row nobody looked at.
+# What a status is *characteristically* doing is `step_machine`, which is prose
+# and is not checked.
 #
 # Fields:
 #   terminal          - whether the Job is over here
@@ -110,7 +116,7 @@ mode = "N/A"
 who_is_acting = "None"
 drone_process = "None"
 step_machine = "Frozen, every step advanced"
-step_states = ["advanced", "not_started", "running", "stopped"]
+step_states = ["advanced"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["running -> completed_success", "awaiting_review -> completed_success", "piloted -> completed_success", "awaiting_attestation -> completed_success"]
