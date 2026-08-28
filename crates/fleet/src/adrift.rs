@@ -150,14 +150,19 @@ pub enum Adrift {
     /// A resume was asked for on a Job that is not waiting for a person.
     ///
     /// **Not an illegal transition.** The machine has `escalated -> running`
-    /// and would have taken the move; what is missing is the escalation, so the
-    /// question of which step to resume has no answer.
+    /// and would have taken the move; what is missing is the escalation, so
+    /// there is nothing for either act to hand back.
     NotResumable { job: JobId, status: JobStatus },
-    /// The Job is escalated and no step of it stopped.
+    /// A **restart** was asked for on a Job no step of which stopped.
     ///
     /// A Job-level escalation — `interrupted`, `resource_exhausted`,
-    /// `dependency_failed` — names no step, so neither resume act has anywhere
-    /// to land. Redispatch and Pilot are what is left.
+    /// `dependency_failed`, `stalled` — names no step, so a restart has nowhere
+    /// to land. For the first three the Drone is gone too, which leaves
+    /// redispatch and Pilot; `stalled` holds a live session, and a redirect is
+    /// what answers that one.
+    ///
+    /// **A redirect never reaches this.** It needs a session, not a step —
+    /// which is why the two acts stopped sharing one predicate.
     NoStepStopped { job: JobId },
     /// A redirect was asked for on a Job whose Drone is gone.
     ///
@@ -432,15 +437,16 @@ impl fmt::Display for Adrift {
             ),
             Adrift::NotResumable { job, status } => write!(
                 out,
-                "{} is {} and has no stopped step to resume. Redirect and restart both take a \
-                 Job a person is holding, which is `escalated`",
+                "{} is {}. Redirect and restart both take a Job a person is holding, which is \
+                 `escalated`",
                 job.as_str(),
                 status.as_wire()
             ),
             Adrift::NoStepStopped { job } => write!(
                 out,
-                "{} escalated without stopping a step, so there is none to resume. Only a \
-                 step-level trigger names a step; a redispatch or Pilot is what answers this one",
+                "{} escalated without stopping a step, so there is none to restart. Only a \
+                 step-level trigger names a step — redirect the Drone if it is still there, and \
+                 a redispatch or Pilot is what answers this otherwise",
                 job.as_str()
             ),
             Adrift::NoDroneToRedirect { job } => write!(
