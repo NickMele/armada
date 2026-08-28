@@ -77,7 +77,8 @@ use std::time::Duration;
 use adapters::{GitVcs, HeadlessAgent};
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
-    CheckBudget, Fittings, Fleet, Host, JudgeBudget, Mint, StepNorms, SystemClock, UlidMint,
+    CheckBudget, Fittings, Fleet, Host, JudgeBudget, Liveness, Mint, StepNorms, SystemClock,
+    UlidMint,
 };
 use ipc::PROTOCOL_VERSION;
 use store::Store;
@@ -160,13 +161,9 @@ pub const PROVISIONAL_JUDGE_BUDGET: Duration = Duration::from_secs(120);
 /// a ceiling low enough to catch a stuck Drone early is a ceiling that burns
 /// the attention a later, real thrash would need.
 ///
-/// **What it still does not catch is what stopped every stuck step measured.**
-/// They were quiet, not long: inside an honest step the longest silence
-/// between two Drone events was 79s, while a scope step whose Drone had
-/// stopped speaking sat for 1636s and was killed by a person two seconds
-/// before 1800s would have fired. Time since the last event is what separates
-/// the two, the tier has no such tripwire, and `stalled`'s liveness timer —
-/// where it belongs — is unbuilt.
+/// **What it does not catch is what stopped every stuck step measured.** They
+/// were quiet, not long, and that is [`PROVISIONAL_LIVENESS`]'s to catch rather
+/// than this value's.
 ///
 /// The grace is the shortest of the three deliberately: spike 4 measured an
 /// injected turn consumed in 1.59s mid-task and 33s against a forty-second
@@ -174,6 +171,27 @@ pub const PROVISIONAL_JUDGE_BUDGET: Duration = Duration::from_secs(120);
 /// inside a long call.
 pub const PROVISIONAL_STEP_NORMS: StepNorms =
     StepNorms::of(60, Duration::from_secs(1_500), Duration::from_secs(120));
+
+/// How long a Drone may say nothing, and how many times it is asked before the
+/// Job escalates as `stalled`.
+///
+/// **Provisional, and measured on one repository rather than on none** — the
+/// same steps as the norms above, from
+/// `docs/spikes/009-how-long-does-a-step-take.md`, plus the eight that never
+/// finished, which are the half that matters here.
+///
+/// **Two minutes, the bottom of the band that spike leaves open.** Inside an
+/// honest step the longest silence between two Drone events was 79s, so none of
+/// the 31 honest steps would have been poked at 120s. Three of the eight stuck
+/// ones were quieter than that — 147s, 409s and 1636s — and only the bottom of
+/// the band catches the first. Firing early costs one injected turn; firing
+/// late cost 27 minutes of a person watching a step that had already stopped.
+///
+/// **Two pokes**, `poke_limit`'s default in `crates/config/settings.toml`. What
+/// must not fire routinely is the escalation rather than the poke, and that one
+/// needs the silence to survive both — about six minutes, or four and a half
+/// times the longest silence any honest step produced.
+pub const PROVISIONAL_LIVENESS: Liveness = Liveness::of(Duration::from_secs(120), 2);
 
 /// How often Fleet is turned. **Provisional**, and nothing has measured it.
 ///
@@ -440,6 +458,7 @@ fn assemble(
         },
         budget: CheckBudget::of(PROVISIONAL_CHECK_BUDGET),
         norms: PROVISIONAL_STEP_NORMS,
+        liveness: PROVISIONAL_LIVENESS,
         // The same CLI, invoked as a call rather than as a session. The
         // spelling of the model is the adapter's; this crate never learns it.
         judge: Arc::new(HeadlessAgent::at(judge_binary)),

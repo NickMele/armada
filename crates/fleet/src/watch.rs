@@ -45,12 +45,13 @@ struct Heard {
     ended: bool,
 }
 
-/// How far a run has got, in the only two numbers anything asks for.
+/// How far a run has got, in the only three numbers anything asks for.
 ///
-/// **Neither is a verdict and neither can become one.** `calls` is Fleet's own
-/// count of what the Drone did and is compared against a step norm;
+/// **None of them is a verdict and none can become one.** `calls` is Fleet's
+/// own count of what the Drone did and is compared against a step norm;
 /// `boundaries` is how many times the Drone came to rest, which is what says a
-/// directive was acted on rather than what it said in answer.
+/// directive was acted on rather than what it said in answer; `heard` is how
+/// many events arrived at all, which is what says the Drone is still there.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Progress {
     /// How many tool calls the Drone has made this session.
@@ -76,6 +77,23 @@ pub struct Progress {
     pub calls: u32,
     /// How many terminating events have arrived.
     pub boundaries: usize,
+    /// How many events have arrived, **of every kind**, including the ones this
+    /// vocabulary has no name for and the lines that did not decode.
+    ///
+    /// **The liveness reading, and it has to count everything.** `calls` is the
+    /// wrong number for it twice over: a Drone stuck inside one long command
+    /// makes no further calls and is not silent, and a Drone that has stopped
+    /// makes none either — which is the failure mode
+    /// `docs/spikes/009-how-long-does-a-step-take.md` measured, where a frozen
+    /// call counter read as a step that was merely early.
+    ///
+    /// A Drone inside a long command is not quiet: the harness emits a
+    /// `tool_progress` heartbeat every thirty seconds while a tool runs, which
+    /// this vocabulary has no variant for and therefore counts as
+    /// `Unrecognised`. Counting only what Armada names would have thrown away
+    /// the one signal that separates a Drone running `cargo test` from a Drone
+    /// that has stopped running anything.
+    pub heard: usize,
 }
 
 /// A transcript being read.
@@ -165,6 +183,11 @@ impl Watching {
                     DroneEvent::Ended { .. } => so_far.boundaries += 1,
                     _ => {}
                 }
+                // Outside the match, deliberately: every event is one, and an
+                // arm that had to be added for a new kind would be an arm
+                // somebody could forget — which would read as a Drone falling
+                // silent the moment the harness grew an event.
+                so_far.heard += 1;
                 so_far
             })
     }

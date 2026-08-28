@@ -85,6 +85,22 @@ pub(crate) struct Working {
     rested_before: usize,
     /// Where this step stands in the thrashing chain.
     chain: Chain,
+    /// When the Drone was last heard from, as the injected clock read it on the
+    /// turn Fleet noticed. **Sampled per turn rather than stamped per event**:
+    /// the transcript is read on a task of its own, which holds no clock, and
+    /// nothing in this crate reads one outside `crate::clock`. A quarter-second
+    /// loop against a threshold in minutes makes the sampling error nothing.
+    heard_at: Timestamp,
+    /// What [`Progress::heard`](crate::Progress::heard) read when `heard_at`
+    /// was taken. The comparison that says whether anything has arrived since.
+    heard: usize,
+    /// How many liveness pokes this step has spent.
+    ///
+    /// **The step's budget, not the episode's.** A Drone that answers a poke
+    /// and then goes quiet again has spent one either way — resetting on an
+    /// answer would let a Drone that says one word every two minutes and does
+    /// nothing else stay under the counter for ever.
+    pokes: u32,
     /// When the worktree was last read for the live file list, and what was
     /// last published from it.
     publishing: Publishing,
@@ -145,10 +161,13 @@ impl Working {
             _complaints: started.complaints,
             declared: None,
             drifted: Vec::new(),
-            step_began: at,
+            step_began: at.clone(),
             calls_before: 0,
             rested_before: 0,
             chain: Chain::Working,
+            heard_at: at,
+            heard: 0,
+            pokes: 0,
             publishing: Publishing::default(),
             entered_with: None,
         }
@@ -194,9 +213,15 @@ impl Working {
         // the new baseline and hands it back through `entering_with`; until it
         // does, the step has no baseline and the gate fails closed.
         self.entered_with = None;
-        self.step_began = at;
+        self.step_began = at.clone();
         self.calls_before = self.transcript.progress().calls;
         self.chain = Chain::Working;
+        // **And the silence clock, which is the step's too.** The gate's Checks
+        // and its Judge calls run inside the turn that advances a step, and a
+        // Drone waiting behind them is quiet because Fleet has not given it
+        // anything to do — so a clock carried across this boundary would charge
+        // the Drone for the time Fleet spent ruling on its last submission.
+        self.listening(at);
         // A new step is a new pen holder. Keeping the memo would let step two's
         // first reading match step one's last and publish nothing, leaving a
         // watcher reading a list attributed to the step before.
@@ -216,9 +241,13 @@ impl Working {
     /// before the person spoke, and it would then pass `diff_nonempty` on
     /// nothing.
     pub(crate) fn resumed(&mut self, at: Timestamp) {
-        self.step_began = at;
+        self.step_began = at.clone();
         self.calls_before = self.transcript.progress().calls;
         self.chain = Chain::Working;
+        // The pokes go back with the chain, and for the same reason: a person
+        // has just spoken into the session, so what the Drone did before they
+        // did is not what its answer to them is measured from.
+        self.listening(at);
     }
 
     /// Record what the Drone declared for the step it is on. **Replaces**, so a
@@ -304,6 +333,59 @@ impl Working {
     /// How long the step has been running, by the instant handed in.
     pub(crate) fn running_for(&self, now: &Timestamp) -> Duration {
         elapsed(&self.step_began, now)
+    }
+
+    /// How long the Drone has said nothing, by the instant handed in.
+    ///
+    /// **It samples, which is why it is `&mut`.** The reading it takes is what
+    /// the next one is compared against, so asking the question is what keeps
+    /// the answer true — there is no separate writer to forget to call, and no
+    /// way to read this without the reading being recorded.
+    ///
+    /// Zero on the turn anything arrived, of any kind. See
+    /// [`Progress::heard`](crate::Progress::heard) for why it is every kind.
+    pub(crate) fn quiet_for(&mut self, now: &Timestamp) -> Duration {
+        let heard = self.transcript.progress().heard;
+        if heard > self.heard {
+            self.heard = heard;
+            self.heard_at = now.clone();
+        }
+        elapsed(&self.heard_at, now)
+    }
+
+    /// Start the silence clock again, and give the step its pokes back.
+    ///
+    /// **A new step, or the same step handed back by a person.** Both are
+    /// moments the Drone has just been given something to do, and neither owes
+    /// an answer for the time before it.
+    fn listening(&mut self, at: Timestamp) {
+        self.waiting(at);
+        self.pokes = 0;
+    }
+
+    /// Start the silence clock again **without** returning a poke.
+    ///
+    /// For the turns where the Drone owes nothing: its evidence is at the gate,
+    /// or the Job is not `running` and the liveness clock is suspended by the
+    /// registry's own rule. Quiet is what a Drone waiting on Fleet or on a
+    /// person looks like, and charging it for that is how a tripwire learns to
+    /// fire on the honest case.
+    pub(crate) fn waiting(&mut self, at: Timestamp) {
+        self.heard = self.transcript.progress().heard;
+        self.heard_at = at;
+    }
+
+    /// How many pokes this step has spent.
+    pub(crate) fn pokes(&self) -> u32 {
+        self.pokes
+    }
+
+    /// The Drone has been poked, at this instant. **The clock restarts**, so
+    /// the next poke — or the escalation — is a fresh silence rather than the
+    /// same one read twice.
+    pub(crate) fn poked(&mut self, at: Timestamp) {
+        self.waiting(at);
+        self.pokes += 1;
     }
 
     /// Add paths seen outside the plan, and answer with the ones that are new.

@@ -118,5 +118,6 @@ mod scope;
 mod serving;
 mod session;
 mod settling;
+mod silence;
 mod tmp;
 mod transcript;
