@@ -30,13 +30,15 @@
 //! Telling a Drone the Check would let it satisfy the Check rather than do the
 //! work, which is the failure the whole gate exists to refuse.
 //!
-//! Two blocks outlive the turn they were written for and are types rather than
-//! paragraphs: [`Declaring`], which a step boundary sends again, and
-//! [`Stopped`], which a restart is built from. Each says why on itself.
+//! Three blocks outlive the turn they were written for and are types rather
+//! than paragraphs: [`Declaring`], which a step boundary sends again,
+//! [`Redeclaring`], which the live drift check sends mid-step, and [`Stopped`],
+//! which a restart is built from. Each says why on itself.
 
 use adapter_traits::{Prompt, SpawnConfigRefused};
 use core_model::{
-    EscalationTrigger, FrozenWorkflow, GamingFlag, Job, Judgment, ResolvedStep, StepId, StepVerdict,
+    EscalationTrigger, FrozenWorkflow, GamingFlag, Job, Judgment, RepoPath, ResolvedStep, StepId,
+    StepVerdict,
 };
 
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering.
@@ -316,6 +318,76 @@ impl Declaring {
             }
         }
         Some(Declaring(block))
+    }
+
+    /// The block, exactly as it reaches a Drone.
+    pub fn text(&self) -> &str {
+        &self.0
+    }
+}
+
+/// What a Drone is told when its work turns up outside the plan it declared.
+///
+/// **The other half of [`Declaring`], and it was missing.** The live check in
+/// `crate::scope` has compared edits against the plan since the scope tool
+/// existed, and everything it found went to the Job's log. The Drone was never
+/// told, so the one call that fixes a plan that turned out wrong was a call it
+/// had no reason to make: Job `01M14HZ8ND001FYT6264WZJFPB` drifted onto
+/// `crates/ipc/src/lib.rs`, carried on for seven minutes and reached its gate
+/// still holding a declaration it had outgrown.
+///
+/// **It offers rather than demands, and the wording is the whole mechanism.**
+/// `docs/concepts/judge.md` keeps drift a signal because legitimate
+/// investigation moves the work, so a Drone that reads this as an accusation
+/// and apologises, or as a stop-work order and downs tools over a file it was
+/// right to touch, has been made worse off by being told. Three sentences carry
+/// that: nothing has failed, you are not being asked to stop, and here is the
+/// call that makes the plan true. The stop-and-report directive is
+/// `crate::converging::ReportNow` and is a different act.
+///
+/// **Drafted wording**, like the gaming half of [`Stopped`].
+/// `docs/contracts/agent-prompt.md` has no sanctioned copy for a mid-step
+/// scope notice, and the phrasing here follows [`Declaring`]'s so a Drone
+/// reads one vocabulary rather than two.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Redeclaring(String);
+
+impl Redeclaring {
+    /// The notice for paths seen outside the plan, or `None` where there is
+    /// nothing to say.
+    ///
+    /// **There is no constructor taking a string**, and the step decides
+    /// whether one exists at all — the same narrowing [`Declaring::at`] makes.
+    /// `watches_live_edits` is the switch rather than `scope_diff_check`: a
+    /// step whose plan arrives at the gate has no live plan to correct, and a
+    /// Drone told to call a tool it was never asked to call goes looking for
+    /// one.
+    ///
+    /// **`drifted` is what was seen for the first time**, which
+    /// [`Working::drifting`](crate::working::Working::drifting) already
+    /// answers. Passing everything seen so far would say the same thing every
+    /// turn, and a notice a Drone has already acted on is one it reads as
+    /// having been ignored.
+    pub fn at(step: &ResolvedStep, drifted: &[RepoPath]) -> Option<Redeclaring> {
+        if drifted.is_empty() || !step.evidence_scope()?.watches_live_edits() {
+            return None;
+        }
+        let mut block = String::from(
+            "FILES OUTSIDE WHAT YOU DECLARED\n\nThe plan you declared for this \
+             part does not cover everything that has changed:",
+        );
+        for path in drifted {
+            block.push_str("\n  - ");
+            block.push_str(path.as_str());
+        }
+        block.push_str(
+            "\n\nNothing has failed and you are not being asked to stop. If this \
+             part's work is there, call the scope tool again with every path the \
+             work is in. The new call replaces the plan, and that is how a plan \
+             that turned out wrong is corrected. If that work belongs to a later \
+             part, leave it to that part.",
+        );
+        Some(Redeclaring(block))
     }
 
     /// The block, exactly as it reaches a Drone.
