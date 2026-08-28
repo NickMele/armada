@@ -612,6 +612,10 @@ where
 
 /// Whether every Job this one waits on has finished, and finished well.
 ///
+/// `pub(crate)` because `serving` renders the same fact as a label. **One
+/// answer, not two** — a Board saying a Job is blocked while admission
+/// disagrees is worse than a Board saying nothing.
+///
 /// **`completed_success` and nothing weaker.** A dependent admitted after a
 /// failed upstream would do its work against a base that never landed, which is
 /// the half-landed upstream the linked-DAG shape exists to prevent.
@@ -619,7 +623,7 @@ where
 /// A peer that is not in the list at all counts as unfinished. An edge pointing
 /// at a Job that was retained out is a sequence nothing can establish, and of
 /// the two answers only "run it" cannot be taken back.
-fn clear_to_run(job: &Job, standing: &BTreeMap<JobId, JobStatus>) -> bool {
+pub(crate) fn clear_to_run(job: &Job, standing: &BTreeMap<JobId, JobStatus>) -> bool {
     job.dependencies()
         .iter()
         .filter(|edge| edge.direction == DependencyDirection::DependsOn)

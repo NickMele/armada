@@ -113,6 +113,11 @@ wire_enum! {
     DependencyDirection, core_model::DependencyDirection, "a dependency direction"
 }
 wire_enum! {
+    /// Why an approved Job has not started. **Derived at read time**, so what
+    /// crosses is what was true when the row was read and never a stored label.
+    QueuedReason, core_model::QueuedReason, "a queued reason"
+}
+wire_enum! {
     /// What kind of work product a step's evidence is. Six, from the
     /// WorkflowDef schema, and **the workflow's word rather than the Drone's**:
     /// the Evidence tool has no parameter for it, so a submission is recorded

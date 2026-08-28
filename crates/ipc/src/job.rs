@@ -42,7 +42,7 @@ use crate::event::Reason;
 use crate::ids::{DroneId, Instant, JobId, ManifestId, StepId, WorkflowId};
 
 use crate::enums::{
-    CriterionSource, DependencyDirection, JobStatus, Origin, TopLevelOrigin, Urgency,
+    CriterionSource, DependencyDirection, JobStatus, Origin, QueuedReason, TopLevelOrigin, Urgency,
 };
 
 /// One Job, as a Board row.
@@ -78,10 +78,24 @@ pub struct JobSummary {
     pub branch: Option<String>,
     /// The qualifying reason the Job's last transition stored, where it stored
     /// one. **Absent is not "no reason"** — `queued` computes its readiness
-    /// reason at read time from dependencies and live headroom, and it is
-    /// therefore not in the log for this to carry.
+    /// reason at read time from dependencies and live headroom, so it is not in
+    /// the log for this to carry and rides on
+    /// [`queued_reason`](JobSummary::queued_reason) instead.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<Reason>,
+    /// Why an approved Job has not started yet.
+    ///
+    /// **Its own field and not [`reason`](JobSummary::reason)**, because the
+    /// two are different facts: that one is what a transition recorded, this
+    /// one is computed from the board a moment ago. A caller handed one field
+    /// could not tell a reason that was written down from one worked out on the
+    /// way past.
+    ///
+    /// **Absent on every status but `queued`**, and absent on a `queued` Job
+    /// that nothing is holding — which is the registry's `none`, carried as the
+    /// absence of a value rather than as a variant nothing renders.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queued_reason: Option<QueuedReason>,
     pub workflow_id: WorkflowId,
     pub owner_manifest_id: ManifestId,
     pub origin: Origin,
@@ -112,7 +126,11 @@ impl JobSummary {
     /// The reason is a second argument because it is not on the record: the
     /// `jobs` row stores `status` and `job_events` stores why. Only a caller
     /// holding the log can supply it, which is Fleet.
-    pub fn of(job: &core_model::Job, reason: Option<&core_model::TransitionReason>) -> JobSummary {
+    pub fn of(
+        job: &core_model::Job,
+        reason: Option<&core_model::TransitionReason>,
+        queued_reason: Option<core_model::QueuedReason>,
+    ) -> JobSummary {
         JobSummary {
             id: job.id().into(),
             title: job.title().as_str().to_string(),
@@ -120,6 +138,7 @@ impl JobSummary {
             created_at: job.created_at().into(),
             branch: job.branch().map(|branch| branch.as_str().to_string()),
             reason: reason.and_then(Reason::of),
+            queued_reason: queued_reason.map(QueuedReason::from),
             workflow_id: job.workflow_id().into(),
             owner_manifest_id: job.owner_manifest_id().into(),
             origin: job.origin().into(),
@@ -167,9 +186,15 @@ pub struct Redirection {
 }
 
 /// The redaction, at the Fleet boundary, with no reason to hand.
+///
+/// **No queued reason either**, and that is not a gap: this conversion is what
+/// an event publish uses, and nothing publishes a summary of a `queued` Job —
+/// creation, a step advancing and a Drone arriving or leaving all carry a Job
+/// in some other status. A publish that did would need the board, which is
+/// exactly what this conversion does not have.
 impl From<&core_model::Job> for JobSummary {
     fn from(job: &core_model::Job) -> JobSummary {
-        JobSummary::of(job, None)
+        JobSummary::of(job, None, None)
     }
 }
 
