@@ -53,7 +53,7 @@ use std::sync::Mutex;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use config::EvidenceType;
-use core_model::{JobId, Timestamp};
+use core_model::{JobId, JobStatus, Timestamp};
 use ipc::mcp::SubmitEvidence;
 use verification::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};
 
@@ -102,6 +102,83 @@ pub struct Landed {
     pub at: Timestamp,
 }
 
+/// Why the gate was asked for a ruling and did not give one.
+///
+/// **A decline is a fact about the Job rather than an absence.** A step waiting
+/// on a model call and a step nothing will ever rule on are the same pixels and
+/// the same empty log, which is how a Job came to sit for eight minutes with a
+/// person watching it and asking whether a Judge was running. So each of the
+/// three guards says which one it was and what it did with the submission.
+///
+/// It is `PartialEq` because the inbox compares one against the last one it was
+/// given: the loop ticks four times a second, and a decline that wrote a line
+/// per tick is a log nobody can read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Decline {
+    /// Nothing is in the slot, and a submission is waiting.
+    ///
+    /// **The only one of the three where the submission survives**, and the one
+    /// that used to drop it: the take sat above the other two guards, so a
+    /// decline after it put the evidence out of the inbox with nothing to put
+    /// it back.
+    NothingIsWorking,
+    /// The Job in the slot is no longer running, so there is nowhere for a
+    /// second ruling to be written. **The submission is dropped, and that is
+    /// right** — see the guard.
+    NotRunning { status: JobStatus },
+    /// The submission names a Job other than the one in the slot. **Dropped**:
+    /// there is no step it could be ruled against here.
+    AnotherJob,
+}
+
+impl Decline {
+    /// Which guard refused, as the one word a query finds every one of.
+    pub fn guard(&self) -> &'static str {
+        match self {
+            Decline::NothingIsWorking => "nothing_is_working",
+            Decline::NotRunning { .. } => "not_running",
+            Decline::AnotherJob => "another_job",
+        }
+    }
+
+    /// Why, in the sentence a person reads off the Job's log.
+    pub fn said(&self) -> &'static str {
+        match self {
+            Decline::NothingIsWorking => {
+                "evidence is waiting and no Job is in the slot to rule it against"
+            }
+            Decline::NotRunning { .. } => {
+                "evidence arrived for a step whose Job is no longer running"
+            }
+            Decline::AnotherJob => "evidence arrived naming a Job other than the one being worked",
+        }
+    }
+
+    /// Whether the submission survived the decline.
+    ///
+    /// **The whole of the defect, as one question.** Two of the three drops are
+    /// deliberate and are argued for at the guard; the third was an accident of
+    /// where the take sat.
+    pub fn keeps_the_evidence(&self) -> bool {
+        matches!(self, Decline::NothingIsWorking)
+    }
+}
+
+/// Whether the gate has already declined this submission for this reason.
+///
+/// [`Working::drifting`](crate::working::Working::drifting) is the precedent:
+/// what is reported is the transition, not the condition, because the condition
+/// is true four times a second for as long as it lasts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Standing {
+    /// The first turn this reason stood about this submission. **The
+    /// transition**, and the only one that writes a line.
+    First,
+    /// The same reason, on a later turn, about the same submission. Nothing
+    /// raced — the submission is stranded.
+    Again,
+}
+
 /// Where evidence waits between the tool returning and the gate running.
 ///
 /// The two are separated because the tool must return immediately and the gate
@@ -111,6 +188,13 @@ pub struct Landed {
 #[derive(Debug, Default)]
 pub struct EvidenceInbox {
     waiting: Mutex<VecDeque<Landed>>,
+    /// What the gate last declined the submission at the head for.
+    ///
+    /// **Held on the inbox rather than on the working slot**, because the
+    /// decline this exists for is the one where there is no slot to hold it on.
+    /// Cleared whenever the head changes, so the reason standing is always
+    /// about the submission standing.
+    standing: Mutex<Option<Decline>>,
 }
 
 impl EvidenceInbox {
@@ -124,10 +208,15 @@ impl EvidenceInbox {
     /// without removing it — a peek would let two gate runs decide the same
     /// evidence.
     pub fn take(&self) -> Option<Landed> {
-        self.waiting
+        let taken = self
+            .waiting
             .lock()
             .expect("the evidence inbox is not held across a panic")
-            .pop_front()
+            .pop_front();
+        // The head has changed, so whatever the gate last said about it is
+        // about a submission that is no longer here.
+        self.forget();
+        taken
     }
 
     /// How many submissions are waiting. For a test, and for a Doctor probe
@@ -139,11 +228,56 @@ impl EvidenceInbox {
             .len()
     }
 
-    fn accept(&self, landed: Landed) {
+    /// Which Job the submission at the head is for, without taking it.
+    ///
+    /// **Not the peek [`take`](EvidenceInbox::take) refuses to be.** What that
+    /// doctrine protects is the submission: two gate runs must not rule on one.
+    /// A Job id cannot be ruled on — it is only whose the strand is, and
+    /// without it a submission nothing can settle has nobody to be reported to.
+    pub fn waiting_for(&self) -> Option<JobId> {
         self.waiting
             .lock()
             .expect("the evidence inbox is not held across a panic")
-            .push_back(landed);
+            .front()
+            .map(|landed| landed.job.clone())
+    }
+
+    /// Record that the gate declined the submission at the head, and answer
+    /// whether that is news.
+    pub fn declining(&self, why: Decline) -> Standing {
+        let mut standing = self
+            .standing
+            .lock()
+            .expect("the evidence inbox is not held across a panic");
+        let first = standing.as_ref() != Some(&why);
+        *standing = Some(why);
+        match first {
+            true => Standing::First,
+            false => Standing::Again,
+        }
+    }
+
+    fn accept(&self, landed: Landed) {
+        let mut waiting = self
+            .waiting
+            .lock()
+            .expect("the evidence inbox is not held across a panic");
+        let was_empty = waiting.is_empty();
+        waiting.push_back(landed);
+        drop(waiting);
+        // Only where this one became the head. A submission that queued behind
+        // another has not changed what the gate is declining, and forgetting on
+        // it would buy the one in front a second log line.
+        if was_empty {
+            self.forget();
+        }
+    }
+
+    fn forget(&self) {
+        *self
+            .standing
+            .lock()
+            .expect("the evidence inbox is not held across a panic") = None;
     }
 }
 
@@ -279,12 +413,21 @@ where
         self.inbox().take()
     }
 
-    /// Drop every submission still waiting.
+    /// Drop every submission still waiting, and say how many went.
     ///
     /// Called when a Job ends: evidence for a Job that is over has no step to
     /// be against, and leaving it would let the next Job's gate rule on the
     /// last one's work.
-    pub(crate) fn empty_the_inbox(&self) {
-        while self.inbox().take().is_some() {}
+    ///
+    /// **The count is answered rather than swallowed.** Ordinarily it is zero,
+    /// because the gate drains the inbox before anything reaps — so a
+    /// submission still in here when a Job ends is one no gate ever saw, and
+    /// that is the fact a person needs and the one that was missing.
+    pub(crate) fn empty_the_inbox(&self) -> usize {
+        let mut dropped = 0;
+        while self.inbox().take().is_some() {
+            dropped += 1;
+        }
+        dropped
     }
 }

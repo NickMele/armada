@@ -72,6 +72,11 @@
 //! tell — because those are what keep the three from becoming acts they are
 //! not.
 //!
+//! `settling` is the sixteenth, and every case in it is one where nothing
+//! advances: the gate asked and refusing. What it proves is that a refusal
+//! keeps the submission where it can still be ruled on, says which guard
+//! refused, and escalates rather than sitting once nothing can reach it.
+//!
 //! `attachments` is the eleventh: a file staged before a Job exists, promoted
 //! at creation, refused where the staged path cannot be read, and copied again
 //! into the worktree dispatch makes — proving the same path `briefing` writes
@@ -106,5 +111,6 @@ mod runtime;
 mod scope;
 mod serving;
 mod session;
+mod settling;
 mod tmp;
 mod transcript;

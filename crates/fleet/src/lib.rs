@@ -111,6 +111,7 @@ pub mod runtime;
 pub mod scope;
 pub mod serving;
 pub mod session;
+mod settling;
 pub mod spawning;
 pub mod transcript;
 pub mod turning;
@@ -130,7 +131,7 @@ pub use detach::Detached;
 pub use drone::{
     aftermath, environment, Aftermath, DroneNotStarted, Ending, HostPaths, Left, Started,
 };
-pub use evidence::{Call, EvidenceInbox, EvidenceTool, Landed, Recorded};
+pub use evidence::{Call, Decline, EvidenceInbox, EvidenceTool, Landed, Recorded, Standing};
 pub use gate::{apply, rule_on, CheckBudget, CheckOutput, Ruling};
 pub use judging::{CallFailed, JudgeBudget, Judging};
 pub use mint::{Mint, UlidMint};
@@ -144,6 +145,7 @@ pub use runtime::{
 };
 pub use scope::{Declared, Drifting};
 pub use session::{DroneSession, LiveSession, Turn};
+pub use settling::Settled;
 pub use transcript::{history, log_of, transcript_of, Live, Recording, Spine, Tap, Taps};
 pub use turning::{keep_turning, Turning};
 pub use watch::{Progress, Watching};
