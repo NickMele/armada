@@ -25,9 +25,24 @@ with four verbs:
 
 [Running it locally](#running-it-locally) is how to start.
 
-This repository is the second attempt, started from scratch in August 2026. It
-has a build gate, a design-token pipeline, a component library, and a Rust
-workspace that can drive a Job from approval to a finished branch.
+This repository is the second attempt, started from scratch in August 2026.
+
+**A Job runs end to end.** Approve one and Armada cuts a worktree on its own
+branch, spawns a confined agent into it, runs the repository's own Checks
+against what comes back, advances the step only if they pass, commits, rebases
+onto the branch it merges into, pushes, and opens a pull request whose body is
+assembled from what it checked — not from anything the agent said about itself.
+Several have; one of the documents in this repository was written that way.
+
+**And it argues back.** A Judge reads a step's work against the criteria and can
+refuse a step whose Checks all passed. Evidence that satisfies a Check by gutting
+it — a test deleted, a skip added, the config a frozen command resolves through —
+is caught, three of those patterns without a model call at all. A step that
+edits outside what it declared is caught the same way. An agent that loops
+without converging is told to report, and stopped if it does not.
+
+Any of those stops the Job at the step it happened on, so you redirect that step
+or restart it rather than starting over.
 
 **The acceptance test passes.** It was written before the code it tests and
 could not compile for the whole of the first milestone — deliberately, so the
@@ -37,10 +52,11 @@ claim. `docs/practices/acceptance-tests.md` is the arrangement.
 
 **What it does not prove is the interesting part.** It is hermetic — no process
 spawned, no repository touched, no network opened — so it proves the machinery
-and not the merge.
+and not the merge. The merge is proved by doing it: a real agent fixed a real
+defect in this repository, and the commit is in the history.
 
-Watch the [milestones](https://github.com/NickMele/armada/milestones) if you
-want to know when that changes.
+Watch the [milestones](https://github.com/NickMele/armada/milestones) for what
+is next.
 
 ## What it is
 
@@ -59,11 +75,21 @@ something that reports on itself means reading everything anyway.
 **Three rules it is built around:**
 
 - **An agent cannot mark its own work complete.** Evidence goes through a tool;
-  a mechanical check decides.
-- **An agent cannot push.** Every Job works in its own git worktree on its own
-  branch. Work stays local until a person merges it.
-- **An agent gets only the tools it is handed.** No inheritance from the
-  machine, the shell, or anybody's credentials.
+  a mechanical check decides, and a Judge can refuse a step whose checks passed.
+- **An agent cannot reach the network.** Every Job works in its own git worktree
+  on its own branch, in an environment built from nothing that carries no
+  credential — so it cannot push. Armada pushes on its behalf once the checks
+  have passed, and opens a pull request for a person to merge.
+- **An agent inherits no MCP server.** Without that, a spawned agent comes up
+  holding every server the operator has connected — measured at seven servers,
+  ninety-five tools, personal accounts, which is the defect that made the first
+  attempt unusable.
+
+**What that is not is a sandbox**, and the difference is written down rather
+than glossed: an agent can still run a shell, because a tool allowlist is a
+permission list and not a toolset — measured. What bounds it is the worktree and
+the empty environment. Real confinement means containers, and that is a
+different system. `docs/scope.md` carries the reasoning.
 
 ## How it is put together
 

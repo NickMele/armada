@@ -30,6 +30,9 @@ Each ends with the questions it found and did not answer.
   security posture, and the v1 failure the desktop app exists to escape.
 - [`practices/protocol.md`](practices/protocol.md) — the one seam between Rust
   and TypeScript: version skew, DTOs, and what survives when the two disagree.
+- [`practices/half-built.md`](practices/half-built.md) — the defect this
+  codebase produces most: a thing that exists and nothing reaches. Read before
+  calling a change finished
 - [`practices/acceptance-tests.md`](practices/acceptance-tests.md) — the one
   test per milestone that stands for its claim: why it is written first, what
   reconciling one costs, and what M1's proves.

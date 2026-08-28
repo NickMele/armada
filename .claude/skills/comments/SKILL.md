@@ -94,3 +94,28 @@ them longer than the code beneath them.
 Most of it is not a document. It is reasoning worth keeping, written at three
 times the length it needs, and the first pass over any of it is reduction rather
 than relocation.
+
+## A comment that was true is the one that misleads
+
+**The dangerous comment is never the wrong one. It is the one that was right.**
+A comment nobody believes is ignored; a comment that describes how the code
+worked last month is trusted and acted on.
+
+Found in one night, all of them accurate when written:
+
+- `gate.rs` said a trigger's level was undecided "so it could not legally reach
+  `last_verdict`" — the registry had typed it since.
+- `step.rs` said four triggers carried no level at all. All four had one.
+- A module doc said version-skew handling belonged to a later milestone. It had
+  shipped.
+- `ipc/src/checks.rs` argued for serving a Check's command from the live
+  Manifest, which the workflow freeze had made wrong.
+
+**So when you change behaviour, grep for the sentence that described it.** Not
+the function — the claim. A rule stated in prose outlives the code it described,
+and the next reader will change working code back to match it.
+
+**Replace the argument, do not edit around it.** Where a comment carries
+reasoning that is now wrong, say what replaced it and why. A comment quietly
+softened reads as though it always said that, and the reasoning it held is lost
+without anybody deciding to lose it.

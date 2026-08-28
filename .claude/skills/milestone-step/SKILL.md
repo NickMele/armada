@@ -51,6 +51,26 @@ what is missing and ask.
 Do not pick a reasonable default and continue. Ask with a real prompt carrying
 concrete options and a recommendation.
 
+### 2.5 Read the registry before minting anything
+
+**The decision is usually already written down.** `crates/core-model/domain/`,
+`crates/ipc/operations.toml` and `packages/icons/icons.toml` are older than any
+session, and they carry reasoning as well as values.
+
+In one night, three agents each drafted something new and then found it
+decided: a new escalation trigger, where `judge.md` already said a Judge refusal
+*is* a gate failure; a trigger's level, which the registry had typed; and a
+glyph rule, where the icon's own reservation sanctioned exactly the use being
+avoided. **Each of them abandoned the draft and said so, which is the right
+outcome — but the reading should come first.**
+
+A row carries `notes` and `why` for this reason. Read them before adding a
+sibling, because several rows exist specifically to be told apart from each
+other and the notes are where that is stated.
+
+**Minting a second answer is how a vocabulary splits**, and the split is not
+visible until two things that mean the same render differently.
+
 ### 3. Build
 
 One step. Finish it, report, stop. The order is deliberate and several steps
@@ -122,11 +142,16 @@ documents that had been read, one written that same day.
 
 ### 7. Report
 
-Three things, and the third matters most:
+Four things, and the last two matter most:
 
 1. What changed.
 2. What you decided that the plan did not decide for you.
-3. **What you found that contradicts the plan.**
+3. **What you built that nothing reads yet.** A finding that reaches a database
+   and not a person is not finished, and a field on the wire that nothing draws
+   is not either. Say where the value is *read* — and where the answer is "a
+   test", say that rather than counting it done.
+   `docs/practices/half-built.md` is the defect and why it recurs.
+4. **What you found that contradicts the plan.**
 
 Bottom line first. Under 150 words. Tables for anything comparative. Say plainly
 when nothing needs the owner.
