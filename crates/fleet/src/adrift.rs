@@ -191,16 +191,17 @@ pub enum Adrift {
         job: JobId,
         cause: Box<dyn Error + Send + Sync>,
     },
-    /// An override was asked for on a step stopped by something other than the
-    /// Judge refusing a criterion.
+    /// An override was asked for on a step stopped by something no machine
+    /// ruled on.
     ///
-    /// **`gate_failure` is the only verdict that is a matter of opinion.** A
-    /// step stopped on `gate_undecided` was never weighed at all, so advancing
-    /// it would pass work no tier ruled on; a step stopped on
-    /// `evidence_suspect` carries a claim about how the step was satisfied
-    /// rather than about whether it was, which `docs/concepts/judge.md`
-    /// deliberately routes away from the retry flow. Neither is what a person
-    /// disagreeing with a Judge is disagreeing about.
+    /// **A person may overrule a decision and not the absence of one.** A step
+    /// stopped on `gate_failure` or on `evidence_suspect` is a step a machine
+    /// weighed and called wrong, and either is a call a person can disagree
+    /// with. A step stopped on `gate_undecided` was never weighed at all, so
+    /// advancing it would pass work nothing ruled on; the rest — a Check that
+    /// hit its bound, evidence too large to read, a loop that did not
+    /// converge — say the same thing in their own way. `overrulable` in
+    /// `crate::overruling` is the list, arm by arm.
     NotTheJudges {
         job: JobId,
         step: StepId,
@@ -468,9 +469,9 @@ impl fmt::Display for Adrift {
             ),
             Adrift::NotTheJudges { job, step, trigger } => write!(
                 out,
-                "{}'s step `{}` stopped on {}, which is not the Judge refusing a criterion. Only \
-                 gate_failure is an opinion a person can overrule; the others say the gate never \
-                 weighed the work, or that the evidence itself is not to be trusted",
+                "{}'s step `{}` stopped on {}, which is not a verdict there is anything to \
+                 disagree with. gate_failure and evidence_suspect are calls a machine made and a \
+                 person can overrule; the others say the gate never weighed the work at all",
                 job.as_str(),
                 step.as_str(),
                 trigger.as_wire()
