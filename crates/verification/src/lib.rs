@@ -67,6 +67,7 @@ mod judge;
 mod mechanical;
 mod outcome;
 mod product;
+mod request;
 mod scope;
 mod submission;
 
@@ -83,5 +84,6 @@ pub use mechanical::{
 };
 pub use outcome::{OutcomeTurn, TheBaseMoved};
 pub use product::{NothingToJudge, Product, Reference, Written};
+pub use request::Request;
 pub use scope::{drifted, InScope, OutsideScope};
 pub use submission::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};

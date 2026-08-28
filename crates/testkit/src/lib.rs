@@ -41,14 +41,21 @@
 //! through the same parsers Fleet uses. It is not a fake of anything: the
 //! parsing is real, and it is here because a workflow is what every gate test
 //! needs and no test can construct one.
+//!
+//! [`asking`] and [`asked_for`] are the second of those, for the same reason
+//! one level along: the Judge is shown the request, `verification::Request::of`
+//! will read one only off a real `Job`, and a `Job` is twenty fields with no
+//! `Default`. Written out once here rather than once per test file.
 
 mod harness;
+mod job;
 mod judge;
 mod vcs;
 mod work_product;
 mod workflow;
 
 pub use harness::{FakeHarness, FakeHarnessRefused};
+pub use job::{asked_for, asking};
 pub use judge::FakeJudge;
 pub use vcs::{Delivered, Delivering, FakeCommit, FakeVcs, FakeVcsError};
 pub use work_product::{FakeDiffRefused, FakeWorkProduct, Holding};

@@ -36,7 +36,7 @@ use core_model::{
 };
 use fleet::{apply, rule_on, AtStep, CheckBudget, Clock, JudgeBudget, Judging, Mint, Ruling};
 use testkit::{resolved, FakeJudge, FakeVcs, FakeWorkProduct, Gaming, Gate, Sketch};
-use verification::{Claimed, NotClaimed, ShownBy, Submission};
+use verification::{Claimed, NotClaimed, Request, ShownBy, Submission};
 
 /// Absolute, because `WorktreeSpec` refuses a relative root — a derived path
 /// that moves with the caller is the stored-path failure in another shape.
@@ -395,6 +395,9 @@ impl Bench {
         let entered_with = Footprint::nothing();
         let ruling = rule_on(
             at,
+            // The Job's own request, which is what the Judge is measured
+            // against — not a fixture, because the bench holds the real record.
+            Request::of(&run.job),
             submitted,
             run.declared.as_ref(),
             Some(&entered_with),

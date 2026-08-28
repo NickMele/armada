@@ -6,14 +6,17 @@
 //! cases are cases where nothing advances. [`judge`] is the third tier and its
 //! cases each name the constitutional rule they hold. [`product`] is what a
 //! Judge is shown on a step whose work product is not a diff, which is the one
-//! place a Drone's own writing reaches it. [`converging`] is the mid-step look,
-//! which gates nothing and holds the same two rules anyway.
+//! place a Drone's own writing reaches it. [`request`] is rule 2's other half —
+//! what the Judge is measured *against* — and its cases are written against the
+//! two designed criteria that were dropped for wanting it. [`converging`] is the
+//! mid-step look, which gates nothing and holds the same two rules anyway.
 
 mod converging;
 mod gaming;
 mod gate;
 mod judge;
 mod product;
+mod request;
 mod submission;
 
 use config::{ResolvedStep, ResolvedWorkflow};

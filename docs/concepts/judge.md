@@ -46,9 +46,11 @@ The Judge occupies the middle: machine cost, semantic reach. Measured in v1 at r
 **1. Veto-only, never a vote.** The Judge runs only after the mechanical check holds, and may only refuse; it can never grant advancement the mechanical tier did not already earn.
 Why: there is no such thing as a Judge pass — only a mechanical pass the Judge declined to refuse, and a model that can grant is a model that can be talked into granting.
 
-**2. Blind to the Drone.** The Judge never sees the Drone's transcript or self-report, and receives only the original task text, the diff, and the deterministic facts.
-Why: a verifier that reads the defendant's testimony is not independent, so the Drone's own account is removed as a contamination source.
-Enforced at prompt assembly — `../contracts/agent-prompt.md` section 7.
+**2. Blind to the Drone, and shown the request.** The Judge never sees the Drone's transcript or self-report, and receives only the original task text, the diff, and the deterministic facts.
+Why: a verifier that reads the defendant's testimony is not independent, so the Drone's own account is removed as a contamination source — and a verifier that cannot see what was asked for can only check whether a document agrees with itself, which passes a well-written answer to the wrong question.
+Enforced at prompt assembly — `../contracts/agent-prompt.md` section 7. Both halves are the signature of `verification::Brief::about`: it has no `submission` parameter and no `transcript` parameter, and its `request` parameter is not optional. The request is the Job's title, its facts and its `acceptance_criteria`, read off the Job row through a constructor that takes nothing else.
+
+> The criteria arrive as **the whole Job's** bar and are labelled so. No Judge criterion names which acceptance criterion it tests: the `source_ref` in the sketch below is refused at parse, and the join is not built. Until it is, a criterion cannot be written against one of them by name.
 
 **3. Narrow question.** Every question is yes/no, never "review this".
 Why: open-ended prompts produce agreeable prose, and a narrow question has a wrong answer.

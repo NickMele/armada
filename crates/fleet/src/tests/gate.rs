@@ -21,7 +21,7 @@ use core_model::{
 };
 use testkit::{FakeJudge, FakeWorkProduct, Gate, Sketch};
 use verification::{
-    CheckFailed, Claimed, NeverRan, NotASubmission, NotClaimed, ShownBy, Submission,
+    CheckFailed, Claimed, NeverRan, NotASubmission, NotClaimed, Request, ShownBy, Submission,
 };
 
 use crate::at_step::AtStep;
@@ -253,6 +253,7 @@ async fn evidence_and_every_check_passing_advances_the_step() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -281,6 +282,7 @@ async fn evidence_with_every_check_failing_advances_nothing() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -319,6 +321,7 @@ async fn a_step_with_no_checks_advances_on_evidence_alone() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &note_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -347,6 +350,7 @@ async fn a_hanging_check_fails_rather_than_hanging() {
     let started = std::time::Instant::now();
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -384,6 +388,7 @@ async fn a_check_whose_command_does_not_exist_fails_rather_than_passing() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -418,6 +423,7 @@ async fn the_check_output_comes_back_for_a_person_to_read() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -445,6 +451,7 @@ async fn evidence_of_the_wrong_kind_runs_no_checks_and_moves_nothing() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &note_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -480,6 +487,7 @@ async fn a_diff_that_cannot_be_read_decides_nothing_and_stops_the_job() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -517,6 +525,7 @@ async fn the_diff_fleet_reads_is_of_the_job_s_own_worktree() {
 
     rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -541,6 +550,7 @@ async fn a_failed_check_ends_the_job_and_fleet_is_the_actor() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -572,6 +582,7 @@ async fn an_advancing_step_does_not_move_the_job() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -594,6 +605,7 @@ async fn the_last_step_advancing_completes_the_job() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &note_evidence(),
         None,
         Some(&Footprint::nothing()),

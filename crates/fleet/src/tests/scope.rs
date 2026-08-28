@@ -17,7 +17,9 @@ use core_model::{
 };
 use ipc::mcp::DeclareScope;
 use testkit::{FakeJudge, FakeWorkProduct, Gate, Scoped, Sketch};
-use verification::{CheckFailed, Claimed, NotClaimed, OutsideScope, ShownBy, DECLARED_PLAN_DRIFT};
+use verification::{
+    CheckFailed, Claimed, NotClaimed, OutsideScope, Request, ShownBy, DECLARED_PLAN_DRIFT,
+};
 
 use crate::adrift::NotDeclared;
 use crate::at_step::AtStep;
@@ -84,6 +86,7 @@ async fn ruled_by(
     let work = FakeWorkProduct::changed(changed);
     rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         declared,
         Some(&Footprint::nothing()),
@@ -554,6 +557,7 @@ async fn a_step_with_no_scope_is_neither_checked_nor_read() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -592,6 +596,7 @@ async fn an_ungated_step_with_no_scope_advances_on_evidence_alone() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),

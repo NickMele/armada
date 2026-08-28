@@ -27,6 +27,21 @@
 //! measured against and the step declares what it produces, so nothing here
 //! decides what the Judge may see.
 //!
+//! The **request** is the third and it is the one thing a caller does hand in,
+//! because it belongs to the Job rather than to the step: `verification::
+//! Request::of` reads it off the `Job` row and there is no other constructor.
+//! It goes on every brief, including the drift look, and that is a cost:
+//! a title, the requester's facts and the Job's acceptance criteria, added to
+//! every criterion of every step and multiplied by `panel_size`. Nobody has
+//! measured it and this does not invent a number — what is known is the shape,
+//! a few hundred characters beside a brief that already carries a whole diff.
+//!
+//! **Unconditional on purpose.** Making it per-criterion needs a key in the
+//! definition, and a criterion that asks about the request while its author
+//! forgot the key is the defect #169 named, one dial smaller. If the cost is
+//! ever shown to matter, the dial to reach for is `panel_size`, which
+//! multiplies the whole brief and not this part of it.
+//!
 //! # Where it runs
 //!
 //! In the process's temporary directory, never the worktree. A `JudgeCall`
@@ -47,7 +62,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use verification::{
     Accepted, Baseline, Brief, Convergence, ConvergenceBrief, Flagged, GamingBrief, NothingToJudge,
-    Product, Reference, Refusals, Unreadable,
+    Product, Reference, Refusals, Request, Unreadable,
 };
 
 use crate::at_step::AtStep;
@@ -110,6 +125,7 @@ pub struct Judging {
 /// Job whose first step wrote a note.
 pub(crate) async fn judged(
     at: AtStep<'_>,
+    request: Request<'_>,
     accepted: Accepted<'_>,
     patch: &Patch,
     checks: &[StepCheck],
@@ -128,7 +144,7 @@ pub(crate) async fn judged(
     for check in step.judge_checks() {
         let model = model_for(check, &judging.default_model)?;
         for criterion in check.criteria() {
-            let brief = Brief::about(step, criterion, &product, &references, checks);
+            let brief = Brief::about(step, criterion, request, &product, &references, checks);
             // Every member of a panel answers the same brief and none of them
             // sees another's verdict — there is nothing in this loop that
             // carries one answer into the next call.
@@ -145,7 +161,7 @@ pub(crate) async fn judged(
     // step's own rigour dial bill it for drift.
     if let Some(criterion) = verification::drift_criterion(off_plan) {
         let model = fleets_model(step, &judging.default_model)?;
-        let brief = Brief::about(step, &criterion, &product, &references, checks);
+        let brief = Brief::about(step, &criterion, request, &product, &references, checks);
         let ask = Ask::put(model, brief.question(), judging.environment.clone())
             .map_err(|_| CallFailed::NothingToAsk)?;
         let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
