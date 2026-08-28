@@ -34,6 +34,19 @@ function reasonOf(status: string, named: string | undefined): Rendering | undefi
   return undefined;
 }
 
+/**
+ * Which field a status keeps its reason in.
+ *
+ * **`queued` keeps it in its own**, because it is computed from the board at
+ * read time rather than recorded by a transition — so it is not in the log
+ * `reason` is read from, and reading it there answered `undefined` on every
+ * queued Job.
+ */
+function namedOn(job: JobSummary): string | undefined {
+  if (job.status === "queued") return job.queued_reason;
+  return job.reason?.named;
+}
+
 export function readingOf(job: JobSummary): Reading {
   const base = JOB_STATUS[job.status];
   if (base === undefined) {
@@ -42,7 +55,7 @@ export function readingOf(job: JobSummary): Reading {
     return { as: "text", verb: null, wire: job.status, missing: ["variant"] };
   }
 
-  const named = job.reason?.named;
+  const named = namedOn(job);
   const reason = reasonOf(job.status, named);
   const verb = reason?.verb ?? base.verb;
   const icon = reason?.icon ?? base.icon;
