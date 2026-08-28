@@ -115,7 +115,11 @@ void app.whenReady().then(() => {
   // reload is a fresh reader and gets what exists rather than what main last
   // heard about. See `FleetConnection.state`.
   ipcMain.handle(CHANNELS.state, () => connection?.state());
-  ipcMain.handle(CHANNELS.proposeJob, (_event, draft: Draft) => connection?.proposeJob(draft));
+  // Every act on a Job is reached through `commands` — see `command.ts`, which
+  // holds them because they are HTTP and the connection is a socket.
+  ipcMain.handle(CHANNELS.proposeJob, (_event, draft: Draft) =>
+    connection?.commands.proposeJob(draft),
+  );
   // Staging happens before a Job exists — there is no id yet to key storage
   // on, and one is minted at `propose` time. Fleet is not involved here at
   // all; this only writes bytes to a temp file `proposeJob` later names.
@@ -125,23 +129,27 @@ void app.whenReady().then(() => {
       stageAttachment(bytes, filename, mimeType),
   );
   ipcMain.handle(CHANNELS.approveDispatch, (_event, jobId: string) =>
-    connection?.approveDispatch(jobId),
+    connection?.commands.approveDispatch(jobId),
   );
   ipcMain.handle(CHANNELS.redispatchJob, (_event, jobId: string) =>
-    connection?.redispatchJob(jobId),
+    connection?.commands.redispatchJob(jobId),
   );
   // Two channels, because they are two acts: one ends a process and one ends
   // the unit of work. Collapsing them here would make the difference a flag.
-  ipcMain.handle(CHANNELS.killDrone, (_event, jobId: string) => connection?.killDrone(jobId));
-  ipcMain.handle(CHANNELS.killJob, (_event, jobId: string) => connection?.killJob(jobId));
+  ipcMain.handle(CHANNELS.killDrone, (_event, jobId: string) =>
+    connection?.commands.killDrone(jobId),
+  );
+  ipcMain.handle(CHANNELS.killJob, (_event, jobId: string) =>
+    connection?.commands.killJob(jobId),
+  );
   // The two acts that resume a step without redispatching. Which applies is
   // decided by whether the Job still holds a Drone; Fleet is the authority
   // and refuses the wrong one rather than Bridge picking silently.
   ipcMain.handle(CHANNELS.redirectDrone, (_event, jobId: string, instruction: string) =>
-    connection?.redirectDrone(jobId, instruction),
+    connection?.commands.redirectDrone(jobId, instruction),
   );
   ipcMain.handle(CHANNELS.restartStep, (_event, jobId: string) =>
-    connection?.restartStep(jobId),
+    connection?.commands.restartStep(jobId),
   );
   // Which Job is open. Main does the reading and republishes it as events
   // arrive, so the detail moves without the renderer asking again.
@@ -173,12 +181,14 @@ void app.whenReady().then(() => {
   // rejecting is terminal and ends the drone — a single channel taking which
   // one as an argument would make that difference a flag.
   ipcMain.handle(CHANNELS.approveReview, (_event, jobId: string) =>
-    connection?.approveReview(jobId),
+    connection?.commands.approveReview(jobId),
   );
   ipcMain.handle(CHANNELS.requestChanges, (_event, jobId: string, note: string) =>
-    connection?.requestChanges(jobId, note),
+    connection?.commands.requestChanges(jobId, note),
   );
-  ipcMain.handle(CHANNELS.rejectWork, (_event, jobId: string) => connection?.rejectWork(jobId));
+  ipcMain.handle(CHANNELS.rejectWork, (_event, jobId: string) =>
+    connection?.commands.rejectWork(jobId),
+  );
 
   createWindow();
   connection.start();
