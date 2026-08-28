@@ -1,13 +1,14 @@
-// One Job, read whole. The three renders the design draws, chosen by the Job's
+// One Job, read whole. The four renders the design draws, chosen by the Job's
 // status and fed from `GET /jobs/:job_id` rather than from the row beside it.
 //
-// # Three renders, and the finished one is a different shape
+// # Four renders, and only the running one is drawn here
 //
-// A running Job is watched and a stopped one is diagnosed, so both lead with a
-// rail: where is it now, and where did it stop. A finished Job is read once, to
-// decide whether to take the work, so it leads with what it was and what came
-// out and folds the rest into a record. That render is `Finished.tsx`; the two
-// that lead with a rail are here.
+// A running Job is watched, so it leads with a rail and this file draws it. The
+// other three are opened with a question and each one's question is different:
+// `Reviewing.tsx` is the diff and the reply as one loop, `Finished.tsx` leads
+// with what a Job was and what came out, and `Stopped.tsx` leads with what
+// stopped it and whether anything resumes it. This file chooses between them,
+// builds the header all four share, and draws the one that is left.
 //
 // # What is served is drawn, and what is not is named
 //
@@ -29,15 +30,10 @@
 // and present-and-empty is determined to write nothing. Collapsing them would
 // tell somebody a Job has no scope when what is true is that nobody set one.
 
-import {
-  AFailedJobADeadEndReadAsOne,
-  ARunningJob,
-  type JobDetailHeading,
-} from "@armada/components";
+import { ARunningJob, type JobDetailHeading } from "@armada/components";
 
 import type { Diff, Evidence, Footprint, History, Observed, Watched } from "../../shared/bridge";
 import type {
-  JobDetail as JobWhole,
   JobSummary,
   ManifestSummary,
   WorkflowSummary,
@@ -46,10 +42,11 @@ import { Acts, type ConfirmableAct } from "./Acts";
 import { factsOf } from "./facts";
 import { filesOf, footprintNote, readingFor, whyNoFootprint } from "./files";
 import { Finished } from "./Finished";
-import { railOf, stoppedAt } from "./rail";
+import { railOf } from "./rail";
 import { readingOf } from "./reading";
 import { Reviewing } from "./Reviewing";
-import { escalation, renderFor } from "./render";
+import { RECORDS_ITS_OWN_TURNS, renderFor } from "./render";
+import { Stopped } from "./Stopped";
 import { whyNoWork, workOf } from "./work";
 
 export { ACT_LABEL } from "./Acts";
@@ -172,7 +169,7 @@ export function JobDetail({
         onAct={onAct}
         onRedirect={onRedirect}
         onApprove={onApprove}
-        onObserve={render === "finished" ? undefined : () => onObserve(true)}
+        onObserve={RECORDS_ITS_OWN_TURNS.has(render) ? undefined : () => onObserve(true)}
       />
     ),
   };
@@ -226,14 +223,19 @@ export function JobDetail({
 
   if (render === "stopped") {
     return (
-      <AFailedJobADeadEndReadAsOne
+      <Stopped
+        job={job}
+        whole={whole}
+        manifest={manifest}
+        observed={observed}
+        history={recorded.history}
+        evidence={recorded.evidence}
+        diff={recorded.diff}
         heading={heading}
-        why={whyOf(job, whole)}
         steps={rail}
         stepsAbsent={stepsAbsent}
-        work={workOf(job, whole, manifest, true)}
-        outputAbsent={NOT_SERVED.output}
         workAbsent={workAbsent}
+        onWatchTurns={onObserve}
         onCopied={onCopied}
       />
     );
@@ -304,11 +306,6 @@ const NOT_SERVED = {
   evidence:
     "Submissions are read at the review gate, beside the diff they are claims about. " +
     "Nothing on a running job reads them.",
-  // The path is served per Check run and is drawn on the gate row that owns
-  // it — a step with three Checks wrote three files, and one region can only
-  // hold one. The contents are not served, and Bridge does not read the
-  // filesystem, so naming the file is the whole of what it can do.
-  output: "Each check names its output file on its own row. Nothing serves the contents.",
 } as const;
 
 /** Why the rail has no rows, which is never the same sentence twice. */
@@ -322,62 +319,6 @@ function whyNoSteps(watched: Watched, jobId: string): string | undefined {
     return "Fleet did not answer for this Job, so its steps are unknown.";
   }
   return "Reading this Job.";
-}
-
-
-
-/**
- * Why a Job stopped: the reason's own verb, the criteria it still owes, and
- * the step it stopped at with what the gate found there. The label above it
- * supplies the grammar, so no sentence is composed around a word the registry
- * chose.
- *
- * **Where it stopped is stated even where no reason was stored.** Four of the
- * five statuses this screen draws store none — a failed Job, a killed one, a
- * rejected one and a superseded one all arrive with `reason` absent — and
- * without the step they say only that something ended. `stoppedAt` reads the
- * step and its Check runs, which are served; nothing here is inferred and
- * nothing is composed beyond the separators the rail already uses.
- */
-function whyOf(job: JobSummary, whole: JobWhole | null) {
-  const reason = escalation(job);
-  const owed = job.reason?.criteria_owed ?? [];
-  const at = whole === null ? undefined : stoppedAt(whole);
-  if (reason?.verb == null && at === undefined) return undefined;
-  return (
-    <>
-      {reason?.verb == null ? null : (
-        <>
-          {reason.verb}
-          {owed.length === 0 ? null : (
-            <>
-              {" · owes "}
-              <span className="mono">{owed.join(", ")}</span>
-            </>
-          )}
-          {at === undefined ? null : " · "}
-        </>
-      )}
-      {at === undefined ? null : (
-        <>
-          {"stopped at "}
-          {at.labelIsAnIdentifier ? <span className="mono">{at.label}</span> : at.label}
-          {at.check === undefined ? null : (
-            <>
-              {" · "}
-              <span className="mono">{at.check}</span>
-            </>
-          )}
-          {at.outputPath === undefined ? null : (
-            <>
-              {" · "}
-              <span className="mono">{at.outputPath}</span>
-            </>
-          )}
-        </>
-      )}
-    </>
-  );
 }
 
 /**

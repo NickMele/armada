@@ -1,17 +1,22 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import type { LucideIcon } from "lucide-react";
-import { CircleCheck, CircleX, File, Folder, GitBranch, OctagonAlert, Power, ShieldCheck, ShieldMinus, ShieldX, X } from "lucide-react";
+import { CircleCheck, CircleX, File, Folder, GitBranch, OctagonAlert, Power, ShieldCheck, ShieldX, Unplug } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
 import { Dialog } from "../../primitives/Dialog/Dialog";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { Textarea } from "../../primitives/Textarea/Textarea";
-import type { WorkflowRailStep } from "../../compositions/WorkflowRail/WorkflowRail";
 import { AFailedJobADeadEndReadAsOne } from "./AFailedJobADeadEndReadAsOne";
+import { heading, record, steps, tail } from "./fixtures";
 
 /**
- * Journey · Read a failed Job. The screen states four things in order — what
- * failed, that the job is over, where the branch is, and where the log is.
+ * Journey · Read a failed Job. The screen answers, in order, what stopped it,
+ * whether anything resumes it, what ran, where the work is, and what it left
+ * behind.
+ *
+ * **A job that landed is the one nobody investigates.** This is the screen with
+ * every question on it, so the record beneath it holds the moves, the turns,
+ * the diff and the claims — the four things a person used to open a database, a
+ * transcript on disk and the source for.
  *
  * The header is `Job detail header actions`, the same component the running job
  * renders: a badge, a title, a job id and a run of facts. What changes with the
@@ -27,102 +32,20 @@ export default meta;
 
 type Story = StoryObj<typeof AFailedJobADeadEndReadAsOne>;
 
-/* `file` has no entry in `packages/icons/icons.toml`, so the log row renders a
-   channel short rather than reaching for an unregistered glyph. Reported. */
-const NO_GLYPH_IN_REGISTRY = undefined as unknown as LucideIcon;
-
-const steps: WorkflowRailStep[] = [
-  {
-    id: "plan",
-    label: "Plan the change",
-    activity: "advanced",
-    status: "advanced",
-    // The drawing draws no row under Plan the change here. The rail always
-    // draws one. Reported.
-    evidence: { icon: NO_GLYPH_IN_REGISTRY, iconLabel: "Evidence", label: "" },
-  },
-  {
-    id: "implement",
-    label: "Implement",
-    activity: "advanced",
-    status: "advanced",
-    gates: [
-      {
-        command: "build · cargo build --workspace",
-        result: "exit 0",
-        icon: ShieldCheck,
-        iconLabel: "Passed",
-      },
-      // The drawing draws `shield-minus` on this row, whose registry entry
-      // means "not reached", beside the result "passed". A glyph is never
-      // written by hand against the registry, so the row takes `shield-check`.
-      // Reported as a slip in the drawing.
-      {
-        command: "diff_nonempty",
-        result: "passed",
-        icon: ShieldCheck,
-        iconLabel: "Passed",
-      },
-    ],
-  },
-  {
-    id: "verify",
-    label: "Run tests",
-    activity: "failed",
-    status: "failed a check",
-    gates: [
-      {
-        command: "test · cargo test --workspace",
-        result: "exit 1",
-        icon: ShieldX,
-        iconLabel: "Failed",
-      },
-    ],
-  },
-  {
-    id: "handoff",
-    label: "Summarise",
-    activity: "not_started",
-    status: "not started",
-    evidence: { icon: NO_GLYPH_IN_REGISTRY, iconLabel: "Evidence", label: "" },
-  },
-];
-
-const tail = [
-  "running 84 tests",
-  "test manifest::cache::reads_once ... FAILED",
-  "test manifest::cache::invalidates_on_write ... FAILED",
-  "",
-  "failures:",
-  "",
-  "---- manifest::cache::reads_once stdout ----",
-  "assertion `left == right` failed",
-  "  left: 2",
-  " right: 1",
-  "   at core/manifest/src/cache.rs:214",
-  "",
-  "test result: FAILED. 82 passed; 2 failed",
-].join("\n");
-
-const heading = {
-  status: "completed-failed",
-  statusIcon: X,
-  statusLabel: "Failed",
-  headline: "Cache the manifest read",
-  jobId: "job_91ab",
-  fields: [
-    // A step name is a label, so it stays sans beside its mono siblings, and
-    // the two halves are one fact joined by a comma.
-    { label: "Stopped at", value: "Run tests" },
-    { label: "step", value: "3 of 4", mono: true, continues: true },
-    { label: "Ran", value: "22m 41s", mono: true },
-    { label: "Spend, estimated", value: "~$2.10", mono: true },
-    { label: "Dispatched by you" },
-  ],
-};
-
+/**
+ * **`completed_failed`, which is the state with no way back.** `restart_step`
+ * and `redirect` both take an `escalated` job — `crates/fleet/src/adrift.rs`
+ * refuses anything else as `NotResumable` — so the recourse line says that
+ * rather than leaving a person to press a button and find out.
+ *
+ * The record beneath holds the four reads: the moves, the turns, the diff and
+ * the claims. Only the open one is drawn, so a record nobody unfolded costs
+ * nothing.
+ */
 export const FailedJob: Story = {
-  render: () => (
+  render: function FailedJobStory() {
+    const [section, setSection] = useState("moves");
+    return (
     <div className="armada-screen">
       <AFailedJobADeadEndReadAsOne
         heading={heading}
@@ -133,6 +56,10 @@ export const FailedJob: Story = {
             runs from here without you.
           </>
         }
+        recourse="Nothing resumes this job. Redirect and restart both take a job a person is holding, which is an escalated one, and this job is failed. A redispatch mints a new job from the approval gate and carries none of the work over."
+        record={record}
+        recordValue={section}
+        onRecordChange={setSection}
         steps={steps}
         output={{ tail, meta: "exit 1 · 4.2s · tail 12 lines" }}
         work={{
@@ -185,7 +112,8 @@ export const FailedJob: Story = {
         }}
       />
     </div>
-  ),
+    );
+  },
 };
 
 /**
@@ -236,6 +164,7 @@ export const StoppedAndAsked: Story = {
             ),
           }}
           why="The job stalled. Nothing runs from here without you."
+          recourse="Redirect the drone. Its session, its worktree and every step so far are still held, so an instruction reaches it as a new turn at the step above. Fleet refuses a restart while a drone is alive, because a restart throws that session away. A redispatch mints a new job from the approval gate and carries none of the work over."
           steps={steps.map((step) => ({
             id: step.id,
             label: step.id,
@@ -313,6 +242,7 @@ export const StoppedWithNoDrone: Story = {
             ),
           }}
           why="The job stalled. Its drone is gone. Nothing runs from here without you."
+          recourse="Restart the step. The drone is gone, so a fresh one takes over the worktree at the step above, resolving its toolset, model and environment again. Fleet refuses this where the worktree is no longer on disk, and Bridge does not read the filesystem, so that answer comes on the press. A redispatch mints a new job from the approval gate and carries none of the work over."
           steps={steps.map((step) => ({
             id: step.id,
             label: step.id,
@@ -370,9 +300,15 @@ export const AJudgeRefusedACriterion: Story = {
             { label: "Elapsed", value: "11m 03s", mono: true },
             { label: "Model", value: "sonnet", mono: true },
           ],
-          actions: <Button>Redispatch as a new job</Button>,
+          actions: (
+            <>
+              <Button variant="secondary">Restart step</Button>
+              <Button>Redispatch as a new job</Button>
+            </>
+          ),
         }}
         why="failed a check · owes c2"
+        recourse="Restart the step. The drone is gone, so a fresh one takes over the worktree at the step above, resolving its toolset, model and environment again. Fleet refuses this where the worktree is no longer on disk, and Bridge does not read the filesystem, so that answer comes on the press. A redispatch mints a new job from the approval gate and carries none of the work over."
         ranLabel="What ran"
         steps={[
           { id: "plan", label: "Plan the change", activity: "advanced", status: "advanced" },
@@ -460,6 +396,7 @@ export const KilledWhileTheStepWasRunning: Story = {
           ],
         }}
         why={<>stopped at Run tests</>}
+        recourse="Nothing resumes this job. Redirect and restart both take a job a person is holding, which is an escalated one, and this job is killed. A redispatch mints a new job from the approval gate and carries none of the work over."
         steps={[
           { id: "plan", label: "Plan the change", activity: "advanced", status: "advanced", elapsed: "2m 14s" },
           { id: "implement", label: "Implement", activity: "advanced", status: "advanced", elapsed: "6m 48s" },
@@ -483,6 +420,49 @@ export const KilledWhileTheStepWasRunning: Story = {
           },
           { id: "handoff", label: "Summarise", activity: "not_started", status: "not_started" },
         ]}
+        outputAbsent="Each check names its output file on its own row. Nothing serves the contents."
+        workAbsent="Nothing serves this Job's paths, its branch or its brief."
+      />
+    </div>
+  ),
+};
+
+/**
+ * **Escalated, and no step of it stopped.** A job-level trigger — `interrupted`,
+ * `resource_exhausted`, `dependency_failed` — names no step, so neither resume
+ * act has anywhere to land and `crates/fleet/src/adrift.rs` refuses both as
+ * `NoStepStopped`. The header carries no redirect and no restart, and the
+ * recourse line says why rather than leaving the absence to read as an
+ * oversight.
+ *
+ * This is the fourth of the four answers the recourse line gives. The other
+ * three are on the stories above: redirect, restart, and a job whose status is
+ * not `escalated` at all.
+ */
+export const EscalatedWithNoStepToResume: Story = {
+  render: () => (
+    <div className="armada-screen">
+      <AFailedJobADeadEndReadAsOne
+        heading={{
+          status: "escalated",
+          statusIcon: Unplug,
+          statusLabel: "interrupted",
+          headline: "Cache the manifest read",
+          jobId: "job_91ab",
+          fields: [
+            { label: "Ran", value: "3m 12s", mono: true },
+            { label: "Model", value: "sonnet", mono: true },
+          ],
+          actions: <Button>Redispatch as a new job</Button>,
+        }}
+        why="interrupted"
+        recourse="Nothing resumes this job. It escalated without stopping a step, so redirect and restart have no step to land on. A redispatch mints a new job from the approval gate and carries none of the work over."
+        steps={steps.map((step) => ({
+          id: step.id,
+          label: step.label,
+          activity: "not_started" as const,
+          status: "not started",
+        }))}
         outputAbsent="Each check names its output file on its own row. Nothing serves the contents."
         workAbsent="Nothing serves this Job's paths, its branch or its brief."
       />

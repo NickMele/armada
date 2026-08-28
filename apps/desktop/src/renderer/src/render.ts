@@ -46,6 +46,21 @@ const SUCCEEDED = "--status-completed-success";
  */
 const AT_REVIEW = "--status-awaiting-review";
 
+/**
+ * The renders that hold the Drone's turns as a section of their own record.
+ *
+ * **Two things follow from it, and they are in two files, which is why it is in
+ * neither.** The header does not offer "Watch the turns" on these, because one
+ * route to a thing is enough; and the board does not put the turns screen up
+ * when the socket opens on one, because the socket being open there means a tab
+ * was pressed on the page a person is reading. A screen that swapped away under
+ * them is the surface this app was built to escape.
+ */
+export const RECORDS_ITS_OWN_TURNS: ReadonlySet<Render> = new Set<Render>([
+  "finished",
+  "stopped",
+]);
+
 export function renderFor(job: JobSummary): Render {
   const base = JOB_STATUS[job.status];
   const life = JOB_LIFECYCLE[job.status];
