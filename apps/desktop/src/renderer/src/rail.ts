@@ -14,7 +14,6 @@ import type {
 } from "@armada/components";
 
 import {
-  ADVANCE_GATE,
   CHECK_OUTCOME,
   CRITERION_VERDICT_CHECK,
   CRITERION_VERDICT_JUDGE,
@@ -24,12 +23,11 @@ import {
 import type {
   CheckRun,
   Criterion,
-  DeclaredCheck,
-  DeclaredJudge,
   JobDetail as JobWhole,
   Judged,
   StepDetail,
 } from "../../shared/protocol";
+import { advanceOf, commandOf, judgeOf, nameOf } from "./declared";
 import { span } from "./duration";
 import { ordered } from "./facts";
 import { frozenBeneath } from "./frozen";
@@ -160,9 +158,8 @@ function gatesOf(step: StepDetail): WorkflowRailGate[] | undefined {
     const reading = run === undefined ? NOT_REACHED : CHECK_OUTCOME[run.outcome];
     return {
       // Name first, then the command the Job's frozen workflow resolved it to.
-      // `build` says nothing about what gated the step; the command says what
-      // to run to reproduce it. `diff_nonempty` runs nothing and carries none.
-      command: check.run === undefined ? nameOf(check) : `${nameOf(check)} · ${check.run}`,
+      // The same spelling the proposal-time preview uses, from `declared.ts`.
+      command: commandOf(check),
       result: run === undefined ? (reading?.verb ?? undefined) : resultOf(run),
       icon: reading?.icon ?? undefined,
       iconLabel: reading?.verb ?? undefined,
@@ -189,15 +186,6 @@ function gatesOf(step: StepDetail): WorkflowRailGate[] | undefined {
  * results, and a declaration draws no mark at all.
  */
 const NOT_REACHED = CRITERION_VERDICT_CHECK["not_reached"];
-
-/**
- * The Check's name, or the built-in's kind where it names none.
- * `diff_nonempty` is an assertion rather than a Manifest Check, so it carries
- * the kind and nothing invents a name for it.
- */
-function nameOf(check: DeclaredCheck): string {
-  return check.name ?? check.kind;
-}
 
 /**
  * What one Check did, or nothing where the gate has not run it.
@@ -245,9 +233,10 @@ function ungatedOf(step: StepDetail): string | undefined {
  * halt for a person has to say so before it halts. Nothing here claims a Judge
  * call is out; no state carries that.
  *
- * **Counts, never a question.** `DeclaredJudge` carries how many criteria are
- * asked and how many judges answer, and deliberately carries no prompt: a
- * question drawn on this rail is a prompt in a screenshot.
+ * **The words are `declared.ts`'s**, so the running rail and the proposal-time
+ * preview say the same sentence about the same declaration. What is only this
+ * file's is the second column: whether the Judge has been reached, which a
+ * preview has no answer to and does not ask.
  */
 function declarationsOf(step: StepDetail): WorkflowRailDeclaration[] {
   const declared = (step.judge_checks ?? []).map((judge) => ({
@@ -258,52 +247,8 @@ function declarationsOf(step: StepDetail): WorkflowRailDeclaration[] {
     // one line above.
     result: step.judged.length === 0 ? (NOT_REACHED?.verb ?? undefined) : undefined,
   }));
-  const advance = advanceOf(step);
+  const advance = advanceOf(step.advance_gate);
   return advance === undefined ? declared : [...declared, advance];
-}
-
-/**
- * One declared `judge_checks[]` entry, in counts.
- *
- * `judge` is the verification source named in text, which the iconography
- * contract settles for exactly this reason — Check, Judge and Attestation are
- * shorter and more precise as words than any glyph, and every verdict family is
- * reserved to a source rather than to a declaration.
- *
- * **`panel_size` is absent at one**, so a value here always means a panel and
- * nothing compares against a default that is already the domain's. An entry
- * asking no criteria only looks for gaming, and says that and nothing else.
- */
-function judgeOf(judge: DeclaredJudge): string {
-  const said = ["judge"];
-  if (judge.criteria > 0) {
-    said.push(`${judge.criteria} ${judge.criteria === 1 ? "criterion" : "criteria"}`);
-  }
-  if (judge.panel_size !== undefined) said.push(`panel of ${judge.panel_size}`);
-  if (judge.gaming_check) said.push("gaming check");
-  return said.join(" · ");
-}
-
-/** The one gate whose whole meaning is that the Checks above are the whole gate. */
-const AUTO = "auto";
-
-/**
- * What it takes to advance past the step, where that is more than its Checks.
- *
- * **`auto` draws no row.** It says the mechanical tier is the whole gate, which
- * the gate rows above already are — and a row on every step of every workflow
- * would bury the two values that matter and displace the sentence the design
- * contract requires on a step that genuinely checks nothing.
- *
- * **The word is the wire's own.** `enum-verbs.toml` carries no `advance_gate`
- * rows, so `ADVANCE_GATE` is empty and `human_always` renders as itself — the
- * same fallback `step_state` takes. A phrase chosen here would be the second
- * vocabulary the generated module exists to prevent. Reported.
- */
-function advanceOf(step: StepDetail): WorkflowRailDeclaration | undefined {
-  const gate = step.advance_gate;
-  if (gate === undefined || gate === AUTO) return undefined;
-  return { label: `advance_gate · ${ADVANCE_GATE[gate]?.verb ?? gate}` };
 }
 
 /**

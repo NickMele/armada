@@ -33,11 +33,8 @@
 import { ARunningJob, type JobDetailHeading } from "@armada/components";
 
 import type { Diff, Evidence, Footprint, History, Observed, Watched } from "../../shared/bridge";
-import type {
-  JobSummary,
-  ManifestSummary,
-  WorkflowSummary,
-} from "../../shared/protocol";
+import type { JobSummary } from "../../shared/protocol";
+import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
 import { Acts, type ConfirmableAct } from "./Acts";
 import { factsOf } from "./facts";
 import { filesOf, footprintNote, readingFor, whyNoFootprint } from "./files";

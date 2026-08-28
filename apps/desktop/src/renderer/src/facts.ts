@@ -14,10 +14,9 @@ import type { JobDetailField } from "@armada/components";
 import type {
   JobDetail as JobWhole,
   JobSummary,
-  ManifestSummary,
   StepDetail,
-  WorkflowSummary,
 } from "../../shared/protocol";
+import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
 import { span } from "./duration";
 
 /**

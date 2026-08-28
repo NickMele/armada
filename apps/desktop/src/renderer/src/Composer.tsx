@@ -23,6 +23,18 @@
 // no create-form field for it; it is a scope note written before any of this
 // existed and the owner decided otherwise. A proposal naming no model still
 // gets the configured default at the Fleet boundary.
+//
+// # The workflow picker said how many steps and not what they do
+//
+// `bug — 4 steps` is a count, and this is the surface where a dispatch is
+// agreed to: after the fact the rail says what happened, and here it says what
+// is being agreed to. A workflow that will halt and wait for a person, and will
+// spend two Judge calls before it gets there, previewed as neither.
+//
+// So the picked workflow draws the rail it will become, from `preview.ts`. It
+// is the running rail's own component and its own words — a second treatment
+// for the same declarations would be two vocabularies for one sentence read at
+// two moments.
 
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, ClipboardEvent } from "react";
@@ -38,14 +50,25 @@ import {
   Input,
   Select,
   Textarea,
+  WorkflowRail,
 } from "@armada/components";
 
 import { URGENCIES } from "../../shared/generated/vocabulary";
 import type { Draft } from "../../shared/bridge";
-import type { ManifestSummary, ModelChoices, WorkflowSummary } from "../../shared/protocol";
+import type { ManifestSummary, ModelChoices, WorkflowSummary } from "../../shared/setup";
+import { previewOf } from "./preview";
 
 /** One staged file, as the composer holds it before `propose()` sends it on. */
 type StagedAttachment = { path: string; filename: string; mimeType: string };
+
+/**
+ * What the preview is, above it.
+ *
+ * **A promise and not a record**, which is the one thing this rail has to say
+ * that the running one does not: every row is what the workflow declares it
+ * will do, and no Job exists to have done any of it yet.
+ */
+const PREVIEW = "What this workflow will do, step by step";
 
 /**
  * A person filling in this form by hand is the `manual` origin. The other three
@@ -89,6 +112,10 @@ export function Composer({ workflows, manifest, models, disabled, onPropose }: C
   useEffect(() => {
     if (model === "" && models !== null) setModel(models.default);
   }, [models, model]);
+
+  // The picked workflow, drawn as the rail it will become. Empty until one is
+  // picked, and empty for a roster that has not arrived.
+  const preview = previewOf(workflows.find((held) => held.id === workflowId));
 
   const manifestId = manifest?.id ?? "";
   const emptyTitle = title.trim() === "";
@@ -262,6 +289,15 @@ export function Composer({ workflows, manifest, models, disabled, onPropose }: C
               ))}
             </Select>
           </div>
+          {/* What the picked workflow will do, before it does any of it. The
+              rail a running Job draws, one moment earlier — see `preview.ts`
+              for why no row here carries a result. */}
+          {preview.length === 0 ? null : (
+            <div className="flex flex-col gap-1">
+              <span className="text-2xs text-fg-muted">{PREVIEW}</span>
+              <WorkflowRail steps={preview} />
+            </div>
+          )}
           <Checkbox checked={atomic} onChange={(event) => setAtomic(event.target.checked)}>
             The write targets land as one unit
           </Checkbox>

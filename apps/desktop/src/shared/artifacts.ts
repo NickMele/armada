@@ -12,7 +12,7 @@
 // renderer was never given. Two copies of this arithmetic would be two
 // capabilities that agree until one of them is edited.
 
-import type { ManifestSummary } from "./protocol";
+import type { ManifestSummary } from "./setup";
 
 /** The per-repo directory the architecture fixes. Not configurable. */
 export const ARMADA = ".armada";

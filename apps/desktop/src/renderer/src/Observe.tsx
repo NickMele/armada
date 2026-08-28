@@ -22,9 +22,8 @@ import type { Observed } from "../../shared/bridge";
 import type {
   JobDetail as JobWhole,
   JobSummary,
-  ManifestSummary,
-  WorkflowSummary,
 } from "../../shared/protocol";
+import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
 import { factsOf } from "./facts";
 import { readingOf } from "./reading";
 import { turnsOf } from "./turns";

@@ -41,8 +41,8 @@ import type { Work } from "../../shared/work";
 import type {
   JobDetail as JobWhole,
   JobSummary,
-  ManifestSummary,
 } from "../../shared/protocol";
+import type { ManifestSummary } from "../../shared/setup";
 import { briefOf, whyNoWork, workOf } from "./work";
 import {
   CHANGED_NOTHING,
