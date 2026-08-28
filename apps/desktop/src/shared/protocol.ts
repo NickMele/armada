@@ -204,9 +204,59 @@ export type StepDetail = {
    * what the flag was about. Empty on every step nothing was flagged on.
    */
   flagged: Flagged[];
+  /**
+   * The Judge call out on this step **right now**, where one is.
+   *
+   * **Absent is the ordinary case, and it is the point of the field.** A step
+   * waiting on a model call, a step whose Drone is thinking and a step that has
+   * quietly become unreachable were the same pixels on this side of the seam,
+   * and nothing on the wire told them apart. `since` is what keeps a surface
+   * from being a spinner: ninety seconds and two seconds are different facts,
+   * the budget is two minutes, and the elapsed time is subtracted here rather
+   * than pushed as an event a second.
+   *
+   * It is not a step state. `state` still says `running` while a gate asks, and
+   * the six values it may take are unchanged.
+   */
+  judging?: JudgeInFlight;
   /** Entered, then moved on entering `running`. To `updated_at` is how long. */
   entered_at: string;
   updated_at: string;
+};
+
+/**
+ * One Judge call, while it is still out. `crates/ipc/src/detail.rs`.
+ *
+ * Arrives two ways and means the same thing both times: on the open Job's
+ * `StepDetail`, which is what a Bridge opened mid-call reads, and as the
+ * `job.judging` event, which is what moves it without a reload.
+ */
+export type JudgeInFlight = {
+  /**
+   * `criterion`, `drift`, `gaming` or `convergence` — the four looks Fleet
+   * makes. Left as `string` like every other closed set on this side: no
+   * registry declares this one, so a union here would be a roster with no
+   * authority behind it.
+   */
+  look: string;
+  /**
+   * Which criterion is being asked. **Joins to `judged`**, where the same id
+   * reappears with a verdict once the answer lands. Absent on `gaming`, which
+   * is about a pattern, and on `convergence`, which is about neither.
+   */
+  criterion_id?: string;
+  /** Which gaming pattern is being asked about. Joins to `flagged`. */
+  pattern?: string;
+  /** Which model is out. What the wait costs, and roughly how long it is. */
+  model: string;
+  /** Which call of how many this pass is making. Counted from one. */
+  call: number;
+  /** Criteria times panel size, plus the drift look where the work drifted. */
+  of: number;
+  /** When the call went out. **A surface subtracts; nothing ticks on the wire.** */
+  since: string;
+  /** How long it may take before Fleet calls it a failed call. */
+  budget_ms: number;
 };
 
 /** One Check a step declares. `crates/ipc/src/checks.rs`. */
@@ -438,7 +488,8 @@ export type Event =
   | ({ kind: "job.created" } & JobCreated)
   | ({ kind: "job.state_changed" } & JobStateChanged)
   | ({ kind: "job.step_advanced" } & JobStepAdvanced)
-  | ({ kind: "job.files_changed" } & JobFilesChanged);
+  | ({ kind: "job.files_changed" } & JobFilesChanged)
+  | ({ kind: "job.judging" } & JobJudging);
 
 /**
  * A Job exists that did not before, carrying the row whole.
@@ -510,6 +561,29 @@ export type JobFilesChanged = {
   plan_declared: boolean;
   /** Every file, in the order the reading found them. Empty is a real answer. */
   files: ChangedFile[];
+  actor: string;
+  at: string;
+};
+
+/**
+ * A Judge call went out on a step, or the one that was out came back.
+ * `crates/ipc/src/event.rs`.
+ *
+ * **Two messages per call and never a third.** The one going out carries
+ * `judging`; the one coming back carries nothing, and that absence is the
+ * message rather than the stream going quiet. Elapsed is subtracted from
+ * `since` here, so a call that takes the whole two-minute budget costs the
+ * channel two messages rather than one a second.
+ *
+ * It names no `JobSummary`: nothing on the Board's row changes when a call goes
+ * out, and this is read by a detail view somebody has open on one Job — the
+ * same terms as `job.files_changed`.
+ */
+export type JobJudging = {
+  job_id: string;
+  step_id: string;
+  /** The call that went out, or absent because it came back. */
+  judging?: JudgeInFlight;
   actor: string;
   at: string;
 };

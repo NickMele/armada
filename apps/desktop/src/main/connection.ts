@@ -319,6 +319,21 @@ export class FleetConnection {
       return;
     }
 
+    if (event.kind === "job.judging") {
+      // **Re-read rather than fold.** The call in flight is served on the open
+      // Job's own `StepDetail.judging`, which is what a Bridge opened mid-call
+      // already reads, so folding this message into a second copy would give
+      // one fact two homes — and the one a surface picked would be whichever
+      // arrived last. The event is the wake-up; the detail is the answer.
+      //
+      // Only the open Job's, for `job.files_changed`'s reason: nothing on the
+      // Board changes when a call goes out. Two reads per Judge call, against
+      // a call that lasts seconds to two minutes.
+      this.publish({ connection });
+      this.refresh(fleet.port, event.job_id);
+      return;
+    }
+
     const held = this.current.jobs.find((job) => job.id === event.job_id);
     if (held === undefined) {
       // `job.created` covers the ordinary case, so a move about a Job this
