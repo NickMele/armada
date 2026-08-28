@@ -98,6 +98,73 @@ async fn refused(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
     job_id
 }
 
+/// A test config narrowed to one file. `check_config_edited` reads this as the
+/// gate being weakened; the same diff is what a person makes when narrowing the
+/// suite *is* the step, which is why the flag is a guess and not a finding.
+const GAMED: &str = "diff --git a/jest.config.js b/jest.config.js\n\
+                     --- a/jest.config.js\n+++ b/jest.config.js\n\
+                     @@ -1,3 +1,3 @@\n-  testMatch: ['**/*.test.ts'],\n\
+                     +  testMatch: ['src/one.test.ts'],\n";
+
+/// [`judged_then_summarised`]'s shape with the gaming check in place of the
+/// criterion, so an overruled flag has a step to advance to and the Job does
+/// not reach the commit that ending a workflow does. The two fixtures differ in
+/// the one thing under test.
+fn gaming_then_summarised() -> config::ResolvedWorkflow {
+    testkit::resolved(&[
+        Sketch {
+            id: "implement",
+            label: "Implement",
+            evidence_type: Some("diff"),
+            gates: &[],
+            judged_on: &[],
+            scope: None,
+            gaming: Some(Gaming {
+                baseline: None,
+                flag_if: &["check_config_edited"],
+            }),
+        },
+        Sketch {
+            id: "summarise",
+            label: "Summarise",
+            evidence_type: Some("facts_note"),
+            gates: &[],
+            judged_on: &[],
+            scope: None,
+            gaming: None,
+        },
+    ])
+}
+
+/// [`refused`]'s counterpart on the other trigger: dispatched, worked, flagged
+/// by the gaming check, standing escalated with its step stopped.
+async fn flagged(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
+    let job = fleet
+        .propose(a_proposal("narrow the suite instead of fixing it"))
+        .await
+        .expect("a Job at the approval gate");
+    let job_id = job.id().clone();
+    worktree_directory(home, &job_id);
+    fleet.approve(&job_id).await.expect("released to run");
+    fleet
+        .submit_evidence(diff_evidence())
+        .await
+        .expect("the tool took it");
+    let turned = fleet.turn().await.expect("the gate ruled");
+    assert!(
+        matches!(turned.ruled, Some(Ruling::Suspect { .. })),
+        "the fixture did not reach a gaming flag: {:?}",
+        turned.ruled
+    );
+    let escalated = fleet.load(&job_id).await.expect("the Job reads");
+    assert_eq!(escalated.status(), JobStatus::Escalated);
+    assert_eq!(
+        escalated.step(&implement()).map(|step| step.state()),
+        Some(StepState::Stopped),
+    );
+    job_id
+}
+
 fn a_reason() -> Overruling {
     Overruling::saying("the criterion asks about the writer, and the Job is about the reader")
         .expect("a reason with something in it")
@@ -251,6 +318,68 @@ async fn the_log_carries_one_row_an_override_can_be_counted_from() {
     );
 }
 
+/// **A gaming flag is a machine's reading of a diff, and a person can be right
+/// where it is wrong.**
+///
+/// `evidence_suspect` was refused here until the owner settled it: anything a
+/// machine decides, he can overrule. The check that fires this one is
+/// `check_config_edited`, which cannot tell a test config narrowed to hide a
+/// failure from a test config edited because the edit was the work — and that
+/// is exactly the call the flag is a machine's guess at.
+///
+/// **What is asserted is the record, not the advance.** A gaming flag overruled
+/// has to read as legibly afterwards as a refusal overruled: `advanced` beside
+/// `failed(evidence_suspect)`, `overridden` on the wire, and the patterns that
+/// were flagged still there to be read.
+#[tokio::test]
+async fn a_gaming_flag_is_overruled_and_the_step_advances_still_carrying_it() {
+    let home = TempDir::new();
+    let fleet = a_fleet_judged_by(
+        &home,
+        FakeWorkProduct::changed(&["jest.config.js"]).showing(GAMED),
+        gaming_then_summarised(),
+        FakeJudge::saying("flag: no"),
+    );
+    let job_id = flagged(&fleet, &home).await;
+
+    fleet
+        .override_verdict(&job_id, &a_reason())
+        .await
+        .expect("the person overrules the gaming flag");
+
+    let advanced = fleet.load(&job_id).await.expect("the Job reads");
+    assert_eq!(advanced.status(), JobStatus::Running);
+    let row = advanced.step(&implement()).expect("the row is there");
+    assert_eq!(row.state(), StepState::Advanced);
+    assert_eq!(
+        row.last_verdict(),
+        StepLevelTrigger::of(EscalationTrigger::EvidenceSuspect).map(StepVerdict::Failed),
+        "the flag is not rewritten to `passed` by somebody disagreeing with it"
+    );
+
+    let events = fleet.events();
+    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+    let (_, body) = call(&app, "GET", &format!("/jobs/{}", job_id.as_str()), "").await;
+    let detail: JobDetail = ipc::decode("a Job in full", &body).expect("a JobDetail");
+    let step = &detail.steps[0];
+    assert!(
+        step.overridden,
+        "the same field carries both, so no surface has to learn a second rule"
+    );
+    assert_eq!(
+        step.last_verdict
+            .as_ref()
+            .map(|verdict| (verdict.named.as_str(), verdict.trigger.as_deref())),
+        Some(("failed", Some("evidence_suspect"))),
+        "the trigger is what tells an overruled flag from an overruled refusal"
+    );
+    assert!(
+        !step.flagged.is_empty(),
+        "which pattern fired stays readable beside the fact that it was overruled — \
+         `flagged` is to evidence_suspect what `judged` is to gate_failure"
+    );
+}
+
 // ------------------------------------------ what it must not be able to do
 
 /// **A failed mechanical Check is not a matter of opinion.**
@@ -306,37 +435,31 @@ async fn a_failed_mechanical_check_cannot_be_overruled() {
     );
 }
 
-/// **A gaming flag is not the Judge refusing a criterion.**
+/// **A machine that could not decide left nothing to disagree with.**
 ///
-/// `evidence_suspect` says the way the step was satisfied is not to be trusted,
-/// which is a claim about the evidence rather than an opinion about the work.
-/// Folding it in here would make one act answer two different findings.
+/// `gate_undecided` is the gate saying it could not read the artifact. The
+/// owner's rule reaches what a machine decided, and here it decided nothing —
+/// overruling would advance work no tier ever weighed, which is the one thing
+/// `evidence_suspect` moving must not be read as licence for.
 #[tokio::test]
-async fn a_gaming_flag_is_not_the_judges_verdict_to_overrule() {
-    const GAMED: &str = "diff --git a/jest.config.js b/jest.config.js\n\
-                         --- a/jest.config.js\n+++ b/jest.config.js\n\
-                         @@ -1,3 +1,3 @@\n-  testMatch: ['**/*.test.ts'],\n\
-                         +  testMatch: ['src/one.test.ts'],\n";
+async fn a_gate_that_could_not_decide_has_no_verdict_to_overrule() {
     let home = TempDir::new();
     let fleet = a_fleet_judged_by(
         &home,
-        FakeWorkProduct::changed(&["jest.config.js"]).showing(GAMED),
+        FakeWorkProduct::refusing("a worktree that would not read"),
         testkit::resolved(&[Sketch {
             id: "implement",
             label: "Implement",
             evidence_type: Some("diff"),
             gates: &[],
-            judged_on: &[],
+            judged_on: &[("c1", QUESTION)],
             scope: None,
-            gaming: Some(Gaming {
-                baseline: None,
-                flag_if: &["check_config_edited"],
-            }),
+            gaming: None,
         }]),
-        FakeJudge::saying("flag: no"),
+        a_judge_that_refuses(),
     );
     let job = fleet
-        .propose(a_proposal("narrow the suite instead of fixing it"))
+        .propose(a_proposal("fix the reader"))
         .await
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
@@ -347,13 +470,17 @@ async fn a_gaming_flag_is_not_the_judges_verdict_to_overrule() {
         .await
         .expect("the tool took it");
     let turned = fleet.turn().await.expect("the gate ruled");
-    assert!(matches!(turned.ruled, Some(Ruling::Suspect { .. })));
+    assert!(
+        matches!(turned.ruled, Some(Ruling::CouldNotDecide { .. })),
+        "the fixture did not reach an undecided gate: {:?}",
+        turned.ruled
+    );
 
     match fleet.override_verdict(&job_id, &a_reason()).await {
         Err(Adrift::NotTheJudges { trigger, .. }) => {
-            assert_eq!(trigger, EscalationTrigger::EvidenceSuspect)
+            assert_eq!(trigger, EscalationTrigger::GateUndecided)
         }
-        other => panic!("a gaming finding was overruled: {other:?}"),
+        other => panic!("a gate that never ruled was overruled: {other:?}"),
     }
     assert_eq!(
         fleet
