@@ -68,7 +68,7 @@
           "enabled": true,
           "model": "haiku",
           "prompt_key": "implementation_matches_scope",
-          "question": "Does this diff implement what the scope note described, and nothing outside it?",
+          "question": "Does this diff implement what the scope note described, rather than something else in its place? Unscoped work that only restructures -- a move, a rename, a file split that leaves behaviour where it was -- is not a refusal on this criterion.",
           "panel_size": 3
         }
       ],

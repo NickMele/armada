@@ -123,6 +123,22 @@
 # perfectly specific root cause of a problem nobody reported, and only the first
 # criterion catches that.
 #
+# **`no_behaviour_beyond_the_plan` asks about behaviour, not about every line.**
+# It was ported here as *does this diff change anything the plan did not
+# describe*, which is wider than the designed file it came from -- that one asks
+# about behaviour beyond the stated root cause -- and wider than Feature's
+# criterion of the same role. The difference is not academic: a diff that fixes
+# the cause and also moves a helper into a new file changes something the plan
+# did not describe and changes no behaviour at all, and the wide reading refuses
+# it. #190 decided it should not, so the question is the designed one again and
+# the id says what the question asks. What it still catches is the pain it was
+# bought for, a Drone that got ahead of itself and did three steps' work in one.
+#
+# `addresses_the_cause` is untouched, because it never carried the clause that
+# did the refusing. It asks whether the named cause was addressed rather than
+# masked, and a restructure sitting beside the fix is not an answer to it either
+# way.
+#
 # **What is still not joined**, and what the second criterion is worded around:
 # `acceptance_criteria[]` belongs to the Job and no criterion here names which
 # of them it tests. `config/src/judge.rs` refuses `source_ref` for that reason.
@@ -212,8 +228,8 @@
               "question": "Does this diff address the root cause named in the plan, rather than masking the symptom?"
             },
             {
-              "criterion_id": "nothing_beyond_the_plan",
-              "question": "Does this diff change anything the plan did not describe?"
+              "criterion_id": "no_behaviour_beyond_the_plan",
+              "question": "Does this diff change behaviour beyond what the plan described?"
             }
           ],
           "gaming_check": {

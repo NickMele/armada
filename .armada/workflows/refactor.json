@@ -49,6 +49,15 @@
 # only is answerable from the plan. Bug and Feature each got a criterion back
 # that had been dropped for wanting the request; Refactor had none owed.
 #
+# **Nothing here carries #190's defect, and that is worth writing down because
+# the issue names this file.** What refused a sound restructure was Feature's
+# `implements_the_scope`, through its *and nothing outside it* clause, and Bug's
+# sibling, through *anything the plan did not describe*. Neither criterion below
+# has such a clause: `restructures_without_changing` asks about behaviour, and
+# an unscoped move inside a refactor is still a move. Refactor has the mirror
+# gap instead -- no criterion asks whether the restructure the plan named is the
+# one that was performed -- and that is a different issue from this one.
+#
 # What is still not joined is `acceptance_criteria[]` to a step. They reach a
 # brief as the whole Job's bar and no criterion can name one of them --
 # `config/src/judge.rs` refuses `source_ref` for that reason.
