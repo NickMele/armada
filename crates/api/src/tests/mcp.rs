@@ -114,18 +114,19 @@ async fn a_notification_is_acknowledged_and_not_answered() {
     assert!(answered.body.is_empty());
 }
 
-/// Two tools, named as the allowlist names them and as `adapters` joins them.
+/// Three tools, named as the allowlist names them and as `adapters` joins them.
 #[tokio::test]
-async fn the_tool_list_carries_both_tools_and_no_third() {
+async fn the_tool_list_carries_three_tools_and_no_fourth() {
     let app = wired(FakeDaemon::new(Broadcaster::new()));
     let answered = call(&app, r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#).await;
     assert_eq!(answered.status, StatusCode::OK);
     assert!(answered.body.contains("\"name\":\"submit_evidence\""));
     assert!(answered.body.contains("\"name\":\"declare_scope\""));
-    // Two, and no third. **Only one of them reports** — the count matters
+    assert!(answered.body.contains("\"name\":\"run_checks\""));
+    // Three, and no fourth. **Only one of them reports** — the count matters
     // because a Drone choosing between reporting-shaped tools is spike 6's one
-    // miss, and a declaration is not a report.
-    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 2);
+    // miss, and neither a declaration nor a dry run is a report.
+    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 3);
 }
 
 /// The happy path, end to end through the router: a call becomes a receipt and
@@ -324,6 +325,48 @@ async fn a_declaration_with_nothing_working_is_a_tool_error() {
         &app,
         r#"{"jsonrpc":"2.0","id":8,"method":"tools/call",
             "params":{"name":"declare_scope","arguments":{"context_paths":["docs"]}}}"#,
+    )
+    .await;
+    assert_eq!(answered.status, StatusCode::OK);
+    assert!(answered.is_error());
+}
+
+/// **A report naming a failed Check is a tool call that worked.** `isError`
+/// would tell the client the server is broken and put the one answer the Drone
+/// asked for behind a retry — so the failure is in the text and the call is a
+/// success.
+#[tokio::test]
+async fn a_report_carrying_a_failure_is_not_a_tool_error() {
+    let daemon = FakeDaemon::new(Broadcaster::new());
+    running(&daemon, "01JOB0");
+    let app = wired(daemon);
+
+    let answered = call(
+        &app,
+        r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"run_checks"}}"#,
+    )
+    .await;
+    assert_eq!(answered.status, StatusCode::OK);
+    assert!(!answered.is_error(), "{}", answered.text());
+    let said = answered.text();
+    assert!(said.contains("tests") && said.contains("FAILED"), "{said}");
+    assert!(said.contains("exit code 101, expected 0"), "{said}");
+    assert!(said.contains("implement.dry.1.log"), "{said}");
+    assert!(
+        said.contains("not a verdict"),
+        "the answer says so itself, not only the briefing: {said}"
+    );
+}
+
+/// And a call arriving when nothing is being worked is a tool error, like every
+/// other refusal on this endpoint.
+#[tokio::test]
+async fn a_checks_call_with_nothing_working_is_a_tool_error() {
+    let app = wired(FakeDaemon::new(Broadcaster::new()));
+
+    let answered = call(
+        &app,
+        r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"run_checks"}}"#,
     )
     .await;
     assert_eq!(answered.status, StatusCode::OK);

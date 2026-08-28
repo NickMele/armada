@@ -48,7 +48,9 @@ mod worktree;
 mod tests;
 
 pub use error::{CommitWorkError, CreateWorktreeError, ReadWorkProductError};
-pub use harness::{evidence_server, evidence_tool, scope_tool, HarnessRefused, HeadlessAgent};
+pub use harness::{
+    checks_tool, evidence_server, evidence_tool, scope_tool, HarnessRefused, HeadlessAgent,
+};
 pub use mcp::only_the_evidence_server;
 pub use reclaim::{reclaim, BranchGone, Reclaimed, RepoUnreadable, UnmergedWork, WorktreeGone};
 pub use worktree::GitVcs;

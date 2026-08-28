@@ -1,4 +1,4 @@
-//! The Drone endpoint: one path, two tools, on the listener that was already
+//! The Drone endpoint: one path, three tools, on the listener that was already
 //! there.
 //!
 //! # Why this is not in the route table
@@ -78,6 +78,17 @@ async fn called<D: Daemon>(State(served): State<Served<D>>, body: Bytes) -> Resp
                 Err(why) => Answered::Refused { id, why },
             }
         }
+        // **The one call that is held open while work happens.** Every other
+        // arm here answers from a value the daemon already has; this one runs
+        // the step's Checks and comes back with what they printed, which is
+        // minutes rather than milliseconds. It adds nothing to the
+        // unbounded-sink risk this module's comment names — it is still one
+        // reply on the Drone's own connection — and what bounds the cost is
+        // `Daemon::run_checks`'s, not the transport's.
+        Incoming::RunChecks { id } => match served.daemon().run_checks().await {
+            Ok(report) => Answered::Checked { id, report },
+            Err(why) => Answered::Refused { id, why },
+        },
     };
     match mcp::answer(answered) {
         Ok(body) => (

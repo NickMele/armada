@@ -18,8 +18,10 @@
 //! # The tools are next door
 //!
 //! What a tool takes, and what it is described as, is [`tools`](mod@tools).
-//! This module decides which method a message is and what is answered; it
-//! never decides what a field means.
+//! What one of them answers with is [`report`](mod@report). This module decides
+//! which method a message is and what is answered; it never decides what a
+//! field means.
+mod report;
 mod tools;
 
 use serde::{Deserialize, Serialize};
@@ -27,7 +29,8 @@ use serde_json::{json, Value};
 
 use crate::codec::{encode, Unencodable};
 
-pub use tools::{DeclareScope, NotAnArgument, SubmitEvidence, SCOPE_TOOL, TOOL};
+pub use report::{CheckRan, CheckReport};
+pub use tools::{DeclareScope, NotAnArgument, SubmitEvidence, CHECKS_TOOL, SCOPE_TOOL, TOOL};
 
 /// The name Armada's server is registered under in a Drone's MCP
 /// configuration, and therefore the middle of the tool name a Drone is
@@ -75,7 +78,7 @@ pub enum Incoming {
     Ping {
         id: CallId,
     },
-    /// The tool list. Both tools, always — there is no parameter through
+    /// The tool list. Every tool, always — there is no parameter through
     /// which a client could ask for a subset.
     Tools {
         id: CallId,
@@ -91,6 +94,14 @@ pub enum Incoming {
     Declare {
         id: CallId,
         declaration: DeclareScope,
+    },
+    /// A call of the dry-run tool. **It carries nothing** — the tool takes no
+    /// arguments, so there is no value here for a Drone to have chosen.
+    ///
+    /// Not evidence either, and not a gate: what comes back is what the Checks
+    /// printed, and no step moves on it in either direction.
+    RunChecks {
+        id: CallId,
     },
     /// A tool call this server would not take. **Answered as a tool error and
     /// never as a transport failure** — a Drone reads a tool error and can act
@@ -143,6 +154,16 @@ pub enum Answered {
     Recorded {
         id: CallId,
         receipt: Receipt,
+    },
+    /// What the Checks did, in full.
+    ///
+    /// **A success carrying failures.** A report naming three failed Checks is
+    /// still a tool call that worked, so `isError` is false — setting it would
+    /// tell the client the server is broken and put the one answer a Drone
+    /// asked for behind a retry.
+    Checked {
+        id: CallId,
+        report: CheckReport,
     },
     /// A tool error: a JSON-RPC *success* carrying `isError`. That is the
     /// shape a client surfaces to its model as something to read, and a
@@ -233,6 +254,18 @@ fn called(id: CallId, params: Option<&Value>) -> Incoming {
         Ok(tool) => tool,
         Err(why) => return Incoming::NotASubmission { id, why },
     };
+    // **Before the arguments are looked for**, because this tool takes none and
+    // a client is entitled to omit the member entirely. A client that sends an
+    // empty object is answered by the same arm, one branch down.
+    if tool == CHECKS_TOOL {
+        let carried = params
+            .and_then(|params| params.get("arguments"))
+            .and_then(|arguments| arguments.as_object());
+        return match carried.map(tools::nothing).unwrap_or(Ok(())) {
+            Ok(()) => Incoming::RunChecks { id },
+            Err(why) => Incoming::NotASubmission { id, why },
+        };
+    }
     let Some(arguments) = params
         .and_then(|params| params.get("arguments"))
         .and_then(|arguments| arguments.as_object())
@@ -268,6 +301,7 @@ pub fn answer(answered: Answered) -> Result<String, Unencodable> {
         Answered::Ping { id } => result(id, json!({})),
         Answered::Tools { id } => result(id, json!({ "tools": tools::listed() })),
         Answered::Recorded { id, receipt } => result(id, said(&receipt.word, false)),
+        Answered::Checked { id, report } => result(id, said(&report.to_string(), false)),
         Answered::Refused { id, why } => result(id, said(&why.because, true)),
         Answered::NoSuchMethod { id, named } => {
             failed(Some(id), NO_SUCH_METHOD, format!("no such method: {named}"))

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Check, CircleDot, Clock, GitBranch, OctagonAlert, Power, UserCheck, X } from "lucide-react";
+import { Check, CircleDot, Clock, Folder, GitBranch, OctagonAlert, Power, UserCheck, X } from "lucide-react";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { StepBar } from "../StepBar/StepBar";
 import { JobRowStacked } from "./JobRowStacked";
@@ -282,17 +282,22 @@ export const AtTheWidthFloor: StoryObj = {
 };
 
 /**
- * A Convoy has no single workspace, so its row says "3 workspaces" where every
- * other row names one — a count in a field that elsewhere holds an identifier.
- * Rendered as the open question describes it, unresolved. See
- * `[convoy-row-single-workspace]`.
+ * A Convoy has no single workspace, so its row **names its first write target
+ * and counts the rest** — `+2` where three Workspaces are declared. Every
+ * other row names a place in that column, so this one does too, and the folder
+ * glyph keeps meaning a workspace. A bare "3 workspaces" was drawn and
+ * rejected: it puts a count where the column holds an identifier.
+ *
+ * **No chip and no hue.** A bordered pill is a Job state and nothing else, so
+ * shape reads as plain text. The Board computes it from `write_targets` and
+ * `atomic` — nothing on Job stores a shape.
  */
 export const Convoy: Story = {
   args: {
     ...Running.args,
     headline: "Retire the poke path across the fleet",
     fields: [
-      { value: "3 workspaces" },
+      { value: "crates/fleet +2", mono: true, icon: Folder },
       { value: <StepBar total={4} current={2} activity="running" label="Step 2 of 4" /> },
       { value: "Implement", emphasis: true },
       { value: "11m 03s", mono: true },

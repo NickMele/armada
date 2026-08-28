@@ -147,6 +147,23 @@ pub(crate) struct Working {
     /// that did it — which is the direction an unknown baseline has to fail
     /// in.
     entered_with: Option<Footprint>,
+    /// When Fleet started running this step's Checks for the Drone, where it
+    /// is doing so now. **`Some` is the whole of what "the clocks are
+    /// suspended" means** — see [`Working::quiet_for`] and
+    /// [`Working::running_for`], which are the only two readers.
+    ///
+    /// It is also the refusal that stops two dry runs overlapping: a second
+    /// `cargo build` in one worktree is two processes fighting over one target
+    /// directory, and neither answer would be about the work.
+    checking_since: Option<Timestamp>,
+    /// How long this step has already spent inside Fleet's own Check runs.
+    /// Subtracted from the wall clock, because a Drone waiting on Fleet is not
+    /// a Drone failing to converge.
+    checked_for: Duration,
+    /// How many dry runs this step has asked for. **The step's budget**, like
+    /// the pokes — and unlike the pokes it is not refunded by anything the
+    /// Drone does, because what it bounds is money rather than patience.
+    dry_runs: u32,
 }
 
 impl Working {
@@ -190,6 +207,9 @@ impl Working {
             pokes: 0,
             publishing: Publishing::default(),
             entered_with: None,
+            checking_since: None,
+            checked_for: Duration::ZERO,
+            dry_runs: 0,
         }
     }
 
@@ -246,6 +266,14 @@ impl Working {
         // first reading match step one's last and publish nothing, leaving a
         // watcher reading a list attributed to the step before.
         self.publishing = Publishing::default();
+        // **The dry-run budget is per step, and so is the time it cost.** A run
+        // still in flight across a step boundary is one whose answer is about
+        // the step that just ended; the caller finds the slot on a different
+        // step and leaves the clocks alone, so clearing it here is what stops
+        // the new step starting out suspended.
+        self.checking_since = None;
+        self.checked_for = Duration::ZERO;
+        self.dry_runs = 0;
     }
 
     /// The step this Drone is on has been resumed by a person.
@@ -268,6 +296,54 @@ impl Working {
         // has just spoken into the session, so what the Drone did before they
         // did is not what its answer to them is measured from.
         self.listening(at);
+        // **The dry runs do not go back.** The pokes are patience and a person
+        // has just spent some of theirs; a Check run is minutes of a machine,
+        // and a redirect is not a refund. `checked_for` is cleared only because
+        // `step_began` moved above, so the time it accounted for is already
+        // outside the window.
+        self.checked_for = Duration::ZERO;
+    }
+
+    /// Fleet has started running this step's Checks for the Drone, at this
+    /// instant.
+    ///
+    /// **The clocks suspend from here.** The Drone is not working and not
+    /// speaking, and both of those are things it would otherwise be counted
+    /// for — `#58` suspends the silence clock while evidence sits at the gate
+    /// for the same reason, and this is the same mechanism on a different
+    /// trigger.
+    pub(crate) fn checking(&mut self, at: Timestamp) {
+        self.checking_since = Some(at);
+        self.dry_runs += 1;
+    }
+
+    /// The run has finished, at this instant. **The clocks start again from
+    /// here** rather than from where they were: the Drone has been waiting, and
+    /// the silence it owes an answer for begins when it gets one.
+    pub(crate) fn checked(&mut self, at: Timestamp) {
+        if let Some(began) = self.checking_since.take() {
+            self.checked_for += elapsed(&began, &at);
+        }
+        self.waiting(at);
+    }
+
+    /// Whether a dry run is in flight. **The refusal a second call gets**, and
+    /// the switch [`quiet_for`](Working::quiet_for) reads.
+    pub(crate) fn is_checking(&self) -> bool {
+        self.checking_since.is_some()
+    }
+
+    /// How many dry runs this step has spent.
+    pub(crate) fn dry_runs(&self) -> u32 {
+        self.dry_runs
+    }
+
+    /// How long of the window ending at `now` was Fleet running Checks.
+    fn suspended_for(&self, now: &Timestamp) -> Duration {
+        match &self.checking_since {
+            Some(began) => self.checked_for + elapsed(began, now),
+            None => self.checked_for,
+        }
     }
 
     /// Record what the Drone declared for the step it is on. **Replaces**, so a
@@ -350,9 +426,16 @@ impl Working {
         self.chain = Chain::Stopped;
     }
 
-    /// How long the step has been running, by the instant handed in.
+    /// How long the step has been running, by the instant handed in — **not
+    /// counting the time Fleet spent running the step's Checks for it.**
+    ///
+    /// The wall-clock tripwire is a question about the Drone, and a Drone
+    /// blocked on a tool call Fleet is servicing is not doing anything the
+    /// tripwire is looking for. Without the subtraction, a `cargo build` this
+    /// capability exists to offer would push an honest step over a ceiling set
+    /// against steps that could not ask for one.
     pub(crate) fn running_for(&self, now: &Timestamp) -> Duration {
-        elapsed(&self.step_began, now)
+        elapsed(&self.step_began, now).saturating_sub(self.suspended_for(now))
     }
 
     /// How long the Drone has said nothing, by the instant handed in.
@@ -364,7 +447,17 @@ impl Working {
     ///
     /// Zero on the turn anything arrived, of any kind. See
     /// [`Progress::heard`](crate::Progress::heard) for why it is every kind.
+    ///
+    /// **Zero, too, while Fleet is running the step's Checks for it.** A Drone
+    /// inside a tool call Fleet has not answered yet is quiet the way a Drone
+    /// whose evidence is at the gate is quiet — waiting on Fleet, and unable to
+    /// say anything until Fleet is done. The reading is still taken so that
+    /// what arrives during the run is not counted as silence afterwards.
     pub(crate) fn quiet_for(&mut self, now: &Timestamp) -> Duration {
+        if self.is_checking() {
+            self.waiting(now.clone());
+            return Duration::ZERO;
+        }
         let heard = self.transcript.progress().heard;
         if heard > self.heard {
             self.heard = heard;

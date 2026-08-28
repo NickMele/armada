@@ -9,7 +9,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
-use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
+use ipc::mcp::{CheckRan, CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
     Actor, ChangesRequested, Event, EvidenceType, Instant, JobCreated, JobDetail, JobDiff,
     JobEvidence, JobHistory, JobId, JobList, JobStateChanged, JobStatus, JobSummary, ManifestId,
@@ -77,6 +77,9 @@ pub struct FakeDaemon {
     pub submitted: Mutex<Vec<SubmitEvidence>>,
     /// Every scope declaration taken, in arrival order.
     pub declared: Mutex<Vec<DeclareScope>>,
+    /// How many dry runs were asked for, so a test can assert that a refused
+    /// call ran nothing.
+    pub checked: AtomicU64,
     /// When set, every call answers with a fault. The stream closing on a
     /// daemon that cannot answer is a behaviour worth a test.
     pub mute: Mutex<bool>,
@@ -94,6 +97,7 @@ impl FakeDaemon {
             minted: AtomicU64::new(0),
             submitted: Mutex::new(Vec::new()),
             declared: Mutex::new(Vec::new()),
+            checked: AtomicU64::new(0),
             mute: Mutex::new(false),
         }
     }
@@ -693,6 +697,42 @@ impl Daemon for FakeDaemon {
             word: "declared".to_string(),
         })
     }
+
+    /// One passing Check and one failing one, so a test over this router can
+    /// tell that a report reaches the Drone **and** that a failure in it is
+    /// still a successful tool call.
+    async fn run_checks(&self) -> Result<CheckReport, NotRecorded> {
+        let running = self
+            .jobs
+            .lock()
+            .expect("not poisoned")
+            .iter()
+            .any(|job| job.status.as_wire() == "running");
+        if !running {
+            return Err(NotRecorded {
+                because: "no Job is being worked, so there are no checks to run".to_string(),
+            });
+        }
+        self.checked.fetch_add(1, Ordering::SeqCst);
+        Ok(CheckReport {
+            ran: vec![
+                CheckRan {
+                    name: "fmt".to_string(),
+                    outcome: outcome("passed"),
+                    detail: None,
+                    took: std::time::Duration::from_millis(300),
+                    log: Some(".armada/checks/a-job/implement.dry.0.log".to_string()),
+                },
+                CheckRan {
+                    name: "tests".to_string(),
+                    outcome: outcome("failed"),
+                    detail: Some("exit code 101, expected 0".to_string()),
+                    took: std::time::Duration::from_secs(12),
+                    log: Some(".armada/checks/a-job/implement.dry.1.log".to_string()),
+                },
+            ],
+        })
+    }
 }
 
 /// A Job already running, so the Drone kill has something to kill.
@@ -721,6 +761,13 @@ pub fn at(daemon: &FakeDaemon, id: &str, spelling: &str) {
         assigned_drone: None,
         redispatched_from: None,
     });
+}
+
+/// A check outcome by its registry spelling. **`from_wire` rather than a
+/// variant**, because this crate names no domain type — the same reason
+/// `origin` and `urgency` above are built this way.
+fn outcome(spelling: &str) -> ipc::CheckOutcome {
+    ipc::CheckOutcome::from_wire(spelling).expect("a check outcome")
 }
 
 /// A proposal body, as Bridge would send it.

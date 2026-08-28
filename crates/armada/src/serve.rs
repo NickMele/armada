@@ -77,8 +77,8 @@ use std::time::Duration;
 use adapters::{GitVcs, HeadlessAgent};
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
-    CheckBudget, Fittings, Fleet, Host, JudgeBudget, Liveness, Mint, StepNorms, SystemClock,
-    UlidMint,
+    CheckBudget, DryRuns, Fittings, Fleet, Host, JudgeBudget, Liveness, Mint, StepNorms,
+    SystemClock, UlidMint,
 };
 use ipc::PROTOCOL_VERSION;
 use store::Store;
@@ -192,6 +192,27 @@ pub const PROVISIONAL_STEP_NORMS: StepNorms =
 /// needs the silence to survive both — about six minutes, or four and a half
 /// times the longest silence any honest step produced.
 pub const PROVISIONAL_LIVENESS: Liveness = Liveness::of(Duration::from_secs(120), 2);
+
+/// How many times one step may ask Fleet to run its Checks.
+///
+/// **Provisional, and nothing has measured it** — there is no history of a
+/// Drone asking, because until now it could not.
+///
+/// **Three, derived from what it is standing in for.** A Drone that could run
+/// the Checks itself would run them roughly once per attempt at getting them
+/// green, and `docs/spikes/009-how-long-does-a-step-take.md` puts a step's p90
+/// at 437s of work — which is not room for many `cargo build --workspace
+/// --locked` runs on top. One would make the tool a single shot to be saved for
+/// the end, which is the moment it is worth least; more than three stops being
+/// a check on the work and starts being the work.
+///
+/// **It is a cost bound and not a convergence one.** `fleet::dry_run` suspends
+/// the wall clock and the silence clock while a run is in flight, which is
+/// correct — a Drone waiting on Fleet is not thrashing — and which removes the
+/// pressure that would otherwise have bounded this. A Drone that spends all
+/// three and is no closer is still caught, by the tool-call tripwire in
+/// `fleet::converging`: each ask is one of its own calls.
+pub const PROVISIONAL_DRY_RUNS: DryRuns = DryRuns::of(3);
 
 /// How often Fleet is turned. **Provisional**, and nothing has measured it.
 ///
@@ -459,6 +480,7 @@ fn assemble(
         budget: CheckBudget::of(PROVISIONAL_CHECK_BUDGET),
         norms: PROVISIONAL_STEP_NORMS,
         liveness: PROVISIONAL_LIVENESS,
+        dry_runs: PROVISIONAL_DRY_RUNS,
         // The same CLI, invoked as a call rather than as a session. The
         // spelling of the model is the adapter's; this crate never learns it.
         judge: Arc::new(HeadlessAgent::at(judge_binary)),

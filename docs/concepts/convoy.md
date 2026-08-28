@@ -120,6 +120,8 @@ Allowlist, secrets, **MCP and Sub agents** all resolve most-restrictive-wins (in
 
 Grouping the diff per Workspace for review is presentation, not gate scope.
 
+**A Convoy's proposal merges into the dispatch approval gate**, and each Job still takes its own one-by-one dispatch approval there. That is a different gate from the one above — see [Job Board](job-board.md), which owns the distinction and the surface. What that surface looks like for a Convoy is open (see Open questions).
+
 ### Which Manifest's policy applies — freeze, auto-merge, review gate, budget cap
 
 **Split along safety versus resource.** Dispatch freeze, `auto_merge` and `review_gate` are **most-restrictive-wins** across the gating Manifests: any frozen Manifest freezes the Job, `never` beats `tests-pass` beats `always`, `human_always` beats `auto_if_judge_passes`.
@@ -142,7 +144,7 @@ Each holds inside one root `armada.yml`, where a worktree spanning declared Work
 
 ## Open questions
 
-- **[convoy-dispatch-approval-surface]** What does the dispatch-approval surface for a Convoy actually look like? The structural question — that a Convoy proposal merges into the dispatch approval gate, with each Job still taking its own one-by-one dispatch approval — was settled Aug 2026. The surface itself is deliberately still open, since Dispatch a Job is design order 1. One of the two related Board questions is closed on the design side (Aug 21 2026): a Convoy row shows its **first write target and a `+2`**, keeping an identifier in the identifier column rather than a count where every other row names a place; a Convoy takes **no chip and no hue**, since a bordered pill is a Job state and nothing else, so shape reads as plain text in the identifier column.
+- **[convoy-dispatch-approval-surface]** What does the dispatch-approval surface for a Convoy actually look like? Where the proposal is approved is settled and is stated above; the surface itself is deliberately still open, since Dispatch a Job is design order 1. What the Board's list row shows for a Convoy is settled and is not part of this — see [Job Board](job-board.md).
 - **[convoy-board-graph-view]** Does the Job Board need a graph view for DAG dependencies, now that a Convoy may be a peer node in that graph? Related: the Board must **compute** the shape per row, since it is derived rather than stored.
 - **[convoy-multi-repo-job-shape]** Does Armada need a multi-repo Job shape, and what is its workflow DAG? Carried forward from the root-scoping decision, which left it open, and no scenario currently pressures it.
 - **[convoy-freeze-while-running]** What happens when a dispatch freeze lands on a Convoy that is already running? Named in the policy resolution above rather than filed as its own question until now: freeze is enforced live rather than only at dispatch, and the already-running case is not covered.

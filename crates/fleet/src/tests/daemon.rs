@@ -38,6 +38,7 @@ use verification::{Claimed, NotClaimed, ShownBy};
 use crate::clock::Clock;
 use crate::converging::StepNorms;
 use crate::daemon::{Fittings, Fleet, Host};
+use crate::dry_run::DryRuns;
 use crate::evidence::Call;
 use crate::gate::{CheckBudget, Ruling};
 use crate::judging::JudgeBudget;
@@ -298,6 +299,9 @@ pub fn fitted_with(
         budget: CheckBudget::of(Duration::from_secs(5)),
         norms: UNTRIPPABLE,
         liveness: NEVER_QUIET,
+        // The production allowance, so the cases that spend it spend the number
+        // that ships. A fixture with its own would prove a cap and not the cap.
+        dry_runs: DryRuns::of(3),
         // A Judge that fails every call, because no step in these fixtures
         // declares a criterion. One that answered would let a cold-by-default
         // regression pass unseen.

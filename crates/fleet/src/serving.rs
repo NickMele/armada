@@ -41,7 +41,7 @@ use api::{Daemon, Observed, Refusal};
 use core_model::{
     Job, JobId as CoreJobId, JobStatus as CoreJobStatus, QueuedReason as CoreQueuedReason,
 };
-use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
+use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
     ChangesRequested, CheckRun, DeclaredCheck, DeclaredJudge, Flagged, JobDetail, JobDiff,
     JobEvidence, JobHistory, JobId, JobList, JobSummary, Judged, ManifestId, ManifestSummary,
@@ -545,6 +545,20 @@ where
                 because: why.to_string(),
             }),
         }
+    }
+
+    /// The Drone asking whether its work passes.
+    ///
+    /// It converts and maps like the two above, and decides as little: which
+    /// Checks, what they are run against and what bounds the asking are all
+    /// `Fleet::run_checks`'s, under the slot lock that binds them to one step.
+    ///
+    /// **What comes back is a report and never a verdict.** The step is exactly
+    /// where it was when the call arrived, whatever the Checks said.
+    async fn run_checks(&self) -> Result<CheckReport, NotRecorded> {
+        Fleet::run_checks(self).await.map_err(|why| NotRecorded {
+            because: why.to_string(),
+        })
     }
 }
 

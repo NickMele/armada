@@ -182,6 +182,47 @@ pub fn kept(
     checks: &[StepCheck],
     output: &[(String, Output)],
 ) -> Vec<StepCheck> {
+    keeping(repo_root, job, step, attempt, checks, output, RECORDED)
+}
+
+/// The same, for a run the Drone asked for rather than one the gate made.
+///
+/// **A different file name, deliberately.** `crate::dry_run` writes no row, so
+/// a dry run using [`RECORDED`]'s path would overwrite output the record points
+/// at with output nothing points at — and a person opening the log named on a
+/// step's Check row would be reading a run that decided nothing.
+///
+/// The attempt and the ordinal key it to the step's Check on this run, so a
+/// second dry run inside one attempt overwrites the first. The files and the
+/// attempt have one lifetime, which is what stops the directory growing with
+/// every ask — and what keeps a reattempt's dry runs apart from the ones
+/// before it, the same reason the gate's own path carries the attempt.
+pub fn kept_dry(
+    repo_root: &str,
+    job: &JobId,
+    step: &StepId,
+    attempt: Attempt,
+    checks: &[StepCheck],
+    output: &[(String, Output)],
+) -> Vec<StepCheck> {
+    keeping(repo_root, job, step, attempt, checks, output, DRY)
+}
+
+/// What a gate run's file name carries between the step and the ordinal:
+/// nothing.
+const RECORDED: &str = "";
+/// What a dry run's carries.
+const DRY: &str = "dry.";
+
+fn keeping(
+    repo_root: &str,
+    job: &JobId,
+    step: &StepId,
+    attempt: Attempt,
+    checks: &[StepCheck],
+    output: &[(String, Output)],
+    infix: &str,
+) -> Vec<StepCheck> {
     let Some(dir) = writable(repo_root, job) else {
         return checks.to_vec();
     };
@@ -192,7 +233,7 @@ pub fn kept(
             let Some((_, printed)) = output.iter().find(|(name, _)| name == &check.name) else {
                 return check.clone();
             };
-            let Some(name) = file_name(step, attempt, ordinal) else {
+            let Some(name) = file_name(step, attempt, ordinal, infix) else {
                 return check.clone();
             };
             let mut kept = check.clone();
@@ -215,7 +256,7 @@ fn writable(repo_root: &str, job: &JobId) -> Option<PathBuf> {
 /// text a workflow author typed and nothing validates it, so one holding a
 /// separator would put the file somewhere other than the directory named above.
 /// The output is then not kept and the row says so by having no path.
-fn file_name(step: &StepId, attempt: Attempt, ordinal: usize) -> Option<String> {
+fn file_name(step: &StepId, attempt: Attempt, ordinal: usize, infix: &str) -> Option<String> {
     let id = step.as_str();
     let plain = !id.is_empty()
         && id != "."
@@ -223,7 +264,7 @@ fn file_name(step: &StepId, attempt: Attempt, ordinal: usize) -> Option<String> 
         && !id.contains('/')
         && !id.contains('\\')
         && !id.contains('\0');
-    plain.then(|| format!("{id}.{attempt}.{ordinal}.log"))
+    plain.then(|| format!("{id}.{attempt}.{infix}{ordinal}.log"))
 }
 
 /// Both streams in one file, each behind a marker line.

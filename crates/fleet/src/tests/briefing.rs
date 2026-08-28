@@ -32,7 +32,10 @@ use crate::gate::Ruling;
 use crate::tests::daemon::{a_fleet_holding, a_proposal, worktree_directory};
 use crate::tests::tmp::TempDir;
 
-fn a_job() -> Job {
+/// **`pub(super)` so `dry_run` can use it**: the briefing block that offers the
+/// dry run is assembled here, and a second Job fixture would be a second answer
+/// to what a Job is.
+pub(super) fn a_job() -> Job {
     Job::create_top_level(
         NewJob {
             id: JobId::carried(Ulid::carried("01TEST00000000000000000001")),

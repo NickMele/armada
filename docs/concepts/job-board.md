@@ -106,13 +106,15 @@ It carries no `dispatched_by`, linking back through `subject` instead, which is 
 
 The `snake_case` form (`auto_detected`, `manual`, `helm_drafted`, `sub_dispatched`, `workflow_triggered`) is the stored value defined by [Job](job.md); the Title Case form above is the rendered label.
 
-### No field distinguishes a Convoy
+### A Convoy's row names its first write target
 
-**No origin value or shape field distinguishes a Convoy on this Board (see Open questions).** Shape is derived from a Job's `write_targets` and its `atomic` flag rather than stored — nothing on Job records a shape at all — so `origin` was never going to carry it and no shape field exists to read.
+**No origin value or shape field distinguishes a Convoy on this Board.** Shape is derived from a Job's `write_targets` and its `atomic` flag rather than stored — nothing on Job records a shape at all — so `origin` was never going to carry it and no shape field exists to read. **The Board computes the distinction from those two fields** rather than rendering a stored label.
 
-The consequence: a Convoy is visually identical to a single-workspace Job on the very surface whose stated purpose is "what's queued and why", and the Board must compute the distinction from those two fields rather than render a stored label.
+**The row shows the first write target, then a count of the rest** — `+2` where three Workspaces are declared. Every other row names a place in that column, so a Convoy names one too. A bare count there was drawn and rejected: it puts a number where the column holds an identifier, and it gives the folder glyph a second meaning.
 
-What surface approves or overrides the Job proposer's proposal is tracked separately — see [Convoy](convoy.md) — and is not resolved here.
+**A Convoy takes no chip and no hue.** A bordered pill is a Job state and nothing else, so shape reads as plain text.
+
+How a Convoy renders in the graph view is separate and unsettled — see Open questions. What surface approves or overrides the Job proposer's proposal is tracked separately — see [Convoy](convoy.md) — and is not resolved here.
 
 ## Dispatch flow
 
@@ -153,4 +155,3 @@ The following settings (see `../contracts/configuration.md`) directly affect thi
 ## Open questions
 
 - **[job-board-convoy-graph-rendering]** Given the graph view exists, how does a Convoy — which may be a peer node in the dependency graph but has no children of its own — actually render there? As an ordinary node, visually distinguished, or expanded into its declared Workspaces is unstated.
-- **[job-board-convoy-list-distinction]** How is a Convoy visually distinguished from a single-workspace Job in the default flat-list view? No origin value or shape field carries the distinction — the Board must compute it from `write_targets` and `atomic` rather than render a stored label, and no visual treatment exists yet.

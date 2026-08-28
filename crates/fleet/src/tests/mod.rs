@@ -88,6 +88,12 @@
 //! does, and it comes back to `running` on the Drone's own next turn rather
 //! than on the sending. Most of its cases are ones where the Job stays
 //! escalated, which is the proportion the act is about.
+//! `dry_run` is the nineteenth, and it is `gate` asked from the other side: a
+//! Drone finding out where it stands before it spends a step finding out the
+//! hard way. One case gives it an answer and five prove an absence — the step
+//! does not move, the gate reaches its own verdict on its own run, the
+//! convergence clocks do not count the wait, and each of the two bounds refuses
+//! a call.
 //!
 //! `attachments` is the eleventh: a file staged before a Job exists, promoted
 //! at creation, refused where the staged path cannot be read, and copied again
@@ -103,6 +109,7 @@ mod delivery;
 mod detach;
 mod detail;
 mod drone;
+mod dry_run;
 mod evidence;
 mod footprint;
 mod frozen;
