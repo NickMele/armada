@@ -100,6 +100,13 @@ approximations.
   in its own `INDEX.md`. The state machine and the schemas they describe are
   data in `crates/core-model/domain/`.
 
+## Capabilities
+
+- [`capabilities/`](capabilities/) — one file per capability that has prose
+  worth keeping, each bound by its frontmatter to the issue that tracks it,
+  indexed in its own `INDEX.md`. The roadmap itself is GitHub issues; these hold
+  the reasoning an issue body buries when it closes.
+
 ## Journeys
 
 - [`journeys/`](journeys/) — how a person moves through Armada, one document
