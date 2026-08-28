@@ -13,7 +13,7 @@ import type { ProtocolVersion } from "./version";
 /** One message on a Job's Observe socket. `crates/ipc/src/turn.rs`. */
 export type TurnMessage =
   | ({ message: "opened" } & Opened)
-  | ({ message: "row"; ts: string } & Saw)
+  | ({ message: "row"; ts: string; step?: string } & Saw)
   | ({ message: "missed" } & Missed)
   | ({ message: "closed" } & Closed);
 
@@ -35,6 +35,11 @@ export type Closed = {
 
 /**
  * One row of a Drone's transcript, as a viewer is shown it.
+ *
+ * The step a row was written under travels beside this rather than inside it,
+ * as `step` on the row message: it is true of every kind, and it is optional
+ * because a row written before Fleet recorded one carries no step and nothing
+ * can recover which it was.
  *
  * The tag is `event` and not `kind`, because `unrecognised` already carries a
  * `kind`. Three of the file's kinds never arrive here — `quota_moved`, `ended`

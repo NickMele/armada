@@ -58,6 +58,9 @@ async fn a_job(app: &Router) -> JobId {
 fn said(what: &str) -> TranscriptRow {
     TranscriptRow {
         ts: Instant::carried("2026-08-26T09:00:00.000Z"),
+        // Which step a row belongs to is Fleet's to say. This crate carries
+        // rows and reads none of them, so there is nothing here to name one.
+        step: None,
         saw: Saw::Said {
             text: what.to_string(),
         },
