@@ -294,14 +294,27 @@ where
                 self.applied(&job, ruling).await?;
                 Ok(())
             }
-            // Three endings, one shape: the work stops here, the Drone is not
+            // Four stops, one shape: the work stops here, the Drone is not
             // told, and `apply` decides which status and which trigger.
             // `Suspect` joins them because a person is being asked either way —
             // what differs is the claim being made, which is the trigger's to
             // say. The refusal reprompt the prompt contract specifies arrives
             // with the retry ledger, which is what would give a Drone somewhere
             // to go with a citation; until then it goes to the person.
-            Ruling::Failed { .. } | Ruling::Refused { .. } | Ruling::Suspect { .. } => {
+            //
+            // **`CouldNotDecide` is the fourth, and it is not a verdict.** The
+            // shape is shared and the claim is not: the other three weighed the
+            // work, and this one is Fleet saying it could not read what it
+            // needed to weigh it with. It joins them because the alternative is
+            // what it used to do — leave the Job `running` for the liveness
+            // clock to find, with nothing anywhere saying why — and because
+            // only a stopped step is one `crate::resume` can put a person back
+            // on. What could not be read is written into the Job's log by
+            // `crate::settling`, before this runs.
+            Ruling::Failed { .. }
+            | Ruling::Refused { .. }
+            | Ruling::Suspect { .. }
+            | Ruling::CouldNotDecide { .. } => {
                 let job = self.load(job_id).await?;
                 // **Before the Job moves, and it cannot be after.** The inner
                 // machine is frozen beneath every status but `running` and
@@ -323,11 +336,16 @@ where
                 }
                 Ok(())
             }
-            // Neither moves anything. `NotWhatTheStepAsked` asks the Drone
-            // again — and **nothing is sent**, because `Ruling::tell` answers
-            // `None` for it and `verification` has no turn for a resubmission.
-            // That gap is real and is named in this crate's report.
-            Ruling::NotWhatTheStepAsked(_) | Ruling::CouldNotDecide { .. } => Ok(()),
+            // Nothing moves, and it is the one ruling left that moves nothing.
+            // `NotWhatTheStepAsked` asks the Drone again — and **nothing is
+            // sent**, because `Ruling::tell` answers `None` for it and
+            // `verification` has no turn for a resubmission. That gap is real
+            // and is named in this crate's report.
+            //
+            // It stays here for the reason the arm above stopped holding it: a
+            // submission of the wrong kind spent no Check and derived no
+            // artifact, so nothing was read that could have failed to be read.
+            Ruling::NotWhatTheStepAsked(_) => Ok(()),
         }
     }
 

@@ -14,7 +14,10 @@
 //! empty `Option<Working>` is that turn, reproduced without waiting for a race
 //! that happens once in a few thousand ticks.
 
-use core_model::{EscalationTrigger, JobId, JobStatus, StepId, Timestamp, TransitionReason};
+use core_model::{
+    EscalationTrigger, JobId, JobStatus, StepId, StepLevelTrigger, StepState, StepVerdict,
+    Timestamp, TransitionReason,
+};
 use testkit::{FakeVcs, FakeWorkProduct};
 
 use crate::evidence::Decline;
@@ -271,6 +274,98 @@ async fn a_second_submission_at_a_human_gate_is_dropped_and_written_down() {
     assert!(
         written.contains("\"held\":false"),
         "the line says the submission was dropped, which it was: {written}"
+    );
+}
+
+/// **The gate ran, could not read what it needed, and said nothing.** That is
+/// the eight minutes: `check_runs: 0`, `judged: 0`, a row in
+/// `job_step_evidence`, and a Job left at `running` for the liveness clock to
+/// find by a route that knows nothing about why.
+///
+/// It escalates now, on a trigger that says the gate could not decide rather
+/// than that the work failed, and the artifact is in the Job's log where the
+/// person watching was looking.
+#[tokio::test]
+async fn a_gate_that_cannot_read_its_artifact_escalates_and_names_the_artifact() {
+    let home = TempDir::new();
+    let fleet = a_fleet(
+        &home,
+        FakeWorkProduct::refusing("a worktree that would not read"),
+    );
+
+    let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.unwrap();
+    fleet.submit_evidence(diff_evidence()).await.unwrap();
+
+    let turned = fleet.turn().await.unwrap();
+    assert!(
+        matches!(turned.ruled, Some(Ruling::CouldNotDecide { .. })),
+        "{:?}",
+        turned.ruled
+    );
+
+    let escalated = fleet.load(job.id()).await.unwrap();
+    assert_eq!(
+        escalated.status(),
+        JobStatus::Escalated,
+        "the Job stayed running with nothing anywhere saying why"
+    );
+    assert_eq!(
+        fleet.last_reason(job.id()).await.unwrap(),
+        Some(TransitionReason::Escalation(
+            EscalationTrigger::GateUndecided
+        )),
+        "gate_failure would say the Judge refused work no Judge ever saw"
+    );
+
+    // **Stopped, which is what a person can act on.** `resume` finds the step
+    // to redirect or restart by looking for the stopped one, so a gate that
+    // escalated and left the step running would have surfaced a Job with no
+    // move out of it.
+    let stopped = escalated.step(&StepId::new("implement")).unwrap();
+    assert_eq!(stopped.state(), StepState::Stopped);
+    assert_eq!(
+        stopped.last_verdict(),
+        StepLevelTrigger::of(EscalationTrigger::GateUndecided).map(StepVerdict::Failed),
+    );
+
+    let written = logged(&home, job.id());
+    assert!(
+        written.contains("the gate could not read what it needed to rule"),
+        "a gate that reads nothing and writes nothing is the whole defect: {written}"
+    );
+    assert!(
+        written.contains("the Job's diff"),
+        "the artifact is named, not just the fact that something went wrong: {written}"
+    );
+    assert!(
+        written.contains("a worktree that would not read"),
+        "the cause is carried whole rather than summarised away: {written}"
+    );
+}
+
+/// The Drone is left alive and idle, exactly as a refusal leaves it, so the
+/// cheap move is still available: a person who fixes what could not be read
+/// redirects the session that is still holding its context.
+#[tokio::test]
+async fn a_gate_that_could_not_decide_keeps_its_drone() {
+    let home = TempDir::new();
+    let fleet = a_fleet(
+        &home,
+        FakeWorkProduct::refusing("a worktree that would not read"),
+    );
+
+    let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.unwrap();
+    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.turn().await.unwrap();
+
+    assert_eq!(
+        fleet.working_on().await.as_ref(),
+        Some(job.id()),
+        "the session was ended over a reading Fleet could not take"
     );
 }
 

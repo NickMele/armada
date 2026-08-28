@@ -18,8 +18,9 @@
 //!
 //! Everything below the take drops by design; what changed is that nothing
 //! above it does. All three say so in the Job's log, on the turn the reason
-//! first stands and never per tick — which is [`Working::drifting`]'s rule
-//! against a loop that ticks four times a second.
+//! first stands and never per tick — [`Working::drifting`]'s rule against a
+//! loop ticking four times a second. A fourth reason produces no ruling and is
+//! no guard at all: [`noted_undecided`](Fleet::noted_undecided).
 //!
 //! [`Working::drifting`]: crate::working::Working::drifting
 
@@ -169,6 +170,11 @@ where
         self.recorded_evidence(&job_id, &step, &landed.submission, &ruling)
             .await?;
         self.recorded_gaming(&job_id, &step, &ruling).await?;
+        // Before the escalation, for the same reason the four records above
+        // come before the transition — and here it is the whole content of the
+        // stop. `gate_undecided` says the gate could not decide; only this says
+        // what about.
+        self.noted_undecided(&job_id, &step, &ruling);
         self.act_on(&ruling, &job_id, &step, working).await?;
         Ok(Settled::ruling(ruling))
     }
@@ -263,6 +269,45 @@ where
         // A log line that will not write does not stop the Job: the decline is
         // still the gate's answer, and the escalation is a transition of its
         // own.
+        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+    }
+
+    /// Write down what the gate could not read. **Nothing on any other
+    /// ruling.**
+    ///
+    /// The fourth decline, and not a [`Decline`]: the three guards are reasons
+    /// the gate was never asked, and this is the gate having been asked and
+    /// having had nothing to answer with. What they share is the only thing
+    /// that mattered to the person watching — no ruling, and no line saying
+    /// there had not been one.
+    ///
+    /// Fields, never an interpolated message, for
+    /// [`noted_decline`](Fleet::noted_decline)'s reason: `artifact` is what a
+    /// query groups on, and it is a fixed set of phrases rather than a cause
+    /// string, so "the Judge's answer" and "the Job's diff" are countable
+    /// against each other. The cause is carried whole beside it — the one on
+    /// the Job that stranded was a Judge that could not be handed a patch, and
+    /// the sentence saying so is the entire lead.
+    ///
+    /// Written on every occurrence, where a decline writes on the turn its
+    /// reason first stands. There is no per-tick risk here: the submission is
+    /// taken before the gate runs, so a second line means a second submission
+    /// was read and a second reading failed.
+    fn noted_undecided(&self, job: &JobId, step: &StepId, ruling: &Ruling) {
+        let Some((artifact, cause)) = ruling.undecided() else {
+            return;
+        };
+        let envelope = Envelope::new(
+            self.now(),
+            Level::Warn,
+            Component::Fleet,
+            self.run().clone(),
+            "the gate could not read what it needed to rule",
+        )
+        .in_job(job.as_ulid().clone())
+        .at_step(step.as_str())
+        .with_field("artifact", FieldValue::Str(artifact.to_string()))
+        .with_field("said", FieldValue::Str(cause.to_string()));
         let _ = transcript::note(&self.host().repo_root, job, &envelope);
     }
 

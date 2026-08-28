@@ -188,10 +188,24 @@ pub enum Ruling {
     /// the step neither advanced nor failed: a machine that cannot answer must
     /// not produce a verdict, in either direction.
     ///
-    /// Nothing here escalates, because this milestone step has no escalation.
-    /// A Job that lands in this state stays `running` and is reached by the
-    /// liveness clock rather than by the gate, which is a gap and is named as
-    /// one.
+    /// **It escalates on `gate_undecided`, and the artifact is the whole
+    /// point.** Nothing here used to escalate: a Job that landed in this state
+    /// stayed `running` and was reached, if at all, by the liveness clock —
+    /// which arrives late and knows nothing about why. So a Job sat on one step
+    /// for eight minutes with a one-line log while the person watching it asked
+    /// whether a Judge was running invisibly, and the truthful answer was that
+    /// the gate had already tried, failed to read something, and told nobody.
+    ///
+    /// Escalating is not a verdict. The trigger says the gate could not decide
+    /// rather than that the work failed, and `crate::settling` writes the
+    /// artifact and the cause into the Job's own log, so what stopped it is
+    /// readable without opening the record.
+    ///
+    /// **Nothing is retried.** A worktree momentarily unreadable and a Judge
+    /// that cannot be handed a patch arrive here as the same value, and trying
+    /// again would fix only the first — the Job stranded on 2026-08-28 was on a
+    /// `facts_note` step whose Judge could not be given a patch at all. So the
+    /// two are not told apart here; they are named, and handed to a person.
     CouldNotDecide {
         artifact: &'static str,
         cause: Box<dyn Error + Send + Sync>,
@@ -291,9 +305,16 @@ impl Ruling {
     /// The trigger a ruling stops the step with, and `None` where it stops no
     /// step.
     ///
-    /// **The one place either trigger is named**, and what [`apply`] derives
+    /// **The one place any of the three is named**, and what [`apply`] derives
     /// the escalation from — so the step's `last_verdict` and the Job's stored
     /// reason cannot come to disagree about why the same gate stopped.
+    ///
+    /// [`CouldNotDecide`](Ruling::CouldNotDecide) is here for a reason unlike
+    /// the other two. The step is stopped not because it failed but because
+    /// only a stopped step is one a person can act on: `crate::resume` finds
+    /// the step to redirect or restart by looking for the stopped one, so a
+    /// gate that could not decide and left the step `running` would escalate a
+    /// Job neither act could reach.
     ///
     /// [`Ruling::Failed`] answers `None`: `job-statuses.toml` gives `stopped`
     /// to `escalated` alone, and `completed_failed`'s step machine is "frozen
@@ -308,6 +329,23 @@ impl Ruling {
         match self {
             Ruling::Refused { .. } => StepLevelTrigger::of(EscalationTrigger::GateFailure),
             Ruling::Suspect { .. } => StepLevelTrigger::of(EscalationTrigger::EvidenceSuspect),
+            Ruling::CouldNotDecide { .. } => StepLevelTrigger::of(EscalationTrigger::GateUndecided),
+            _ => None,
+        }
+    }
+
+    /// What the gate could not read, and why, where that is what stopped it.
+    /// `None` on every other ruling.
+    ///
+    /// Handed out rather than rendered here, for
+    /// [`stops_the_step`](Ruling::stops_the_step)'s reason turned around: the
+    /// trigger says the gate could not decide, and this says what about — which
+    /// is the half a person triages on and the half no vocabulary can hold.
+    pub fn undecided(&self) -> Option<(&'static str, &(dyn Error + Send + Sync))> {
+        match self {
+            Ruling::CouldNotDecide {
+                artifact, cause, ..
+            } => Some((artifact, cause.as_ref())),
             _ => None,
         }
     }
@@ -631,8 +669,9 @@ where
 /// two spellings of it could drift. `gate_failure` is what
 /// `docs/concepts/judge.md` picks for the step evidence gate in as many words;
 /// `evidence_suspect` is the gaming check's alone, because a Judge that refused
-/// a criterion accused nobody. Both are step-level, which is what lets each
-/// reach `last_verdict`.
+/// a criterion accused nobody; `gate_undecided` is neither, because the work was
+/// never weighed. All three are step-level, which is what lets each reach
+/// `last_verdict`.
 pub fn apply(
     job: &Job,
     ruling: &Ruling,

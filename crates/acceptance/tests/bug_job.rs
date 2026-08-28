@@ -451,7 +451,15 @@ async fn evidence_that_narrows_its_own_check_is_caught_rather_than_advanced() {
 }
 
 /// **A verification that could not run is not a refusal**, and it is not a pass
-/// either. The Job stays where it is and a person is left something to read.
+/// either. The step is not advanced and it is not failed — the Job stops, on a
+/// trigger that says the gate could not decide, and a person is left something
+/// to read.
+///
+/// It used to claim the Job stayed `running`, and the second half of the
+/// sentence — that a person was left something to read — was never true. A Job
+/// that landed here sat where it was until the liveness clock reached it, and
+/// nothing said why. Escalating is not a verdict on the work: `gate_undecided`
+/// is not `gate_failure`, and the criteria were never weighed.
 #[tokio::test]
 async fn a_judge_call_that_fails_neither_advances_the_step_nor_fails_it() {
     let bench = Bench::judged_by(
@@ -477,14 +485,28 @@ async fn a_judge_call_that_fails_neither_advances_the_step_nor_fails_it() {
     );
     bench.settled(&mut run, &bench.step(1), &ruling);
 
-    assert_eq!(run.job.status(), JobStatus::Running);
+    assert_eq!(run.job.status(), JobStatus::Escalated);
+    assert!(
+        !run.job.status().is_terminal(),
+        "a Judge that could not be reached is not the work failing"
+    );
+    assert_eq!(
+        bench.reasons().last(),
+        Some(&TransitionReason::Escalation(
+            EscalationTrigger::GateUndecided
+        )),
+        "gate_failure would say the Judge refused work it never saw"
+    );
+    // The bench applies the Job move a ruling implies and no step move but an
+    // advance, which is why `fix` still reads `running` here. Fleet stops it
+    // before the Job escalates — `fleet::dispatch::act_on`, asserted there.
     assert_eq!(
         states(&run.job),
         [
             ("root_cause", StepState::Advanced),
             ("fix", StepState::Running)
         ],
-        "the step neither advanced nor failed"
+        "the step did not advance on a verdict nobody gave"
     );
 }
 
