@@ -13,6 +13,7 @@ import { PROTOCOL_VERSION } from "../shared/generated/protocol-version";
 import { connectedTo, NOTHING_YET } from "../shared/bridge";
 import { connects, skew } from "../shared/version";
 import type { BridgeState, Connection, Draft, Outcome, Watched } from "../shared/bridge";
+import type { JobHistory } from "../shared/history";
 import type {
   JobDetail,
   JobSummary,
@@ -24,6 +25,7 @@ import type {
 } from "../shared/protocol";
 import { ObserveSocket } from "./observe";
 import { ask, holdingsOf, isJobSummary } from "./request";
+import { decide, ReviewMaterial, type Decision } from "./review";
 import { auditPath, HOST, machinePath, read } from "./runtime-file";
 
 /** How long to wait before reading the runtime file again. */
@@ -53,7 +55,13 @@ export class FleetConnection {
   private watching: string | null = null;
   /** The Job whose turns are open. A second socket to Fleet — see `observe.ts`. */
   private observing: string | null = null;
+  /** The Job whose transition history is unfolded. `null` is no read. */
+  private recounting: string | null = null;
   private readonly turns: ObserveSocket;
+  /** The claims and the patch, each read when a surface asks — see `review.ts`. */
+  private readonly material: ReviewMaterial;
+  /** Jobs with a decision on the work in flight. One press sends one decision. */
+  private readonly deciding = new Set<string>();
   private stopped = false;
 
   constructor(wiring: Wiring) {
@@ -62,6 +70,7 @@ export class FleetConnection {
     // where its log is is half a failure.
     this.current = { ...NOTHING_YET, bridge: { auditPath: auditPath(wiring.home) } };
     this.turns = new ObserveSocket((observed) => this.publish({ observed }));
+    this.material = new ReviewMaterial((change) => this.publish(change));
   }
 
   /**
@@ -77,6 +86,8 @@ export class FleetConnection {
       await this.reread(fleet);
       await this.readHoldings(fleet);
       await this.readWatched(fleet);
+      await this.readMoves(fleet);
+      await this.material.reread(fleet.port);
     }
     return this.current;
   }
@@ -96,7 +107,9 @@ export class FleetConnection {
     // Watching ends with the window; the Job does not, because nothing observed
     // is written onto it.
     this.observing = null;
+    this.recounting = null;
     this.turns.close();
+    this.material.close();
   }
 
   // -------------------------------------------------------------- connecting
@@ -255,6 +268,20 @@ export class FleetConnection {
       return;
     }
 
+    if (event.kind === "job.files_changed") {
+      // **Only the open Job's, and the whole list rather than a fold.** The
+      // reading replaces what is held, so a file that stopped being changed
+      // leaves by not being in the next one — a stream of additions could never
+      // say that. A reading about a Job nobody has open is dropped: nothing on
+      // the Board changes when a file does.
+      const mine = this.watching === event.job_id;
+      this.publish({
+        connection,
+        ...(mine ? { footprint: { state: "read" as const, jobId: event.job_id, reading: event } } : {}),
+      });
+      return;
+    }
+
     const held = this.current.jobs.find((job) => job.id === event.job_id);
     if (held === undefined) {
       // `job.created` covers the ordinary case, so a move about a Job this
@@ -296,6 +323,12 @@ export class FleetConnection {
    */
   async watchJob(jobId: string | null): Promise<void> {
     this.watching = jobId;
+    // A footprint belongs to the Job it was read from. Carrying one into the
+    // next Job opened would draw another Drone's files under this Job's title.
+    const footprint = this.current.footprint;
+    if (footprint.state === "read" && footprint.jobId !== jobId) {
+      this.publish({ footprint: { state: "none" } });
+    }
     if (jobId === null) {
       this.publish({ watched: { state: "none" } });
       return;
@@ -311,6 +344,9 @@ export class FleetConnection {
 
   /** Re-read the open Job, where the event was about it. */
   private refresh(fleet: BridgeStateFleet, jobId: string): void {
+    // A history that is unfolded grows as the Job moves, so the move that was
+    // just delivered is read back rather than left off the end of the list.
+    if (this.recounting === jobId) void this.readMoves(fleet);
     if (this.watching !== jobId) return;
     void this.readWatched(fleet);
   }
@@ -335,6 +371,54 @@ export class FleetConnection {
     }
     const detail = answer.body as JobDetail;
     this.publish({ watched: { state: "read", jobId, detail }, readAt: this.wiring.now() });
+  }
+
+  // ------------------------------------------------------ one Job's history
+  /**
+   * Read one Job's transition history, or `null` to stop.
+   *
+   * **Its own operation, asked for rather than paid for.** `get_job` is fetched
+   * on every open of a Job; a history has no bound — it grows for as long as
+   * the Job lives, and a retried step is a row per attempt plus the moves
+   * around it. So the surface that draws it says when it wants one.
+   */
+  async readHistory(jobId: string | null): Promise<void> {
+    this.recounting = jobId;
+    if (jobId === null) {
+      this.publish({ history: { state: "none" } });
+      return;
+    }
+    this.publish({ history: { state: "reading", jobId } });
+    const fleet = this.connected();
+    if (fleet === null) {
+      const outcome: Outcome = { ok: false, why: "not_connected" };
+      this.publish({ history: { state: "failed", jobId, outcome } });
+      return;
+    }
+    await this.readMoves(fleet);
+  }
+
+  /**
+   * `GET /jobs/:job_id/events`, published whole.
+   *
+   * **The rows are carried, never folded.** `crates/store/src/fold.rs` owns the
+   * machine, and Fleet loads the Job before it reads the log — so a history
+   * that arrives is one the machine already admitted, and a second fold here
+   * would agree with the first only until one of them changed.
+   */
+  private async readMoves(fleet: BridgeStateFleet): Promise<void> {
+    const jobId = this.recounting;
+    if (jobId === null) return;
+    const path = `/jobs/${encodeURIComponent(jobId)}/events`;
+    const answer = await ask(fleet.port, "GET", path);
+    // The open section changed mid-read: nobody has this answer's Job open.
+    if (this.recounting !== jobId) return;
+    if (answer.ok !== true) {
+      this.publish({ history: { state: "failed", jobId, outcome: answer.outcome } });
+      return;
+    }
+    const read = answer.body as JobHistory;
+    this.publish({ history: { state: "read", jobId, moves: read.moves } });
   }
 
   // -------------------------------------------------------- one Job's turns
@@ -524,6 +608,65 @@ export class FleetConnection {
       return { ok: true };
     } finally {
       this.restarting.delete(jobId);
+    }
+  }
+
+  // ------------------------------------------------- one Job's work, reviewed
+  // The two reads and the three acts. What each one is and why it is its own
+  // entry is in `review.ts`; these hold the state the answers are published
+  // into, which is the only part that belongs to the connection.
+
+  /** What one Job's Drones claimed. The cheap half of the pair. */
+  async readEvidence(jobId: string | null): Promise<void> {
+    await this.material.evidence(this.connected()?.port ?? null, jobId);
+  }
+
+  /**
+   * One Job's worktree against its branch. **The expensive half, and the only
+   * place the patch bytes are spent** — called by the surface that draws a diff
+   * rather than by opening a Job, which is the separation
+   * `crates/adapter-traits/src/work_product.rs` records.
+   */
+  async readDiff(jobId: string | null): Promise<void> {
+    await this.material.diff(this.connected()?.port ?? null, jobId);
+  }
+
+  /** Take the work. On the last step Fleet commits and delivers first. */
+  async approveReview(jobId: string): Promise<Outcome> {
+    return this.settleWork(jobId, "approve_review");
+  }
+
+  /** Send it back. **`running` again**, same step, same Drone. Blank refused. */
+  async requestChanges(jobId: string, note: string): Promise<Outcome> {
+    if (note.trim() === "") return { ok: false, why: "empty_note" };
+    return this.settleWork(jobId, "request_changes", note);
+  }
+
+  /** A verdict on the work. **Terminal, and it ends the Drone.** */
+  async rejectWork(jobId: string): Promise<Outcome> {
+    return this.settleWork(jobId, "reject");
+  }
+
+  /**
+   * One decision, sent once. **One in flight per Job covers all three**: a
+   * second press aims at a Job that has already left `awaiting_review`, the
+   * only status any of the three is legal on.
+   */
+  private async settleWork(jobId: string, what: Decision, note?: string): Promise<Outcome> {
+    if (this.deciding.has(jobId)) return { ok: false, why: "already_deciding" };
+    const fleet = this.connected();
+    if (fleet === null) return { ok: false, why: "not_connected" };
+
+    this.deciding.add(jobId);
+    try {
+      const answer = await decide(fleet.port, jobId, what, note);
+      if (answer.ok !== true) return answer.outcome;
+      if (isJobSummary(answer.body)) this.fold(answer.body);
+      else await this.reread(fleet);
+      this.refresh(fleet, jobId);
+      return { ok: true };
+    } finally {
+      this.deciding.delete(jobId);
     }
   }
 

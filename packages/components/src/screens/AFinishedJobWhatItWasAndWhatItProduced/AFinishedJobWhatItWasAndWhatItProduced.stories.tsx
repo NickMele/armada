@@ -1,75 +1,25 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import type { LucideIcon } from "lucide-react";
-import { Check, File, Folder } from "lucide-react";
-import { Button } from "../../primitives/Button/Button";
-import { AFinishedJobABranchAndAnEvidenceTrail } from "./AFinishedJobABranchAndAnEvidenceTrail";
+import { Check, File, FileCheck, Folder, GitBranch, GitCommitHorizontal, GitPullRequest } from "lucide-react";
+import { JobBrief } from "../../compositions/JobBrief/JobBrief";
+import { JobLogReference } from "../../compositions/JobLogReference/JobLogReference";
+import { AFinishedJobWhatItWasAndWhatItProduced } from "./AFinishedJobWhatItWasAndWhatItProduced";
 
 /**
- * Journey · Read the work and merge by hand. The screen hands over a branch
- * name and gets out of the way: no approve, no reject, no merge, no in-app
- * diff.
+ * Journey · Read the work and merge by hand. A finished Job is read once, to
+ * decide whether to take the work, so the screen answers what it was and what
+ * it produced at full weight and folds the rest into a record.
  *
  * The header is `Job detail header actions`, the same component the running and
  * failed jobs render. A finished job reports what it ran rather than what step
- * it is on, and carries no action in the header.
+ * it is on.
  */
-const meta: Meta<typeof AFinishedJobABranchAndAnEvidenceTrail> = {
-  title: "Screens/A finished job — a branch and an evidence trail",
-  component: AFinishedJobABranchAndAnEvidenceTrail,
+const meta: Meta<typeof AFinishedJobWhatItWasAndWhatItProduced> = {
+  title: "Screens/A finished job — what it was and what it produced",
+  component: AFinishedJobWhatItWasAndWhatItProduced,
 };
 export default meta;
 
-type Story = StoryObj<typeof AFinishedJobABranchAndAnEvidenceTrail>;
-
-/* `file` and `file-check` have no entry in `packages/icons/icons.toml`. The log
-   row and every trail entry render a channel short rather than reaching for an
-   unregistered glyph. Reported. */
-const NO_GLYPH_IN_REGISTRY = undefined as unknown as LucideIcon;
-
-const entries = [
-  {
-    step: "Plan the change",
-    provenance: "14:02 · facts_note · no check",
-    icon: NO_GLYPH_IN_REGISTRY,
-    iconLabel: "Evidence",
-    claimed: "The poke loop stops after 3 attempts and the job records how many it spent.",
-    shownBy: "core/fleet/src/lease.rs · the loop has no ceiling today",
-    notClaimed:
-      "Does not change the poke interval, and does not decide what happens at the third failure.",
-  },
-  {
-    step: "Implement",
-    provenance: "14:11 · diff · build exit 0 · diff_nonempty passed",
-    icon: NO_GLYPH_IN_REGISTRY,
-    iconLabel: "Evidence",
-    claimed:
-      "A drone that stops answering is poked at most 3 times, and the count is on the job record.",
-    shownBy: "core/fleet/src/lease.rs +38 −7 · core/model/src/job.rs +14 −0",
-    notClaimed:
-      "The count is not surfaced in Bridge. Nothing acts on reaching the ceiling yet — the loop exits and the job keeps its status.",
-  },
-  {
-    step: "Run tests",
-    provenance: "14:16 · test_suite_run · test exit 0",
-    icon: NO_GLYPH_IN_REGISTRY,
-    iconLabel: "Evidence",
-    claimed: "The ceiling holds at 3 and the counter increments once per poke.",
-    shownBy:
-      "cargo test --workspace · 86 passed 0 failed 5.1s · lease::poke_ceiling_holds, lease::poke_count_increments",
-    notClaimed:
-      "No test covers a drone that answers on the third poke. The suite was green before this change and is green after, so it does not prove the ceiling is reached in practice.",
-  },
-  {
-    step: "Summarise",
-    provenance: "14:20 · facts_note · no check",
-    icon: NO_GLYPH_IN_REGISTRY,
-    iconLabel: "Evidence",
-    claimed: "The change is on fix/poke-ceiling and ready to read.",
-    shownBy: "3 files +214 −96 · branch fix/poke-ceiling",
-    notClaimed:
-      "The value 3 is a constant rather than config. Whether it is the right number is not established by anything here.",
-  },
-];
+type Story = StoryObj<typeof AFinishedJobWhatItWasAndWhatItProduced>;
 
 const heading = {
   status: "completed-success",
@@ -87,75 +37,172 @@ const heading = {
   ],
 };
 
-/**
- * Where the work is, on a Job that is over. **The branch is not repeated** —
- * the handover above names it, and this region is where to go looking rather
- * than what to take away. No path carries a count: nothing counts lines.
- */
-const WORK = {
-  brief: {
-    criteria: [
-      { text: "The poke loop stops after the configured number of attempts.", source: "check" },
-      { text: "A ceiling of zero is refused at load rather than at run.", source: "check" },
-    ],
-    facts: "The loop is in `fleet::poke`. The ceiling is a Machine setting, not a Kit one.",
-  },
-  rows: [
-    {
-      icon: Folder,
-      iconLabel: "Worktree",
-      value: "/repos/armada/.armada/worktrees/job_4f10",
-      copyValue: "/repos/armada/.armada/worktrees/job_4f10",
-    },
-    {
-      icon: File,
-      iconLabel: "Log",
-      value: "/repos/armada/.armada/logs/job_4f10.jsonl",
-      copyValue: "/repos/armada/.armada/logs/job_4f10.jsonl",
-    },
-    {
-      iconLabel: "Transcript",
-      value: "/repos/armada/.armada/transcripts/",
-      copyValue: "/repos/armada/.armada/transcripts/",
-      meta: "named by a drone id nothing serves",
-    },
+const brief = {
+  criteria: [
+    { text: "The poke loop stops after the configured number of attempts.", source: "check" },
+    { text: "A ceiling of zero is refused at load rather than at run.", source: "check" },
   ],
-  note: "The worktree and the log are derived from the job id and the repository the manifest was read from.",
 };
 
-export const FinishedJob: Story = {
+const NOTE =
+  "The branch is unpushed and unmerged. Armada does not push and has no merge action — read the diff in your own tools and land it yourself.";
+
+/** Where the work is, folded into the record: where to go looking, not what to take away. */
+const paths = (
+  <JobLogReference
+    rows={[
+      {
+        icon: Folder,
+        iconLabel: "Worktree",
+        value: "/repos/armada/.armada/worktrees/job_4f10",
+        copyValue: "/repos/armada/.armada/worktrees/job_4f10",
+      },
+      {
+        icon: File,
+        iconLabel: "Log",
+        value: "/repos/armada/.armada/logs/job_4f10.jsonl",
+        copyValue: "/repos/armada/.armada/logs/job_4f10.jsonl",
+        separated: true,
+      },
+      {
+        iconLabel: "Transcript",
+        value: "/repos/armada/.armada/transcripts/",
+        copyValue: "/repos/armada/.armada/transcripts/",
+        meta: "named by a drone id nothing serves",
+      },
+    ]}
+  >
+    The worktree, the log and the transcripts directory follow from the job id and the repository
+    its manifest was read from.
+  </JobLogReference>
+);
+
+const record = [
+  { id: "steps", label: "Steps and checks", panel: <Stub>The workflow rail goes here.</Stub> },
+  { id: "turns", label: "The drone's turns", panel: <Stub>The transcript goes here.</Stub> },
+  {
+    id: "told",
+    label: "What it was told",
+    panel: (
+      <JobBrief
+        criteria={[]}
+        only="facts"
+        facts="The loop is in `fleet::poke`. The ceiling is a Machine setting, not a Kit one."
+      />
+    ),
+  },
+  { id: "paths", label: "Where the work is", panel: paths },
+];
+
+/**
+ * The screen as Bridge draws it today: a branch, and four parts of "produced"
+ * that nothing serves. Each keeps its row and names what would have to serve
+ * it, so the gap is a finding rather than a silence.
+ */
+export const AsBridgeDrawsItToday: Story = {
   render: () => (
     <div className="armada-screen">
-      <AFinishedJobABranchAndAnEvidenceTrail
+      <AFinishedJobWhatItWasAndWhatItProduced
         heading={heading}
-        handover={{
-          branch: "fix/poke-ceiling",
-          meta: "from main · 3 files +214 −96",
-          action: <Button ground="sunken">Open the worktree</Button>,
-          // No `log` here: the region beneath names the log along with the
-          // worktree and the transcript, and one path drawn twice is two
-          // places to keep in step.
-          // Operator copy, not commentary: it is addressed to the person using
-          // the app and states the one thing this screen exists to say.
-          note: "The branch is unpushed and unmerged. Armada does not push and has no merge action — read the diff in your own tools and land it yourself.",
+        brief={brief}
+        outcome={{
+          note: NOTE,
+          parts: [
+            {
+              name: "Branch",
+              icon: GitBranch,
+              iconLabel: "Branch",
+              value: "fix/poke-ceiling",
+            },
+            {
+              name: "Commit",
+              icon: GitCommitHorizontal,
+              iconLabel: "Commit",
+              absent: "Fleet does not commit at the last step yet, so there is nothing to name.",
+            },
+            {
+              name: "Pull request",
+              icon: GitPullRequest,
+              iconLabel: "Pull request",
+              absent: "Fleet does not open one yet, so there is nothing to open.",
+            },
+            {
+              /* No glyph: `file` is reserved to the log row and `file-check` to
+                 a submission that landed, so a changed-file row has nothing in
+                 the registry to take. The mark column stays and renders empty. */
+              name: "Files changed",
+              absent:
+                "job.files_changed is published while a drone is working. Nothing serves a finished job's footprint.",
+            },
+            {
+              name: "Evidence",
+              icon: FileCheck,
+              iconLabel: "Evidence",
+              absent: "No operation serves a work submission, so there is nothing to draw.",
+            },
+          ],
         }}
-        work={WORK}
-        trail={entries}
-        trailMeta="4 submissions · in order"
+        record={record}
+        recordValue="steps"
+      />
+    </div>
+  ),
+};
+
+/** Every part of "produced" served — what the lead region becomes as they land. */
+export const EveryPartServed: Story = {
+  render: () => (
+    <div className="armada-screen">
+      <AFinishedJobWhatItWasAndWhatItProduced
+        heading={heading}
+        brief={brief}
+        outcome={{
+          note: NOTE,
+          parts: [
+            {
+              name: "Branch",
+              icon: GitBranch,
+              iconLabel: "Branch",
+              value: "fix/poke-ceiling",
+              meta: "from main",
+            },
+            {
+              name: "Commit",
+              icon: GitCommitHorizontal,
+              iconLabel: "Commit",
+              value: "9f2c1ab",
+            },
+            {
+              name: "Pull request",
+              icon: GitPullRequest,
+              iconLabel: "Pull request",
+              value: "armada#42",
+            },
+            { name: "Files changed", value: "3 files", meta: "+214 −96" },
+            {
+              name: "Evidence",
+              icon: FileCheck,
+              iconLabel: "Evidence",
+              value: "4 submissions",
+            },
+          ],
+        }}
+        record={record}
+        recordValue="told"
       />
     </div>
   ),
 };
 
 /**
- * The same screen with only what `GET /jobs` carries — which is what Bridge
- * draws today. Neither the branch nor the evidence trail is on the wire, so
- * both regions say what is missing instead of closing up.
+ * A Job read before its detail arrived. Both lead regions say which of the two
+ * silences this is, and the record folds nothing rather than showing a strip
+ * with no panel under it.
  */
-export const AsBridgeDrawsItToday: Story = {
+export const BeforeTheDetailArrives: Story = {
   render: () => (
     <div className="armada-screen">
-      <AFinishedJobABranchAndAnEvidenceTrail
+      <AFinishedJobWhatItWasAndWhatItProduced
         heading={{
           status: "completed-success",
           statusIcon: Check,
@@ -167,7 +214,15 @@ export const AsBridgeDrawsItToday: Story = {
             { label: "Model", value: "sonnet", mono: true },
           ],
         }}
+        briefAbsent="Reading this job."
+        outcomeAbsent="Reading this job."
+        recordAbsent="Reading this job, so there is no record to fold yet."
       />
     </div>
   ),
 };
+
+/** Standing in for a component another issue builds, so the strip can be read. */
+function Stub({ children }: { children: string }) {
+  return <p className="armada-record__note">{children}</p>;
+}

@@ -1,0 +1,33 @@
+/* Job record — the tab strip and the one open section under it.
+
+   No frame and no fill of its own: the strip's own rule is the only edge the
+   component sheet gives a tab group, and a card around it would put a second
+   border a few pixels from the first. What each section draws carries its own
+   surface — a rail is a well, a transcript is a well — so the panel is a
+   container for one of them and never a surface itself. */
+.armada-record {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The open section. `min-width: 0` is load-bearing: without it a transcript
+   row wider than the window makes the panel demand that width and the whole
+   page scrolls sideways instead of the row truncating. */
+.armada-record__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* A record with no section at all. Never a bare tab strip with nothing under
+   it — a label with no panel reads as a section that failed to load. */
+.armada-record__note {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}

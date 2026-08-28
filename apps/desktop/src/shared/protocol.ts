@@ -304,7 +304,8 @@ export type Missed = { dropped: number };
 export type Event =
   | ({ kind: "job.created" } & JobCreated)
   | ({ kind: "job.state_changed" } & JobStateChanged)
-  | ({ kind: "job.step_advanced" } & JobStepAdvanced);
+  | ({ kind: "job.step_advanced" } & JobStepAdvanced)
+  | ({ kind: "job.files_changed" } & JobFilesChanged);
 
 /**
  * A Job exists that did not before, carrying the row whole.
@@ -349,6 +350,54 @@ export type JobStepAdvanced = {
   status: string;
   actor: string;
   at: string;
+};
+
+/**
+ * What the working Drone has changed in its worktree, as of one reading.
+ * `crates/ipc/src/event.rs`.
+ *
+ * **The whole footprint, not a delta.** A client replaces the list it holds
+ * rather than folding this into one, so a file that stopped being changed — a
+ * revert, a checkout — leaves the view by not being in the next reading.
+ *
+ * It names no `JobSummary`, unlike the kinds that move a row: nothing on the
+ * Board changes when a file does, and this is read by a detail view somebody
+ * opened on one Job.
+ */
+export type JobFilesChanged = {
+  job_id: string;
+  /** Which step's Drone did it. The footprint is the Job's whole work. */
+  step_id: string;
+  drone_id: string;
+  /**
+   * Whether the step has a declared plan for `outside_plan` to mean anything.
+   * **False is "there is no plan", not "nothing drifted"**, and a surface that
+   * drew the two the same way would report every unscoped step as on plan.
+   */
+  plan_declared: boolean;
+  /** Every file, in the order the reading found them. Empty is a real answer. */
+  files: ChangedFile[];
+  actor: string;
+  at: string;
+};
+
+/**
+ * One file in the Drone's footprint. **A name and a kind, never bytes** — what
+ * changed inside a file is the patch, which is read only when a Judge fires and
+ * is deliberately not on this seam.
+ */
+export type ChangedFile = {
+  /** Repository-relative, exactly as git spells it. */
+  path: string;
+  /** `added`, `modified`, `deleted`, `renamed`, `copied`, `type_changed`,
+   * `conflicted`, `unreadable`. Left as `string` like every other closed set. */
+  change: string;
+  /**
+   * Not covered by the plan the step declared. **A mark, not a judgement** —
+   * it restates a comparison already made and decides nothing. Always false
+   * where the step declared no plan, which is what `plan_declared` is for.
+   */
+  outside_plan?: boolean;
 };
 
 /** One workflow Fleet holds. `crates/ipc/src/setup.rs`. */
@@ -410,66 +459,3 @@ export type WireError = {
   drone_id?: string;
   step_id?: string;
 };
-
-// ------------------------------------------------------------ one Job's turns
-//
-// `GET /jobs/:job_id/observe`, the one query whose transport is a socket.
-// Read-only: nothing here has a request half, and nothing here reaches a Drone.
-
-/** One message on a Job's Observe socket. `crates/ipc/src/turn.rs`. */
-export type TurnMessage =
-  | ({ message: "opened" } & Opened)
-  | ({ message: "row"; ts: string } & Saw)
-  | ({ message: "missed" } & Missed)
-  | ({ message: "closed" } & Closed);
-
-/** The first message on every connection, before any row. */
-export type Opened = {
-  protocol_version: ProtocolVersion;
-  job_id: string;
-  /** Whether a Drone was writing when this opened. `false` is ordinary. */
-  live: boolean;
-  /** Older rows the bounded backfill left out. Never a silent truncation. */
-  skipped: number;
-};
-
-/** Nothing more is coming, and why. A socket that simply stops says nothing. */
-export type Closed = {
-  /** `drone_ended` or `nothing_writing`. */
-  because: string;
-};
-
-/**
- * One row of a Drone's transcript, as a viewer is shown it.
- *
- * The tag is `event` and not `kind`, because `unrecognised` already carries a
- * `kind`. Three of the file's kinds never arrive here — `quota_moved`, `ended`
- * and the sink's own `missed` — so no case is written for them.
- */
-export type Saw =
-  | { event: "started"; session: string; model: string; mcp_servers: number }
-  /**
-   * The Drone reached for a tool.
-   *
-   * **`detail` is not on the wire yet, and the name here is a placeholder.**
-   * `Saw::Called` carries a tool and an opaque call id, so a pane reads
-   * `Bash · toolu_01Haa…` twenty-two times over — measured on one transcript.
-   * What the call did is being added on Fleet's side; this is the field the
-   * renderer reads when it lands, and nothing fakes it from the tool name in
-   * the meantime. Reconcile the spelling against `crates/ipc/src/turn.rs`.
-   *
-   * It is bounded and may be cut: a `Write` argument is a whole file.
-   */
-  | {
-      event: "called";
-      tool: string;
-      call: string;
-      detail?: string;
-      /** Whether `detail` was cut short. Never rendered as the whole value. */
-      truncated?: boolean;
-    }
-  | { event: "answered"; call: string; failed: boolean }
-  | { event: "said"; text: string }
-  | { event: "refused"; tool: string; call: string; because: string }
-  | { event: "unrecognised"; kind: string }
-  | { event: "unreadable"; line: string; why: string };

@@ -13,7 +13,7 @@
 import WebSocket from "ws";
 
 import type { Observed, Turn, Turns } from "../shared/bridge";
-import type { TurnMessage } from "../shared/protocol";
+import type { TurnMessage } from "../shared/turn";
 import { HOST } from "./runtime-file";
 
 /** Nothing has arrived yet, and nothing has been lost. */
@@ -114,7 +114,12 @@ export class ObserveSocket {
     }
 
     // `closed` carries why, because a socket that simply stops is
-    // indistinguishable from one that broke. The rows are kept.
+    // indistinguishable from one that broke. The rows are kept, and the socket
+    // is let go here rather than left to close under its own event: Fleet sends
+    // `closed` and *then* closes, so a listener still attached would answer the
+    // transport's close by restating the transport — overwriting `drone_ended`,
+    // the one reason a viewer actually wanted, with "the connection closed".
+    this.close();
     this.turns = { ...this.turns, live: false };
     this.publish({ state: "ended", jobId, turns: this.turns, because: message.because });
   }

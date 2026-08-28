@@ -1,0 +1,187 @@
+/* Unified diff — a well, because it is a record being read rather than a
+   surface being acted on. The same treatment the rail, the transcript and the
+   changed-file list take, and for the same reason: nothing in it is actionable.
+   The decision sits beneath it as its own region. */
+.armada-diff {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+}
+
+/* One file: its header, then its lines. `min-width: 0` on every level, because
+   a diff is the widest content in the app and a track that will not shrink
+   makes the whole page scroll sideways instead — the failure this app exists
+   to escape. */
+.armada-diff__file {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: var(--radius-sm);
+  border: var(--border-width) solid var(--border-subtle);
+  overflow: hidden;
+}
+
+/* The file's own row. Raised against the well beneath it, so the boundary
+   between two files is a surface change rather than a rule somebody has to
+   find while scrolling. Sticky: the path is what every line under it is about,
+   and a diff scrolled far enough to lose it is a diff of nothing in
+   particular. */
+.armada-diff__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-raised);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+/* The path. Mono, because it is machine-derived, and it copies on click — a
+   path is a thing that gets pasted into a shell. It says so by going to
+   --accent on hover: no `copy` glyph, the affordance token is the affordance. */
+.armada-diff__path {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-diff__path:hover {
+  color: var(--accent);
+}
+
+/* What git said about the file that is not a line of it. Mono and muted: it is
+   machine output labelling the path rather than being one. */
+.armada-diff__meta {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+/* Outside the declared plan. Sans, because it is a phrase and not a value, and
+   --fg-default against muted neighbours — weight, not hue. `ChangedFiles` marks
+   a drifted row the same way; a second treatment here would be a second
+   vocabulary for one fact. */
+.armada-diff__mark {
+  margin-left: auto;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+  white-space: nowrap;
+  flex: none;
+}
+
+.armada-diff__head[data-outside] {
+  background: var(--bg-hover);
+}
+
+/* The lines. `overflow-x` on the list rather than on the page, so a long line
+   scrolls its own file and the layout around it holds still. */
+.armada-diff__lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+  overflow-x: auto;
+  background: var(--bg-base);
+}
+
+.armada-diff__line {
+  min-width: 0;
+}
+
+/* Nothing wraps. A diff that reflowed would move the +/- marker off the column
+   that identifies the line by it, which is the one thing this rendering has to
+   keep. Long lines scroll the file, not the window. */
+.armada-diff__text {
+  margin: 0;
+  padding: 0 var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  white-space: pre;
+  color: var(--diff-context);
+}
+
+/* The three kinds git writes. The marker is in the text and carries the claim
+   on its own; these are what make the shape of a change readable at a glance,
+   not what states it. */
+.armada-diff__line[data-kind="added"] .armada-diff__text {
+  background: var(--diff-add-bg);
+  color: var(--diff-add-fg);
+}
+
+.armada-diff__line[data-kind="removed"] .armada-diff__text {
+  background: var(--diff-del-bg);
+  color: var(--diff-del-fg);
+}
+
+/* git's own `@@` header. Neither added nor removed, so neither hue — it is a
+   position, and it reads as one: set back, on the file's own surface. */
+.armada-diff__line[data-kind="hunk"] .armada-diff__text {
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+  background: var(--bg-raised);
+  color: var(--fg-subtle);
+}
+
+/* The patch was longer than the bound and the rest is not on screen. Loud,
+   because a decision taken on part of a diff is the failure this surface
+   exists to prevent — the same treatment an unbuilt region takes, for the same
+   reason: it is the loudest claim a screen can make about itself. */
+.armada-diff__cut {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--status-completed-failed);
+  background: var(--status-completed-failed-bg);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+  text-wrap: pretty;
+}
+
+/* Where the reading came from. Sans, because it is a sentence about the diff
+   rather than a line of it. */
+.armada-diff__note {
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: var(--border-width) solid var(--border-subtle);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* No patch at all. A drone that changed nothing is an ordinary answer, so this
+   is a sentence in the well rather than an error treatment — the caller's
+   sentence says which of the three silences this one is. */
+.armada-diff__empty {
+  margin: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}

@@ -8,6 +8,19 @@
 // `fleet.elapsed` is the connection's own reading and rounds to one unit,
 // which is right for "last read 4m ago" and wrong for a step that took 4m 09s.
 
+/**
+ * The instant, as a wall clock. **Not a relative age** — a transcript and a
+ * history are both read down, and "4m ago" on every row changes meaning while
+ * it is being read. The date is dropped: every row on screen is one Job's.
+ *
+ * One definition, because the turns and the transition history sit in the same
+ * record one tab apart, and two instants in two shapes read as two clocks.
+ */
+export function clock(at: string): string {
+  const ms = instant(at);
+  return ms === null ? at : new Date(ms).toLocaleTimeString([], { hour12: false });
+}
+
 /** An RFC 3339 instant, in epoch milliseconds. `null` where it will not parse. */
 export function instant(at: string): number | null {
   const ms = Date.parse(at);

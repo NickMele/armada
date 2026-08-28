@@ -1,0 +1,58 @@
+/* Review decision — a card and not a well. Every other region on this screen is
+   a record being read; this is the one thing on it that acts, and the surface
+   is what says so before a label is read. */
+.armada-decision {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--pad-card);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  border: var(--border-width) solid var(--border-default);
+}
+
+/* The two answers that leave something behind. Together, because they are the
+   pair a reader chooses between; `wrap` because the window has a floor and two
+   labelled controls at that floor is the case that overflows first. */
+.armada-decision__kept {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* What an act does, said beneath it. Sans, muted, and set against the labels
+   above — it is read once and the label is what is found afterwards. */
+.armada-decision__said {
+  margin: 0;
+  max-width: 88ch;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* The rule between the recoverable pair and the terminal act. It carries its
+   own space here rather than in the primitive, which is what `Separator` says:
+   spacing belongs to the thing doing the separating. */
+.armada-decision__rule {
+  margin-top: var(--space-1);
+}
+
+/* The terminal act, alone. Its sentence sits under it rather than beside it,
+   so the control is not read as one of a row. */
+.armada-decision__terminal {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+/* The one sentence that names an end. --fg-default against the muted ones
+   above: weight, not hue — the control beside it already carries the only red
+   this region is allowed, and saying it twice would make the pair above read
+   as safe rather than as recoverable. */
+.armada-decision__said[data-terminal] {
+  color: var(--fg-default);
+}
