@@ -6,26 +6,24 @@
 // data it does not have is missing a preload call, not a fetch of its own.
 //
 // **Bridge never talks to a Drone.** Everything below names Fleet.
+//
+// What is here is the socket, the runtime file, the state machine, and the
+// reads that keep it current. What is none of those sits beside it and is
+// handed a port: `request.ts` sends, `command.ts` acts on a Job, `review.ts`
+// reads the work, `observe.ts` holds the second socket.
 
 import WebSocket from "ws";
 
 import { PROTOCOL_VERSION } from "../shared/generated/protocol-version";
 import { connectedTo, NOTHING_YET } from "../shared/bridge";
 import { connects, skew } from "../shared/version";
-import type { BridgeState, Connection, Draft, Outcome, Watched } from "../shared/bridge";
+import type { BridgeState, Connection, Outcome } from "../shared/bridge";
 import type { JobHistory } from "../shared/history";
-import type {
-  JobDetail,
-  JobSummary,
-  ProposeJob,
-  Redirection,
-  Redispatched,
-  StreamMessage,
-  WireError,
-} from "../shared/protocol";
+import type { JobDetail, JobSummary, StreamMessage } from "../shared/protocol";
+import { JobCommands } from "./command";
 import { ObserveSocket } from "./observe";
-import { ask, holdingsOf, isJobSummary } from "./request";
-import { decide, ReviewMaterial, type Decision } from "./review";
+import { ask, holdingsOf } from "./request";
+import { ReviewMaterial } from "./review";
 import { auditPath, HOST, machinePath, read } from "./runtime-file";
 
 /** How long to wait before reading the runtime file again. */
@@ -46,11 +44,6 @@ export class FleetConnection {
   private socket: WebSocket | null = null;
   private retry: ReturnType<typeof setTimeout> | null = null;
   private unreachableSince: number | null = null;
-  private readonly approving = new Set<string>();
-  private readonly redispatching = new Set<string>();
-  private readonly killing = new Set<string>();
-  private readonly redirecting = new Set<string>();
-  private readonly restarting = new Set<string>();
   /** The Job whose detail is open. `null` is no detail, and no read. */
   private watching: string | null = null;
   /** The Job whose turns are open. A second socket to Fleet — see `observe.ts`. */
@@ -60,8 +53,12 @@ export class FleetConnection {
   private readonly turns: ObserveSocket;
   /** The claims and the patch, each read when a surface asks — see `review.ts`. */
   private readonly material: ReviewMaterial;
-  /** Jobs with a decision on the work in flight. One press sends one decision. */
-  private readonly deciding = new Set<string>();
+  /**
+   * Every act on a Job — see `command.ts`. Reached through this rather than
+   * re-exported one method at a time: a delegator carries no reasoning, and
+   * nine of them would be nine places for the reasoning to go missing.
+   */
+  readonly commands: JobCommands;
   private stopped = false;
 
   constructor(wiring: Wiring) {
@@ -71,6 +68,13 @@ export class FleetConnection {
     this.current = { ...NOTHING_YET, bridge: { auditPath: auditPath(wiring.home) } };
     this.turns = new ObserveSocket((observed) => this.publish({ observed }));
     this.material = new ReviewMaterial((change) => this.publish(change));
+    this.commands = new JobCommands({
+      port: () => this.connected()?.port ?? null,
+      fold: (job) => this.fold(job),
+      reread: (port) => this.reread(port),
+      refresh: (port, jobId) => this.refresh(port, jobId),
+      publish: (change) => this.publish(change),
+    });
   }
 
   /**
@@ -83,10 +87,10 @@ export class FleetConnection {
   async state(): Promise<BridgeState> {
     const fleet = this.connected();
     if (fleet !== null) {
-      await this.reread(fleet);
-      await this.readHoldings(fleet);
-      await this.readWatched(fleet);
-      await this.readMoves(fleet);
+      await this.reread(fleet.port);
+      await this.readHoldings(fleet.port);
+      await this.readWatched(fleet.port);
+      await this.readMoves(fleet.port);
       await this.material.reread(fleet.port);
     }
     return this.current;
@@ -227,9 +231,9 @@ export class FleetConnection {
       });
       // What a proposal may name: read once per connection, because it changes
       // when Fleet restarts rather than when a Job moves.
-      void this.readHoldings(fleet);
+      void this.readHoldings(fleet.port);
       // A resync says nothing about the open Job's steps, so it is re-read.
-      void this.readWatched(fleet);
+      void this.readWatched(fleet.port);
       // A pane left open across a Fleet restart reopens its own socket. Only
       // where it has none: a resync arrives after every dropped event too, and
       // reopening a working socket would restart the transcript from the top.
@@ -264,7 +268,7 @@ export class FleetConnection {
       // either by hand is how half a row goes stale.
       this.publish({ connection });
       this.fold(event.job);
-      this.refresh(fleet, event.job.id);
+      this.refresh(fleet.port, event.job.id);
       return;
     }
 
@@ -287,7 +291,7 @@ export class FleetConnection {
       // `job.created` covers the ordinary case, so a move about a Job this
       // window has never seen means a message was missed.
       this.publish({ connection });
-      void this.reread(fleet);
+      void this.reread(fleet.port);
       return;
     }
     const moved: JobSummary = { ...held, status: event.to, reason: event.reason };
@@ -296,11 +300,11 @@ export class FleetConnection {
       jobs: this.current.jobs.map((job) => (job.id === moved.id ? moved : job)),
       readAt: this.wiring.now(),
     });
-    this.refresh(fleet, moved.id);
+    this.refresh(fleet.port, moved.id);
   }
 
-  private async reread(fleet: BridgeStateFleet): Promise<void> {
-    const answer = await ask(fleet.port, "GET", "/jobs");
+  private async reread(port: number): Promise<void> {
+    const answer = await ask(port, "GET", "/jobs");
     if (answer.ok !== true) return;
     const list = answer.body as { jobs: JobSummary[]; unreadable?: [] };
     this.publish({
@@ -311,8 +315,8 @@ export class FleetConnection {
   }
 
   /** What a proposal may name. The reads are `request.ts`'s; the state is here. */
-  private async readHoldings(fleet: BridgeStateFleet): Promise<void> {
-    this.publish({ holds: await holdingsOf(fleet.port, this.current.holds) });
+  private async readHoldings(port: number): Promise<void> {
+    this.publish({ holds: await holdingsOf(port, this.current.holds) });
   }
 
   // ----------------------------------------------------------- one Job, whole
@@ -339,16 +343,16 @@ export class FleetConnection {
       this.publish({ watched: { state: "failed", jobId, outcome: { ok: false, why: "not_connected" } } });
       return;
     }
-    await this.readWatched(fleet);
+    await this.readWatched(fleet.port);
   }
 
   /** Re-read the open Job, where the event was about it. */
-  private refresh(fleet: BridgeStateFleet, jobId: string): void {
+  private refresh(port: number, jobId: string): void {
     // A history that is unfolded grows as the Job moves, so the move that was
     // just delivered is read back rather than left off the end of the list.
-    if (this.recounting === jobId) void this.readMoves(fleet);
+    if (this.recounting === jobId) void this.readMoves(port);
     if (this.watching !== jobId) return;
-    void this.readWatched(fleet);
+    void this.readWatched(port);
   }
 
   /**
@@ -356,11 +360,11 @@ export class FleetConnection {
    * detail rather than blanking the screen, but only for the same Job — a first
    * read that fails has nothing to fall back to and says so.
    */
-  private async readWatched(fleet: BridgeStateFleet): Promise<void> {
+  private async readWatched(port: number): Promise<void> {
     const jobId = this.watching;
     if (jobId === null) return;
     const path = `/jobs/${encodeURIComponent(jobId)}`;
-    const answer = await ask(fleet.port, "GET", path);
+    const answer = await ask(port, "GET", path);
     // The open Job changed mid-read: nobody has this answer's Job open.
     if (this.watching !== jobId) return;
     if (answer.ok !== true) {
@@ -395,7 +399,7 @@ export class FleetConnection {
       this.publish({ history: { state: "failed", jobId, outcome } });
       return;
     }
-    await this.readMoves(fleet);
+    await this.readMoves(fleet.port);
   }
 
   /**
@@ -406,11 +410,11 @@ export class FleetConnection {
    * that arrives is one the machine already admitted, and a second fold here
    * would agree with the first only until one of them changed.
    */
-  private async readMoves(fleet: BridgeStateFleet): Promise<void> {
+  private async readMoves(port: number): Promise<void> {
     const jobId = this.recounting;
     if (jobId === null) return;
     const path = `/jobs/${encodeURIComponent(jobId)}/events`;
-    const answer = await ask(fleet.port, "GET", path);
+    const answer = await ask(port, "GET", path);
     // The open section changed mid-read: nobody has this answer's Job open.
     if (this.recounting !== jobId) return;
     if (answer.ok !== true) {
@@ -432,189 +436,10 @@ export class FleetConnection {
     this.turns.open(this.connected()?.port ?? null, jobId);
   }
 
-  // ---------------------------------------------------------------- commands
-
-  /** Draft a Job onto the approval gate. What comes back is not a running Job. */
-  async proposeJob(draft: Draft): Promise<Outcome> {
-    // Refused here and not only in the form, whose check is a courtesy.
-    if (draft.title.trim() === "") return { ok: false, why: "empty_title" };
-    if (draft.brief.trim() === "") return { ok: false, why: "empty_brief" };
-    // Ids Fleet holds. An empty one is an unfilled form, not a value to send.
-    if (draft.workflowId === "") return { ok: false, why: "no_workflow" };
-    if (draft.manifestId === "") return { ok: false, why: "no_manifest" };
-    const fleet = this.connected();
-    if (fleet === null) return { ok: false, why: "not_connected" };
-
-    const proposal: ProposeJob = {
-      // Rust stores a trimmed `Title`, so padding makes what comes back
-      // differ from what was sent.
-      title: draft.title.trim(),
-      workflow_id: draft.workflowId,
-      owner_manifest_id: draft.manifestId,
-      origin: draft.origin,
-      urgency: draft.urgency,
-      atomic: draft.atomic,
-      // Omitted rather than sent empty: `""` reads like a value, and Fleet
-      // fills it from configuration.
-      ...(draft.model === "" ? {} : { model: draft.model }),
-      facts: draft.brief,
-      // Sent unconditionally, even empty: unlike `model` there is no
-      // meaningful absent-vs-empty reading for Fleet to fill in.
-      attachments: draft.attachments.map((attachment) => ({
-        staged_path: attachment.path,
-        filename: attachment.filename,
-        mime_type: attachment.mimeType,
-      })),
-    };
-    const answer = await ask(fleet.port, "POST", "/jobs", proposal);
-    if (answer.ok !== true) return answer.outcome;
-    this.fold(answer.body as JobSummary);
-    return { ok: true };
-  }
-
-  /** Release a Job to spawn. Approving twice does not spawn twice. */
-  async approveDispatch(jobId: string): Promise<Outcome> {
-    if (this.approving.has(jobId)) return { ok: false, why: "already_approving" };
-    const fleet = this.connected();
-    if (fleet === null) return { ok: false, why: "not_connected" };
-
-    this.approving.add(jobId);
-    this.publish({ approving: [...this.approving] });
-    try {
-      const path = `/jobs/${encodeURIComponent(jobId)}/approve_dispatch`;
-      const answer = await ask(fleet.port, "POST", path);
-      if (answer.ok !== true) return answer.outcome;
-      this.fold(answer.body as JobSummary);
-      return { ok: true };
-    } finally {
-      this.approving.delete(jobId);
-      this.publish({ approving: [...this.approving] });
-    }
-  }
-
-  /**
-   * Kill the failed Job and mint its replacement. **Nothing is reopened.**
-   *
-   * Two Jobs come back because a redispatch is two acts, and both are folded so
-   * the board shows the lineage. Accepted only from `escalated`.
-   */
-  async redispatchJob(jobId: string): Promise<Outcome> {
-    if (this.redispatching.has(jobId)) return { ok: false, why: "already_redispatching" };
-    const fleet = this.connected();
-    if (fleet === null) return { ok: false, why: "not_connected" };
-
-    this.redispatching.add(jobId);
-    try {
-      const path = `/jobs/${encodeURIComponent(jobId)}/redispatch`;
-      const answer = await ask(fleet.port, "POST", path);
-      if (answer.ok !== true) return answer.outcome;
-      const both = answer.body as Redispatched;
-      // Folding whatever a route answered would put a malformed row on the
-      // board.
-      if (!isJobSummary(both.replaced) || !isJobSummary(both.dispatched)) {
-        await this.reread(fleet);
-        return { ok: true };
-      }
-      this.fold(both.replaced);
-      this.fold(both.dispatched);
-      // The replacement's id: the Job the caller asked about is over, and the
-      // one worth opening did not exist a moment ago.
-      return { ok: true, jobId: both.dispatched.id };
-    } finally {
-      this.redispatching.delete(jobId);
-    }
-  }
-
-  /** Kill the Drone. **The Job survives**, its worktree held for a redispatch. */
-  async killDrone(jobId: string): Promise<Outcome> {
-    return this.kill(jobId, "kill_drone");
-  }
-
-  /**
-   * End the Job at `killed`, terminal. Legal from every non-terminal status,
-   * including those no Drone ran under — which is why it is not the same act,
-   * or the same button, as killing one.
-   */
-  async killJob(jobId: string): Promise<Outcome> {
-    return this.kill(jobId, "kill_job");
-  }
-
-  /** One in flight per Job covers both kills: a second press aims at a row
-   * that has already moved. */
-  private async kill(jobId: string, operation: "kill_drone" | "kill_job"): Promise<Outcome> {
-    if (this.killing.has(jobId)) return { ok: false, why: "already_killing" };
-    const fleet = this.connected();
-    if (fleet === null) return { ok: false, why: "not_connected" };
-
-    this.killing.add(jobId);
-    try {
-      const path = `/jobs/${encodeURIComponent(jobId)}/${operation}`;
-      const answer = await ask(fleet.port, "POST", path);
-      if (answer.ok !== true) return answer.outcome;
-      if (isJobSummary(answer.body)) this.fold(answer.body);
-      else await this.reread(fleet);
-      this.refresh(fleet, jobId);
-      return { ok: true };
-    } finally {
-      this.killing.delete(jobId);
-    }
-  }
-
-  /**
-   * Say something to the Drone that is there. **The Job comes back
-   * `running`**, at the same step, with the same Drone — nothing was spawned
-   * and nothing was thrown away. Blank is refused before the request is
-   * sent, matching the 422 Fleet would give it.
-   */
-  async redirectDrone(jobId: string, instruction: string): Promise<Outcome> {
-    if (instruction.trim() === "") return { ok: false, why: "empty_instruction" };
-    if (this.redirecting.has(jobId)) return { ok: false, why: "already_redirecting" };
-    const fleet = this.connected();
-    if (fleet === null) return { ok: false, why: "not_connected" };
-
-    this.redirecting.add(jobId);
-    try {
-      const path = `/jobs/${encodeURIComponent(jobId)}/redirect`;
-      const body: Redirection = { instruction };
-      const answer = await ask(fleet.port, "POST", path, body);
-      if (answer.ok !== true) return answer.outcome;
-      if (isJobSummary(answer.body)) this.fold(answer.body);
-      else await this.reread(fleet);
-      this.refresh(fleet, jobId);
-      return { ok: true };
-    } finally {
-      this.redirecting.delete(jobId);
-    }
-  }
-
-  /**
-   * Put a fresh Drone on the worktree the last one left, at the step that
-   * stopped. **One Job comes back**, resuming rather than replacing — the
-   * whole difference between this and a redispatch.
-   */
-  async restartStep(jobId: string): Promise<Outcome> {
-    if (this.restarting.has(jobId)) return { ok: false, why: "already_restarting" };
-    const fleet = this.connected();
-    if (fleet === null) return { ok: false, why: "not_connected" };
-
-    this.restarting.add(jobId);
-    try {
-      const path = `/jobs/${encodeURIComponent(jobId)}/restart_step`;
-      const answer = await ask(fleet.port, "POST", path);
-      if (answer.ok !== true) return answer.outcome;
-      if (isJobSummary(answer.body)) this.fold(answer.body);
-      else await this.reread(fleet);
-      this.refresh(fleet, jobId);
-      return { ok: true };
-    } finally {
-      this.restarting.delete(jobId);
-    }
-  }
-
   // ------------------------------------------------- one Job's work, reviewed
-  // The two reads and the three acts. What each one is and why it is its own
-  // entry is in `review.ts`; these hold the state the answers are published
-  // into, which is the only part that belongs to the connection.
+  // The two reads. What each one is and why it is its own entry is in
+  // `review.ts`; these hold the port the reads are made over, which is the only
+  // part that belongs to the connection. The three decisions are `command.ts`'s.
 
   /** What one Job's Drones claimed. The cheap half of the pair. */
   async readEvidence(jobId: string | null): Promise<void> {
@@ -629,45 +454,6 @@ export class FleetConnection {
    */
   async readDiff(jobId: string | null): Promise<void> {
     await this.material.diff(this.connected()?.port ?? null, jobId);
-  }
-
-  /** Take the work. On the last step Fleet commits and delivers first. */
-  async approveReview(jobId: string): Promise<Outcome> {
-    return this.settleWork(jobId, "approve_review");
-  }
-
-  /** Send it back. **`running` again**, same step, same Drone. Blank refused. */
-  async requestChanges(jobId: string, note: string): Promise<Outcome> {
-    if (note.trim() === "") return { ok: false, why: "empty_note" };
-    return this.settleWork(jobId, "request_changes", note);
-  }
-
-  /** A verdict on the work. **Terminal, and it ends the Drone.** */
-  async rejectWork(jobId: string): Promise<Outcome> {
-    return this.settleWork(jobId, "reject");
-  }
-
-  /**
-   * One decision, sent once. **One in flight per Job covers all three**: a
-   * second press aims at a Job that has already left `awaiting_review`, the
-   * only status any of the three is legal on.
-   */
-  private async settleWork(jobId: string, what: Decision, note?: string): Promise<Outcome> {
-    if (this.deciding.has(jobId)) return { ok: false, why: "already_deciding" };
-    const fleet = this.connected();
-    if (fleet === null) return { ok: false, why: "not_connected" };
-
-    this.deciding.add(jobId);
-    try {
-      const answer = await decide(fleet.port, jobId, what, note);
-      if (answer.ok !== true) return answer.outcome;
-      if (isJobSummary(answer.body)) this.fold(answer.body);
-      else await this.reread(fleet);
-      this.refresh(fleet, jobId);
-      return { ok: true };
-    } finally {
-      this.deciding.delete(jobId);
-    }
   }
 
   private connected(): BridgeStateFleet | null {
