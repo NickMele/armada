@@ -27,6 +27,7 @@ use crate::daemon::Fleet;
 use crate::evidence::Call;
 use crate::gate::{apply, rule_on, Ruling};
 use crate::judging::Judging;
+use crate::tests::briefing::turns_sent;
 use crate::tests::daemon::{a_fleet_holding, a_fleet_judged_by, a_proposal, worktree_directory};
 use crate::tests::gate::{
     budget, diff_evidence, judged_by, judged_by_shared, judging, running_job, worktree,
@@ -388,6 +389,54 @@ async fn the_same_drift_is_reported_once_and_not_every_turn() {
 
     assert!(fleet.turn().await.unwrap().drifting.is_some());
     assert!(fleet.turn().await.unwrap().drifting.is_none());
+}
+
+/// **The half that was missing for as long as the check existed.** The finding
+/// went to the Job's log, which no Drone reads, so the call that replaces a
+/// plan was one the Drone had no reason to make — Job
+/// `01M14HZ8ND001FYT6264WZJFPB` drifted, carried on for seven minutes and
+/// reached its gate holding a declaration it had outgrown.
+///
+/// Once per path, and the second path's notice carries only the second path:
+/// a Drone told again about a file it has already answered for reads the
+/// notice as having been ignored.
+#[tokio::test]
+async fn a_drifting_drone_is_told_once_per_path_and_not_again() {
+    let home = TempDir::new();
+    let fleet = a_watching_fleet(&home, FakeWorkProduct::changed(&["src/lib.rs"]));
+    let job = fleet.propose(a_proposal("write the plan")).await.unwrap();
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.unwrap();
+    fleet
+        .declare_scope(&DeclareScope {
+            context_paths: vec!["docs".to_string()],
+        })
+        .await
+        .unwrap();
+
+    assert!(fleet.turn().await.unwrap().drifting.is_some());
+    let told = turns_sent(&fleet, 2).await;
+    assert!(
+        told[1].contains("src/lib.rs") && told[1].contains("call the scope tool again"),
+        "the Drone is told which file and what to do about it: {}",
+        told[1]
+    );
+
+    // Nothing new this turn, so nothing is said. The Drone then edits a second
+    // file outside the plan, which is new and is.
+    assert!(fleet.turn().await.unwrap().drifting.is_none());
+    fleet
+        .work()
+        .wrote(&[("src/reader.rs", adapter_traits::Change::Modified)]);
+    assert!(fleet.turn().await.unwrap().drifting.is_some());
+
+    let told = turns_sent(&fleet, 3).await;
+    assert!(told[2].contains("src/reader.rs"), "{}", told[2]);
+    assert!(
+        !told[2].contains("src/lib.rs"),
+        "the turn between said nothing, and this one repeats nothing: {}",
+        told[2]
+    );
 }
 
 /// **The plan that turned out wrong.** Declaring again replaces the plan, which

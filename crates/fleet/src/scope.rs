@@ -11,7 +11,8 @@
 //! the plan. The answer while the step runs is to call the tool again, which
 //! replaces the plan; the answer at the gate is one narrow Judge question,
 //! which is `docs/concepts/judge.md`'s and is what stops the softer half being
-//! toothless.
+//! toothless. **And the Drone is told what the live check saw**, which for a
+//! long time it was not. [`Drifting`] says what that cost.
 //!
 //! # Nothing here is a model call, and nothing takes the Drone's word
 //!
@@ -26,7 +27,9 @@ use ipc::mcp::DeclareScope;
 use verification::{drifted, InScope, OutsideScope};
 
 use crate::adrift::NotDeclared;
+use crate::briefing::Redeclaring;
 use crate::daemon::Fleet;
+use crate::session::LiveSession;
 use crate::transcript;
 use crate::working::Working;
 
@@ -45,7 +48,17 @@ impl Declared {
 /// One step's work seen outside the plan it declared.
 ///
 /// Reported on the turn that first saw it, so a person watching sees the drift
-/// while it is happening rather than at the gate.
+/// while it is happening rather than at the gate — **and so does the Drone**,
+/// which for as long as this check existed it did not. "Call the tool again"
+/// was the sanctioned answer to drift from the day the tool shipped, and the
+/// only place it was ever said was the Job's log, which no Drone reads. The
+/// mechanism was real, tested and unreachable, and a Job that drifted carried
+/// its outgrown declaration to its gate.
+///
+/// [`Redeclaring`] is what is said. **Once per path**, because
+/// [`Working::drifting`](crate::working::Working::drifting) already answers
+/// only what is new and this rides that rather than keeping a second memory of
+/// what a Drone has been told.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Drifting {
     pub job: JobId,
@@ -126,8 +139,8 @@ where
         let at_work = working.as_ref()?;
         let (job, step, worktree) = at_work.standing();
         let record = self.load(&job).await.ok()?;
-        let scope = record.workflow().step(&step)?.evidence_scope()?;
-        if !scope.watches_live_edits() {
+        let declared_step = record.workflow().step(&step)?;
+        if !declared_step.evidence_scope()?.watches_live_edits() {
             return None;
         }
         let declared = at_work.declared()?.clone();
@@ -144,7 +157,15 @@ where
         if fresh.is_empty() {
             return None;
         }
-        self.noted_drift(&job, &step, &fresh);
+        let told = match Redeclaring::at(declared_step, &fresh) {
+            // `watches_live_edits` is true above, so this is always `Some`.
+            // Matched rather than unwrapped: the switch belongs to the block
+            // and a narrowing added there is this check going quiet, never a
+            // panic in the daemon.
+            Some(notice) => self.tell_of_drift(working, &notice).await,
+            None => false,
+        };
+        self.noted_drift(&job, &step, &fresh, told);
         Some(Drifting {
             job,
             step,
@@ -152,9 +173,31 @@ where
         })
     }
 
+    /// Say it, into the session the slot is holding, and answer whether the
+    /// Drone heard it.
+    ///
+    /// **A failed write does not stop the step and does not escalate.** A pipe
+    /// that will not take a turn is a Drone that is gone, which the reap in
+    /// `crate::dispatch` answers with the whole aftermath; ending a step here on a notice that
+    /// asks for nothing would make the softest thing Fleet says the harshest
+    /// thing it does. What it does instead is get recorded, because "the Drone
+    /// was never told" is the defect this whole path was built to close.
+    async fn tell_of_drift(&self, working: &Option<Working>, notice: &Redeclaring) -> bool {
+        match working.as_ref() {
+            Some(at_work) => at_work.session().notice(notice).await.is_ok(),
+            None => false,
+        }
+    }
+
     /// Write the drift into the Job's log. **Fields, never an interpolated
     /// message**, so a query can find every step that wandered.
-    fn noted_drift(&self, job: &JobId, step: &StepId, paths: &[RepoPath]) {
+    ///
+    /// `told` is whether the notice reached the Drone. It is a field of its own
+    /// because the two cases are different things to read: a step that drifted
+    /// and was told may correct itself on the next turn, and one that drifted
+    /// and was not told will reach its gate holding a plan nobody asked it to
+    /// fix.
+    fn noted_drift(&self, job: &JobId, step: &StepId, paths: &[RepoPath], told: bool) {
         let envelope = Envelope::new(
             self.now(),
             Level::Warn,
@@ -164,6 +207,7 @@ where
         )
         .in_job(job.as_ulid().clone())
         .at_step(step.as_str())
+        .with_field("told", FieldValue::Bool(told))
         .with_field(
             "paths",
             FieldValue::Str(

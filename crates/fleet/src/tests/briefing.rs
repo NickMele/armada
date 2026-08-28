@@ -18,14 +18,14 @@ use std::time::Duration;
 use adapter_traits::DroneEvent;
 use core_model::{
     AcceptanceCriterion, CriterionId, CriterionSource, EscalationTrigger, Facts, Job, JobId,
-    JudgeVerdict, Judgment, ManifestId, ModelName, NewJob, StepId, StepLevelTrigger, StepSeed,
-    StepVerdict, Timestamp, TopLevelOrigin, Ulid, Urgency,
+    JudgeVerdict, Judgment, ManifestId, ModelName, NewJob, RepoPath, StepId, StepLevelTrigger,
+    StepSeed, StepVerdict, Timestamp, TopLevelOrigin, Ulid, Urgency,
 };
 use ipc::mcp::DeclareScope;
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Gate, Scoped, Sketch};
 use verification::{Claimed, NotClaimed, ShownBy};
 
-use crate::briefing::{first_turn, resuming_turn, Stopped, BASELINE};
+use crate::briefing::{first_turn, resuming_turn, Redeclaring, Stopped, BASELINE};
 use crate::daemon::Fleet;
 use crate::evidence::Call;
 use crate::gate::Ruling;
@@ -217,6 +217,96 @@ fn a_scoped_step_is_told_to_declare_before_it_starts() {
     );
 }
 
+// --------------------------------------------- what a drifting Drone is told
+
+/// One step, watched or not, for the drift notice to be built from.
+fn watching(live: bool) -> config::ResolvedWorkflow {
+    testkit::resolved(&[Sketch {
+        id: "implement",
+        label: "Implement",
+        evidence_type: Some("diff"),
+        gates: &[],
+        judged_on: &[],
+        scope: Some(Scoped {
+            diff_check: true,
+            at_step_start: live,
+            exclude: &[],
+            references: &[],
+        }),
+        gaming: None,
+    }])
+}
+
+fn drift_notice(workflow: &config::ResolvedWorkflow, paths: &[&str]) -> Option<Redeclaring> {
+    Redeclaring::at(
+        workflow.steps().first().expect("a first step"),
+        &paths
+            .iter()
+            .map(|path| RepoPath::new(*path))
+            .collect::<Vec<RepoPath>>(),
+    )
+}
+
+/// **The mechanism nothing could reach.** Drift has been compared against the
+/// plan on every turn since the scope tool existed, and every finding went to
+/// the Job's log — which no Drone reads. The notice names the file and names
+/// the call, because "you edited outside your scope" does not make re-declaring
+/// obvious to anything reading it.
+#[test]
+fn a_drone_that_drifted_is_told_which_file_and_which_call() {
+    let workflow = watching(true);
+    let notice = drift_notice(&workflow, &["crates/ipc/src/lib.rs"]).expect("a watched step");
+
+    let said = notice.text();
+    assert!(said.contains("crates/ipc/src/lib.rs"), "{said}");
+    assert!(
+        said.contains("call the scope tool again"),
+        "the call that fixes it, not just the finding: {said}"
+    );
+    assert!(
+        !said.contains("mcp__") && !said.to_lowercase().contains("declare_scope"),
+        "described rather than named, like every other tool: {said}"
+    );
+}
+
+/// **Not an accusation and not a stop-work order.** Drift is a signal because
+/// investigation legitimately moves the work, so a Drone that reads this and
+/// carries on has done nothing wrong. A notice that read like the thrashing
+/// directive would have a Drone down tools over a file it was right to touch.
+#[test]
+fn the_drift_notice_asks_for_nothing_but_the_call() {
+    let workflow = watching(true);
+    let notice = drift_notice(&workflow, &["src/lib.rs"]).expect("a watched step");
+
+    let said = notice.text();
+    assert!(said.contains("Nothing has failed"), "{said}");
+    assert!(said.contains("not being asked to stop"), "{said}");
+    assert!(
+        !said.contains("Stop and report"),
+        "that is the thrashing directive, and this is not it: {said}"
+    );
+    assert!(
+        !said.contains("failed to") && !said.contains("should have"),
+        "nothing here is put to the Drone as a fault: {said}"
+    );
+}
+
+/// The cold switch, on the block this time. A step whose plan is measured only
+/// at the gate has no live plan to correct, and a Drone told to call a tool it
+/// was never asked to call goes looking for one.
+#[test]
+fn a_step_whose_edits_are_not_watched_has_no_drift_notice_to_send() {
+    assert_eq!(drift_notice(&watching(false), &["src/lib.rs"]), None);
+}
+
+/// Nothing new is nothing to say. The once-per-path rule is
+/// `Working::drifting`'s and this rides it rather than keeping a second memory
+/// of what a Drone has already been told.
+#[test]
+fn nothing_seen_outside_the_plan_is_nothing_to_send() {
+    assert_eq!(drift_notice(&watching(true), &[]), None);
+}
+
 // ------------------------------------------------------ the step boundary
 
 /// The two-step Job the boundary cases run: the first step scoped, the second
@@ -265,7 +355,7 @@ fn a_diff_call<'a>() -> Call<'a> {
 /// transcript — which is the only way to read an injected turn from outside the
 /// process that sent it. It comes back on the reader's own task, so this waits
 /// for `turns` of them rather than reading once and hoping.
-async fn turns_sent(
+pub(crate) async fn turns_sent(
     fleet: &Fleet<FakeHarness, FakeVcs, FakeWorkProduct>,
     turns: usize,
 ) -> Vec<String> {

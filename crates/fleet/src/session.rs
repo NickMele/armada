@@ -28,18 +28,19 @@
 //! that cost is zero: a Drone that has just submitted evidence is between turns
 //! by definition, which is exactly the moment the gate speaks.
 //!
-//! # Four methods, and none of them can start anything
+//! # Five methods, and none of them can start anything
 //!
-//! [`tell`](LiveSession::tell), [`redirect`](LiveSession::redirect),
-//! [`interrupt`](LiveSession::interrupt) and
-//! [`terminate`](LiveSession::terminate). There is no spawn, no respawn and no
-//! restart, because the gate must not be able to produce a Drone — and no way
-//! to remove a worktree, because nothing in this workspace can. A restart is
-//! `crate::resume`'s, and it reaches a spawn rather than this trait.
+//! [`tell`](LiveSession::tell), [`notice`](LiveSession::notice),
+//! [`redirect`](LiveSession::redirect), [`interrupt`](LiveSession::interrupt)
+//! and [`terminate`](LiveSession::terminate). There is no spawn, no respawn and
+//! no restart, because the gate must not be able to produce a Drone — and no
+//! way to remove a worktree, because nothing in this workspace can. A restart
+//! is `crate::resume`'s, and it reaches a spawn rather than this trait.
 //!
 //! Each carries a different authorship, which is why one method taking text
-//! would be wrong: a verdict Fleet reached, a person's own words, and Fleet's
-//! own directive at the third stage of the thrashing chain.
+//! would be wrong: a verdict Fleet reached, something Fleet observed while the
+//! step ran, a person's own words, and Fleet's own directive at the third stage
+//! of the thrashing chain.
 
 use std::future::Future;
 use std::io;
@@ -50,7 +51,7 @@ use tokio::process::{Child, ChildStdin};
 use tokio::sync::Mutex;
 use verification::OutcomeTurn;
 
-use crate::briefing::Declaring;
+use crate::briefing::{Declaring, Redeclaring};
 use crate::converging::ReportNow;
 use crate::resume::Redirection;
 
@@ -82,6 +83,21 @@ pub trait LiveSession {
         turn: &OutcomeTurn,
         declaring: Option<&Declaring>,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// Inject what the live check saw, so the Drone can act on it.
+    ///
+    /// **A separate method from [`tell`](LiveSession::tell) because there is no
+    /// verdict and no boundary to ride.** Drift is found in the middle of a
+    /// step, and the turn the Drone would otherwise hear about it on is the one
+    /// after its gate — by which time the declaration it could have fixed has
+    /// already been measured.
+    ///
+    /// **And not [`interrupt`](LiveSession::interrupt)**, which is a directive
+    /// to stop and report. This one asks for nothing but the tool call that
+    /// makes a plan true, and a Drone that ignores it has done nothing wrong;
+    /// see [`crate::briefing::Redeclaring`].
+    fn notice(&self, drifted: &Redeclaring)
+        -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Inject a person's instruction. The Drone reads it at the next turn
     /// boundary, like every other injected turn.
@@ -153,6 +169,17 @@ impl Turn {
             Some(asked) => Turn::of(&format!("{}\n\n{}", turn.text(), asked.text())),
             None => Turn::of(turn.text()),
         }
+    }
+
+    /// What the live check saw, injected into a session already running.
+    ///
+    /// **Its own turn, and this is the one place that is right.** The step
+    /// boundary has a verdict for the notice to ride and this moment has
+    /// nothing: the drift is found while the step runs, and holding it until
+    /// something else goes down the pipe would deliver it after the gate has
+    /// already measured the plan it was offering to correct.
+    pub fn noticing(drifted: &Redeclaring) -> Turn {
+        Turn::of(drifted.text())
     }
 
     /// What a person said, injected into a session already running.
@@ -266,6 +293,10 @@ impl LiveSession for DroneSession {
         declaring: Option<&Declaring>,
     ) -> Result<(), io::Error> {
         self.say(&Turn::outcome(turn, declaring)).await
+    }
+
+    async fn notice(&self, drifted: &Redeclaring) -> Result<(), io::Error> {
+        self.say(&Turn::noticing(drifted)).await
     }
 
     async fn redirect(&self, instruction: &Redirection) -> Result<(), io::Error> {
