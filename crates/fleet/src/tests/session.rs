@@ -119,6 +119,7 @@ fn the_ask_the_next_step_makes_rides_on_the_same_turn_as_the_verdict() {
             diff_check: true,
             at_step_start: true,
             exclude: &[],
+            references: &[],
         }),
         gaming: None,
     }]);

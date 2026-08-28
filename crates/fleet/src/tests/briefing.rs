@@ -226,6 +226,7 @@ fn plan_then_do(second_is_scoped: bool) -> config::ResolvedWorkflow {
         diff_check: true,
         at_step_start: true,
         exclude: &[],
+        references: &[],
     });
     testkit::resolved(&[
         Sketch {
