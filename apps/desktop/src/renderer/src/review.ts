@@ -277,18 +277,39 @@ export const NO_WORKTREE =
 export const DIFF_READ_FROM = "Read from this job's worktree against the branch it was cut from.";
 
 /**
+ * What an unreadable declaration says, and it is the whole of #157.
+ *
+ * `get_diff` reads the plan declaration out of the live working slot, which a
+ * job whose drone has stopped no longer holds — so `plan_declared` is false
+ * there whatever the step declared. The old sentence read "This step declared
+ * no plan, so no file is marked," which is **a claim about what the drone did**
+ * rather than a report of what can be read, and four of the shipped workflows
+ * declare a plan at step start. A reader deciding whether work stayed in scope
+ * was being told it was never scoped.
+ *
+ * **The last clause is not padding.** Dropping the sentence altogether was the
+ * other option and it leaves the same wrong reading available: unmarked rows
+ * with nothing beside them read as rows inside a plan. So the silence is named
+ * and the inference is closed off in the same breath.
+ */
+export const PLAN_NOT_READABLE =
+  "The plan this step declared is not readable once its drone has stopped, so no file is " +
+  "marked — an unmarked file here is not a file that was inside the plan.";
+
+/**
  * Where the reading came from, and what the drift mark does or does not mean
  * on it.
  *
- * **`plan_declared` is false on every job that has stopped, and that is #157
- * rather than a fact about the job.** `get_diff` reads the plan declaration out
- * of the live working slot, which a job that is over no longer holds — so the
- * second sentence here says "this step declared no plan" about steps that
- * declared one. A surface drawing a terminal job passes `DIFF_READ_FROM` on its
- * own instead, which drops a false claim rather than restating it.
+ * `planReadable` is the caller saying whether a drone is still holding the pen
+ * on this job. **It is not derivable here**: `work` carries `plan_declared`,
+ * and false on it is "no plan was declared" and "no plan can be read" at once —
+ * which is exactly the conflation #157 was.
  */
-export function diffNote(work: Work): string {
+export function diffNote(work: Work, planReadable: boolean): string {
   const read = DIFF_READ_FROM;
+  if (!planReadable) {
+    return `${read} ${PLAN_NOT_READABLE}`;
+  }
   if (!work.plan_declared) {
     return `${read} This step declared no plan, so no file is marked.`;
   }

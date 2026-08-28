@@ -192,7 +192,10 @@ function diffOf(work: Work | undefined): UnifiedDiffProps {
     files,
     emptyNote: CHANGED_NOTHING,
     ...(cut === undefined ? {} : { cut }),
-    note: diffNote(work),
+    // Readable, and this is the one render where it is: a Job held at
+    // `awaiting_review` keeps its Drone, so the slot `get_diff` reads the
+    // declaration out of is still the one that made it.
+    note: diffNote(work, true),
   };
 }
 

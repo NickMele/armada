@@ -26,7 +26,6 @@ import {
   CHANGED_NOTHING,
   CLAIMED_NOTHING,
   claimsOf,
-  DIFF_READ_FROM,
   diffNote,
   drawn,
   NO_WORKTREE,
@@ -161,20 +160,22 @@ export function Claims({
 export function Changed({
   job,
   diff,
-  planNote = true,
+  planReadable = true,
   onCopied,
 }: {
   job: JobSummary;
   diff: Diff;
   /**
-   * Whether the note beneath the diff may speak about the step's declared plan.
-   * **False on a stopped Job**, where #157 makes `plan_declared` false whatever
-   * the step declared: the read takes it from the live working slot, which a
-   * Job that is over no longer holds. Drawing only the provenance sentence is
-   * the honest answer until the read is fixed — restating the other half would
-   * put "this step declared no plan" onto a step that declared one.
+   * Whether a Drone is still holding the pen on this Job, and so whether the
+   * plan it declared can be read at all.
+   *
+   * **False on a stopped Job and on a finished one.** `get_diff` takes the
+   * declaration from the live working slot, so `plan_declared` comes back false
+   * for a step that declared one — and the note beneath the diff then says the
+   * declaration is unreadable rather than saying none was made. The caller
+   * knows which of the two it is drawing and the wire does not.
    */
-  planNote?: boolean;
+  planReadable?: boolean;
   onCopied: (value: string) => void;
 }) {
   const mine = diff.state !== "none" && diff.jobId === job.id;
@@ -198,7 +199,7 @@ export function Changed({
       files={files}
       emptyNote={CHANGED_NOTHING}
       cut={cut}
-      note={planNote ? diffNote(work) : DIFF_READ_FROM}
+      note={diffNote(work, planReadable)}
       onCopied={onCopied}
     />
   );

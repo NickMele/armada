@@ -342,7 +342,10 @@ function recordOf({
       // deeper — and it is the one section that costs anything to open.
       id: CHANGED,
       label: "What it changed",
-      panel: <Changed job={job} diff={diff} onCopied={onCopied} />,
+      // The declaration went with the Drone, for the reason the stopped render
+      // gives. The record above this section is what a reader asking whether
+      // the work stayed in scope has, and it says what it does not carry.
+      panel: <Changed job={job} diff={diff} planReadable={false} onCopied={onCopied} />,
     },
     {
       id: CLAIMS,

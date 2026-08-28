@@ -237,11 +237,12 @@ function recordOf({
     },
     {
       id: CHANGED,
-      // `planNote` off: #157 reads the plan declaration out of the live working
-      // slot, which a stopped Job no longer holds, so the sentence about the
-      // declared plan would be false on every one of them.
+      // The declaration is not readable here: `get_diff` takes it from the live
+      // working slot and a stopped Job's Drone has let go of it. The note says
+      // so, rather than reporting a step that declared a plan as one that
+      // declared none.
       label: "What it changed",
-      panel: <Changed job={job} diff={diff} planNote={false} onCopied={onCopied} />,
+      panel: <Changed job={job} diff={diff} planReadable={false} onCopied={onCopied} />,
     },
     {
       id: CLAIMS,
