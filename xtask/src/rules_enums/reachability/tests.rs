@@ -20,13 +20,14 @@ fn machine() -> Machine {
         entry: ["queued"].iter().map(|s| s.to_string()).collect(),
         initial: "not_started".to_string(),
         advancing: ["running"].iter().map(|s| s.to_string()).collect(),
-        status_edges: pairs(&[
+        status_edges: unguarded(&[
             ("queued", "running"),
             ("running", "escalated"),
             ("escalated", "running"),
             ("running", "killed"),
         ]),
         step_edges: pairs(&[("not_started", "running"), ("running", "stopped")]),
+        guards: BTreeMap::new(),
     }
 }
 
@@ -34,6 +35,19 @@ fn pairs(of: &[(&str, &str)]) -> Vec<(String, String)> {
     of.iter()
         .map(|(a, b)| (a.to_string(), b.to_string()))
         .collect()
+}
+
+/// Status edges none of which carries a condition, which is every edge the
+/// machine had before #189 and most of them after it.
+fn unguarded(of: &[(&str, &str)]) -> Vec<(String, String, Option<String>)> {
+    of.iter()
+        .map(|(a, b)| (a.to_string(), b.to_string(), None))
+        .collect()
+}
+
+/// The `Guard` variants the small machine may name.
+fn guards() -> BTreeMap<String, String> {
+    spellings(&[("EveryStepAdvanced", "every_step_advanced")])
 }
 
 fn spellings(of: &[(&str, &str)]) -> BTreeMap<String, String> {
@@ -137,6 +151,181 @@ fn a_state_no_edge_arrives_at_is_reached_beneath_nothing() {
     assert!(
         !reachable.values().flatten().any(|s| s == "retrying"),
         "`retrying` is a `StepState` with no `STEP_EDGES` edge into it"
+    );
+}
+
+/// **A guard is the only thing that stops a step state crossing an edge**, and
+/// it is what lets a destination's row say something a reader learns from.
+/// Without it `killed` holds everything `running` held, which is every other
+/// row in the real registry and was `completed_success`'s too. Issue #189.
+#[test]
+fn a_guarded_edge_carries_only_the_states_its_condition_admits() {
+    let mut machine = machine();
+    machine.status_edges = vec![
+        ("queued".into(), "running".into(), None),
+        (
+            "running".into(),
+            "killed".into(),
+            Some("every_step_advanced".into()),
+        ),
+    ];
+    machine.guards = [(
+        "every_step_advanced".to_string(),
+        vec!["advanced".to_string()],
+    )]
+    .into_iter()
+    .collect();
+    machine.step_edges = pairs(&[
+        ("not_started", "running"),
+        ("running", "stopped"),
+        ("running", "advanced"),
+    ]);
+    let reachable = machine.reachable();
+    assert_eq!(
+        reachable["running"],
+        ["not_started", "running", "stopped", "advanced"]
+            .map(String::from)
+            .into_iter()
+            .collect(),
+        "the source still holds everything the inner machine writes"
+    );
+    assert_eq!(
+        reachable["killed"],
+        ["advanced"].map(String::from).into_iter().collect(),
+        "and the guarded destination holds only what its condition admits"
+    );
+}
+
+/// The same walk with the condition removed, which is what every edge was
+/// before #189 and what the rule must keep doing for the unguarded ones.
+#[test]
+fn an_unguarded_edge_still_carries_whatever_the_step_held() {
+    let mut machine = machine();
+    machine.status_edges = vec![
+        ("queued".into(), "running".into(), None),
+        ("running".into(), "killed".into(), None),
+    ];
+    machine.step_edges = pairs(&[("not_started", "running"), ("running", "stopped")]);
+    assert_eq!(
+        machine.reachable()["killed"],
+        ["not_started", "running", "stopped"]
+            .map(String::from)
+            .into_iter()
+            .collect()
+    );
+}
+
+// ------------------------------------------- the guard against its registry
+
+/// The registry sanctions the set and `Guard::holds` is it transcribed, so a
+/// silent divergence would let the walk narrow a row the machine does not.
+#[test]
+fn a_guard_that_admits_what_its_registry_row_declares_reports_nothing() {
+    let mut report = Report::new("test");
+    let arms = [(
+        "every_step_advanced".to_string(),
+        vec!["advanced".to_string()],
+    )]
+    .into_iter()
+    .collect();
+    check_guards(
+        "[guards.every_step_advanced]
+holds_steps = [\"advanced\"]
+",
+        &arms,
+        &states(),
+        &mut report,
+    );
+    assert_eq!(said(&report), Vec::<String>::new());
+}
+
+/// **The registry is the authority here**, unlike the comparison against the
+/// machine — so the finding names the arm as the side that changes.
+#[test]
+fn an_arm_that_disagrees_with_its_row_names_the_arm_as_what_changes() {
+    let mut report = Report::new("test");
+    let arms = [(
+        "every_step_advanced".to_string(),
+        vec!["advanced".to_string(), "stopped".to_string()],
+    )]
+    .into_iter()
+    .collect();
+    check_guards(
+        "[guards.every_step_advanced]
+holds_steps = [\"advanced\"]
+",
+        &arms,
+        &states(),
+        &mut report,
+    );
+    let found = said(&report);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].contains("admits [advanced]"), "{}", found[0]);
+    assert!(
+        found[0].contains("returns [advanced, stopped]"),
+        "{}",
+        found[0]
+    );
+    assert!(found[0].contains("the arm is what changes"), "{}", found[0]);
+}
+
+/// A guard the code evaluates and the registry never sanctioned is the
+/// transcription defect running the other way.
+#[test]
+fn an_arm_with_no_registry_row_is_a_condition_nothing_sanctions() {
+    let mut report = Report::new("test");
+    let arms = [("no_step_running".to_string(), vec!["advanced".to_string()])]
+        .into_iter()
+        .collect();
+    check_guards(
+        "[guards.every_step_advanced]
+holds_steps = [\"advanced\"]
+",
+        &arms,
+        &states(),
+        &mut report,
+    );
+    let found = said(&report);
+    assert!(
+        found.iter().any(|f| f.contains("`Guard::no_step_running`")),
+        "{found:?}"
+    );
+}
+
+/// A row admitting a state no `StepState` spells is a guard the walk would
+/// carry nothing across, which reads as a narrowing nobody wrote.
+#[test]
+fn a_row_admitting_a_state_no_variant_spells_is_named() {
+    let mut report = Report::new("test");
+    let arms = [(
+        "every_step_advanced".to_string(),
+        vec!["finished".to_string()],
+    )]
+    .into_iter()
+    .collect();
+    check_guards(
+        "[guards.every_step_advanced]
+holds_steps = [\"finished\"]
+",
+        &arms,
+        &states(),
+        &mut report,
+    );
+    let found = said(&report);
+    assert!(
+        found.iter().any(|f| f.contains("variant spells")),
+        "{found:?}"
+    );
+}
+
+/// `Guard::holds` read out of source, which is how the walk gets the set.
+#[test]
+fn the_holds_arms_are_read_out_of_the_source() {
+    let text = "    pub const fn holds(&self) -> &'static [StepState] {\n                        match self {\n            Guard::EveryStepAdvanced => &[StepState::Advanced],\n                        }\n    }\n";
+    let arms = super::machine::holds_arms(text, &guards(), &states());
+    assert_eq!(
+        arms.get("every_step_advanced"),
+        Some(&vec!["advanced".to_string()])
     );
 }
 

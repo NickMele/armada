@@ -7,9 +7,10 @@
 //! `[[transitions]]` row, in that file's order. The registry's `on` prose is
 //! not carried: it says what fires an edge, which is Fleet's to know, and a
 //! second copy of it here could only drift from the file that owns it. What
-//! *is* carried is `escalation_trigger`, because it constrains what a caller
-//! may pass — and a constraint the type system can hold is worth more than a
-//! sentence.
+//! *is* carried is `escalation_trigger` and [`Guard`] — the latter from
+//! `domain/transition-guards.toml`, `#189` — because both constrain what a
+//! caller may pass, and a constraint the type system can hold is worth more
+//! than a sentence.
 //!
 //! A transcription is a copy, and a copy drifts. The gate's `the transition
 //! registry and the edge table name the same edges` is what holds it: every row
@@ -32,8 +33,10 @@ use alloc::vec::Vec;
 use core::fmt;
 
 use crate::job::escalation::EscalationTrigger;
-use crate::job::ids::CriterionId;
-use crate::job::status::JobStatus;
+use crate::job::guard::Guard;
+use crate::job::ids::{CriterionId, StepId};
+use crate::job::status::{JobStatus, StepState};
+use crate::job::step::JobStep;
 
 /// One legal edge.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,6 +49,14 @@ pub struct Edge {
     /// `running -> escalated` declares none and is the default edge: a trigger
     /// with no edge of its own fires it.
     pub escalation_trigger: Option<EscalationTrigger>,
+    /// The condition this edge is admitted under, where the registry gives it
+    /// one. `None` is unconditional, which is what every edge was.
+    ///
+    /// A guard is checked after the edge is found and refused separately from
+    /// it — see [`IllegalTransition::GuardRefused`]. The two are different
+    /// findings: one says the move does not exist, the other says it exists and
+    /// the Job is not ready for it.
+    pub guard: Option<Guard>,
 }
 
 use JobStatus::*;
@@ -57,11 +68,15 @@ pub static EDGES: &[Edge] = &[
     edge(AwaitingApproval, Queued),
     edge(AwaitingApproval, Rejected),
     edge(AwaitingAttestation, CompletedFailed),
-    edge(AwaitingAttestation, CompletedSuccess),
+    guarded(
+        AwaitingAttestation,
+        CompletedSuccess,
+        Guard::EveryStepAdvanced,
+    ),
     edge(AwaitingAttestation, Killed),
     edge(AwaitingAttestation, Piloted),
     edge(AwaitingReview, AwaitingAttestation),
-    edge(AwaitingReview, CompletedSuccess),
+    guarded(AwaitingReview, CompletedSuccess, Guard::EveryStepAdvanced),
     triggered(AwaitingReview, Escalated, EscalationTrigger::Interrupted),
     edge(AwaitingReview, Killed),
     edge(AwaitingReview, Piloted),
@@ -71,7 +86,7 @@ pub static EDGES: &[Edge] = &[
     edge(Escalated, Killed),
     edge(Escalated, Piloted),
     edge(Escalated, Running),
-    edge(Piloted, CompletedSuccess),
+    guarded(Piloted, CompletedSuccess, Guard::EveryStepAdvanced),
     edge(Piloted, Killed),
     edge(Piloted, Running),
     edge(Piloted, Superseded),
@@ -83,7 +98,7 @@ pub static EDGES: &[Edge] = &[
     edge(Running, AwaitingAttestation),
     edge(Running, AwaitingReview),
     edge(Running, CompletedFailed),
-    edge(Running, CompletedSuccess),
+    guarded(Running, CompletedSuccess, Guard::EveryStepAdvanced),
     edge(Running, Escalated),
     edge(Running, Killed),
     edge(Running, Piloted),
@@ -94,6 +109,7 @@ const fn edge(from: JobStatus, to: JobStatus) -> Edge {
         from,
         to,
         escalation_trigger: None,
+        guard: None,
     }
 }
 
@@ -102,6 +118,16 @@ const fn triggered(from: JobStatus, to: JobStatus, trigger: EscalationTrigger) -
         from,
         to,
         escalation_trigger: Some(trigger),
+        guard: None,
+    }
+}
+
+const fn guarded(from: JobStatus, to: JobStatus, guard: Guard) -> Edge {
+    Edge {
+        from,
+        to,
+        escalation_trigger: None,
+        guard: Some(guard),
     }
 }
 
@@ -285,6 +311,25 @@ pub enum IllegalTransition {
         expected: EscalationTrigger,
         given: EscalationTrigger,
     },
+    /// The edge exists, and the condition it carries does not hold.
+    ///
+    /// **Not a [`NoSuchEdge`](Self::NoSuchEdge), and the distinction is the
+    /// whole reason this variant exists.** A refused edge is a caller asking
+    /// for a move the registry does not sanction — a bug in the caller. A
+    /// refused guard is a sanctioned move that this Job is not ready for, and
+    /// the answer is to make it ready. A caller that could not tell the two
+    /// apart would report the first to a person as the second.
+    ///
+    /// It names the guard, and the first step row the guard refused so that
+    /// the finding is actionable rather than only true.
+    GuardRefused {
+        from: JobStatus,
+        to: JobStatus,
+        guard: Guard,
+        /// The first step the guard refused, and what it holds.
+        step_id: StepId,
+        holding: StepState,
+    },
 }
 
 impl fmt::Display for IllegalTransition {
@@ -312,6 +357,21 @@ impl fmt::Display for IllegalTransition {
                 expected.as_wire(),
                 given.as_wire()
             ),
+            IllegalTransition::GuardRefused {
+                from,
+                to,
+                guard,
+                step_id,
+                holding,
+            } => write!(
+                f,
+                "{} -> {} is guarded by {}, and step `{}` is {}",
+                from.as_wire(),
+                to.as_wire(),
+                guard.as_wire(),
+                step_id.as_str(),
+                holding.as_wire()
+            ),
         }
     }
 }
@@ -319,7 +379,22 @@ impl fmt::Display for IllegalTransition {
 impl core::error::Error for IllegalTransition {}
 
 /// Whether the machine admits this move, and why not if it does not.
-pub(crate) fn admits(from: JobStatus, to: &Target) -> Result<(), IllegalTransition> {
+///
+/// **The steps are read and nothing else is.** They arrive as rows rather than
+/// as the `Job` that holds them, so a guard added later cannot quietly grow a
+/// dependency on a field this function was never given — widening what a guard
+/// may see is a change to this signature, which is a change somebody makes on
+/// purpose.
+///
+/// The order is edge first, guard second, and it is not an optimisation: a
+/// guard on an edge that does not exist has nothing to be asked about, and
+/// reporting a failed condition for a move nothing sanctions would name the
+/// wrong defect.
+pub(crate) fn admits(
+    from: JobStatus,
+    to: &Target,
+    steps: &[JobStep],
+) -> Result<(), IllegalTransition> {
     let arriving = to.status();
     if from.is_terminal() {
         return Err(IllegalTransition::FromTerminal { from, to: arriving });
@@ -329,13 +404,25 @@ pub(crate) fn admits(from: JobStatus, to: &Target) -> Result<(), IllegalTransiti
     };
     match (edge.escalation_trigger, to) {
         (Some(expected), Target::Escalated(given)) if expected != *given => {
-            Err(IllegalTransition::WrongTrigger {
+            return Err(IllegalTransition::WrongTrigger {
                 from,
                 to: arriving,
                 expected,
                 given: *given,
             })
         }
-        _ => Ok(()),
+        _ => {}
     }
+    if let Some(guard) = edge.guard {
+        if let Some(refused) = guard.refusing(steps) {
+            return Err(IllegalTransition::GuardRefused {
+                from,
+                to: arriving,
+                guard,
+                step_id: refused.step_id().clone(),
+                holding: refused.state(),
+            });
+        }
+    }
+    Ok(())
 }

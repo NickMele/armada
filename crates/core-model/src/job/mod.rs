@@ -20,7 +20,8 @@
 //! transcribes nothing: it declares the three states M1 reaches and the two
 //! edges it walks, and makes the other three unreachable by giving
 //! [`StepTarget`] no variant that names them. The full edge table stays an
-//! honest gap rather than a guess.
+//! honest gap rather than a guess. [`Guard`] is where the two halves meet: a
+//! status edge may carry a condition on the Job's step rows.
 //!
 //! [`step_machine`]: crate::StepTarget
 //!
@@ -42,6 +43,7 @@ mod escalation;
 mod event;
 mod fields;
 mod gaming;
+mod guard;
 mod ids;
 mod judge;
 mod record;
@@ -67,6 +69,7 @@ pub use fields::{
     TopLevelOrigin, Urgency, WriteTargets,
 };
 pub use gaming::{DecidedBy, EvidenceRef, GamingCheck, GamingFlag, GamingPattern};
+pub use guard::Guard;
 pub use ids::{
     BlankModel, BlankTitle, CriterionId, DroneId, JobId, ManifestId, ModelName, RepoPath, StepId,
     Title, WorkflowId,

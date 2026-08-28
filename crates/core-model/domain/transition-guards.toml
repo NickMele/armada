@@ -1,0 +1,49 @@
+# The conditions an edge is admitted under, beyond the edge existing.
+#
+# Authored here, and unlike its neighbours it was not carried across from the
+# design workspace: the guard is a concept the source never had. An edge there
+# is a `from`, a `to` and what fires it, so a status could not be made to depend
+# on its steps and `job-statuses.toml` carried the dependency as prose instead —
+# `completed_success` promising "every step advanced" while its `step_states`
+# named three states that are not `advanced`. Issue #189.
+#
+# The table key is the wire value, so a rule can compare this set against the
+# `Guard` enum without a mapping in between — the same arrangement every file
+# here uses. `job-transitions.toml`'s `guard` field is a key in this file, the
+# way its `escalation_trigger` is a key in escalation-triggers.toml.
+#
+# `holds_steps` is what makes a guard readable by something other than the
+# predicate itself. A guard is evaluated against the Job's `job_steps` rows and
+# nothing else, so what it admits *is* a set of step states, and declaring that
+# set is what lets `cargo xtask verify-foundations` walk the two machines
+# together: a step state that is not in this list cannot be carried across a
+# guarded edge, which is what narrows the destination's `step_states` row. The
+# `Guard::holds` arm in core-model is this list transcribed, and the gate
+# compares them.
+#
+# `on_edges` is derivable from job-transitions.toml and is carried anyway, for
+# the reason `transitions_out` is carried on a status: declared intent checked
+# against what was actually wired.
+#
+# Fields:
+#   asserts     - what the guard claims about the Job, in one sentence
+#   holds_steps - the step states a Job may hold and still cross a guarded
+#                 edge. Every name is a key in step-states.toml
+#   on_edges    - the edges declaring this guard, as "from -> to"
+#   refused_as  - the IllegalTransition variant a failed guard produces
+#   in_code     - whether an implementation exists
+#   notes       - the reasoning the guard carries
+
+[guards.every_step_advanced]
+asserts = "Every step of the frozen WorkflowDef passed its advance gate"
+holds_steps = ["advanced"]
+on_edges = ["running -> completed_success", "awaiting_review -> completed_success", "piloted -> completed_success", "awaiting_attestation -> completed_success"]
+refused_as = "GuardRefused"
+in_code = "Yes"
+notes = """
+On every edge arriving at `completed_success` and not on a subset of them, because a guard on one inbound edge constrains that edge and a status is the union of everything that arrives at it. Guarding all four is what lets `completed_success` declare `step_states = ["advanced"]` and be checkable.
+
+It reads the `state` column of each `job_steps` row, which is the latest attempt by construction: a row is overwritten by each move, and the count of runs lives in the log rather than on the row — `store::attempt`. So there is no version of this guard that could pass on a stale attempt.
+
+The inner machine is frozen everywhere but `running` and `awaiting_review`, so a Job satisfies this guard by advancing its steps before it leaves one of those two. That is the order `fleet::landing` and `fleet::reviewing` already walk.
+"""

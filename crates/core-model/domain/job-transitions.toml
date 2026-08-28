@@ -18,6 +18,9 @@
 #   on                 - what fires the edge. Absent where the source left it so
 #   escalation_trigger - the named trigger, where the edge belongs to one.
 #                        A key in escalation-triggers.toml
+#   guard              - the condition the edge is admitted under, where it
+#                        carries one. A key in transition-guards.toml. Absent
+#                        is unconditional, which every edge was before #189
 #   in_code            - whether an implementation exists, as the source recorded it
 #   notes              - the reasoning the row's page carried
 
@@ -49,6 +52,7 @@ in_code = "Not yet"
 from = "awaiting_attestation"
 to = "completed_success"
 on = "Attested"
+guard = "every_step_advanced"
 in_code = "Not yet"
 
 [[transitions]]
@@ -71,7 +75,9 @@ in_code = "Not yet"
 from = "awaiting_review"
 to = "completed_success"
 on = "approve on the final gate"
+guard = "every_step_advanced"
 in_code = "Not yet"
+notes = "The step at a human gate stays `running`, so approving advances it and then moves the Job. The guard is why that order is the only one: the inner machine freezes the moment the Job leaves the gate."
 
 [[transitions]]
 from = "awaiting_review"
@@ -132,7 +138,9 @@ in_code = "Not yet"
 from = "piloted"
 to = "completed_success"
 on = "Attest complete, under the human-attested verification source"
+guard = "every_step_advanced"
 in_code = "Not yet"
+notes = "Attesting is a verdict on the work and not a way past the steps. A pilot whose steps have not all advanced submits for verification — `piloted -> running` — and advances them there."
 
 [[transitions]]
 from = "piloted"
@@ -206,7 +214,9 @@ in_code = "Not yet"
 from = "running"
 to = "completed_success"
 on = "Last step advanced, every criterion verified"
+guard = "every_step_advanced"
 in_code = "Not yet"
+notes = "`on` says \"last step advanced\" and the guard says every step, which is the same claim made checkable: the steps are worked in order, so the last one advances only after the ones before it did, and \"every\" is the form a predicate over the rows can hold."
 
 [[transitions]]
 from = "running"

@@ -63,6 +63,10 @@ const ENUMS: &[EnumSource] = &[
         name: "QueuedReason",
         path: "crates/core-model/src/job/fields.rs",
     },
+    EnumSource {
+        name: "Guard",
+        path: "crates/core-model/src/job/guard.rs",
+    },
 ];
 
 /// A registry table, and the enum whose wire spellings its keys must be.
@@ -96,6 +100,11 @@ const PAIRINGS: &[Pairing] = &[
         registry: "check-outcomes.toml",
         prefix: "outcomes.",
         enum_name: "CheckOutcome",
+    },
+    Pairing {
+        registry: "transition-guards.toml",
+        prefix: "guards.",
+        enum_name: "Guard",
     },
     Pairing {
         registry: "enum-verbs.toml",

@@ -146,6 +146,27 @@ impl JobStatus {
     }
 }
 
+/// Every status but `completed_success`, which is guarded against every step
+/// state except `advanced`.
+///
+/// Written out rather than filtered from [`JobStatus::ALL`], because
+/// `seen_under` returns a `&'static [JobStatus]` and the gate reads these arms
+/// as text. A `const fn` filter would answer correctly and be unreadable by the
+/// rule that keeps it honest.
+const NOT_UNDER_COMPLETED_SUCCESS: &[JobStatus] = &[
+    JobStatus::AwaitingApproval,
+    JobStatus::AwaitingAttestation,
+    JobStatus::AwaitingReview,
+    JobStatus::CompletedFailed,
+    JobStatus::Escalated,
+    JobStatus::Killed,
+    JobStatus::Piloted,
+    JobStatus::Queued,
+    JobStatus::Rejected,
+    JobStatus::Running,
+    JobStatus::Superseded,
+];
+
 /// Where one step of a Job's frozen WorkflowDef is. Six, from
 /// `domain/step-states.toml`.
 ///
@@ -209,16 +230,22 @@ impl StepState {
     /// `domain/step-states.toml` declares them. A hand transcription, checked
     /// against that file by the gate.
     ///
-    /// **Four of the six answer with every status, and that is the machine.**
-    /// A status change looks at no step — [`admits`](crate::Job::transition)
-    /// takes a from and a to and nothing else — so the only coupling between
-    /// the two levels is [`ADVANCING_STATUSES`](crate::ADVANCING_STATUSES), and
-    /// a frozen step crosses every other edge still holding what it held. Four
-    /// of these answered far more narrowly until issue #184, and `escalated`
-    /// was the one that made it concrete: `stopped` claimed it alone, while a
-    /// Job escalated on `stalled` arrives holding a step that is `running`.
+    /// **Only `advanced` answers with every status, and that is the machine.**
+    /// A status change looks at a step only where the edge carries a
+    /// [`Guard`](crate::Guard); across every unguarded edge a frozen step is
+    /// carried holding what it held, which is why three of these answer with
+    /// almost all of them. Four answered far more narrowly until issue #184,
+    /// and `escalated` was the one that made it concrete: `stopped` claimed it
+    /// alone, while a Job escalated on `stalled` arrives holding a step that is
+    /// `running`.
     ///
-    /// The two narrow answers are the two states nothing reaches yet:
+    /// **`completed_success` is the exception, and it is the guard.** Every
+    /// edge arriving there is guarded on `every_step_advanced`, so no other
+    /// state is carried across one and no other state answers with it. That is
+    /// issue #189, and it is what a row narrowing on something other than a
+    /// widening looks like.
+    ///
+    /// The two narrowest answers are the two states nothing reaches yet:
     /// `awaiting_human` has no [`StepTarget`](crate::StepTarget) and `retrying`
     /// has no retry budget, so each is where its design puts it rather than
     /// where a walk found it.
@@ -226,10 +253,10 @@ impl StepState {
         match self {
             StepState::Advanced => JobStatus::ALL,
             StepState::AwaitingHuman => &[JobStatus::AwaitingReview],
-            StepState::NotStarted => JobStatus::ALL,
+            StepState::NotStarted => NOT_UNDER_COMPLETED_SUCCESS,
             StepState::Retrying => &[JobStatus::Running],
-            StepState::Running => JobStatus::ALL,
-            StepState::Stopped => JobStatus::ALL,
+            StepState::Running => NOT_UNDER_COMPLETED_SUCCESS,
+            StepState::Stopped => NOT_UNDER_COMPLETED_SUCCESS,
         }
     }
 }

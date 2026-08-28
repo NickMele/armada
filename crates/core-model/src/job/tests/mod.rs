@@ -7,6 +7,11 @@
 //! machine — which is the crack a no-setter rule leaks through, and the reason
 //! [`Job`] has no constructor that takes a status for such a test to call.
 //!
+//! **A guarded edge is walked with its condition satisfied**, by
+//! [`advance_every_step`], and never by relaxing the guard. A test asserting
+//! that a guard *refuses* uses the same [`reach`] every other test does, since
+//! a freshly created Job's steps are `not_started` and satisfy nothing.
+//!
 //! This module is the scaffolding. [`machine`] tests what the registry says is
 //! legal for a Job; [`step_machine`] tests the inner half, which has no
 //! registry table to be read against; [`record`] tests what a Job is made of
@@ -138,12 +143,79 @@ fn target_for(status: JobStatus, trigger: Option<EscalationTrigger>) -> Target {
     }
 }
 
+/// Every step of the Job advanced, walking the inner machine's real edges.
+///
+/// **Only usable beneath an advancing status**, which is the constraint the
+/// guard lives inside: a Job satisfies `every_step_advanced` before it leaves
+/// `running` or `awaiting_review`, never after.
+fn advance_every_step(job: &Job) -> Job {
+    let mut current = job.clone();
+    let steps: Vec<StepId> = current
+        .steps()
+        .iter()
+        .map(|row| row.step_id().clone())
+        .collect();
+    for step_id in steps {
+        for target in [StepTarget::Running, StepTarget::Advanced] {
+            current = current
+                .transition_step(
+                    &step_id,
+                    target,
+                    Actor::Fleet,
+                    at("2026-08-26T09:02:00.000Z"),
+                )
+                .unwrap_or_else(|e| panic!("advancing {}: {e}", step_id.as_str()))
+                .job;
+        }
+    }
+    current
+}
+
+/// A Job standing in `status` with every step advanced — what a guarded edge
+/// is admitted from.
+///
+/// The steps are advanced at `running` and the walk continues from there,
+/// because the inner machine is frozen everywhere else. That is the ordering
+/// `fleet::landing` and `fleet::reviewing` walk, asserted here.
+fn reach_with_every_step_advanced(status: JobStatus) -> Job {
+    let advanced = advance_every_step(&reach(JobStatus::Running));
+    let path: Vec<Target> = match status {
+        JobStatus::Running => Vec::new(),
+        JobStatus::AwaitingReview => vec![Target::AwaitingReview],
+        JobStatus::AwaitingAttestation => vec![Target::AwaitingAttestation(CriteriaOwed::one(
+            CriterionId::new("c1"),
+        ))],
+        JobStatus::Piloted => vec![Target::Piloted(PilotReason::TakeOver)],
+        other => panic!("no advanced-steps path to {}", other.as_wire()),
+    };
+    let reached = drive(&advanced, &path);
+    assert_eq!(
+        reached.status(),
+        status,
+        "the walk went to the wrong status"
+    );
+    reached
+}
+
 /// A Job standing in `status`, arrived at by walking edges from the entry
 /// status. There is no other way to get one.
 fn reach(status: JobStatus) -> Job {
     let queued = [Target::Queued];
     let running = [Target::Queued, Target::Running];
     let job = created();
+    // `completed_success` is guarded, and the steps have to be advanced on the
+    // `running` side of the edge — the inner machine is frozen on the other.
+    // Every other status is reached with its steps where creation left them.
+    if status == JobStatus::CompletedSuccess {
+        let advanced = advance_every_step(&drive(&job, &running));
+        let reached = drive(&advanced, &[Target::CompletedSuccess]);
+        assert_eq!(
+            reached.status(),
+            status,
+            "reach() walked to the wrong status"
+        );
+        return reached;
+    }
     let path: Vec<Target> = match status {
         JobStatus::AwaitingApproval => Vec::new(),
         JobStatus::Queued => queued.to_vec(),
@@ -162,7 +234,6 @@ fn reach(status: JobStatus) -> Job {
         ]
         .concat(),
         JobStatus::Piloted => [&running[..], &[Target::Piloted(PilotReason::TakeOver)]].concat(),
-        JobStatus::CompletedSuccess => [&running[..], &[Target::CompletedSuccess]].concat(),
         JobStatus::CompletedFailed => [&running[..], &[Target::CompletedFailed]].concat(),
         JobStatus::Rejected => vec![Target::Rejected],
         JobStatus::Superseded => [
@@ -171,6 +242,8 @@ fn reach(status: JobStatus) -> Job {
         ]
         .concat(),
         JobStatus::Killed => vec![Target::Killed],
+        // Taken above: it is the one status no path of targets alone reaches.
+        JobStatus::CompletedSuccess => unreachable!("handled before the match"),
     };
     let reached = drive(&job, &path);
     assert_eq!(

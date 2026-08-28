@@ -14,8 +14,10 @@
 # transpose of `step_states` there — one relation written twice, read as one by
 # `cargo xtask verify-foundations`. Both halves had gone stale before anything
 # read either. Why nearly every state is seen beneath nearly every status is on
-# job-statuses.toml's own header: the status machine admits a move without
-# looking at a step, so a frozen step crosses every edge holding what it held.
+# job-statuses.toml's own header: a frozen step crosses an unguarded edge
+# holding what it held. `completed_success` is absent from three of these rows
+# because every edge arriving there is guarded on `every_step_advanced`, so a
+# step in any other state cannot be carried across one.
 #
 # Fields:
 #   meaning    - what the state asserts about the step
@@ -36,7 +38,7 @@ in_code = "Not yet"
 
 [states.not_started]
 meaning = "Written at Job creation for every step of the frozen WorkflowDef"
-seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_review", "completed_failed", "completed_success", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
+seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_review", "completed_failed", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
 in_code = "Not yet"
 
 [states.retrying]
@@ -46,12 +48,12 @@ in_code = "Not yet"
 
 [states.running]
 meaning = "The step is being worked"
-seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_review", "completed_failed", "completed_success", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
+seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_review", "completed_failed", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
 in_code = "Not yet"
 
 [states.stopped]
 meaning = "Retries spent"
-seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_review", "completed_failed", "completed_success", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
+seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_review", "completed_failed", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
 in_code = "Not yet"
 notes = "The step's retries are spent; it is neither retrying nor waiting on a person."
 why = "Folding it into `retrying` or `awaiting_human` would make a designed human gate and a dead stop render alike."

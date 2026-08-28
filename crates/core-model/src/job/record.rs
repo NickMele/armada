@@ -221,6 +221,11 @@ impl Job {
 
     /// Move the Job, or say why it cannot move.
     ///
+    /// **The steps are read here, and this is the only place the outer machine
+    /// looks at the inner one.** An edge carrying a [`Guard`](crate::Guard) is
+    /// admitted only where the Job's `job_steps` rows satisfy it, which is what
+    /// makes `completed_success` unwritable while a step is still running.
+    ///
     /// Takes `&self` and returns a new `Job` rather than consuming: on the
     /// error path a consumed Job is gone, and the caller that most needs to
     /// report the refusal would have nothing left to report it about. The
@@ -235,7 +240,7 @@ impl Job {
         by: Actor,
         at: Timestamp,
     ) -> Result<Transitioned, IllegalTransition> {
-        admits(self.status, &to)?;
+        admits(self.status, &to, &self.steps)?;
         let arriving = to.status();
         let event = JobEvent::recorded(self.id.clone(), self.status, arriving, to.reason(), by, at);
         let mut job = self.clone();

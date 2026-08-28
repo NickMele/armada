@@ -36,6 +36,8 @@ const MACHINE: &str = "crates/core-model/src/job/step_machine.rs";
 const RECORD: &str = "crates/core-model/src/job/record.rs";
 const STEP: &str = "crates/core-model/src/job/step.rs";
 const SOURCE: &str = "crates/core-model/src/job/status.rs";
+const GUARD: &str = "crates/core-model/src/job/guard.rs";
+const GUARDS: &str = "crates/core-model/domain/transition-guards.toml";
 const SOURCE_IS: &str = "the source `StepState::seen_under` is written in";
 
 /// The two machines joined, in wire spellings throughout.
@@ -46,10 +48,12 @@ pub(super) struct Machine {
     initial: String,
     /// The statuses beneath which a step moves at all.
     advancing: BTreeSet<String>,
-    /// `EDGES`, as `from -> to`.
-    status_edges: Vec<(String, String)>,
+    /// `EDGES`, as `from -> to` and the guard the edge carries.
+    status_edges: Vec<(String, String, Option<String>)>,
     /// `STEP_EDGES`, likewise.
     step_edges: Vec<(String, String)>,
+    /// `Guard::holds`, as `guard -> the step states it admits`.
+    guards: BTreeMap<String, Vec<String>>,
 }
 
 impl Machine {
@@ -71,10 +75,22 @@ impl Machine {
             if !seen.insert(state.clone()) {
                 continue;
             }
-            for (from, to) in &self.status_edges {
-                if *from == status {
-                    frontier.push((to.clone(), state.clone()));
+            for (from, to, guard) in &self.status_edges {
+                if *from != status {
+                    continue;
                 }
+                // **The one place the two machines meet in this walk.** A
+                // frozen step crosses an unguarded edge holding whatever it
+                // held; a guarded one carries only the states its condition
+                // admits, which is what lets a destination's row say something
+                // narrower than "whatever arrived".
+                if let Some(guard) = guard {
+                    let admits = self.guards.get(guard).is_some_and(|h| h.contains(&state));
+                    if !admits {
+                        continue;
+                    }
+                }
+                frontier.push((to.clone(), state.clone()));
             }
             if self.advancing.contains(&status) {
                 for (from, to) in &self.step_edges {
@@ -96,21 +112,32 @@ pub fn every_status_declares_the_step_states_it_holds(root: &Path) -> Report {
     // [`super::edges`] gives: their internal failures belong to the rule above.
     let mut reading = Report::new("reading the enums");
     let spellings = super::wire_spellings(root, &mut reading);
-    let (Some(statuses), Some(states), Some(triggers)) = (
+    let (Some(statuses), Some(states), Some(triggers), Some(guard_names)) = (
         spellings.get("JobStatus"),
         spellings.get("StepState"),
         spellings.get("EscalationTrigger"),
+        spellings.get("Guard"),
     ) else {
         report.fail(
-            "`JobStatus`, `StepState` and `EscalationTrigger` did not all read — see the \
-             rules above. Nothing can be walked in spellings that were not found",
+            "`JobStatus`, `StepState`, `EscalationTrigger` and `Guard` did not all read — \
+             see the rules above. Nothing can be walked in spellings that were not found",
         );
         return report;
     };
 
-    let Some(machine) = machine::read_machine(root, statuses, states, triggers, &mut report) else {
+    let Some(machine) =
+        machine::read_machine(root, statuses, states, triggers, guard_names, &mut report)
+    else {
         return report;
     };
+    if let Some(text) = read(
+        root,
+        GUARDS,
+        "the registry whose `holds_steps` this rule reads",
+        &mut report,
+    ) {
+        check_guards(&text, &machine.guards, states, &mut report);
+    }
     let reachable = machine.reachable();
     let anywhere: BTreeSet<String> = reachable.values().flatten().cloned().collect();
 
@@ -375,6 +402,79 @@ fn check_transcription(
                 "{SOURCE} — `StepState::{state}` has a `seen_under` arm and {STATES} has no \
                  `[states.{state}]` row. The arm answers for a state the registry does not \
                  declare"
+            ));
+        }
+    }
+}
+
+/// `Guard::holds` against the registry that sanctions it.
+///
+/// The relation is written twice for the reason `seen_under` is: the walk needs
+/// the set the code holds, and `transition-guards.toml` is the authority on
+/// what that set may be. **The registry is the authority**, so the finding
+/// names the arm as the side that changes — unlike the comparison against the
+/// machine, where neither side is derivable from the other.
+///
+/// A guard the registry declares and the enum does not spell is the set
+/// comparison above's, not this one's; here a declared guard with no arm is a
+/// condition the machine cannot evaluate.
+fn check_guards(
+    text: &str,
+    arms: &BTreeMap<String, Vec<String>>,
+    states: &BTreeMap<String, String>,
+    report: &mut Report,
+) {
+    let rows = read_rows(text, "guards.", GUARDS, report);
+    if rows.is_empty() {
+        report.fail(format!(
+            "{GUARDS} has no `[guards.<key>]` table at all — `Guard::holds` was compared \
+             against nothing"
+        ));
+        return;
+    }
+    for row in &rows {
+        let key = &row.key;
+        let Some(array) = row.arrays.get("holds_steps") else {
+            report.fail(format!(
+                "{GUARDS}:{} — `[guards.{key}]` declares no `holds_steps`. It is the set the \
+                 walk carries across a guarded edge, and an absent one is a guard the gate \
+                 reads as admitting nothing",
+                row.line
+            ));
+            continue;
+        };
+        for value in &array.values {
+            if !states.values().any(|wire| wire == value) {
+                report.fail(format!(
+                    "{GUARDS}:{} — `[guards.{key}]` admits the step state `{value}`, which no \
+                     `StepState` variant spells",
+                    array.line
+                ));
+            }
+        }
+        let held: BTreeSet<String> = arms
+            .get(key)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+        if held == array.values {
+            continue;
+        }
+        report.fail(format!(
+            "{GUARDS}:{} — `[guards.{key}]` admits {}, and `Guard::holds` returns {}. The \
+             registry is the authority on the set, so the arm is what changes",
+            array.line,
+            list(&array.values),
+            list(&held)
+        ));
+    }
+    for guard in arms.keys() {
+        if !rows.iter().any(|row| row.key == *guard) {
+            report.fail(format!(
+                "{GUARD} — `Guard::{guard}` has a `holds` arm and {GUARDS} has no \
+                 `[guards.{guard}]` row. The arm answers for a condition the registry does \
+                 not declare"
             ));
         }
     }
