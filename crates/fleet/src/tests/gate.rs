@@ -25,9 +25,10 @@ use verification::{
 };
 
 use crate::at_step::AtStep;
+use crate::clock::Clock;
 use crate::evidence::{Call, EvidenceInbox, EvidenceTool};
 use crate::gate::{apply, rule_on, CheckBudget, Ruling};
-use crate::judging::{JudgeBudget, Judging};
+use crate::judging::{Aloft, JudgeBudget, Judging, Marking};
 
 const NOW: &str = "2026-08-26T09:00:00.000Z";
 
@@ -180,7 +181,30 @@ pub(super) fn judged_by_shared(client: Arc<FakeJudge>) -> Judging {
         budget: JudgeBudget::of(Duration::from_secs(20)),
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
+        marking: Marking::detached(),
     }
+}
+
+/// A clock that answers the same instant every time. What a case asserting on
+/// the mark wants: nothing here measures how long a call took, only that the
+/// mark went up naming the right thing and came down.
+pub(super) struct Stopped;
+
+impl Clock for Stopped {
+    fn now(&self) -> Timestamp {
+        at(NOW)
+    }
+}
+
+/// A marking bound to this file's Job, with the slot and the stream handed in.
+pub(super) fn marking(aloft: Aloft, events: api::Broadcaster) -> Marking {
+    Marking::on(
+        (&job_id()).into(),
+        aloft,
+        events,
+        Arc::new(Stopped),
+        JudgeBudget::of(Duration::from_secs(20)),
+    )
 }
 
 // ------------------------------------------------------------------ the tool

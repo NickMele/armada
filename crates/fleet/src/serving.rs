@@ -783,6 +783,11 @@ where
                     .find(|(at, _)| at == step.step_id())
                     .map(|(_, found)| found.iter().map(Flagged::from).collect())
                     .unwrap_or_default(),
+                // The one fact here that is not a row. Read from the live slot
+                // as the answer is assembled, because nothing writes it down.
+                judging: self
+                    .aloft()
+                    .on(&ipc::JobId::from(job.id()), &StepId::from(step.step_id())),
             })
             .collect()
     }

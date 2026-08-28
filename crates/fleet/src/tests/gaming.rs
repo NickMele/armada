@@ -20,7 +20,7 @@ use verification::Request;
 
 use crate::at_step::AtStep;
 use crate::gate::{apply, rule_on, Ruling};
-use crate::judging::{JudgeBudget, Judging};
+use crate::judging::{JudgeBudget, Judging, Marking};
 use crate::tests::daemon::{a_fleet_judged_by, a_proposal, worktree_directory};
 use crate::tests::detail::get;
 use crate::tests::gate::{budget, diff_evidence, running_job, worktree};
@@ -74,6 +74,7 @@ fn judging() -> Judging {
         budget: JudgeBudget::of(Duration::from_secs(20)),
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
+        marking: Marking::detached(),
     }
 }
 
@@ -274,6 +275,7 @@ async fn a_flagged_step_keeps_what_the_judge_said_about_its_criteria() {
         budget: JudgeBudget::of(Duration::from_secs(20)),
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
+        marking: Marking::detached(),
     };
     let ruling = rule_on(
         at,

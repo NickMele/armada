@@ -254,7 +254,7 @@ where
         let Ok(patch) = self.work().patch(&worktree) else {
             return Ok(None);
         };
-        let judging = self.judging().map_err(|cause| Adrift::NotConfigurable {
+        let judging = self.judging(job).map_err(|cause| Adrift::NotConfigurable {
             job: job.clone(),
             cause,
         })?;

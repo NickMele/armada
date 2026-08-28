@@ -34,7 +34,9 @@ use core_model::{
     ModelName, NewJob, StepEvent, StepEvidence, StepId, StepSeed, StepState, StepTarget, Target,
     Timestamp, Title, TopLevelOrigin, TransitionReason, Ulid, Urgency,
 };
-use fleet::{apply, rule_on, AtStep, CheckBudget, Clock, JudgeBudget, Judging, Mint, Ruling};
+use fleet::{
+    apply, rule_on, AtStep, CheckBudget, Clock, JudgeBudget, Judging, Marking, Mint, Ruling,
+};
 use testkit::{resolved, FakeJudge, FakeVcs, FakeWorkProduct, Gaming, Gate, Sketch};
 use verification::{Claimed, NotClaimed, Request, ShownBy, Submission};
 
@@ -281,6 +283,10 @@ impl Bench {
                 budget: JudgeBudget::of(Duration::from_secs(20)),
                 default_model: Model::named("the-cheap-model").expect("a model name"),
                 environment: Environment::nothing(),
+                // The bench asserts on rulings, not on what a call said about
+                // itself while it was out — and it reaches no `api` and no
+                // `ipc`, which is the hermetic rule this file's header states.
+                marking: Marking::detached(),
             },
             moves: RefCell::new(Vec::new()),
             step_moves: RefCell::new(Vec::new()),
