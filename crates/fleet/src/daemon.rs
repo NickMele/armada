@@ -61,7 +61,7 @@ use crate::converging::{StepNorms, Wandering};
 use crate::delivery::Delivered;
 use crate::drafting::StatedBy;
 use crate::drone::{aftermath, environment, Aftermath, Ending, HostPaths};
-use crate::evidence::EvidenceInbox;
+use crate::evidence::{Decline, EvidenceInbox};
 use crate::gate::{CheckBudget, Ruling};
 use crate::judging::{JudgeBudget, Judging};
 use crate::mint::Mint;
@@ -171,6 +171,10 @@ pub struct Reconciled {
 pub struct Turned {
     /// The gate's answer to a submission that had landed.
     pub ruled: Option<Ruling>,
+    /// The gate having been asked and refused. **Never present beside
+    /// `ruled`**, and carried rather than swallowed: an absence is exactly what
+    /// a person cannot tell from a Judge still thinking.
+    pub declined: Option<Decline>,
     /// What followed from a Drone that had gone.
     pub after: Option<Aftermath>,
     /// The Job admitted because the slot came free.
@@ -313,6 +317,19 @@ where
     /// world having moved, in the one order they can follow in, over a slot
     /// that holds one Job.
     pub async fn turn(&self) -> Result<Turned, Adrift> {
+        let turned = self.turning().await;
+        // **Into the Job's own log**, not only onto the reporter the loop was
+        // given. That reporter is Fleet's stdout, which is the operator's
+        // console and is not where anybody reads a Job — so a turn that failed
+        // showed a person exactly what a decline that wrote nothing showed
+        // them, which is nothing at all.
+        if let Err(why) = &turned {
+            self.noted_adrift(why);
+        }
+        turned
+    }
+
+    async fn turning(&self) -> Result<Turned, Adrift> {
         let mut working = self.working.lock().await;
         // First, because the reading it takes is the one the drift check needs
         // and a turn must not open the same repository twice. It answers `None`
@@ -328,12 +345,13 @@ where
         // one place both are true: a step whose evidence lands this turn is at
         // the gate rather than thrashing, and `settle` may clear the slot.
         let wandering = self.watch_convergence(&mut working).await?;
-        let ruled = self.settle(&mut working).await?;
+        let settled = self.settle(&mut working).await?;
         let delivered = self.delivered.lock().await.take();
         let after = self.reap(&mut working).await?;
         let admitted = self.admit_next(&mut working).await?;
         Ok(Turned {
-            ruled,
+            ruled: settled.ruled,
+            declined: settled.declined,
             after,
             admitted,
             delivered,

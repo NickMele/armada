@@ -514,6 +514,62 @@ impl Adrift {
             said: why.said,
         }
     }
+
+    /// Which Job could not be carried forward, where one can be named.
+    ///
+    /// **What makes a failure reachable from the thing it happened to.** A turn
+    /// that fails is reported on Fleet's stdout, which is not where a Job is
+    /// read; this is what lets the same failure be written into the Job's own
+    /// log, where the person watching it is looking.
+    ///
+    /// `None` is honest rather than a gap. A boot read, a proposal that named
+    /// no workflow this Fleet holds, a request with nothing in it — none of
+    /// those has a Job yet, and the three illegal-move variants carry the
+    /// machine's own refusal rather than the record it was asked about.
+    pub fn job(&self) -> Option<&JobId> {
+        match self {
+            Adrift::Unworkable { job, .. }
+            | Adrift::NoWorktree { job, .. }
+            | Adrift::NotConfigurable { job, .. }
+            | Adrift::NoDrone { job, .. }
+            | Adrift::NoTranscript { job, .. }
+            | Adrift::NotTold { job, .. }
+            | Adrift::NotCommitted { job, .. }
+            | Adrift::NotDelivered { job, .. }
+            | Adrift::NoSuchStep { job, .. }
+            | Adrift::NotReaped { job, .. }
+            | Adrift::NotRedispatchable { job, .. }
+            | Adrift::NeverRan { job }
+            | Adrift::NotReplaceable { job }
+            | Adrift::WorkflowWithdrawn { job, .. }
+            | Adrift::NotResumable { job, .. }
+            | Adrift::NoStepStopped { job }
+            | Adrift::NoDroneToRedirect { job }
+            | Adrift::NotUnderReview { job, .. }
+            | Adrift::NoDroneToTell { job }
+            | Adrift::WorkUnreadable { job, .. }
+            | Adrift::DroneStillThere { job }
+            | Adrift::WorktreeGone { job, .. }
+            | Adrift::AttachmentUnreadable { job, .. } => Some(job),
+            Adrift::BootRead(_)
+            | Adrift::Reading(_)
+            | Adrift::Writing(_)
+            | Adrift::IllegalMove(_)
+            | Adrift::IllegalStepMove(_)
+            | Adrift::IllegalDroneMove(_)
+            | Adrift::Unnameable
+            | Adrift::NoSuchWorkflow { .. }
+            | Adrift::NoSuchManifest { .. }
+            | Adrift::Modelless
+            | Adrift::NothingToPropose
+            | Adrift::NoReadingWorktree(_)
+            | Adrift::NoReading { .. }
+            | Adrift::ReadingNotDiscarded { .. }
+            | Adrift::NotProposable(_)
+            | Adrift::NoWorkflowFits { .. }
+            | Adrift::NotProposed { .. } => None,
+        }
+    }
 }
 
 impl Error for Adrift {

@@ -35,11 +35,10 @@ use store::Moved;
 use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
-use crate::at_step::AtStep;
 use crate::briefing;
 use crate::daemon::Fleet;
 use crate::drone::{aftermath, Aftermath, Ending, Left};
-use crate::gate::{apply, rule_on, Ruling};
+use crate::gate::{apply, Ruling};
 use crate::session::LiveSession;
 use crate::working::Working;
 
@@ -208,88 +207,6 @@ where
             .await
     }
 
-    /// Run the gate over one waiting submission, and do what it says.
-    pub(crate) async fn settle(
-        &self,
-        working: &mut Option<Working>,
-    ) -> Result<Option<Ruling>, Adrift> {
-        let Some(at_work) = working.as_ref() else {
-            return Ok(None);
-        };
-        let (job_id, step, worktree) = at_work.standing();
-        let Some(landed) = self.take_evidence() else {
-            return Ok(None);
-        };
-        // A submission from the idle Drone of a Job that is no longer being
-        // worked. The gate ruled on this step already, and it is dropped rather
-        // than held: a held one would be ruled on by the turn a redirect
-        // produces, and the person's instruction would be answered by a verdict
-        // on work done before they wrote it.
-        //
-        // Two statuses reach here and the drop is right for both. Beneath
-        // `escalated` the inner machine is frozen and a second ruling has
-        // nowhere to be written. Beneath `awaiting_review` it is not frozen,
-        // and that is the sharper case: a Job at a human gate is a person's,
-        // and a second submission must not be able to re-rule the step out from
-        // under them.
-        if self.load(&job_id).await?.status() != JobStatus::Running {
-            return Ok(None);
-        }
-        // The tool is bound to a Job at construction and the inbox is emptied
-        // when a Job ends, so this cannot be a submission about some other Job.
-        // Kept because the alternative to a guard here is a gate ruling on one
-        // Job's step from another Job's evidence.
-        if landed.job != job_id {
-            return Ok(None);
-        }
-
-        let job = self.load(&job_id).await?;
-        let Some(at) = AtStep::named(job.workflow(), &step, &worktree) else {
-            return Err(Adrift::NoSuchStep {
-                job: job_id,
-                step: Some(step),
-            });
-        };
-        // Assembled here rather than inside the gate: a Judge call
-        // authenticates as Fleet, and a value that could not be built is a
-        // configuration failure against this Job rather than a verdict.
-        let judging = self.judging().map_err(|cause| Adrift::NotConfigurable {
-            job: job_id.clone(),
-            cause,
-        })?;
-        let declared = at_work.declared().cloned();
-        // Read before the gate rather than inside it: `rule_on` reaches no
-        // database, and a baseline is a row like any other.
-        let recorded = self
-            .store()
-            .lock()
-            .await
-            .step_evidence(&job_id)
-            .map_err(Adrift::Reading)?;
-        let entered_with = at_work.entered_with().cloned();
-        let ruling = rule_on(
-            at,
-            &landed.submission,
-            declared.as_ref(),
-            entered_with.as_ref(),
-            &recorded,
-            self.work(),
-            self.budget(),
-            &judging,
-        )
-        .await;
-        // Before the Job or the step moves. A recorded result the transition
-        // then failed to make is readable; a transition whose evidence was
-        // never written down is a verdict with no trace.
-        self.recorded_checks(&job_id, &step, &ruling).await?;
-        self.recorded_judgments(&job_id, &step, &ruling).await?;
-        self.recorded_evidence(&job_id, &step, &landed.submission, &ruling)
-            .await?;
-        self.recorded_gaming(&job_id, &step, &ruling).await?;
-        self.act_on(&ruling, &job_id, &step, working).await?;
-        Ok(Some(ruling))
-    }
-
     /// Read what the worktree holds now, and hold it as this step's baseline.
     ///
     /// **The reading `diff_nonempty` is decided against**, taken at the moment
@@ -328,7 +245,7 @@ where
 
     /// The Job move a ruling implies, and the step move it implies, in the one
     /// order the two machines admit.
-    async fn act_on(
+    pub(crate) async fn act_on(
         &self,
         ruling: &Ruling,
         job_id: &JobId,
@@ -470,14 +387,21 @@ where
                 let job = self.load(&job_id).await?;
                 self.move_job(&job, target.clone(), Actor::Fleet).await?;
                 working.take();
-                self.empty_the_inbox();
+                // Ordinarily nothing: `left` answers `Left::Evidence` when a
+                // submission is waiting and this arm is not the one reached.
+                // Said out loud on the arm it is not reached from, because the
+                // one drop nobody wrote down is the defect this pair closes.
+                self.dropped_with_the_job(&job_id, self.empty_the_inbox());
             }
             // The idle Drone of a Job a person is already holding. Its going is
             // the only fact, and it is what turns a redirect into a restart.
             Aftermath::AlreadyStopped => {
                 self.drone_left(&job_id).await;
                 working.take();
-                self.empty_the_inbox();
+                // Reachable, unlike its neighbour: a Job that stopped while its
+                // Drone was still submitting leaves evidence with no step to be
+                // against. It goes, and the Job's log says it went.
+                self.dropped_with_the_job(&job_id, self.empty_the_inbox());
             }
             Aftermath::TheGateDecides => {}
         }
@@ -527,12 +451,19 @@ where
     /// taken here and the id goes with it — and a `drone.exited` that never
     /// landed would leave the Board showing a Drone on a Job that has none.
     pub(crate) async fn end_the_drone(&self, working: &mut Option<Working>) {
-        if let Some(at_work) = working.take() {
-            let (job_id, _) = at_work.drone();
-            self.drone_left(&job_id).await;
-            let _ = at_work.session().terminate().await;
+        let ended = match working.take() {
+            Some(at_work) => {
+                let (job_id, _) = at_work.drone();
+                self.drone_left(&job_id).await;
+                let _ = at_work.session().terminate().await;
+                Some(job_id)
+            }
+            None => None,
+        };
+        let dropped = self.empty_the_inbox();
+        if let Some(job_id) = ended {
+            self.dropped_with_the_job(&job_id, dropped);
         }
-        self.empty_the_inbox();
     }
 
     /// Pause the Job for a person, holding its worktree as-is.
