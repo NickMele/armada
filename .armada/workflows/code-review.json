@@ -27,6 +27,18 @@
 #
 # `read` and `deliver` carry no Judge. Reading is not a work product, and
 # delivering is a hand-off.
+#
+# **A step whose `evidence_type` is `facts_note` carries no Judge, and that is
+# forced rather than chosen.** The Judge is shown a patch and nothing else --
+# `crates/verification/src/judge.rs:59` is explicit that there is no
+# `submission` parameter, because what a Drone says about its own work is not an
+# input to the thing checking it. On a step whose work product *is* a written
+# note there is no patch, so the Judge is handed an empty one and refuses every
+# time. It did, on a real Job, at its first step.
+#
+# The designed workflow feeds prior evidence to the Judge through
+# `reference_docs`, which M1's parser does not read. Until it does, a Judge here
+# cannot see the thing it is being asked about. See #153.
 {
   "version": 1,
   "workflow_id": "code_review",
@@ -51,28 +63,7 @@
           "target/"
         ]
       },
-      "judge_checks": [
-        {
-          "enabled": true,
-          "model": "sonnet",
-          "criteria": [
-            {
-              "criterion_id": "findings_engage_with_the_diff",
-              "question": "Do these findings engage with what this diff actually does, citing specific changes -- or are they generic observations that would apply to any diff?"
-            }
-          ],
-          "gaming_check": {
-            "enabled": true,
-            "baseline_ref": "read.evidence",
-            "flag_if": [
-              "no_findings_on_substantial_diff",
-              "findings_not_tied_to_changed_lines",
-              "findings_generic"
-            ]
-          }
-        }
-      ],
-      "advance_gate": "auto_if_judge_passes"
+      "advance_gate": "auto"
     },
     {
       "id": "deliver",
