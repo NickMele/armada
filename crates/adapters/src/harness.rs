@@ -52,12 +52,23 @@ use crate::transcript;
 /// The tools the Evidence server exposes, as the harness names them: the
 /// server's registered name and each tool's own, joined the way MCP tools are.
 ///
-/// **Both in every toolbelt.** They are prepended here rather than being a
+/// **All three in every toolbelt.** They are prepended here rather than being a
 /// `Grant`, because a list is something a caller can build empty — and a Drone
 /// denied one of them is denied silently, which reads as a Drone that went
 /// quiet rather than as an argument-list fault.
+///
+/// **The third one is why this table matters.** A Drone on the `tests` step of
+/// Job `01M14HZ8ND001FYT6264WZJFPB` was granted `Bash(cargo fmt --all:*)` and
+/// `Bash(cargo xtask verify-foundations:*)` and nothing else, so every way of
+/// finding out whether its work held up was denied by the row above — silently,
+/// which reads to a Drone as a tool that does not work. It hand-checked, said
+/// so honestly, and failed a Check it had no way to see coming. The fix is not
+/// a wider `Bash` grant, which would run a command the workflow froze against a
+/// Manifest that may have changed; it is a tool through which Fleet runs the
+/// Checks itself.
 const EVIDENCE_TOOL: &str = "mcp__armada__submit_evidence";
 const SCOPE_TOOL: &str = "mcp__armada__declare_scope";
+const CHECKS_TOOL: &str = "mcp__armada__run_checks";
 
 /// The program name `crates/config/settings.toml` gives as the default for the
 /// AgentHarness binary path: `claude (on PATH)`.
@@ -204,7 +215,11 @@ impl AgentHarness for HeadlessAgent {
 /// and a reader checking an argument list by eye sees them before anything that
 /// varies.
 fn allowlist(config: &DroneSpawnConfig) -> Result<String, HarnessRefused> {
-    let mut allowed = vec![String::from(EVIDENCE_TOOL), String::from(SCOPE_TOOL)];
+    let mut allowed = vec![
+        String::from(EVIDENCE_TOOL),
+        String::from(SCOPE_TOOL),
+        String::from(CHECKS_TOOL),
+    ];
     for grant in config.toolbelt().granted() {
         match grant {
             // Reading is three tools, because a search and a listing are reads
@@ -329,11 +344,18 @@ pub fn evidence_tool() -> &'static str {
     EVIDENCE_TOOL
 }
 
-/// The scope tool's name, for the same callers. **Both are needed**: a
-/// toolbelt missing either one denies the Drone silently, and a Job that goes
-/// quiet is an argument-list fault rather than a prompt one.
+/// The scope tool's name, for the same callers. **All three are needed**: a
+/// toolbelt missing any one of them denies the Drone silently, and a Job that
+/// goes quiet is an argument-list fault rather than a prompt one.
 pub fn scope_tool() -> &'static str {
     SCOPE_TOOL
+}
+
+/// The dry-run tool's name. The one this file's [`EVIDENCE_TOOL`] comment is
+/// about: a Drone that cannot ask whether its work passes has no way to find
+/// out except by submitting.
+pub fn checks_tool() -> &'static str {
+    CHECKS_TOOL
 }
 
 /// The server both tools above are served from.

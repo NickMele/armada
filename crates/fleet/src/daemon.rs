@@ -61,6 +61,7 @@ use crate::converging::{StepNorms, Wandering};
 use crate::delivery::Delivered;
 use crate::drafting::StatedBy;
 use crate::drone::{aftermath, environment, Aftermath, Ending, HostPaths};
+use crate::dry_run::DryRuns;
 use crate::evidence::{Decline, EvidenceInbox};
 use crate::gate::{CheckBudget, Ruling};
 use crate::judging::{Aloft, JudgeBudget, Judging, Marking};
@@ -131,6 +132,11 @@ pub struct Fittings<H, V, W> {
     /// bounds is the Drone being there at all, and nothing about it is measured
     /// against a step's work. See [`Liveness`].
     pub liveness: Liveness,
+    /// How many times one step may ask Fleet to run its Checks. Its own value
+    /// for [`Liveness`]'s reason: what it bounds is money spent answering the
+    /// Drone rather than anything about the step's work. See
+    /// [`DryRuns`](crate::DryRuns).
+    pub dry_runs: DryRuns,
     /// What makes a Judge call. **A pointer rather than a type parameter**: the
     /// seam renders and cannot fail, so nothing about it needs to be generic.
     pub judge: Arc<dyn ModelClient + Send + Sync>,
@@ -215,6 +221,7 @@ pub struct Fleet<H, V, W> {
     budget: CheckBudget,
     norms: StepNorms,
     liveness: Liveness,
+    dry_runs: DryRuns,
     judge: Arc<dyn ModelClient + Send + Sync>,
     judge_budget: JudgeBudget,
     /// The Judge call that is out right now, or none. **The one piece of Fleet
@@ -269,6 +276,7 @@ where
             budget: fittings.budget,
             norms: fittings.norms,
             liveness: fittings.liveness,
+            dry_runs: fittings.dry_runs,
             judge: fittings.judge,
             judge_budget: fittings.judge_budget,
             aloft: Aloft::default(),
@@ -579,6 +587,9 @@ where
     }
     pub(crate) fn liveness(&self) -> Liveness {
         self.liveness
+    }
+    pub(crate) fn dry_runs(&self) -> DryRuns {
+        self.dry_runs
     }
 
     /// What the gate needs in order to ask the Judge.

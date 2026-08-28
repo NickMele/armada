@@ -1,14 +1,20 @@
-//! The two tools a Drone is given, their arguments and their schemas.
+//! The three tools a Drone is given, their arguments and their schemas.
 //!
 //! Split from the transport beside it because they are two things: [`mod@super`]
 //! reads JSON-RPC and decides what is answered, and this decides what a tool
-//! takes. A third tool touches only this file.
+//! takes. A fourth tool touches only this file.
 //!
-//! # Two tools, and neither takes a job id or a step id
+//! # No tool takes a job id or a step id
 //!
 //! Fleet knows both, and a value a Drone supplies is a value a Drone chose. A
 //! call carrying one is refused **by name** rather than ignored — a field
 //! nothing reads is a promise the call makes and the system does not keep.
+//!
+//! [`CHECKS_TOOL`] takes nothing at all, not even a Check name: which Checks
+//! gate the step was frozen when the Job was approved, so a name here could
+//! only agree or disagree, and the disagreeing case is a Drone choosing which
+//! bar it is measured against. Its field list is empty, which makes every
+//! argument a named refusal.
 //!
 //! # Why declaring is a different call from submitting
 //!
@@ -27,10 +33,17 @@ pub const TOOL: &str = "submit_evidence";
 /// The scope-declaration tool's name, bare.
 pub const SCOPE_TOOL: &str = "declare_scope";
 
+/// The dry-run tool's name, bare. **A question, not a submission** — it moves
+/// no step, and `fleet::dry_run` says why the answer it returns can never be
+/// one.
+pub const CHECKS_TOOL: &str = "run_checks";
+
 /// The three prose fields, and a refusal for anything else.
 const EVIDENCE_FIELDS: &[&str] = &["claimed", "shown_by", "not_claimed"];
 /// The one field the scope tool takes.
 const SCOPE_FIELDS: &[&str] = &["context_paths"];
+/// The Checks tool takes none. See this module's comment.
+const CHECKS_FIELDS: &[&str] = &[];
 
 /// What a Drone hands over. **The Agent Copy Contract's Work submission
 /// fields, spelled as the Drone is asked for them**, and nothing else.
@@ -63,7 +76,7 @@ pub struct DeclareScope {
 /// told is to fix it and call again.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NotAnArgument {
-    /// A tool that is neither of the two.
+    /// A tool that is none of the three.
     NoSuchTool {
         named: String,
     },
@@ -95,7 +108,17 @@ impl core::fmt::Display for NotAnArgument {
         match self {
             NotAnArgument::NoSuchTool { named } => write!(
                 out,
-                "there is no tool called `{named}`. The tools are `{TOOL}` and `{SCOPE_TOOL}`"
+                "there is no tool called `{named}`. The tools are `{TOOL}`, \
+                 `{SCOPE_TOOL}` and `{CHECKS_TOOL}`"
+            ),
+            // The empty list is a real case now: `run_checks` takes nothing, so
+            // a call of it with no arguments is a correct call and never
+            // reaches here. A message reading "takes " with nothing after it
+            // would be this refusal arriving at a tool it does not apply to.
+            NotAnArgument::NoArguments { tool, takes: [] } => write!(
+                out,
+                "`{tool}` takes no arguments and none were expected. This \
+                 refusal is a fault in Fleet rather than in the call"
             ),
             NotAnArgument::NoArguments { tool, takes } => write!(
                 out,
@@ -134,6 +157,19 @@ impl core::fmt::Display for NotAnArgument {
                  or artifact you name in `shown_by`, and what it shows in \
                  `claimed` — then submit again"
             ),
+            // A Drone that invented a Check name is told who decides that,
+            // because "no such field" reads as an oversight to work around and
+            // the answer here is that there is nothing to work around.
+            NotAnArgument::NotAField {
+                named,
+                tool,
+                takes: [],
+            } => write!(
+                out,
+                "`{named}` is not a field of `{tool}`, which takes no arguments \
+                 at all. Which checks gate the part you are on was settled when \
+                 this task was approved; remove it and call again"
+            ),
             NotAnArgument::NotAField { named, tool, takes } => write!(
                 out,
                 "`{named}` is not a field of `{tool}`. It takes {} — remove it \
@@ -170,6 +206,14 @@ pub(crate) fn submission(arguments: &Map<String, Value>) -> Result<SubmitEvidenc
         shown_by: text(arguments, "shown_by")?,
         not_claimed: text(arguments, "not_claimed")?,
     })
+}
+
+/// The Checks tool's arguments, which is to say: that there are none.
+///
+/// **A call carrying a field is refused by name** rather than having it
+/// dropped, which is [`closed`]'s rule applied to an empty list.
+pub(crate) fn nothing(arguments: &Map<String, Value>) -> Result<(), NotAnArgument> {
+    closed(arguments, CHECKS_TOOL, CHECKS_FIELDS)
 }
 
 pub(crate) fn declaration(arguments: &Map<String, Value>) -> Result<DeclareScope, NotAnArgument> {
@@ -214,18 +258,25 @@ pub(crate) fn named(name: &str) -> Result<&'static str, NotAnArgument> {
     match name {
         TOOL => Ok(TOOL),
         SCOPE_TOOL => Ok(SCOPE_TOOL),
+        CHECKS_TOOL => Ok(CHECKS_TOOL),
         other => Err(NotAnArgument::NoSuchTool {
             named: other.to_string(),
         }),
     }
 }
 
-/// What a call with no `arguments` object is refused with, for either tool.
+/// What a call with no `arguments` object is refused with, for the two tools
+/// that take one. `run_checks` never reaches this — the transport answers it
+/// before the arguments are looked for.
 pub(crate) fn argumentless(tool: &'static str) -> NotAnArgument {
     match tool {
         SCOPE_TOOL => NotAnArgument::NoArguments {
             tool: SCOPE_TOOL,
             takes: SCOPE_FIELDS,
+        },
+        CHECKS_TOOL => NotAnArgument::NoArguments {
+            tool: CHECKS_TOOL,
+            takes: CHECKS_FIELDS,
         },
         _ => NotAnArgument::NoArguments {
             tool: TOOL,
@@ -244,7 +295,7 @@ fn text(arguments: &Map<String, Value>, field: &'static str) -> Result<String, N
         .to_string())
 }
 
-/// Both tools, as the client is shown them.
+/// Every tool, as the client is shown them.
 ///
 /// The Evidence description is the wording spike 6 measured — the `silent` arm
 /// proved a description alone does not make a Drone call the tool, which is why
@@ -255,7 +306,38 @@ fn text(arguments: &Map<String, Value>, field: &'static str) -> Result<String, N
 /// schema is advice a client may enforce; [`closed`] is what makes a forged
 /// field a named refusal rather than a silently accepted one.
 pub(crate) fn listed() -> Vec<Value> {
-    vec![evidence_tool(), scope_tool()]
+    vec![evidence_tool(), scope_tool(), checks_tool()]
+}
+
+/// The dry-run tool.
+///
+/// **The description says what it is not**, twice: not a verdict, and not a
+/// substitute for submitting. Spike 6 measured that a description alone does
+/// not make a Drone call a tool, which is why the offer is also in the
+/// briefing — but what a description still has to do is stop a Drone reading a
+/// green run as a finished step.
+///
+/// It names no Check and offers no way to. `docs/concepts/drone.md` used to
+/// keep the Checks from a Drone entirely; what replaced that is the Judge and
+/// the gaming patterns, not a parameter through which a Drone picks its own
+/// bar.
+fn checks_tool() -> Value {
+    json!({
+        "name": CHECKS_TOOL,
+        "description":
+            "Run the checks that gate the part you are on, in your worktree, and \
+             get back what each one did and where its output was written. Call \
+             it when you want to know whether the work holds up, before you \
+             submit. It is not a verdict and it advances nothing — the checks \
+             are run again when you submit, and only that run decides anything. \
+             There is a limit on how many times one part may ask, and a second \
+             call while one is still running is refused.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false,
+        },
+    })
 }
 
 fn evidence_tool() -> Value {

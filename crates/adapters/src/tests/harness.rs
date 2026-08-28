@@ -13,7 +13,7 @@ use adapter_traits::{
     Worktree,
 };
 
-use crate::harness::{evidence_tool, scope_tool, HarnessRefused, HeadlessAgent};
+use crate::harness::{checks_tool, evidence_tool, scope_tool, HarnessRefused, HeadlessAgent};
 
 const SECRET_LOOKING_TASK: &str = "fix the parser, the token is hunter2";
 
@@ -99,10 +99,10 @@ fn armadas_own_tools_are_in_a_toolbelt_that_was_granted_nothing() {
     let allowed = value_after(&args, "--allowedTools").expect("an allowlist is rendered");
     assert_eq!(
         allowed,
-        format!("{},{}", evidence_tool(), scope_tool()),
-        "a Drone granted nothing else still reports and still declares its \
-         scope, because neither tool is one of the grants — and a Drone denied \
-         one is denied silently"
+        format!("{},{},{}", evidence_tool(), scope_tool(), checks_tool()),
+        "a Drone granted nothing else still reports, still declares its scope \
+         and can still ask whether its work passes, because none of the three \
+         is one of the grants — and a Drone denied one is denied silently"
     );
 }
 
@@ -119,6 +119,7 @@ fn a_grant_becomes_the_tools_it_needs_and_armadas_own_stay_first() {
 
     assert_eq!(entries.first(), Some(&evidence_tool()));
     assert_eq!(entries.get(1), Some(&scope_tool()));
+    assert_eq!(entries.get(2), Some(&checks_tool()));
     assert!(entries.contains(&"Read"), "{allowed}");
     assert!(entries.contains(&"Edit"), "{allowed}");
     assert!(entries.contains(&"Bash(cargo test:*)"), "{allowed}");

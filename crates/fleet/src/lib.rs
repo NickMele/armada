@@ -37,6 +37,13 @@
 //! and nothing in either module accepts a fact from a Drone that gates its own
 //! step.
 //!
+//! And the other direction across the same gate: [`dry_run`](mod@dry_run) is a
+//! Drone asking whether its work passes, before it spends a step finding out
+//! the hard way. **It is not the gate and there is no path from it to one** —
+//! it writes no row, moves no step, and the gate runs the Checks again for
+//! itself. What it changes is that a Drone denied every `cargo` invocation by
+//! the allowlist has a way to ask.
+//!
 //! And the Drone itself: [`drone`](mod@drone) builds the environment a Drone
 //! gets — from an explicit list, never from Fleet's own — starts it detached
 //! against a harness's rendering, and says what a dead Drone means for its Job.
@@ -97,6 +104,7 @@ pub mod dispatch;
 pub mod drafting;
 pub mod drone;
 mod drone_moves;
+pub mod dry_run;
 pub mod evidence;
 pub mod footprint;
 mod gate;
@@ -136,6 +144,7 @@ pub use detach::Detached;
 pub use drone::{
     aftermath, environment, Aftermath, DroneNotStarted, Ending, HostPaths, Left, Started,
 };
+pub use dry_run::{DryRuns, NotRun};
 pub use evidence::{Call, Decline, EvidenceInbox, EvidenceTool, Landed, Recorded, Standing};
 pub use gate::{apply, rule_on, CheckBudget, CheckOutput, Ruling};
 pub use judging::{Aloft, CallFailed, JudgeBudget, Judging, Look, Marking};

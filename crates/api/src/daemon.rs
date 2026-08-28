@@ -25,7 +25,7 @@
 use std::future::Future;
 
 use crate::observing::Observed;
-use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
+use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
     ChangesRequested, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList, JobSummary,
     ManifestSummary, ModelChoices, ProposeJob, Redirection, Redispatched, WireError,
@@ -358,7 +358,8 @@ pub trait Daemon: Send + Sync + 'static {
     /// `submit_evidence` — the Evidence tool, called by the Drone that is
     /// working. **Not an inventory operation and not Bridge's**: its caller is
     /// a Drone rather than Bridge, which is why its refusal is [`NotRecorded`]
-    /// rather than [`Refusal`]. [`Daemon::declare_scope`] is the other.
+    /// rather than [`Refusal`]. [`Daemon::declare_scope`] and
+    /// [`Daemon::run_checks`] are the other two.
     ///
     /// # The submission is bound to a Job the caller never names
     ///
@@ -381,8 +382,33 @@ pub trait Daemon: Send + Sync + 'static {
         submission: SubmitEvidence,
     ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
 
+    /// `run_checks` — the working Drone asks whether the work it has so far
+    /// passes the Checks that gate its step, and is told.
+    ///
+    /// # It is not the gate, and the signature is what says so
+    ///
+    /// What comes back is [`CheckReport`], which has no verdict on it and no
+    /// method that could become one. Nothing here advances a step, records
+    /// evidence, or writes a Check row — the gate runs the same Checks again
+    /// for itself when evidence is submitted, and only that run decides
+    /// anything.
+    ///
+    /// # It blocks, where submitting does not
+    ///
+    /// A receipt is returned before the Checks run because the outcome is not
+    /// known yet; here the outcome *is* the answer, so the call is held open
+    /// while they run. What that costs is bounded by the implementation — a cap
+    /// per step, and a refusal while one is already running — because the
+    /// convergence clocks are suspended for the duration and cannot bound it.
+    ///
+    /// Bound to a Job and a step the caller never names, for
+    /// [`submit_evidence`](Daemon::submit_evidence)'s reason: there is no
+    /// parameter at all.
+    fn run_checks(&self) -> impl Future<Output = Result<CheckReport, NotRecorded>> + Send;
+
     /// `declare_scope` — where the working Drone says its work for this step
-    /// will be. **The Drone's other call, and the only other one.**
+    /// will be. **The one call that arrives before the work rather than
+    /// after it.**
     ///
     /// Bound to a Job and a step the caller never names, for
     /// [`submit_evidence`](Daemon::submit_evidence)'s reason. It moves nothing:

@@ -230,7 +230,47 @@ fn a_path_list_that_is_not_a_list_is_refused_by_name() {
     ));
 }
 
-/// The refusal for a third tool names both real ones, so a Drone that guessed
+/// **A tool that takes nothing is called with nothing**, and a client is
+/// entitled to omit the `arguments` member entirely rather than send an empty
+/// object. Both readings are the same call, and the arm that answers them runs
+/// before the arguments are looked for at all.
+#[test]
+fn a_checks_call_reads_the_same_with_no_arguments_and_with_none() {
+    use crate::mcp::{read, Incoming};
+
+    let omitted =
+        read(br#"{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"run_checks"}}"#);
+    let empty = read(
+        br#"{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"run_checks",
+            "arguments":{}}}"#,
+    );
+    assert!(matches!(omitted, Incoming::RunChecks { .. }), "{omitted:?}");
+    assert!(matches!(empty, Incoming::RunChecks { .. }), "{empty:?}");
+}
+
+/// **A Drone cannot choose which bar it is measured against**, so an invented
+/// Check name has no field to arrive in — and it is refused by name rather than
+/// dropped, because a Drone that named one believed it would be honoured.
+#[test]
+fn a_checks_call_naming_a_check_is_refused_and_told_who_decides() {
+    use crate::mcp::{read, Incoming};
+
+    let called = read(
+        br#"{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"run_checks",
+            "arguments":{"check":"tests"}}}"#,
+    );
+    let Incoming::NotASubmission { why, .. } = called else {
+        panic!("a field this tool does not take is refused as a tool error");
+    };
+    let said = why.to_string();
+    assert!(said.contains("`check` is not a field"), "{said}");
+    assert!(
+        said.contains("when this task was approved"),
+        "and is told who settled it: {said}"
+    );
+}
+
+/// The refusal for a fourth tool names every real one, so a Drone that guessed
 /// is told what it may call rather than only that it guessed.
 #[test]
 fn a_tool_that_is_neither_names_both() {
@@ -245,7 +285,9 @@ fn a_tool_that_is_neither_names_both() {
     };
     let said = why.to_string();
     assert!(
-        said.contains("submit_evidence") && said.contains("declare_scope"),
+        said.contains("submit_evidence")
+            && said.contains("declare_scope")
+            && said.contains("run_checks"),
         "{said}"
     );
 }

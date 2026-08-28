@@ -28,18 +28,32 @@
 //! [`Redeclaring`] — the contract has no sanctioned copy for it, and sanctioned
 //! copy is the contract's to write.
 //!
-//! # A Drone is never told what the Checks are
+//! # A Drone is not told what the Checks are. It is told it can run them
 //!
-//! `docs/concepts/drone.md` governs every Drone-facing surface, and nothing in
-//! this module has access to a `ResolvedCheck`'s `run` string by accident: the
-//! step block is written from [`ResolvedStep::label`] and the Job's own fields.
-//! Telling a Drone the Check would let it satisfy the Check rather than do the
-//! work, which is the failure the whole gate exists to refuse.
+//! This module used to say the first half and stop there: telling a Drone the
+//! Check would let it satisfy the Check rather than do the work. **The owner
+//! overruled that on 2026-08-28** — *"this is what the judge is for and the
+//! gaming checks"* — because the defence against a Drone satisfying the bar
+//! instead of doing the work is `docs/concepts/judge.md` and the gaming
+//! patterns, `check_config_edited` among them, and not keeping the Drone
+//! ignorant. What the old rule actually cost is in `crate::dry_run`: a Drone
+//! that could not run a single command that would tell it anything, hand-
+//! checked its work, said so honestly, and failed a Check it had no way to see
+//! coming.
 //!
-//! Three blocks outlive the turn they were written for and are types rather
+//! So the narrowing that remains is narrower and is about this module rather
+//! than about the system. **No block here is written from a `ResolvedCheck`'s
+//! `run` string** — the step block is written from [`ResolvedStep::label`] and
+//! the Job's own fields, and [`Checking`] says a tool exists rather than what
+//! it will run. A Drone that wants to know what the Checks are calls the tool
+//! and reads what they printed, which is Fleet running them rather than a
+//! Drone reading a command out of a prompt.
+//!
+//! Four blocks outlive the turn they were written for and are types rather
 //! than paragraphs: [`Declaring`], which a step boundary sends again,
-//! [`Redeclaring`], which the live drift check sends mid-step, and [`Stopped`],
-//! which a restart is built from. Each says why on itself.
+//! [`Redeclaring`], which the live drift check sends mid-step, [`Checking`],
+//! which offers the dry run, and [`Stopped`], which a restart is built from.
+//! Each says why on itself.
 
 use adapter_traits::{Prompt, SpawnConfigRefused};
 use core_model::{
@@ -260,8 +274,74 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId) -> String {
             text.push_str("\n\n");
             text.push_str(asked.text());
         }
+        if let Some(offered) = Checking::at(step) {
+            text.push_str("\n\n");
+            text.push_str(offered.text());
+        }
     }
     text
+}
+
+/// What a step tells its Drone about the dry run, where it has Checks to run.
+///
+/// **A tool nothing points at is the defect this whole capability is about.**
+/// Spike 6 measured that a description alone does not make a Drone call a tool,
+/// which is why the Evidence obligation is in the baseline and the scope ask is
+/// in [`Declaring`]; this is the same fact applied to an offer rather than an
+/// obligation.
+///
+/// **It offers and does not instruct.** A block a Drone reads as a requirement
+/// puts every step through a build nobody asked for, and the cost of one is
+/// minutes. So the whole of it is conditional, and the last sentence says
+/// outright that not calling it is a legitimate way to work.
+///
+/// **It names no number.** The allowance is Fleet's and is named in the refusal
+/// a Drone gets when it is spent — `docs/concepts/drone.md` keeps counters out
+/// of what a Drone is told, because a counter is a bar, and "two runs left" is
+/// a thing to optimise against rather than information about the work.
+///
+/// **It says twice that this is not the gate**, in the two places a Drone could
+/// stop reading: that a pass here is not a pass, and that submitting is still
+/// the only way to report. A Drone that read a green dry run as a finished step
+/// would have been made worse off by being offered this at all.
+///
+/// **Drafted wording**, like [`Redeclaring`] and the gaming half of [`Stopped`].
+/// `docs/contracts/agent-prompt.md` has no sanctioned copy for it, and
+/// sanctioned copy is the contract's to write.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Checking(String);
+
+impl Checking {
+    /// The offer this step makes, or `None` where it has nothing to run.
+    ///
+    /// **The step's own declared Checks are the switch**, and it is the same
+    /// switch `crate::dry_run` refuses on: a step declaring none would answer
+    /// every call with a refusal, and a Drone pointed at a tool that refuses it
+    /// is a Drone reading a denial as a broken system. That is the defect this
+    /// capability exists to close, arriving from the other side.
+    pub fn at(step: &ResolvedStep) -> Option<Checking> {
+        if step.checks().is_empty() {
+            return None;
+        }
+        Some(Checking(String::from(
+            "FINDING OUT WHERE YOU STAND\n\nYou can ask for the checks that \
+             gate this part to be run against your worktree, and you will be \
+             told what each one did and where its output was written. Use it \
+             when you want to know whether the work holds up rather than \
+             guessing — and note that it takes as long as the checks take.\n\n\
+             It is not a verdict and it advances nothing. A run in which \
+             everything passes does not finish this part; the checks are run \
+             again when you submit, and that run is the one that decides. \
+             Submitting is still the only way to report. There is a limit on \
+             how many times one part may ask, and you do not have to ask at \
+             all.",
+        )))
+    }
+
+    /// The block, exactly as it reaches a Drone.
+    pub fn text(&self) -> &str {
+        &self.0
+    }
 }
 
 /// What a step asks its Drone to declare before starting, where it asks at all.

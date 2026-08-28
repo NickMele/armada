@@ -56,7 +56,7 @@ The injected toolset:
 - The project's allowlist
 - The [Manifest Commands registry](manifest.md)
 - A brokered secrets scope
-- A dedicated **Evidence MCP tool**
+- A dedicated **Armada MCP server**, carrying three tools: submit evidence, declare scope, and run this step's Checks
 
 All of that assumes one owning Manifest. For a Drone working a [Convoy](convoy.md), see the resolution rule below.
 
@@ -150,9 +150,13 @@ What it settles that bears directly here:
 
 The Agent Prompt Contract exists because every constraint on Armada's prompts was written down and none of the prompts were. Section 5 lists the clauses the baseline must carry — completion is claimed through the Evidence tool and nowhere else, stopping and handing back through `escape_hatch` is a legitimate way to finish, a denied command is denied rather than an obstacle to route around, and secrets are brokered and never held.
 
-**The Drone is never told what the Checks are.** "The suite is run against your work" says a gate exists without naming the bar. Naming it hands the Drone a target to satisfy rather than work to do, and `check_config_edited` is already a gaming pattern.
+**The Drone is not told what the Checks are. It is told it can ask Fleet to run them.**
 
-The same rule keeps every counter out of an injected turn — a counter is a bar, and a Drone one attempt from escalation has the strongest possible incentive to satisfy it rather than do the work.
+This said "never told", full stop, and the reason given was that naming the bar hands the Drone a target to satisfy rather than work to do. **The owner overruled that on 2026-08-28** — *"this is what the judge is for and the gaming checks"*. The defence against a Drone satisfying the bar instead of doing the work is the [Judge](judge.md) and the gaming patterns, `check_config_edited` among them; keeping the Drone ignorant was never the mechanism doing that work, and it had a cost. A Drone on a `tests` step was denied every `cargo` invocation by its allowlist, hand-checked its work, said so plainly, and then failed a Check it had no way to see coming.
+
+So what remains is narrower. No block a Drone is given is written from a Check's command, and no prompt names a bar. What the Drone has instead is a third MCP tool: it asks, Fleet runs the step's own frozen Checks in the Drone's worktree, and the Drone is told what each one did and where its output was written. **The answer is a signal and never a pass** — no step advances on it, nothing is recorded against the step, and the gate runs the Checks again for itself. Fleet suspends the convergence clocks while it runs them, because a Drone waiting on Fleet is not silent and is not thrashing; what bounds the cost instead is a count per step and a refusal while one is already running.
+
+The same rule still keeps every counter out of an injected turn — a counter is a bar, and a Drone one attempt from escalation has the strongest possible incentive to satisfy it rather than do the work. The dry run's own allowance is named in the refusal a Drone gets when it is spent, and nowhere before that.
 
 ### Worked samples
 
