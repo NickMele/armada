@@ -30,7 +30,7 @@ mod row;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use adapter_traits::DroneEvent;
 use core_model::{Component, DroneId, Envelope, FieldValue, JobId, Level, StepId, Timestamp, Ulid};
@@ -72,9 +72,54 @@ pub trait Tap: Send + Sync {
 pub struct Spine {
     pub job: JobId,
     pub drone: DroneId,
+    /// The step the Drone was spawned on. **Where a row's step starts and not
+    /// what a row is stamped with** — that is [`StepLabel`], which this seeds.
     pub step: StepId,
     /// Fleet's own instance. A restart is this value changing.
     pub run: Ulid,
+}
+
+/// Which step a row written now belongs to.
+///
+/// **Shared, not copied.** The sinks are held by the reader task pumping the
+/// Drone's stdout, so a step moved in a copy they do not hold would look right
+/// in the slot and change nothing in the file — which is the defect this type
+/// exists for.
+///
+/// It is read as a row is built rather than as it is written or read back, so
+/// a step that advances while the Drone is mid-turn labels the rows that arrive
+/// after it and not the ones already taken.
+///
+/// **The reader cannot move it and the mover cannot read it.** [`now`] is
+/// private to this module, which is where rows are built, and [`now_on`] has
+/// exactly one caller: `Working::now_on`.
+///
+/// [`now`]: StepLabel::now
+/// [`now_on`]: StepLabel::now_on
+#[derive(Clone, Debug)]
+pub struct StepLabel(Arc<Mutex<StepId>>);
+
+impl StepLabel {
+    fn starting_at(step: StepId) -> StepLabel {
+        StepLabel(Arc::new(Mutex::new(step)))
+    }
+
+    /// The step running now.
+    ///
+    /// **A clone under the lock and nothing else.** A `Tap` may not block, and
+    /// the only other holder of this lock writes one `StepId` into it.
+    fn now(&self) -> StepId {
+        self.locked().clone()
+    }
+
+    /// The slot has moved to another step, from this instant.
+    pub(crate) fn now_on(&self, step: StepId) {
+        *self.locked() = step;
+    }
+
+    fn locked(&self) -> std::sync::MutexGuard<'_, StepId> {
+        self.0.lock().expect("the step is not held across a panic")
+    }
 }
 
 /// Where a Drone's rows land, under the repository it is working in.
@@ -104,6 +149,8 @@ pub struct Recording {
     /// Rows the queue would not take. Read and written down by the writer.
     missed: Arc<AtomicU64>,
     clock: Arc<dyn Clock>,
+    /// The step every row from here is stamped with, as it is stamped.
+    step: StepLabel,
     writer: JoinHandle<()>,
 }
 
@@ -125,12 +172,14 @@ impl Recording {
         // by a minted id findable from the Job it belongs to.
         write_line(&mut log, &opened(&spine, clock.now(), &at))?;
 
+        let step = StepLabel::starting_at(spine.step.clone());
         let missed = Arc::new(AtomicU64::new(0));
         let (rows, waiting) = mpsc::channel(QUEUED);
         let writer = tokio::spawn(writing(
             File::from_std(transcript),
             File::from_std(log),
             spine,
+            step.clone(),
             waiting,
             Arc::clone(&missed),
             Arc::clone(&clock),
@@ -139,8 +188,17 @@ impl Recording {
             rows,
             missed,
             clock,
+            step,
             writer,
         })
+    }
+
+    /// The label this recording stamps rows with, for whoever moves the step.
+    ///
+    /// Handed out rather than set: the recording is opened before the Drone
+    /// exists, and the slot that will advance the step is made from it.
+    pub fn label(&self) -> StepLabel {
+        self.step.clone()
     }
 
     /// Wait for every row already taken to reach the disk.
@@ -161,6 +219,9 @@ pub struct Live {
     /// Its own, because a `Feed` is `api`'s type and cannot hold a `Clock`.
     /// The stamp is the instant Fleet's loop saw the line, as on the file's row.
     clock: Arc<dyn Clock>,
+    /// The same label the file's rows carry, so a watcher and the record agree
+    /// on which step a row belongs to.
+    step: StepLabel,
 }
 
 impl Tap for Live {
@@ -169,8 +230,9 @@ impl Tap for Live {
     /// dropped and nothing is told.
     fn saw(&self, events: &[DroneEvent]) {
         let at = self.clock.now();
+        let step = self.step.now();
         for event in events {
-            self.feed.offer(row::seen(&at, event));
+            self.feed.offer(row::seen(&at, &step, event));
         }
     }
 }
@@ -180,7 +242,13 @@ impl Tap for Live {
 /// A type rather than a `Vec` at the call site, so opening the record and
 /// opening the view are one act that either happened or did not — dispatch has
 /// one failure to handle and cannot start a Drone with half of it.
-pub struct Taps(Vec<Arc<dyn Tap>>);
+pub struct Taps {
+    each: Vec<Arc<dyn Tap>>,
+    /// Shared by every sink behind it. **On `Taps` rather than passed beside
+    /// it**, so the one act that opens the sinks is also the one act that hands
+    /// out the label they read.
+    step: StepLabel,
+}
 
 impl Taps {
     /// The durable record and the live view, in that order.
@@ -196,14 +264,30 @@ impl Taps {
         feed: api::Feed,
     ) -> Result<Taps, io::Error> {
         let recording = Recording::of(repo_root, spine, Arc::clone(&clock))?;
-        Ok(Taps(vec![
-            Arc::new(recording),
-            Arc::new(Live { feed, clock }),
-        ]))
+        let step = recording.label();
+        Ok(Taps {
+            each: vec![
+                Arc::new(recording),
+                Arc::new(Live {
+                    feed,
+                    clock,
+                    step: step.clone(),
+                }),
+            ],
+            step,
+        })
+    }
+
+    /// The label every sink here reads, for the slot that moves the step.
+    ///
+    /// Taken before [`each`](Taps::each), which consumes: the slot is built
+    /// from both, and only the label outlives the reader task.
+    pub(crate) fn label(&self) -> StepLabel {
+        self.step.clone()
     }
 
     pub(crate) fn each(self) -> Vec<Arc<dyn Tap>> {
-        self.0
+        self.each
     }
 }
 
@@ -212,8 +296,11 @@ impl Tap for Recording {
     /// because the alternative is holding up the loop that advances the Job.
     fn saw(&self, events: &[DroneEvent]) {
         let at = self.clock.now();
+        // Read here rather than in the writer: the row belongs to the step that
+        // was running when Fleet saw the line, and the writer drains later.
+        let step = self.step.now();
         for event in events {
-            let row = row::seen(&at, event);
+            let row = row::seen(&at, &step, event);
             if self.rows.try_send(row).is_err() {
                 self.missed.fetch_add(1, Ordering::Relaxed);
             }
@@ -226,6 +313,7 @@ async fn writing(
     mut transcript: File,
     mut log: File,
     spine: Spine,
+    step: StepLabel,
     mut waiting: Receiver<TranscriptRow>,
     missed: Arc<AtomicU64>,
     clock: Arc<dyn Clock>,
@@ -234,7 +322,7 @@ async fn writing(
     while let Some(row) = waiting.recv().await {
         // Taken as the row is dequeued, so the count lands among the rows it
         // was lost between rather than in a total at the end of the file.
-        lost += note_missed(&mut transcript, &missed, &clock).await;
+        lost += note_missed(&mut transcript, &step, &missed, &clock).await;
         match append(&mut transcript, &row).await {
             Ok(()) => written += 1,
             // A row the disk refused is as lost as one the queue refused, and
@@ -243,22 +331,31 @@ async fn writing(
             Err(_) => lost += 1,
         }
     }
-    lost += note_missed(&mut transcript, &missed, &clock).await;
-    let _ = write_async(&mut log, &closed(&spine, clock.now(), written, lost)).await;
+    lost += note_missed(&mut transcript, &step, &missed, &clock).await;
+    let _ = write_async(
+        &mut log,
+        &closed(&spine, &step.now(), clock.now(), written, lost),
+    )
+    .await;
 }
 
 /// Write down what the queue refused, if anything, and say how much.
-async fn note_missed(transcript: &mut File, missed: &AtomicU64, clock: &Arc<dyn Clock>) -> u64 {
+async fn note_missed(
+    transcript: &mut File,
+    step: &StepLabel,
+    missed: &AtomicU64,
+    clock: &Arc<dyn Clock>,
+) -> u64 {
     let lost = missed.swap(0, Ordering::Relaxed);
     if lost > 0 {
-        let _ = append(transcript, &row::missed(&clock.now(), lost)).await;
+        let _ = append(transcript, &row::missed(&clock.now(), &step.now(), lost)).await;
     }
     lost
 }
 
 /// The line that makes the transcript findable.
 fn opened(spine: &Spine, at: Timestamp, transcript: &Path) -> Envelope {
-    envelope(spine, at, "drone transcript opened").with_field(
+    envelope(spine, &spine.step, at, "drone transcript opened").with_field(
         "transcript",
         FieldValue::Str(transcript.to_string_lossy().into_owned()),
     )
@@ -268,19 +365,23 @@ fn opened(spine: &Spine, at: Timestamp, transcript: &Path) -> Envelope {
 ///
 /// `missed` counts a row the queue refused **and** a row the disk refused; only
 /// the first can also appear in the file, which is where the two differ.
-fn closed(spine: &Spine, at: Timestamp, rows: u64, missed: u64) -> Envelope {
-    envelope(spine, at, "drone transcript closed")
+///
+/// **`step_id` is the step the Drone was on when the pipe closed**, which is
+/// not the one it opened on for any Job that advanced. The opening line is what
+/// carries the step it started under.
+fn closed(spine: &Spine, step: &StepId, at: Timestamp, rows: u64, missed: u64) -> Envelope {
+    envelope(spine, step, at, "drone transcript closed")
         .with_field("rows", FieldValue::Int(rows as i64))
         .with_field("missed", FieldValue::Int(missed as i64))
 }
 
 /// **`msg` never carries an interpolated id.** The spine is fields, which is
 /// what any query targets.
-fn envelope(spine: &Spine, at: Timestamp, msg: &str) -> Envelope {
+fn envelope(spine: &Spine, step: &StepId, at: Timestamp, msg: &str) -> Envelope {
     Envelope::new(at, Level::Info, Component::Fleet, spine.run.clone(), msg)
         .in_job(spine.job.as_ulid().clone())
         .by_drone(spine.drone.as_ulid().clone())
-        .at_step(spine.step.as_str())
+        .at_step(step.as_str())
 }
 
 /// Write one Fleet-authored line into a Job's log.

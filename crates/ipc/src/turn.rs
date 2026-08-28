@@ -24,7 +24,7 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::event::Missed;
-use crate::ids::{Instant, JobId};
+use crate::ids::{Instant, JobId, StepId};
 use crate::version::ProtocolVersion;
 
 /// One line of `.armada/transcripts/<drone-id>.jsonl`.
@@ -32,6 +32,19 @@ use crate::version::ProtocolVersion;
 pub struct TranscriptRow {
     /// When Fleet's line loop saw it, not when it reached the disk.
     pub ts: Instant,
+    /// The step that was running when Fleet saw it — **not the step the Job is
+    /// on when the row is read back**. One Drone works several steps, so a row
+    /// that took its label at spawn would say the first step for the whole of a
+    /// four-step Job.
+    ///
+    /// A label on a row and never a range: a step can run more than once, so
+    /// the same id may appear, stop appearing, and appear again.
+    ///
+    /// **`None` is a row written before this field existed**, whose true step
+    /// nobody can recover. It is not a step that was unknown at the time, and
+    /// nothing relabels it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub step: Option<StepId>,
     #[serde(flatten)]
     pub saw: Saw,
 }

@@ -54,12 +54,24 @@ What that gives up is a payload the vocabulary has no variant for: `Unrecognised
 | | |
 | --- | --- |
 | **When it is written** | While the Drone runs, from Fleet's line loop. Not at the end, and not on request |
-| **What it contains** | One row per `DroneEvent`, in the order the Drone emitted them, each with the instant Fleet saw it. Never the wire shape |
+| **What it contains** | One row per `DroneEvent`, in the order the Drone emitted them, each with the instant Fleet saw it and the step that was running then. Never the wire shape |
 | **Who writes it** | Fleet, and nothing else. It is opened before the Drone is spawned, so a disk that will not hold the record escalates the Job instead of losing a transcript quietly |
 | **What reads it** | Observe's backfill, and Debug's turn history. Nothing decodes it — the rows are already the vocabulary |
 | **What names it** | A line in the Job's log carrying `job_id`, `drone_id`, `step_id` and the path in `fields`. **The only record of the path**: `assigned_drone` on the Job record names the Drone while it is running, and is null again once it has exited |
 
 **Fleet going away does not corrupt it.** Each row is flushed as it is written, so what was taken is on disk; the writer goes with Fleet, and Fleet never puts a Drone back onto a Job it did not spawn. A closing line in the Job log says how many rows the file holds.
+
+### The step a row was written under
+
+**Every row carries the step that was running when Fleet saw the line.** Why: one Drone works a Job's steps in turn, so a step read at the moment a row is read back is the wrong answer for every row but the last, and a step copied in when the Drone was spawned is the wrong answer for every row but the first — which is what shipped, and it made a four-step Job's transcript read as though all of it happened during the first step.
+
+**It is a label on a row and never a range.** A step can be run more than once, so the same id may appear, stop appearing, and appear again; nothing may read a transcript as one contiguous span per step.
+
+**The record is told when the step moves rather than asked when a row is written.** Why: the row is built by the loop pumping the Drone's output, and a lookup back into Fleet on every line is a different design with a different cost. What moves the step in the slot moves it in the record, in one call.
+
+**A step that advances mid-turn labels what arrives after it.** The row belongs to the moment Fleet saw it, so the turn that was in flight stays with the step it was in flight under and the answer that comes back belongs to the new one.
+
+**Rows written before Fleet recorded a step carry none, and nothing relabels them.** Their true step is not recoverable from the file, and naming the step the Drone was spawned on would state as fact the thing this record exists to correct.
 
 ### When the sink cannot keep up
 

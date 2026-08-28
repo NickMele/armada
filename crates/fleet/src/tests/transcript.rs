@@ -136,9 +136,9 @@ async fn a_drone_is_handed_to_a_consumer_as_rows_and_never_as_the_wire_shape() {
     assert_eq!(
         rows(&at, drone).lines().take(3).collect::<Vec<_>>(),
         vec![
-            r#"{"ts":"2026-08-26T09:00:01.000Z","event":"said","text":"one"}"#,
-            r#"{"ts":"2026-08-26T09:00:02.000Z","event":"said","text":"two"}"#,
-            r#"{"ts":"2026-08-26T09:00:03.000Z","event":"said","text":"three"}"#,
+            r#"{"ts":"2026-08-26T09:00:01.000Z","step":"implement","event":"said","text":"one"}"#,
+            r#"{"ts":"2026-08-26T09:00:02.000Z","step":"implement","event":"said","text":"two"}"#,
+            r#"{"ts":"2026-08-26T09:00:03.000Z","step":"implement","event":"said","text":"three"}"#,
         ]
     );
 }
@@ -391,6 +391,77 @@ async fn a_running_drone_can_be_watched_and_a_finished_one_leaves_its_history() 
         .observe_job(ipc::JobId::carried("01JOBNOTDISPATCHEDATALL"))
         .await;
     assert!(quiet.is_err(), "an id naming no Job is refused as one");
+}
+
+/// Every step this Job's rows are labelled with, once one of them says `wanted`.
+///
+/// Polled, because the row is written by the reader task on the far side of the
+/// Drone's pipe rather than by the call that moved the step.
+async fn steps_until(home: &TempDir, job: &JobId, wanted: &str) -> Vec<String> {
+    let root = home.path().to_string_lossy().to_string();
+    let mut seen = Vec::new();
+    for _ in 0..400 {
+        let (rows, _) = history(&root, job).await;
+        seen = rows
+            .iter()
+            .filter_map(|row| row.step.as_ref().map(|step| String::from(step.as_str())))
+            .collect();
+        if seen.iter().any(|step| step == wanted) {
+            return seen;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    seen
+}
+
+/// **The defect, at the seam it lives at.** One Drone works several steps, and
+/// the row's step was taken once when the Drone was spawned — so every row
+/// written after a Job's first advance said the first step, and a four-step
+/// Job's transcript claimed all of it happened during step one.
+///
+/// Driven through a real Fleet rather than through the label directly: the
+/// sinks are held by the reader task, so a step moved in a copy they do not
+/// hold passes a unit test and changes nothing in the file.
+#[tokio::test]
+async fn a_row_written_after_a_step_advances_carries_the_step_it_was_written_under() {
+    let home = TempDir::new();
+    let fleet = crate::tests::daemon::a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let job = fleet
+        .propose(crate::tests::daemon::a_proposal("advance once"))
+        .await
+        .expect("a proposal Fleet holds everything for");
+    crate::tests::daemon::worktree_directory(&home, job.id());
+    fleet
+        .approve(job.id())
+        .await
+        .expect("approval puts a Drone on `implement`");
+    assert!(
+        !steps_until(&home, job.id(), "implement").await.is_empty(),
+        "the Drone said something under the step it was spawned on"
+    );
+
+    fleet
+        .submit_evidence(crate::tests::daemon::diff_evidence())
+        .await
+        .expect("the step's evidence");
+    fleet
+        .turn()
+        .await
+        .expect("a non-empty diff advances the step to `summarise`");
+
+    // The Drone is told the step advanced, and this one echoes what it is told
+    // — so the row that comes back was written under the new step.
+    let steps = steps_until(&home, job.id(), "summarise").await;
+    assert_eq!(
+        steps.first().map(String::as_str),
+        Some("implement"),
+        "the rows before the advance are still the first step's: {steps:?}"
+    );
+    assert!(
+        steps.iter().any(|step| step == "summarise"),
+        "a row written after the advance says which step it was written under, \
+         and saying `implement` for the whole life of the Job is the bug: {steps:?}"
+    );
 }
 
 /// One tool call, as the transcript carries it.

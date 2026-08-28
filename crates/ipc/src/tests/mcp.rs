@@ -103,6 +103,7 @@ fn an_empty_not_claimed_reads_and_an_absent_one_refuses() {
 fn a_transcript_row_reads_back_as_what_was_written() {
     let row = crate::TranscriptRow {
         ts: crate::Instant::carried("2026-08-26T09:00:00.000Z"),
+        step: Some(crate::StepId::carried("implement")),
         saw: crate::Saw::Called {
             tool: "Bash".to_string(),
             call: "toolu_1".to_string(),
@@ -113,10 +114,25 @@ fn a_transcript_row_reads_back_as_what_was_written() {
     let json = crate::encode(&row).expect("a row encodes");
     assert_eq!(
         json,
-        r#"{"ts":"2026-08-26T09:00:00.000Z","event":"called","tool":"Bash","call":"toolu_1","detail":"cargo build --workspace","truncated":false}"#
+        r#"{"ts":"2026-08-26T09:00:00.000Z","step":"implement","event":"called","tool":"Bash","call":"toolu_1","detail":"cargo build --workspace","truncated":false}"#
     );
     let back: crate::TranscriptRow = crate::decode("row", json.as_bytes()).expect("a row decodes");
     assert_eq!(back, row);
+}
+
+/// A file written before rows carried a step still reads. **Nothing relabels
+/// it** — which step produced it is not recoverable, and `None` says so rather
+/// than naming the step the Drone was spawned on.
+#[test]
+fn a_row_from_before_the_step_was_recorded_still_decodes_and_says_it_does_not_know() {
+    let old = r#"{"ts":"2026-08-26T09:00:00.000Z","event":"said","text":"one"}"#;
+    let back: crate::TranscriptRow = crate::decode("row", old.as_bytes()).expect("a row decodes");
+    assert_eq!(back.step, None);
+    assert_eq!(
+        crate::encode(&back).expect("it re-encodes"),
+        old,
+        "an absent step is written back absent rather than as a null or a guess"
+    );
 }
 
 /// A row the design withholds cannot be put on the wire, and cannot be read off
@@ -125,6 +141,7 @@ fn a_transcript_row_reads_back_as_what_was_written() {
 fn a_withheld_row_has_no_constructor_and_no_decoder() {
     let quota = crate::TranscriptRow {
         ts: crate::Instant::carried("2026-08-26T09:00:00.000Z"),
+        step: Some(crate::StepId::carried("implement")),
         saw: crate::Saw::QuotaMoved {
             window: "five_hour".to_string(),
             status: "warning".to_string(),
@@ -141,6 +158,7 @@ fn a_withheld_row_has_no_constructor_and_no_decoder() {
 fn a_turn_message_carries_a_row_under_its_own_tag() {
     let shown = crate::Shown::of(crate::TranscriptRow {
         ts: crate::Instant::carried("2026-08-26T09:00:00.000Z"),
+        step: Some(crate::StepId::carried("implement")),
         saw: crate::Saw::Said {
             text: "reading the file".to_string(),
         },

@@ -14,7 +14,7 @@
 use std::collections::BTreeMap;
 
 use adapter_traits::DroneEvent;
-use core_model::{Envelope, FieldValue, Timestamp};
+use core_model::{Envelope, FieldValue, StepId, Timestamp};
 use ipc::{Instant, Saw, TranscriptRow};
 use serde::Serialize;
 
@@ -23,9 +23,14 @@ use serde::Serialize;
 /// The `match` has **no `_` arm, on purpose.** A variant added to `DroneEvent`
 /// fails to compile here, which is the whole of what stops a transcript quietly
 /// losing a kind — cheaper than a gate rule and impossible to skip.
-pub(crate) fn seen(at: &Timestamp, event: &DroneEvent) -> TranscriptRow {
+///
+/// **The step is a parameter and never read from anywhere here.** Which step is
+/// running is the slot's to say, and a row that asked would be a lookup on
+/// every line.
+pub(crate) fn seen(at: &Timestamp, step: &StepId, event: &DroneEvent) -> TranscriptRow {
     TranscriptRow {
         ts: Instant::carried(at.as_str()),
+        step: Some(ipc::StepId::from(step)),
         saw: match event {
             DroneEvent::Started {
                 session,
@@ -81,9 +86,10 @@ pub(crate) fn seen(at: &Timestamp, event: &DroneEvent) -> TranscriptRow {
 /// Rows the queue would not take. **Not a `DroneEvent`** — a sink saying what
 /// it lost is the one thing the vocabulary cannot say, and a gap left unsaid
 /// reads as a Drone that went quiet.
-pub(crate) fn missed(at: &Timestamp, rows: u64) -> TranscriptRow {
+pub(crate) fn missed(at: &Timestamp, step: &StepId, rows: u64) -> TranscriptRow {
     TranscriptRow {
         ts: Instant::carried(at.as_str()),
+        step: Some(ipc::StepId::from(step)),
         saw: Saw::Missed { rows },
     }
 }

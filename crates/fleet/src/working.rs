@@ -35,7 +35,7 @@ use crate::converging::{elapsed, Chain};
 use crate::drone::Started;
 use crate::footprint::Publishing;
 use crate::session::DroneSession;
-use crate::transcript::Taps;
+use crate::transcript::{StepLabel, Taps};
 use crate::watch::Watching;
 use verification::NotConverging;
 
@@ -50,6 +50,12 @@ pub(crate) struct Working {
     drone: DroneId,
     /// Which step of the frozen workflow the Drone was told to do.
     step: StepId,
+    /// The same answer as `step`, held where the transcript's sinks can read
+    /// it. **Two places rather than one because the sinks are on the far side
+    /// of the reader task**, and a step moved only here left every row after a
+    /// Job's first advance claiming the first step. [`Working::now_on`] is the
+    /// only writer of either.
+    labelling: StepLabel,
     worktree: Worktree,
     session: DroneSession,
     transcript: Watching,
@@ -125,10 +131,14 @@ impl Working {
     where
         H: AgentHarness + Send + Sync + 'static,
     {
+        // Taken before `each`, which consumes the taps: the label is the one
+        // part of them that outlives the reader task.
+        let labelling = taps.label();
         Working {
             job,
             drone,
             step,
+            labelling,
             worktree,
             session: started.session,
             transcript: Watching::reading(started.transcript, harness, taps.each()),
@@ -163,7 +173,13 @@ impl Working {
     /// Move to the next step, **and forget the last one's plan**. A
     /// declaration is about one step; carrying it forward would let step two's
     /// footprint be measured against step one's promise.
+    ///
+    /// **The transcript is told here and nowhere else.** Its sinks stamp each
+    /// row with the step as they build it, so a row written after this call
+    /// carries the new step and one already built carries the old — which is
+    /// what the label is for, since a step can advance mid-turn.
     pub(crate) fn now_on(&mut self, step: StepId, at: Timestamp) {
+        self.labelling.now_on(step.clone());
         self.step = step;
         self.declared = None;
         self.drifted.clear();
