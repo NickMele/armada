@@ -43,6 +43,28 @@ He was juggling five or more agent sessions and hit these, in these words:
 **Armada is the orchestrator above agents.** It babysits them, and surfaces a
 review only when it is confident the work is ready to be looked at.
 
+## What a milestone may claim
+
+**A milestone is one thing a person can complete, including its Bridge half.**
+There is a moment where it is finished and they can do something they could not
+do before.
+
+A milestone naming a part of the system rather than an outcome absorbs work
+forever without closing. Surface named the surfaces, and "everything I need to
+know is in the app" is a standing bar rather than a finish line — every future
+screen either meets it or does not. Its items each turned out to belong to an
+event somewhere else, and what was left was never a milestone. It was retired.
+
+**A milestone that ships an act with no surface to invoke it from has not
+shipped the act.** It has shipped a route, and left a person with the API. The
+half that is easy to file is the half that does nothing alone.
+
+The cost of cutting this way is real: a milestone drawn around one person's
+event touches more of the codebase at once than one confined to a crate, and is
+harder to fan out across agents. That is the reason the earlier cut existed. It
+is worth paying, because the alternative optimises for how work is dispatched
+rather than for whether anything is finished.
+
 ## Four attempts got here
 
 Each one was abandoned for a reason, and each reason is now a constraint. A
