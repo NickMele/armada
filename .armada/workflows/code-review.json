@@ -1,16 +1,32 @@
-# Code Review, reduced to what M1's parser accepts. See `bug.json` beside this
-# file for why a reduced form exists at all, and for the six fields this one
-# also holds to.
+# Code Review, reduced to what M1's parser accepts.
+# See `bug.json` beside this file for the shape all seven hold to, for why a
+# reduced form exists at all, and for the three ways the designed samples under
+# `crates/core-model/domain/workflow-samples/` are stale against the parser --
+# `question` where it reads `criteria[]`, `declare_plan_at` inside
+# `evidence_scope` where the registry parents it to the step, and
+# `reference_docs` / `max_context_size`, which M1 does not read. The questions
+# below are ported from the designed files; none of the shape is.
 #
-# The designed `code-review.json` (`crates/core-model/domain/workflow-samples/`)
-# is already linear and already three steps — `read`, `assess`, `deliver` —
-# so nothing here is folded. What is dropped: the Judge panel on `assess`, the
-# `manifest_rule:review_gate` on `deliver`, and every `artifact_exists` check,
-# since that mechanical-check type is not in M1's carried set. `assess`'s
-# `evidence_type` is `facts_note` rather than the designed `review_findings`,
-# which is not a value the schema has. Every step is gateless — auto with no
-# mechanical tier — because this workflow lands nothing and produces no diff
-# for `diff_nonempty` to check.
+# The designed `code-review.json` is already linear and already three steps --
+# `read`, `assess`, `deliver` -- so nothing here is folded. What is still
+# dropped: the `manifest_rule:review_gate` on `deliver`, which is refused as
+# `OutsideM1`, and every `artifact_exists` check, since that mechanical-check
+# type is not in M1's carried set. `assess`'s `evidence_type` is `facts_note`
+# rather than the designed `review_findings`, which is not a value the schema
+# has -- see `[review-findings-evidence-type]` in `docs/OPEN.md`.
+#
+# **The Judge panel on `assess` is no longer dropped.** This is the one
+# workflow whose gaming patterns exist for it and nothing else:
+# `no_findings_on_substantial_diff`, `findings_not_tied_to_changed_lines` and
+# `findings_generic` describe a review that went through the motions. A review
+# workflow with no semantic tier is the exact failure those patterns name --
+# it produces prose, and prose is not a claim.
+#
+# `sonnet` rather than `haiku`, as the designed file has it: this step reads a
+# diff and a set of findings together and judges whether they engage.
+#
+# `read` and `deliver` carry no Judge. Reading is not a work product, and
+# delivering is a hand-off.
 {
   "version": 1,
   "workflow_id": "code_review",
@@ -27,7 +43,36 @@
       "id": "assess",
       "label": "Assess",
       "evidence_type": "facts_note",
-      "advance_gate": "auto"
+      "evidence_scope": {
+        "context_source": "hybrid",
+        "exclude_paths": [
+          ".env",
+          "node_modules/",
+          "target/"
+        ]
+      },
+      "judge_checks": [
+        {
+          "enabled": true,
+          "model": "sonnet",
+          "criteria": [
+            {
+              "criterion_id": "findings_engage_with_the_diff",
+              "question": "Do these findings engage with what this diff actually does, citing specific changes -- or are they generic observations that would apply to any diff?"
+            }
+          ],
+          "gaming_check": {
+            "enabled": true,
+            "baseline_ref": "read.evidence",
+            "flag_if": [
+              "no_findings_on_substantial_diff",
+              "findings_not_tied_to_changed_lines",
+              "findings_generic"
+            ]
+          }
+        }
+      ],
+      "advance_gate": "auto_if_judge_passes"
     },
     {
       "id": "deliver",

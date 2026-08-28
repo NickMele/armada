@@ -1,16 +1,35 @@
-# Revert, reduced to what M1's parser accepts. See `bug.json` beside this
-# file for why a reduced form exists at all, and for the six fields this one
-# also holds to.
+# Revert, reduced to what M1's parser accepts.
+# See `bug.json` beside this file for the shape all seven hold to, for why a
+# reduced form exists at all, and for the three ways the designed samples under
+# `crates/core-model/domain/workflow-samples/` are stale against the parser --
+# `question` where it reads `criteria[]`, `declare_plan_at` inside
+# `evidence_scope` where the registry parents it to the step, and
+# `reference_docs` / `max_context_size`, which M1 does not read. The questions
+# below are ported from the designed files; none of the shape is.
 #
-# The designed `revert.json` (`crates/core-model/domain/workflow-samples/`)
-# runs five steps in a loop and opens on `revert` itself — there is no plan
-# step, since a revert's scope is inherited from the Job it undoes rather than
-# classified. This form keeps that shape: `revert` and `review` + `merge` +
-# `close` folded into one auto `handoff`. `revert` carries the designed
-# `regression_verify`'s `test` check itself (dropping its `lint` check, which
-# this repository's Manifest does not declare) rather than a separate step —
-# Fleet runs it after the Drone reports the diff, and a step blocked until it
-# passes needs no second step to say so again.
+# The designed `revert.json` runs five steps in a loop and opens on `revert`
+# itself -- there is no plan step, since a revert's scope is inherited from the
+# Job it undoes rather than classified. This form keeps that shape: `revert`,
+# then `review` + `merge` + `close` folded into one `handoff`.
+#
+# **`handoff` is gated `human_always`**, which is the folded `review` step's
+# own gate -- see `feature.json` for why a fold takes the strictest of the
+# three. Revert is the second workflow whose designed `review` spells
+# `human_always` as a literal, and `workflows.toml` gives the opposite reason
+# to Feature's: Feature's review is human because the behaviour is new, this
+# one because the behaviour is old, worked, and is being thrown away.
+#
+# **The designed `revert` step carries a judge check with no question in it.**
+# That is a hole in the sample, not a decision, so the criteria below are
+# written here rather than ported. What a revert has to be judged on is narrow
+# and obvious: that it undoes the named change, and that it undoes only that.
+#
+# `revert` carries the designed `regression_verify`'s `test` check itself,
+# dropping its `lint` check, which this repository's Manifest does not declare.
+#
+# `handoff` carries no Judge. A step with no criterion asks the Judge nothing,
+# and the designed `review`'s summary check declares `gates_advancement:
+# false`, which M1's parser does not read -- see `feature.json`.
 {
   "version": 1,
   "workflow_id": "revert",
@@ -22,17 +41,53 @@
       "label": "Undo the change",
       "evidence_type": "diff",
       "mechanical_checks": [
-        { "type": "manifest_check", "check": "build", "expect_exit_code": 0 },
-        { "type": "manifest_check", "check": "test", "expect_exit_code": 0 },
-        { "type": "diff_nonempty" }
+        {
+          "type": "manifest_check",
+          "check": "build",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "test",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "diff_nonempty"
+        }
       ],
-      "advance_gate": "auto"
+      "declare_plan_at": "step_start",
+      "evidence_scope": {
+        "context_source": "drone_declared",
+        "exclude_paths": [
+          ".env",
+          "node_modules/",
+          "target/"
+        ],
+        "scope_diff_check": true
+      },
+      "judge_checks": [
+        {
+          "enabled": true,
+          "model": "haiku",
+          "criteria": [
+            {
+              "criterion_id": "undoes_the_named_change",
+              "question": "Does this diff undo the change it was dispatched to undo?"
+            },
+            {
+              "criterion_id": "undoes_nothing_else",
+              "question": "Does this diff undo or alter anything beyond the change it names?"
+            }
+          ]
+        }
+      ],
+      "advance_gate": "auto_if_judge_passes"
     },
     {
       "id": "handoff",
       "label": "Summarise",
       "evidence_type": "facts_note",
-      "advance_gate": "auto"
+      "advance_gate": "human_always"
     }
   ]
 }
