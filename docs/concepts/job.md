@@ -133,7 +133,7 @@ different name.** They are ordered here by how much they take away.
 | Act | What the Drone is | What survives | Where it lands |
 |---|---|---|---|
 | **Override the verdict** | Either | Everything, including the refused step's own work | `running`, the **next** step |
-| **Redirect** | Alive and idle | The session, the worktree, every step so far | `running`, the same step |
+| **Redirect** | Alive and idle | The session, the worktree, every step so far | `running` the same step where a step stopped; where none did, the Job stays `escalated` until the Drone turns |
 | **Restart a step** | Gone | The worktree and the branch; earlier steps' work | `running`, the same step, a new Drone |
 | **Redispatch** | Irrelevant | Nothing. A new Job carries a reference back | A replacement at the approval gate |
 | **Pilot** | Terminated | The worktree, handed to a person | `piloted` |
@@ -180,10 +180,18 @@ next step.
 
 **Where a step-level escalation pays off.** Only a step-level trigger reaches a
 step's `last_verdict`, so only a step-level escalation names the step that
-stopped — and naming it is what makes restarting or redirecting *that step*
-coherent. A Job-level escalation has no step to resume, which is why
-`interrupted` and `resource_exhausted` leave redispatch and Pilot as the only
-moves.
+stopped — and naming it is what makes restarting or *that step* coherent. A
+Job-level escalation has no step to resume, which is why `interrupted` and
+`resource_exhausted` leave redispatch and Pilot as the only moves.
+
+**Redirect is the exception, and `stalled` is why.** A redirect operates on a
+live Drone rather than on a step, so it asks whether there is a session to
+speak to rather than whether a step stopped. `stalled` is the one trigger that
+escalates a Job whose Drone is still up and holding its session, and killing it
+to say something to it would be absurd. Where no step stopped there is nothing
+to unfreeze, so the Job stays `escalated` and returns to `running` on the
+Drone's next turn — evidence it took the advice, rather than the act of sending
+it.
 
 **How a Job ends** — every edge into a terminal.
 
