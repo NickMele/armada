@@ -421,7 +421,7 @@ Helm does not reach it directly, because Helm access on a command is the ladder 
 kind = "command"
 transport = "HTTP"
 helm_access = "No"
-description = "A person overrules the Judge's refusal and the stopped step advances, keeping the verdict on the record"
+description = "A person overrules the machine that stopped a step and the step advances, keeping what was ruled on the record"
 notes = """
 The fifth act that reaches an escalated Job, and the only one that lets the work
 already done stand. `docs/concepts/job.md` has the other four and none of them is
@@ -434,22 +434,26 @@ had no answer but discarding correct work or repeating it, and **a verdict that
 cannot be appealed is worse than no Judge** — a verifier a person cannot overrule
 is one they route around, by weakening criteria or by not dispatching.
 
-**It lifts `gate_failure` and nothing else.** That trigger is the Judge refusing
-a criterion, which is the one refusal that is a matter of opinion. `gate_undecided`
-is the gate never having weighed the work at all, so advancing on it would pass a
-step nothing ruled on. `evidence_suspect` is the gaming check saying the evidence
-is not to be trusted, which is a claim about how the step was satisfied rather
-than about whether it was — `docs/concepts/judge.md` routes it away from the retry
-flow for that reason and it is not folded in here. The mechanical tier is
-unreachable by construction as well as by the check: a failed Check is
-`completed_failed`, terminal, with no stopped step for any act to land on. `build`
-failing is not a matter of opinion.
+**It lifts `gate_failure` and `evidence_suspect`, and nothing else.** Both are a
+machine's decision, which is the owner's rule for what a person may overrule. The
+first is the Judge refusing a criterion, a judgement about the work. The second is
+the gaming check saying the evidence is not to be trusted — a claim about how the
+step was satisfied rather than about whether it was, and a machine reading a diff
+to infer intent, which is the call a person is most likely to be right about.
+`last_verdict.trigger` is what tells an overruled flag from an overruled refusal
+afterwards, and Bridge chooses its words off the same field. `gate_undecided` is
+the gate never having weighed the work at all, so advancing on it would pass a
+step nothing ruled on; whether that wants an act of its own is open. The
+mechanical tier is unreachable by construction as well as by the check: a failed
+Check is `completed_failed`, terminal, with no stopped step for any act to land
+on. `build` failing is not a matter of opinion.
 
 **Recorded as an override and never as a pass.** The step move is `stopped ->
 advanced` carrying the trigger it overruled, with the person as the actor, so
-`job_steps.last_verdict` still says `failed(gate_failure)` beside a state that
-says `advanced` — what the Judge said, and the fact that it did not stand, in one
-row of the log that is already append-only. `StepDetail.overridden` is that pair
+`job_steps.last_verdict` still says `failed` beside a state that says
+`advanced`, carrying whichever of the two triggers was overruled — what the
+machine said, and the fact that it did not stand, in one row of the log that is
+already append-only. `StepDetail.overridden` is that pair
 read once at this boundary rather than by every surface that draws a rail. A rate
 is countable off `job_events` alone: step moves from `stopped` to `advanced`,
 against refusals. #154 is what does the counting and is not this.

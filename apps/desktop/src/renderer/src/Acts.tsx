@@ -10,7 +10,7 @@ import { Button, Dialog, SplitButton, Textarea, type SplitButtonItem } from "@ar
 
 import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
 import type { JobDetail as JobWhole, JobSummary } from "../../shared/protocol";
-import { onwards, recourseOf, REDISPATCHABLE, type Overrule } from "./recovery";
+import { onwards, OVERRULING, recourseOf, REDISPATCHABLE, type Overrule } from "./recovery";
 import type { Render } from "./render";
 
 /**
@@ -310,6 +310,16 @@ function RedirectControl({
  * step advances it and the Job carries on; overruling the last one makes Fleet
  * commit and deliver. `recourseOf` decided which, once, and `onwards` is the
  * sentence the screen behind this dialog already said about it.
+ *
+ * **And which of the two decisions is being overruled.** A Judge that refused a
+ * criterion and a gaming check that called the evidence suspect are different
+ * machines saying different things, so every word here comes from `OVERRULING`
+ * keyed by the trigger rather than being written once for the refusal and
+ * reused. The flag's case carries one thing the refusal's does not: what was
+ * flagged, and where — a person taking responsibility for evidence a machine
+ * distrusted must not have to leave the dialog to find out what it distrusted.
+ * The same weight either way: the dialog and the required reason are what make
+ * this a decision taken rather than a button pressed.
  */
 function OverruleControl({
   jobId,
@@ -324,6 +334,11 @@ function OverruleControl({
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
+  const words = OVERRULING[overrule.trigger];
+  // Only a flag has these, and a step can trip more than one pattern. Read
+  // rather than counted: what was cited is the whole value of a flag, exactly
+  // as a citation is the whole value of a refusal.
+  const flagged = overrule.trigger === "evidence_suspect" ? overrule.step.flagged : [];
 
   function close() {
     setOpen(false);
@@ -333,13 +348,13 @@ function OverruleControl({
   return (
     <>
       <Button variant="secondary" disabled={disabled} onClick={() => setOpen(true)}>
-        {ACT_LABEL.override_verdict}
+        {words.label}
       </Button>
       <Dialog
         open={open}
         tone="neutral"
-        title="Overrule the judge on this step?"
-        confirmLabel={ACT_LABEL.override_verdict}
+        title={words.asks}
+        confirmLabel={words.label}
         confirmDisabled={reason.trim() === ""}
         onCancel={close}
         onConfirm={() => {
@@ -351,11 +366,26 @@ function OverruleControl({
         {/* What the act is, said before what it does, and what it is not said
             beside it. The step is named because the person reading this came
             from a rail with several rows on it. */}
-        <p>
-          {`The judge refused ${overrule.step.label}. Overruling says the judge was wrong — not ` +
-            "that the work was approved. The step advances still recorded as failed, so what the " +
-            "judge said stays beside the fact that it did not stand."}
-        </p>
+        <p>{words.dialog(overrule.step.label)}</p>
+        {/* What the check actually found, on the flag's case only. The pattern
+            is a name a workflow chose and the citation is a place in the work,
+            so both are mono — machine-derived, and neither is a sentence. A
+            flagged step that carries none is a Fleet that flagged without
+            citing, and drawing nothing is the honest render of that. */}
+        {flagged.length === 0 ? null : (
+          <p>
+            {"It flagged "}
+            {flagged.map((flag, at) => (
+              <span key={`${flag.pattern}-${flag.cited}`}>
+                {at === 0 ? null : ", "}
+                <span className="mono">{flag.pattern}</span>
+                {" in "}
+                <span className="mono">{flag.cited}</span>
+              </span>
+            ))}
+            {"."}
+          </p>
+        )}
         {/* What happens next, and what it costs. `onwards` is the same sentence
             the screen behind this one already said, so the two cannot differ
             about whether this job is about to land. */}
@@ -367,7 +397,7 @@ function OverruleControl({
         {/* No `autoFocus`, for `RedirectControl`'s reason: the dialog's own
             contract puts initial focus on Cancel. */}
         <Textarea
-          label="Why the judge is wrong"
+          label={words.field}
           rows={4}
           value={reason}
           onChange={(event) => setReason(event.target.value)}
@@ -387,6 +417,12 @@ function OverruleControl({
  * different act on a different status and means the work was right; this one
  * means a machine was wrong and a person is taking responsibility for going
  * past it.
+ *
+ * **The override's own control does not read this row.** Its wording changes
+ * with what is being overruled — a Judge's verdict or a gaming flag — so it
+ * comes from `OVERRULING` in `recovery.ts`, where the trigger is known. This
+ * row is the act's name where no trigger is in hand, which is the shared
+ * confirmation and the menu, and it keeps the record total over `JobAct`.
  */
 export const ACT_LABEL: Record<JobAct, string> = {
   kill_drone: "Kill drone",

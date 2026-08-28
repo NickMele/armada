@@ -396,18 +396,21 @@ export type BridgeApi = {
    */
   restartStep: (jobId: string) => Promise<Outcome>;
   /**
-   * Overrule a Judge that refused the work, and let the Job go on.
+   * Overrule a machine that stopped the work, and let the Job go on.
    *
    * **Not an approval, and its own entry for that reason.** `approveReview`
-   * answers a gate nothing objected to; this answers one that refused, and it
-   * says a machine was wrong rather than that the work was right. The step
-   * advances still carrying `failed`, and the reason is written to the Job's log
-   * where it stays.
+   * answers a gate nothing objected to; this answers one that stopped the step,
+   * and it says a machine was wrong rather than that the work was right. The
+   * step advances still carrying `failed`, and the reason is written to the
+   * Job's log where it stays.
    *
-   * Legal only on an escalated Job whose step stopped on `gate_failure` —
-   * Fleet refuses 409 for `evidence_suspect`, for `gate_undecided` and for a
-   * step that stopped on anything else, and 422 for a blank reason. Whether the
-   * Drone is still there decides only how the Job carries on.
+   * Legal on an escalated Job whose step stopped on `gate_failure` — the Judge
+   * refusing a criterion — or on `evidence_suspect`, the gaming check calling
+   * the evidence untrustworthy. Both are a machine's decision, which is what a
+   * person may overrule. Fleet refuses 409 for `gate_undecided`, where nothing
+   * weighed the work, and for a step that stopped on anything else; 422 for a
+   * blank reason. Whether the Drone is still there decides only how the Job
+   * carries on.
    */
   overrideVerdict: (jobId: string, reason: string) => Promise<Outcome>;
   /**
