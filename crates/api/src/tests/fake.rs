@@ -11,9 +11,10 @@ use std::sync::Mutex;
 
 use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    Actor, Event, Instant, JobCreated, JobDetail, JobId, JobList, JobStateChanged, JobStatus,
-    JobSummary, ManifestId, ManifestSummary, ModelChoices, Origin, ProposeJob, Redispatched, RunId,
-    StepId, UnreadableJob, Urgency, WorkflowId, WorkflowSummary,
+    Actor, ChangesRequested, Event, EvidenceType, Instant, JobCreated, JobDetail, JobDiff,
+    JobEvidence, JobHistory, JobId, JobList, JobStateChanged, JobStatus, JobSummary, ManifestId,
+    ManifestSummary, ModelChoices, Movement, Origin, ProposeJob, Recorded, Redispatched, RunId,
+    StatusMoved, StepId, Submitted, UnreadableJob, Urgency, Work, WorkflowId, WorkflowSummary,
 };
 
 use crate::{Broadcaster, Daemon, Feed, Observed, Refusal, Turns};
@@ -163,6 +164,77 @@ impl Daemon for FakeDaemon {
         })
     }
 
+    /// The one move this fake records: the Job reaching the status it is at.
+    ///
+    /// **Not a fold and not a machine.** The header comment holds for this too
+    /// — the fake asserts nothing about either machine, and what it answers is
+    /// the shape rather than a real history. The refusal is what matters here:
+    /// an id that names nothing is a 404, never an empty list.
+    async fn get_job_events(&self, job_id: JobId) -> Result<JobHistory, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+            return Err(self.no_such_job(&job_id));
+        };
+        Ok(JobHistory {
+            job_id,
+            moves: vec![Recorded {
+                seq: 1,
+                status: status("awaiting_approval"),
+                moved: Movement::Status(StatusMoved {
+                    to: job.status,
+                    reason: None,
+                }),
+                actor: Actor::from_wire("human").expect("an actor the envelope has"),
+                at: Instant::carried("2026-08-26T09:00:00.000Z"),
+            }],
+        })
+    }
+
+    /// One step's evidence, for a Job that exists. **A step that submitted
+    /// nothing is absent** rather than blank, which is the shape the store
+    /// answers in and the one this fake is here to prove crosses.
+    async fn get_evidence(&self, job_id: JobId) -> Result<JobEvidence, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        if !jobs.iter().any(|job| job.id == job_id) {
+            return Err(self.no_such_job(&job_id));
+        }
+        Ok(JobEvidence {
+            job_id,
+            steps: vec![Submitted {
+                step_id: StepId::carried("implement"),
+                evidence_type: EvidenceType::from_wire("diff").expect("a type the registry has"),
+                claimed: "the log reader stops one line early".to_string(),
+                shown_by: "a failing test that now passes".to_string(),
+                // Absent, not blank. The rule the whole DTO turns on.
+                not_claimed: None,
+            }],
+        })
+    }
+
+    /// A reading with a patch in it. **Present because there is something in
+    /// it** — the absent case is a Job with no worktree, and this fake has no
+    /// worktrees to be absent.
+    async fn get_diff(&self, job_id: JobId) -> Result<JobDiff, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        if !jobs.iter().any(|job| job.id == job_id) {
+            return Err(self.no_such_job(&job_id));
+        }
+        Ok(JobDiff {
+            job_id,
+            work: Some(Work {
+                files: vec![ipc::ChangedFile {
+                    path: "crates/store/src/read.rs".to_string(),
+                    change: ipc::ChangeKind::Modified,
+                    outside_plan: false,
+                }],
+                plan_declared: false,
+                patch: Some(
+                    "--- a/crates/store/src/read.rs\n+++ b/crates/store/src/read.rs\n".to_string(),
+                ),
+            }),
+        })
+    }
+
     /// The one workflow this fake holds. A list, because the operation is one.
     async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
@@ -218,6 +290,39 @@ impl Daemon for FakeDaemon {
         })
     }
 
+    /// The proposer's own path, faked at the seam above it: the fake names the
+    /// workflow the request asked for by naming none of its own reasoning. What
+    /// `api` is under test for is the route, the status and the body.
+    async fn propose_from_request(
+        &self,
+        request: ipc::JobRequest,
+    ) -> Result<ipc::ProposedPlan, Refusal> {
+        if request.request.trim().is_empty() {
+            return Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fleet.unacceptable_proposal",
+                "a request needs something in it to read",
+                run_id(),
+            )));
+        }
+        self.propose_job(ProposeJob {
+            title: request.request.clone(),
+            workflow_id: WorkflowId::carried("bug"),
+            owner_manifest_id: ManifestId::carried("01MANIFEST"),
+            origin: ipc::TopLevelOrigin::from_wire("auto_detected").expect("an origin"),
+            urgency: Urgency::from_wire("normal").expect("an urgency"),
+            atomic: false,
+            model: None,
+            acceptance_criteria: Vec::new(),
+            subject: None,
+            facts: request.request,
+            write_targets: None,
+            dependencies: Vec::new(),
+            attachments: Vec::new(),
+        })
+        .await
+        .map(|job| ipc::ProposedPlan { jobs: vec![job] })
+    }
+
     async fn propose_job(&self, proposal: ProposeJob) -> Result<JobSummary, Refusal> {
         let minted = self.minted.fetch_add(1, Ordering::SeqCst);
         let job = JobSummary {
@@ -255,6 +360,38 @@ impl Daemon for FakeDaemon {
 
     async fn approve_dispatch(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         self.move_to(&job_id, "awaiting_approval", "queued", "human")
+    }
+
+    /// The person takes the work. The gate this answers is the one after the
+    /// Job ran, which is why the status it moves from is not the one
+    /// `approve_dispatch` moves from.
+    async fn approve_review(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        self.move_to(&job_id, "awaiting_review", "running", "human")
+    }
+
+    /// The work goes back with a note. The same destination as an approval on a
+    /// Job with steps left, and **a different act** — what separates them here
+    /// is the note, and in Fleet it is the step that does or does not advance.
+    async fn request_changes(
+        &self,
+        job_id: JobId,
+        note: ChangesRequested,
+    ) -> Result<JobSummary, Refusal> {
+        if note.note.trim().is_empty() {
+            return Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fake.blank_note",
+                "a review note with nothing in it says nothing to change",
+                run_id(),
+            )));
+        }
+        self.move_to(&job_id, "awaiting_review", "running", "human")
+    }
+
+    /// A verdict on the work. Terminal, and from the review gate alone: the
+    /// other edge into `rejected` is the dispatch gate's and belongs to
+    /// `deny_dispatch`.
+    async fn reject_job(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        self.move_to(&job_id, "awaiting_review", "rejected", "human")
     }
 
     /// The process, not the unit of work. The Job is handed back where it

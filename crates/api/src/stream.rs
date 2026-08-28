@@ -87,6 +87,22 @@ impl Broadcaster {
         Cursor::at(self.next.load(Ordering::SeqCst))
     }
 
+    /// How many clients are listening right now.
+    ///
+    /// **What lets a producer decline to produce.** Everything published here
+    /// is cheap to make except one thing — the footprint of a Drone's worktree,
+    /// which is a repository read — and a Fleet nobody has open should not be
+    /// paying for a list no socket will carry. It is a count and not a
+    /// subscription: a producer asks whether anyone is there, and cannot learn
+    /// who or what they want.
+    ///
+    /// Racy by nature. A client may connect or drop between this answer and
+    /// whatever is done about it, and the cost of being wrong either way is one
+    /// reading taken or one interval's delay before the next.
+    pub fn watching(&self) -> usize {
+        self.outbound.receiver_count()
+    }
+
     /// Listen. **Open this before reading the snapshot it accompanies** — the
     /// other order can lose an event in between.
     pub fn subscribe(&self) -> Subscription {

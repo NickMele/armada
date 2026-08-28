@@ -57,6 +57,10 @@ const ENUMS: &[EnumSource] = &[
         name: "JudgeVerdict",
         path: "crates/core-model/src/job/judge.rs",
     },
+    EnumSource {
+        name: "QueuedReason",
+        path: "crates/core-model/src/job/fields.rs",
+    },
 ];
 
 /// A registry table, and the enum whose wire spellings its keys must be.
@@ -110,6 +114,15 @@ const PAIRINGS: &[Pairing] = &[
         registry: "enum-verbs.toml",
         prefix: "verbs.criterion_verdict_judge.",
         enum_name: "JudgeVerdict",
+    },
+    // `queued_reason` has no registry file of its own: the set is written on
+    // `job-statuses.toml`'s `queued` row as prose, and the verbs are the only
+    // place it is spelled key by key. `none` is not among them — it is the
+    // absence of a reason, which the enum carries as `Option`.
+    Pairing {
+        registry: "enum-verbs.toml",
+        prefix: "verbs.queued_reason.",
+        enum_name: "QueuedReason",
     },
 ];
 
@@ -171,7 +184,16 @@ pub fn every_registry_key_is_a_variant(root: &Path) -> Report {
             continue;
         };
         let keys = keys_under(&text, pairing.prefix, &path, &mut report);
+        // Not a `continue`. A pairing naming an enum that `ENUMS` does not
+        // declare compares nothing and reports ok, which is the silently-empty
+        // comparison this rule exists to end — it was found by breaking a
+        // spelling on purpose and watching the rule pass.
         let Some(variants) = spellings.get(pairing.enum_name) else {
+            report.fail(format!(
+                "`{}` is paired against {path} and is in no `ENUMS` entry, so nothing was \
+                 compared",
+                pairing.enum_name
+            ));
             continue;
         };
         if keys.is_empty() {

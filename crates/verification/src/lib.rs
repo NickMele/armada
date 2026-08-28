@@ -63,7 +63,7 @@ mod tests;
 pub use converging::{Convergence, ConvergenceBrief, NotConverging, MID_STEP_CONVERGENCE};
 pub use gaming::{in_the_diff, judged_patterns, Baseline, Flagged, GamingBrief};
 pub use gate::{decide, Accepted, NotWhatTheStepAsked, Verdict};
-pub use judge::{Brief, Refusals, Unreadable};
+pub use judge::{field, Brief, Refusals, Unreadable};
 pub use mechanical::{
     CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran, EVIDENCE_SCOPE,
 };

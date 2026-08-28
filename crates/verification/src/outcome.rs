@@ -60,6 +60,34 @@ impl OutcomeTurn {
         OutcomeTurn { text }
     }
 
+    /// A person took the work at a human gate, and the Drone continues.
+    ///
+    /// **A turn of its own, because the other one would be a lie.**
+    /// [`advanced`](OutcomeTurn::advanced) says the step passed every check it
+    /// declared, which is what the mechanical gate ruled; a human gate is a
+    /// person reading the work and deciding, and the Drone is told that instead
+    /// of being told a check passed that nobody ran.
+    ///
+    /// It carries no part of what the person said. Where there is something to
+    /// change, the act is `request_changes` and the words go with it — an
+    /// approval that quoted a reviewer would be an instruction wearing a
+    /// verdict's shape.
+    pub fn approved(passed: &ResolvedStep, next: Option<&ResolvedStep>) -> OutcomeTurn {
+        let label = passed.label();
+        let text = match next {
+            Some(next) => format!(
+                "{label} was reviewed and accepted.\n\n\
+                 Go on to {}. Submit when it is done, then wait.",
+                next.label()
+            ),
+            None => format!(
+                "{label} was reviewed and accepted.\n\n\
+                 That was the last part of this task. Nothing further is yours. Stop here."
+            ),
+        };
+        OutcomeTurn { text }
+    }
+
     /// The same turn, with what happened to the branch underneath added.
     ///
     /// `None` leaves it alone, which is how a base that did not move stays

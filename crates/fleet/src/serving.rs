@@ -34,16 +34,17 @@
 //! which would be a second vocabulary that agrees with the log only until
 //! something changes.
 
-use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
+use adapter_traits::{AgentHarness, Delivery, Since, Vcs, WorkProduct};
 use api::{Daemon, Observed, Refusal};
 use core_model::Job;
 use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    CheckRun, DeclaredCheck, Flagged, JobDetail, JobId, JobList, JobSummary, Judged, ManifestId,
-    ManifestSummary, ModelChoices, ProposeJob, Redirection, Redispatched, RunId, StepFacts, StepId,
-    WireError, WorkflowId, WorkflowStep, WorkflowSummary,
+    ChangesRequested, CheckRun, DeclaredCheck, Flagged, JobDetail, JobDiff, JobEvidence,
+    JobHistory, JobId, JobList, JobSummary, Judged, ManifestId, ManifestSummary, ModelChoices,
+    ProposeJob, Redirection, Redispatched, RunId, StepFacts, StepId, Submitted, WireError,
+    WireValue, Work, WorkflowId, WorkflowStep, WorkflowSummary,
 };
-use store::{LoadJobError, WriteError};
+use store::{LoadJobError, Moved, RecordedEvent, WriteError};
 
 use crate::adrift::{Adrift, NotSubmitted};
 use crate::daemon::Fleet;
@@ -61,9 +62,21 @@ const ILLEGAL_MOVE: &str = "fleet.illegal_move";
 const FAULT: &str = "fleet.fault";
 /// A proposal that decoded and names something that cannot produce a Drone.
 const UNACCEPTABLE: &str = "fleet.unacceptable_proposal";
+/// The request was read and no workflow fits. **A refusal about the request**,
+/// and the reason it has a code of its own: a caller reading `UNACCEPTABLE`
+/// cannot tell it from a proposal naming a workflow that does not exist.
+const NO_WORKFLOW_FITS: &str = "fleet.no_workflow_fits";
+/// The proposer call could not be made. **Never the code above** — a client
+/// that rendered an outage as "nothing fits" would tell a person their request
+/// was refused when it was never read.
+const PROPOSER_UNREACHABLE: &str = "fleet.proposer_unreachable";
 /// A redispatch asked for on a Job that is not waiting for a person. A 409 like
 /// a refused move, and a code of its own because the machine was never asked.
 const NOT_REDISPATCHABLE: &str = "fleet.not_redispatchable";
+/// A review act asked for on a Job that is not standing at a human gate. Its
+/// own code because a caller reading `ILLEGAL_MOVE` would look for an edge that
+/// exists — the machine was never asked.
+const NOT_UNDER_REVIEW: &str = "fleet.not_under_review";
 
 impl<H, V, W> Daemon for Fleet<H, V, W>
 where
@@ -128,6 +141,110 @@ where
         ))
     }
 
+    /// Every move one Job made, oldest first. **The log, read — not folded.**
+    ///
+    /// # The Job is loaded first, and that is not a wasted read
+    ///
+    /// It is what makes an id that names nothing a 404 rather than an empty
+    /// history, which would be a lie about a Job that exists and has not moved.
+    /// It also keeps this read behind the same fold every other read is behind:
+    /// a log the machine would not admit refuses to load, so a history that
+    /// reaches the wire is one `Job::transition` accepted. **This read cannot
+    /// show a state the fold rejected**, and it does not replay anything to
+    /// avoid it — `crates/store/src/fold.rs` is still the only caller.
+    ///
+    /// # The rows come back whole
+    ///
+    /// One query, in `seq` order, over the one table both machines write to.
+    /// A step move ordered against the status transitions around it is what a
+    /// separately keyed second log could not have offered.
+    async fn get_job_events(&self, job_id: JobId) -> Result<JobHistory, Refusal> {
+        let id = job_id.to_domain();
+        self.load(&id).await.map_err(|why| self.refusal(why))?;
+        let events = self
+            .store()
+            .lock()
+            .await
+            .events_for(&id)
+            .map_err(|cause| self.refusal(Adrift::Reading(LoadJobError::Unreadable(cause))))?;
+        Ok(JobHistory {
+            job_id,
+            moves: events.iter().map(recorded).collect(),
+        })
+    }
+
+    /// Every claim this Job's Drones have submitted, step by step.
+    ///
+    /// **The Job is loaded first**, for `get_job_events`' reason: an id naming
+    /// nothing is a 404, and never an empty list. Empty is a real answer and it
+    /// means no step has submitted anything yet.
+    async fn get_evidence(&self, job_id: JobId) -> Result<JobEvidence, Refusal> {
+        let id = job_id.to_domain();
+        self.load(&id).await.map_err(|why| self.refusal(why))?;
+        let recorded = self
+            .store()
+            .lock()
+            .await
+            .step_evidence(&id)
+            .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+        Ok(JobEvidence {
+            job_id,
+            steps: recorded.iter().map(submitted).collect(),
+        })
+    }
+
+    /// One Job's whole patch, with the file list beside it.
+    ///
+    /// **The expensive read, and the only place Fleet spends it for a person.**
+    /// `WorkProduct` keeps the patch behind its own call because the bytes are
+    /// large and most steps ask no semantic question; the two calls are made
+    /// together here because this is the one caller that wants both.
+    ///
+    /// A Job with no worktree answers `work: None` rather than an empty
+    /// reading, and a worktree that will not open is a 500 rather than a patch
+    /// nobody read. `plan_declared` is false unless this Job is the one holding
+    /// the working slot: a declaration belongs to the Drone that made it, and
+    /// there is nowhere else it survives.
+    async fn get_diff(&self, job_id: JobId) -> Result<JobDiff, Refusal> {
+        let job = self
+            .load(&job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        let Some(worktree) = self.worktree_of(&job).map_err(|why| self.refusal(why))? else {
+            return Ok(JobDiff { job_id, work: None });
+        };
+        let plan = {
+            let working = self.slot().lock().await;
+            working
+                .as_ref()
+                .filter(|at_work| at_work.is(job.id()))
+                .and_then(|at_work| at_work.declared().cloned())
+        };
+        // **The whole branch, and the one caller that wants it.** A person
+        // opening a Job is reading everything it has produced; every other
+        // reading in Fleet is a gate on one step and says so.
+        let whole = Since::the_branch_started();
+        let changed = self
+            .work()
+            .changed_files(&worktree, &whole)
+            .map_err(|cause| self.unreadable(job.id(), cause))?;
+        let patch = self
+            .work()
+            .patch(&worktree, &whole)
+            .map_err(|cause| self.unreadable(job.id(), cause))?;
+        Ok(JobDiff {
+            job_id,
+            work: Some(Work {
+                files: crate::footprint::seen(&changed, plan.as_ref()),
+                plan_declared: plan.is_some(),
+                // Absent where there is nothing in it. An empty string reads as
+                // a reading that broke, and a reading that broke is the refusal
+                // above rather than a field.
+                patch: Some(patch.as_str().to_string()).filter(|text| !text.is_empty()),
+            }),
+        })
+    }
+
     /// Every workflow this Fleet holds, so a caller can name one that will not
     /// be refused.
     async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {
@@ -184,9 +301,63 @@ where
         self.summarised(&job).await
     }
 
+    /// Read a request and draft the Job it proposes. **The same gate, and the
+    /// same `job.created`** — the workflow is the only thing filled in
+    /// differently.
+    async fn propose_from_request(
+        &self,
+        request: ipc::JobRequest,
+    ) -> Result<ipc::ProposedPlan, Refusal> {
+        let made = self
+            .propose_from(&request.request)
+            .await
+            .map_err(|why| self.refusal(why))?;
+        let mut jobs = Vec::with_capacity(made.len());
+        for job in &made {
+            jobs.push(self.summarised(job).await?);
+        }
+        Ok(ipc::ProposedPlan { jobs })
+    }
+
     async fn approve_dispatch(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         let job = self
             .approve(&job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
+    /// The person takes the work, and the Job goes on or is finished.
+    async fn approve_review(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let job = Fleet::approve_review(self, &job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
+    /// The work goes back with a note, to the Drone that is standing at the
+    /// gate.
+    ///
+    /// **An empty note is refused here rather than sent**, for the reason
+    /// `redirect_drone` refuses one: a Drone told nothing at all resumes with
+    /// exactly the information that was not enough, which is the review
+    /// appearing to work and changing nothing.
+    async fn request_changes(
+        &self,
+        job_id: JobId,
+        note: ChangesRequested,
+    ) -> Result<JobSummary, Refusal> {
+        let said =
+            Instruction::saying(&note.note).ok_or_else(|| self.refusal(Adrift::Unnameable))?;
+        let job = Fleet::request_changes(self, &job_id.to_domain(), &said)
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
+    /// A verdict on the work, and the Job is over.
+    async fn reject_job(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let job = Fleet::reject(self, &job_id.to_domain())
             .await
             .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
@@ -367,6 +538,72 @@ fn declared(workflow: &config::ResolvedWorkflow) -> Vec<WorkflowStep> {
         .collect()
 }
 
+/// One log row, as the wire carries it. **The redaction, for a history.**
+///
+/// It is a plain function and not a `From` because the orphan rule puts one at
+/// this boundary in `ipc`, and `ipc` has no `store` — the crate that
+/// deserializes rows is deliberately not the crate that deserializes the wire.
+/// So the field-by-field decision is written here, where both types are in
+/// scope, and it is the same decision `JobSummary::of` makes: nothing reaches
+/// Bridge that somebody did not write a line for.
+///
+/// It replays nothing. Every value below is copied across; none is put back
+/// through `Job::transition`, which `crates/store/src/fold.rs` has already done
+/// by the time this runs.
+fn recorded(event: &RecordedEvent) -> ipc::Recorded {
+    ipc::Recorded {
+        seq: event.seq(),
+        status: event.under().into(),
+        moved: match event.moved() {
+            Moved::Job { to, reason } => ipc::Movement::Status(ipc::StatusMoved {
+                to: (*to).into(),
+                reason: ipc::Reason::of(reason),
+            }),
+            Moved::Step {
+                step_id,
+                from,
+                to,
+                why,
+            } => ipc::Movement::Step(ipc::StepMoved {
+                step_id: step_id.into(),
+                from: (*from).into(),
+                to: (*to).into(),
+                // The registry's own spelling, through the narrowing newtype —
+                // a step is stopped only by a step-level trigger, and nothing
+                // here restates the list.
+                why: why.map(|trigger| trigger.as_wire().to_string()),
+            }),
+            Moved::Drone { drone_id, presence } => ipc::Movement::Drone(ipc::DroneMoved {
+                drone_id: drone_id.into(),
+                presence: (*presence).into(),
+            }),
+        },
+        actor: event.actor().into(),
+        at: event.at().into(),
+    }
+}
+
+/// One step's evidence, as the wire carries it. **The redaction, for a claim.**
+///
+/// A plain function rather than a `From` for [`recorded`]'s reason: the orphan
+/// rule would put the impl in `ipc`, and the pair is `(StepId, StepEvidence)`
+/// rather than one type. Every field crosses — the three sentences are the
+/// whole of what a submission is — and the one that does not is `source`, which
+/// the record does not have either.
+fn submitted(recorded: &(core_model::StepId, core_model::StepEvidence)) -> Submitted {
+    let (step_id, evidence) = recorded;
+    Submitted {
+        step_id: step_id.into(),
+        evidence_type: evidence.evidence_type.into(),
+        claimed: evidence.claimed.clone(),
+        shown_by: evidence.shown_by.clone(),
+        // Absent rather than blank. `not_claimed` is legitimately empty on the
+        // record, and an empty string on the wire reads as a boundary somebody
+        // lost.
+        not_claimed: Some(evidence.not_claimed.clone()).filter(|text| !text.is_empty()),
+    }
+}
+
 /// A refusal, as the Drone reads it.
 ///
 /// The name is the typed variant and stays on this side; what crosses is the
@@ -471,6 +708,15 @@ where
             }
             // The same conflict, from a request the machine never saw: the Job
             // is somewhere a replacement would mean nothing.
+            // The Job is not at a human gate. A 409 like the conflicts above,
+            // and never a 500: the machine was never asked, so there is no edge
+            // for a caller to go looking for.
+            Adrift::NotUnderReview { job, .. } | Adrift::NoDroneToTell { job } => {
+                Refusal::IllegalMove(
+                    WireError::raised(NOT_UNDER_REVIEW, said, self.run_id())
+                        .about_job(ipc::JobId::from(job)),
+                )
+            }
             Adrift::NotRedispatchable { job, .. }
             | Adrift::NeverRan { job }
             | Adrift::NotReplaceable { job }
@@ -485,11 +731,46 @@ where
             | Adrift::NoSuchWorkflow { .. }
             | Adrift::NoSuchManifest { .. }
             | Adrift::Modelless
+            | Adrift::NothingToPropose
             | Adrift::AttachmentUnreadable { .. } => {
                 Refusal::Unacceptable(WireError::raised(UNACCEPTABLE, said, self.run_id()))
             }
+            // The request was read and declined, and it goes back on the field
+            // rather than being echoed in the message: what the person retypes
+            // or hands to `propose_job` is what they wrote, character for
+            // character. No Job exists.
+            Adrift::NoWorkflowFits { request, .. } => Refusal::Unacceptable(
+                WireError::raised(NO_WORKFLOW_FITS, said, self.run_id())
+                    .with_field("request", WireValue::Str(request.clone())),
+            ),
+            // A call that could not be made, which is not that refusal — 500,
+            // because nothing about the request is wrong and asking again is
+            // reasonable. It comes back on the same field either way.
+            // `NotProposable` falls to the catch-all below: a proposer that
+            // could not be configured is Fleet's own fault and carries no
+            // request to return.
+            Adrift::NotProposed { request, .. } => Refusal::Fault(
+                WireError::raised(PROPOSER_UNREACHABLE, said, self.run_id())
+                    .with_field("request", WireValue::Str(request.clone())),
+            ),
             _ => Refusal::Fault(WireError::raised(FAULT, said, self.run_id())),
         }
+    }
+
+    /// A worktree that would not be read, named against the Job it was for.
+    ///
+    /// **A 500 and never an empty diff.** A repository that will not open and a
+    /// Drone that changed nothing are opposite answers, and a reviewer handed
+    /// the second when the first happened would take work nobody read.
+    fn unreadable<E: std::error::Error + Send + Sync + 'static>(
+        &self,
+        job: &core_model::JobId,
+        cause: E,
+    ) -> Refusal {
+        self.refusal(Adrift::WorkUnreadable {
+            job: job.clone(),
+            cause: Box::new(cause),
+        })
     }
 
     /// This process's run id.

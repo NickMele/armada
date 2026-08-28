@@ -44,12 +44,43 @@
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
-    AcceptanceCriterion, Attachment, CriterionId, Facts, JobId, ModelName, NewJob, RepoPath,
-    StepSeed, Subject, Title, TopLevelOrigin, WriteTargets,
+    AcceptanceCriterion, Actor, Attachment, CriterionId, DependencyEdge, Facts, JobId, ModelName,
+    NewJob, RepoPath, ScopeRevision, ScopeRevisionOutcome, StepSeed, Subject, Timestamp, Title,
+    TopLevelOrigin, WriteTargets,
 };
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
+
+/// Who stated the scope a proposal carries.
+///
+/// **Presence is the proposer and absence is a person.** Entry zero's
+/// `approved_by` is what makes the call evaluable after the fact — the one
+/// durable trace that a proposal was read rather than typed — so the two paths
+/// have to be tellable apart on the record rather than by guessing from
+/// `origin`.
+pub(crate) enum StatedBy {
+    /// The Job proposer, and what it said about the scope it chose.
+    TheProposer(String),
+    /// Somebody who filled the form in.
+    APerson,
+}
+
+impl StatedBy {
+    fn actor(&self) -> Actor {
+        match self {
+            StatedBy::TheProposer(_) => Actor::Fleet,
+            StatedBy::APerson => Actor::Human,
+        }
+    }
+
+    fn rationale(&self) -> String {
+        match self {
+            StatedBy::TheProposer(said) => said.clone(),
+            StatedBy::APerson => String::from("hand-entered at the dispatch form"),
+        }
+    }
+}
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -66,15 +97,22 @@ where
     /// The steps are the **frozen** workflow's, written at creation, which is
     /// what lets "what you approved is what runs" hold while a Job waits at the
     /// gate for days.
-    /// **It takes no instant.** Creation's timestamp is the constructor's
-    /// argument, not one of the things creation decides — `NewJob` carries no
-    /// time field, and a parameter here that nothing read would look like one
-    /// that does.
+    /// **The instant is for entry zero and nothing else.** Creation's own
+    /// timestamp is still the constructor's argument; this one is read by the
+    /// scope revision below, which is a stamped record rather than a field of
+    /// the Job.
     pub(crate) fn drafted(
         &self,
-        proposal: ipc::ProposeJob,
+        mut proposal: ipc::ProposeJob,
+        stated: StatedBy,
+        at: &Timestamp,
     ) -> Result<(NewJob, TopLevelOrigin), Adrift> {
         let title = Title::new(&proposal.title).map_err(|_| Adrift::Unnameable)?;
+        let atomic = proposal.atomic;
+        let write_targets = proposal
+            .write_targets
+            .take()
+            .map(|paths| WriteTargets::of(paths.into_iter().map(RepoPath::new).collect()));
         let workflow = self.the_workflow_named(&proposal.workflow_id)?;
         let owner_manifest_id = self.the_manifest_named(&proposal.owner_manifest_id)?;
         let model = self.the_model_named(proposal.model.as_deref())?;
@@ -108,27 +146,32 @@ where
                 .acceptance_criteria
                 .into_iter()
                 .enumerate()
-                .map(|(at, criterion)| AcceptanceCriterion {
-                    criterion_id: CriterionId::new(format!("c{}", at + 1)),
+                .map(|(position, criterion)| AcceptanceCriterion {
+                    criterion_id: CriterionId::new(format!("c{}", position + 1)),
                     text: criterion.text,
                     source: criterion.source.domain(),
                 })
                 .collect(),
             steps,
-            dependencies: Vec::new(),
             gate_manifests: Vec::new(),
             // Null is not empty: absent is scope not yet determined, present
             // and empty is determined to write nothing.
-            write_targets: proposal
-                .write_targets
-                .map(|paths| WriteTargets::of(paths.into_iter().map(RepoPath::new).collect())),
+            write_targets: write_targets.clone(),
+            dependencies: proposal
+                .dependencies
+                .into_iter()
+                .map(|edge| DependencyEdge {
+                    direction: edge.direction.domain(),
+                    peer: edge.peer.to_domain(),
+                })
+                .collect(),
             subject: proposal.subject.map(|subject| Subject {
                 kind: subject.kind,
                 reference: subject.reference,
             }),
             redispatched_from: None,
             facts: Facts::new(proposal.facts),
-            scope_revisions: Vec::new(),
+            scope_revisions: vec![entry_zero(write_targets.as_ref(), atomic, stated, at)],
             attachments,
         };
         Ok((new, origin))
@@ -230,5 +273,42 @@ where
             }
         }
         ModelName::new(&self.models().default).map_err(|_| Adrift::Modelless)
+    }
+}
+
+/// Entry zero of the scope history: what this Job starts out intending to
+/// write, and who said so.
+///
+/// **Written on both paths, not only the proposer's.** A revert reads entry
+/// zero of the Job it undoes rather than proposing afresh, so a hand-entered
+/// Job with no entry zero would be one nothing could be reverted against.
+/// `approved_by` is what tells the two apart.
+///
+/// `atomic_before` is `false` because there was no before — the Job did not
+/// exist. `outcome` is `took` because entry zero is the scope the Job actually
+/// carries; the registry names the field and no value set, so this is the word
+/// this file chose and it is reported as such.
+fn entry_zero(
+    write_targets: Option<&WriteTargets>,
+    atomic: bool,
+    stated: StatedBy,
+    at: &Timestamp,
+) -> ScopeRevision {
+    ScopeRevision {
+        // No step: entry zero is before the first one starts.
+        at_step: None,
+        // Empty where scope is undetermined. What was determined is on the
+        // Job's own `write_targets`, which is where null and empty differ; a
+        // revision records movement and there was none to record.
+        paths_added: write_targets
+            .map(|targets| targets.paths().to_vec())
+            .unwrap_or_default(),
+        paths_removed: Vec::new(),
+        atomic_before: false,
+        atomic_after: atomic,
+        rationale: stated.rationale(),
+        outcome: ScopeRevisionOutcome::recorded("took"),
+        approved_by: stated.actor(),
+        at: at.clone(),
     }
 }

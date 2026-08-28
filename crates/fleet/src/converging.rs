@@ -245,8 +245,14 @@ where
             return Ok(None);
         };
         // A patch that will not read spends nothing and marks nothing: there is
-        // no work product to look at, so there is no look to have had.
-        let Ok(patch) = self.work().patch(&worktree) else {
+        // no work product to look at, so there is no look to have had. A step
+        // with no footing is the same case — the reading at its boundary
+        // failed, and the Judge would be shown the whole branch and asked
+        // whether this step is converging on it.
+        let Some(since) = at_work.since() else {
+            return Ok(None);
+        };
+        let Ok(patch) = self.work().patch(&worktree, since) else {
             return Ok(None);
         };
         let judging = self.judging().map_err(|cause| Adrift::NotConfigurable {

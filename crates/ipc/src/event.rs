@@ -27,7 +27,7 @@
 //! and would need a subscribe message, an unsubscribe message and a rule for
 //! what a resync means when the set changes mid-stream.
 //!
-//! # Five event kinds are produced at M1
+//! # Six event kinds are produced at M1
 //!
 //! The rest of `operations.toml`'s — `alert.raised`, `review.ready`,
 //! `evidence.submitted` and `usage.threshold` — describe records this workspace
@@ -42,6 +42,14 @@
 //! then a Job running through four steps still emitted one event and nothing
 //! after it. What changes most often during a run was what the stream did not
 //! carry.
+//!
+//! `job.files_changed` is the sixth, and it is the only kind that describes a
+//! worktree rather than a record. Fleet already read the footprint every turn a
+//! step watched its scope and kept only the paths that had drifted; what a
+//! person needs while a Drone works is the whole list, and nothing carried it.
+//! **Bridge does not read a worktree** — no surface on the other side of this
+//! seam opens a repository, so the only way a file list reaches one is as an
+//! event like every other.
 //!
 //! # `job.created` is a kind and not a state change, and that is why it exists
 //!
@@ -139,6 +147,8 @@ pub enum Event {
     DroneSpawned(DroneSpawned),
     #[serde(rename = "drone.exited")]
     DroneExited(DroneExited),
+    #[serde(rename = "job.files_changed")]
+    JobFilesChanged(JobFilesChanged),
 }
 
 /// A Job exists that did not before, whole enough to draw.
@@ -286,6 +296,86 @@ impl DroneExited {
             at: event.at().into(),
         }
     }
+}
+
+/// What happened to one file, in the vocabulary a person reads.
+///
+/// **A closed set that is not expected to grow.** Every delta Fleet's reading
+/// can produce has a variant, so a client's `match` on this is exhaustive today
+/// and stays exhaustive — which is what keeps a later addition from being the
+/// major bump the protocol table says a new matched-on variant is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChangeKind {
+    /// The file did not exist when the branch was cut. Staged or not — an
+    /// untracked file a Drone wrote is added.
+    Added,
+    Modified,
+    Deleted,
+    Renamed,
+    Copied,
+    /// A file became a directory or a symlink, or the reverse. Not a content
+    /// change.
+    TypeChanged,
+    Conflicted,
+    /// In the diff, and could not be read. **Not an absence of change** — one
+    /// path's reading failed and the rest did not.
+    Unreadable,
+}
+
+/// One file in the Drone's footprint.
+///
+/// **A name and a kind, never bytes.** What changed inside a file is the patch,
+/// which is read only when a Judge fires and is deliberately not on this seam:
+/// a stream carrying diffs at Drone speed is the thing the event channel's
+/// bound exists to keep off it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChangedFile {
+    /// Repository-relative, exactly as git spells it.
+    pub path: String,
+    pub change: ChangeKind,
+    /// This path is not covered by the plan the step declared.
+    ///
+    /// **A mark, not a judgement.** It restates the comparison the live scope
+    /// check already made and decides nothing: drift does not fail a step, and
+    /// a Drone that finds the real work elsewhere answers by declaring again.
+    /// Always `false` where the step declared no plan, which is what
+    /// [`JobFilesChanged::plan_declared`] is for.
+    #[serde(default)]
+    pub outside_plan: bool,
+}
+
+/// What the working Drone has changed in its worktree, as of one reading.
+///
+/// **The whole footprint, not a delta.** A client replaces the list it holds
+/// rather than folding this into one, so a file that stopped being changed —
+/// a revert, a `git checkout` — leaves the view by not being in the next
+/// reading. A stream of additions could never say that.
+///
+/// It names no [`JobSummary`], unlike the kinds that move a row: nothing on the
+/// Board changes when a file does, and this is read by a detail view somebody
+/// opened on one Job.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobFilesChanged {
+    pub job_id: JobId,
+    /// Which step's Drone did it. The footprint is measured from where the
+    /// branch was cut, so it is the Job's whole work and not this step's — the
+    /// step is here to say who is holding the pen.
+    pub step_id: StepId,
+    pub drone_id: DroneId,
+    /// Whether the step has a declared plan for `outside_plan` to mean
+    /// anything. **False is "there is no plan", not "nothing drifted"**, and a
+    /// surface that drew the two the same way would report every unscoped step
+    /// as perfectly on plan.
+    pub plan_declared: bool,
+    /// Every file, in the order the reading found them. Empty is a real
+    /// answer: a Drone that has changed nothing yet.
+    pub files: Vec<ChangedFile>,
+    /// Always Fleet. Carried for the reason [`DroneSpawned`] carries one — a
+    /// field absent on one kind and present on the rest is a shape a client has
+    /// to special-case.
+    pub actor: Actor,
+    pub at: Instant,
 }
 
 /// The qualifying reason a transition carried.

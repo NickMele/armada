@@ -22,7 +22,7 @@ use crate::gate::{apply, rule_on, Ruling};
 use crate::judging::{JudgeBudget, Judging};
 use crate::tests::daemon::{a_fleet_judged_by, a_proposal, worktree_directory};
 use crate::tests::detail::get;
-use crate::tests::gate::{budget, diff_evidence, running_job, worktree};
+use crate::tests::gate::{budget, diff_evidence, fresh, running_job, worktree};
 use crate::tests::tmp::TempDir;
 
 /// The diff a Drone submits when it narrows the gate instead of fixing the
@@ -102,6 +102,7 @@ async fn ruled(patch: &str, flag_if: &[&str], recorded: &[(StepId, StepEvidence)
         at,
         &diff_evidence(),
         None,
+        Some(&fresh()),
         recorded,
         &work,
         budget(),
@@ -200,7 +201,17 @@ async fn a_step_that_asks_nothing_about_gaming_is_never_looked_at() {
     let worktree = worktree();
     let at = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["jest.config.js"]).showing(GAMED);
-    let ruling = rule_on(at, &diff_evidence(), None, &[], &work, budget(), &judging()).await;
+    let ruling = rule_on(
+        at,
+        &diff_evidence(),
+        None,
+        Some(&fresh()),
+        &[],
+        &work,
+        budget(),
+        &judging(),
+    )
+    .await;
     assert!(ruling.advanced(), "{ruling:?}");
 }
 
@@ -261,7 +272,17 @@ async fn a_flagged_step_keeps_what_the_judge_said_about_its_criteria() {
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
     };
-    let ruling = rule_on(at, &diff_evidence(), None, &[], &work, budget(), &judging).await;
+    let ruling = rule_on(
+        at,
+        &diff_evidence(),
+        None,
+        Some(&fresh()),
+        &[],
+        &work,
+        budget(),
+        &judging,
+    )
+    .await;
 
     assert!(matches!(ruling, Ruling::Suspect { .. }), "{ruling:?}");
     assert_eq!(ruling.judged().len(), 1, "the criterion was answered");

@@ -112,6 +112,19 @@ wire_enum! {
     /// Which way a dependency edge points.
     DependencyDirection, core_model::DependencyDirection, "a dependency direction"
 }
+wire_enum! {
+    /// What kind of work product a step's evidence is. Six, from the
+    /// WorkflowDef schema, and **the workflow's word rather than the Drone's**:
+    /// the Evidence tool has no parameter for it, so a submission is recorded
+    /// under the type its frozen step declared.
+    EvidenceType, core_model::EvidenceType, "an evidence type"
+}
+wire_enum! {
+    /// Whether a Drone arrived on a Job or left it. **Presence, not state** —
+    /// `assigned_drone` is a pointer that is set or null, so the log carries
+    /// the two moments that change it and nothing else about a Drone's life.
+    DronePresence, core_model::DronePresence, "a drone presence"
+}
 
 /// The four origins a Job proposed over the wire may claim.
 ///

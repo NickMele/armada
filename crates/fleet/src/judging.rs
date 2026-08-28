@@ -186,7 +186,11 @@ fn model_for(check: &JudgeCheck, default: &Model) -> Result<Model, CallFailed> {
 }
 
 /// Run one rendered call and answer with what it printed.
-async fn said(
+///
+/// `pub(crate)` because the Job proposer's call is the same call: one turn, one
+/// question on stdin, a directory with no repository under it. A second runner
+/// beside this one would be a second answer to what a failed call is.
+pub(crate) async fn said(
     client: &(dyn ModelClient + Send + Sync),
     ask: &Ask,
     budget: JudgeBudget,
@@ -219,8 +223,8 @@ async fn said(
         drop(stdin);
     }
 
-    let finished = tokio::time::timeout(budget.duration(), child.wait_with_output()).await;
-    let output = match finished {
+    let ended = tokio::time::timeout(budget.duration(), child.wait_with_output()).await;
+    let output = match ended {
         Ok(Ok(output)) => output,
         Ok(Err(error)) => return Err(CallFailed::NotAsked { kind: error.kind() }),
         Err(_) => return Err(CallFailed::TimedOut),

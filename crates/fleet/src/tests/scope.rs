@@ -19,7 +19,7 @@ use crate::daemon::Fleet;
 use crate::evidence::Call;
 use crate::gate::{rule_on, Ruling};
 use crate::tests::daemon::{a_fleet_holding, a_proposal, worktree_directory};
-use crate::tests::gate::{budget, diff_evidence, judging, worktree};
+use crate::tests::gate::{budget, diff_evidence, fresh, judging, worktree};
 use crate::tests::tmp::TempDir;
 
 fn a_diff_call<'a>() -> Call<'a> {
@@ -65,6 +65,7 @@ async fn ruled_on(
         at_step,
         &diff_evidence(),
         declared,
+        Some(&fresh()),
         &[],
         &work,
         budget(),
@@ -410,6 +411,7 @@ async fn a_step_with_no_scope_is_neither_checked_nor_read() {
         at_step,
         &diff_evidence(),
         None,
+        Some(&fresh()),
         &[],
         &work,
         budget(),
@@ -447,6 +449,7 @@ async fn an_ungated_step_with_no_scope_advances_on_evidence_alone() {
         at_step,
         &diff_evidence(),
         None,
+        Some(&fresh()),
         &[],
         &work,
         budget(),

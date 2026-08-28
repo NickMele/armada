@@ -48,11 +48,18 @@ pub enum EvidenceType {
     Document,
 }
 
-/// What it takes to advance past a step. **Two variants, of four.**
+/// What it takes to advance past a step. **Three variants, of four.**
 ///
-/// The schema's other two need a Manifest-level policy, which does not exist
-/// yet. An enum rather than a string so widening it is a compile error at every
-/// `match`.
+/// The schema's fourth is `manifest_rule:<key>`, which resolves against a
+/// Manifest-level policy that does not exist — so it stays refused by name
+/// where a definition is parsed rather than being carried and ignored. An enum
+/// rather than a string so widening it is a compile error at every `match`.
+///
+/// **Two of the three name a tier and the third names an actor**, which is the
+/// distinction everything downstream turns on: `auto` and
+/// `auto_if_judge_passes` say which of Fleet's tiers is the whole gate, and
+/// [`HumanAlways`](AdvanceGate::HumanAlways) says the tiers do not decide at
+/// all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AdvanceGate {
     /// The mechanical tier is the whole gate.
@@ -61,6 +68,16 @@ pub enum AdvanceGate {
     /// above a bar: there is no such thing as a Judge pass, only a mechanical
     /// pass a Judge declined to refuse.
     AutoIfJudgePasses,
+    /// A person answers. The tiers still run and still stop the step — what
+    /// they establish is the material a person reads, not the verdict.
+    ///
+    /// **The step does not advance here.** It holds at `awaiting_review` for
+    /// one of the three answers `fleet::reviewing` implements: approve,
+    /// request changes, or reject. A `mechanical_checks[]` or a `judge_checks[]`
+    /// on such a step is not spent on an answer nothing reads: a tier that
+    /// stops the step keeps the work away from the person, and a tier that does
+    /// not is written down beside the evidence they open.
+    HumanAlways,
 }
 
 /// A deterministic assertion with everything it needs already in hand.
@@ -330,6 +347,7 @@ impl AdvanceGate {
         match self {
             AdvanceGate::Auto => "auto",
             AdvanceGate::AutoIfJudgePasses => "auto_if_judge_passes",
+            AdvanceGate::HumanAlways => "human_always",
         }
     }
 
@@ -337,6 +355,7 @@ impl AdvanceGate {
         match value {
             "auto" => Some(AdvanceGate::Auto),
             "auto_if_judge_passes" => Some(AdvanceGate::AutoIfJudgePasses),
+            "human_always" => Some(AdvanceGate::HumanAlways),
             _ => None,
         }
     }

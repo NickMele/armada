@@ -13,41 +13,16 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use axum::body::Body;
-use axum::http::{Request, StatusCode};
+use axum::http::StatusCode;
 use axum::Router;
-use http_body_util::BodyExt;
 use ipc::{JobList, JobSummary, RunId};
 use testkit::FakeWorkProduct;
-use tower::ServiceExt;
 
 use crate::tests::daemon::{a_fleet, a_proposal, diff_evidence, note_evidence, worktree_directory};
+use crate::tests::http::call;
 use crate::tests::tmp::TempDir;
 
-async fn call(app: &Router, method: &str, uri: &str, body: &str) -> (StatusCode, Vec<u8>) {
-    let request = Request::builder()
-        .method(method)
-        .uri(uri)
-        .header("content-type", "application/json")
-        .body(Body::from(body.to_string()))
-        .expect("a well-formed request");
-    let response = app
-        .clone()
-        .oneshot(request)
-        .await
-        .expect("the router answers every request");
-    let status = response.status();
-    let body = response
-        .into_body()
-        .collect()
-        .await
-        .expect("a body that reads")
-        .to_bytes()
-        .to_vec();
-    (status, body)
-}
-
-const A_PROPOSAL: &str = r#"{
+pub(crate) const A_PROPOSAL: &str = r#"{
     "title": "fix the off-by-one in the log reader",
     "workflow_id": "fixture-workflow",
     "owner_manifest_id": "01FIXTUREMANIFEST",

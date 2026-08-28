@@ -26,7 +26,7 @@ use std::time::Duration;
 
 use std::sync::Arc;
 
-use adapter_traits::{Environment, Model, Vcs, Worktree, WorktreeSpec};
+use adapter_traits::{Environment, Model, Since, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use config::{EvidenceType, ResolvedWorkflow};
 use core_model::{
     AcceptanceCriterion, Actor, CriterionId, CriterionSource, DeclaredPaths, Facts,
@@ -228,6 +228,10 @@ pub struct Run {
     /// What the Drone declared this step's work would be in. `None` on a step
     /// that asks for no scope, which is every step of the bug workflow.
     pub declared: Option<DeclaredPaths>,
+    /// What the step being worked inherited. Read when the step starts, the
+    /// way `fleet::dispatch` reads it at a boundary, so the gate here answers
+    /// about the step rather than about the branch.
+    pub since: Option<Since>,
 }
 
 /// Everything the run needs, with no process, no repository and no network
@@ -328,10 +332,12 @@ impl Bench {
             attachments: Vec::new(),
         };
         let job = Job::create_top_level(new, TopLevelOrigin::Manual, self.clock.now());
+        let since = self.work.already_there(&worktree).ok();
         Run {
             job,
             worktree,
             declared: None,
+            since,
         }
     }
 
@@ -353,6 +359,10 @@ impl Bench {
 
     /// Move one step of the frozen workflow. **Always Fleet**: the inner
     /// machine has no human actor at M1.
+    ///
+    /// A step entering `running` takes the worktree's footing, which is what
+    /// `fleet::dispatch` does at a boundary — so the gate below asks about the
+    /// step that just started and not about everything the branch holds.
     pub fn step_moved(&self, run: &mut Run, step: &StepId, to: StepTarget) {
         let moved = run
             .job
@@ -360,6 +370,9 @@ impl Bench {
             .expect("a legal step move");
         self.step_moves.borrow_mut().push(moved.event);
         run.job = moved.job;
+        if to == StepTarget::Running {
+            run.since = self.work.already_there(&run.worktree).ok();
+        }
     }
 
     pub fn refuses_step(&self, run: &Run, step: &StepId, to: StepTarget) -> IllegalStepTransition {
@@ -391,6 +404,7 @@ impl Bench {
             at,
             submitted,
             run.declared.as_ref(),
+            run.since.as_ref(),
             &recorded,
             &self.work,
             self.budget,

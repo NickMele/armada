@@ -62,8 +62,11 @@ fn one_step(scope: Option<Scoped<'static>>) -> ResolvedWorkflow {
 
 /// A Drone that prints one line and then never reads or says anything again.
 ///
-/// The line decodes as a terminating event carrying `turns`, which is how a
-/// test puts the harness's own turn count where the tripwire reads it.
+/// The line decodes as an invocation opening and then finishing with `turns`
+/// against it, which is how a test puts the harness's own turn count where the
+/// tripwire reads it. **The opening is not decoration** — a turn count that
+/// arrives with no invocation to belong to is the previous step's arriving
+/// late, and `Watching::turns_since` will not count one.
 /// Whether a pid is still running. `kill -0` rather than `libc::kill`, because
 /// this crate denies `unsafe` and the one exception is the `setsid` in
 /// `detach.rs` — a test is not a second reason to open that door.
@@ -78,7 +81,7 @@ fn alive(pid: u32) -> bool {
 
 fn a_drone_that_will_not_answer(turns: u32) -> FakeHarness {
     FakeHarness::running("/bin/sh", &["-c", "echo BUSY; sleep 30"])
-        .reading("BUSY", vec![ended(turns)])
+        .reading("BUSY", vec![opened(), ended(turns)])
 }
 
 /// The same Drone, except that it answers every turn injected into it.
@@ -90,8 +93,17 @@ fn a_drone_that_answers(turns: u32) -> FakeHarness {
             "echo BUSY; while IFS= read -r line; do echo RESTED; done",
         ],
     )
-    .reading("BUSY", vec![ended(turns)])
-    .reading("RESTED", vec![ended(turns)])
+    .reading("BUSY", vec![opened(), ended(turns)])
+    .reading("RESTED", vec![opened(), ended(turns)])
+}
+
+/// An invocation opening: `system/init` in the stream this stands in for.
+fn opened() -> DroneEvent {
+    DroneEvent::Started {
+        session: String::from("a-session"),
+        model: String::from("the-configured-model"),
+        mcp_servers: 1,
+    }
 }
 
 fn ended(turns: u32) -> DroneEvent {
@@ -191,6 +203,38 @@ async fn a_step_inside_its_norms_is_never_looked_at() {
         judge.asked().is_empty(),
         "a slow step is not a thrashing step, and nothing should have been spent"
     );
+}
+
+/// **The false trip, in the shape the stream delivered it.** A turn count that
+/// arrives with no invocation open belongs to the invocation that ended before
+/// this step began — the harness reports it only when an invocation finishes,
+/// and the one a step submits from finishes *after* Fleet has advanced. A
+/// baseline read at the boundary and subtracted from it charges the new step
+/// with the whole of the last one's count.
+///
+/// This Drone reports 90 turns against a norm of 5 and none of them are its
+/// own. Nothing looks, nothing is spent, and the step keeps the one look it
+/// gets — `Chain::Looked` would otherwise have disarmed it for good.
+#[tokio::test]
+async fn a_turn_count_from_before_the_step_began_trips_nothing() {
+    let home = TempDir::new();
+    let judge = Arc::new(FakeJudge::saying(THRASHING));
+    let fleet = a_watched_fleet(
+        &home,
+        FakeHarness::running("/bin/sh", &["-c", "echo BUSY; sleep 30"])
+            .reading("BUSY", vec![ended(90)]),
+        Arc::clone(&judge),
+        on_turns(5),
+        one_step(None),
+    );
+    let job = started(&fleet, &home).await;
+
+    assert!(
+        turns(&fleet, 12).await.is_empty(),
+        "a step that has spent no turns of its own was poked"
+    );
+    assert!(judge.asked().is_empty(), "and a call was spent on it");
+    assert_eq!(fleet.load(&job).await.unwrap().status(), JobStatus::Running);
 }
 
 /// **The failure the whole chain exists to avoid.** A turn count over the norm
@@ -410,10 +454,7 @@ async fn a_drone_that_will_not_report_is_escalated_with_its_step_stopped() {
         .expect("a Drone is working")
         .session()
         .pid();
-    assert!(
-        alive(pid),
-        "the Drone is alive when it is told to report"
-    );
+    assert!(alive(pid), "the Drone is alive when it is told to report");
     let escalated = next_stage(&fleet, "escalated").await;
     assert!(matches!(escalated.stage, Stage::Escalated { .. }));
 

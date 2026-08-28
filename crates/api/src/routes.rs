@@ -25,8 +25,8 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
 use ipc::{
-    JobId, Missed, ProposeJob, Redirection, Resync, RunId, StreamMessage, WireError,
-    PROTOCOL_VERSION,
+    ChangesRequested, JobId, JobRequest, Missed, ProposeJob, Redirection, Resync, RunId,
+    StreamMessage, WireError, PROTOCOL_VERSION,
 };
 use serde::Serialize;
 use std::sync::Arc;
@@ -68,6 +68,29 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/jobs/:job_id",
     },
+    // The path taken, under the Job that took it. `get_job_events` drops
+    // `get_` and `job_` for the reason `redispatch` drops `_job`: the segment
+    // before it already names the Job. It is not `/events`, which is the
+    // global stream and carries no history at all.
+    Route {
+        operation: "get_job_events",
+        method: "GET",
+        path: "/jobs/:job_id/events",
+    },
+    // The two halves of the work product, on two routes and not one. Evidence
+    // is a handful of sentences per step and the patch is however large the
+    // work is, so a surface wanting only the claims does not fetch the bytes.
+    // Neither is on `get_job`, which is read on every open to draw a summary.
+    Route {
+        operation: "get_evidence",
+        method: "GET",
+        path: "/jobs/:job_id/evidence",
+    },
+    Route {
+        operation: "get_diff",
+        method: "GET",
+        path: "/jobs/:job_id/diff",
+    },
     Route {
         operation: "list_workflows",
         method: "GET",
@@ -88,10 +111,37 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs",
     },
+    // A second POST under `/jobs`, and a segment rather than a mode flag on the
+    // first: what a caller sends is a different shape, and one route taking
+    // either would be the two paths sharing a body that means two things.
+    Route {
+        operation: "propose_from_request",
+        method: "POST",
+        path: "/jobs/from_request",
+    },
     Route {
         operation: "approve_dispatch",
         method: "POST",
         path: "/jobs/:job_id/approve_dispatch",
+    },
+    // The three answers at a human gate, and three routes rather than one with
+    // a decision in the body: each does something different to the Job, and one
+    // route taking any of them would be a body that means three things. The
+    // reject path drops `_job` for the reason `redispatch` does.
+    Route {
+        operation: "approve_review",
+        method: "POST",
+        path: "/jobs/:job_id/approve_review",
+    },
+    Route {
+        operation: "request_changes",
+        method: "POST",
+        path: "/jobs/:job_id/request_changes",
+    },
+    Route {
+        operation: "reject_job",
+        method: "POST",
+        path: "/jobs/:job_id/reject",
     },
     Route {
         operation: "kill_drone",
@@ -146,6 +196,11 @@ pub const SERVED: &[Route] = &[
     },
     Route {
         operation: "job.step_advanced",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "job.files_changed",
         method: "GET",
         path: "/events",
     },
@@ -226,10 +281,17 @@ impl<D> Clone for Served<D> {
 pub fn router<D: Daemon>(served: Served<D>) -> Router {
     Router::new()
         .route("/jobs", get(list_jobs::<D>).post(propose_job::<D>))
+        .route("/jobs/from_request", post(propose_from_request::<D>))
         .route("/workflows", get(list_workflows::<D>))
         .route("/manifests", get(list_manifests::<D>))
         .route("/models", get(list_models::<D>))
         .route("/jobs/:job_id", get(get_job::<D>))
+        .route("/jobs/:job_id/events", get(get_job_events::<D>))
+        .route("/jobs/:job_id/evidence", get(get_evidence::<D>))
+        .route("/jobs/:job_id/diff", get(get_diff::<D>))
+        .route("/jobs/:job_id/approve_review", post(approve_review::<D>))
+        .route("/jobs/:job_id/request_changes", post(request_changes::<D>))
+        .route("/jobs/:job_id/reject", post(reject_job::<D>))
         .route(
             "/jobs/:job_id/approve_dispatch",
             post(approve_dispatch::<D>),
@@ -265,6 +327,51 @@ async fn get_job<D: Daemon>(
 ) -> Response {
     match served.daemon.get_job(JobId::carried(job_id)).await {
         Ok(detail) => answer(StatusCode::OK, &detail, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Every move one Job made, oldest first. **The path taken**, which `get_job`
+/// answers nothing about — it says where a Job is, and this says how it got
+/// there.
+///
+/// Its own route because a history has no bound and a detail view is fetched to
+/// draw a summary. Nothing here folds: the rows are read and rendered, and
+/// `crates/store/src/fold.rs` stays the only thing that replays them.
+async fn get_job_events<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served.daemon.get_job_events(JobId::carried(job_id)).await {
+        Ok(history) => answer(StatusCode::OK, &history, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Every claim a Job's Drones have submitted. **What the work says about
+/// itself**, which the gate ruled on and a person reads before deciding.
+///
+/// Its own route beside the diff rather than folded into it: this is a few
+/// sentences per step and that is however large the work is.
+async fn get_evidence<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served.daemon.get_evidence(JobId::carried(job_id)).await {
+        Ok(evidence) => answer(StatusCode::OK, &evidence, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// One Job's whole patch. **The expensive read, on the one route that asks for
+/// it** — `get_job` is fetched on every open to draw a summary, and the bytes
+/// are what a person reading a diff needs and nothing else does.
+async fn get_diff<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served.daemon.get_diff(JobId::carried(job_id)).await {
+        Ok(diff) => answer(StatusCode::OK, &diff, &served.run_id),
         Err(refusal) => refused(refusal),
     }
 }
@@ -315,11 +422,90 @@ async fn propose_job<D: Daemon>(State(served): State<Served<D>>, body: Bytes) ->
     }
 }
 
+/// The other way a Job reaches the gate: a person describes the work and the
+/// proposer reads it. **The same 201 and the same gate** — what differs is who
+/// filled the workflow in, and that one request can be several Jobs.
+async fn propose_from_request<D: Daemon>(State(served): State<Served<D>>, body: Bytes) -> Response {
+    let request: JobRequest = match ipc::decode("request", &body) {
+        Ok(request) => request,
+        Err(why) => {
+            return problem(
+                StatusCode::BAD_REQUEST,
+                &WireError::raised(UNDECODABLE_REQUEST, why.to_string(), served.run_id.clone())
+                    .caused_by(vec![why.to_string()]),
+            )
+        }
+    };
+    match served.daemon.propose_from_request(request).await {
+        Ok(job) => answer(StatusCode::CREATED, &job, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 async fn approve_dispatch<D: Daemon>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
 ) -> Response {
     match served.daemon.approve_dispatch(JobId::carried(job_id)).await {
+        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// The person takes the work. **The counterpart to `approve_dispatch`**, at the
+/// other end of the Job: that is the gate before anything runs, and this is the
+/// decision after it has.
+///
+/// 409 anywhere but `awaiting_review`, which is what keeps it from becoming the
+/// dispatch gate under a second name.
+async fn approve_review<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served.daemon.approve_review(JobId::carried(job_id)).await {
+        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Send the work back with a note. **The Job comes back `running`**, at the
+/// same step, with the same Drone — nothing was thrown away and nothing was
+/// spawned.
+///
+/// 409 where the Drone is gone: there is nobody to tell.
+async fn request_changes<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+    body: Bytes,
+) -> Response {
+    let note: ChangesRequested = match ipc::decode("a review note", &body) {
+        Ok(note) => note,
+        Err(why) => {
+            return problem(
+                StatusCode::BAD_REQUEST,
+                &WireError::raised(UNDECODABLE_REQUEST, why.to_string(), served.run_id.clone())
+                    .caused_by(vec![why.to_string()]),
+            )
+        }
+    };
+    match served
+        .daemon
+        .request_changes(JobId::carried(job_id), note)
+        .await
+    {
+        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// A verdict on the work, and the Job is over. **Terminal**, which is what
+/// separates it from `request_changes` — and it is not `kill_job`, which clears
+/// the Board and carries no verdict at all.
+async fn reject_job<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served.daemon.reject_job(JobId::carried(job_id)).await {
         Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
         Err(refusal) => refused(refusal),
     }

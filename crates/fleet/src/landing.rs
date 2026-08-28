@@ -61,24 +61,44 @@ where
     ) -> Result<(), Adrift> {
         let job = self.load(job_id).await?;
         let job = self.move_step(&job, step, StepTarget::Advanced).await?;
-        let landed = self.land(&job, working).await;
-        // **After the commit and only after it.** A push of a branch whose work
-        // is still uncommitted would publish the commit the Job started from.
-        let delivered = match landed {
-            Ok(_) => self.delivered(&job, working).await,
-            Err(_) => Ok(Delivered::default()),
-        };
-        if let Ok(delivered) = &delivered {
-            *self.delivery_slot().lock().await = Some(delivered.clone());
-        }
+        let landed = self.land_and_deliver(&job, working).await;
         // The Job is moved before the Drone is told, so a session that has gone
         // deaf cannot leave a finished Job at `running`.
         self.applied(&job, ruling).await?;
         let told = self.tell(job_id, tell, working).await;
         self.end_the_drone(working).await;
         landed?;
-        delivered?;
         told
+    }
+
+    /// Put the work on the branch and the branch where it is going.
+    ///
+    /// Held rather than raised, so the caller can free the slot and tell the
+    /// Drone before it deals with the failure. **The two are one call because
+    /// the order between them is a rule and not a preference:** a push of a
+    /// branch whose work is still uncommitted would publish the commit the Job
+    /// started from, so nothing is delivered where the commit did not land.
+    ///
+    /// Its second caller is `crate::reviewing`, where a person advances the
+    /// last step by hand. A Job recorded `completed_success` with its work
+    /// uncommitted is correct, verified and unmergeable, and which of Fleet or
+    /// a reviewer advanced the step changes nothing about that.
+    pub(crate) async fn land_and_deliver(
+        &self,
+        job: &Job,
+        working: &Option<Working>,
+    ) -> Result<(), Adrift> {
+        let landed = self.land(job, working).await;
+        let delivered = match landed {
+            Ok(_) => self.delivered(job, working).await,
+            Err(_) => Ok(Delivered::default()),
+        };
+        if let Ok(delivered) = &delivered {
+            *self.delivery_slot().lock().await = Some(delivered.clone());
+        }
+        landed?;
+        delivered?;
+        Ok(())
     }
 
     /// Deliver the Job's branch, from the worktree the slot is holding.

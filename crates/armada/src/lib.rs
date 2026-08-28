@@ -34,6 +34,7 @@ pub mod setup;
 mod tests;
 
 pub use agent::{
-    agent_binary, judge_model, model_choices, NoSuchAgent, AGENT_BINARY, JUDGE_MODEL, MODEL,
+    agent_binary, judge_model, model_choices, proposer_model, NoSuchAgent, AGENT_BINARY,
+    JUDGE_MODEL, MODEL, PROPOSER_MODEL,
 };
 pub use setup::{Setup, SetupRefused};

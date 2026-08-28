@@ -21,8 +21,9 @@ use core_model::{
 };
 
 use crate::{
-    decode, encode, AttachmentRef, CheckRun, DeclaredCheck, JobDetail, JobSummary, Judged,
-    ProposeJob, StepFacts, StreamMessage,
+    decode, encode, AttachmentRef, ChangesRequested, CheckRun, DeclaredCheck, DroneMoved,
+    JobDetail, JobDiff, JobEvidence, JobHistory, JobSummary, Judged, Movement, ProposeJob,
+    Recorded, StatusMoved, StepFacts, StepMoved, StreamMessage, Submitted, Work,
 };
 
 fn at(instant: &str) -> Timestamp {
@@ -377,6 +378,70 @@ fn the_drone_lifecycle_pair_travels_under_the_names_the_inventory_declares() {
     );
 }
 
+/// The footprint's kind is the dotted name too, and the change kinds are the
+/// spellings a TypeScript union has to mirror by hand — nothing generates the
+/// DTO types from this crate yet, so this test is what pins them.
+#[test]
+fn a_footprint_travels_with_names_and_kinds_and_never_bytes() {
+    let message = StreamMessage::Event(crate::Delivered {
+        cursor: crate::Cursor::at(11),
+        event: crate::Event::JobFilesChanged(crate::JobFilesChanged {
+            job_id: crate::JobId::carried("01JOB"),
+            step_id: crate::StepId::carried("repro"),
+            drone_id: crate::DroneId::carried("01DRONE"),
+            plan_declared: true,
+            files: vec![
+                crate::ChangedFile {
+                    path: "src/parse.rs".to_string(),
+                    change: crate::ChangeKind::Modified,
+                    outside_plan: false,
+                },
+                crate::ChangedFile {
+                    path: "src/legacy.rs".to_string(),
+                    change: crate::ChangeKind::Deleted,
+                    outside_plan: true,
+                },
+                crate::ChangedFile {
+                    path: "docs/notes.md".to_string(),
+                    change: crate::ChangeKind::TypeChanged,
+                    outside_plan: true,
+                },
+            ],
+            actor: Actor::Fleet.into(),
+            at: (&at("2026-08-26T09:07:00.000Z")).into(),
+        }),
+    });
+    let json = encode(&message).expect("plain data");
+
+    assert!(json.contains("\"kind\":\"job.files_changed\""), "{json}");
+    assert!(json.contains("\"change\":\"modified\""), "{json}");
+    assert!(
+        json.contains("\"change\":\"type_changed\""),
+        "snake_case, as every other closed set on this wire is: {json}"
+    );
+    assert!(
+        !json.contains("+++") && !json.contains("@@"),
+        "names and kinds, never the patch: {json}"
+    );
+    assert_eq!(
+        decode::<StreamMessage>("stream message", json.as_bytes()).expect("it round-trips"),
+        message
+    );
+}
+
+/// **The mark defaults to unmarked.** A row from a peer that predates the field
+/// reads as inside the plan rather than failing the parse — the same additive
+/// rule the whole minor-skew row rests on.
+#[test]
+fn a_changed_file_with_no_mark_reads_as_inside_the_plan() {
+    let file = decode::<crate::ChangedFile>(
+        "a changed file",
+        br#"{"path":"src/parse.rs","change":"added"}"#,
+    )
+    .expect("the mark defaults");
+    assert!(!file.outside_plan);
+}
+
 #[test]
 fn a_queued_transition_carries_no_reason_because_the_log_stores_none() {
     let moved = job()
@@ -516,4 +581,157 @@ fn the_summary_of_a_sub_dispatched_job_says_so() {
     assert_eq!(summary.origin.as_wire(), "sub_dispatched");
     assert_eq!(summary.status.as_wire(), "queued");
     assert_eq!(summary.urgency.as_wire(), "incident");
+}
+
+/// One history, of all three shapes, round-trips — and **the tag is what tells
+/// them apart.** A client reading a timeline matches on `kind`, so a row that
+/// serialised without one would be a row nothing could draw.
+#[test]
+fn a_history_carries_all_three_shapes_and_names_each_one() {
+    let history = JobHistory {
+        job_id: crate::JobId::carried("01JOB"),
+        moves: vec![
+            Recorded {
+                seq: 1,
+                status: crate::JobStatus::from_wire("awaiting_approval").expect("a status"),
+                moved: Movement::Status(StatusMoved {
+                    to: crate::JobStatus::from_wire("queued").expect("a status"),
+                    reason: None,
+                }),
+                actor: crate::Actor::from_wire("human").expect("an actor"),
+                at: crate::Instant::carried("2026-08-26T09:01:00.000Z"),
+            },
+            Recorded {
+                seq: 2,
+                status: crate::JobStatus::from_wire("running").expect("a status"),
+                moved: Movement::Drone(DroneMoved {
+                    drone_id: crate::DroneId::carried("01DRONE"),
+                    presence: crate::DronePresence::from_wire("drone_spawned").expect("a presence"),
+                }),
+                actor: crate::Actor::from_wire("fleet").expect("an actor"),
+                at: crate::Instant::carried("2026-08-26T09:02:00.000Z"),
+            },
+            Recorded {
+                seq: 3,
+                status: crate::JobStatus::from_wire("running").expect("a status"),
+                moved: Movement::Step(StepMoved {
+                    step_id: crate::StepId::carried("repro"),
+                    from: crate::StepState::from_wire("running").expect("a step state"),
+                    to: crate::StepState::from_wire("stopped").expect("a step state"),
+                    why: Some("gate_failure".to_string()),
+                }),
+                actor: crate::Actor::from_wire("fleet").expect("an actor"),
+                at: crate::Instant::carried("2026-08-26T09:03:00.000Z"),
+            },
+        ],
+    };
+    let json = encode(&history).expect("plain data");
+    assert!(json.contains(r#""kind":"status""#), "{json}");
+    assert!(json.contains(r#""kind":"drone""#), "{json}");
+    assert!(json.contains(r#""kind":"step""#), "{json}");
+    assert!(
+        json.contains(r#""presence":"drone_spawned""#),
+        "the registry's own spelling, not a second one: {json}"
+    );
+    assert!(
+        !json.contains(r#""reason":null"#),
+        "absent, never present and null: {json}"
+    );
+    assert_eq!(
+        decode::<JobHistory>("a Job's history", json.as_bytes()).expect("it round-trips"),
+        history
+    );
+}
+
+/// **A history is a list, and an empty one is an answer.** A Job created and
+/// not yet moved has no rows, which a client must be able to draw as "nothing
+/// has happened" rather than as a failure.
+#[test]
+fn a_history_with_no_moves_decodes() {
+    let history = decode::<JobHistory>("a Job's history", br#"{"job_id":"01JOB","moves":[]}"#)
+        .expect("empty is a shape");
+    assert!(history.moves.is_empty());
+}
+
+/// A step move that stopped nothing carries no trigger, and a row from a peer
+/// that omits it still parses — the additive rule the minor-skew row rests on,
+/// applied to the newest DTO.
+#[test]
+fn a_step_move_that_stopped_nothing_carries_no_trigger() {
+    let history = decode::<JobHistory>(
+        "a Job's history",
+        br#"{"job_id":"01JOB","moves":[{"seq":4,"status":"running",
+            "moved":{"kind":"step","step_id":"repro","from":"not_started","to":"running"},
+            "actor":"fleet","at":"2026-08-26T09:04:00.000Z"}]}"#,
+    )
+    .expect("a step move without a trigger");
+    let Movement::Step(step) = &history.moves[0].moved else {
+        panic!("a step move");
+    };
+    assert_eq!(step.why, None);
+}
+
+/// **The reviewing reads keep the absent-never-empty rule, in both places it
+/// bites.** A Job with no worktree carries no reading at all, and a submission
+/// that drew no boundary carries no `not_claimed` — an empty object and an
+/// empty string would each read as a value somebody lost.
+#[test]
+fn the_reviewing_reads_are_absent_rather_than_empty() {
+    let nothing_to_read = JobDiff {
+        job_id: crate::JobId::carried("01JOB"),
+        work: None,
+    };
+    let json = encode(&nothing_to_read).expect("a diff is plain data");
+    assert!(
+        !json.contains("\"work\""),
+        "there was no worktree, and absent is not an empty reading: {json}"
+    );
+
+    let read_and_empty = JobDiff {
+        job_id: crate::JobId::carried("01JOB"),
+        work: Some(Work {
+            files: Vec::new(),
+            plan_declared: false,
+            patch: None,
+        }),
+    };
+    let json = encode(&read_and_empty).expect("a diff is plain data");
+    assert!(
+        json.contains("\"files\":[]"),
+        "a worktree that opened and holds no change is a real answer: {json}"
+    );
+    assert!(
+        !json.contains("\"patch\""),
+        "and nothing in it is absent rather than blank: {json}"
+    );
+
+    let boundless = JobEvidence {
+        job_id: crate::JobId::carried("01JOB"),
+        steps: vec![Submitted {
+            step_id: crate::StepId::carried("repro"),
+            evidence_type: EvidenceType::FailingTest.into(),
+            claimed: "the reader stops one line early".to_string(),
+            shown_by: "a failing test".to_string(),
+            not_claimed: None,
+        }],
+    };
+    let json = encode(&boundless).expect("evidence is plain data");
+    assert!(
+        !json.contains("not_claimed"),
+        "legitimately empty on the record is absent on the wire: {json}"
+    );
+    assert!(
+        json.contains("\"evidence_type\":\"failing_test\""),
+        "the registry's own spelling, through the domain pair: {json}"
+    );
+}
+
+/// A note is refused on its spelling, not on its emptiness. **Blank is Fleet's
+/// refusal** — a decoded request is well-formed, and a value that cannot work
+/// is a 422 rather than a 400.
+#[test]
+fn a_blank_review_note_decodes_and_is_refused_further_in() {
+    let note = decode::<ChangesRequested>("a review note", br#"{"note":"   "}"#)
+        .expect("the bytes became a request");
+    assert_eq!(note.note, "   ");
 }
