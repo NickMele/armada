@@ -18,12 +18,20 @@
 //! `defer_foreign_keys` moves that check to the commit, where both halves are
 //! gone. Nothing outside the transaction ever sees the half-forgotten shape.
 //!
+//! # The tables are asked for, not listed
+//!
+//! "Every row beneath it" is read out of the file's own catalog by
+//! [`tables_pointing_at_a_job`] each time, because the three times this was a
+//! list in a loop it was a list three tables out of date. See that function for
+//! what it cost.
+//!
 //! [`schema::MIGRATIONS`]: crate::schema::MIGRATIONS
 
 use core_model::JobId;
 
 use crate::error::{fault, WriteError};
 use crate::open::Store;
+use crate::schema::tables_pointing_at_a_job;
 
 /// What forgetting one Job removed.
 ///
@@ -42,6 +50,44 @@ pub struct Forgotten {
     pub step_checks: usize,
     /// Files handed to the Job at proposal time.
     pub attachments: usize,
+    /// What the Judge answered, one row per criterion per run of a step.
+    pub step_judgments: usize,
+    /// What the gaming check flagged, one row per pattern per run of a step.
+    pub step_gaming_flags: usize,
+    /// What each run of a step submitted, one row per run.
+    pub step_evidence: usize,
+    /// Rows removed from a table this build has no field for.
+    ///
+    /// Always zero today, and a test says so. It exists because the delete is
+    /// derived from the file's own catalog while these fields are written by
+    /// hand: a table added tomorrow is emptied correctly the moment it is
+    /// created, and until somebody names it here its rows are counted in a
+    /// lump rather than not counted at all. An undercount is the thing this
+    /// struct exists to prevent.
+    pub other: usize,
+}
+
+impl Forgotten {
+    /// Where one table's removed rows are counted, or `None` for a table no
+    /// field here names.
+    ///
+    /// Kept as a lookup rather than written into the loop so a test can ask the
+    /// same question of every table in the schema and fail on the first one
+    /// this does not answer for.
+    pub(crate) fn count_of(&mut self, table: &str) -> Option<&mut usize> {
+        Some(match table {
+            "job_events" => &mut self.events,
+            "job_steps" => &mut self.steps,
+            "job_write_targets" => &mut self.write_targets,
+            "job_manifests" => &mut self.manifests,
+            "job_step_checks" => &mut self.step_checks,
+            "job_attachments" => &mut self.attachments,
+            "job_step_judgments" => &mut self.step_judgments,
+            "job_step_gaming_flags" => &mut self.step_gaming_flags,
+            "job_step_evidence" => &mut self.step_evidence,
+            _ => return None,
+        })
+    }
 }
 
 impl Store {
@@ -74,18 +120,23 @@ impl Store {
             existed,
             ..Forgotten::default()
         };
-        for (table, into) in [
-            ("job_events", &mut removed.events),
-            ("job_steps", &mut removed.steps),
-            ("job_write_targets", &mut removed.write_targets),
-            ("job_manifests", &mut removed.manifests),
-            ("job_step_checks", &mut removed.step_checks),
-            ("job_attachments", &mut removed.attachments),
-        ] {
-            *into = tx
+        // Read inside the transaction that is about to use it, and read at all
+        // rather than listed: see `schema::tables_pointing_at_a_job` for the
+        // three tables a list forgot. The names are the file's own catalog
+        // entries and cannot be bound as parameters, identifiers never being
+        // bindable in SQL.
+        let tables = tables_pointing_at_a_job(&tx)
+            .map_err(fault("asking which tables point at a job"))
+            .map_err(WriteError::Database)?;
+        for table in &tables {
+            let rows = tx
                 .execute(&format!("DELETE FROM {table} WHERE job_id = ?1"), (id,))
                 .map_err(fault("removing the rows beneath a job"))
                 .map_err(WriteError::Database)?;
+            match removed.count_of(table) {
+                Some(into) => *into += rows,
+                None => removed.other += rows,
+            }
         }
 
         tx.commit()

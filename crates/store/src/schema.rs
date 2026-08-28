@@ -34,6 +34,8 @@
 //! one. `AUTOINCREMENT` rather than a bare rowid so a key is never reused, which
 //! matters for a log whose whole value is that entries do not move.
 
+use rusqlite::Connection;
+
 /// The key under which [`MIGRATIONS`]' applied count is recorded.
 pub const SCHEMA_VERSION_KEY: &str = "schema_version";
 
@@ -48,6 +50,40 @@ pub const KNOWN_SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 /// migrated file is assumed to contain, which is the one thing the version
 /// number exists to stop.
 pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13];
+
+/// Every table whose rows belong to one Job, asked of the file rather than
+/// listed here.
+///
+/// [`forget_job`](crate::Store::forget_job) deletes from each. It asks because
+/// a list is a thing somebody has to remember to extend, and three times in a
+/// row nobody did: `job_step_judgments`, `job_step_gaming_flags` and
+/// `job_step_evidence` arrived in [`V8`], [`V12`] and [`V10`] and none of them
+/// reached the delete. Nothing failed while no shipped workflow declared a
+/// `judge_check` and the tables stayed empty; the day nine of them went live,
+/// every Job that reached a gate became one `armada clean` could not forget,
+/// because the `jobs` row it deletes first is the parent those rows point at.
+/// A catalog cannot fall behind the schema it is the schema of.
+///
+/// **The file's catalog, not the constants above it.** [`V13`] builds four
+/// tables under `_wide` names and renames them over the originals, so the
+/// `CREATE TABLE` text in this module names four tables no migrated file has
+/// and misses the four every one of them does.
+///
+/// `job_events` is in this set and belongs there — it is append-only by
+/// trigger only while its Job row still exists, which by then it does not. See
+/// [`V4`], and the ordering it forces on `forget_job`.
+pub(crate) fn tables_pointing_at_a_job(conn: &Connection) -> rusqlite::Result<Vec<String>> {
+    conn.prepare(
+        r#"SELECT m.name
+           FROM sqlite_master AS m
+           JOIN pragma_foreign_key_list(m.name) AS fk
+           WHERE m.type = 'table' AND fk."table" = 'jobs'
+           GROUP BY m.name
+           ORDER BY m.name"#,
+    )?
+    .query_map([], |row| row.get(0))?
+    .collect()
+}
 
 /// Version 1 — the Job record, the rows beneath it, and the log.
 const V1: &str = r#"
