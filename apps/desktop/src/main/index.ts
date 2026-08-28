@@ -163,6 +163,12 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.restartStep, (_event, jobId: string) =>
     connection?.commands.restartStep(jobId),
   );
+  // The third act on an escalated Job, and the only one that keeps the work the
+  // gate refused. Its own channel rather than a flag on `approveReview`: that
+  // answers a gate nothing objected to, and this answers one that refused.
+  ipcMain.handle(CHANNELS.overrideVerdict, (_event, jobId: string, reason: string) =>
+    connection?.commands.overrideVerdict(jobId, reason),
+  );
   // Which Job is open. Main does the reading and republishes it as events
   // arrive, so the detail moves without the renderer asking again.
   ipcMain.handle(CHANNELS.watchJob, (_event, jobId: string | null) =>

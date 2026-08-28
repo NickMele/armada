@@ -128,6 +128,21 @@ export type StepDetail = {
   /** Absent until a gate has ruled on the step. */
   last_verdict?: Verdict;
   /**
+   * **The step advanced because a person overruled the gate, not because it
+   * passed.**
+   *
+   * Served as a field rather than left as a rule a client applies, and that is
+   * the point: the fact is already on the wire as `state: advanced` beside
+   * `last_verdict: failed`, and every surface drawing a rail would otherwise
+   * have to spell the same pair — the first one that forgot would draw a Judge
+   * that had been overruled as a Judge that had cleared the work.
+   *
+   * Never absent, because it is a `bool` on the wire: `false` on every ordinary
+   * advance. What was overruled is on `last_verdict`, which still names the
+   * trigger, and the person's reason is in the Job's own log rather than here.
+   */
+  overridden: boolean;
+  /**
    * Every criterion the Judge answered on this step, in the order asked.
    *
    * **Always present, empty on a step that asks nothing** — which is most of
@@ -261,6 +276,19 @@ export type Redispatched = {
  */
 export type Redirection = {
   instruction: string;
+};
+
+/**
+ * The body of `override_verdict`. `crates/ipc/src/work.rs`.
+ *
+ * **Its own type though it is structurally the same string as `Redirection`**,
+ * for that type's own reason turned around: a redirect steers a Drone, and this
+ * one goes nowhere near one. It is written for the record and for whoever later
+ * asks how often the Judge was wrong. Blank is refused server-side with a 422,
+ * and refused here before the press for the same reason.
+ */
+export type Overruled = {
+  reason: string;
 };
 
 /** The reason a transition carried, where it stored one. */

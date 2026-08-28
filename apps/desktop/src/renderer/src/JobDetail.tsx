@@ -76,6 +76,16 @@ export type JobDetailProps = {
    */
   onRedirect: (jobId: string, instruction: string) => void;
   /**
+   * Overrule a Judge that refused the work, with the reason. **Straight through
+   * like a redirect** — the dialog that collects the reason is the
+   * confirmation, so there is nothing left for `onAct` to ask about.
+   *
+   * Its own prop and not a value of `onAct` for the reason the three review
+   * decisions are three: it differs from every other act by what survives it,
+   * and it is the only one that keeps work a gate refused.
+   */
+  onOverrule: (jobId: string, reason: string) => void;
+  /**
    * Let this Job run. **Sent on the press, with no confirmation** — approving
    * is the ordinary path, it is reversible by killing, and a gate that costs
    * two clicks for the common case is a gate in the wrong place.
@@ -126,6 +136,7 @@ export function JobDetail({
   recorded,
   onAct,
   onRedirect,
+  onOverrule,
   onApprove,
   onApproveReview,
   onRequestChanges,
@@ -159,12 +170,14 @@ export function JobDetail({
     actions: (
       <Acts
         job={job}
+        whole={whole}
         render={render}
         acting={acting}
         approving={approving}
         stale={stale}
         onAct={onAct}
         onRedirect={onRedirect}
+        onOverrule={onOverrule}
         onApprove={onApprove}
         onObserve={RECORDS_ITS_OWN_TURNS.has(render) ? undefined : () => onObserve(true)}
       />

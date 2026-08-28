@@ -120,6 +120,19 @@ export type WorkflowRailStep = {
   /** Which of `passed`, `failed` or `not_reached` the verdict is, for its hue. */
   verdictNamed?: string;
   /**
+   * That a person overruled the gate and the step advanced anyway, in words.
+   *
+   * **A third axis, and it sits beside the verdict rather than replacing it.**
+   * `StepDetail.overridden` is served as a field precisely so no surface has to
+   * read `advanced` beside `failed` and work the pair out; a rail that drew only
+   * one of the two would render a Judge that was overruled as a Judge that
+   * cleared the work, which is how a verifier quietly becomes decorative.
+   *
+   * Absent on every ordinary advance, which writes `passed` and needs nothing
+   * said about it.
+   */
+  overridden?: ReactNode;
+  /**
    * The Checks beneath. An empty array is a step with no Check, and it says so
    * in words rather than leaving a gap — an empty slot where a gate row would
    * sit reads as a gate that failed to render.
@@ -233,6 +246,12 @@ export function WorkflowRail({ steps, pulsing = false, onCopied }: WorkflowRailP
                 <span className="armada-rail__verdict" data-verdict={step.verdictNamed}>
                   {step.verdict}
                 </span>
+              ) : null}
+              {/* After the verdict and never instead of it. The refusal is
+                  still what the gate said; this is only the fact that it did
+                  not stand. */}
+              {step.overridden ? (
+                <span className="armada-rail__overridden">{step.overridden}</span>
               ) : null}
               {step.elapsed ? <span className="armada-rail__elapsed">{step.elapsed}</span> : null}
               {step.status ? <span className="armada-rail__status">{step.status}</span> : null}

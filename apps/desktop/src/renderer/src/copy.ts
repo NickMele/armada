@@ -35,8 +35,12 @@ export function said(outcome: Outcome): string {
       return "That redirect is already in flight. It was not sent twice.";
     case "already_restarting":
       return "That restart is already in flight. It was not sent twice.";
+    case "already_overruling":
+      return "That override is already in flight. It was not sent twice.";
     case "empty_instruction":
       return "A redirect needs an instruction. Nothing was sent.";
+    case "empty_reason":
+      return "An override needs a reason. Nothing was sent, and the judge's verdict stands.";
     case "already_deciding":
       return "A decision on that job's work is already in flight. It was not sent twice.";
     case "empty_note":
@@ -59,9 +63,9 @@ export function said(outcome: Outcome): string {
  * does, on screen while the dialog is open.
  *
  * `tone` defaults to destructive in `Dialog` itself; only `restart_step` says
- * otherwise, because it is a recovery, not an end. Redirect carries no entry
- * — its own dialog collects the instruction and is its own confirmation, so
- * it never reaches this one.
+ * otherwise, because it is a recovery, not an end. Redirect and the override
+ * carry no entry — each collects a required field in its own dialog and is its
+ * own confirmation, so neither reaches this one.
  */
 export const CONFIRM: Record<ConfirmableAct, { title: string; body: string; tone?: DialogTone }> = {
   kill_drone: {

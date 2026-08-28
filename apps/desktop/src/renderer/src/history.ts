@@ -21,7 +21,7 @@
 import type { TransitionMove } from "@armada/components";
 
 import { ESCALATION_REASON, QUEUED_REASON } from "../../shared/generated/vocabulary";
-import type { Recorded } from "../../shared/history";
+import type { Recorded, StepMoved } from "../../shared/history";
 import type { Reason } from "../../shared/protocol";
 import { clock } from "./duration";
 
@@ -55,15 +55,38 @@ function moveOf(recorded: Recorded): TransitionMove {
       kind: moved.kind,
       subject: moved.step_id,
       moved: `${moved.from} → ${moved.to}`,
-      // The trigger that stopped the step, in the registry's words where it has
-      // them. Absent on every move that does not stop one, which is most.
-      why: moved.why === undefined ? undefined : (ESCALATION_REASON[moved.why]?.verb ?? moved.why),
+      why: whyStepMoved(moved),
     };
   }
   // A Drone arrived or left. Presence, not a state pair — so there is one word
   // and no arrow, and inventing a `from` for it would be drawing a machine
   // `assigned_drone` does not have.
   return { ...common, kind: moved.kind, subject: moved.drone_id, moved: moved.presence };
+}
+
+/** The two step states the pair below is read off. */
+const STOPPED = "stopped";
+const ADVANCED = "advanced";
+
+/**
+ * The trigger a step move carried, in the registry's words. Absent on every
+ * move that carries none, which is most of them.
+ *
+ * **`stopped → advanced` is an override and never a stop.** Both moves that
+ * carry a trigger carry the same one — the step stopped on it, and then a
+ * person overruled it — so the verb alone reads as though the Judge refusing is
+ * why the step advanced, which is the opposite of what happened.
+ * `crates/ipc/src/event.rs` names the pair as what tells the two apart, and a
+ * history row is the one surface that has to read it: the detail is served an
+ * `overridden` field so no rail works the pair out, and no such field exists on
+ * a recorded move.
+ */
+function whyStepMoved(moved: StepMoved): string | undefined {
+  if (moved.why === undefined) return undefined;
+  const named = ESCALATION_REASON[moved.why]?.verb ?? moved.why;
+  // The word is the actor's act, and the trigger it lifted is kept beside it —
+  // what was overruled is the whole of what makes an override readable.
+  return moved.from === STOPPED && moved.to === ADVANCED ? `overruled · ${named}` : named;
 }
 
 /**

@@ -322,6 +322,48 @@ export const AVerdictBesideTheState: Story = {
 };
 
 /**
+ * A step a person overruled — and it must not read like one that passed.
+ *
+ * **Three facts on one row, and all three stay.** The step is `advanced`, the
+ * verdict is still `failed` carrying the trigger the Judge refused on, and
+ * `overridden` says a person put it there. `StepDetail.overridden` is served as
+ * a field so that no surface has to notice `advanced` beside `failed` and work
+ * the pair out for itself — the first rail that forgot would draw an overruled
+ * Judge as a Judge that cleared the work.
+ *
+ * The refusal itself is untouched beneath the step: the criterion the Judge
+ * refused still reads refused, with what it expected and what it saw. Overruling
+ * is a person disagreeing on the record, not a verdict being erased.
+ *
+ * **Weight and not a second hue.** The verdict carries the row's one
+ * `--step-failed`; the override sits beside it in `--fg-default` at medium, so
+ * the pair reads as two facts rather than one louder failure. No glyph — the
+ * `circle-*` family is the Judge's and `shield-*` is the Checks', and an
+ * override is neither.
+ */
+export const OverruledByAPerson: Story = {
+  args: {
+    steps: [
+      { id: "implement", label: "Implement", activity: "advanced", status: "advanced", elapsed: "6m 48s",
+        verdict: "passed", verdictNamed: "passed",
+        gates: [{ command: "build · cargo build --workspace", result: "passed", icon: ShieldCheck, iconLabel: "passed" }] },
+      { id: "verify", label: "Run tests", activity: "advanced", status: "advanced", elapsed: "12m 30s",
+        verdict: "failed · refused by the judge", verdictNamed: "failed", overridden: "overruled by a person",
+        gates: [{ command: "test · cargo test --workspace", result: "passed", icon: ShieldCheck, iconLabel: "passed" }],
+        declarations: [{ label: "judge · 2 criteria" }, { label: "advance_gate · auto_if_judge_passes" }],
+        verdicts: [{ ordinal: 2, criterionId: "crit_7f2a", named: "not_met", verdict: "refused",
+          text: "The regression is covered by a test that fails without the fix.",
+          expected: "a test that fails on the parent commit",
+          produced: "a test asserting the new behaviour only",
+          consequence: "a reader cannot tell the fix from the assertion" }] },
+      { id: "handoff", label: "Summarise", activity: "running", status: "running · 0m 04s", current: true,
+        declarations: [{ label: "advance_gate · human_always" }] },
+    ],
+    pulsing: true,
+  },
+};
+
+/**
  * The two different sentences a rail says where a Check would be.
  *
  * **`checks: []` is "this step is ungated" and an absent key is "Fleet cannot
