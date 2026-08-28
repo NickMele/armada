@@ -135,31 +135,45 @@ pub const PROVISIONAL_JUDGE_BUDGET: Duration = Duration::from_secs(120);
 
 /// What a step is expected to cost before the thrashing chain looks at it.
 ///
-/// **Provisional, and two of the three are still unmeasured.** The registry
-/// names a "step norm" and an "expected ceiling" and no value was ever put on
-/// either; these are a first guess in the one place a search will find them,
-/// sized so a step that has genuinely stopped converging is looked at while a
-/// long build is not. Tripping one of them costs a Judge call and nothing else
-/// — see `fleet::converging`, where the escalation is three stages further on.
+/// **Provisional, and measured on one repository rather than on none.**
+/// `docs/spikes/009-how-long-does-a-step-take.md` holds the distribution and
+/// what it was taken over — the Jobs this repository has run, on two
+/// workflows, one model, with a warm build cache. Not a fleet-wide constant.
+/// Tripping one of them costs a Judge call and nothing else — see
+/// `fleet::converging`, where the escalation is three stages further on.
 ///
-/// The first number has since been measured, against the 32 invocations this
-/// repository has recorded: a step's median is 13.5 turns and its p90 is 38, so
-/// sixty is a ceiling roughly one and a half times the widest ordinary step
-/// rather than the coin-flip it could have been. Two of the 32 exceeded it
-/// legitimately, at 69 and 180, which is the rate of Judge calls this buys.
-/// The unit is now tool calls rather than the harness's turns and the number
-/// did not move with it; `fleet::Progress::calls` says what that substitution
-/// costs.
+/// **Calls, at sixty.** The unit is the Drone's own tool calls per step, which
+/// is what `fleet::Progress::calls` counts and what the harness's `turns` could
+/// not be read as mid-step. Measured per step rather than per invocation —
+/// the unit the comparison uses — the median is 18 and the p90 is 68, so sixty
+/// sits just under the widest ordinary step and four of the 31 steps measured
+/// would have bought a look. Left where it is rather than raised to the p95:
+/// sixty is the more sensitive reading, and 31 steps on one repository is not
+/// enough to move a tripwire in the direction that makes it fire less.
 ///
-/// The wall clock is the one still worth doubting. At 1800s against a step
-/// whose p90 finishes in minutes, it has never been the tripwire that fired.
+/// **The wall clock, at 1500s, down from an 1800s nothing had measured.** Nine
+/// steps in ten finished inside 500s and the longest honest one took 1777s.
+/// The floor is not the distribution: a step's clock runs through Fleet's own
+/// Checks and does not restart on a retry, so an honest step can hold one
+/// Check at `PROVISIONAL_CHECK_BUDGET` plus a p90 step's own work, which is
+/// 1337s. And **a trip spends the step's only look**, whichever wire fired, so
+/// a ceiling low enough to catch a stuck Drone early is a ceiling that burns
+/// the attention a later, real thrash would need.
+///
+/// **What it still does not catch is what stopped every stuck step measured.**
+/// They were quiet, not long: inside an honest step the longest silence
+/// between two Drone events was 79s, while a scope step whose Drone had
+/// stopped speaking sat for 1636s and was killed by a person two seconds
+/// before 1800s would have fired. Time since the last event is what separates
+/// the two, the tier has no such tripwire, and `stalled`'s liveness timer —
+/// where it belongs — is unbuilt.
 ///
 /// The grace is the shortest of the three deliberately: spike 4 measured an
 /// injected turn consumed in 1.59s mid-task and 33s against a forty-second
 /// command, so two minutes is a Drone that is not answering rather than one
 /// inside a long call.
 pub const PROVISIONAL_STEP_NORMS: StepNorms =
-    StepNorms::of(60, Duration::from_secs(1_800), Duration::from_secs(120));
+    StepNorms::of(60, Duration::from_secs(1_500), Duration::from_secs(120));
 
 /// How often Fleet is turned. **Provisional**, and nothing has measured it.
 ///
