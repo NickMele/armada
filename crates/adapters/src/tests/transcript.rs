@@ -336,12 +336,90 @@ fn a_real_write_call_carries_its_path_and_not_its_content() {
 
 #[test]
 fn a_turn_with_nothing_armada_names_in_it_is_still_an_event() {
-    let read = read(r#"{"type":"assistant","message":{"content":[{"type":"thinking"}]}}"#);
+    let read = read(r#"{"type":"assistant","message":{"content":[{"type":"a_new_block"}]}}"#);
     assert_eq!(read.len(), 1);
     assert!(
         matches!(read[0], DroneEvent::Unrecognised { .. }),
         "{read:?}"
     );
+}
+
+/// The turn that made the removal invisible: the Drone thought, then reached
+/// for a tool, and what shipped answered with the call alone. The reasoning was
+/// synthesised into a row only when the turn had nothing else in it, so the
+/// commonest turn in the stream lost it silently.
+#[test]
+fn a_turn_that_reasoned_and_then_called_a_tool_still_says_it_reasoned() {
+    let read = read(
+        r#"{"type":"assistant","message":{"content":[
+             {"type":"thinking","thinking":"a long look at the problem","signature":"abc"},
+             {"type":"tool_use","id":"a","name":"Read",
+              "input":{"file_path":"/tmp/repo/src/lib.rs"}}]}}"#,
+    );
+    let kinds: Vec<&str> = read
+        .iter()
+        .filter_map(|event| match event {
+            DroneEvent::Unrecognised { kind } => Some(kind.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(kinds.len(), 1, "the turn reasoned and says so: {read:?}");
+    assert!(
+        matches!(read[1], DroneEvent::Called { .. }),
+        "the call keeps its own row and its order: {read:?}"
+    );
+
+    // Distinguishable from a turn that held nothing, which is the row a reader
+    // already learns nothing from — and never the working itself.
+    let empty = read_kind(r#"{"type":"assistant","message":{"content":[]}}"#);
+    assert_ne!(kinds[0], empty);
+    assert!(!kinds[0].contains("a long look"), "{kinds:?}");
+}
+
+/// A turn's working arrives as several blocks. The fact a reader is owed is
+/// about the turn, and a row each would add volume to a fold that already reads
+/// as noise.
+#[test]
+fn a_turn_that_reasoned_twice_says_so_once() {
+    let read = read(
+        r#"{"type":"assistant","message":{"content":[
+             {"type":"thinking","thinking":"one"},
+             {"type":"redacted_thinking","data":"opaque"},
+             {"type":"text","text":"done"},
+             {"type":"thinking","thinking":"two"}]}}"#,
+    );
+    let reasoning = read
+        .iter()
+        .filter(|event| matches!(event, DroneEvent::Unrecognised { .. }))
+        .count();
+    assert_eq!(reasoning, 1, "{read:?}");
+    assert_eq!(read.len(), 2, "the prose keeps its own row: {read:?}");
+}
+
+/// The captures are the specification, and spike 4's is a real run whose turns
+/// carry reasoning beside their calls. Asserted against the stream rather than
+/// against a fixture written to match this decoder.
+#[test]
+fn a_real_run_that_reasoned_leaves_a_row_saying_so() {
+    let kinds: Vec<String> = all_of("004-transcript-during-tool-call.ndjson")
+        .into_iter()
+        .filter_map(|event| match event {
+            DroneEvent::Unrecognised { kind } => Some(kind),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        kinds.iter().any(|kind| kind.contains("reasoning")),
+        "the capture holds thinking blocks: {kinds:?}"
+    );
+}
+
+fn read_kind(line: &str) -> String {
+    let read = read(line);
+    let DroneEvent::Unrecognised { kind } = &read[0] else {
+        panic!("{read:?}")
+    };
+    kind.clone()
 }
 
 #[test]

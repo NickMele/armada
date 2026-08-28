@@ -16,11 +16,11 @@
 //!
 //! # Nothing is dropped, in either direction
 //!
-//! A line that does not decode is [`DroneEvent::Unreadable`] and a line this
-//! vocabulary has no name for is [`DroneEvent::Unrecognised`]. Neither is a
-//! filter: a decoder that answered "nothing happened" for output it did not
-//! understand is the pre-filtered query in another shape, and the caller could
-//! not tell a quiet Drone from a stream it stopped being able to read.
+//! A line that does not decode is [`DroneEvent::Unreadable`] and one this
+//! vocabulary has no name for is [`DroneEvent::Unrecognised`]; a decoder that
+//! answered "nothing happened" is the pre-filtered query in another shape, and
+//! the caller could not tell a quiet Drone from a stream it stopped reading.
+//! **It holds at the block too**: a turn is several, each answering for itself.
 //!
 //! # The fields that are deliberately not read
 //!
@@ -38,6 +38,28 @@ use serde::Deserialize;
 /// A runaway line is still a line, and the reason it is unreadable is usually
 /// in the first few characters.
 const KEEP: usize = 240;
+
+/// A turn that carried the model's working, named without carrying it.
+///
+/// **The text is deliberately not read.** Reasoning is the model's working
+/// rather than its answer, it is long, and `docs/scope.md` records that reading
+/// a transcript is the thing Armada exists to escape. What a reader cannot do
+/// without is knowing the turn had reasoning in it at all — a turn that thought
+/// for thirty seconds and then made one call rendered as one call, and the
+/// removal was invisible. Whether the text is ever shown is a separate decision
+/// and is not this decoder's.
+const REASONED: &str = "the Drone's reasoning, not carried";
+
+/// A block whose `type` this vocabulary has no variant for.
+///
+/// The spelling is not carried: serde's catch-all variant consumes the tag, and
+/// a second read of the block to recover it would cost every ordinary turn.
+const UNNAMED_BLOCK: &str = "a block Armada does not name";
+
+/// A turn whose content held nothing at all — which is a different fact from a
+/// turn holding blocks this vocabulary does not name, and they say so one row
+/// each.
+const EMPTY_TURN: &str = "a turn with nothing in it Armada names";
 
 /// Read one line.
 ///
@@ -105,9 +127,14 @@ fn system_event(system: SystemLine) -> DroneEvent {
 
 /// The content blocks of one turn.
 ///
-/// A turn carrying no block Armada names is still an event, so the empty case
-/// answers with one `Unrecognised` rather than with nothing — the same rule the
-/// whole module follows.
+/// **No block leaves without a row.** A block this vocabulary has no variant
+/// for is a [`DroneEvent::Unrecognised`] carrying what it was — the same answer
+/// [`system_event`] gives a subtype it does not name, and the rule the whole
+/// module follows, applied one level down.
+///
+/// What shipped applied it only to a turn that had nothing else, so a turn that
+/// reasoned and then made a call rendered as the call alone and a reader could
+/// not tell that anything had been taken out.
 fn blocks(message: MessageLine) -> Vec<DroneEvent> {
     let blocks = match message.message.content {
         // An injected turn is replayed with its content as a plain string.
@@ -119,6 +146,7 @@ fn blocks(message: MessageLine) -> Vec<DroneEvent> {
         Content::Blocks(blocks) => blocks,
     };
 
+    let mut reasoned = false;
     let mut events: Vec<DroneEvent> = blocks
         .into_iter()
         .filter_map(|block| match block {
@@ -135,13 +163,28 @@ fn blocks(message: MessageLine) -> Vec<DroneEvent> {
                 failed: is_error,
             }),
             Block::Text { text } => Some(DroneEvent::Said { text }),
-            Block::Unnamed => None,
+            // **One row per turn, not one per block.** What a reader is owed is
+            // that the turn reasoned, which is a fact about the turn; a turn's
+            // working arrives as several blocks, and a row each would put
+            // volume into the fold that already reads as noise.
+            Block::Thinking => match reasoned {
+                true => None,
+                false => {
+                    reasoned = true;
+                    Some(DroneEvent::Unrecognised {
+                        kind: String::from(REASONED),
+                    })
+                }
+            },
+            Block::Unnamed => Some(DroneEvent::Unrecognised {
+                kind: String::from(UNNAMED_BLOCK),
+            }),
         })
         .collect();
 
     if events.is_empty() {
         events.push(DroneEvent::Unrecognised {
-            kind: String::from("a turn with nothing in it Armada names"),
+            kind: String::from(EMPTY_TURN),
         });
     }
     events
@@ -345,6 +388,15 @@ enum Block {
     },
     #[serde(rename = "text")]
     Text { text: String },
+    /// The model's working. **A unit variant on purpose** — the working and its
+    /// signature are the largest fields in an ordinary turn, and there is no
+    /// field here for either to arrive in, so this decoder cannot carry the
+    /// text even by mistake.
+    ///
+    /// The redacted spelling is the same fact with the working withheld
+    /// upstream, and reads as the same row.
+    #[serde(rename = "thinking", alias = "redacted_thinking")]
+    Thinking,
     #[serde(other)]
     Unnamed,
 }
