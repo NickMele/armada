@@ -26,7 +26,6 @@ on purpose and makes the gate name what was waiting.
 ## docs/concepts/convoy.md
 
 - **[convoy-dispatch-approval-surface]** What does the dispatch-approval surface for a Convoy actually look like? Where the proposal is approved is settled and is stated above; the surface itself is deliberately still open, since Dispatch a Job is design order 1. What the Board's list row shows for a Convoy is settled and is not part of this — see [Job Board](job-board.md).
-- **[convoy-board-graph-view]** Does the Job Board need a graph view for DAG dependencies, now that a Convoy may be a peer node in that graph? Related: the Board must **compute** the shape per row, since it is derived rather than stored.
 - **[convoy-multi-repo-job-shape]** Does Armada need a multi-repo Job shape, and what is its workflow DAG? Carried forward from the root-scoping decision, which left it open, and no scenario currently pressures it.
 - **[convoy-freeze-while-running]** What happens when a dispatch freeze lands on a Convoy that is already running? Named in the policy resolution above rather than filed as its own question until now: freeze is enforced live rather than only at dispatch, and the already-running case is not covered.
 
@@ -50,7 +49,7 @@ on purpose and makes the gate name what was waiting.
 
 ## docs/concepts/job-board.md
 
-- **[job-board-convoy-graph-rendering]** Given the graph view exists, how does a Convoy — which may be a peer node in the dependency graph but has no children of its own — actually render there? As an ordinary node, visually distinguished, or expanded into its declared Workspaces is unstated.
+- **[job-board-graph-view]** What is the Board's graph view, and how does a Convoy render inside it? The Layout section above states an opt-in toggle beside the flat list, defaulting per Machine, and that much is settled. What is not: whether the view is a surface of its own or dependency affordances on the rows themselves, and how a Convoy renders once inside it — as an ordinary node, visually distinguished, or expanded into its declared Workspaces. A Convoy has no `dependencies` of its own by construction, though it may be a peer in someone else's. **Unscheduled.** The graph the owner wants is a Job's own workflow, drawn on job detail, and this one answers a question nobody is currently asking.
 
 ## docs/concepts/job-proposer.md
 
@@ -159,8 +158,7 @@ on purpose and makes the gate name what was waiting.
 
 ## docs/journeys/1-dispatch-a-job.md
 
-- **[origin-tag-filterable-or-display]** Is the Job Board origin tag filterable, or display-only? Not yet decided. The origin tag names how a Job came to exist — dispatched by you, found by Fleet, drafted in Helm — and whether the Job Board can filter or sort on it, versus it being read-only labelling, is unspecified.
-- **[job-board-graph-view]** Does the Job Board need a graph view for DAG dependencies, and what is that view? Job dependencies are a full DAG — Jobs branch and fan in, and Fleet schedules topologically. The brief states directly that the Job Board needs a graph view, not just a flat list. **Two documents disagree about whether this is still open:** [Job Board](../concepts/job-board.md)'s layout section states an opt-in toggle beside the flat list, with the default configurable per Machine, while this question and [Convoy](../concepts/convoy.md)'s `[convoy-board-graph-view]` both read as though nothing has been chosen. What is genuinely unstated either way is a separate surface versus dependency affordances on the rows themselves, and how a Convoy renders once inside it — tracked at `[job-board-convoy-graph-rendering]`, since a Convoy has no `dependencies` of its own though it may be a peer in the DAG. How a Board row distinguishes a Convoy in the flat list is no longer part of this: the row names its first write target and counts the rest. The Job Board's default sort order is a further open item, tracked at `[job-board-sort-order]` in `../contracts/configuration.md` rather than duplicated here.
+- **[origin-tag-filterable-or-display]** Is the Job Board origin tag filterable, or display-only? Not yet decided. The origin tag names how a Job came to exist — dispatched by you, found by Fleet, drafted in Helm — and whether the Job Board can filter or sort on it, versus it being read-only labelling, is unspecified. The Board's graph view is tracked at `[job-board-graph-view]` on [Job Board](../concepts/job-board.md), which owns the Board's layout, and its default sort order at `[job-board-sort-order]` in `../contracts/configuration.md`. Neither is duplicated here.
 
 ## docs/journeys/2-check-system-health.md
 

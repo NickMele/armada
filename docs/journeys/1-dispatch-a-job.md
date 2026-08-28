@@ -61,11 +61,7 @@ A handful of questions this journey once carried are now settled, recorded here 
 - **[origin-tag-filterable-or-display]** Is the Job Board origin tag filterable, or display-only?
   Not yet decided. The origin tag names how a Job came to exist — dispatched by you, found by Fleet, drafted in Helm — and whether the Job Board can filter or sort on it, versus it being read-only labelling, is unspecified.
 
-- **[job-board-graph-view]** Does the Job Board need a graph view for DAG dependencies, and what is that view?
-  Job dependencies are a full DAG — Jobs branch and fan in, and Fleet schedules topologically. The brief states directly that the Job Board needs a graph view, not just a flat list. **Two documents disagree about whether this is still open:** [Job Board](../concepts/job-board.md)'s layout section states an opt-in toggle beside the flat list, with the default configurable per Machine, while this question and [Convoy](../concepts/convoy.md)'s `[convoy-board-graph-view]` both read as though nothing has been chosen. What is genuinely unstated either way is a separate surface versus dependency affordances on the rows themselves, and how a Convoy renders once inside it — tracked at `[job-board-convoy-graph-rendering]`, since a Convoy has no `dependencies` of its own though it may be a peer in the DAG.
-  How a Board row distinguishes a Convoy in the flat list is no longer part of this: the row names its first write target and counts the rest.
-
-The Job Board's default sort order is a further open item, tracked at `[job-board-sort-order]` in `../contracts/configuration.md` rather than duplicated here.
+The Board's graph view is tracked at `[job-board-graph-view]` on [Job Board](../concepts/job-board.md), which owns the Board's layout, and its default sort order at `[job-board-sort-order]` in `../contracts/configuration.md`. Neither is duplicated here.
 
 ## Related
 

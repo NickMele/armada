@@ -154,4 +154,4 @@ The following settings (see `../contracts/configuration.md`) directly affect thi
 
 ## Open questions
 
-- **[job-board-convoy-graph-rendering]** Given the graph view exists, how does a Convoy — which may be a peer node in the dependency graph but has no children of its own — actually render there? As an ordinary node, visually distinguished, or expanded into its declared Workspaces is unstated.
+- **[job-board-graph-view]** What is the Board's graph view, and how does a Convoy render inside it? The Layout section above states an opt-in toggle beside the flat list, defaulting per Machine, and that much is settled. What is not: whether the view is a surface of its own or dependency affordances on the rows themselves, and how a Convoy renders once inside it — as an ordinary node, visually distinguished, or expanded into its declared Workspaces. A Convoy has no `dependencies` of its own by construction, though it may be a peer in someone else's. **Unscheduled.** The graph the owner wants is a Job's own workflow, drawn on job detail, and this one answers a question nobody is currently asking.

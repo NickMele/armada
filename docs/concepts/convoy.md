@@ -44,6 +44,8 @@ A revision can change the shape itself: dropping to one `write_target`, or clear
 
 ### Overlap with concurrent work
 
+**How a Convoy renders in the Board's graph view is open, and is the Board's question rather than this one** — see [Job Board](job-board.md), Open questions.
+
 **A Convoy overlaps more concurrent work than a single-workspace Job, by construction.** Its declared scope is wider, so its `write_targets` intersect more of what else is running, and the approval card will name a collision more often for one.
 
 The alternative to one Job spanning coupled Workspaces is several Jobs touching the same set, which collides identically and lands in pieces. Overlap is surfaced and never serialised; see [Fleet](fleet.md), Scheduling and gating.
@@ -145,6 +147,5 @@ Each holds inside one root `armada.yml`, where a worktree spanning declared Work
 ## Open questions
 
 - **[convoy-dispatch-approval-surface]** What does the dispatch-approval surface for a Convoy actually look like? Where the proposal is approved is settled and is stated above; the surface itself is deliberately still open, since Dispatch a Job is design order 1. What the Board's list row shows for a Convoy is settled and is not part of this — see [Job Board](job-board.md).
-- **[convoy-board-graph-view]** Does the Job Board need a graph view for DAG dependencies, now that a Convoy may be a peer node in that graph? Related: the Board must **compute** the shape per row, since it is derived rather than stored.
 - **[convoy-multi-repo-job-shape]** Does Armada need a multi-repo Job shape, and what is its workflow DAG? Carried forward from the root-scoping decision, which left it open, and no scenario currently pressures it.
 - **[convoy-freeze-while-running]** What happens when a dispatch freeze lands on a Convoy that is already running? Named in the policy resolution above rather than filed as its own question until now: freeze is enforced live rather than only at dispatch, and the already-running case is not covered.
