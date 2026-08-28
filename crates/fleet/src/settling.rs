@@ -187,7 +187,8 @@ where
         // Before the Job or the step moves. A recorded result the transition
         // then failed to make is readable; a transition whose evidence was
         // never written down is a verdict with no trace.
-        self.recorded_checks(&job_id, &step, attempt, &ruling).await?;
+        self.recorded_checks(&job_id, &step, attempt, &ruling)
+            .await?;
         self.recorded_judgments(&job_id, &step, &ruling).await?;
         self.recorded_evidence(&job_id, &step, &landed.submission, &ruling)
             .await?;
