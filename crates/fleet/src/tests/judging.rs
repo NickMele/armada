@@ -643,3 +643,64 @@ async fn a_step_with_nothing_to_show_costs_no_call_and_draws_no_verdict() {
         "a call was bought against an empty page"
     );
 }
+
+/// **The request reaches the model, not just the brief.** `verification` proves
+/// `Brief::about` renders it; this proves the whole path — a Job row, `rule_on`,
+/// Fleet's own process runner — puts it in front of the thing that answers.
+///
+/// The criterion is Feature's designed `scope` wording, restored on #169. It is
+/// unanswerable unless the request is in the same question, which is why it was
+/// narrowed the first time the workflows were ported.
+#[tokio::test]
+async fn a_criterion_asking_what_was_requested_reaches_a_call_that_carries_it() {
+    let workflow = testkit::resolved(&[Sketch {
+        id: "scope",
+        label: "Scope the change",
+        evidence_type: Some("facts_note"),
+        gates: &[],
+        judged_on: &[(
+            "scope",
+            "Does this scope note address what was actually requested, without \
+             expanding beyond it?",
+        )],
+        scope: None,
+        gaming: None,
+    }]);
+    let worktree = worktree();
+    let at = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
+    // A real record, not the shared fixture: the three parts of this request
+    // are what the assertions below look for, one each.
+    let asked_for = testkit::asking(
+        "The log reader drops the last line",
+        "`read_all` stops one row short with no trailing newline.",
+        &["the last line is returned"],
+    );
+    let judge = Arc::new(FakeJudge::with_no_objection());
+    let judging = judged_by_shared(Arc::clone(&judge));
+
+    let ruling = rule_on(
+        at,
+        Request::of(&asked_for),
+        &note_evidence(),
+        None,
+        Some(&Footprint::nothing()),
+        &[],
+        &FakeWorkProduct::untouched(),
+        budget(),
+        &judging,
+    )
+    .await;
+
+    assert!(ruling.advanced(), "{ruling:?}");
+    let question = &judge.asked()[0];
+    for part in [
+        "The log reader drops the last line",
+        "stops one row short",
+        "the last line is returned",
+    ] {
+        assert!(
+            question.contains(part),
+            "the Judge was asked about the request and not shown it: {question}"
+        );
+    }
+}
