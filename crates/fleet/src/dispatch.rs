@@ -24,14 +24,11 @@
 //! written on the trait. A failed Job's branch is exactly as its Drone left it,
 //! which is what "a person reads the branch" depends on.
 
-use std::sync::Arc;
-
 use adapter_traits::{
-    AgentHarness, Delivery, DroneSpawnConfig, Grant, McpConfig, Model, SpawnConfigRefused,
-    Toolbelt, Vcs, WorkProduct, Worktree, WorktreeSpec,
+    AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec,
 };
 use core_model::{
-    Actor, Branch, DroneId, EscalationTrigger, Job, JobId, JobStatus, StepId, StepTarget, Target,
+    Actor, Branch, EscalationTrigger, Job, JobId, JobStatus, StepId, StepTarget, Target,
     Transitioned,
 };
 use store::Moved;
@@ -41,10 +38,9 @@ use crate::adrift::Adrift;
 use crate::at_step::AtStep;
 use crate::briefing;
 use crate::daemon::Fleet;
-use crate::drone::{self, aftermath, environment, Aftermath, Ending, HostPaths, Left};
+use crate::drone::{aftermath, Aftermath, Ending, Left};
 use crate::gate::{apply, rule_on, Ruling};
 use crate::session::LiveSession;
-use crate::transcript::{Spine, Taps};
 use crate::working::Working;
 
 impl<H, V, W> Fleet<H, V, W>
@@ -190,116 +186,15 @@ where
 
         let job = self.move_step(&job, &step, StepTarget::Running).await?;
 
-        let config = match self.spawn_config(&job, &worktree, &step) {
-            Ok(config) => config,
+        let brief = match briefing::first_turn(&job, job.workflow(), &step) {
+            Ok(brief) => brief,
             Err(cause) => {
                 self.interrupt(&job).await?;
                 return Err(Adrift::NotConfigurable { job: job_id, cause });
             }
         };
-        // The record is opened **before** the Drone, so a disk that will not
-        // hold it escalates the Job rather than losing a transcript quietly
-        // once there is already a process producing one.
-        let drone = DroneId::carried(self.mint().ulid());
-        let recording = match self.recording(&job_id, &drone, &step) {
-            Ok(recording) => recording,
-            Err(cause) => {
-                self.interrupt(&job).await?;
-                return Err(Adrift::NoTranscript { job: job_id, cause });
-            }
-        };
-        let started = match drone::start(self.harness().as_ref(), &config).await {
-            Ok(started) => started,
-            Err(cause) => {
-                self.interrupt(&job).await?;
-                return Err(Adrift::NoDrone {
-                    job: job_id,
-                    cause: Box::new(cause),
-                });
-            }
-        };
-        // After the process exists, never before: `assigned_drone` is presence,
-        // and a Job claiming a Drone that failed to start is exactly the
-        // liveness lie the column is read for.
-        self.drone_arrived(&job, drone.clone()).await?;
-
-        *working = Some(Working::holding(
-            job_id,
-            drone,
-            step,
-            worktree,
-            started,
-            Arc::clone(self.harness()),
-            recording,
-        ));
-        Ok(())
-    }
-
-    /// Open this Drone's transcript, and name it in the Job's log.
-    ///
-    /// The log line is still written: it carries the transcript's path, which
-    /// `assigned_drone` does not — the column names the Drone and this names
-    /// the file its rows are in.
-    fn recording(
-        &self,
-        job: &JobId,
-        drone: &DroneId,
-        step: &StepId,
-    ) -> Result<Taps, std::io::Error> {
-        Taps::opening(
-            &self.host().repo_root,
-            Spine {
-                job: job.clone(),
-                drone: drone.clone(),
-                step: step.clone(),
-                run: self.run().clone(),
-            },
-            Arc::clone(self.clock()),
-            self.turns().feeding(&ipc::JobId::from(job)),
-        )
-    }
-
-    /// Everything one Drone is started with, from the Job and the machine.
-    fn spawn_config(
-        &self,
-        job: &Job,
-        worktree: &Worktree,
-        step: &StepId,
-    ) -> Result<DroneSpawnConfig, SpawnConfigRefused> {
-        Ok(DroneSpawnConfig::spawn_in(
-            worktree,
-            Model::named(job.model().as_str())?,
-            briefing::first_turn(job, job.workflow(), step)?,
-            McpConfig::only_these(&self.host().mcp_config)?,
-            self.toolbelt(),
-            environment(HostPaths {
-                path: &self.host().path,
-                home: &self.host().home,
-                user: &self.host().user,
-            })?,
-        ))
-    }
-
-    /// What the Drone may call: the Evidence tool, its own worktree, and each
-    /// **non-destructive** command the Manifest declares.
-    ///
-    /// A destructive command is withheld, and that is a decision this file
-    /// makes rather than one it inherits: `commands.<name>.destructive` is a
-    /// key `config` reads at M1 and nothing consumed until now, and granting
-    /// one to an unattended process is the opposite of what the flag is for.
-    fn toolbelt(&self) -> Toolbelt {
-        let mut belt = Toolbelt::evidence_only()
-            .and(Grant::ReadTheWorktree)
-            .and(Grant::ChangeTheWorktree);
-        for name in self.manifest().command_names() {
-            match self.manifest().command(&name) {
-                Some(command) if !command.is_destructive() => {
-                    belt = belt.and(Grant::RunADeclaredCommand(command.run().to_string()));
-                }
-                _ => {}
-            }
-        }
-        belt
+        self.put_a_drone_on(&job, &step, worktree, brief, working)
+            .await
     }
 
     /// Run the gate over one waiting submission, and do what it says.
@@ -314,6 +209,15 @@ where
         let Some(landed) = self.take_evidence() else {
             return Ok(None);
         };
+        // A submission from the idle Drone of a Job that has already stopped.
+        // The gate ruled on this step and the inner machine is frozen beneath
+        // `escalated`, so a second ruling has nowhere to be written. It is
+        // dropped rather than held: a held one would be ruled on by the turn a
+        // redirect produces, and the person's instruction would be answered by
+        // a verdict on work done before they wrote it.
+        if self.load(&job_id).await?.status() != JobStatus::Running {
+            return Ok(None);
+        }
         // The tool is bound to a Job at construction and the inbox is emptied
         // when a Job ends, so this cannot be a submission about some other Job.
         // Kept because the alternative to a guard here is a gate ruling on one
@@ -416,10 +320,13 @@ where
                     None => job,
                 };
                 self.applied(&job, ruling).await?;
-                // Terminated without a turn, and the worktree is kept. See
-                // `Ruling::ends_the_drone` for why an escalated Job's Drone
-                // goes too, where the registry says it stays.
-                self.end_the_drone(working).await;
+                // Terminated without a turn, and the worktree is kept — on the
+                // two rulings that end the Job. A refusal keeps its Drone
+                // alive and idle, which is what makes a redirect cost no
+                // respawn. See `Ruling::ends_the_drone`.
+                if ruling.ends_the_drone() {
+                    self.end_the_drone(working).await;
+                }
                 Ok(())
             }
             // Neither moves anything. `NotWhatTheStepAsked` asks the Drone
@@ -471,15 +378,31 @@ where
             return Ok(None);
         }
         let job_id = at_work.standing().0;
-        let after = aftermath(&Ending::of(&at_work.heard()), self.left());
-        if let Aftermath::JobMoves(target) = &after {
-            // The departure first, so the Job's move is published over a record
-            // that already says no Drone is on it.
-            self.drone_left(&job_id).await;
-            let job = self.load(&job_id).await?;
-            self.move_job(&job, target.clone(), Actor::Fleet).await?;
-            working.take();
-            self.empty_the_inbox();
+        let heard = at_work.heard();
+        // The status is read before the ending is folded, because an escalated
+        // Job keeps its Drone: a process that is gone no longer proves the Job
+        // was working, and asking one that already stopped to stop again is the
+        // move the machine refuses.
+        let standing = self.load(&job_id).await?;
+        let after = aftermath(standing.status(), &Ending::of(&heard), self.left());
+        match &after {
+            Aftermath::JobMoves(target) => {
+                // The departure first, so the Job's move is published over a
+                // record that already says no Drone is on it.
+                self.drone_left(&job_id).await;
+                let job = self.load(&job_id).await?;
+                self.move_job(&job, target.clone(), Actor::Fleet).await?;
+                working.take();
+                self.empty_the_inbox();
+            }
+            // The idle Drone of a Job a person is already holding. Its going is
+            // the only fact, and it is what turns a redirect into a restart.
+            Aftermath::AlreadyStopped => {
+                self.drone_left(&job_id).await;
+                working.take();
+                self.empty_the_inbox();
+            }
+            Aftermath::TheGateDecides => {}
         }
         Ok(Some(after))
     }
@@ -543,7 +466,7 @@ where
     /// behind. **No trigger names an infrastructure failure at dispatch**, and
     /// that gap is named in this crate's report rather than papered over with a
     /// trigger that means something else.
-    async fn interrupt(&self, job: &Job) -> Result<(), Adrift> {
+    pub(crate) async fn interrupt(&self, job: &Job) -> Result<(), Adrift> {
         self.move_job(
             job,
             Target::Escalated(EscalationTrigger::Interrupted),

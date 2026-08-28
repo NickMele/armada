@@ -40,13 +40,18 @@ use core_model::Job;
 use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
     CheckRun, DeclaredCheck, Flagged, JobDetail, JobId, JobList, JobSummary, Judged, ManifestId,
-    ManifestSummary, ModelChoices, ProposeJob, Redispatched, RunId, StepFacts, StepId, WireError,
+    ManifestSummary, ModelChoices, ProposeJob, Redirection, Redispatched, RunId, StepFacts,
+    StepId, WireError,
     WorkflowId, WorkflowStep, WorkflowSummary,
 };
 use store::{LoadJobError, WriteError};
 
 use crate::adrift::{Adrift, NotSubmitted};
 use crate::daemon::Fleet;
+// The wire's `Redirection` is a struct with a public field; Fleet's is a
+// newtype that cannot hold an empty instruction. Both names are in scope here,
+// which is the one place they meet.
+use crate::resume::Redirection as Instruction;
 
 /// The codes this boundary raises, declared beside the thing that raises them.
 ///
@@ -218,6 +223,40 @@ where
             replaced: self.summarised(&both.replaced).await?,
             dispatched: self.summarised(&both.dispatched).await?,
         })
+    }
+
+    /// A structured instruction to a Drone that is escalated and idle.
+    ///
+    /// **An empty instruction is refused here rather than sent.** A Drone told
+    /// nothing at all resumes the step it stopped on with exactly the
+    /// information that failed, which is the redirect appearing to work and
+    /// changing nothing. `Redirection::saying` is where the emptiness is
+    /// caught; this only carries the refusal out.
+    async fn redirect_drone(
+        &self,
+        job_id: JobId,
+        instruction: Redirection,
+    ) -> Result<JobSummary, Refusal> {
+        let said = Instruction::saying(&instruction.instruction)
+            .ok_or_else(|| self.refusal(Adrift::Unnameable))?;
+        let job = self
+            .redirect(&job_id.to_domain(), &said)
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
+    /// A fresh Drone on the worktree the last one left.
+    ///
+    /// The Job resumes at the step that stopped; every earlier step's work is
+    /// on the branch and is not redone. That is what separates this from a
+    /// redispatch, which starts a replacement Job at the approval gate.
+    async fn restart_step(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let job = self
+            .restart_step(&job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
     }
 
     /// One Job's turns. **Subscribe, then read the history** — the one order,

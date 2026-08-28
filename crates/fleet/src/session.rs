@@ -28,12 +28,13 @@
 //! that cost is zero: a Drone that has just submitted evidence is between turns
 //! by definition, which is exactly the moment the gate speaks.
 //!
-//! # Two methods, and neither can start anything
+//! # Three methods, and none of them can start anything
 //!
-//! [`tell`](LiveSession::tell) and [`terminate`](LiveSession::terminate). There
-//! is no spawn, no respawn and no restart, because the gate must not be able to
-//! produce a Drone — and no way to remove a worktree, because nothing in this
-//! workspace can.
+//! [`tell`](LiveSession::tell), [`redirect`](LiveSession::redirect) and
+//! [`terminate`](LiveSession::terminate). There is no spawn, no respawn and no
+//! restart, because the gate must not be able to produce a Drone — and no way
+//! to remove a worktree, because nothing in this workspace can. A restart is
+//! `crate::resume`'s, and it reaches a spawn rather than this trait.
 
 use std::future::Future;
 use std::io;
@@ -43,6 +44,8 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, ChildStdin};
 use tokio::sync::Mutex;
 use verification::OutcomeTurn;
+
+use crate::resume::Redirection;
 
 /// A Drone's live session, from the gate's side.
 pub trait LiveSession {
@@ -60,6 +63,20 @@ pub trait LiveSession {
     /// block the runtime on a child that has stopped reading, or need a second
     /// path for the same write that `crate::drone` already makes.
     fn tell(&self, turn: &OutcomeTurn) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// Inject a person's instruction. The Drone reads it at the next turn
+    /// boundary, like every other injected turn.
+    ///
+    /// **A separate method from [`tell`](LiveSession::tell) because the two
+    /// carry different authorship.** `tell` carries a verdict Fleet reached and
+    /// can only be produced by the advance path; this carries words a person
+    /// wrote, and `docs/contracts/agent-prompt.md` gives it no wording of its
+    /// own for that reason. One method taking either would let the gate send
+    /// arbitrary text.
+    fn redirect(
+        &self,
+        instruction: &Redirection,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// End the Drone.
     ///
@@ -97,6 +114,17 @@ impl Turn {
     /// What the gate decided, injected into a session already running.
     pub fn outcome(turn: &OutcomeTurn) -> Turn {
         Turn::of(turn.text())
+    }
+
+    /// What a person said, injected into a session already running.
+    ///
+    /// **Verbatim, and Fleet adds nothing.** The Drone's baseline already told
+    /// it a verdict arrives as a later turn carrying the reason, so this turn
+    /// lands where the Drone is waiting for one — and framing it would be
+    /// Fleet authoring copy the prompt contract deliberately leaves to the
+    /// person.
+    pub fn redirection(instruction: &Redirection) -> Turn {
+        Turn::of(instruction.text())
     }
 
     fn of(content: &str) -> Turn {
@@ -188,6 +216,10 @@ impl LiveSession for DroneSession {
 
     async fn tell(&self, turn: &OutcomeTurn) -> Result<(), io::Error> {
         self.say(&Turn::outcome(turn)).await
+    }
+
+    async fn redirect(&self, instruction: &Redirection) -> Result<(), io::Error> {
+        self.say(&Turn::redirection(instruction)).await
     }
 
     /// End the Drone and reap it.

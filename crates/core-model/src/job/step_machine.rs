@@ -4,17 +4,22 @@
 //!
 //! `domain/step-states.toml` declares six states and says nothing about which
 //! moves are legal. Built here are the edges M1 walks: `not_started -> running`,
-//! `running -> advanced`, and `running -> stopped`, which is the one a refusal
+//! `running -> advanced`, `running -> stopped`, which is the one a refusal
 //! needs — `job-statuses.toml` gives `escalated` the step state `stopped`, and
 //! without the edge a refused step stayed `running` with no writer for
-//! `last_verdict` at all.
+//! `last_verdict` at all — and `stopped -> running`, which is how a person
+//! resumes it.
+//!
+//! **`stopped -> running` is one edge for two acts.** A redirect speaks to the
+//! Drone that is still there and a restart puts a new one on the worktree, and
+//! the difference between them is the process rather than the step: the step
+//! was stopped and is being worked again either way. Which act a Job admits is
+//! decided by whether it holds a Drone, which is `fleet::resume`'s to ask.
 //!
 //! `awaiting_human` needs a human advance gate and `retrying` a retry budget,
 //! and M1 has neither. Both stay declared on [`StepState`], because a stored
 //! row may render any of the six, and **neither is reachable**: [`StepTarget`]
-//! has no variant naming one. `stopped -> running` is missing too and is named
-//! rather than added — redirect and restart both resume the step a Job stopped
-//! on, and the edge lands with whichever is built first.
+//! has no variant naming one.
 //!
 //! # The outer machine gates the inner one
 //!
@@ -41,12 +46,13 @@ pub struct StepEdge {
     pub to: StepState,
 }
 
-/// The three edges M1 walks. Nothing else in this crate decides what is legal
-/// for a step.
+/// The edges M1 walks. Nothing else in this crate decides what is legal for a
+/// step.
 pub static STEP_EDGES: &[StepEdge] = &[
     step_edge(StepState::NotStarted, StepState::Running),
     step_edge(StepState::Running, StepState::Advanced),
     step_edge(StepState::Running, StepState::Stopped),
+    step_edge(StepState::Stopped, StepState::Running),
 ];
 
 const fn step_edge(from: StepState, to: StepState) -> StepEdge {
@@ -72,6 +78,10 @@ pub const ADVANCING_STATUSES: &[JobStatus] = &[JobStatus::Running, JobStatus::Aw
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StepTarget {
     /// The step is being worked. Entering it is what moves the Job's cursor.
+    ///
+    /// Reached at dispatch and again on a resume. It carries no reason, and
+    /// the row keeps whatever verdict stopped it — so a resumed step still
+    /// says what it is being resumed from.
     Running,
     /// The step passed its advance gate.
     ///

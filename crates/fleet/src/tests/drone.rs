@@ -27,6 +27,8 @@ use testkit::FakeHarness;
 use tokio::io::AsyncReadExt;
 
 use crate::drone::{aftermath, environment, start, Aftermath, DroneNotStarted, Ending, HostPaths};
+use core_model::JobStatus;
+
 use crate::tests::tmp::TempDir;
 use crate::LiveSession;
 
@@ -301,7 +303,7 @@ fn evidence_waiting_means_the_gate_decides_and_the_dead_drone_changes_nothing() 
         },
     ] {
         assert_eq!(
-            aftermath(&ending, crate::Left::Evidence),
+            aftermath(JobStatus::Running, &ending, crate::Left::Evidence),
             Aftermath::TheGateDecides
         );
     }
@@ -339,7 +341,7 @@ fn a_drone_that_died_mid_step_never_leaves_the_job_running() {
 
     for (ending, expected) in endings {
         assert_eq!(
-            aftermath(&ending, crate::Left::Nothing),
+            aftermath(JobStatus::Running, &ending, crate::Left::Nothing),
             Aftermath::JobMoves(Target::Escalated(expected)),
             "{ending:?}"
         );
@@ -351,6 +353,7 @@ fn a_refused_call_and_a_quiet_drone_are_told_apart() {
     // The remedies are opposite — widen the allowlist, or rephrase the task —
     // and both runs come back empty and look identical in the envelope.
     let blocked = aftermath(
+        JobStatus::Running,
         &Ending::Reported {
             refusals: 1,
             called_something: true,
@@ -358,6 +361,7 @@ fn a_refused_call_and_a_quiet_drone_are_told_apart() {
         crate::Left::Nothing,
     );
     let silent = aftermath(
+        JobStatus::Running,
         &Ending::Reported {
             refusals: 0,
             called_something: false,

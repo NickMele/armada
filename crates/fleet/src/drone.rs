@@ -45,7 +45,7 @@ use std::fmt;
 use adapter_traits::{
     AgentHarness, DroneEvent, DroneHandle, DroneSpawnConfig, Environment, SpawnConfigRefused,
 };
-use core_model::{EscalationTrigger, Target};
+use core_model::{EscalationTrigger, JobStatus, Target};
 use tokio::process::{ChildStderr, ChildStdout};
 
 use crate::session::{DroneSession, Turn};
@@ -316,27 +316,44 @@ pub enum Aftermath {
     TheGateDecides,
     /// The Job moves, now, to this.
     JobMoves(Target),
+    /// The Job had already stopped, so its Drone going takes nothing further
+    /// with it. **The escalation already recorded stands** — a second one
+    /// would be the `escalated -> escalated` move the machine refuses, which
+    /// is what made ending an escalated Job's Drone look like the easy answer.
+    ///
+    /// What it changes is which act a person has: the Drone was there and is
+    /// not, so this Job is restartable rather than redirectable.
+    AlreadyStopped,
 }
 
 /// What a dead Drone means for its Job.
 ///
-/// The three answers, and each is a different thing for a person to do:
+/// The answers, and each is a different thing for a person to do:
 ///
-/// | Ending | Left | Answer |
-/// | --- | --- | --- |
-/// | anything | evidence | the gate rules |
-/// | reported, refusals | nothing | `blocked_by_policy` — widen the allowlist, do not rephrase |
-/// | reported, called nothing | nothing | `silent` — rephrase, then redispatch |
-/// | reported, called things | nothing | `stalled` — it worked and never submitted |
-/// | vanished | nothing | `interrupted` — the process died; a person decides |
+/// | Status | Ending | Left | Answer |
+/// | --- | --- | --- | --- |
+/// | working | anything | evidence | the gate rules |
+/// | working | reported, refusals | nothing | `blocked_by_policy` — widen the allowlist, do not rephrase |
+/// | working | reported, called nothing | nothing | `silent` — rephrase, then redispatch |
+/// | working | reported, called things | nothing | `stalled` — it worked and never submitted |
+/// | working | vanished | nothing | `interrupted` — the process died; a person decides |
+/// | stopped | anything | anything | nothing moves; the Job is now restartable |
 ///
-/// **Every answer other than the first leaves the Job escalated, which is not
-/// terminal**, and the milestone step's own words say terminal. The registry
-/// wins: `escalated` holds the worktree and the port span as-is until a person
-/// answers, and answering is what takes it terminal. What the step is actually
-/// asking for is that the Job does not stay `running`, and no path here leaves
-/// it there.
-pub fn aftermath(ending: &Ending, left: Left) -> Aftermath {
+/// **Every answer other than the first two leaves the Job escalated, which is
+/// not terminal**, and the milestone step's own words say terminal. The
+/// registry wins: `escalated` holds the worktree and the port span as-is until
+/// a person answers, and answering is what takes it terminal. What the step is
+/// actually asking for is that the Job does not stay `running`, and no path
+/// here leaves it there.
+///
+/// **`status` is the first question and not a guard bolted on.** An escalated
+/// Job keeps its Drone alive and idle, so a Drone dying is no longer proof the
+/// Job was working — and asking a Job that already stopped to stop again is
+/// the `escalated -> escalated` move the machine refuses.
+pub fn aftermath(status: JobStatus, ending: &Ending, left: Left) -> Aftermath {
+    if status != JobStatus::Running {
+        return Aftermath::AlreadyStopped;
+    }
     if left == Left::Evidence {
         return Aftermath::TheGateDecides;
     }

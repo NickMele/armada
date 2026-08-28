@@ -31,7 +31,7 @@
 //! work, which is the failure the whole gate exists to refuse.
 
 use adapter_traits::{Prompt, SpawnConfigRefused};
-use core_model::{FrozenWorkflow, Job, ResolvedStep, StepId};
+use core_model::{FrozenWorkflow, GamingFlag, Job, Judgment, ResolvedStep, StepId, StepVerdict};
 
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering.
 ///
@@ -64,6 +64,77 @@ pub fn first_turn(
     at: &StepId,
 ) -> Result<Prompt, SpawnConfigRefused> {
     Prompt::assembled(&assemble(job, workflow, at))
+}
+
+/// Assemble the first turn for a Drone taking over a step that stopped.
+///
+/// **The reason is not optional and there is no constructor without one.** A
+/// restarted Drone has no session and no history: it knows nothing about the
+/// attempt it is replacing, and a brief that did not say what stopped would
+/// send it to reproduce the work that was refused.
+///
+/// [`Stopped`] is read off the record rather than composed by a caller, so
+/// nothing here is a claim about the Job that the log does not already carry.
+pub fn resuming_turn(
+    job: &Job,
+    workflow: &FrozenWorkflow,
+    at: &StepId,
+    stopped: &Stopped,
+) -> Result<Prompt, SpawnConfigRefused> {
+    let mut text = assemble(job, workflow, at);
+    text.push_str("\n\n");
+    text.push_str(&stopped.block());
+    Prompt::assembled(&text)
+}
+
+/// Why the step a Drone is being put on stopped, as the record holds it.
+///
+/// Built by `crate::resume` from `last_verdict`, `job_step_judgments` and
+/// `job_step_gaming_flags` — the same three a person reads on the detail view.
+#[derive(Clone, Debug, Default)]
+pub struct Stopped {
+    /// What the gate said stopped it, spelled as the registry spells it.
+    pub verdict: Option<StepVerdict>,
+    /// Every criterion the Judge answered on the step. Only the refused ones
+    /// are rendered.
+    pub judged: Vec<Judgment>,
+    /// Every gaming pattern the step's evidence tripped.
+    pub flagged: Vec<GamingFlag>,
+}
+
+impl Stopped {
+    /// The block, in the shape the Agent Prompt Contract's refusal reprompt
+    /// specifies: `expected` and `produced`, **never `consequence`**, which is
+    /// written for a person deciding whether to care, and **never a counter**.
+    ///
+    /// The gaming half has no sanctioned wording and is drafted. It renders
+    /// the pattern and what it cited, which is the same two-column shape and
+    /// the whole of what a flag is.
+    fn block(&self) -> String {
+        let mut block = String::from(
+            "WHY THIS PART IS BEING DONE AGAIN\n\nAn earlier attempt at this part was \
+             checked and did not pass. Its work is on the branch you are in.",
+        );
+        for judgment in self.judged.iter().filter(|judged| judged.verdict.refuses()) {
+            if let (Some(expected), Some(produced)) = (&judgment.expected, &judgment.produced) {
+                block.push_str(&format!(
+                    "\n\n  Expected   {expected}\n  Produced   {produced}"
+                ));
+            }
+        }
+        for flag in &self.flagged {
+            block.push_str(&format!(
+                "\n\n  Pattern    {}\n  Found in   {}",
+                flag.pattern.as_wire(),
+                flag.cited
+            ));
+        }
+        block.push_str(
+            "\n\nAddress this and submit again. Say what changed since the last \
+             submission.",
+        );
+        block
+    }
 }
 
 fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId) -> String {

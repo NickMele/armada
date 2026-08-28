@@ -67,6 +67,14 @@ fn every_edge_in_the_table_is_admitted() {
         let job = match edge.from {
             StepState::NotStarted => running(),
             StepState::Running => step(&running(), &first(), StepTarget::Running),
+            // Two moves past the start. A stopped step is a `from` because a
+            // redirect and a restart both resume one, which is the whole
+            // reason `stopped -> running` is in the table.
+            StepState::Stopped => step(
+                &step(&running(), &first(), StepTarget::Running),
+                &first(),
+                StepTarget::Stopped(gate_failure().expect("gate_failure is step-level")),
+            ),
             other => panic!("no way to reach {} by transitioning", other.as_wire()),
         };
         // The reason follows the destination, which is the rule

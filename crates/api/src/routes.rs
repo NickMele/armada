@@ -24,7 +24,10 @@ use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
-use ipc::{JobId, Missed, ProposeJob, Resync, RunId, StreamMessage, WireError, PROTOCOL_VERSION};
+use ipc::{
+    JobId, Missed, ProposeJob, Redirection, Resync, RunId, StreamMessage, WireError,
+    PROTOCOL_VERSION,
+};
 use serde::Serialize;
 use std::sync::Arc;
 
@@ -104,6 +107,20 @@ pub const SERVED: &[Route] = &[
         operation: "redispatch_job",
         method: "POST",
         path: "/jobs/:job_id/redispatch",
+    },
+    // The two acts that resume a step without redispatching. Two routes and
+    // not one with a mode: which applies is decided by whether the Job holds a
+    // Drone, and a caller that asked for the wrong one is told which is right
+    // rather than silently given it.
+    Route {
+        operation: "redirect_drone",
+        method: "POST",
+        path: "/jobs/:job_id/redirect",
+    },
+    Route {
+        operation: "restart_step",
+        method: "POST",
+        path: "/jobs/:job_id/restart_step",
     },
     // A socket rather than a body: it opens with what has already happened and
     // then continues, which no request-response shape carries. The path drops
@@ -220,6 +237,8 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/kill_drone", post(kill_drone::<D>))
         .route("/jobs/:job_id/kill_job", post(kill_job::<D>))
         .route("/jobs/:job_id/redispatch", post(redispatch_job::<D>))
+        .route("/jobs/:job_id/redirect", post(redirect_drone::<D>))
+        .route("/jobs/:job_id/restart_step", post(restart_step::<D>))
         .route("/jobs/:job_id/observe", get(observe_job::<D>))
         .route("/events", get(events::<D>))
         // The Evidence endpoint, on the same listener and deliberately not in
@@ -341,6 +360,51 @@ async fn redispatch_job<D: Daemon>(
 ) -> Response {
     match served.daemon.redispatch_job(JobId::carried(job_id)).await {
         Ok(both) => answer(StatusCode::OK, &both, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Say something to the Drone that is there. **The Job comes back `running`**,
+/// at the same step, with the same Drone — nothing was spawned and nothing was
+/// thrown away.
+///
+/// 409 where the Drone is gone, naming `restart_step` as the act that applies.
+async fn redirect_drone<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+    body: Bytes,
+) -> Response {
+    let instruction: Redirection = match ipc::decode("a redirect", &body) {
+        Ok(instruction) => instruction,
+        Err(why) => {
+            return problem(
+                StatusCode::BAD_REQUEST,
+                &WireError::raised(UNDECODABLE_REQUEST, why.to_string(), served.run_id.clone())
+                    .caused_by(vec![why.to_string()]),
+            )
+        }
+    };
+    match served
+        .daemon
+        .redirect_drone(JobId::carried(job_id), instruction)
+        .await
+    {
+        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Put a new Drone on the worktree the last one left. **One Job comes back**,
+/// not two — this is the same Job resuming, which is the whole of what makes it
+/// different from a redispatch.
+///
+/// 409 where the Drone is alive, and where the worktree is gone.
+async fn restart_step<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served.daemon.restart_step(JobId::carried(job_id)).await {
+        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
         Err(refusal) => refused(refusal),
     }
 }

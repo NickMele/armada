@@ -266,23 +266,16 @@ impl Ruling {
         }
     }
 
-    /// Whether the Drone's session ends here. True where the Job is over, and
-    /// on a refusal, where the Job is not.
+    /// Whether the Drone's session ends here. **True only where the Job is
+    /// over.**
     ///
-    /// `job-statuses.toml` says `escalated` keeps its Drone "alive, idle", and
-    /// that is not reachable yet: the only way back to a live session is
-    /// `escalated -> running`, the redirect, which is not built — and a Drone
-    /// left running would be reaped, which would ask the machine for an
-    /// `escalated -> escalated` move it does not have. Named in this crate's
-    /// report rather than half-built.
+    /// A refusal and a suspect verdict escalate, and `job-statuses.toml` gives
+    /// `escalated` the Drone "alive, idle" — so the session stays, holding its
+    /// context, and a redirect is a turn injected into it rather than a
+    /// respawn. `crate::aftermath` is what stops that idle Drone being reaped
+    /// into an `escalated -> escalated` move.
     pub fn ends_the_drone(&self) -> bool {
-        matches!(
-            self,
-            Ruling::Finished { .. }
-                | Ruling::Failed { .. }
-                | Ruling::Refused { .. }
-                | Ruling::Suspect { .. }
-        )
+        matches!(self, Ruling::Finished { .. } | Ruling::Failed { .. })
     }
 }
 

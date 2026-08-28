@@ -272,6 +272,12 @@ helm_access = "Yes"
 description = "Structured instruction to a running Drone"
 notes = """
 Intervention Ladder rung 1. The one command Helm gets directly.
+
+**It needs a Drone that is there.** An escalated Job keeps its Drone alive and idle, and the instruction is a turn injected into that session — so what is kept is the session, the worktree and every step so far. Where the Drone is gone the answer is `restart_step`, and this refuses rather than respawning: a redirect that spawned would be a restart that lost the session for nothing. Which of the two applies is decided by the Drone rather than by the person, so a surface that offers both regardless is offering one that will fail.
+
+The body carries the person's own words. It is the one string in the workspace that reaches a Drone without Fleet assembling it, and the Agent Prompt Contract gives the turn no wording of its own for that reason. Blank is refused.
+
+Nothing bounds how often a Job may be redirected. Whether a cap belongs here is decided in no document, and none is invented.
 """
 
 [operations.redispatch_job]
@@ -297,6 +303,21 @@ kind = "command"
 transport = "HTTP"
 helm_access = "No"
 description = "Design Plan feedback loop"
+
+[operations.restart_step]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "A fresh Drone on the surviving worktree, at the step that stopped"
+notes = """
+The second of the four acts that reach an escalated Job — `docs/concepts/job.md` has the table. The Drone is **gone**; the worktree, the branch and every earlier step's work survive, and a new Drone takes the step over where it stopped.
+
+**Not a redispatch.** A redispatch mints a replacement Job and re-runs every step from the approval gate. This resumes the one step, on the branch the earlier steps' work is already on. Where the worktree has been reclaimed there is nothing to resume onto, and it refuses and says the act being asked for is a redispatch.
+
+**Not a redirect.** The toolset, the model and the environment are resolved again from scratch: permissions intersect on a respawn, so a widened scope can only produce a narrower toolset than the Drone that asked for it. A restart mints a second `drone_id` under one `job_id`, which the log envelope already anticipates.
+
+Helm does not reach it directly, because Helm access on a command is the ladder rung and this has none.
+"""
 
 [operations.restart_fleet]
 kind = "command"

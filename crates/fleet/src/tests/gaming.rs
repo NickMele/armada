@@ -126,7 +126,13 @@ async fn evidence_that_narrows_its_own_gate_escalates_as_suspect_rather_than_fai
         "a flag names what a person is being asked to look at"
     );
     assert!(!ruling.advanced());
-    assert!(ruling.ends_the_drone());
+    // **The Drone is kept, not ended.** `job-statuses.toml` says an escalated
+    // Job's Drone is `Alive, idle. Gone only on interrupted`, and that is what
+    // a redirect acts on — the process is still there holding its session, so
+    // an instruction is a turn injected rather than a respawn. This asserted
+    // the opposite until redirect was built, because ending it was what the
+    // reap path made easy.
+    assert!(!ruling.ends_the_drone());
 
     let moved = apply(
         &running_job(),

@@ -109,7 +109,10 @@ async fn a_veto_stops_a_step_whose_check_passed() {
     );
     // The Drone goes and is not told: there is no retry ledger for it to retry
     // against. The Job does not go with it.
-    assert!(ruling.ends_the_drone());
+    // Kept, not ended — an escalated Job's Drone is `Alive, idle` per
+    // `job-statuses.toml`, which is what a redirect resumes. See the same
+    // correction in `tests::gaming`.
+    assert!(!ruling.ends_the_drone());
     assert!(ruling.tell().is_none());
     let job = running_job();
     let moved = apply(

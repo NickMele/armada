@@ -261,18 +261,22 @@ where
             unreadable,
             ..Reconciled::default()
         };
-        let interrupted = loaded
+        // Every Job the store says holds a Drone, whatever status it is under.
+        // A Drone is spoken to through a pipe the Fleet that spawned it holds,
+        // so this Fleet has none of them — and `assigned_drone` is read to
+        // decide whether a Job can be redirected at all. A column left saying
+        // yes is a redirect that injects a turn into nothing.
+        let held: Vec<Job> = loaded
             .jobs
             .iter()
-            .filter(|job| job.status() == JobStatus::Running);
-        for job in interrupted {
-            if let Aftermath::JobMoves(target) = aftermath(&Ending::Vanished, self.left()) {
-                // The Drone went with the Fleet that spawned it, so the column
-                // saying one is on the Job is stale before the Job moves. A
-                // record still naming a process nobody holds is what
-                // `assigned_drone` was given an event to stop.
-                self.drone_left(job.id()).await;
-                let job = self.load(job.id()).await?;
+            .filter(|job| job.assigned_drone().is_some() || job.status() == JobStatus::Running)
+            .cloned()
+            .collect();
+        for job in held {
+            self.drone_left(job.id()).await;
+            let job = self.load(job.id()).await?;
+            if let Aftermath::JobMoves(target) = aftermath(job.status(), &Ending::Vanished, self.left())
+            {
                 self.move_job(&job, target, Actor::Fleet).await?;
                 reconciled.interrupted.push(job.id().clone());
             }
@@ -370,9 +374,10 @@ where
                         .expect("the slot was just read as full")
                         .heard(),
                 );
+                let standing = self.load(job_id).await?.status();
                 self.end_the_drone(&mut working).await;
                 let job = self.load(job_id).await?;
-                if let Aftermath::JobMoves(target) = aftermath(&ending, self.left()) {
+                if let Aftermath::JobMoves(target) = aftermath(standing, &ending, self.left()) {
                     self.move_job(&job, target, Actor::Human).await?;
                 }
             }

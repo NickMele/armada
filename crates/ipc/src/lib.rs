@@ -77,7 +77,8 @@ pub use event::{
 };
 pub use ids::{CriterionId, DroneId, Instant, JobId, ManifestId, StepId, WorkflowId};
 pub use job::{
-    AttachmentRef, JobList, JobSummary, ProposeJob, ProposedCriterion, Redispatched, Subject,
+    AttachmentRef, JobList, JobSummary, ProposeJob, ProposedCriterion, Redirection, Redispatched,
+    Subject,
     UnreadableJob,
 };
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};

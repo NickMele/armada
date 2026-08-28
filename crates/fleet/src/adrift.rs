@@ -139,6 +139,38 @@ pub enum Adrift {
     /// A redispatch was asked for on a Job that is a step of another Job.
     /// Replacing one is the parent's act, and nothing dispatches a sub-Job yet.
     NotReplaceable { job: JobId },
+    /// A resume was asked for on a Job that is not waiting for a person.
+    ///
+    /// **Not an illegal transition.** The machine has `escalated -> running`
+    /// and would have taken the move; what is missing is the escalation, so the
+    /// question of which step to resume has no answer.
+    NotResumable { job: JobId, status: JobStatus },
+    /// The Job is escalated and no step of it stopped.
+    ///
+    /// A Job-level escalation — `interrupted`, `resource_exhausted`,
+    /// `dependency_failed` — names no step, so neither resume act has anywhere
+    /// to land. Redispatch and Pilot are what is left.
+    NoStepStopped { job: JobId },
+    /// A redirect was asked for on a Job whose Drone is gone.
+    ///
+    /// **The other act applies**, and this says so rather than respawning: a
+    /// redirect that spawned would be a restart that lost nothing it could
+    /// have kept, and the record would say a person injected context into a
+    /// session that did not exist.
+    NoDroneToRedirect { job: JobId },
+    /// A restart was asked for on a Job whose Drone is alive.
+    ///
+    /// The inverse refusal. Ending a live session to spawn a replacement onto
+    /// the same worktree throws away the context that makes a redirect cost
+    /// nothing.
+    DroneStillThere { job: JobId },
+    /// A restart was asked for on a Job whose worktree is no longer on disk.
+    ///
+    /// **Nothing is spawned.** The earlier steps' work lived in that directory,
+    /// so what is being asked for is a Job that starts again from the approval
+    /// gate — which is a redispatch, and is named as one rather than silently
+    /// performed.
+    WorktreeGone { job: JobId, path: String },
     /// A proposal carried a title nothing could be picked out of a list by.
     Unnameable,
     /// A proposal named a workflow this Fleet does not hold.
@@ -273,6 +305,37 @@ impl fmt::Display for Adrift {
                  rather than this one's",
                 job.as_str()
             ),
+            Adrift::NotResumable { job, status } => write!(
+                out,
+                "{} is {} and has no stopped step to resume. Redirect and restart both take a \
+                 Job a person is holding, which is `escalated`",
+                job.as_str(),
+                status.as_wire()
+            ),
+            Adrift::NoStepStopped { job } => write!(
+                out,
+                "{} escalated without stopping a step, so there is none to resume. Only a \
+                 step-level trigger names a step; a redispatch or Pilot is what answers this one",
+                job.as_str()
+            ),
+            Adrift::NoDroneToRedirect { job } => write!(
+                out,
+                "{} has no Drone to redirect — it is gone, and what is left is a restart onto \
+                 the worktree it left behind",
+                job.as_str()
+            ),
+            Adrift::DroneStillThere { job } => write!(
+                out,
+                "{}'s Drone is alive and idle, holding its session. Redirect it rather than \
+                 restarting the step, which would throw that session away",
+                job.as_str()
+            ),
+            Adrift::WorktreeGone { job, path } => write!(
+                out,
+                "{} has no worktree at {path}, so the earlier steps' work is not on disk. \
+                 Starting the work again from the approval gate is a redispatch",
+                job.as_str()
+            ),
             Adrift::Unnameable => out.write_str("a Job needs a title somebody can read"),
             Adrift::NoSuchWorkflow { named, held } => write!(
                 out,
@@ -343,6 +406,14 @@ impl Error for Adrift {
             | Adrift::Unnameable
             | Adrift::NoSuchWorkflow { .. }
             | Adrift::NoSuchManifest { .. }
+            // The five resume refusals are refusals rather than faults: a Job
+            // that cannot be redirected has nothing underneath saying why, only
+            // the state it is in.
+            | Adrift::NotResumable { .. }
+            | Adrift::NoStepStopped { .. }
+            | Adrift::NoDroneToRedirect { .. }
+            | Adrift::DroneStillThere { .. }
+            | Adrift::WorktreeGone { .. }
             | Adrift::Modelless => None,
         }
     }

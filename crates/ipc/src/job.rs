@@ -147,6 +147,23 @@ pub struct Redispatched {
     pub dispatched: JobSummary,
 }
 
+/// A person's instruction to a Drone that is there. The request half of
+/// `redirect_drone`.
+///
+/// **The one place a person's own words reach a Drone.** Every other
+/// Drone-facing string in the workspace is assembled by Fleet from the record;
+/// this is Intervention Ladder rung one, and steering with better information
+/// is the whole act. `docs/contracts/agent-prompt.md` gives the turn no wording
+/// of its own for the same reason.
+///
+/// Blank is refused at the Fleet boundary rather than here: a decoded request
+/// is well-formed, and an instruction with nothing in it is a value that cannot
+/// work — which is a 422 and not a 400.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Redirection {
+    pub instruction: String,
+}
+
 /// The redaction, at the Fleet boundary, with no reason to hand.
 impl From<&core_model::Job> for JobSummary {
     fn from(job: &core_model::Job) -> JobSummary {

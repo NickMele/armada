@@ -27,8 +27,8 @@ use std::future::Future;
 use crate::observing::Observed;
 use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    JobDetail, JobId, JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redispatched,
-    WireError, WorkflowSummary,
+    JobDetail, JobId, JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redirection,
+    Redispatched, WireError, WorkflowSummary,
 };
 
 /// The request-response operations M1 serves.
@@ -122,6 +122,40 @@ pub trait Daemon: Send + Sync + 'static {
         &self,
         job_id: JobId,
     ) -> impl Future<Output = Result<Redispatched, Refusal>> + Send;
+
+    /// `redirect_drone` — a person's instruction to the Drone that is there.
+    /// Intervention Ladder rung 1, and the one command Helm reaches directly.
+    ///
+    /// **It keeps everything.** The session, the worktree and every step so
+    /// far: the Job goes back to `running` at the step it stopped on and the
+    /// instruction is a turn injected into a process that never went away.
+    ///
+    /// **Refused where the Drone is gone**, with a 409, because the act that
+    /// applies there is [`Daemon::restart_step`]. It does not respawn — a
+    /// redirect that spawned is a restart that lost the session for nothing,
+    /// and the two are separate methods so that neither can quietly become the
+    /// other.
+    fn redirect_drone(
+        &self,
+        job_id: JobId,
+        instruction: Redirection,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `restart_step` — a fresh Drone on the worktree the last one left, at the
+    /// step that stopped.
+    ///
+    /// **The worktree, the branch and every earlier step's work survive**, and
+    /// nothing else does: there is no session to resume, which is what makes
+    /// this a different act from [`Daemon::redirect_drone`] rather than a
+    /// slower one. The toolset is resolved again from scratch.
+    ///
+    /// **Refused where the Drone is alive**, and refused where the worktree has
+    /// been reclaimed — the second says the act being asked for is a
+    /// redispatch rather than becoming one.
+    fn restart_step(
+        &self,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `observe_job` — one Job's turns, the history and then the live ones.
     ///

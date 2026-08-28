@@ -308,6 +308,45 @@ impl Daemon for FakeDaemon {
     /// the domain and no more**: a Job that ran and stopped is replaceable and
     /// anything else is refused, because that is the whole of what the route
     /// refuses on.
+    /// Both resume acts, faked the way the real ones are told apart: **which
+    /// one applies is decided by the Drone, not by the caller.** A redirect
+    /// needs one alive; a restart is what exists when it is gone. A fake that
+    /// let either work on any Job would let a test pass against a rule the
+    /// real Fleet enforces.
+    async fn redirect_drone(
+        &self,
+        job_id: JobId,
+        _instruction: ipc::Redirection,
+    ) -> Result<JobSummary, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+            return Err(self.no_such_job(&job_id));
+        };
+        if job.assigned_drone.is_none() {
+            return Err(Refusal::IllegalMove(ipc::WireError::raised(
+                "fake.no_drone_to_redirect",
+                "this Job has no Drone to redirect".to_string(),
+                run_id(),
+            )));
+        }
+        Ok(job.clone())
+    }
+
+    async fn restart_step(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+            return Err(self.no_such_job(&job_id));
+        };
+        if job.assigned_drone.is_some() {
+            return Err(Refusal::IllegalMove(ipc::WireError::raised(
+                "fake.drone_still_there",
+                "this Job still has a Drone — redirect it rather than restarting".to_string(),
+                run_id(),
+            )));
+        }
+        Ok(job.clone())
+    }
+
     async fn redispatch_job(&self, job_id: JobId) -> Result<Redispatched, Refusal> {
         let failed = {
             let jobs = self.jobs.lock().expect("not poisoned");
