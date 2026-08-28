@@ -118,8 +118,10 @@ async fn a_veto_stops_a_step_whose_check_passed() {
         refusals.cited()[0].consequence.as_deref(),
         Some("the last row is dropped")
     );
-    // The Drone goes and is not told: there is no retry ledger for it to retry
-    // against. The Job does not go with it.
+    // The Drone goes and is not told. The retry budget exists and does not
+    // reach here: it answers a check that ran and said no, and resubmitting
+    // against the same instructions would produce the same work a Judge just
+    // refused. The Job does not go with the Drone.
     // Kept, not ended — an escalated Job's Drone is `Alive, idle` per
     // `job-statuses.toml`, which is what a redirect resumes. See the same
     // correction in `tests::gaming`.
