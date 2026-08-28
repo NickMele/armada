@@ -6,23 +6,26 @@
 //! requires, and the rule `docs/concepts/drone.md` puts on every Drone-facing
 //! surface: **a Drone is never told what the Checks are.**
 //!
-//! The last group is about a moment rather than a rendering: a step advancing
-//! under a Drone that is already running. It drives a whole Fleet, because the
-//! defect it is about was not in any block's text — every block was right, and
-//! the turn that carries them was never sent.
+//! The last two groups are about moments rather than renderings. A step
+//! boundary drives a whole Fleet, because the defect it is about was not in any
+//! block's text — every block was right and the turn carrying them was never
+//! sent. A restart asserts the opposite failure: **the sentence has to be the
+//! one the record supports**, because a Drone told its work did not pass will
+//! change work that was correct.
 
 use std::time::Duration;
 
 use adapter_traits::DroneEvent;
 use core_model::{
-    AcceptanceCriterion, CriterionId, CriterionSource, Facts, Job, JobId, ManifestId, ModelName,
-    NewJob, StepId, StepSeed, Timestamp, TopLevelOrigin, Ulid, Urgency,
+    AcceptanceCriterion, CriterionId, CriterionSource, EscalationTrigger, Facts, Job, JobId,
+    JudgeVerdict, Judgment, ManifestId, ModelName, NewJob, StepId, StepLevelTrigger, StepSeed,
+    StepVerdict, Timestamp, TopLevelOrigin, Ulid, Urgency,
 };
 use ipc::mcp::DeclareScope;
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Gate, Scoped, Sketch};
 use verification::{Claimed, NotClaimed, ShownBy};
 
-use crate::briefing::{first_turn, BASELINE};
+use crate::briefing::{first_turn, resuming_turn, Stopped, BASELINE};
 use crate::daemon::Fleet;
 use crate::evidence::Call;
 use crate::gate::Ruling;
@@ -372,4 +375,124 @@ async fn a_step_boundary_says_nothing_where_the_next_step_wants_no_plan() {
         "it is still told where it is going: {}",
         sent[1]
     );
+}
+
+// ------------------------------------------- what a restarted Drone is told
+
+fn stopped_by(trigger: EscalationTrigger) -> Stopped {
+    Stopped {
+        verdict: Some(StepVerdict::Failed(
+            StepLevelTrigger::of(trigger).expect("a step-level trigger"),
+        )),
+        judged: Vec::new(),
+        flagged: Vec::new(),
+    }
+}
+
+fn restarted(stopped: &Stopped) -> String {
+    resuming_turn(&a_job(), &a_workflow(), &StepId::new("implement"), stopped)
+        .expect("a prompt")
+        .as_str()
+        .to_string()
+}
+
+/// **The one that changes work that was right.** `gate_undecided` is the gate
+/// saying it could not read what it needed, which is the whole point of
+/// `CouldNotDecide`: a machine that cannot answer must not produce a verdict in
+/// either direction. The briefing then produced one anyway and handed it over
+/// as fact, and a Drone told its work did not pass goes looking for what was
+/// wrong with it.
+#[test]
+fn a_restart_after_a_gate_that_could_not_decide_is_not_told_its_work_failed() {
+    let said = restarted(&stopped_by(EscalationTrigger::GateUndecided));
+
+    assert!(
+        !said.contains("did not pass"),
+        "nothing was checked, so nothing failed: {said}"
+    );
+    assert!(
+        said.contains("never checked"),
+        "it is told what actually happened: {said}"
+    );
+    assert!(
+        said.contains("nothing was decided about the work"),
+        "and that no verdict exists to go looking for: {said}"
+    );
+    assert!(
+        !said.contains("Address this"),
+        "there is nothing cited to address: {said}"
+    );
+}
+
+/// The ordinary failure still reads as one, and still carries the two fields
+/// the refusal reprompt specifies.
+#[test]
+fn a_restart_after_a_gate_failure_is_told_its_work_did_not_pass() {
+    let mut stopped = stopped_by(EscalationTrigger::GateFailure);
+    stopped.judged = vec![Judgment {
+        criterion_id: CriterionId::new("c1"),
+        verdict: JudgeVerdict::NotMet,
+        expected: Some(String::from("the reader stops one line later")),
+        produced: Some(String::from("the reader stops where it did")),
+        consequence: Some(String::from("every caller still reads short")),
+    }];
+    let said = restarted(&stopped);
+
+    assert!(said.contains("checked and did not pass"), "{said}");
+    assert!(said.contains("the reader stops one line later"), "{said}");
+    assert!(said.contains("the reader stops where it did"), "{said}");
+    assert!(
+        !said.contains("every caller still reads short"),
+        "consequence is the person's field: {said}"
+    );
+    assert!(said.contains("Address this and submit again"), "{said}");
+}
+
+/// **Four stops, four sentences.** A Drone acts on what it is told, so a
+/// restart after thrashing and a restart after a refusal cannot read the same
+/// — and neither may claim a check ran where none did.
+#[test]
+fn no_two_triggers_hand_a_drone_the_same_sentence() {
+    let four = [
+        EscalationTrigger::GateFailure,
+        EscalationTrigger::EvidenceSuspect,
+        EscalationTrigger::GateUndecided,
+        EscalationTrigger::Thrashing,
+    ];
+    let mut said: Vec<String> = four
+        .iter()
+        .map(|trigger| {
+            let block = restarted(&stopped_by(*trigger));
+            block
+                .rsplit("WHY THIS PART IS BEING DONE AGAIN")
+                .next()
+                .expect("the block is there")
+                .to_string()
+        })
+        .collect();
+    said.sort();
+    said.dedup();
+    assert_eq!(said.len(), 4, "one sentence each: {said:#?}");
+
+    for trigger in [
+        EscalationTrigger::GateUndecided,
+        EscalationTrigger::Thrashing,
+    ] {
+        let block = restarted(&stopped_by(trigger));
+        assert!(
+            !block.contains("did not pass"),
+            "{trigger:?} weighed nothing: {block}"
+        );
+    }
+}
+
+/// A `Stopped` carrying no verdict says so rather than inventing one. It is
+/// what `Default` builds, and a record that lost its `last_verdict` must not
+/// become a refusal on the way to a Drone.
+#[test]
+fn a_stop_with_no_verdict_recorded_claims_none() {
+    let said = restarted(&Stopped::default());
+
+    assert!(said.contains("holds no verdict against its work"), "{said}");
+    assert!(!said.contains("did not pass"), "{said}");
 }

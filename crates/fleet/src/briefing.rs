@@ -30,18 +30,14 @@
 //! Telling a Drone the Check would let it satisfy the Check rather than do the
 //! work, which is the failure the whole gate exists to refuse.
 //!
-//! # The ask outlives the first turn, so it is a value rather than a paragraph
-//!
-//! [`Declaring`] is the scope ask as a thing that can be handed somewhere else.
-//! It has to be, because `Working::now_on` clears the declaration at every step
-//! boundary — a plan inherited from the step before is not a plan — and a Drone
-//! told once, at spawn, arrives at the second step having declared nothing. The
-//! block written into the first turn and the block injected at a boundary are
-//! the same value built the same way, so the two cannot come to say different
-//! things.
+//! Two blocks outlive the turn they were written for and are types rather than
+//! paragraphs: [`Declaring`], which a step boundary sends again, and
+//! [`Stopped`], which a restart is built from. Each says why on itself.
 
 use adapter_traits::{Prompt, SpawnConfigRefused};
-use core_model::{FrozenWorkflow, GamingFlag, Job, Judgment, ResolvedStep, StepId, StepVerdict};
+use core_model::{
+    EscalationTrigger, FrozenWorkflow, GamingFlag, Job, Judgment, ResolvedStep, StepId, StepVerdict,
+};
 
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering.
 ///
@@ -101,9 +97,15 @@ pub fn resuming_turn(
 ///
 /// Built by `crate::resume` from `last_verdict`, `job_step_judgments` and
 /// `job_step_gaming_flags` — the same three a person reads on the detail view.
+///
+/// **All three are rendered.** The verdict used to be carried and never read,
+/// which left the briefing holding the true answer and stating a different
+/// one — see [`Stopped::why`].
 #[derive(Clone, Debug, Default)]
 pub struct Stopped {
-    /// What the gate said stopped it, spelled as the registry spells it.
+    /// What the gate said stopped it, spelled as the registry spells it. It
+    /// decides the block's first sentence, and no two triggers get the same
+    /// one.
     pub verdict: Option<StepVerdict>,
     /// Every criterion the Judge answered on the step. Only the refused ones
     /// are rendered.
@@ -120,30 +122,118 @@ impl Stopped {
     /// The gaming half has no sanctioned wording and is drafted. It renders
     /// the pattern and what it cited, which is the same two-column shape and
     /// the whole of what a flag is.
+    ///
+    /// **The closing line follows what was cited rather than being fixed.**
+    /// "Address this" names the rows above it, and there are stops that leave
+    /// no rows at all — a Drone told to address nothing goes looking for it.
     fn block(&self) -> String {
-        let mut block = String::from(
-            "WHY THIS PART IS BEING DONE AGAIN\n\nAn earlier attempt at this part was \
-             checked and did not pass. Its work is on the branch you are in.",
+        let mut block = format!(
+            "WHY THIS PART IS BEING DONE AGAIN\n\n{} Its work is on the branch you are in.",
+            self.why()
         );
+        let mut cited = false;
         for judgment in self.judged.iter().filter(|judged| judged.verdict.refuses()) {
             if let (Some(expected), Some(produced)) = (&judgment.expected, &judgment.produced) {
+                cited = true;
                 block.push_str(&format!(
                     "\n\n  Expected   {expected}\n  Produced   {produced}"
                 ));
             }
         }
         for flag in &self.flagged {
+            cited = true;
             block.push_str(&format!(
                 "\n\n  Pattern    {}\n  Found in   {}",
                 flag.pattern.as_wire(),
                 flag.cited
             ));
         }
-        block.push_str(
-            "\n\nAddress this and submit again. Say what changed since the last \
-             submission.",
-        );
+        block.push_str(match cited {
+            true => {
+                "\n\nAddress this and submit again. Say what changed since the last \
+                 submission."
+            }
+            false => "\n\nNothing was cited for you to answer. Finish this part and submit.",
+        });
         block
+    }
+
+    /// What stopped the earlier attempt, in one sentence, from the verdict the
+    /// record holds.
+    ///
+    /// **Read rather than assumed.** [`Stopped::verdict`] was carried here and
+    /// never rendered, and the block said "checked and did not pass" whatever
+    /// it held — which is false after `gate_undecided`, where nothing was
+    /// checked and the gate said so. A Drone told its work did not pass goes
+    /// looking for what was wrong with work that was right, and the second
+    /// attempt is then worse than the first for a reason nothing records.
+    ///
+    /// **One sentence per trigger, matched exhaustively.** `gate_failure`,
+    /// `evidence_suspect`, `gate_undecided` and `thrashing` are four different
+    /// things to be told and a Drone acts on what it is told, so a trigger
+    /// added to the registry is a compile error here rather than a Drone
+    /// quietly handed the nearest sentence.
+    ///
+    /// Every sentence says what Fleet knows and stops. What the gate could not
+    /// read, and what a Judge would make of it, are not Fleet's to speculate
+    /// about — `docs/concepts/drone.md`'s rule about self-report, pointed the
+    /// other way.
+    fn why(&self) -> &'static str {
+        let Some(StepVerdict::Failed(stopped_by)) = self.verdict else {
+            // No verdict against the work at all. `passed` and `not_reached`
+            // are not refusals either, and rendering any of the three as one
+            // is the defect this function exists to close.
+            return "An earlier attempt at this part stopped. The record holds no verdict \
+                    against its work.";
+        };
+        match stopped_by.trigger() {
+            EscalationTrigger::GateFailure => {
+                "An earlier attempt at this part was checked and did not pass."
+            }
+            EscalationTrigger::EvidenceSuspect => {
+                "An earlier attempt at this part passed its checks, and what it submitted \
+                 was not accepted as evidence that the work was done."
+            }
+            EscalationTrigger::GateUndecided => {
+                "An earlier attempt at this part was never checked. Something the check \
+                 needed could not be read, so nothing was decided about the work itself."
+            }
+            EscalationTrigger::Thrashing => {
+                "An earlier attempt at this part was stopped while it was still running. \
+                 Nothing it did was checked."
+            }
+            EscalationTrigger::CheckTimeout => {
+                "An earlier attempt at this part was stopped because a check did not \
+                 finish. Nothing was decided about the work itself."
+            }
+            EscalationTrigger::EvidenceTooLarge => {
+                "An earlier attempt at this part submitted more than could be read, so it \
+                 was never checked."
+            }
+            EscalationTrigger::BlockedByPolicy => {
+                "An earlier attempt at this part was refused a tool or a command it needed, \
+                 and stopped without submitting anything."
+            }
+            EscalationTrigger::LoopCap => {
+                "An earlier attempt at this part used every round it is allowed. Nothing it \
+                 did was refused."
+            }
+            // Job-level triggers, which `StepLevelTrigger::of` will not build,
+            // so none of these is reachable through a stopped step. Named
+            // rather than swept into a wildcard: the narrowing is what makes
+            // them unreachable, and a wildcard would hide a registry change
+            // that moved one of them to step level.
+            EscalationTrigger::DependencyFailed
+            | EscalationTrigger::FanOut
+            | EscalationTrigger::HatchUnbidden
+            | EscalationTrigger::Interrupted
+            | EscalationTrigger::ResourceExhausted
+            | EscalationTrigger::Silent
+            | EscalationTrigger::Stalled => {
+                "An earlier attempt at this part stopped. The record holds no verdict \
+                 against its work."
+            }
+        }
     }
 }
 
