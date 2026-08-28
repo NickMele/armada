@@ -94,6 +94,25 @@ pub(crate) struct Working {
     /// What [`Progress::heard`](crate::Progress::heard) read when `heard_at`
     /// was taken. The comparison that says whether anything has arrived since.
     heard: usize,
+    /// What [`Progress::turned`](crate::Progress::turned) read when a person
+    /// redirected this Drone on a Job **no step had stopped on** — the
+    /// `stalled` shape, where the Job is `escalated` and the step is still
+    /// running.
+    ///
+    /// **`Some` is a Job waiting for its Drone to prove it heard.** The
+    /// redirect went down the pipe and the Job was left `escalated` on purpose:
+    /// a Job that returned to `running` on the act of sending would read as
+    /// recovered whether or not anything woke up, and the one case worth
+    /// telling apart is a Drone that never does. `None` on every other Job and
+    /// on every other redirect — where a step *had* stopped, the two machines
+    /// move together and there is nothing outstanding.
+    ///
+    /// **The reading is taken before the write, never after.** The answer can
+    /// arrive between the write and the next statement, and a baseline taken
+    /// after it would have the answer already inside it and read as a Drone
+    /// that never turned. That is [`rested`](Working::rested)'s hazard, and it
+    /// costs the same care.
+    answering: Option<usize>,
     /// How many liveness pokes this step has spent.
     ///
     /// **The step's budget, not the episode's.** A Drone that answers a poke
@@ -167,6 +186,7 @@ impl Working {
             chain: Chain::Working,
             heard_at: at,
             heard: 0,
+            answering: None,
             pokes: 0,
             publishing: Publishing::default(),
             entered_with: None,
@@ -386,6 +406,44 @@ impl Working {
     pub(crate) fn poked(&mut self, at: Timestamp) {
         self.waiting(at);
         self.pokes += 1;
+    }
+
+    /// What [`Progress::turned`](crate::Progress::turned) reads now. The
+    /// baseline a redirect is held against, and it is asked for **before** the
+    /// instruction goes down the pipe.
+    pub(crate) fn turned(&self) -> usize {
+        self.transcript.progress().turned
+    }
+
+    /// A person's redirect has gone into the session and the Job is held at
+    /// `escalated` until the Drone answers it.
+    ///
+    /// The baseline is handed in rather than read here, because the write has
+    /// already happened by the time anything can call this — see
+    /// [`answering`](Working::answering).
+    pub(crate) fn awaiting_answer(&mut self, turned: usize) {
+        self.answering = Some(turned);
+    }
+
+    /// Whether the Drone has taken a turn since a redirect was put to it.
+    ///
+    /// **`false` where no redirect is outstanding**, which is every Job but the
+    /// one a person has just spoken to — so the question costs a lock and a
+    /// comparison and reaches no store.
+    ///
+    /// **`turned` and not `heard`.** A `tool_progress` heartbeat is a Drone
+    /// that never stopped working rather than one that read what a person said,
+    /// and counting it would move the Job back to `running` on a Drone that is
+    /// wedged inside the same call it was wedged in when the vigil caught it.
+    pub(crate) fn turned_since_redirect(&self) -> bool {
+        self.answering
+            .is_some_and(|before| self.transcript.progress().turned > before)
+    }
+
+    /// The outstanding redirect has been answered, and nothing is waiting on
+    /// this Drone.
+    pub(crate) fn answered(&mut self) {
+        self.answering = None;
     }
 
     /// Add paths seen outside the plan, and answer with the ones that are new.

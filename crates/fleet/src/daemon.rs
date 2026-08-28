@@ -66,6 +66,7 @@ use crate::gate::{CheckBudget, Ruling};
 use crate::judging::{Aloft, JudgeBudget, Judging, Marking};
 use crate::mint::Mint;
 use crate::proposal::Proposing;
+use crate::resume::Roused;
 use crate::scope::Drifting;
 use crate::silence::{Liveness, Quiet};
 use crate::working::Working;
@@ -199,6 +200,10 @@ pub struct Turned {
     /// Empty on every turn of a Drone that is speaking, which is nearly all of
     /// them.
     pub quiet: Option<Quiet>,
+    /// The Job that came back to `running` because its Drone took a turn after
+    /// a person redirected it. Empty on every turn no redirect is outstanding
+    /// on, which is nearly all of them.
+    pub roused: Option<Roused>,
 }
 
 /// The daemon core: **the only writer of Job state.**
@@ -358,6 +363,12 @@ where
         // watched — and after nothing, because the check reads a worktree and
         // must not run against a slot the gate has just cleared.
         let drifting = self.watch_scope(&mut working, footprint.as_ref()).await;
+        // **Before the vigil, because they are one question in the two
+        // directions** and the answers must not be read out of order: a Drone
+        // that has answered a redirect is a Drone that is speaking, and a Job
+        // still `escalated` is one the vigil declines to measure at all. This
+        // is what puts it back under the clock.
+        let roused = self.watch_redirect(&mut working).await?;
         // **Before the thrashing chain, because it is cheaper and more
         // specific.** A Drone that has stopped speaking is not thrashing, and
         // the chain's first stage costs a Judge call — so asking the free
@@ -381,6 +392,7 @@ where
             drifting,
             wandering,
             quiet,
+            roused,
         })
     }
 

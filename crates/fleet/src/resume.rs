@@ -1,37 +1,54 @@
-//! The two acts that resume a step a Job stopped on, without redispatching it.
+//! The two acts that put a person back on a Job without redispatching it.
 //!
 //! # Which one applies is decided by the Drone, not by the person
 //!
 //! [`redirect`](Fleet::redirect) needs a live session and [`restart_step`] is
-//! what exists when there is none, so each refuses where the other applies.
-//! `docs/concepts/job.md` is the specification: a redirect that respawns is a
-//! restart that threw away the session, and a restart that reuses one is a
-//! redirect that respawned for no reason.
+//! what exists when there is none, so each refuses where the other applies —
+//! `docs/concepts/job.md` is the specification. **Neither asks the other's
+//! question**: a redirect wanted a stopped step only because both were once one
+//! predicate, which held until `stalled` escalated a Job over a live Drone.
 //!
-//! # Both walk the two machines in the one order the registry admits
+//! # A step that stopped is moved; a Job that is only quiet is not
 //!
-//! `escalated -> running` first, then `stopped -> running` — the exact reverse
-//! of the way out. The inner machine advances only beneath `running`, so a step
-//! cannot be resumed until the Job has moved, and it is why an escalated Job's
-//! step move has to bracket the status move on both sides.
+//! Where a step stopped, both machines move in the one order the registry
+//! admits — `escalated -> running`, then `stopped -> running` — because the
+//! inner machine advances only beneath `running`. Where none stopped there is
+//! nothing to unfreeze, the Job stays `escalated`, and it comes back on
+//! [`watch_redirect`](Fleet::watch_redirect) seeing the Drone turn: a Job
+//! moved on the sending would read as recovered whether or not anything woke.
 //!
 //! # Nothing here is bounded
 //!
-//! A person who can redirect can redirect for ever. Whether that is capped,
-//! and by what, is decided in no document — so no cap is invented here.
+//! A person who can redirect can redirect for ever. Whether that is capped is
+//! decided in no document, so no cap is invented here.
 //!
 //! [`restart_step`]: Fleet::restart_step
 
 use std::path::Path;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
-use core_model::{Actor, Job, JobId, JobStatus, StepId, StepState, StepTarget, Target};
+use core_model::{
+    Actor, Component, Envelope, Job, JobId, JobStatus, Level, StepId, StepState, StepTarget, Target,
+};
 
 use crate::adrift::Adrift;
 use crate::briefing::{self, Stopped};
 use crate::daemon::Fleet;
 use crate::session::LiveSession;
+use crate::transcript;
 use crate::working::Working;
+
+/// A Drone that took a turn after a person redirected it, and the Job that came
+/// back to `running` with it.
+///
+/// **The Drone's evidence, reported rather than inferred.** It is on `Turned`
+/// beside what the liveness vigil did, because the two are one question read in
+/// the two directions: one says a Drone stopped and the other says it started.
+#[derive(Debug)]
+pub struct Roused {
+    pub job: JobId,
+    pub step: StepId,
+}
 
 /// A person's instruction to a Drone that is there.
 ///
@@ -76,31 +93,118 @@ where
     /// told the Judge's citation, because the person read that citation and
     /// wrote the instruction from it; `docs/contracts/agent-prompt.md` gives
     /// this turn no Fleet wording for the same reason.
+    ///
+    /// **What it asks for is a live session, and nothing about a step.** A
+    /// redirect is a turn injected into a process; whether some step of the Job
+    /// is frozen decides what else has to move, never whether this act applies.
+    /// It was gated on a stopped step until `stalled` arrived — the first
+    /// trigger that pauses a Job over a Drone that is still there — and the
+    /// only move left on the case a redirect most obviously fits was
+    /// kill-and-redispatch.
     pub async fn redirect(&self, job_id: &JobId, instruction: &Redirection) -> Result<Job, Adrift> {
         let mut working = self.slot().lock().await;
         let job = self.load(job_id).await?;
-        let step = self.resumable(&job)?;
+        self.held_for_a_person(&job)?;
         // The live session, which is the whole difference between the two acts
         // — and it is asked of the slot rather than of the record, because the
         // slot is the only thing holding a pipe. A record saying a Drone is on
         // a Job this Fleet did not spawn is repaired at the boot read.
-        if !working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
+        let Some(at_work) = working.as_ref().filter(|at_work| at_work.is(job_id)) else {
             return Err(Adrift::NoDroneToRedirect {
                 job: job_id.clone(),
             });
-        }
+        };
+        // **Before the write**, for `Working::answering`'s reason: an answer
+        // that arrived between the two would be inside a baseline taken after
+        // and would read as a Drone that never turned.
+        let turned = at_work.turned();
 
-        let job = self.resumed(&job, &step, Actor::Human).await?;
-        // After both moves, never before. A turn delivered to a Drone whose
-        // Job then failed to move would be an instruction acted on by a
-        // process nobody had unpaused.
+        // The step, where one stopped. `Err` is the `stalled` shape and is not
+        // a refusal here — a Job-level escalation freezes nothing underneath
+        // it, so there is nothing for this act to unfreeze.
+        let stopped = self.stopped_step(&job).ok();
+        let job = match stopped.as_ref() {
+            // After both moves, never before. A turn delivered to a Drone whose
+            // Job then failed to move would be an instruction acted on by a
+            // process nobody had unpaused.
+            Some(step) => self.resumed(&job, step, Actor::Human).await?,
+            None => job,
+        };
         self.instruct(job_id, instruction, &working).await?;
         // The step is running again, so the thrashing chain is too. Without
         // this a Drone steered off one loop is never caught in the next.
         if let Some(at_work) = working.as_mut() {
             at_work.resumed(self.now());
+            // And where nothing was unfrozen, the Job is still `escalated` and
+            // stays there until the Drone proves it heard. See
+            // [`watch_redirect`](Fleet::watch_redirect).
+            if stopped.is_none() {
+                at_work.awaiting_answer(turned);
+            }
         }
         Ok(job)
+    }
+
+    /// A Job comes back to `running` when its Drone turns, and never on the
+    /// send. **The deferred half of [`redirect`](Fleet::redirect)**, kept beside
+    /// it rather than in a watcher of its own so that the act and what completes
+    /// it are read together.
+    ///
+    /// **Cold on every turn but one.** The slot answers `false` unless a
+    /// redirect is outstanding, so a Drone nobody has spoken to reaches no
+    /// store — the property [`watch_silence`](Fleet::watch_silence) has, for the
+    /// same reason.
+    ///
+    /// The actor is **human**. A person took a Job out of `escalated` by
+    /// redirecting it; Fleet only chose the instant, once the Drone had shown
+    /// the instruction landed. `job-statuses.toml` says a person is who acts on
+    /// an escalated Job, and a row saying Fleet un-escalated one would be Fleet
+    /// claiming a decision it did not take.
+    pub(crate) async fn watch_redirect(
+        &self,
+        working: &mut Option<Working>,
+    ) -> Result<Option<Roused>, Adrift> {
+        let Some(at_work) = working.as_ref() else {
+            return Ok(None);
+        };
+        if !at_work.turned_since_redirect() {
+            return Ok(None);
+        }
+        let (job, step, _) = at_work.standing();
+        // From here it costs a store read, and only on the turn a redirect is
+        // answered.
+        let record = self.load(&job).await?;
+        // The Job left `escalated` some other way while the redirect was out —
+        // killed, piloted, failed. Nothing is owed and nothing is moved; what is
+        // dropped is only the wait.
+        if record.status() == JobStatus::Escalated {
+            self.move_job(&record, Target::Running, Actor::Human)
+                .await?;
+            self.noted_roused(&job, &step);
+        }
+        if let Some(at_work) = working.as_mut() {
+            at_work.answered();
+        }
+        Ok(Some(Roused { job, step }))
+    }
+
+    /// Write the answer into the Job's own log. **Fields say who and when; the
+    /// wording says what happened**, and neither carries anything the Drone
+    /// said — that the Drone turned is a count, and what it turned about is a
+    /// claim the gate exists to refuse.
+    fn noted_roused(&self, job: &JobId, step: &StepId) {
+        let envelope = Envelope::new(
+            self.now(),
+            Level::Info,
+            Component::Fleet,
+            self.run().clone(),
+            "the Drone took a turn after being redirected and the Job is running again",
+        )
+        .in_job(job.as_ulid().clone())
+        .at_step(step.as_str());
+        // A log line that will not write does not undo the move, for
+        // `silence::noted_quiet`'s reason: the transition is its own record.
+        let _ = transcript::note(&self.host().repo_root, job, &envelope);
     }
 
     /// Put a fresh Drone on the worktree the last one left. **The second act**,
@@ -116,7 +220,7 @@ where
     pub async fn restart_step(&self, job_id: &JobId) -> Result<Job, Adrift> {
         let mut working = self.slot().lock().await;
         let job = self.load(job_id).await?;
-        let step = self.resumable(&job)?;
+        let step = self.stopped_step(&job)?;
         if working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
             return Err(Adrift::DroneStillThere {
                 job: job_id.clone(),
@@ -138,20 +242,35 @@ where
         self.load(job_id).await
     }
 
-    /// The step both acts resume, or why there is not one.
+    /// The Job is one a person is holding. **What both acts need, and all
+    /// either of them needs of the status.**
     ///
-    /// **A step-level escalation is what makes either act coherent.** Only a
-    /// step-level trigger reaches a step's `last_verdict`, so only a step-level
-    /// escalation leaves a `stopped` row naming which step to resume — and a
-    /// Job escalated on `interrupted` or `resource_exhausted` has none, which
-    /// leaves redispatch and Pilot as the only moves.
-    fn resumable(&self, job: &Job) -> Result<StepId, Adrift> {
-        if job.status() != JobStatus::Escalated {
-            return Err(Adrift::NotResumable {
+    /// It is `escalated` and nothing weaker: `escalated -> running` is the edge
+    /// both acts take, and the registry has no other status it leaves from.
+    fn held_for_a_person(&self, job: &Job) -> Result<(), Adrift> {
+        (job.status() == JobStatus::Escalated)
+            .then_some(())
+            .ok_or_else(|| Adrift::NotResumable {
                 job: job.id().clone(),
                 status: job.status(),
-            });
-        }
+            })
+    }
+
+    /// The step a restart lands on, or why there is not one.
+    ///
+    /// **A step-level escalation is what makes a restart coherent.** Only a
+    /// step-level trigger reaches a step's `last_verdict`, so only a step-level
+    /// escalation leaves a `stopped` row naming which step to run again — and a
+    /// Job escalated on `interrupted`, `resource_exhausted` or `stalled` has
+    /// none. For the first two the Drone is gone as well, which leaves
+    /// redispatch and Pilot; for the third it is alive, and a redirect is what
+    /// answers it.
+    ///
+    /// **A redirect does not call this to decide whether it applies.** It calls
+    /// it to learn whether anything has to be unfrozen, which is a different
+    /// question and is why this stopped being one predicate.
+    fn stopped_step(&self, job: &Job) -> Result<StepId, Adrift> {
+        self.held_for_a_person(job)?;
         job.steps()
             .iter()
             .find(|step| step.state() == StepState::Stopped)

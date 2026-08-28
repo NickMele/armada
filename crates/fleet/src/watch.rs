@@ -45,13 +45,15 @@ struct Heard {
     ended: bool,
 }
 
-/// How far a run has got, in the only three numbers anything asks for.
+/// How far a run has got, in the only four numbers anything asks for.
 ///
 /// **None of them is a verdict and none can become one.** `calls` is Fleet's
 /// own count of what the Drone did and is compared against a step norm;
 /// `boundaries` is how many times the Drone came to rest, which is what says a
 /// directive was acted on rather than what it said in answer; `heard` is how
-/// many events arrived at all, which is what says the Drone is still there.
+/// many events arrived at all, which is what says the Drone is still there; and
+/// `turned` is how many of those the Drone produced itself, which is what says
+/// it acted on something a person told it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Progress {
     /// How many tool calls the Drone has made this session.
@@ -94,6 +96,24 @@ pub struct Progress {
     /// the one signal that separates a Drone running `cargo test` from a Drone
     /// that has stopped running anything.
     pub heard: usize,
+    /// How many events the **Drone itself** produced — a tool it reached for, a
+    /// refusal it walked into, prose it wrote, a turn it finished.
+    ///
+    /// **The narrower reading, and the one that says a redirect was taken up.**
+    /// [`heard`](Progress::heard) has to count everything, because a Drone that
+    /// is merely working through a long command is not silent and its heartbeat
+    /// is the only proof — but a heartbeat is a Drone that never stopped, not a
+    /// Drone that read what a person said and started again. So the two
+    /// questions take two counters, and the wider one cannot answer the
+    /// narrower.
+    ///
+    /// **Four kinds, and the four that are absent are absent on purpose.**
+    /// `Started` is the harness opening a session, `Answered` is a tool
+    /// replying rather than the Drone acting, `QuotaMoved` is the harness's
+    /// window, and `Unrecognised` is where that heartbeat lands. `Unreadable`
+    /// is a line nobody could attribute. None of them is the Drone taking a
+    /// turn.
+    pub turned: usize,
 }
 
 /// A transcript being read.
@@ -160,7 +180,7 @@ impl Watching {
             .ended
     }
 
-    /// How far the run has got, as two counts.
+    /// How far the run has got, as four counts.
     ///
     /// **Still not a per-event accessor.** It folds under the lock and answers
     /// numbers, so there is no way to reach a Drone's claim through it — the
@@ -179,8 +199,15 @@ impl Watching {
                 // compile when a kind is added; this one counts two of them,
                 // and a new kind is not a third thing to count.
                 match event {
-                    DroneEvent::Called { .. } => so_far.calls += 1,
-                    DroneEvent::Ended { .. } => so_far.boundaries += 1,
+                    DroneEvent::Called { .. } => {
+                        so_far.calls += 1;
+                        so_far.turned += 1;
+                    }
+                    DroneEvent::Ended { .. } => {
+                        so_far.boundaries += 1;
+                        so_far.turned += 1;
+                    }
+                    DroneEvent::Said { .. } | DroneEvent::Refused { .. } => so_far.turned += 1,
                     _ => {}
                 }
                 // Outside the match, deliberately: every event is one, and an

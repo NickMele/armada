@@ -82,6 +82,13 @@
 //! four where nothing moves. What keeps an appeal from being an
 //! approve-anything is the four.
 //!
+//! `redirect` is the eighteenth: steering a Drone that is still there. Its
+//! claim is the pair a single predicate used to conflate — a Job escalated over
+//! a **live** Drone with no step stopped takes a redirect and nothing else
+//! does, and it comes back to `running` on the Drone's own next turn rather
+//! than on the sending. Most of its cases are ones where the Job stays
+//! escalated, which is the proportion the act is about.
+//!
 //! `attachments` is the eleventh: a file staged before a Job exists, promoted
 //! at creation, refused where the staged path cannot be read, and copied again
 //! into the worktree dispatch makes — proving the same path `briefing` writes
@@ -111,6 +118,7 @@ mod planning;
 mod process;
 mod proposing;
 mod queued;
+mod redirect;
 mod redispatch;
 mod reviewing;
 mod runtime;
