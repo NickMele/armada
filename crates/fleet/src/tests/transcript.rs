@@ -392,3 +392,64 @@ async fn a_running_drone_can_be_watched_and_a_finished_one_leaves_its_history() 
         .await;
     assert!(quiet.is_err(), "an id naming no Job is refused as one");
 }
+
+/// One tool call, as the transcript carries it.
+fn a_call(tool: &str) -> DroneEvent {
+    DroneEvent::Called {
+        tool: String::from(tool),
+        call: String::from("01CALLAAAAAAAAAAAAAAAAAAAA"),
+        detail: adapter_traits::CallDetail::of("a path"),
+    }
+}
+
+/// **The count the convergence tripwire reads is Fleet's own, and it is live.**
+///
+/// The regression this pins: `Progress` used to carry the harness's own
+/// `turns`, which arrives only on a terminating event. An invocation ends when
+/// a step ends, so at a step boundary the finishing step's count had not been
+/// published yet, the new step's baseline read zero, and the whole of the
+/// previous step's turns landed on its successor. A step was told to stop and
+/// report twenty-three seconds in, charged with the sixty-nine turns of the
+/// step before it.
+///
+/// A call is counted where it happens, so a baseline taken at a step boundary
+/// is true at the instant it is taken.
+#[tokio::test]
+async fn progress_counts_calls_as_they_arrive_and_never_the_reported_turn_count() {
+    let at = TempDir::new();
+    let harness = Arc::new(
+        FakeHarness::running("/bin/sh", &["-c", SAYS_THREE])
+            .reading("one", vec![a_call("Read"), a_call("Grep")])
+            .reading("two", vec![a_call("Edit")])
+            .reading(
+                "three",
+                vec![DroneEvent::Ended {
+                    turns: 69,
+                    cost_micros: 0,
+                    refusals: 0,
+                }],
+            ),
+    );
+    let started = start(harness.as_ref(), &config(&at))
+        .await
+        .expect("a shell starts and reads its first turn");
+    let watching = Watching::reading(started.transcript, harness, Vec::new());
+    for _ in 0..200 {
+        if watching.transcript_ended() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+
+    let progress = watching.progress();
+    assert_eq!(progress.calls, 3, "three calls arrived, one at a time");
+    assert_eq!(
+        progress.boundaries, 1,
+        "one invocation ended, which is what a forced report is read against"
+    );
+    assert_ne!(
+        progress.calls, 69,
+        "the harness's turn count is not the live count, and reading it as one \
+         is the defect this test exists for"
+    );
+}

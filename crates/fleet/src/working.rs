@@ -27,7 +27,7 @@ use std::sync::Arc;
 
 use std::time::Duration;
 
-use adapter_traits::{AgentHarness, DroneEvent, Worktree};
+use adapter_traits::{AgentHarness, DroneEvent, Footprint, Worktree};
 use core_model::{DeclaredPaths, DroneId, JobId, RepoPath, StepId, Timestamp};
 use tokio::process::ChildStderr;
 
@@ -67,14 +67,41 @@ pub(crate) struct Working {
     /// When the step in this slot started, as the injected clock read it. What
     /// the wall-clock tripwire is measured from.
     step_began: Timestamp,
-    /// The harness's cumulative turn count when the step started, so a step's
-    /// own count is a subtraction rather than a second counter to keep true.
-    turns_before: u32,
+    /// Fleet's own call count when the step started, so a step's own count is
+    /// a subtraction rather than a second counter to keep true.
+    ///
+    /// **True at the instant it is taken**, which the harness's `turns` was
+    /// not: see [`Progress::calls`](crate::Progress::calls).
+    calls_before: u32,
     /// How many times the Drone had come to rest by the moment it was told to
     /// report. The baseline the forced report is read against.
     rested_before: usize,
     /// Where this step stands in the thrashing chain.
     chain: Chain,
+    /// What the worktree held when this step began.
+    ///
+    /// **The baseline `diff_nonempty` is decided against.** `WorkProduct` reads
+    /// the branch — everything since the commit it was cut from — which is the
+    /// right question for a Job and the wrong one for a step: every step after
+    /// the first one that writes anything inherits its predecessor's files.
+    /// Armada shipped that, and a step that wrote no code advanced on the scope
+    /// note the step before it had committed.
+    ///
+    /// `None` where Fleet never saw the step start, which the gate reads as
+    /// nothing known to have moved.
+    ///
+    /// **A redirect does not clear it.** `resumed` restarts the chain and the
+    /// step's clock; the step itself is carrying on, and re-reading here would
+    /// discard the work it had already done as though some other step had done
+    /// it.
+    ///
+    /// It is not persisted. A Fleet that restarts mid-step reads a fresh
+    /// baseline when it puts a Drone back on the worktree, so the step is then
+    /// measured from where it was picked up rather than from where it began.
+    /// That fails closed — work already done stops counting toward the step
+    /// that did it — which is the direction an unknown baseline has to fail
+    /// in.
+    entered_with: Option<Footprint>,
 }
 
 impl Working {
@@ -105,9 +132,10 @@ impl Working {
             declared: None,
             drifted: Vec::new(),
             step_began: at,
-            turns_before: 0,
+            calls_before: 0,
             rested_before: 0,
             chain: Chain::Working,
+            entered_with: None,
         }
     }
 
@@ -134,8 +162,13 @@ impl Working {
         self.step = step;
         self.declared = None;
         self.drifted.clear();
+        // Cleared rather than replaced, because reading the worktree needs the
+        // seam and this type holds none. The caller that moved the step reads
+        // the new baseline and hands it back through `entering_with`; until it
+        // does, the step has no baseline and the gate fails closed.
+        self.entered_with = None;
         self.step_began = at;
-        self.turns_before = self.transcript.progress().turns;
+        self.calls_before = self.transcript.progress().calls;
         self.chain = Chain::Working;
     }
 
@@ -147,7 +180,7 @@ impl Working {
     /// Drone that thrashed once and was steered can thrash again.
     pub(crate) fn resumed(&mut self, at: Timestamp) {
         self.step_began = at;
-        self.turns_before = self.transcript.progress().turns;
+        self.calls_before = self.transcript.progress().calls;
         self.chain = Chain::Working;
     }
 
@@ -163,18 +196,28 @@ impl Working {
         self.declared.as_ref()
     }
 
+    /// Record what the worktree held as this step began.
+    pub(crate) fn entering_with(&mut self, footprint: Footprint) {
+        self.entered_with = Some(footprint);
+    }
+
+    /// The baseline this step's work is measured against.
+    pub(crate) fn entered_with(&self) -> Option<&Footprint> {
+        self.entered_with.as_ref()
+    }
+
     /// What has been seen outside the plan so far. The third tripwire, and the
     /// observation the mid-step look is given.
     pub(crate) fn off_plan(&self) -> &[RepoPath] {
         &self.drifted
     }
 
-    /// The Drone's own turns since this step started.
-    pub(crate) fn turns_this_step(&self) -> u32 {
+    /// The Drone's own tool calls since this step started.
+    pub(crate) fn calls_this_step(&self) -> u32 {
         self.transcript
             .progress()
-            .turns
-            .saturating_sub(self.turns_before)
+            .calls
+            .saturating_sub(self.calls_before)
     }
 
     /// Whether the Drone has come to rest since it was told to report.

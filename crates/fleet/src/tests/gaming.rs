@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use adapter_traits::{Environment, Model};
+use adapter_traits::{Environment, Footprint, Model};
 use config::ResolvedWorkflow;
 use core_model::{
     EscalationTrigger, EvidenceRef, EvidenceType, GamingPattern, JobStatus, StepEvidence, StepId,
@@ -102,6 +102,7 @@ async fn ruled(patch: &str, flag_if: &[&str], recorded: &[(StepId, StepEvidence)
         at,
         &diff_evidence(),
         None,
+        Some(&Footprint::nothing()),
         recorded,
         &work,
         budget(),
@@ -200,7 +201,17 @@ async fn a_step_that_asks_nothing_about_gaming_is_never_looked_at() {
     let worktree = worktree();
     let at = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
     let work = FakeWorkProduct::changed(&["jest.config.js"]).showing(GAMED);
-    let ruling = rule_on(at, &diff_evidence(), None, &[], &work, budget(), &judging()).await;
+    let ruling = rule_on(
+        at,
+        &diff_evidence(),
+        None,
+        Some(&Footprint::nothing()),
+        &[],
+        &work,
+        budget(),
+        &judging(),
+    )
+    .await;
     assert!(ruling.advanced(), "{ruling:?}");
 }
 
@@ -261,7 +272,17 @@ async fn a_flagged_step_keeps_what_the_judge_said_about_its_criteria() {
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
     };
-    let ruling = rule_on(at, &diff_evidence(), None, &[], &work, budget(), &judging).await;
+    let ruling = rule_on(
+        at,
+        &diff_evidence(),
+        None,
+        Some(&Footprint::nothing()),
+        &[],
+        &work,
+        budget(),
+        &judging,
+    )
+    .await;
 
     assert!(matches!(ruling, Ruling::Suspect { .. }), "{ruling:?}");
     assert_eq!(ruling.judged().len(), 1, "the criterion was answered");

@@ -47,15 +47,33 @@ struct Heard {
 
 /// How far a run has got, in the only two numbers anything asks for.
 ///
-/// **Neither is a verdict and neither can become one.** `turns` is what the
-/// harness itself reported and is compared against a step norm; `boundaries` is
-/// how many times the Drone came to rest, which is what says a directive was
-/// acted on rather than what it said in answer.
+/// **Neither is a verdict and neither can become one.** `calls` is Fleet's own
+/// count of what the Drone did and is compared against a step norm;
+/// `boundaries` is how many times the Drone came to rest, which is what says a
+/// directive was acted on rather than what it said in answer.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Progress {
-    /// The turn count the harness last reported. Cumulative over the session,
-    /// so a step's own count is this minus its reading when the step began.
-    pub turns: u32,
+    /// How many tool calls the Drone has made this session.
+    ///
+    /// **Cumulative and live.** A `Called` arrives as the Drone makes it, so a
+    /// step's own count is this minus its reading when the step began — and
+    /// that reading is true at the instant it is taken, which is the whole
+    /// reason the count is here rather than on the harness's own number.
+    ///
+    /// **Not the harness's `turns`.** That arrives only on `Ended`, and the
+    /// harness ends an invocation when a step ends, so at a step boundary the
+    /// finishing step's count has not been reported yet and the baseline reads
+    /// its predecessor's. It also resets per invocation rather than
+    /// accumulating, so subtracting a baseline from it underflows. Both halves
+    /// of that were load-bearing: a step was told to stop and report
+    /// twenty-three seconds in, charged with the 69 turns of the step before
+    /// it.
+    ///
+    /// Calls stand in for turns because they track them. Measured over the 32
+    /// invocations this repository has recorded, `calls / turns` runs 0.92–0.99
+    /// for any step past fifteen turns, which is the only range a norm of sixty
+    /// can care about.
+    pub calls: u32,
     /// How many terminating events have arrived.
     pub boundaries: usize,
 }
@@ -138,9 +156,14 @@ impl Watching {
             .events
             .iter()
             .fold(Progress::default(), |mut so_far, event| {
-                if let DroneEvent::Ended { turns, .. } = event {
-                    so_far.turns = *turns;
-                    so_far.boundaries += 1;
+                // A catch-all is right here and wrong in `transcript::row`.
+                // That one maps every kind onto the wire and must fail to
+                // compile when a kind is added; this one counts two of them,
+                // and a new kind is not a third thing to count.
+                match event {
+                    DroneEvent::Called { .. } => so_far.calls += 1,
+                    DroneEvent::Ended { .. } => so_far.boundaries += 1,
+                    _ => {}
                 }
                 so_far
             })

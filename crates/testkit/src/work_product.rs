@@ -14,7 +14,7 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Mutex;
 
-use adapter_traits::{Changed, Patch, WorkProduct, Worktree};
+use adapter_traits::{Changed, Footprint, Patch, WorkProduct, Worktree};
 
 /// Why the fake would not read the worktree.
 ///
@@ -43,6 +43,15 @@ pub struct FakeWorkProduct {
     patch: String,
     refuse: Mutex<Option<&'static str>>,
     asked: Mutex<Vec<String>>,
+    /// Whether the work moves between one footprint and the next.
+    ///
+    /// A footprint is read at a step's start and again at its gate, and what
+    /// `diff_nonempty` asks is whether the two differ. A fake therefore has to
+    /// model time: `true` is a Drone that is working, `false` is one that found
+    /// the files already there and added nothing — the defect that let a step
+    /// advance on its predecessor's scope note.
+    moving: bool,
+    readings: Mutex<usize>,
 }
 
 impl FakeWorkProduct {
@@ -63,6 +72,23 @@ impl FakeWorkProduct {
                 .collect(),
             refuse: Mutex::new(None),
             asked: Mutex::new(Vec::new()),
+            moving: true,
+            readings: Mutex::new(0),
+        }
+    }
+
+    /// A worktree holding these files **before this step began**, with the step
+    /// adding nothing to them.
+    ///
+    /// The shape of the defect: every step after the first one that writes
+    /// anything inherits its predecessor's files, and a `diff_nonempty` read
+    /// against the branch rather than against the step passed on them. A Job
+    /// advanced through `implement` having written no code, credited with the
+    /// scope note the step before it had committed.
+    pub fn inherited(paths: &[&str]) -> FakeWorkProduct {
+        FakeWorkProduct {
+            moving: false,
+            ..FakeWorkProduct::changed(paths)
         }
     }
 
@@ -80,6 +106,8 @@ impl FakeWorkProduct {
             patch: String::new(),
             refuse: Mutex::new(Some(standing_in_for)),
             asked: Mutex::new(Vec::new()),
+            moving: true,
+            readings: Mutex::new(0),
         }
     }
 
@@ -102,6 +130,31 @@ impl WorkProduct for FakeWorkProduct {
             return Err(FakeDiffRefused { standing_in_for });
         }
         Ok(Changed::of(self.changed.clone()))
+    }
+
+    fn footprint(&self, worktree: &Worktree) -> Result<Footprint, Self::Error> {
+        self.asked
+            .lock()
+            .expect("not poisoned")
+            .push(worktree.path().to_string());
+        if let Some(standing_in_for) = *self.refuse.lock().expect("not poisoned") {
+            return Err(FakeDiffRefused { standing_in_for });
+        }
+        // The reading number stands in for the bytes. A worktree nothing
+        // changed answers the same footprint every time however this counts,
+        // because there is nothing in it to carry the number.
+        let mut readings = self.readings.lock().expect("not poisoned");
+        *readings += 1;
+        let held = match self.moving {
+            true => format!("reading-{readings}"),
+            false => String::from("as the step found it"),
+        };
+        Ok(Footprint::of(
+            self.changed
+                .iter()
+                .map(|path| (path.clone(), held.clone()))
+                .collect(),
+        ))
     }
 
     fn patch(&self, worktree: &Worktree) -> Result<Patch, Self::Error> {

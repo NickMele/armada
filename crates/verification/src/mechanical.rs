@@ -91,9 +91,16 @@ pub enum NeverRan {
 pub enum Observed {
     /// A Manifest Check ran in the Job's worktree.
     Command(Exit),
-    /// The Job's work product, as Fleet derived it. **Fleet's own reading of
-    /// the worktree**, never a number the Drone reported.
-    Diff { changed_files: usize },
+    /// Whether **this step** moved the work, as Fleet derived it by reading the
+    /// worktree at the step's start and again at its gate. Fleet's own reading,
+    /// never a number the Drone reported.
+    ///
+    /// **One bit rather than a count, and the count was the defect.** It used
+    /// to carry how many files the *branch* held, which every step after the
+    /// first one that wrote anything inherited — so a step that produced
+    /// nothing passed `diff_nonempty` on its predecessor's files. A count
+    /// cannot express "not since this step began", so it is not a count.
+    Diff { moved: bool },
 }
 
 impl Observed {
@@ -120,7 +127,11 @@ pub enum CheckFailed {
     TimedOut { check: String, after: Duration },
     /// It never started.
     NeverRan { check: String, why: NeverRan },
-    /// The step declares `diff_nonempty` and the worktree holds no change.
+    /// The step declares `diff_nonempty` and nothing moved between the step's
+    /// start and its gate.
+    ///
+    /// **Not "the worktree is empty."** The worktree can be full of an earlier
+    /// step's work; what this says is that *this* step added nothing to it.
     DiffEmpty,
     /// The step's footprint disagreed with what the Drone declared.
     ///
@@ -188,7 +199,7 @@ impl CheckFailed {
                     format!("`{program}` could not be started ({kind:?})")
                 }
             },
-            CheckFailed::DiffEmpty => "the worktree holds no change".to_string(),
+            CheckFailed::DiffEmpty => "nothing moved while this step ran".to_string(),
             CheckFailed::OutOfScope(outside) => outside.to_string(),
         }
     }
@@ -334,8 +345,8 @@ fn verdict(
             },
             Observed::Command(exit),
         ) => Ok(command(name, *expect_exit_code, exit)),
-        (ResolvedCheck::DiffNonempty, Observed::Diff { changed_files }) => {
-            Ok((*changed_files == 0).then_some(CheckFailed::DiffEmpty))
+        (ResolvedCheck::DiffNonempty, Observed::Diff { moved }) => {
+            Ok((!*moved).then_some(CheckFailed::DiffEmpty))
         }
         (ResolvedCheck::ManifestCheck { .. }, other) => Err(ChecksOutstanding::WrongKind {
             at,

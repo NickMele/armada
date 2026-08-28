@@ -34,7 +34,7 @@ use std::error::Error;
 use std::path::Path;
 use std::time::Duration;
 
-use adapter_traits::WorkProduct;
+use adapter_traits::{Footprint, WorkProduct};
 use checks_runner::Output;
 use core_model::{
     Actor, DeclaredPaths, EscalationTrigger, IllegalTransition, Job, Judgment, ResolvedCheck,
@@ -292,6 +292,7 @@ pub async fn rule_on<W>(
     at: AtStep<'_>,
     evidence: &Submission,
     declared: Option<&DeclaredPaths>,
+    entered_with: Option<&Footprint>,
     recorded: &[(StepId, StepEvidence)],
     work: &W,
     budget: CheckBudget,
@@ -321,9 +322,19 @@ where
                     output: attempt.output,
                 });
             }
-            ResolvedCheck::DiffNonempty => match work.changed_files(at.worktree()) {
-                Ok(changed) => observed.push(Observed::Diff {
-                    changed_files: changed.len(),
+            // **Against the step's own start, never the branch's.** A step that
+            // wrote nothing used to pass this on the files an earlier step
+            // committed; `entered_with` is what the worktree held when this
+            // step began, and the difference is what this step did.
+            //
+            // A step with no baseline is one Fleet never saw start — a Drone
+            // adopted mid-flight, or a slot that lost its reading. The honest
+            // answer there is that nothing is known to have moved, which fails
+            // the check rather than passing it: an unread baseline must not
+            // advance a step, for `Changed::nothing`'s reason.
+            ResolvedCheck::DiffNonempty => match work.footprint(at.worktree()) {
+                Ok(now) => observed.push(Observed::Diff {
+                    moved: entered_with.is_some_and(|before| now.differs_from(before)),
                 }),
                 Err(cause) => {
                     return Ruling::CouldNotDecide {
