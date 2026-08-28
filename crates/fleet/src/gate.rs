@@ -334,11 +334,12 @@ impl Ruling {
 /// `recorded` is what every step of this Job has submitted so far. **The
 /// gaming check is its only reader**, through [`AtStep::baseline`], which will
 /// not answer with anything but a strictly earlier step's.
-/// `entered_with` is what the worktree held when this step began, and
-/// `diff_nonempty` is decided by comparing it against a second reading taken
-/// here. That is what catches the step that advanced having written nothing:
-/// the check used to read the whole branch and count an earlier step's file as
-/// this step's work.
+/// `entered_with` is what the worktree held when this step began — **after the
+/// boundary rebase that started it**, which is `crate::dispatch::Fleet::marked`'s
+/// to place and not this function's. `diff_nonempty` is decided by comparing it
+/// against a second reading taken here. That is what catches the step that
+/// advanced having written nothing: the check used to read the whole branch and
+/// count an earlier step's file as this step's work.
 pub async fn rule_on<W>(
     at: AtStep<'_>,
     evidence: &Submission,
@@ -376,6 +377,10 @@ where
             // wrote nothing used to pass this on the files an earlier step
             // committed; `entered_with` is what the worktree held when this
             // step began, and the difference is what this step did.
+            //
+            // "Began" includes the boundary rebase, which is why a step that
+            // resolves none of a conflict fails here: the markers are in the
+            // baseline, so nothing about them differs.
             //
             // A step with no baseline is one Fleet never saw start — a Drone
             // adopted mid-flight, or a slot that lost its reading. The honest
