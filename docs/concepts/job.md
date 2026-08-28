@@ -193,6 +193,13 @@ to unfreeze, so the Job stays `escalated` and returns to `running` on the
 Drone's next turn — evidence it took the advice, rather than the act of sending
 it.
 
+**And the wait is said out loud.** A Job holding a redirect nobody has answered
+and a Job nobody has spoken to are both `escalated`, so the one that is waiting
+is named on the Job's own detail rather than left for a person to infer from a
+screen that did not change. It is a fact about the last act and not a status:
+what it says is that Fleet wrote to the session, which is all Fleet knows until
+the Drone turns.
+
 **How a Job ends** — every edge into a terminal.
 
 ```mermaid

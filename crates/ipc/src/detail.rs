@@ -126,6 +126,15 @@ pub struct JobDetail {
     /// Present with no files is a worktree that was read and held no change.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub footprint: Option<JobFootprint>,
+    /// The redirect this Job's Drone has been sent and has not answered yet.
+    ///
+    /// **Absent is the ordinary case**, and on this field absent is the whole
+    /// of the second reading: where a step had stopped, the Job went back to
+    /// `running` on the send and there is nothing outstanding, so a redirect
+    /// that landed on such a Job leaves nothing here. Present is the `stalled`
+    /// shape — the Job is still `escalated`, and it is waiting on the Drone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub redirecting: Option<RedirectInFlight>,
 }
 
 impl JobDetail {
@@ -144,6 +153,7 @@ impl JobDetail {
         queued_reason: Option<core_model::QueuedReason>,
         steps: &[StepFacts],
         footprint: Option<JobFootprint>,
+        redirecting: Option<RedirectInFlight>,
     ) -> JobDetail {
         JobDetail {
             job: JobSummary::of(job, reason, queued_reason),
@@ -178,8 +188,42 @@ impl JobDetail {
             subject: job.subject().map(Subject::from),
             dependencies: job.dependencies().iter().map(Dependency::from).collect(),
             footprint,
+            redirecting,
         }
     }
+}
+
+/// A person's redirect that has gone into the session and has not been answered.
+///
+/// **A fact about the last act, not a status.** The Job is `escalated` and stays
+/// there: it returns to `running` when the Drone takes a turn, which is evidence
+/// it resumed rather than evidence somebody pressed a button. Minting a status
+/// for the wait would mint one for a Job that is in the status it is already in
+/// — which is why `StepState` gained nothing for a Judge call in flight either.
+///
+/// # It says Fleet wrote to the pipe, and no more than that
+///
+/// Whether the Drone read the instruction is answered by the next turn it takes
+/// and by nothing else — a `tool_progress` heartbeat deliberately does not
+/// count, so a Drone wedged inside the call it was already wedged in does not
+/// clear this. The field is [`sent_at`](RedirectInFlight::sent_at) rather than
+/// `received_at` for that reason, and there is no delivery flag to add later:
+/// there is nothing on this seam that could set one honestly.
+///
+/// # Nothing ages it
+///
+/// The instant crosses once and every surface subtracts for itself, as
+/// [`JudgeInFlight::since`] does. A wait that lasts an hour costs this seam one
+/// message, and it ends where the Job's own move to `running` already says so.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RedirectInFlight {
+    /// When the instruction went into the Drone's session, by Fleet's clock.
+    ///
+    /// **The one field.** Who sent it is on the Job's log, what was said is the
+    /// person's own words and is deliberately not re-served, and which step it
+    /// was about is [`JobSummary::current_step_id`](crate::JobSummary) — a Job
+    /// that is `escalated` over a live Drone advances no step while it waits.
+    pub sent_at: Instant,
 }
 
 /// One `job_steps` row: which step, where in the order, and where it got to.

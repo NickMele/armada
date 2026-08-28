@@ -111,8 +111,9 @@ pub(crate) struct Working {
     /// arrive between the write and the next statement, and a baseline taken
     /// after it would have the answer already inside it and read as a Drone
     /// that never turned. That is [`rested`](Working::rested)'s hazard, and it
-    /// costs the same care.
-    answering: Option<usize>,
+    /// costs the same care. The instant is kept beside the baseline because the
+    /// wait is a fact a person is owed — `Fleet::redirect_awaited` serves it.
+    answering: Option<Awaiting>,
     /// How many liveness pokes this step has spent.
     ///
     /// **The step's budget, not the episode's.** A Drone that answers a poke
@@ -164,6 +165,18 @@ pub(crate) struct Working {
     /// the pokes — and unlike the pokes it is not refunded by anything the
     /// Drone does, because what it bounds is money rather than patience.
     dry_runs: u32,
+}
+
+/// A redirect that has gone into the session and has not been answered: what
+/// [`Progress::turned`](crate::Progress::turned) read the moment before it went
+/// down the pipe, and when it did.
+///
+/// **One value because they are one act.** Held apart, a redirect could be
+/// outstanding with no instant to serve, which is the reading
+/// `JobDetail.redirecting` must not have.
+struct Awaiting {
+    turned: usize,
+    sent_at: Timestamp,
 }
 
 impl Working {
@@ -511,11 +524,28 @@ impl Working {
     /// A person's redirect has gone into the session and the Job is held at
     /// `escalated` until the Drone answers it.
     ///
-    /// The baseline is handed in rather than read here, because the write has
-    /// already happened by the time anything can call this — see
-    /// [`answering`](Working::answering).
-    pub(crate) fn awaiting_answer(&mut self, turned: usize) {
-        self.answering = Some(turned);
+    /// Both are handed in rather than read here, because the write has already
+    /// happened by the time anything can call this — see
+    /// [`answering`](Working::answering). The instant is when the instruction
+    /// went into the session and not when the Drone read it: nothing on this
+    /// side of the pipe can say the second.
+    ///
+    /// **A second redirect replaces the first.** Nothing bounds how often a Job
+    /// may be redirected, and a baseline kept from the earlier one would let a
+    /// turn taken before the new instruction answer it.
+    pub(crate) fn awaiting_answer(&mut self, turned: usize, at: Timestamp) {
+        self.answering = Some(Awaiting {
+            turned,
+            sent_at: at,
+        });
+    }
+
+    /// When the outstanding redirect went into the session, where one is.
+    /// **`None` is a Job with nothing outstanding** — the same reading
+    /// [`turned_since_redirect`](Working::turned_since_redirect) takes, asked by
+    /// a reader rather than by the vigil.
+    pub(crate) fn awaiting_since(&self) -> Option<&Timestamp> {
+        self.answering.as_ref().map(|awaiting| &awaiting.sent_at)
     }
 
     /// Whether the Drone has taken a turn since a redirect was put to it.
@@ -530,7 +560,8 @@ impl Working {
     /// wedged inside the same call it was wedged in when the vigil caught it.
     pub(crate) fn turned_since_redirect(&self) -> bool {
         self.answering
-            .is_some_and(|before| self.transcript.progress().turned > before)
+            .as_ref()
+            .is_some_and(|awaiting| self.transcript.progress().turned > awaiting.turned)
     }
 
     /// The outstanding redirect has been answered, and nothing is waiting on

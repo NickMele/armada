@@ -1,38 +1,28 @@
 //! `api::Daemon`, implemented over a real Fleet.
 //!
-//! # The dependency points this way and never back
+//! **The dependency points this way and never back.** The trait is stated in
+//! `api`, where the transport is, and implemented here, where the Jobs are.
+//! `cargo tree -p api` names no `fleet`: the daemon core is drivable in a test
+//! with no socket, no port and no process, and `api`'s own tests were written
+//! against a fake before this existed.
 //!
-//! The trait is stated in `api`, where the transport is, and implemented here,
-//! where the Jobs are. `cargo tree -p api` names no `fleet`, which is what
-//! keeps the daemon core drivable in a test with no socket, no port and no
-//! process — and what let `api`'s own tests be written against a fake before
-//! this existed.
+//! **This is the redaction, and it is a visible step.** Every signature below
+//! speaks `ipc` DTOs, `JobSummary::of` is called here by hand, and a field added
+//! to `core_model::Job` reaches the wire only when somebody writes the line that
+//! puts it there — `api` never sees a domain type.
 //!
-//! # This is the redaction, and it is a visible step
+//! **Where the refusals come from.** [`Refusal`] has four variants because a
+//! caller has four things to do about them, and which is chosen is decided by
+//! the *typed* leaf error rather than by a message. `Adrift::IllegalMove` is a
+//! 409, the machine having refused; a store fault is a 500, not the caller's
+//! doing; a Job that is not there is a 404; a proposal naming a workflow, a
+//! Manifest or a model that cannot work is a 422, well-formed and unworkable.
 //!
-//! Every signature below speaks `ipc` DTOs. `JobSummary::of` is called here,
-//! by hand, and a field added to `core_model::Job` reaches the wire only when
-//! somebody writes the line that puts it there. `api` never sees a domain type.
-//!
-//! # Where the refusals come from
-//!
-//! [`Refusal`] has four variants because a caller has four different things to
-//! do about them, and every mapping below is decided by which *typed* leaf
-//! error came back rather than by reading a message. `Adrift::IllegalMove` is a
-//! 409 because the machine refused; a store fault is a 500 because it was not
-//! the caller's doing; a Job that is not there is a 404; and a proposal naming
-//! a workflow, a Manifest or a model that cannot work is a 422, because the
-//! request is well-formed and the values in it are not. Nothing here parses
-//! prose to decide.
-//!
-//! # The reason costs a second read, and is not derived
-//!
-//! `JobSummary` carries the qualifying reason its last transition stored, and
-//! the `jobs` row does not have it — `job_events` does. So each summary below
-//! reads the Job's log for it. That is N reads for N Jobs and it is the honest
-//! shape at M1: the alternative is a status-to-reason mapping in this file,
-//! which would be a second vocabulary that agrees with the log only until
-//! something changes.
+//! **The reason costs a second read, and is not derived.** `JobSummary` carries
+//! the reason its last transition stored, which is in `job_events` and not on
+//! the `jobs` row, so each summary below reads the Job's log for it. N reads for
+//! N Jobs is the honest shape at M1: a status-to-reason mapping here would be a
+//! second vocabulary that agrees with the log only until something changes.
 
 use std::collections::BTreeMap;
 
@@ -138,6 +128,9 @@ where
     /// Job that has stopped is what keeps an open of a running Job costing
     /// exactly what it cost before, and `footprint` absent on one of them is
     /// the truth rather than an omission.
+    ///
+    /// **The wait a redirect left is on this read and on no other**, because it
+    /// is held in the slot rather than written down — `Fleet::redirect_awaited`.
     async fn get_job(&self, job_id: JobId) -> Result<JobDetail, Refusal> {
         let job = self
             .load(&job_id.to_domain())
@@ -176,6 +169,7 @@ where
             queued,
             &self.step_facts(&job, ran, judged, flagged),
             recorded.as_ref().map(kept),
+            self.redirect_awaited(job.id()).await,
         ))
     }
 

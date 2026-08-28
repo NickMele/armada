@@ -39,9 +39,16 @@ export type ConfirmableAct = Exclude<JobAct, "redirect" | "override_verdict">;
  * ends a process and leaves the Job open with its worktree held; killing the
  * Job ends the Job at `killed`, terminal; redispatch does the second and mints
  * a replacement; approving lets a Job at the gate run. Redirect and restart are
- * the two acts that resume a stopped step rather than ending or replacing it —
- * `crates/api/src/routes.rs` decides which applies by whether the Job still
+ * the two acts that put a person back on a Job rather than ending or replacing
+ * it — `crates/api/src/routes.rs` decides which applies by whether the Job still
  * holds a Drone, and the two are never offered together for that reason.
+ *
+ * **Redirect no longer asks whether a step stopped.** `#181` split the two acts'
+ * one predicate: a redirect wants a live session, a restart wants a stopped step
+ * and no Drone, and the case that needed the split is `stalled` — a Job-level
+ * escalation over a Drone that is still there. Where no step stopped the Job
+ * stays `escalated` until the Drone turns, and `whole.redirecting` is what says
+ * a redirect is out; `recovery.ts` carries the sentence.
  *
  * | Act | Drawn on | Confirms |
  * |---|---|---|
@@ -49,7 +56,7 @@ export type ConfirmableAct = Exclude<JobAct, "redirect" | "override_verdict">;
  * | `redispatch` | `escalated`, `completed_failed`, `killed` | yes |
  * | `kill_drone` | a Job holding an `assigned_drone` | yes |
  * | `kill_job` | every non-terminal status | yes |
- * | `redirect` | escalated, a step stopped, holding an `assigned_drone` | its own dialog |
+ * | `redirect` | escalated, holding an `assigned_drone` | its own dialog |
  * | `restart_step` | escalated, a step stopped, no `assigned_drone` | yes |
  * | `override_verdict` | escalated, the stopped step refused by the judge | its own dialog |
  *
@@ -277,6 +284,15 @@ function RedirectControl({
         <p>
           The instruction is sent to the drone as a new turn. The job stays at the same step, with
           the same session — nothing is spawned and nothing already done is thrown away.
+        </p>
+        {/* Said before the press, because the wait is the surprising half: a job
+            that escalated without stopping a step does not move on the send, and
+            a screen that changed nothing would read as a redirect that never
+            arrived. What it did is on the job afterwards — `recovery.ts`. */}
+        <p>
+          Where a step stopped, the job runs again straight away. Where it escalated without
+          stopping one, it stays escalated until the drone takes a turn — sending is not evidence
+          that it read anything.
         </p>
         {/* No `autoFocus`: the dialog's own contract puts initial focus on
             Cancel, and a second claim on it here would only lose to it. */}

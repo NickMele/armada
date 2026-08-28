@@ -214,6 +214,9 @@ impl Daemon for FakeDaemon {
             // Absent, like every other option here: this daemon reads no store
             // and a footprint is a store's answer.
             footprint: None,
+            // Absent for the same reason, one layer further in: an outstanding
+            // redirect is read from a working slot, and this daemon holds none.
+            redirecting: None,
         })
     }
 
