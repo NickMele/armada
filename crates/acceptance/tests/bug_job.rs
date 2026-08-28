@@ -53,7 +53,7 @@ mod bench;
 use adapter_traits::{CallDetail, DroneEvent, WorktreeSpec};
 use core_model::{
     Actor, EscalationTrigger, IllegalStepTransition, IllegalTransition, JobStatus, StepId,
-    StepState, StepTarget, Target, TransitionReason,
+    StepState, StepTarget, StepVerdict, Target, TransitionReason,
 };
 use fleet::{aftermath, Aftermath, Ending, Left, Ruling};
 use testkit::{FakeJudge, FakeWorkProduct};
@@ -269,13 +269,31 @@ async fn a_failed_check_ends_the_job_and_the_branch_survives() {
     bench.settled(&mut run, &bench.step(1), &ruling);
 
     assert_eq!(run.job.status(), JobStatus::CompletedFailed);
+    // **Stopped, not left running.** #179: the Job went `completed_failed`
+    // while its step still read `running` and carried no verdict, so the only
+    // record that the step had failed was the Check run. The step is stopped
+    // before the Job ends, `last_verdict` says `failed(gate_failure)`, and
+    // `running -> completed_failed` is guarded so it cannot be otherwise.
     assert_eq!(
         states(&run.job),
         [
             ("root_cause", StepState::Advanced),
-            ("fix", StepState::Running)
+            ("fix", StepState::Stopped)
         ],
-        "the step that failed never advanced"
+        "the step that failed is stopped, and did not advance"
+    );
+    let verdict = run
+        .job
+        .step(&bench.step(1))
+        .and_then(|row| row.last_verdict())
+        .expect("the step that failed carries a verdict");
+    let StepVerdict::Failed(why) = verdict else {
+        panic!("the field that says a step failed says {verdict:?}");
+    };
+    assert_eq!(
+        why.trigger(),
+        EscalationTrigger::GateFailure,
+        "the same tier failed as on a hand-back; what differs is the budget left"
     );
     assert_eq!(
         bench.vcs.created(),
@@ -350,9 +368,9 @@ async fn a_judge_stops_a_step_whose_checks_all_passed() {
         states(&run.job),
         [
             ("root_cause", StepState::Advanced),
-            ("fix", StepState::Running)
+            ("fix", StepState::Stopped)
         ],
-        "the refused step never advanced"
+        "the refused step is stopped, and did not advance"
     );
     // The citation is the whole value of the verdict and is what a terminal
     // status had nowhere to put. It is on the ruling, keyed by the criterion,
@@ -444,9 +462,9 @@ async fn evidence_that_narrows_its_own_check_is_caught_rather_than_advanced() {
         states(&run.job),
         [
             ("root_cause", StepState::Advanced),
-            ("fix", StepState::Running)
+            ("fix", StepState::Stopped)
         ],
-        "the flagged step never advanced"
+        "the flagged step is stopped, and did not advance"
     );
 }
 
@@ -497,14 +515,15 @@ async fn a_judge_call_that_fails_neither_advances_the_step_nor_fails_it() {
         )),
         "gate_failure would say the Judge refused work it never saw"
     );
-    // The bench applies the Job move a ruling implies and no step move but an
-    // advance, which is why `fix` still reads `running` here. Fleet stops it
-    // before the Job escalates — `fleet::dispatch::act_on`, asserted there.
+    // **Stopped, and it is not a verdict on the work.** Only a stopped step is
+    // one `resume` can put a person back on: it finds the step to redirect or
+    // restart by looking for the stopped one, so a Job escalated with its step
+    // still `running` is one neither act could reach.
     assert_eq!(
         states(&run.job),
         [
             ("root_cause", StepState::Advanced),
-            ("fix", StepState::Running)
+            ("fix", StepState::Stopped)
         ],
         "the step did not advance on a verdict nobody gave"
     );

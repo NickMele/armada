@@ -29,7 +29,7 @@ use std::collections::BTreeMap;
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{
     Actor, Branch, DependencyDirection, EscalationTrigger, Job, JobId, JobStatus, StepId,
-    StepTarget, Target, Transitioned,
+    StepLevelTrigger, StepTarget, Target, Transitioned,
 };
 use store::Moved;
 use verification::OutcomeTurn;
@@ -355,11 +355,14 @@ where
                 let job = self.load(job_id).await?;
                 // **Before the Job moves, and it cannot be after.** The inner
                 // machine is frozen beneath every status but `running` and
-                // `awaiting_review`, so a step stopped after the escalation
-                // would be refused and `last_verdict` would stay unwritten —
-                // which is exactly what left an escalated Job's step reading
-                // `running` with nothing saying why.
-                let job = match ruling.stops_the_step() {
+                // `awaiting_review`, so a step stopped after the Job left
+                // `running` would be refused and `last_verdict` would stay
+                // unwritten — which is exactly what left an escalated Job's
+                // step reading `running` with nothing saying why, and then a
+                // failed one's. `running -> completed_failed` is guarded on
+                // `no_step_running`, so this order is now the machine's rather
+                // than only this file's.
+                let job = match stopping(ruling) {
                     Some(why) => self.move_step(&job, step, StepTarget::Stopped(why)).await?,
                     None => job,
                 };
@@ -650,6 +653,32 @@ where
             ipc::JobSummary::from(&moved.job),
         )));
         Ok(moved.job)
+    }
+}
+
+/// Why the step stops, on each of the four rulings that end the work on it.
+///
+/// **[`Ruling::stops_the_step`] answers three, and the fourth is spelled here
+/// rather than folded into it.** `gate::apply` reads that method as the trigger
+/// to escalate on — "the rulings that escalate are exactly the rulings that
+/// stop the step" is the sentence it is written under — and a gate failure
+/// escalates nothing, because the Job is over. Folding the two together would
+/// have the one ruling that ends a Job derive an escalation for it.
+///
+/// A failure spells `gate_failure`, the trigger a hand-back already writes: the
+/// same tier failed, and what differs is whether there was budget left to
+/// answer it. Without this, #179 — the Job reached `completed_failed` while its
+/// `tests` step stayed `running` with a null verdict, so the only record that
+/// the step had failed was the Check run itself, and `resume::resumable` finds
+/// a step to act on by looking for the stopped one.
+/// `pub` for one caller outside the loop: `acceptance`'s bench restates this
+/// ordering because a hermetic test cannot reach `act_on`, which speaks to a
+/// live session. It restates the order and **not** the decision — a second
+/// spelling of `gate_failure` over there is how the two would come to disagree.
+pub fn stopping(ruling: &Ruling) -> Option<StepLevelTrigger> {
+    match ruling {
+        Ruling::Failed { .. } => StepLevelTrigger::of(EscalationTrigger::GateFailure),
+        other => other.stops_the_step(),
     }
 }
 

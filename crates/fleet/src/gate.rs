@@ -382,14 +382,18 @@ impl Ruling {
     /// gate that could not decide and left the step `running` would escalate a
     /// Job neither act could reach.
     ///
-    /// [`Ruling::Failed`] answers `None`: `job-statuses.toml` gives `stopped`
-    /// to `escalated` alone, and `completed_failed`'s step machine is "frozen
-    /// at the failed step" with no state named. Stopping a step under a
-    /// terminal status would be this file deciding that — and now that a budget
-    /// exists, `stopped`'s own registry meaning of *"retries spent"* is finally
-    /// true of the step this ruling leaves behind. Where a spent budget belongs
-    /// is `[retries-exhausted-destination]`, which is a person's question and
-    /// not answered here.
+    /// [`Ruling::Failed`] answers `None` **and its step is stopped anyway**, by
+    /// [`dispatch::stopping`](crate::dispatch::stopping). This method is what
+    /// [`apply`] derives an escalation from, and a failure escalates nothing
+    /// because the Job is over — so the fourth stop is spelled there rather
+    /// than folded in here, where it would have the one ruling that ends a Job
+    /// derive an escalation for it. It stopped no step at all until #179, on
+    /// the reading that `completed_failed`'s step machine is "frozen at the
+    /// failed step"; what that left was a step reading `running` beneath a
+    /// terminal Job with `last_verdict` null. `stopped` means *"retries
+    /// spent"*, which is exactly true of the step this ruling leaves behind.
+    /// Where a spent budget belongs is `[retries-exhausted-destination]`, which
+    /// is a person's question and not answered here.
     ///
     /// [`Ruling::HandedBack`] answers `None` because it stops nothing: the step
     /// is about to be worked again. What it moves is

@@ -161,6 +161,94 @@ async fn a_step_with_no_budget_fails_on_its_first_failed_check() {
     );
 }
 
+/// **A gate failure stops the step it failed, and says why on the row.** #179.
+///
+/// The Job reached `completed_failed` with its step still reading `running` and
+/// `last_verdict` null, so the only record that the step had failed was the
+/// Check run — nothing on the step, which is the field every derived reading
+/// keys on. #156 made `gate_undecided` stop its step; the failure path was not
+/// changed with it, and this is the same fix on the fourth ruling.
+///
+/// The order is the one thing that matters: a step is frozen beneath a terminal
+/// status, so a stop attempted after the Job ended would be refused and the
+/// verdict never written. `running -> completed_failed` is guarded on
+/// `no_step_running`, so a caller that got the order wrong is refused rather
+/// than silently leaving this behind.
+#[tokio::test]
+async fn a_failed_check_stops_the_step_and_writes_its_verdict() {
+    let home = TempDir::new();
+    let fleet = a_fleet_holding(
+        &home,
+        FakeWorkProduct::changed(&["src/routes.rs"]),
+        gated_on(UNHAPPY, 0),
+        1,
+    );
+
+    let job = fleet.propose(a_proposal("register the route")).await.unwrap();
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.unwrap();
+    fleet.submit_evidence(diff_evidence()).await.unwrap();
+
+    let ruled = fleet.turn().await.unwrap().ruled.expect("the gate ruled");
+    assert!(matches!(ruled, Ruling::Failed { .. }), "{ruled:?}");
+
+    let ended = fleet.load(job.id()).await.unwrap();
+    assert_eq!(ended.status(), JobStatus::CompletedFailed);
+    let step = ended
+        .step(&StepId::new("implement"))
+        .expect("the row is there");
+    assert_eq!(
+        step.state(),
+        StepState::Stopped,
+        "a step left running beneath a terminal Job is one nothing can find a way out of"
+    );
+    assert_eq!(
+        step.last_verdict(),
+        Some(StepVerdict::Failed(
+            core_model::StepLevelTrigger::of(EscalationTrigger::GateFailure)
+                .expect("a step-level trigger")
+        )),
+        "the same trigger a hand-back writes: the same tier failed, and what \
+         differs is whether there was budget left to answer it"
+    );
+}
+
+/// The same, after the budget is spent rather than absent. **Both paths into
+/// `Ruling::Failed` leave the same record**, which is what #179 could not be
+/// closed without: a step stopped on one route and left running on the other
+/// would render as two different failures.
+#[tokio::test]
+async fn a_spent_budget_stops_the_step_the_same_way() {
+    let home = TempDir::new();
+    let fleet = a_fleet_holding(
+        &home,
+        FakeWorkProduct::changed(&["src/routes.rs"]),
+        gated_on(UNHAPPY, 1),
+        1,
+    );
+
+    let job = fleet.propose(a_proposal("register the route")).await.unwrap();
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.unwrap();
+
+    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.turn().await.unwrap();
+    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    let second = fleet.turn().await.unwrap().ruled.expect("a second ruling");
+    assert!(matches!(second, Ruling::Failed { .. }), "{second:?}");
+
+    let ended = fleet.load(job.id()).await.unwrap();
+    assert_eq!(ended.status(), JobStatus::CompletedFailed);
+    let step = ended
+        .step(&StepId::new("implement"))
+        .expect("the row is there");
+    assert_eq!(step.state(), StepState::Stopped);
+    assert!(
+        matches!(step.last_verdict(), Some(StepVerdict::Failed(_))),
+        "the record says the step failed, in the field that says so"
+    );
+}
+
 /// **The turn carries what the Check printed**, which is the difference between
 /// a Drone that can fix the failure and one that has to reproduce it first.
 #[tokio::test]

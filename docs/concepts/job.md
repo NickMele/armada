@@ -154,8 +154,11 @@ one a judgement about the work, one a claim about the evidence, and
 refusal afterwards. `gate_undecided` stays refused because the gate never
 weighed the work at all, so there is no decision to disagree with; whether that
 wants an act of its own is open. A failed mechanical Check ends the Job at
-`completed_failed` — terminal, stopping no step, and out of reach. `build`
-failing is not a matter of opinion.
+`completed_failed` — terminal and out of reach, and the step it failed is
+stopped carrying `failed(gate_failure)` before the Job gets there, which is what
+`running -> completed_failed`'s guard holds it to. `build` failing is not a
+matter of opinion, and a step left `running` beneath a terminal Job was one
+nothing could read a verdict off (#179).
 
 **An escalated Job keeps its Drone.** `job-statuses.toml` says so —
 `drone_process = "Alive, idle. Gone only on interrupted"` — and the liveness
