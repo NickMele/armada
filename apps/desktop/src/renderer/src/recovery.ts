@@ -34,6 +34,11 @@
 // Job carries on, never whether the act applies. What decides that is the
 // trigger on the stopped step, and it is read off `last_verdict` because that is
 // where Fleet reads it.
+//
+// **Two triggers reach it and the words change with which.** A Judge's refusal
+// overruled and a gaming flag overruled are different things a person is doing,
+// so the scope and the sentences are one record — `OVERRULING` — and admitting
+// a trigger costs the words to describe it.
 
 import { JOB_STATUS } from "../../shared/generated/vocabulary";
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "../../shared/protocol";
@@ -83,7 +88,9 @@ export type Recourse = {
 };
 
 /**
- * The verdict a person may overrule, and what overruling it is about to do.
+ * The decision a person may overrule, and what overruling it is about to do.
+ * **A decision and not a verdict**: a Judge's refusal is one, and a gaming
+ * check calling the evidence suspect is the other, which is never a verdict.
  *
  * `commits` is the difference between the two outcomes `overruling.rs` produces
  * and is not a nicety: overruling a middle step advances it and the Job carries
@@ -92,11 +99,24 @@ export type Recourse = {
  * both.
  */
 export type Overrule = {
-  /** The step the Judge refused. What the confirmation names. */
+  /** The step that stopped. What the confirmation names. */
   step: StepDetail;
+  /**
+   * Which machine's decision is being overruled. **Not a detail of the act but
+   * the subject of it** — a refusal overruled and a flag overruled are two
+   * different things a person is doing, and every word on the screen and in the
+   * confirmation is chosen off this.
+   */
+  trigger: Overruled;
   /** Whether that step is the workflow's last, so the Job lands rather than runs on. */
   commits: boolean;
 };
+
+/**
+ * The triggers a person may overrule. `crates/fleet/src/overruling.rs` is the
+ * authority and admits exactly these two.
+ */
+export type Overruled = "gate_failure" | "evidence_suspect";
 
 /**
  * What is left to do with a Job that stopped.
@@ -132,14 +152,76 @@ export function recourseOf(job: JobSummary, whole: JobWhole | null): Recourse {
 }
 
 /**
- * The one trigger a person may overrule. `crates/fleet/src/overruling.rs` holds
- * it as a constant for the reason it is one here: the whole scope of the act is
- * this value, and a list is where a second entry gets added without anybody
- * arguing for it. `gate_undecided` means the gate never weighed the work and
- * `evidence_suspect` is a claim about the evidence rather than an opinion about
- * it, so neither is a verdict to disagree with.
+ * The words one trigger's override is offered in. **Five, because five places
+ * say it** — the button, the confirmation's question, its reason field, the
+ * stopped screen's sentence and the confirmation's first paragraph — and they
+ * are held together so that no two of them can end up describing different
+ * acts.
  */
-const OVERRULABLE = "gate_failure";
+export type Overruling = {
+  /** The button, and the confirmation's confirm control. **Never "approve"** —
+   * approving means the work was right, and this means a machine was wrong. */
+  label: string;
+  /** The confirmation's question. Sentence case, and it names what happens. */
+  asks: string;
+  /** The label over the required reason. It asks what is wrong with the
+   * decision, never what is right about the work. */
+  field: string;
+  /** What the act is, on the stopped screen, before what it does. */
+  screen: string;
+  /** The same, in the confirmation, with the step named — a person arrives here
+   * from a rail with several rows on it. */
+  dialog: (step: string) => string;
+};
+
+/**
+ * What one trigger's override is called and what it says, for the two triggers
+ * an override reaches.
+ *
+ * **The scope and the words are one record, so a trigger cannot be admitted
+ * without saying what overruling it means.** `overrulable()` in
+ * `crates/fleet/src/overruling.rs` is an exhaustive `match` rather than a list
+ * for the matching reason: there, a new trigger does not compile until somebody
+ * writes its arm; here, it does not compile until somebody writes its sentence.
+ * A `Set` beside one sentence is what this replaced, and it is how
+ * `evidence_suspect` would have arrived wearing the Judge's words.
+ *
+ * **Two, since Fleet admitted the second.** `gate_failure` is the Judge
+ * refusing a criterion — a judgement about the work. `evidence_suspect` is the
+ * gaming check reading a diff and inferring intent — a claim about the
+ * evidence, and the owner's rule is that anything a machine decides a person
+ * can overrule. `gate_undecided` is absent and that is not an omission: the
+ * gate never weighed the work, so there is no ruling to disagree with.
+ */
+export const OVERRULING: Record<Overruled, Overruling> = {
+  gate_failure: {
+    label: "Overrule the verdict",
+    asks: "Overrule the judge on this step?",
+    field: "Why the judge is wrong",
+    screen:
+      "Overrule the verdict. The judge refused this step and a person may disagree: the step " +
+      "advances still carrying the refusal, so what the judge said stays beside the fact that " +
+      "it did not stand.",
+    dialog: (step) =>
+      `The judge refused ${step}. Overruling says the judge was wrong — not that the work was ` +
+      "approved. The step advances still recorded as failed, so what the judge said stays " +
+      "beside the fact that it did not stand.",
+  },
+  evidence_suspect: {
+    label: "Overrule the flag",
+    asks: "Overrule the gaming flag on this step?",
+    field: "Why the flag is wrong",
+    screen:
+      "Overrule the flag. The gaming check called this step's evidence suspect and a person may " +
+      "disagree: the step advances still carrying the flag, so what the check found stays " +
+      "beside the fact that it did not stand.",
+    dialog: (step) =>
+      `The gaming check flagged the evidence for ${step}. It did not refuse the work — it says ` +
+      "the evidence for it is not to be trusted. Overruling says a person has read that " +
+      "evidence and takes responsibility for it; the step advances still recorded as failed " +
+      "against the flag.",
+  },
+};
 
 /** The step state Fleet reads the overrulable verdict off. */
 const STOPPED = "stopped";
@@ -163,29 +245,46 @@ function overruleOf(whole: JobWhole | null): Overrule | undefined {
   if (whole === null) return undefined;
   const steps = ordered(whole);
   const stopped = steps.find((step) => step.state === STOPPED);
-  if (stopped === undefined || stopped.last_verdict?.trigger !== OVERRULABLE) return undefined;
-  return { step: stopped, commits: steps[steps.length - 1]?.step_id === stopped.step_id };
+  if (stopped === undefined) return undefined;
+  const trigger = stopped.last_verdict?.trigger;
+  if (!overrulable(trigger)) return undefined;
+  return {
+    step: stopped,
+    trigger,
+    commits: steps[steps.length - 1]?.step_id === stopped.step_id,
+  };
 }
 
 /**
- * What overruling this verdict does, in the two shapes it has.
+ * Whether the trigger on the wire is one of the two. **The record above is what
+ * admits it**, rather than a second list written here — the scope and the words
+ * are the same fact, and asking the words whether they exist is how they cannot
+ * disagree.
+ */
+function overrulable(trigger: string | undefined): trigger is Overruled {
+  return trigger !== undefined && Object.hasOwn(OVERRULING, trigger);
+}
+
+/**
+ * What overruling this decision does, in the shapes it has — **two triggers by
+ * two outcomes, and the sentence carries both.**
  *
- * **Both halves are said, and the second is the one that changes.** Overruling
- * a middle step continues the Job and overruling the last one commits and
- * delivers, so a sentence that stopped at "the job carries on" would be wrong
- * on exactly the case where being wrong costs the most.
+ * What is being overruled is the trigger's, because a refusal and a flag are
+ * different acts to take. What happens next is `onwards`, and it changes too:
+ * overruling a middle step continues the Job and overruling the last one
+ * commits and delivers, so a sentence that stopped at "the job carries on"
+ * would be wrong on exactly the case where being wrong costs the most. The cost
+ * is the same either way and is said once, here.
  */
 function overruling(overrule: Overrule): string {
   return (
-    "Overrule the verdict. The judge refused this step and a person may disagree: the step " +
-    "advances still carrying the refusal, so what the judge said stays beside the fact that it " +
-    `did not stand. ${onwards(overrule)} The reason given is written to the job's log, which is ` +
-    "append-only."
+    `${OVERRULING[overrule.trigger].screen} ${onwards(overrule)} The reason given is written to ` +
+    "the job's log, which is append-only."
   );
 }
 
 /**
- * What the Job does after the refused step advances. **The one fact the two
+ * What the Job does after the stopped step advances. **The one fact the two
  * outcomes differ by**, written once: the screen's sentence carries it and the
  * confirmation carries it, and a person must not read one of them and press the
  * other.

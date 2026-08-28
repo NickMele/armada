@@ -194,6 +194,16 @@ export type StepDetail = {
    * wrong with the work: the trigger says the gate stopped.
    */
   judged: Judged[];
+  /**
+   * Every gaming pattern this step's evidence tripped, with what each cites.
+   *
+   * **This is what `evidence_suspect` does not say** — the trigger says the
+   * evidence is not to be trusted, and only these say which shape of gaming
+   * was found and where. The same relation `judged` has to a `gate_failure`,
+   * and the reason a person deciding whether to overrule a flag can be shown
+   * what the flag was about. Empty on every step nothing was flagged on.
+   */
+  flagged: Flagged[];
   /** Entered, then moved on entering `running`. To `updated_at` is how long. */
   entered_at: string;
   updated_at: string;
@@ -277,6 +287,19 @@ export type Judged = {
   produced?: string;
   /** What that difference does to whoever consumes it. The triage line. */
   consequence?: string;
+};
+
+/**
+ * One gaming pattern found, and what it was found in. **Never a verdict** — a
+ * flag says the evidence is suspect, not that the step failed. `pattern` is a
+ * string because no registry declares the set: it comes from what a workflow's
+ * `flag_if` names.
+ */
+export type Flagged = {
+  /** The pattern, spelled as `flag_if` spells it. */
+  pattern: string;
+  /** The file, line or assertion the flag is about. An uncited flag is unactionable. */
+  cited: string;
 };
 
 /** The last ruling against a step. `failed` carries its trigger; the rest do not. */
