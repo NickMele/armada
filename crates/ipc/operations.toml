@@ -92,11 +92,15 @@ The one call that must work when Fleet is down. The probe count is not stated he
 kind = "query"
 transport = "HTTP"
 helm_access = "Yes"
-description = "One Job in full, including Facts, shape, and each step's Checks with what they did"
+description = "One Job in full, including Facts, shape, and each step's declared gates with what they did"
 notes = """
 A step carries both what it declares and what ran: `checks` is the workflow's declaration and `check_runs` is what the gate found. Empty `checks` is an ungated step and an absent `checks` is Fleet unable to say — the Job named a workflow this Fleet does not hold, or holds one that no longer declares the step. Those are different sentences and a client that saw a gap either way could not tell them apart.
 
 The declaration is read from the workflow and never from the Job's frozen rows, which carry where a step got to and nothing about what gates it. Two sources for one fact is how a registry drifts.
+
+All three of a step's gates are declared here before any of them acts. `judge_checks` is the semantic tier's declaration, standing to `judged` exactly as `checks` stands to `check_runs`, and `advance_gate` is what says whether the tiers decide at all. Reading only what had already happened is how a step gated `human_always` — where the Job halts and waits for a person, which six of seven shipped workflows now do — rendered as a step with no check on it.
+
+A judge criterion's question does not cross, and neither does a gaming pattern's. What crosses is how many criteria are asked, how many judges answer each where that is more than one, and whether a second look at the evidence rides along. The mechanical tier's `run` crosses because a person reproduces a failure by running it; a criterion's question is a prompt, and there is nothing a rail does with one.
 """
 
 [operations.get_job_events]

@@ -20,6 +20,9 @@
 //! the moment somebody edits `armada.yml` mid-Job. `ManifestSummary::checks`
 //! stays names only for that reason — the Manifest declares Checks, and the
 //! workflow is what resolved one.
+//!
+//! The semantic tier crosses as counts instead: [`DeclaredJudge`] carries no
+//! question, because a question is a prompt in a screenshot.
 
 use serde::{Deserialize, Serialize};
 
@@ -45,6 +48,54 @@ pub struct DeclaredCheck {
     /// return one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expect_exit_code: Option<i64>,
+}
+
+/// One `judge_checks[]` entry a step declares, counted rather than quoted.
+///
+/// **The declaration, never the answer.** What the Judge said is
+/// [`Judged`](crate::Judged), one row per criterion, and the pair is what gives
+/// the semantic tier the four states the mechanical tier already had: no
+/// `Judged` row against a declared entry is *not reached*, fewer rows than
+/// `criteria` is *reached*, and a row's own verdict is *passed* or *refused*.
+/// Neither list is inferable from the other, which is why
+/// [`DeclaredCheck`] and [`CheckRun`] are two shapes and not one.
+///
+/// **A step declares several of these on purpose.** Each entry carries its own
+/// model and its own panel size, so one strong judge can take one question
+/// while a panel of three cheap ones takes another.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeclaredJudge {
+    /// How many narrow yes/no questions this entry asks of the step's
+    /// evidence. **The questions themselves do not cross.**
+    ///
+    /// Zero on an entry that only looks for gaming — which fires the Judge and
+    /// gates nothing.
+    pub criteria: u32,
+    /// How many independent judges answer each criterion, folded by unanimity.
+    ///
+    /// **Absent at one**, so a present value always means a panel. A client
+    /// that had to compare against `1` before saying "panel" would be
+    /// restating a default that is already the domain's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub panel_size: Option<u32>,
+    /// Whether a second look rides along, asking whether the evidence was
+    /// gamed rather than whether it satisfies the step.
+    ///
+    /// **It does not gate.** A step whose only declaration is this one still
+    /// advances on its mechanical tier, and what the look found arrives as
+    /// [`Flagged`](crate::Flagged).
+    pub gaming_check: bool,
+}
+
+impl From<&core_model::JudgeCheck> for DeclaredJudge {
+    fn from(check: &core_model::JudgeCheck) -> DeclaredJudge {
+        DeclaredJudge {
+            criteria: check.criteria().len() as u32,
+            // Never `Some(1)`: the field's whole meaning is "more than one".
+            panel_size: Some(check.panel_size()).filter(|size| *size > 1),
+            gaming_check: check.gaming().is_some_and(core_model::GamingCheck::fires),
+        }
+    }
 }
 
 /// One declared Check, as the gate found it.

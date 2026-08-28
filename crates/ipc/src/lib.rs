@@ -70,14 +70,15 @@ mod work;
 #[cfg(test)]
 mod tests;
 
-pub use checks::{CheckRun, DeclaredCheck};
+pub use checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use detail::{
     Criterion, Dependency, Flagged, JobDetail, Judged, StepDetail, StepFacts, Verdict,
 };
 pub use enums::{
-    Actor, CheckOutcome, CriterionSource, DependencyDirection, DronePresence, EvidenceType,
-    JobStatus, JudgeVerdict, Origin, QueuedReason, StepState, TopLevelOrigin, Urgency,
+    Actor, AdvanceGate, CheckOutcome, CriterionSource, DependencyDirection, DronePresence,
+    EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, StepState, TopLevelOrigin,
+    Urgency,
 };
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
