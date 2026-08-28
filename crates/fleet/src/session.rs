@@ -50,6 +50,7 @@ use tokio::process::{Child, ChildStdin};
 use tokio::sync::Mutex;
 use verification::OutcomeTurn;
 
+use crate::briefing::Declaring;
 use crate::converging::ReportNow;
 use crate::resume::Redirection;
 
@@ -65,10 +66,22 @@ pub trait LiveSession {
     /// Called only where the step advanced. A failed step ends the Job, and the
     /// Drone is terminated rather than told — see `verification::OutcomeTurn`.
     ///
+    /// `declaring` is the ask the step being started makes of its Drone, where
+    /// it makes one. **It travels with the verdict rather than as a turn of its
+    /// own**, because a step boundary is one moment and a second injected
+    /// message would spend a second turn to say the other half of it. It is
+    /// `Option` rather than a separate method for the reason
+    /// [`crate::briefing::Declaring::at`] returns one: most steps ask nothing,
+    /// and a caller cannot tell which without reading the step.
+    ///
     /// Asynchronous because the pipe is: a synchronous signature would either
     /// block the runtime on a child that has stopped reading, or need a second
     /// path for the same write that `crate::drone` already makes.
-    fn tell(&self, turn: &OutcomeTurn) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    fn tell(
+        &self,
+        turn: &OutcomeTurn,
+        declaring: Option<&Declaring>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Inject a person's instruction. The Drone reads it at the next turn
     /// boundary, like every other injected turn.
@@ -127,9 +140,19 @@ impl Turn {
         Turn::of(prompt)
     }
 
-    /// What the gate decided, injected into a session already running.
-    pub fn outcome(turn: &OutcomeTurn) -> Turn {
-        Turn::of(turn.text())
+    /// What the gate decided, injected into a session already running, and the
+    /// ask the step it moves the Drone on to makes.
+    ///
+    /// **One turn for the whole boundary.** Both halves are Fleet's own and
+    /// both are about the same instant: what happened to the part just
+    /// finished, and what the next part wants before it starts. Splitting them
+    /// would cost a second turn boundary to deliver the half a Drone acts on
+    /// first.
+    pub fn outcome(turn: &OutcomeTurn, declaring: Option<&Declaring>) -> Turn {
+        match declaring {
+            Some(asked) => Turn::of(&format!("{}\n\n{}", turn.text(), asked.text())),
+            None => Turn::of(turn.text()),
+        }
     }
 
     /// What a person said, injected into a session already running.
@@ -237,8 +260,12 @@ impl DroneSession {
 impl LiveSession for DroneSession {
     type Error = io::Error;
 
-    async fn tell(&self, turn: &OutcomeTurn) -> Result<(), io::Error> {
-        self.say(&Turn::outcome(turn)).await
+    async fn tell(
+        &self,
+        turn: &OutcomeTurn,
+        declaring: Option<&Declaring>,
+    ) -> Result<(), io::Error> {
+        self.say(&Turn::outcome(turn, declaring)).await
     }
 
     async fn redirect(&self, instruction: &Redirection) -> Result<(), io::Error> {

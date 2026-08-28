@@ -11,6 +11,7 @@ use config::{ResolvedStep, ResolvedWorkflow};
 use testkit::Sketch;
 use verification::OutcomeTurn;
 
+use crate::briefing::Declaring;
 use crate::session::Turn;
 
 fn workflow() -> ResolvedWorkflow {
@@ -70,7 +71,7 @@ fn the_gate_s_outcome_and_the_first_turn_take_the_same_shape() {
     let workflow = workflow();
     let outcome = OutcomeTurn::advanced(step(&workflow), workflow.steps().get(1));
 
-    let injected = encoded(&Turn::outcome(&outcome));
+    let injected = encoded(&Turn::outcome(&outcome, None));
     assert!(injected.starts_with(r#"{"type":"user""#), "{injected}");
 
     // The first line rather than the whole text: an outcome turn is several
@@ -93,11 +94,57 @@ fn a_turn_carries_no_counter_and_no_check_name() {
     // envelope around it and it adds nothing.
     let workflow = workflow();
     let outcome = OutcomeTurn::advanced(step(&workflow), None);
-    let injected = encoded(&Turn::outcome(&outcome));
+    let injected = encoded(&Turn::outcome(&outcome, None));
 
     let added = injected.len() - outcome.text().len();
     assert!(
         added < 80,
         "the envelope is the harness's shape and nothing of Armada's: {injected}"
+    );
+}
+
+/// **One boundary, one turn.** The step being started asks for a plan, and the
+/// ask travels with the verdict rather than as a second injected message —
+/// which would spend a second turn boundary to deliver the half the Drone acts
+/// on first.
+#[test]
+fn the_ask_the_next_step_makes_rides_on_the_same_turn_as_the_verdict() {
+    let workflow = testkit::resolved(&[Sketch {
+        id: "implement",
+        label: "Implement",
+        evidence_type: None,
+        gates: &[],
+        judged_on: &[],
+        scope: Some(testkit::Scoped {
+            diff_check: true,
+            at_step_start: true,
+            exclude: &[],
+        }),
+        gaming: None,
+    }]);
+    let next = step(&workflow);
+    let asked = Declaring::at(next).expect("a scoped step asks");
+    let outcome = OutcomeTurn::advanced(next, Some(next));
+
+    let injected = encoded(&Turn::outcome(&outcome, Some(&asked)));
+    assert!(!injected.contains('\n'), "still one line: {injected}");
+    assert!(injected.contains("BEFORE YOU START"), "{injected}");
+    assert!(
+        injected.contains("is verified"),
+        "the verdict is still there: {injected}"
+    );
+}
+
+/// A step that asks for nothing leaves the turn byte for byte what it was. The
+/// cold switch reaches the pipe as well as the prompt.
+#[test]
+fn a_step_that_asks_for_no_plan_leaves_the_outcome_turn_alone() {
+    let workflow = workflow();
+    let outcome = OutcomeTurn::advanced(step(&workflow), workflow.steps().get(1));
+    let none = workflow.steps().get(1).expect("a second step");
+    assert_eq!(Declaring::at(none), None, "the fixture asks for nothing");
+    assert_eq!(
+        encoded(&Turn::outcome(&outcome, Declaring::at(none).as_ref())),
+        encoded(&Turn::outcome(&outcome, None))
     );
 }

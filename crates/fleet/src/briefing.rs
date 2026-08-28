@@ -29,6 +29,16 @@
 //! step block is written from [`ResolvedStep::label`] and the Job's own fields.
 //! Telling a Drone the Check would let it satisfy the Check rather than do the
 //! work, which is the failure the whole gate exists to refuse.
+//!
+//! # The ask outlives the first turn, so it is a value rather than a paragraph
+//!
+//! [`Declaring`] is the scope ask as a thing that can be handed somewhere else.
+//! It has to be, because `Working::now_on` clears the declaration at every step
+//! boundary — a plan inherited from the step before is not a plan — and a Drone
+//! told once, at spawn, arrives at the second step having declared nothing. The
+//! block written into the first turn and the block injected at a boundary are
+//! the same value built the same way, so the two cannot come to say different
+//! things.
 
 use adapter_traits::{Prompt, SpawnConfigRefused};
 use core_model::{FrozenWorkflow, GamingFlag, Job, Judgment, ResolvedStep, StepId, StepVerdict};
@@ -146,49 +156,82 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId) -> String {
     if let Some(step) = workflow.steps().iter().find(|step| step.id() == at) {
         text.push_str("\n\n");
         text.push_str(&step_block(step));
-        if let Some(block) = scope_block(step) {
+        if let Some(asked) = Declaring::at(step) {
             text.push_str("\n\n");
-            text.push_str(&block);
+            text.push_str(asked.text());
         }
     }
     text
 }
 
-/// What to declare before starting, where the step asks the Drone to.
+/// What a step asks its Drone to declare before starting, where it asks at all.
 ///
 /// **The obligation is here rather than in the tool's description**, for the
 /// reason the baseline carries the Evidence obligation: spike 6 measured that a
 /// description alone does not make a Drone call a tool.
 ///
+/// **And it is a value rather than a private paragraph**, because the ask is
+/// made more than once. The first turn carries it, and so does the turn a Drone
+/// gets when a step advances underneath it — see [`Declaring::at`] for why the
+/// second one is not optional.
+///
 /// The consequence is stated plainly and without a threat: a plan that turns
 /// out wrong is fixed by declaring again, and work belonging to a later part
 /// does not become this part's by being named.
-fn scope_block(step: &ResolvedStep) -> Option<String> {
-    let scope = step.evidence_scope()?;
-    if !scope.wants_a_declaration() {
-        return None;
-    }
-    let mut block = String::from(
-        "BEFORE YOU START\n\nCall the scope tool with the repository-relative \
-         paths this part's work will be in. Include what you will change and \
-         what has to be read to judge the change.",
-    );
-    if scope.scope_diff_check() {
-        block.push_str(
-            " Files you change outside them are compared against what you \
-             declared. If the work turns out to be somewhere else, call the tool \
-             again — a plan that changed is fine, and a file changed for the \
-             next part is not.",
-        );
-    }
-    if !scope.exclude_paths().is_empty() {
-        block.push_str("\n\nDo not name these, and do not change them:");
-        for path in scope.exclude_paths() {
-            block.push_str("\n  - ");
-            block.push_str(path.as_str());
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Declaring(String);
+
+impl Declaring {
+    /// The ask this step makes, or `None` where it makes none.
+    ///
+    /// **`wants_a_declaration` decides it and nothing else does.** That is the
+    /// cold switch `core_model::EvidenceScope` describes: a step with no
+    /// evidence scope, or one whose context comes from somewhere other than the
+    /// Drone, is told exactly what it was told before any of this existed.
+    /// Inferring the ask from `declare_plan_at` or from `scope_diff_check`
+    /// would put a tool call in front of a Drone that has no tool to make it
+    /// with.
+    ///
+    /// **Every step that wants one is asked, including the fourth step of a
+    /// Job whose Drone declared correctly on the first.** Job
+    /// `01M14F8VFA00189ZBMF0HXE607` declared its scope on the step that asked
+    /// for it, advanced, worked the next step for twenty-two minutes, and
+    /// failed `evidence_scope` on a call nobody had requested: the declaration
+    /// is cleared at the boundary and the ask was not repeated there.
+    pub fn at(step: &ResolvedStep) -> Option<Declaring> {
+        let scope = step.evidence_scope()?;
+        if !scope.wants_a_declaration() {
+            return None;
         }
+        let mut block = String::from(
+            "BEFORE YOU START\n\nCall the scope tool with the repository-relative \
+             paths this part's work will be in. Include what you will change and \
+             what has to be read to judge the change. Each part is checked \
+             against what was declared for it, and what you declared for an \
+             earlier part does not carry over.",
+        );
+        if scope.scope_diff_check() {
+            block.push_str(
+                " Files you change outside them are compared against what you \
+                 declared. If the work turns out to be somewhere else, call the \
+                 tool again — a plan that changed is fine, and a file changed \
+                 for the next part is not.",
+            );
+        }
+        if !scope.exclude_paths().is_empty() {
+            block.push_str("\n\nDo not name these, and do not change them:");
+            for path in scope.exclude_paths() {
+                block.push_str("\n  - ");
+                block.push_str(path.as_str());
+            }
+        }
+        Some(Declaring(block))
     }
-    Some(block)
+
+    /// The block, exactly as it reaches a Drone.
+    pub fn text(&self) -> &str {
+        &self.0
+    }
 }
 
 /// What the Job is about, in the requester's own words.

@@ -5,14 +5,29 @@
 //! change. What is asserted is the structure the contract's M1 rendering
 //! requires, and the rule `docs/concepts/drone.md` puts on every Drone-facing
 //! surface: **a Drone is never told what the Checks are.**
+//!
+//! The last group is about a moment rather than a rendering: a step advancing
+//! under a Drone that is already running. It drives a whole Fleet, because the
+//! defect it is about was not in any block's text — every block was right, and
+//! the turn that carries them was never sent.
 
+use std::time::Duration;
+
+use adapter_traits::DroneEvent;
 use core_model::{
     AcceptanceCriterion, CriterionId, CriterionSource, Facts, Job, JobId, ManifestId, ModelName,
     NewJob, StepId, StepSeed, Timestamp, TopLevelOrigin, Ulid, Urgency,
 };
-use testkit::{Gate, Sketch};
+use ipc::mcp::DeclareScope;
+use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Gate, Scoped, Sketch};
+use verification::{Claimed, NotClaimed, ShownBy};
 
 use crate::briefing::{first_turn, BASELINE};
+use crate::daemon::Fleet;
+use crate::evidence::Call;
+use crate::gate::Ruling;
+use crate::tests::daemon::{a_fleet_holding, a_proposal, worktree_directory};
+use crate::tests::tmp::TempDir;
 
 fn a_job() -> Job {
     Job::create_top_level(
@@ -195,5 +210,166 @@ fn a_scoped_step_is_told_to_declare_before_it_starts() {
     assert!(
         !said.contains("mcp__") && !said.to_lowercase().contains("declare_scope"),
         "described rather than named, like the Evidence tool: {said}"
+    );
+}
+
+// ------------------------------------------------------ the step boundary
+
+/// The two-step Job the boundary cases run: the first step scoped, the second
+/// one scoped or not according to the argument.
+fn plan_then_do(second_is_scoped: bool) -> config::ResolvedWorkflow {
+    let scoped = Some(Scoped {
+        diff_check: true,
+        at_step_start: true,
+        exclude: &[],
+    });
+    testkit::resolved(&[
+        Sketch {
+            id: "plan",
+            label: "Plan",
+            evidence_type: Some("diff"),
+            gates: &[],
+            judged_on: &[],
+            scope: scoped,
+            gaming: None,
+        },
+        Sketch {
+            id: "implement",
+            label: "Implement",
+            evidence_type: Some("diff"),
+            gates: &[],
+            judged_on: &[],
+            scope: second_is_scoped.then_some(scoped).flatten(),
+            gaming: None,
+        },
+    ])
+}
+
+fn a_diff_call<'a>() -> Call<'a> {
+    Call {
+        evidence_type: config::EvidenceType::Diff,
+        claimed: Claimed("The plan is written."),
+        shown_by: ShownBy("docs/plan.md"),
+        not_claimed: NotClaimed(""),
+    }
+}
+
+/// Every turn Fleet has written down the pipe, as the Drone echoed it back.
+///
+/// The fake Drone is `/bin/cat`, so a turn Fleet sends comes back as a line of
+/// transcript — which is the only way to read an injected turn from outside the
+/// process that sent it. It comes back on the reader's own task, so this waits
+/// for `turns` of them rather than reading once and hoping.
+async fn turns_sent(
+    fleet: &Fleet<FakeHarness, FakeVcs, FakeWorkProduct>,
+    turns: usize,
+) -> Vec<String> {
+    for _ in 0..600 {
+        let echoed: Vec<String> = {
+            let slot = fleet.slot().lock().await;
+            slot.as_ref()
+                .map(|at_work| {
+                    at_work
+                        .heard()
+                        .into_iter()
+                        .filter_map(|event| match event {
+                            DroneEvent::Said { text } => Some(text),
+                            _ => None,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        if echoed.len() >= turns {
+            return echoed;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    panic!("the Drone never echoed {turns} turns back");
+}
+
+/// Drive a Job through its first step and answer with what its Drone was told.
+async fn told_across_the_boundary(
+    home: &TempDir,
+    second_is_scoped: bool,
+) -> (Fleet<FakeHarness, FakeVcs, FakeWorkProduct>, Vec<String>) {
+    let fleet = a_fleet_holding(
+        home,
+        FakeWorkProduct::changed(&["docs/plan.md"]),
+        plan_then_do(second_is_scoped),
+        1,
+    );
+    let job = fleet
+        .propose(a_proposal("plan then do"))
+        .await
+        .expect("a proposal");
+    worktree_directory(home, job.id());
+    fleet.approve(job.id()).await.expect("it is approved");
+    fleet
+        .declare_scope(&DeclareScope {
+            context_paths: vec!["docs".to_string()],
+        })
+        .await
+        .expect("the first step's plan");
+    fleet
+        .submit_evidence(a_diff_call())
+        .await
+        .expect("evidence lands");
+    let turned = fleet.turn().await.expect("a turn");
+    assert!(
+        matches!(turned.ruled, Some(Ruling::Advanced { .. })),
+        "the first step advanced: {:?}",
+        turned.ruled
+    );
+    let sent = turns_sent(&fleet, 2).await;
+    (fleet, sent)
+}
+
+/// **The one that cost twenty-two minutes of correct work.**
+///
+/// `Working::now_on` clears the declaration at the boundary, which is right: a
+/// plan inherited from the step before is not a plan. Nothing said so. The
+/// Drone declared once, on the step that asked at spawn, worked the next step
+/// for sixty-eight turns and failed `evidence_scope` on a call nobody had
+/// requested. The ask belongs on every boundary that clears one.
+#[tokio::test]
+async fn a_step_boundary_asks_again_for_the_declaration_it_just_cleared() {
+    let home = TempDir::new();
+    let (_fleet, sent) = told_across_the_boundary(&home, true).await;
+
+    assert!(
+        sent[1].contains("BEFORE YOU START"),
+        "the boundary turn asks for the next part's plan: {}",
+        sent[1]
+    );
+    assert!(
+        sent[1].contains("scope tool"),
+        "described rather than named, as the first turn describes it: {}",
+        sent[1]
+    );
+    assert!(
+        sent[1].contains("does not carry over"),
+        "and says why it is being asked again: {}",
+        sent[1]
+    );
+}
+
+/// **The cold switch, at the boundary this time.** A step with no evidence
+/// scope is told exactly what it was told before any of this existed, so the
+/// turn that moves a Drone on to one is the outcome and nothing else.
+#[tokio::test]
+async fn a_step_boundary_says_nothing_where_the_next_step_wants_no_plan() {
+    let home = TempDir::new();
+    let (_fleet, sent) = told_across_the_boundary(&home, false).await;
+
+    assert!(
+        !sent[1].contains("BEFORE YOU START"),
+        "no tool is put in front of a Drone that has nothing to declare: {}",
+        sent[1]
+    );
+    assert!(
+        sent[1].contains("Implement"),
+        "it is still told where it is going: {}",
+        sent[1]
     );
 }
