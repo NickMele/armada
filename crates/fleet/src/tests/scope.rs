@@ -8,6 +8,7 @@
 //! carrying no `evidence_scope` reads no worktree for a scope it does not have
 //! and behaves exactly as it did before any of this existed.
 
+use adapter_traits::Footprint;
 use core_model::{CheckOutcome, DeclaredPaths, RepoPath};
 use ipc::mcp::DeclareScope;
 use testkit::{FakeWorkProduct, Gate, Scoped, Sketch};
@@ -65,6 +66,7 @@ async fn ruled_on(
         at_step,
         &diff_evidence(),
         declared,
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -410,6 +412,7 @@ async fn a_step_with_no_scope_is_neither_checked_nor_read() {
         at_step,
         &diff_evidence(),
         None,
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -447,6 +450,7 @@ async fn an_ungated_step_with_no_scope_advances_on_evidence_alone() {
         at_step,
         &diff_evidence(),
         None,
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),

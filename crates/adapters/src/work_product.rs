@@ -26,9 +26,11 @@
 //! no branch that returns "nothing changed" because something could not be
 //! opened — that would turn a broken machine into a Drone that did no work.
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-use adapter_traits::{Changed, Patch, WorkProduct, Worktree};
+use adapter_traits::{Changed, Footprint, Patch, WorkProduct, Worktree};
 use git2::{Diff, DiffOptions, Oid, Repository};
 
 use crate::error::ReadWorkProductError;
@@ -62,6 +64,17 @@ impl WorkProduct for GitVcs {
             })?;
 
         Ok(Changed::of(paths(&diff)))
+    }
+
+    fn footprint(&self, worktree: &Worktree) -> Result<Footprint, Self::Error> {
+        let path = worktree.path();
+        let root = Path::new(path);
+        let changed = self.changed_files(worktree)?;
+        let mut entries = Vec::with_capacity(changed.len());
+        for named in changed.paths() {
+            entries.push((named.clone(), held(root, named, path)?));
+        }
+        Ok(Footprint::of(entries))
     }
 
     fn patch(&self, worktree: &Worktree) -> Result<Patch, Self::Error> {
@@ -104,6 +117,42 @@ impl WorkProduct for GitVcs {
             cause,
         })?;
         Ok(Patch::of(text))
+    }
+}
+
+/// What one changed path holds, as a value two readings can be compared on.
+///
+/// **A hash of the bytes, not the bytes.** A footprint is taken at every step
+/// start and every gate, and holding the contents of the work would put the
+/// whole diff in memory twice for a question whose answer is one bit.
+///
+/// **Not `git`'s object id.** A blob id exists for what git has stored, and the
+/// interesting case here is the opposite one — a Drone's edit sitting in the
+/// working tree, unstaged, which is precisely what a step produces before it
+/// commits anything.
+///
+/// The hasher is `std`'s, so the value is stable within a process and promises
+/// nothing across builds. That is the whole of what
+/// [`Footprint::differs_from`] needs, and the type's own comment says a
+/// footprint is comparable only against another reading in the same process.
+///
+/// A path the diff named and the filesystem no longer has is a **deletion**,
+/// which is a change and reads as one rather than as a failure. Anything else
+/// the filesystem refuses is an error: see
+/// [`ReadWorkProductError::ContentUnreadable`].
+fn held(root: &Path, named: &str, worktree: &str) -> Result<String, ReadWorkProductError> {
+    match std::fs::read(root.join(named)) {
+        Ok(bytes) => {
+            let mut hasher = DefaultHasher::new();
+            bytes.hash(&mut hasher);
+            Ok(format!("{:016x}", hasher.finish()))
+        }
+        Err(cause) if cause.kind() == std::io::ErrorKind::NotFound => Ok(String::from("gone")),
+        Err(cause) => Err(ReadWorkProductError::ContentUnreadable {
+            worktree: worktree.to_string(),
+            path: named.to_string(),
+            cause,
+        }),
     }
 }
 

@@ -102,6 +102,11 @@ where
             recording,
             self.now(),
         ));
+        // The first step's baseline, read once the slot exists. A Job's first
+        // step ordinarily starts on a worktree holding nothing, and reading it
+        // rather than assuming so is what makes a redispatch onto a worktree
+        // somebody already worked in measure the step and not the branch.
+        self.marked(working);
         Ok(())
     }
 

@@ -26,7 +26,7 @@ use std::time::Duration;
 
 use std::sync::Arc;
 
-use adapter_traits::{Environment, Model, Vcs, Worktree, WorktreeSpec};
+use adapter_traits::{Environment, Footprint, Model, Vcs, Worktree, WorktreeSpec};
 use config::{EvidenceType, ResolvedWorkflow};
 use core_model::{
     AcceptanceCriterion, Actor, CriterionId, CriterionSource, DeclaredPaths, Facts,
@@ -387,10 +387,16 @@ impl Bench {
         let at = AtStep::named(self.workflow.frozen(), step, &run.worktree)
             .expect("a step of the workflow");
         let recorded = self.recorded.borrow().clone();
+        // The worktree as the step found it. A Run's worktree starts empty and
+        // the bench drives one step at a time, so an empty footprint is what
+        // `fleet::dispatch` would have read at the step's start — see
+        // `Working::entered_with`, which is the thing being stood in for.
+        let entered_with = Footprint::nothing();
         let ruling = rule_on(
             at,
             submitted,
             run.declared.as_ref(),
+            Some(&entered_with),
             &recorded,
             &self.work,
             self.budget,

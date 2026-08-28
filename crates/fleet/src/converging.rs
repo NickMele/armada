@@ -4,7 +4,7 @@
 //!
 //! | Stage | What | Costs |
 //! |---|---|---|
-//! | Tripwire | turns, wall-clock, the plan against the live diff | nothing |
+//! | Tripwire | tool calls, wall-clock, the plan against the live diff | nothing |
 //! | The look | one Judge call, **only** once a tripwire fired | one call |
 //! | The directive | "stop and report your current state now" | a turn |
 //! | `thrashing` | **when that also fails** | the escalation |
@@ -46,23 +46,28 @@ use crate::working::Working;
 /// [`CheckBudget`]: crate::CheckBudget
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StepNorms {
-    turns: u32,
+    calls: u32,
     wall_clock: Duration,
     report_grace: Duration,
 }
 
 impl StepNorms {
-    pub const fn of(turns: u32, wall_clock: Duration, report_grace: Duration) -> StepNorms {
+    pub const fn of(calls: u32, wall_clock: Duration, report_grace: Duration) -> StepNorms {
         StepNorms {
-            turns,
+            calls,
             wall_clock,
             report_grace,
         }
     }
 
-    /// How many of the Drone's own turns one step is expected to take.
-    pub fn turns(&self) -> u32 {
-        self.turns
+    /// How many of the Drone's own tool calls one step is expected to take.
+    ///
+    /// Calls rather than the harness's turns, and the substitution is measured
+    /// rather than assumed — [`Progress::calls`](crate::Progress::calls) says
+    /// what the two cost against each other and why the harness's number could
+    /// not be read mid-step at all.
+    pub fn calls(&self) -> u32 {
+        self.calls
     }
 
     /// How long one step is expected to take.
@@ -85,8 +90,8 @@ impl StepNorms {
 /// the look is worth paying for and nothing else.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Tripwire {
-    /// The Drone's own turn count passed the step norm.
-    Turns { taken: u32 },
+    /// The Drone's own tool-call count passed the step norm.
+    ToolCalls { taken: u32 },
     /// The step has been running longer than the ceiling.
     WallClock { after: Duration },
     /// Work appeared outside the declared plan. **Not a failure** —
@@ -99,7 +104,7 @@ impl Tripwire {
     /// The word a log line and a reader use for it.
     pub fn named(&self) -> &'static str {
         match self {
-            Tripwire::Turns { .. } => "turns",
+            Tripwire::ToolCalls { .. } => "tool_calls",
             Tripwire::WallClock { .. } => "wall_clock",
             Tripwire::OffPlan { .. } => "off_plan",
         }
@@ -374,9 +379,9 @@ where
     /// The free half. **No store, no worktree, no model** — every answer is on
     /// the slot already, which is what lets this run on every turn.
     fn tripped(&self, at_work: &Working) -> Option<Tripwire> {
-        let taken = at_work.turns_this_step();
-        if taken >= self.norms().turns() {
-            return Some(Tripwire::Turns { taken });
+        let taken = at_work.calls_this_step();
+        if taken >= self.norms().calls() {
+            return Some(Tripwire::ToolCalls { taken });
         }
         let after = at_work.running_for(&self.now());
         if after >= self.norms().wall_clock() {

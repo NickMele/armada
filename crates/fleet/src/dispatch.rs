@@ -247,10 +247,12 @@ where
             .await
             .step_evidence(&job_id)
             .map_err(Adrift::Reading)?;
+        let entered_with = at_work.entered_with().cloned();
         let ruling = rule_on(
             at,
             &landed.submission,
             declared.as_ref(),
+            entered_with.as_ref(),
             &recorded,
             self.work(),
             self.budget(),
@@ -267,6 +269,33 @@ where
         self.recorded_gaming(&job_id, &step, &ruling).await?;
         self.act_on(&ruling, &job_id, &step, working).await?;
         Ok(Some(ruling))
+    }
+
+    /// Read what the worktree holds now, and hold it as this step's baseline.
+    ///
+    /// **The reading `diff_nonempty` is decided against**, taken at the moment
+    /// a step starts so that what the gate compares is the step's own work
+    /// rather than the branch's. `WorkProduct` measures from the commit the
+    /// branch was cut from, which credits every step with everything its
+    /// predecessors wrote.
+    ///
+    /// **A failure leaves the step with no baseline, and that is deliberate.**
+    /// A reading that did not happen is not a worktree that did not move, so
+    /// there is no arm here that stores an empty footprint — the gate reads
+    /// `None` as nothing known to have moved and fails the check. An unread
+    /// baseline must not be able to advance a step, which is
+    /// `Changed::nothing`'s rule applied one level up.
+    pub(crate) fn marked(&self, working: &mut Option<Working>) {
+        let Some(at_work) = working.as_ref() else {
+            return;
+        };
+        let (_, _, worktree) = at_work.standing();
+        let Ok(footprint) = self.work().footprint(&worktree) else {
+            return;
+        };
+        if let Some(at_work) = working.as_mut() {
+            at_work.entering_with(footprint);
+        }
     }
 
     /// The Job move a ruling implies, and the step move it implies, in the one
@@ -287,6 +316,11 @@ where
                 if let Some(at_work) = working.as_mut() {
                     at_work.now_on(next, self.now());
                 }
+                // Immediately after the step moved and before the Drone is
+                // told, so that anything the Drone does on hearing the verdict
+                // counts toward the step it is now on rather than the one it
+                // just left.
+                self.marked(working);
                 // The boundary catch-up is `delivery`'s. It is told either way
                 // — a Drone that never heard the step advanced would sit there,
                 // and a base that would not read is not its fault.

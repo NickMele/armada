@@ -18,7 +18,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use adapter_traits::DroneEvent;
+use adapter_traits::{CallDetail, DroneEvent};
 use config::ResolvedWorkflow;
 use core_model::{EscalationTrigger, JobStatus, StepState, StepVerdict, TransitionReason};
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Scoped, Sketch};
@@ -38,10 +38,10 @@ const THRASHING: &str = "state: thrashing\n\
                          produced: the same panic on the same input\n\
                          consequence: every caller still crashes on the same file";
 
-/// Norms nothing but the turn count can trip.
-fn on_turns(turns: u32) -> StepNorms {
+/// Norms nothing but the tool-call count can trip.
+fn on_calls(calls: u32) -> StepNorms {
     StepNorms::of(
-        turns,
+        calls,
         Duration::from_secs(86_400),
         Duration::from_secs(86_400),
     )
@@ -62,8 +62,14 @@ fn one_step(scope: Option<Scoped<'static>>) -> ResolvedWorkflow {
 
 /// A Drone that prints one line and then never reads or says anything again.
 ///
-/// The line decodes as a terminating event carrying `turns`, which is how a
-/// test puts the harness's own turn count where the tripwire reads it.
+/// The line decodes as `calls` tool calls, which is how a test puts a live
+/// count where the tripwire reads it.
+///
+/// **It is deliberately not one `Ended` carrying a turn count.** That is what
+/// this fixture used to do, and it could only trip the wire because the wire
+/// was reading a number the harness does not publish until an invocation is
+/// over — which is to say the test asserted the defect. A Drone mid-step has
+/// made calls and has ended nothing.
 /// Whether a pid is still running. `kill -0` rather than `libc::kill`, because
 /// this crate denies `unsafe` and the one exception is the `setsid` in
 /// `detach.rs` — a test is not a second reason to open that door.
@@ -76,13 +82,14 @@ fn alive(pid: u32) -> bool {
         .unwrap_or(false)
 }
 
-fn a_drone_that_will_not_answer(turns: u32) -> FakeHarness {
-    FakeHarness::running("/bin/sh", &["-c", "echo BUSY; sleep 30"])
-        .reading("BUSY", vec![ended(turns)])
+fn a_drone_that_will_not_answer(calls: u32) -> FakeHarness {
+    FakeHarness::running("/bin/sh", &["-c", "echo BUSY; sleep 30"]).reading("BUSY", called(calls))
 }
 
-/// The same Drone, except that it answers every turn injected into it.
-fn a_drone_that_answers(turns: u32) -> FakeHarness {
+/// The same Drone, except that it answers every turn injected into it. Its
+/// answer is a terminating event, because coming to rest is what `boundaries`
+/// counts and what the forced report is read against.
+fn a_drone_that_answers(calls: u32) -> FakeHarness {
     FakeHarness::running(
         "/bin/sh",
         &[
@@ -90,13 +97,24 @@ fn a_drone_that_answers(turns: u32) -> FakeHarness {
             "echo BUSY; while IFS= read -r line; do echo RESTED; done",
         ],
     )
-    .reading("BUSY", vec![ended(turns)])
-    .reading("RESTED", vec![ended(turns)])
+    .reading("BUSY", called(calls))
+    .reading("RESTED", vec![ended()])
 }
 
-fn ended(turns: u32) -> DroneEvent {
+/// `calls` tool calls, as the transcript would carry them one at a time.
+fn called(calls: u32) -> Vec<DroneEvent> {
+    (0..calls)
+        .map(|nth| DroneEvent::Called {
+            tool: String::from("Read"),
+            call: format!("call-{nth}"),
+            detail: CallDetail::of("a file"),
+        })
+        .collect()
+}
+
+fn ended() -> DroneEvent {
     DroneEvent::Ended {
-        turns,
+        turns: 0,
         cost_micros: 0,
         refusals: 0,
     }
@@ -181,7 +199,7 @@ async fn a_step_inside_its_norms_is_never_looked_at() {
         &home,
         a_drone_that_will_not_answer(3),
         Arc::clone(&judge),
-        on_turns(500),
+        on_calls(500),
         one_step(None),
     );
     started(&fleet, &home).await;
@@ -204,7 +222,7 @@ async fn a_mechanical_trigger_on_its_own_escalates_nothing() {
         &home,
         a_drone_that_will_not_answer(90),
         Arc::clone(&judge),
-        on_turns(5),
+        on_calls(5),
         one_step(None),
     );
     let job = started(&fleet, &home).await;
@@ -213,7 +231,7 @@ async fn a_mechanical_trigger_on_its_own_escalates_nothing() {
     assert!(matches!(
         wandering.stage,
         Stage::StillConverging {
-            tripped: Tripwire::Turns { taken: 90 },
+            tripped: Tripwire::ToolCalls { taken: 90 },
             ..
         }
     ));
@@ -263,7 +281,7 @@ async fn work_outside_the_plan_asks_the_judge_and_fails_nothing() {
         &home,
         a_drone_that_will_not_answer(1),
         Arc::clone(&judge),
-        on_turns(500),
+        on_calls(500),
         one_step(Some(Scoped {
             diff_check: true,
             at_step_start: true,
@@ -302,7 +320,7 @@ async fn a_look_that_finds_convergence_stops_the_chain() {
         &home,
         a_drone_that_will_not_answer(40),
         Arc::clone(&judge),
-        on_turns(5),
+        on_calls(5),
         one_step(None),
     );
     let job = started(&fleet, &home).await;
@@ -324,7 +342,7 @@ async fn the_look_reads_what_was_produced_and_never_the_drones_turns() {
         &home,
         a_drone_that_will_not_answer(90),
         Arc::clone(&judge),
-        on_turns(5),
+        on_calls(5),
         one_step(None),
     );
     started(&fleet, &home).await;
@@ -347,7 +365,7 @@ async fn a_look_that_could_not_be_made_escalates_nothing() {
         &home,
         a_drone_that_will_not_answer(90),
         Arc::clone(&judge),
-        on_turns(5),
+        on_calls(5),
         one_step(None),
     );
     let job = started(&fleet, &home).await;
@@ -410,10 +428,7 @@ async fn a_drone_that_will_not_report_is_escalated_with_its_step_stopped() {
         .expect("a Drone is working")
         .session()
         .pid();
-    assert!(
-        alive(pid),
-        "the Drone is alive when it is told to report"
-    );
+    assert!(alive(pid), "the Drone is alive when it is told to report");
     let escalated = next_stage(&fleet, "escalated").await;
     assert!(matches!(escalated.stage, Stage::Escalated { .. }));
 
