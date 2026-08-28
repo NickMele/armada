@@ -26,13 +26,13 @@ use core_model::{
 use crate::tests::{at, created_at, job_id, open, top_level, TempDir};
 use crate::Store;
 
-fn step_id() -> StepId {
+pub(super) fn step_id() -> StepId {
     StepId::new("fix")
 }
 
 /// A stored Job at `running`, with its first step already entered — one run on
 /// the record.
-fn on_its_first_run(store: &mut Store, id: &str) -> Job {
+pub(super) fn on_its_first_run(store: &mut Store, id: &str) -> Job {
     let created = top_level(id);
     store
         .insert_job(&created, &created_at())
@@ -53,7 +53,12 @@ fn on_its_first_run(store: &mut Store, id: &str) -> Job {
 
 /// Stop the step and start it again — the two moves that make a second run, and
 /// the only shape `STEP_EDGES` admits for one.
-fn run_it_again(store: &mut Store, job: &Job, stopped_at: &str, started_at: &str) -> Job {
+pub(super) fn run_it_again(
+    store: &mut Store,
+    job: &Job,
+    stopped_at: &str,
+    started_at: &str,
+) -> Job {
     let why = StepLevelTrigger::of(EscalationTrigger::GateFailure)
         .expect("a gate failure is a step-level trigger");
     let job = moved_step(store, job, StepTarget::Stopped(why), stopped_at);
@@ -72,7 +77,12 @@ fn moved_step(store: &mut Store, job: &Job, to: StepTarget, when: &str) -> Job {
 
 /// One run's worth of every kind of record, said in a way the run can be read
 /// back out of.
-fn record_a_whole_run(store: &mut Store, id: &str, saying: &str, when: &str) {
+///
+/// `pub(super)` because `forget` needs a Job with rows in all four per-step
+/// tables, and the two tests should be asking about the same four: a fifth
+/// table added here reaches the forget test without anybody remembering to
+/// carry it across.
+pub(super) fn record_a_whole_run(store: &mut Store, id: &str, saying: &str, when: &str) {
     let job = job_id(id);
     let step = step_id();
     store
