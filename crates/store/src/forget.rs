@@ -56,6 +56,10 @@ pub struct Forgotten {
     pub step_gaming_flags: usize,
     /// What each run of a step submitted, one row per run.
     pub step_evidence: usize,
+    /// The header saying a Job's footprint was recorded. One row, or none.
+    pub footprint: usize,
+    /// The files that footprint held, one row each.
+    pub footprint_files: usize,
     /// Rows removed from a table this build has no field for.
     ///
     /// Always zero today, and a test says so. It exists because the delete is
@@ -85,6 +89,8 @@ impl Forgotten {
             "job_step_judgments" => &mut self.step_judgments,
             "job_step_gaming_flags" => &mut self.step_gaming_flags,
             "job_step_evidence" => &mut self.step_evidence,
+            "job_footprint" => &mut self.footprint,
+            "job_footprint_files" => &mut self.footprint_files,
             _ => return None,
         })
     }

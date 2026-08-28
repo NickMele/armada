@@ -82,6 +82,49 @@ export type JobDetail = {
   subject?: Subject;
   /** The DAG edges this Job sits on. Empty until something writes one. */
   dependencies: Dependency[];
+  /**
+   * What the worktree held when the job stopped. Since protocol 4.12.
+   *
+   * **Absent on every job that is still going**, which is not a gap — a job
+   * with a drone on it has a live reading, published as `job.files_changed`.
+   * Absent is also a job that finished before Fleet kept these, and one whose
+   * worktree would not open when it did. Present with no files is a worktree
+   * that was read and held no change, which is a different sentence.
+   */
+  footprint?: JobFootprint;
+};
+
+/**
+ * What one job's worktree held when the job stopped. On `JobDetail` rather than
+ * a read of its own: it is a path and a word per file, and Fleet asks for it
+ * only where a job has one, so an open of a running job pays nothing.
+ */
+export type JobFootprint = {
+  /** Every file, in the order the reading found them. */
+  files: TouchedFile[];
+  /**
+   * When the reading was taken. **The instant the job stopped**, not the
+   * instant it was asked for — which is what makes this a record and lets a
+   * surface say so.
+   */
+  recorded_at: string;
+};
+
+/**
+ * One file a finished job touched.
+ *
+ * **Not `ChangedFile`, and the missing field is the reason.** A live reading
+ * carries `outside_plan`, because the step being watched is the step that
+ * declared the plan it is measured against. A record is the job's whole work
+ * since the branch was cut, and the step holding the pen when a job stops is
+ * usually not the step that scoped it. There is no mark here to read, and
+ * nothing may infer one.
+ */
+export type TouchedFile = {
+  /** Repository-relative, exactly as git spells it. */
+  path: string;
+  /** The same closed set `ChangedFile.change` carries, left as `string`. */
+  change: string;
 };
 
 /** One step: which, where in the order, and where it got to. */

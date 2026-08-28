@@ -53,6 +53,7 @@ use store::{LoadJobError, Moved, RecordedEvent, WriteError};
 use crate::adrift::{Adrift, NotSubmitted};
 use crate::daemon::Fleet;
 use crate::dispatch::clear_to_run;
+use crate::footprint::kept;
 // The wire's `Redirection` is a struct with a public field; Fleet's is a
 // newtype that cannot hold an empty instruction. Both names are in scope here,
 // which is the one place they meet.
@@ -127,6 +128,16 @@ where
     }
 
     /// One Job in full, folded from its log like every other read.
+    ///
+    /// # The footprint read is spent only where there is one to read
+    ///
+    /// This call is made on every open of a Job, which is the argument that put
+    /// the history and the patch on routes of their own. A footprint is neither
+    /// — it is a path and a word per file — and it is written at the terminal
+    /// transition, so a Job that is still going has none. Asking only for a
+    /// Job that has stopped is what keeps an open of a running Job costing
+    /// exactly what it cost before, and `footprint` absent on one of them is
+    /// the truth rather than an omission.
     async fn get_job(&self, job_id: JobId) -> Result<JobDetail, Refusal> {
         let job = self
             .load(&job_id.to_domain())
@@ -149,12 +160,22 @@ where
                 .map_err(|why| self.refusal(Adrift::Reading(why)))?;
             (ran, judged, flagged)
         };
+        let recorded = match job.status().is_terminal() {
+            false => None,
+            true => self
+                .store()
+                .lock()
+                .await
+                .footprint(job.id())
+                .map_err(|why| self.refusal(Adrift::Reading(why)))?,
+        };
         let queued = self.queued_reason(&job).await?;
         Ok(JobDetail::of(
             &job,
             reason.as_ref(),
             queued,
             &self.step_facts(&job, ran, judged, flagged),
+            recorded.as_ref().map(kept),
         ))
     }
 

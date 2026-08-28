@@ -95,4 +95,6 @@ pub use job::{
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
 pub use turn::{Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage, Withheld};
 pub use version::{ProtocolVersion, Skew, PROTOCOL_VERSION};
-pub use work::{ChangesRequested, JobDiff, JobEvidence, Overruled, Submitted, Work};
+pub use work::{
+    ChangesRequested, JobDiff, JobEvidence, JobFootprint, Overruled, Submitted, TouchedFile, Work,
+};

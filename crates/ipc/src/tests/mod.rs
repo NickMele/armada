@@ -141,6 +141,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             judged: Vec::new(),
             flagged: Vec::new(),
         }],
+        None,
     );
     let json = encode(&ungated).expect("a detail is plain data");
     assert!(json.contains("\"checks\":[]"), "declares none: {json}");
@@ -157,6 +158,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             judged: Vec::new(),
             flagged: Vec::new(),
         }],
+        None,
     );
     let json = encode(&unanswerable).expect("a detail is plain data");
     assert!(
@@ -186,10 +188,11 @@ fn a_step_with_no_label_reads_as_its_id() {
             judged: Vec::new(),
             flagged: Vec::new(),
         }],
+        None,
     );
     assert_eq!(detail.steps[0].label, "repro");
 
-    let unanswerable = JobDetail::of(&job(), None, None, &[]);
+    let unanswerable = JobDetail::of(&job(), None, None, &[], None);
     assert_eq!(unanswerable.steps[0].label, "repro");
 }
 
@@ -219,6 +222,7 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
             judged: Vec::new(),
             flagged: Vec::new(),
         }],
+        None,
     );
     let json = encode(&detail).expect("a detail is plain data");
 
@@ -267,6 +271,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
             ],
             flagged: Vec::new(),
         }],
+        None,
     );
     let json = encode(&detail).expect("a detail is plain data");
 
@@ -289,7 +294,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
 /// ungated step says so about its Checks.
 #[test]
 fn a_step_the_judge_was_never_asked_about_carries_an_empty_list() {
-    let detail = JobDetail::of(&job(), None, None, &[]);
+    let detail = JobDetail::of(&job(), None, None, &[], None);
     let json = encode(&detail).expect("a detail is plain data");
     assert!(json.contains("\"judged\":[]"), "{json}");
 }

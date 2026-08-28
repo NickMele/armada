@@ -49,7 +49,8 @@ pub const KNOWN_SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 /// **Nothing is ever edited here.** Changing entry zero changes what an already
 /// migrated file is assumed to contain, which is the one thing the version
 /// number exists to stop.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14];
+pub const MIGRATIONS: &[&str] =
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15];
 
 /// Every table whose rows belong to one Job, asked of the file rather than
 /// listed here.
@@ -808,4 +809,49 @@ WHEN NOT (
 BEGIN
     SELECT RAISE(ABORT, 'a job_events row is one whole shape: a job transition with no step or drone columns, a step move beneath an unchanged status carrying a trigger only where it stops the step or advances one that stopped, or a drone arriving or leaving beneath one');
 END;
+"#;
+
+/// Version 15 — what a Job's worktree held when the Job stopped.
+///
+/// `job.files_changed` is a live event published while a Drone works, so the
+/// only reading of a Job's footprint was one a client happened to be listening
+/// for. A Job opened after it finished had none, and the same Job read
+/// differently depending on whether anybody was watching — which is the shape
+/// this table exists to remove.
+///
+/// # Two tables, because zero rows has to mean one thing
+///
+/// `job_footprint` is the header and `job_footprint_files` is the reading. A
+/// Job with no header was never recorded — it is still running, or it finished
+/// before this existed. A Job with a header and no file rows was read and had
+/// changed nothing, which is a real and different answer and the one a
+/// `diff_nonempty` check refuses. One table could not say both.
+///
+/// # No drift mark, and that is the honest shape
+///
+/// A plan is declared by one step and this is the Job's whole work since the
+/// branch was cut. The step holding the pen when a Job stops is usually not the
+/// step that declared — `handoff` finishes a Job that `implement` scoped — so a
+/// mark taken here would measure every step's work against the last step's
+/// promise. `outside_plan` stays on the live reading, where the step that
+/// declared is the step being watched.
+///
+/// **Nothing to backfill.** No footprint was written down before this table
+/// existed, which is what zero rows says.
+const V15: &str = r#"
+CREATE TABLE job_footprint (
+    job_id      TEXT PRIMARY KEY NOT NULL REFERENCES jobs(job_id),
+    recorded_at TEXT NOT NULL
+) STRICT;
+
+-- One row per file, in the order the reading found them. `change` is
+-- `adapter_traits::Change`'s wire spelling, which is the same spelling the
+-- protocol carries.
+CREATE TABLE job_footprint_files (
+    job_id  TEXT NOT NULL REFERENCES jobs(job_id),
+    ordinal INTEGER NOT NULL,
+    path    TEXT NOT NULL,
+    change  TEXT NOT NULL,
+    PRIMARY KEY (job_id, ordinal)
+) STRICT;
 "#;

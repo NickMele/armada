@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::Change;
-use api::{Next, Subscription};
+use api::{Daemon, Next, Subscription};
 use config::ResolvedWorkflow;
 use core_model::Timestamp;
 use ipc::mcp::DeclareScope;
@@ -332,4 +332,119 @@ async fn a_client_that_joins_mid_job_is_sent_the_current_footprint() {
         "the footprint has not moved, and the newcomer is still told what it is"
     );
     assert_eq!(published[0].files.len(), 3);
+}
+
+// ------------------------------------- what survives the Drone that made it
+
+/// **The capability, and #127's definition of done.** Nobody subscribed, so no
+/// live reading was ever taken or published — and the Job still says what it
+/// touched once it is over.
+///
+/// A Job read a week after it finished and one read while it ran now answer the
+/// same thing, which is the whole of what a record buys over an event.
+#[tokio::test]
+async fn a_job_nobody_watched_says_what_it_touched_once_it_is_over() {
+    let home = TempDir::new();
+    let clock = Held::at_nine();
+    let fleet = a_fleet_reading(&home, three_kinds(), Arc::clone(&clock), None);
+    let job = started(&fleet, &home).await;
+
+    fleet.kill_job(&job).await.expect("a terminal status");
+
+    let detail = fleet
+        .get_job(ipc::JobId::from(&job))
+        .await
+        .expect("the Job is served");
+    let footprint = detail.footprint.expect("a footprint was recorded");
+    assert_eq!(
+        footprint
+            .files
+            .iter()
+            .map(|file| (file.path.as_str(), file.change))
+            .collect::<Vec<(&str, ipc::ChangeKind)>>(),
+        vec![
+            ("src/parse.rs", ipc::ChangeKind::Modified),
+            ("src/tokens.rs", ipc::ChangeKind::Added),
+            ("src/legacy.rs", ipc::ChangeKind::Deleted),
+        ],
+        "the reading taken when it stopped, in the order it was found"
+    );
+    assert_eq!(
+        footprint.recorded_at.as_str(),
+        "2026-08-26T09:00:00.000Z",
+        "stamped when the Job stopped, not when it was asked for"
+    );
+}
+
+/// **Absent, never empty, on a Job that is still going.** A working Drone's
+/// footprint is the live event, and a record drawn beside it would be an answer
+/// to a question nobody had asked yet.
+#[tokio::test]
+async fn a_running_job_carries_no_record_of_what_it_touched() {
+    let home = TempDir::new();
+    let clock = Held::at_nine();
+    let fleet = a_fleet_reading(&home, three_kinds(), Arc::clone(&clock), None);
+    let job = started(&fleet, &home).await;
+
+    let detail = fleet
+        .get_job(ipc::JobId::from(&job))
+        .await
+        .expect("the Job is served");
+    assert!(
+        detail.footprint.is_none(),
+        "nothing is recorded until the Job stops"
+    );
+}
+
+/// **A Job that never had a worktree records nothing, and that is absent.** It
+/// is not a worktree that opened and held no change — the two are different
+/// answers, and only one of them is a Drone that wrote nothing.
+#[tokio::test]
+async fn a_job_killed_before_it_was_ever_dispatched_records_nothing() {
+    let home = TempDir::new();
+    let clock = Held::at_nine();
+    let fleet = a_fleet_reading(&home, three_kinds(), Arc::clone(&clock), None);
+    let job = fleet
+        .propose(a_proposal("make the parser take it"))
+        .await
+        .unwrap();
+
+    fleet.kill_job(job.id()).await.expect("a terminal status");
+
+    let detail = fleet
+        .get_job(ipc::JobId::from(job.id()))
+        .await
+        .expect("the Job is served");
+    assert!(
+        detail.footprint.is_none(),
+        "no worktree was ever made, so there was nothing to read"
+    );
+}
+
+/// **A worktree that opened and held nothing is a record, not an absence.** It
+/// is what a `diff_nonempty` check refuses, and a surface that drew it as "not
+/// served" would hide the one finding it carries.
+#[tokio::test]
+async fn a_drone_that_changed_nothing_is_recorded_as_having_changed_nothing() {
+    let home = TempDir::new();
+    let clock = Held::at_nine();
+    let fleet = a_fleet_reading(
+        &home,
+        FakeWorkProduct::changing(&[]),
+        Arc::clone(&clock),
+        None,
+    );
+    let job = started(&fleet, &home).await;
+
+    fleet.kill_job(&job).await.expect("a terminal status");
+
+    let detail = fleet
+        .get_job(ipc::JobId::from(&job))
+        .await
+        .expect("the Job is served");
+    let footprint = detail.footprint.expect("a reading was taken and recorded");
+    assert!(
+        footprint.files.is_empty(),
+        "present and empty, which is not the same sentence as absent"
+    );
 }

@@ -23,8 +23,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::enums::EvidenceType;
-use crate::event::ChangedFile;
-use crate::ids::{JobId, StepId};
+use crate::event::{ChangeKind, ChangedFile};
+use crate::ids::{Instant, JobId, StepId};
 
 /// What one Job's worktree holds against the branch it was cut from.
 ///
@@ -64,6 +64,49 @@ pub struct Work {
     /// broke, and a reading that broke is a refusal rather than a field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub patch: Option<String>,
+}
+
+/// What a Job's worktree held when the Job stopped.
+///
+/// Carried on [`JobDetail`](crate::JobDetail) rather than on its own read, and
+/// **that is the one place the argument runs the other way from the module
+/// note above.** A history is unbounded and a patch is megabytes, so both were
+/// kept off a call made on every open; a footprint is a path and a word per
+/// file. Fleet asks for it only where a Job has one, which is only once the Job
+/// is over, so an open of a running Job pays nothing at all — and a finished
+/// Job's outcome row would otherwise draw its file count from a second read
+/// that lands after the row it belongs to.
+///
+/// **Absent is not empty.** No footprint is a Job nothing recorded — one still
+/// running, or one that finished before Fleet wrote these down. One with no
+/// files is a worktree that was read and held no change.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobFootprint {
+    /// Every file, in the order the reading found them.
+    pub files: Vec<TouchedFile>,
+    /// When the reading was taken. **The instant the Job stopped**, not the
+    /// instant anybody asked — which is what makes this a record rather than a
+    /// reading, and what lets a surface say so.
+    pub recorded_at: Instant,
+}
+
+/// One file a finished Job touched.
+///
+/// **Not [`ChangedFile`], and the missing field is the reason.** A live reading
+/// carries `outside_plan`, because the step being watched is the step that
+/// declared the plan it is measured against. A record is the Job's whole work
+/// since the branch was cut, and the step holding the pen when a Job stops is
+/// usually not the step that scoped it — `handoff` finishes what `implement`
+/// planned. A mark here would attribute one step's promise to every step's
+/// work, and a `false` a client could read as "inside the plan" is worse than
+/// no field: this type cannot carry one, so nothing can infer one from it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TouchedFile {
+    /// Repository-relative, exactly as git spells it.
+    pub path: String,
+    /// The same vocabulary [`ChangedFile::change`] carries. One set of words
+    /// for what happened to a file, whether it is being watched or remembered.
+    pub change: ChangeKind,
 }
 
 /// Every claim a Job's Drones have submitted, step by step.
