@@ -29,7 +29,7 @@ import { FailureBlock } from "./FailureSurface";
 import { fleetFailure, jobFailure, refusalFailure, uncaughtFailure } from "./failures";
 import { statementOf } from "./fleet";
 import { Composer } from "./Composer";
-import { ACT_LABEL, JobDetail, type JobAct } from "./JobDetail";
+import { ACT_LABEL, JobDetail, type ConfirmableAct } from "./JobDetail";
 import { CONFIRM, said } from "./copy";
 import { atTheGate, Jobs, summaryOf } from "./Jobs";
 import { Observe } from "./Observe";
@@ -77,7 +77,9 @@ export function App() {
   // confirmed. **Nothing destructive happens on one press** — every one of the
   // three ends something, so each states what happens and what survives first.
   const [acting, setActing] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState<{ act: JobAct; jobId: string } | null>(null);
+  const [confirming, setConfirming] = useState<{ act: ConfirmableAct; jobId: string } | null>(
+    null,
+  );
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -163,15 +165,15 @@ export function App() {
   }
 
   /**
-   * Do the confirmed act. **The three are three preload calls**, not one call
-   * with a discriminator — killing a Drone leaves the Job, killing the Job ends
-   * it, and a redispatch mints a replacement — killing the original where it
-   * was still open, and leaving an already-terminal one exactly as it stands.
+   * Do the confirmed act. **Four preload calls, not one with a discriminator**
+   * — killing a Drone leaves the Job, killing the Job ends it, a redispatch
+   * mints a replacement, and a restart puts a fresh Drone on the same worktree
+   * at the step that stopped.
    *
    * A redispatch answers with the replacement's id, and the detail follows it:
    * the Job that was open is over, and the one worth reading is the new one.
    */
-  async function act(act: JobAct, jobId: string): Promise<void> {
+  async function act(act: ConfirmableAct, jobId: string): Promise<void> {
     setConfirming(null);
     setActing(jobId);
     try {
@@ -180,9 +182,25 @@ export function App() {
           ? await window.armada.redispatchJob(jobId)
           : act === "kill_drone"
             ? await window.armada.killDrone(jobId)
-            : await window.armada.killJob(jobId);
+            : act === "restart_step"
+              ? await window.armada.restartStep(jobId)
+              : await window.armada.killJob(jobId);
       setOutcome(answer);
       if (answer.ok && answer.jobId !== undefined) setOpenJob(answer.jobId);
+    } finally {
+      setActing(null);
+    }
+  }
+
+  /**
+   * Send a redirect. **Not through `act`** — the dialog that collected the
+   * instruction already was the confirmation, so there is nothing left to
+   * confirm here, only to send.
+   */
+  async function redirect(jobId: string, instruction: string): Promise<void> {
+    setActing(jobId);
+    try {
+      setOutcome(await window.armada.redirectDrone(jobId, instruction));
     } finally {
       setActing(null);
     }
@@ -389,6 +407,7 @@ export function App() {
                 acting={acting === reading.id}
                 approving={state.approving.includes(reading.id)}
                 onAct={(what, jobId) => setConfirming({ act: what, jobId })}
+                onRedirect={(jobId, instruction) => void redirect(jobId, instruction)}
                 onApprove={(jobId) => void approve(jobId)}
                 onObserve={() => setObserving(true)}
                 onCopied={setCopied}
@@ -453,7 +472,7 @@ export function App() {
       {confirming === null ? null : (
         <Dialog
           open
-          tone="destructive"
+          tone={CONFIRM[confirming.act].tone ?? "destructive"}
           title={CONFIRM[confirming.act].title}
           confirmLabel={ACT_LABEL[confirming.act]}
           onCancel={() => setConfirming(null)}

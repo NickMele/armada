@@ -6,8 +6,10 @@
 // among them** — those come from the generated vocabulary, which is what stops
 // a second one being typed into a component.
 
+import type { DialogTone } from "@armada/components";
+
 import type { Outcome } from "../../shared/bridge";
-import type { JobAct } from "./JobDetail";
+import type { ConfirmableAct } from "./JobDetail";
 
 /** What a refusal says. Every one names what happened and what to do. */
 export function said(outcome: Outcome): string {
@@ -29,6 +31,12 @@ export function said(outcome: Outcome): string {
       return "That redispatch is already in flight. It was not sent twice.";
     case "already_killing":
       return "That kill is already in flight. It was not sent twice.";
+    case "already_redirecting":
+      return "That redirect is already in flight. It was not sent twice.";
+    case "already_restarting":
+      return "That restart is already in flight. It was not sent twice.";
+    case "empty_instruction":
+      return "A redirect needs an instruction. Nothing was sent.";
     case "refused":
       // Drawn as a failure notice above, with everything it carries.
       return "";
@@ -45,8 +53,13 @@ export function said(outcome: Outcome): string {
  * Neither the step nor the elapsed is named here. The design's sample line
  * carries both, and neither is a fact this dialog holds — the detail behind it
  * does, on screen while the dialog is open.
+ *
+ * `tone` defaults to destructive in `Dialog` itself; only `restart_step` says
+ * otherwise, because it is a recovery, not an end. Redirect carries no entry
+ * — its own dialog collects the instruction and is its own confirmation, so
+ * it never reaches this one.
  */
-export const CONFIRM: Record<JobAct, { title: string; body: string }> = {
+export const CONFIRM: Record<ConfirmableAct, { title: string; body: string; tone?: DialogTone }> = {
   kill_drone: {
     title: "Kill the drone on this job?",
     body:
@@ -69,5 +82,14 @@ export const CONFIRM: Record<JobAct, { title: string; body: string }> = {
       "continue: one still open is killed, and one that already ended is left as it stands. " +
       "Nothing resumes — the new job starts at the approval gate and needs releasing, and this " +
       "job's worktree and branch stay as its drone left them.",
+  },
+  restart_step: {
+    title: "Restart this step?",
+    tone: "neutral",
+    body:
+      "A fresh drone takes over on the same worktree, at the step the last one stopped at. " +
+      "The toolset, model and environment are resolved again from scratch, so a widened scope " +
+      "can only narrow — and where the worktree itself is gone, Fleet refuses this and names a " +
+      "redispatch instead.",
   },
 };

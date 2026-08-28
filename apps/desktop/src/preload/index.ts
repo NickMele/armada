@@ -51,6 +51,12 @@ const api: BridgeApi = {
 
   killJob: (jobId: string): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.killJob, jobId),
 
+  redirectDrone: (jobId: string, instruction: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.redirectDrone, jobId, instruction),
+
+  restartStep: (jobId: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.restartStep, jobId),
+
   watchJob: (jobId: string | null): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.watchJob, jobId),
 

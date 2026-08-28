@@ -228,6 +228,9 @@ export type Outcome =
   | { ok: false; why: "already_approving" }
   | { ok: false; why: "already_redispatching" }
   | { ok: false; why: "already_killing" }
+  | { ok: false; why: "already_redirecting" }
+  | { ok: false; why: "already_restarting" }
+  | { ok: false; why: "empty_instruction" }
   | { ok: false; why: "refused"; error: WireError }
   | { ok: false; why: "transport"; detail: string };
 
@@ -285,6 +288,19 @@ export type BridgeApi = {
   /** End the Job at `killed`. Terminal, and nothing resumes it. */
   killJob: (jobId: string) => Promise<Outcome>;
   /**
+   * Inject an instruction into the Drone that is there. **Legal only on an
+   * escalated Job that still holds one** — Fleet refuses 409 where the Drone
+   * is gone, naming `restartStep` as the act that applies. Nothing is
+   * spawned; the Job comes back `running` with the same session.
+   */
+  redirectDrone: (jobId: string, instruction: string) => Promise<Outcome>;
+  /**
+   * Put a fresh Drone on the surviving worktree, at the step that stopped.
+   * **Legal only where the Drone is gone** — Fleet refuses 409 where one is
+   * still alive, or where the worktree itself is gone.
+   */
+  restartStep: (jobId: string) => Promise<Outcome>;
+  /**
    * Read one Job whole and keep it current, or `null` to stop.
    *
    * The renderer says which Job is open; main does the reading and republishes
@@ -334,6 +350,8 @@ export const CHANNELS = {
   redispatchJob: "bridge:redispatch-job",
   killDrone: "bridge:kill-drone",
   killJob: "bridge:kill-job",
+  redirectDrone: "bridge:redirect-drone",
+  restartStep: "bridge:restart-step",
   watchJob: "bridge:watch-job",
   observeJob: "bridge:observe-job",
 } as const;

@@ -46,13 +46,16 @@ export const NeutralConfirm: Story = {
 };
 
 /**
- * The three confirmations Bridge actually shows, in the words it uses.
+ * The confirmations Bridge actually shows, in the words it uses.
  *
  * Each states **what happens and what survives**, which is the two halves the
  * copy contract asks for — and it is why the two kills cannot share one dialog:
  * they survive differently. Neither names a step or an elapsed the way the
  * contract's sample line does, because neither is a fact the dialog holds; the
  * detail behind it carries both and stays on screen.
+ *
+ * Redirect is not among them. Its dialog carries the instruction itself and is
+ * its own confirmation — see `Screens/A failed job` for that shape.
  */
 export const KillTheDrone: Story = {
   args: {
@@ -103,5 +106,25 @@ export const RedispatchAsANewJob: Story = {
       "This job is killed and a replacement is created carrying a reference back to it. " +
       "Nothing resumes: the new job starts at the approval gate and needs releasing. " +
       "The failed job's worktree and branch are left as its drone left them.",
+  },
+};
+
+/**
+ * Restart the step. **Neutral, not destructive** — nothing ends, a fresh
+ * drone resumes the step that stopped on the same worktree. Offered only
+ * where the escalated job's drone is gone; where one is alive, redirect is
+ * the act, and it confirms through its own dialog rather than this one.
+ */
+export const RestartTheStep: Story = {
+  args: {
+    open: true,
+    tone: "neutral",
+    title: "Restart this step?",
+    confirmLabel: "Restart step",
+    children:
+      "A fresh drone takes over on the same worktree, at the step the last one stopped at. " +
+      "The toolset, model and environment are resolved again from scratch, so a widened scope " +
+      "can only narrow — and where the worktree itself is gone, Fleet refuses this and names a " +
+      "redispatch instead.",
   },
 };

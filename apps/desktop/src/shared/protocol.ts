@@ -216,6 +216,14 @@ export type Redispatched = {
   dispatched: JobSummary;
 };
 
+/**
+ * The body of `redirect_drone`. `crates/ipc/src/job.rs`. The one string that
+ * reaches a Drone without Fleet assembling it — blank is refused server-side.
+ */
+export type Redirection = {
+  instruction: string;
+};
+
 /** The reason a transition carried, where it stored one. */
 export type Reason = {
   named?: string;

@@ -21,12 +21,15 @@
 // and present-and-empty is determined to write nothing. Collapsing them would
 // tell somebody a Job has no scope when what is true is that nobody set one.
 
+import { useState } from "react";
 import {
   AFailedJobADeadEndReadAsOne,
   AFinishedJobABranchAndAnEvidenceTrail,
   ARunningJob,
   Button,
+  Dialog,
   SplitButton,
+  Textarea,
   type JobDetailHeading,
   type SplitButtonItem,
 } from "@armada/components";
@@ -83,8 +86,15 @@ function escalation(job: JobSummary) {
   return ESCALATION_REASON[named];
 }
 
-/** What the two kills and the redispatch are called, and what each one does. */
-export type JobAct = "kill_drone" | "kill_job" | "redispatch";
+/** What the two kills, the redispatch and the two step-resuming acts are called. */
+export type JobAct = "kill_drone" | "kill_job" | "redispatch" | "redirect" | "restart_step";
+
+/**
+ * The acts that confirm through the shared dialog. **Redirect is not one** —
+ * its dialog carries the instruction itself, so it is its own confirmation
+ * and does not also route through this one.
+ */
+export type ConfirmableAct = Exclude<JobAct, "redirect">;
 
 /**
  * The statuses a redispatch is offered on. Three, and **`rejected` is not one**:
@@ -118,7 +128,13 @@ export type JobDetailProps = {
   /** An approval already sent for this Job. */
   approving: boolean;
   /** Ask for a confirmation. Nothing destructive is one press from here. */
-  onAct: (act: JobAct, jobId: string) => void;
+  onAct: (act: ConfirmableAct, jobId: string) => void;
+  /**
+   * Send a redirect straight through — the dialog that collects the
+   * instruction is the confirmation, so there is nothing left for `onAct` to
+   * ask about.
+   */
+  onRedirect: (jobId: string, instruction: string) => void;
   /**
    * Let this Job run. **Sent on the press, with no confirmation** — approving
    * is the ordinary path, it is reversible by killing, and a gate that costs
@@ -144,6 +160,7 @@ export function JobDetail({
   acting,
   approving,
   onAct,
+  onRedirect,
   onApprove,
   onObserve,
   onCopied,
@@ -179,6 +196,7 @@ export function JobDetail({
         approving={approving}
         stale={stale}
         onAct={onAct}
+        onRedirect={onRedirect}
         onApprove={onApprove}
         onObserve={onObserve}
       />
@@ -280,10 +298,13 @@ function whyNoSteps(watched: Watched, jobId: string): string | undefined {
 /**
  * What can be done to this Job from here.
  *
- * **Four acts, and none of them collapses into another.** Killing the Drone
+ * **Six acts, and none of them collapses into another.** Killing the Drone
  * ends a process and leaves the Job open with its worktree held; killing the
  * Job ends the Job at `killed`, terminal; redispatch does the second and mints
- * a replacement; approving lets a Job at the gate run.
+ * a replacement; approving lets a Job at the gate run. Redirect and restart are
+ * the two acts that resume a stopped step rather than ending or replacing it —
+ * `crates/api/src/routes.rs` decides which applies by whether the Job still
+ * holds a Drone, and the two are never offered together for that reason.
  *
  * | Act | Drawn on | Confirms |
  * |---|---|---|
@@ -291,12 +312,17 @@ function whyNoSteps(watched: Watched, jobId: string): string | undefined {
  * | `redispatch` | `escalated`, `completed_failed`, `killed` | yes |
  * | `kill_drone` | a Job holding an `assigned_drone` | yes |
  * | `kill_job` | every non-terminal status | yes |
+ * | `redirect` | escalated, holding an `assigned_drone` | its own dialog |
+ * | `restart_step` | escalated, no `assigned_drone` | yes |
  *
  * **The three that end something are one split button, not a row of red.** Two
  * outlined reds side by side read as one control with two labels, which is the
  * thing they are least like. What is on the face is the act that state calls
  * for; the rest sit in the menu and each one's label says what survives it, so
  * the caret never turns a terminal act into a variant of a milder one.
+ *
+ * Redirect and restart sit outside that group: neither ends anything, so
+ * neither belongs beside a control whose whole point is announcing what does.
  */
 function Acts({
   job,
@@ -305,6 +331,7 @@ function Acts({
   approving,
   stale,
   onAct,
+  onRedirect,
   onApprove,
   onObserve,
 }: {
@@ -313,24 +340,30 @@ function Acts({
   acting: boolean;
   approving: boolean;
   stale: boolean;
-  onAct: (act: JobAct, jobId: string) => void;
+  onAct: (act: ConfirmableAct, jobId: string) => void;
+  onRedirect: (jobId: string, instruction: string) => void;
   onApprove: (jobId: string) => void;
   onObserve: () => void;
 }) {
   const life = JOB_LIFECYCLE[job.status];
   const over = life?.terminal ?? true;
   // Menu order, mildest first — the split button puts destructive last.
-  const acts: JobAct[] = [
+  const acts: ConfirmableAct[] = [
     // Only where Fleet accepts one; anything else is its 409, and this does not
     // offer a button that is refused on press.
     ...(render === "stopped" && REDISPATCHABLE.has(job.status)
-      ? (["redispatch"] as JobAct[])
+      ? (["redispatch"] as ConfirmableAct[])
       : []),
     // `assigned_drone` is presence rather than state: there is nothing to kill
     // without one.
-    ...(job.assigned_drone === undefined ? [] : (["kill_drone"] as JobAct[])),
-    ...(over ? [] : (["kill_job"] as JobAct[])),
+    ...(job.assigned_drone === undefined ? [] : (["kill_drone"] as ConfirmableAct[])),
+    ...(over ? [] : (["kill_job"] as ConfirmableAct[])),
   ];
+  // Which of redirect and restart applies. Decided by the Drone's presence, the
+  // same signal `kill_drone` reads — a surface that offered both regardless
+  // would offer one Fleet always refuses.
+  const canRedirect = render === "stopped" && job.assigned_drone !== undefined;
+  const canRestart = render === "stopped" && job.assigned_drone === undefined;
   // What the state calls for goes on the face: replacing a Job that stopped, and
   // otherwise the kill that ends it. Never the milder kill — the act with the
   // larger consequence does not hide behind a caret.
@@ -352,6 +385,21 @@ function Acts({
       <Button variant="ghost" disabled={stale} onClick={onObserve}>
         Watch the turns
       </Button>
+      {/* Neither ends the Job, so neither is a plain-red act. The dialog it
+          opens is itself the confirmation — a person who cancels the dialog
+          has sent nothing. */}
+      {canRedirect ? (
+        <RedirectControl jobId={job.id} disabled={acting || stale} onRedirect={onRedirect} />
+      ) : null}
+      {canRestart ? (
+        <Button
+          variant="secondary"
+          disabled={acting || stale}
+          onClick={() => onAct("restart_step", job.id)}
+        >
+          {ACT_LABEL.restart_step}
+        </Button>
+      ) : null}
       {face === undefined ? null : menu.length === 0 ? (
         // A split button with nothing in its menu is a button. Outlined, because
         // a solid red control reads as an error state rather than as an act.
@@ -392,6 +440,67 @@ function Acts({
 }
 
 /**
+ * The button that opens the redirect dialog, and the dialog itself.
+ *
+ * **The dialog is the confirmation.** There is no second "are you sure" after
+ * it, because sending is the one thing the dialog's own button does — closing
+ * it any other way sends nothing. `confirmDisabled` keeps the send control off
+ * while the field is blank, matching the 422 Fleet would give it, rather than
+ * letting the press round-trip to Fleet to learn that.
+ */
+function RedirectControl({
+  jobId,
+  disabled,
+  onRedirect,
+}: {
+  jobId: string;
+  disabled: boolean;
+  onRedirect: (jobId: string, instruction: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [instruction, setInstruction] = useState("");
+
+  function close() {
+    setOpen(false);
+    setInstruction("");
+  }
+
+  return (
+    <>
+      <Button variant="secondary" disabled={disabled} onClick={() => setOpen(true)}>
+        {ACT_LABEL.redirect}
+      </Button>
+      <Dialog
+        open={open}
+        tone="neutral"
+        title="Redirect the drone on this job?"
+        confirmLabel={ACT_LABEL.redirect}
+        confirmDisabled={instruction.trim() === ""}
+        onCancel={close}
+        onConfirm={() => {
+          const sent = instruction;
+          close();
+          onRedirect(jobId, sent);
+        }}
+      >
+        <p>
+          The instruction is sent to the drone as a new turn. The job stays at the same step, with
+          the same session — nothing is spawned and nothing already done is thrown away.
+        </p>
+        {/* No `autoFocus`: the dialog's own contract puts initial focus on
+            Cancel, and a second claim on it here would only lose to it. */}
+        <Textarea
+          label="Instruction"
+          rows={4}
+          value={instruction}
+          onChange={(event) => setInstruction(event.target.value)}
+        />
+      </Dialog>
+    </>
+  );
+}
+
+/**
  * What each act is called on its button. **Redispatch does not say "retry" or
  * "run again"** — nothing resumes, and a label implying the same Job continues
  * would describe an act Fleet does not perform. The confirmation states the
@@ -401,21 +510,29 @@ export const ACT_LABEL: Record<JobAct, string> = {
   kill_drone: "Kill drone",
   kill_job: "Kill job",
   redispatch: "Redispatch as a new job",
+  redirect: "Redirect drone",
+  restart_step: "Restart step",
 };
 
 /**
  * The same acts inside the menu, where each says what survives it. A caret hides
  * the consequence that a button's own position states, so the label has to carry
  * it — `Kill drone` and `Kill job` differ by everything and by three characters.
+ *
+ * **Redirect and restart never reach a menu** — neither joins the split
+ * button, so these two entries exist only to keep the record total over
+ * `JobAct` rather than for anything that reads them today.
  */
 const MENU_LABEL: Record<JobAct, string> = {
   kill_drone: "Kill drone, the job stays open",
   kill_job: "Kill job, it ends here",
   redispatch: "Redispatch as a new job",
+  redirect: "Redirect drone, the job stays open",
+  restart_step: "Restart the step, on the same worktree",
 };
 
 /** Which act takes the split button's face, in preference order. */
-const FACE: readonly JobAct[] = ["redispatch", "kill_job"];
+const FACE: readonly ConfirmableAct[] = ["redispatch", "kill_job"];
 
 /**
  * Why a Job stopped: the reason's own verb, the criteria it still owes, and

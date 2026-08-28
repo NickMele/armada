@@ -17,6 +17,7 @@ import type {
   JobDetail,
   JobSummary,
   ProposeJob,
+  Redirection,
   Redispatched,
   StreamMessage,
   WireError,
@@ -46,6 +47,8 @@ export class FleetConnection {
   private readonly approving = new Set<string>();
   private readonly redispatching = new Set<string>();
   private readonly killing = new Set<string>();
+  private readonly redirecting = new Set<string>();
+  private readonly restarting = new Set<string>();
   /** The Job whose detail is open. `null` is no detail, and no read. */
   private watching: string | null = null;
   /** The Job whose turns are open. A second socket to Fleet — see `observe.ts`. */
@@ -470,6 +473,57 @@ export class FleetConnection {
       return { ok: true };
     } finally {
       this.killing.delete(jobId);
+    }
+  }
+
+  /**
+   * Say something to the Drone that is there. **The Job comes back
+   * `running`**, at the same step, with the same Drone — nothing was spawned
+   * and nothing was thrown away. Blank is refused before the request is
+   * sent, matching the 422 Fleet would give it.
+   */
+  async redirectDrone(jobId: string, instruction: string): Promise<Outcome> {
+    if (instruction.trim() === "") return { ok: false, why: "empty_instruction" };
+    if (this.redirecting.has(jobId)) return { ok: false, why: "already_redirecting" };
+    const fleet = this.connected();
+    if (fleet === null) return { ok: false, why: "not_connected" };
+
+    this.redirecting.add(jobId);
+    try {
+      const path = `/jobs/${encodeURIComponent(jobId)}/redirect`;
+      const body: Redirection = { instruction };
+      const answer = await ask(fleet.port, "POST", path, body);
+      if (answer.ok !== true) return answer.outcome;
+      if (isJobSummary(answer.body)) this.fold(answer.body);
+      else await this.reread(fleet);
+      this.refresh(fleet, jobId);
+      return { ok: true };
+    } finally {
+      this.redirecting.delete(jobId);
+    }
+  }
+
+  /**
+   * Put a fresh Drone on the worktree the last one left, at the step that
+   * stopped. **One Job comes back**, resuming rather than replacing — the
+   * whole difference between this and a redispatch.
+   */
+  async restartStep(jobId: string): Promise<Outcome> {
+    if (this.restarting.has(jobId)) return { ok: false, why: "already_restarting" };
+    const fleet = this.connected();
+    if (fleet === null) return { ok: false, why: "not_connected" };
+
+    this.restarting.add(jobId);
+    try {
+      const path = `/jobs/${encodeURIComponent(jobId)}/restart_step`;
+      const answer = await ask(fleet.port, "POST", path);
+      if (answer.ok !== true) return answer.outcome;
+      if (isJobSummary(answer.body)) this.fold(answer.body);
+      else await this.reread(fleet);
+      this.refresh(fleet, jobId);
+      return { ok: true };
+    } finally {
+      this.restarting.delete(jobId);
     }
   }
 

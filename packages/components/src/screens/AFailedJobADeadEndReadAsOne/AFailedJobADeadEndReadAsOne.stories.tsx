@@ -1,7 +1,11 @@
+import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { LucideIcon } from "lucide-react";
 import { CircleCheck, CircleX, File, Folder, GitBranch, OctagonAlert, Power, ShieldCheck, ShieldMinus, ShieldX, X } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
+import { Dialog } from "../../primitives/Dialog/Dialog";
+import { SplitButton } from "../../primitives/SplitButton/SplitButton";
+import { Textarea } from "../../primitives/Textarea/Textarea";
 import type { WorkflowRailStep } from "../../compositions/WorkflowRail/WorkflowRail";
 import { AFailedJobADeadEndReadAsOne } from "./AFailedJobADeadEndReadAsOne";
 
@@ -185,42 +189,155 @@ export const FailedJob: Story = {
 };
 
 /**
- * A Job that stopped and asked. **Not terminal** — the one act on it is a
- * redispatch, and it is about the Job rather than its branch, so it goes in
- * the header where `Kill` goes on a running Job.
+ * A Job that stopped and asked, **with its drone still alive and idle**. Two
+ * acts beside redispatch and kill: redirect, because the session, the
+ * worktree and every step so far are still held, so a person's own words can
+ * be injected as a new turn rather than starting over.
  *
  * The verb and the glyph are `escalation_reason.stalled`'s, which is what
  * Bridge reads from the generated vocabulary rather than writing here.
+ *
+ * **The dialog is the confirmation.** Bridge's own `JobDetail.tsx` composes
+ * this same shape — a secondary button beside the split button, opening a
+ * `Dialog` whose confirm is disabled until the field holds something, so a
+ * blank instruction never reaches Fleet's own 422 for it.
  */
 export const StoppedAndAsked: Story = {
-  render: () => (
-    <div className="armada-screen">
-      <AFailedJobADeadEndReadAsOne
-        heading={{
-          status: "escalated",
-          statusIcon: OctagonAlert,
-          statusLabel: "stalled",
-          headline: "Cache the manifest read",
-          jobId: "job_91ab",
-          fields: [
-            { label: "Stopped at", value: "verify" },
-            { label: "step", value: "3 of 4", mono: true, continues: true },
-            { label: "Model", value: "sonnet", mono: true },
-          ],
-          actions: <Button>Redispatch</Button>,
-        }}
-        why="The job stalled. Nothing runs from here without you."
-        steps={steps.map((step) => ({
-          id: step.id,
-          label: step.id,
-          labelIsAnIdentifier: true,
-          activity: step.activity,
-          ungatedLabel: "Fleet serves no check result for this step",
-          evidence: { label: "" },
-        }))}
-      />
-    </div>
-  ),
+  render: () => {
+    const [open, setOpen] = useState(false);
+    const [instruction, setInstruction] = useState("");
+    return (
+      <div className="armada-screen">
+        <AFailedJobADeadEndReadAsOne
+          heading={{
+            status: "escalated",
+            statusIcon: OctagonAlert,
+            statusLabel: "stalled",
+            headline: "Cache the manifest read",
+            jobId: "job_91ab",
+            fields: [
+              { label: "Stopped at", value: "verify" },
+              { label: "step", value: "3 of 4", mono: true, continues: true },
+              { label: "Model", value: "sonnet", mono: true },
+            ],
+            actions: (
+              <>
+                <Button variant="secondary" onClick={() => setOpen(true)}>
+                  Redirect drone
+                </Button>
+                <SplitButton
+                  variant="destructive"
+                  menuLabel="What else ends this job"
+                  items={[{ label: "Kill drone, the job stays open" }]}
+                >
+                  Redispatch as a new job
+                </SplitButton>
+              </>
+            ),
+          }}
+          why="The job stalled. Nothing runs from here without you."
+          steps={steps.map((step) => ({
+            id: step.id,
+            label: step.id,
+            labelIsAnIdentifier: true,
+            activity: step.activity,
+            ungatedLabel: "Fleet serves no check result for this step",
+            evidence: { label: "" },
+          }))}
+        />
+        <Dialog
+          open={open}
+          tone="neutral"
+          title="Redirect the drone on this job?"
+          confirmLabel="Redirect drone"
+          confirmDisabled={instruction.trim() === ""}
+          onCancel={() => setOpen(false)}
+          onConfirm={() => setOpen(false)}
+        >
+          <p>
+            The instruction is sent to the drone as a new turn. The job stays at the same step,
+            with the same session — nothing is spawned and nothing already done is thrown away.
+          </p>
+          <Textarea
+            label="Instruction"
+            rows={4}
+            value={instruction}
+            onChange={(event) => setInstruction(event.target.value)}
+          />
+        </Dialog>
+      </div>
+    );
+  },
+};
+
+/**
+ * The same stall, **with the drone gone** instead. Redirect no longer
+ * applies — there is no session left to inject a turn into — so restart
+ * takes its place: a fresh drone on the surviving worktree, at the step
+ * that stopped. Never offered beside redirect on the same job, because
+ * which of the two applies is decided by the drone's presence rather than
+ * by the person.
+ *
+ * Neutral tone, not destructive — nothing here ends the job.
+ */
+export const StoppedWithNoDrone: Story = {
+  render: () => {
+    const [confirming, setConfirming] = useState(false);
+    return (
+      <div className="armada-screen">
+        <AFailedJobADeadEndReadAsOne
+          heading={{
+            status: "escalated",
+            statusIcon: OctagonAlert,
+            statusLabel: "stalled",
+            headline: "Cache the manifest read",
+            jobId: "job_91ab",
+            fields: [
+              { label: "Stopped at", value: "verify" },
+              { label: "step", value: "3 of 4", mono: true, continues: true },
+              { label: "Model", value: "sonnet", mono: true },
+            ],
+            actions: (
+              <>
+                <Button variant="secondary" onClick={() => setConfirming(true)}>
+                  Restart step
+                </Button>
+                <SplitButton
+                  variant="destructive"
+                  menuLabel="What else ends this job"
+                  items={[{ label: "Kill job, it ends here", danger: true }]}
+                >
+                  Redispatch as a new job
+                </SplitButton>
+              </>
+            ),
+          }}
+          why="The job stalled. Its drone is gone. Nothing runs from here without you."
+          steps={steps.map((step) => ({
+            id: step.id,
+            label: step.id,
+            labelIsAnIdentifier: true,
+            activity: step.activity,
+            ungatedLabel: "Fleet serves no check result for this step",
+            evidence: { label: "" },
+          }))}
+        />
+        <Dialog
+          open={confirming}
+          tone="neutral"
+          title="Restart this step?"
+          confirmLabel="Restart step"
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => setConfirming(false)}
+        >
+          A fresh drone takes over on the same worktree, at the step the last one stopped at. The
+          toolset, model and environment are resolved again from scratch, so a widened scope can
+          only narrow — and where the worktree itself is gone, Fleet refuses this and names a
+          redispatch instead.
+        </Dialog>
+      </div>
+    );
+  },
 };
 
 /**

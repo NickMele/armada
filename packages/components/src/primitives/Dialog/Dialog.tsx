@@ -23,6 +23,8 @@ export type DialogProps = {
   tone?: DialogTone;
   /** The action keeps its name through the flow: Kill here produces "Killed". */
   confirmLabel: string;
+  /** Disables confirm without hiding it — a blank field it would refuse anyway. */
+  confirmDisabled?: boolean;
   cancelLabel?: string;
   onConfirm?: () => void;
   onCancel?: () => void;
@@ -34,6 +36,7 @@ export function Dialog({
   children,
   tone = "destructive",
   confirmLabel,
+  confirmDisabled = false,
   cancelLabel = "Cancel",
   onConfirm,
   onCancel,
@@ -55,12 +58,12 @@ export function Dialog({
       }
       if (event.key === "Enter") {
         event.preventDefault();
-        onConfirm?.();
+        if (!confirmDisabled) onConfirm?.();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onCancel, onConfirm]);
+  }, [open, onCancel, onConfirm, confirmDisabled]);
 
   if (!open) return null;
 
@@ -106,6 +109,7 @@ export function Dialog({
                 ? "armada-dialog__button armada-dialog__button--destructive"
                 : "armada-dialog__button armada-dialog__button--primary"
             }
+            disabled={confirmDisabled}
             onClick={onConfirm}
           >
             {confirmLabel}
