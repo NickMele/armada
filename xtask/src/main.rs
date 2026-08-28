@@ -110,6 +110,7 @@ fn verify_foundations() -> ExitCode {
         rules_protocol::the_router_serves_what_the_inventory_names(&root),
         rules_enums::every_registry_key_is_a_variant(&root),
         rules_enums::edges::the_registry_and_the_edge_table_hold_the_same_edges(&root),
+        rules_enums::reachability::every_status_declares_the_step_states_it_holds(&root),
     ];
 
     let mut out = String::new();
