@@ -179,6 +179,7 @@ mod tests {
         EvidenceScope::declared(
             ContextSource::DroneDeclared,
             exclude.into_iter().map(RepoPath::new).collect(),
+            Vec::new(),
             check,
             None,
         )

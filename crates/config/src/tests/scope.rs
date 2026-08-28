@@ -6,7 +6,7 @@
 //! refusal that names the object it belongs to rather than by "unknown key" —
 //! which would read as a field the parser has not reached yet.
 
-use core_model::{ContextSource, DeclarePlanAt};
+use core_model::{ContextSource, DeclarePlanAt, EvidenceRef};
 
 use crate::error::Fault;
 use crate::tests::{fault_at, named, refusals};
@@ -74,10 +74,10 @@ fn a_definition_that_authors_the_drones_answer_is_refused_by_name() {
 }
 
 /// A key nothing reads is a promise the file makes and the system does not
-/// keep. `max_context_size` has no decided value and no owner, and
-/// `reference_docs` needs a Judge brief that carries a yardstick.
+/// keep. `max_context_size` has no decided number and no owner — the cap bounds
+/// all of verification rather than the Judge Check alone, and it stays open.
 #[test]
-fn the_two_deferred_keys_are_refused_as_deferred_rather_than_as_typos() {
+fn the_cap_nobody_has_decided_is_refused_as_deferred_rather_than_as_a_typo() {
     let refusals = refusals(parsed(
         "
   - id: implement
@@ -86,19 +86,89 @@ fn the_two_deferred_keys_are_refused_as_deferred_rather_than_as_typos() {
     evidence_scope:
       context_source: drone_declared
       max_context_size: 20
+",
+    ));
+    assert!(
+        matches!(
+            fault_at(&refusals, "steps[0].evidence_scope.max_context_size"),
+            Fault::OutsideM1 { .. }
+        ),
+        "the cap is a schema key with no decided value, not a typo"
+    );
+}
+
+/// **The yardstick, reachable at last.** A later step names what an earlier
+/// step established, and it names the *evidence* rather than a file: the same
+/// `<step_id>.evidence` spelling `baseline_ref` uses, through the same type.
+#[test]
+fn a_step_can_name_the_earlier_evidence_its_work_is_measured_against() {
+    let def = parsed(
+        "
+  - id: scope
+    label: Scope
+    evidence_type: facts_note
+    advance_gate: auto
+  - id: implement
+    label: Implement
+    evidence_type: diff
+    advance_gate: auto
+    evidence_scope:
+      context_source: drone_declared
+      reference_docs:
+        - scope.evidence
+",
+    )
+    .expect("a step naming an earlier step's evidence loads");
+    let scope = def.steps()[1]
+        .evidence_scope()
+        .expect("the step declares one");
+    assert_eq!(
+        scope.reference_docs(),
+        &[EvidenceRef::parse("scope.evidence").expect("a reference")],
+        "what the step is measured against is carried, not dropped"
+    );
+}
+
+/// A path on disk is not evidence. `reference_docs` names what a step recorded,
+/// so a file path — which is what the deferred key used to be written with — is
+/// refused rather than resolved into something nothing can reach.
+#[test]
+fn a_reference_that_is_not_an_evidence_reference_is_refused() {
+    let refusals = refusals(parsed(
+        "
+  - id: implement
+    label: Implement
+    advance_gate: auto
+    evidence_scope:
+      context_source: drone_declared
       reference_docs:
         - docs/brief.md
+        - scope
 ",
     ));
     for key in [
-        "steps[0].evidence_scope.max_context_size",
-        "steps[0].evidence_scope.reference_docs",
+        "steps[0].evidence_scope.reference_docs[0]",
+        "steps[0].evidence_scope.reference_docs[1]",
     ] {
         assert!(
-            matches!(fault_at(&refusals, key), Fault::OutsideM1 { .. }),
-            "{key} is a schema key this milestone does not read, not a typo"
+            matches!(fault_at(&refusals, key), Fault::NotInTheSchema { .. }),
+            "{key} names no step's evidence, and naming a step is not naming its \
+             evidence either"
         );
     }
+}
+
+/// **The common shape.** Most steps are judged on their own product and
+/// nothing else, and a scope block that names no yardstick carries an empty
+/// one rather than failing to load.
+#[test]
+fn a_scope_naming_no_yardstick_carries_none() {
+    let def = parsed(WATCHED).expect("a scoped step loads");
+    assert!(def.steps()[0]
+        .evidence_scope()
+        .expect("the step declares one")
+        .reference_docs()
+        .is_empty());
 }
 
 /// The two keys are one intent written in two places, and a file where only one

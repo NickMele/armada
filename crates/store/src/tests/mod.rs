@@ -116,6 +116,7 @@ pub fn workflow() -> FrozenWorkflow {
                 Some(EvidenceScope::declared(
                     ContextSource::DroneDeclared,
                     vec![RepoPath::new("secrets")],
+                    vec![EvidenceRef::parse("root_cause.evidence").expect("a reference")],
                     true,
                     Some(DeclarePlanAt::StepStart),
                 )),

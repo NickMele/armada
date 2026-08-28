@@ -11,6 +11,18 @@
 //! joined by `verification`, which is the one place that compares them against
 //! what actually changed.
 //!
+//! # `reference_docs` names evidence, never a path
+//!
+//! The yardstick a step is measured against is an earlier step's evidence, and
+//! it is spelled the way `baseline_ref` is — `<step_id>.evidence`, through
+//! [`EvidenceRef`], which has no constructor taking a bare [`StepId`]. So the
+//! two cannot drift into two spellings of one thing, and a definition cannot
+//! point the Judge at a file on disk that nothing recorded.
+//!
+//! **Kept separate from `context_paths` deliberately.** One is what changed and
+//! the other is what it is measured against, so the Judge is never confused
+//! about which is target and which is standard — `docs/concepts/judge.md`.
+//!
 //! # Why these are not `WriteTargets`
 //!
 //! `WriteTargets` is the **Job's** declared write scope and binds nothing —
@@ -22,6 +34,7 @@
 
 use alloc::vec::Vec;
 
+use crate::job::gaming::EvidenceRef;
 use crate::job::ids::RepoPath;
 
 /// Where a step's `context_paths` came from.
@@ -102,6 +115,7 @@ impl DeclarePlanAt {
 pub struct EvidenceScope {
     context_source: ContextSource,
     exclude_paths: Vec<RepoPath>,
+    reference_docs: Vec<EvidenceRef>,
     scope_diff_check: bool,
     declare_plan_at: Option<DeclarePlanAt>,
 }
@@ -111,12 +125,14 @@ impl EvidenceScope {
     pub fn declared(
         context_source: ContextSource,
         exclude_paths: Vec<RepoPath>,
+        reference_docs: Vec<EvidenceRef>,
         scope_diff_check: bool,
         declare_plan_at: Option<DeclarePlanAt>,
     ) -> EvidenceScope {
         EvidenceScope {
             context_source,
             exclude_paths,
+            reference_docs,
             scope_diff_check,
             declare_plan_at,
         }
@@ -130,6 +146,18 @@ impl EvidenceScope {
     /// over anything the Drone declared.
     pub fn exclude_paths(&self) -> &[RepoPath] {
         &self.exclude_paths
+    }
+
+    /// What this step's work is measured against: the evidence of steps that
+    /// came before it. **Empty on most steps**, which is a step judged on its
+    /// own product and nothing else.
+    ///
+    /// Naming a step is not reaching it. Whether the named step is strictly
+    /// earlier, and whether it recorded anything, is `fleet`'s to answer where
+    /// the position in the workflow is known — the same rule `baseline_ref`
+    /// goes through.
+    pub fn reference_docs(&self) -> &[EvidenceRef] {
+        &self.reference_docs
     }
 
     /// Whether the declaration is checked against the real diff footprint
@@ -243,12 +271,20 @@ mod tests {
         let both = EvidenceScope::declared(
             ContextSource::DroneDeclared,
             Vec::new(),
+            Vec::new(),
             true,
             Some(DeclarePlanAt::StepStart),
         );
-        let late = EvidenceScope::declared(ContextSource::DroneDeclared, Vec::new(), true, None);
+        let late = EvidenceScope::declared(
+            ContextSource::DroneDeclared,
+            Vec::new(),
+            Vec::new(),
+            true,
+            None,
+        );
         let unchecked = EvidenceScope::declared(
             ContextSource::DroneDeclared,
+            Vec::new(),
             Vec::new(),
             false,
             Some(DeclarePlanAt::StepStart),
