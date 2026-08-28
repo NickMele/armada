@@ -124,7 +124,7 @@ fn two_steps() -> config::ResolvedWorkflow {
 /// Two steps, each gated on a non-empty diff. What the boundary needs: a
 /// second step whose `diff_nonempty` can fail, which `two_steps` cannot express
 /// because its second step is gated on nothing.
-fn two_steps_both_gated_on_a_diff() -> config::ResolvedWorkflow {
+pub fn two_steps_both_gated_on_a_diff() -> config::ResolvedWorkflow {
     testkit::resolved(&[
         Sketch {
             id: "implement",

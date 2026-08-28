@@ -21,7 +21,7 @@
 
 use std::error::Error;
 use std::fmt;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use adapter_traits::{Change, Changed, ChangedFile, Footprint, Patch, WorkProduct, Worktree};
 
@@ -43,10 +43,51 @@ impl fmt::Display for FakeDiffRefused {
 impl Error for FakeDiffRefused {}
 
 /// One file in the fake worktree, and what happened to it.
+///
+/// `revision` stands in for the bytes. A path written twice holds something
+/// different the second time, and a footprint that only listed paths could not
+/// tell the two apart — which is exactly the reading a conflicted rebase
+/// changes, since it writes markers into files that are already there.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Wrote {
     path: String,
     change: Change,
+    revision: usize,
+}
+
+/// What the fake worktree holds, as a handle rather than a value.
+///
+/// **The one place two fakes meet**, and it is here because two of them write
+/// to the same worktree: a Drone does, and so does the rebase Fleet runs at a
+/// step boundary. Fleet decides the order of that rebase against the reading it
+/// takes as a step's baseline, and a test cannot see the order at all unless the
+/// rebase moves something. See [`FakeVcs::writing_into`](crate::FakeVcs::writing_into).
+#[derive(Clone, Debug, Default)]
+pub struct Holding(Arc<Mutex<Vec<Wrote>>>);
+
+impl Holding {
+    /// Put bytes at these paths. A path named here holds something it did not
+    /// hold before, whether or not it was already in the worktree.
+    pub fn wrote(&self, files: &[(&str, Change)]) {
+        let mut held = self.0.lock().expect("not poisoned");
+        for (path, change) in files {
+            let revision = held
+                .iter()
+                .find(|was| was.path == *path)
+                .map(|was| was.revision + 1)
+                .unwrap_or(0);
+            held.retain(|was| was.path != *path);
+            held.push(Wrote {
+                path: path.to_string(),
+                change: *change,
+                revision,
+            });
+        }
+    }
+
+    fn each(&self) -> Vec<Wrote> {
+        self.0.lock().expect("not poisoned").clone()
+    }
 }
 
 /// A work product that is whatever the test said it is.
@@ -55,7 +96,7 @@ struct Wrote {
 /// `Sync`, so the seams it holds have to be.
 #[derive(Debug, Default)]
 pub struct FakeWorkProduct {
-    changed: Mutex<Vec<Wrote>>,
+    changed: Holding,
     patch: Mutex<String>,
     refuse: Mutex<Option<&'static str>>,
     asked: Mutex<Vec<String>>,
@@ -129,14 +170,13 @@ impl FakeWorkProduct {
     /// Takes `&self` because the fake is behind a Fleet by the time a test wants
     /// the worktree to move.
     pub fn wrote(&self, files: &[(&str, Change)]) {
-        let mut changed = self.changed.lock().expect("not poisoned");
-        for (path, change) in files {
-            changed.retain(|was| was.path != *path);
-            changed.push(Wrote {
-                path: path.to_string(),
-                change: *change,
-            });
-        }
+        self.changed.wrote(files);
+    }
+
+    /// A handle on what this worktree holds, for whatever else writes into it.
+    /// **A rebase is the other writer**, and the only one: see [`Holding`].
+    pub fn holding(&self) -> Holding {
+        self.changed.clone()
     }
 
     /// The patch text a Judge will be handed. Scripted, because what a Judge
@@ -180,7 +220,7 @@ impl FakeWorkProduct {
             .push(worktree.path().to_string());
         match *self.refuse.lock().expect("not poisoned") {
             Some(standing_in_for) => Err(FakeDiffRefused { standing_in_for }),
-            None => Ok(self.changed.lock().expect("not poisoned").clone()),
+            None => Ok(self.changed.each()),
         }
     }
 }
@@ -209,21 +249,29 @@ impl WorkProduct for FakeWorkProduct {
         if let Some(standing_in_for) = *self.refuse.lock().expect("not poisoned") {
             return Err(FakeDiffRefused { standing_in_for });
         }
-        // The reading number stands in for the bytes. A worktree nothing
-        // changed answers the same footprint every time however this counts,
-        // because there is nothing in it to carry the number.
+        // The reading number stands in for the bytes of a worktree somebody is
+        // still typing into. A worktree nothing changed answers the same
+        // footprint every time however this counts, because there is nothing in
+        // it to carry the number.
+        //
+        // A worktree that is *not* moving of its own accord still answers a new
+        // footprint for a path somebody wrote to, which is what `revision`
+        // carries: a rebase writing markers into a file that is already there
+        // has changed what the worktree holds without changing which paths are
+        // in it.
         let mut readings = self.readings.lock().expect("not poisoned");
         *readings += 1;
-        let held = match self.moving {
-            true => format!("reading-{readings}"),
-            false => String::from("as the step found it"),
-        };
         Ok(Footprint::of(
             self.changed
-                .lock()
-                .expect("not poisoned")
-                .iter()
-                .map(|was| (was.path.clone(), held.clone()))
+                .each()
+                .into_iter()
+                .map(|was| {
+                    let held = match self.moving {
+                        true => format!("reading-{readings}"),
+                        false => format!("as written, revision {}", was.revision),
+                    };
+                    (was.path, held)
+                })
                 .collect(),
         ))
     }

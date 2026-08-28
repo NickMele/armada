@@ -298,6 +298,15 @@ where
     /// branch was cut from, which credits every step with everything its
     /// predecessors wrote.
     ///
+    /// **After the boundary rebase, on the one path that has one.** What a
+    /// rebase moves is inherited rather than done: a conflicting one leaves
+    /// markers in the files it could not merge, and a clean one replays the
+    /// branch onto a base that itself moved. Both are content, so a baseline
+    /// read before the rebase makes git's output the next step's work — and a
+    /// Drone that resolved nothing passed `diff_nonempty` on the markers it was
+    /// handed. Where nothing rebases — a Job's first step, and a step a person
+    /// approved — this is the same moment it has always been.
+    ///
     /// **A failure leaves the step with no baseline, and that is deliberate.**
     /// A reading that did not happen is not a worktree that did not move, so
     /// there is no arm here that stores an empty footprint — the gate reads
@@ -335,15 +344,21 @@ where
                 if let Some(at_work) = working.as_mut() {
                     at_work.now_on(next, self.now());
                 }
-                // Immediately after the step moved and before the Drone is
-                // told, so that anything the Drone does on hearing the verdict
-                // counts toward the step it is now on rather than the one it
-                // just left.
-                self.marked(working);
                 // The boundary catch-up is `delivery`'s. It is told either way
                 // — a Drone that never heard the step advanced would sit there,
                 // and a base that would not read is not its fault.
                 let caught_up = self.caught_up(working).await;
+                // **After the rebase and before the Drone is told**, which is
+                // the whole of the window this reading has. It cannot be
+                // earlier than `now_on`, which clears the last step's baseline;
+                // it cannot be later than `tell`, or the first thing the Drone
+                // does on hearing the verdict is folded into what it started
+                // from. The rebase sits inside that window and belongs on the
+                // inherited side of it — see [`marked`](Fleet::marked). Read
+                // whatever the catch-up came to, including an error: a rebase
+                // that would not run leaves a worktree in some state, and this
+                // step starts from the one that is there.
+                self.marked(working);
                 let tell = tell.clone().and(caught_up.as_ref().ok().cloned().flatten());
                 self.tell(job_id, &tell, working).await?;
                 caught_up.map(|_| ())

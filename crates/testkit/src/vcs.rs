@@ -29,9 +29,11 @@ use std::fmt;
 use std::sync::Mutex;
 
 use adapter_traits::{
-    Base, BroughtUpToDate, CommitTime, Committed, Delivery, NotDelivered, Opened, Pushed, Review,
-    Standing, Vcs, Worktree, WorktreeSpec,
+    Base, BroughtUpToDate, Change, CommitTime, Committed, Delivery, NotDelivered, Opened, Pushed,
+    Review, Standing, Vcs, Worktree, WorktreeSpec,
 };
+
+use crate::work_product::Holding;
 
 /// Why the fake refused.
 ///
@@ -91,6 +93,9 @@ pub struct FakeVcs {
     /// repository here to be behind anything, and no remote to push to.
     delivery: Mutex<Delivering>,
     delivered: Mutex<Vec<Delivered>>,
+    /// What the rebase leaves in the worktree, and where. Absent for every case
+    /// that does not care — see [`FakeVcs::writing_into`].
+    rebase_writes: Mutex<Option<(Holding, Vec<String>)>>,
 }
 
 /// One thing this fake was asked to do to a Job's branch, in order.
@@ -214,6 +219,25 @@ impl FakeVcs {
         self
     }
 
+    /// A rebase that writes these files, into the worktree this
+    /// [`Holding`](crate::Holding) is a handle on.
+    ///
+    /// **What a conflicted rebase does.** `git rebase --autostash` puts markers
+    /// into the files it could not merge, and markers are content: a footprint
+    /// taken after one reads differently from a footprint taken before, on the
+    /// same paths. Nothing here says the rebase conflicted — the answer is
+    /// [`Delivering::rebase`]'s to script, and this is what it left behind.
+    ///
+    /// The two fakes are otherwise independent, and this is the one place they
+    /// are not. It is needed because a test cannot see *when* Fleet takes a
+    /// step's baseline unless the rebase between the two readings moves
+    /// something.
+    pub fn writing_into(self, holding: Holding, files: &[&str]) -> FakeVcs {
+        *self.rebase_writes.lock().expect("not poisoned") =
+            Some((holding, files.iter().map(|path| path.to_string()).collect()));
+        self
+    }
+
     /// Everything this fake was asked to do to a branch, in order. **Nothing
     /// removes an entry**, so a test asserting that no push happened is
     /// asserting on the whole run rather than on the last call.
@@ -252,6 +276,17 @@ impl Delivery for FakeVcs {
                 branch: worktree.branch().to_string(),
                 base: base.name().to_string(),
             });
+        // Before the answer is returned, because that is when git does it: the
+        // worktree has already been written to by the time the caller reads
+        // what the rebase came to.
+        if let Some((holding, files)) = self.rebase_writes.lock().expect("not poisoned").as_ref() {
+            holding.wrote(
+                &files
+                    .iter()
+                    .map(|path| (path.as_str(), Change::Modified))
+                    .collect::<Vec<(&str, Change)>>(),
+            );
+        }
         Ok(self
             .delivery
             .lock()

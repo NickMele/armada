@@ -11,9 +11,11 @@ use adapter_traits::{Base, BroughtUpToDate, Opened, Pushed, Standing};
 use core_model::JobStatus;
 use testkit::{Delivered, Delivering, FakeVcs, FakeWorkProduct};
 
+use crate::daemon::Fleet;
+use crate::gate::Ruling;
 use crate::tests::daemon::{
     a_fleet_committing_through, a_fleet_whose_manifest_declares_a_base, a_proposal, diff_evidence,
-    note_evidence, worktree_directory,
+    fittings, note_evidence, one, two_steps_both_gated_on_a_diff, worktree_directory,
 };
 use crate::tests::tmp::TempDir;
 
@@ -149,6 +151,79 @@ async fn a_conflicting_rebase_is_handed_to_the_drone_rather_than_failing_the_job
     assert!(
         fleet.working_on().await.is_some(),
         "the Drone is still there to be handed it"
+    );
+}
+
+/// **A step that resolves none of a conflict does not advance on the markers.**
+///
+/// `git rebase --autostash` writes conflict markers into the files it could not
+/// merge, and markers are content: the step after the boundary finds a worktree
+/// git changed. The baseline used to be read before the rebase ran, so the
+/// markers landed on the step's side of the comparison — and a Drone that
+/// touched nothing at all passed `diff_nonempty` on git's output.
+///
+/// The rebase is what the step *inherited*. Read after it, the markers are in
+/// the baseline, and a step that resolves nothing differs from it in nothing.
+#[tokio::test]
+async fn a_step_that_resolves_none_of_a_conflicted_rebase_fails_its_diff_check() {
+    let home = TempDir::new();
+    let work = FakeWorkProduct::untouched();
+    let mut fittings = fittings(&home, FakeWorkProduct::untouched());
+    fittings.workflows = one(two_steps_both_gated_on_a_diff());
+    fittings.vcs = FakeVcs::new()
+        .delivering(Delivering {
+            standing: Standing::Behind { commits: 1 },
+            rebase: Some(BroughtUpToDate::Conflicted {
+                base: String::from("main"),
+                files: vec![String::from("src/log.rs")],
+            }),
+            ..Delivering::default()
+        })
+        // The same file the first step wrote, which is the case that bites: a
+        // rebase conflicts precisely where both sides touched something.
+        .writing_into(work.holding(), &["src/log.rs"]);
+    fittings.work = work;
+    let fleet = Fleet::assembled(fittings);
+
+    let job = fleet
+        .propose(a_proposal("fix the off-by-one in the log reader"))
+        .await
+        .unwrap();
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.unwrap();
+
+    // The first step does real work and advances, which is the boundary.
+    fleet
+        .work()
+        .wrote(&[("src/log.rs", adapter_traits::Change::Modified)]);
+    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    let turned = fleet.turn().await.unwrap();
+    assert!(
+        matches!(turned.ruled, Some(Ruling::Advanced { .. })),
+        "the first step wrote a file: {:?}",
+        turned.ruled
+    );
+    assert!(
+        matches!(
+            turned.delivered.and_then(|delivered| delivered.caught_up),
+            Some(BroughtUpToDate::Conflicted { .. })
+        ),
+        "and the boundary rebase conflicted, leaving markers behind"
+    );
+
+    // The second step's Drone resolves nothing and submits anyway.
+    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    let turned = fleet.turn().await.unwrap();
+    let Some(Ruling::Failed { failures, .. }) = &turned.ruled else {
+        panic!(
+            "the step advanced on a conflict it did not resolve: {:?}",
+            turned.ruled
+        );
+    };
+    assert_eq!(failures, &[verification::CheckFailed::DiffEmpty]);
+    assert_eq!(
+        fleet.load(job.id()).await.unwrap().status(),
+        JobStatus::CompletedFailed
     );
 }
 
