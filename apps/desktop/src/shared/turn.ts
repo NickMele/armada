@@ -42,8 +42,14 @@ export type Closed = {
  * can recover which it was.
  *
  * The tag is `event` and not `kind`, because `unrecognised` already carries a
- * `kind`. Three of the file's kinds never arrive here — `quota_moved`, `ended`
- * and the sink's own `missed` — so no case is written for them.
+ * `kind`. Two of the file's kinds never arrive here — `quota_moved`, which is
+ * dispatch gating rather than this Job's business, and the sink's own
+ * `missed` — so no case is written for them.
+ *
+ * **`ended` was a third, and the reason given for it was false.** It was
+ * withheld because the Job's rail was said to state a run's cost and turn
+ * count; no rail ever did, and nothing else on the wire carries either. It
+ * arrives since protocol 4.10, and `turns.ts` is where it is drawn.
  */
 export type Saw =
   | { event: "started"; session: string; model: string; mcp_servers: number }
@@ -71,5 +77,17 @@ export type Saw =
   | { event: "answered"; call: string; failed: boolean }
   | { event: "said"; text: string }
   | { event: "refused"; tool: string; call: string; because: string }
+  /**
+   * The last row a Drone writes: what the run cost, how many turns it took,
+   * and how many of its calls the harness refused.
+   *
+   * **A run's own total and never a Job's.** A Job that retried has one of
+   * these per Drone, and nothing here adds them up — a Job-wide figure is a
+   * question somebody decides rather than a number the wire carries.
+   *
+   * `cost_micros` is millionths of a dollar, an integer because a budget that
+   * is compared and accumulated as a float is a budget that drifts.
+   */
+  | { event: "ended"; turns: number; cost_micros: number; refusals: number }
   | { event: "unrecognised"; kind: string }
   | { event: "unreadable"; line: string; why: string };

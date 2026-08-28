@@ -234,6 +234,38 @@ export const AFinishedRun: Story = {
       ...thinking(30, 14, "09:14:15"),
       { id: "50", at: "09:14:31", kind: "called", subject: "Edit", detail: "src/settings.rs +42 -18", answer: "Answered." },
       { id: "60", at: "09:14:44", kind: "said", said: "The public signature is unchanged. Submitting." },
+      { id: "61", at: "09:14:45", kind: "ended", subject: "18 turns · ~$0.42 · no calls refused" },
+    ],
+  },
+};
+
+/**
+ * What the run cost, on the run's own last row.
+ *
+ * **This is the only place a spend figure appears**, and that is the decision
+ * rather than an omission. `ended` is one Drone's total, so a Job that retried
+ * has one of these per Drone — a number on the Job would be a sum the wire
+ * declines to compute, and the board is not where a figure nobody is deciding
+ * on belongs. It also arrives on the Observe socket alone, so an outcome region
+ * drawn with that socket closed could only carry a labelled blank.
+ *
+ * **The figure hedges and the counts do not.** P4 of the design contract:
+ * spend is estimated and is spelled `~$1.53`, a turn count is measured and
+ * speaks flatly. Rendering the two alike would destroy trust in both.
+ *
+ * The two rows are the pair #161 was filed over — a run that burned a dollar
+ * over forty-one turns and one that gave up in four, which read identically
+ * until this row existed.
+ */
+export const WhatTheRunCost: Story = {
+  args: {
+    live: false,
+    emptyNote: NOTHING_YET,
+    turns: [
+      { id: "1", at: "09:14:02", kind: "said", said: "Starting on the settings split." },
+      { id: "2", at: "09:55:10", kind: "ended", subject: "41 turns · ~$1.53 · 6 calls refused" },
+      { id: "3", at: "10:02:11", kind: "said", said: "Retrying the step. Reading the refusal first." },
+      { id: "4", at: "10:03:40", kind: "ended", subject: "4 turns · ~$0.0018 · no calls refused" },
     ],
   },
 };
