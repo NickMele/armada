@@ -14,11 +14,16 @@
   color: var(--fg-muted);
 }
 
+/* One height for every row, whether or not it carries an open. Set from the
+   small control so a row with the action and a row without it line up — the
+   branch has nothing to open, and a shorter branch row would read as a
+   different kind of row rather than the same row minus a control. */
 .armada-log-ref__row {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+  min-height: var(--h-control-sm);
 }
 
 /* A rule above a row that starts a second group — the log beneath the branch
@@ -67,7 +72,12 @@
 
 /* A machine value copies on click and goes to --accent on hover. No `copy`
    glyph, and no button that copies it — the affordance token is the
-   affordance. A toast confirms, because a clipboard write is silent. */
+   affordance. A toast confirms, because a clipboard write is silent.
+
+   The row that also opens does not change here. Opening is a second act, not
+   a second reading of this click, so it takes its own ghost control at the end
+   of the row and the value keeps copying — which is what a person needs when
+   the path is going into a shell rather than into an editor. */
 .armada-log-ref__value[data-copies] {
   cursor: pointer;
   transition: color var(--duration-fast) var(--ease);
@@ -87,6 +97,19 @@
   line-height: var(--leading-2xs);
   color: var(--fg-muted);
   white-space: nowrap;
+}
+
+/* Why an open did not happen, on the row it was pressed on.
+
+   Inline rather than a toast: the blast radius is one row, and the error
+   contract picks placement by blast radius and lets severity pick only the
+   colour. A reclaimed worktree is a system failure and takes the hue that
+   means one — the neutrality rule above it governs counts, and this is an act
+   that did not happen. */
+.armada-log-ref__unopened {
+  margin: 0;
+  padding-left: calc(var(--space-4) + var(--space-2));
+  color: var(--status-completed-failed);
 }
 
 .armada-log-ref__foot {
