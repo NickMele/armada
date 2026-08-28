@@ -34,8 +34,8 @@ import type { Artifact, Opened } from "../../shared/artifacts";
 import type {
   JobDetail as JobWhole,
   JobSummary,
-  ManifestSummary,
 } from "../../shared/protocol";
+import type { ManifestSummary } from "../../shared/setup";
 
 export { repoOf };
 

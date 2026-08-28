@@ -439,52 +439,6 @@ export type ChangedFile = {
   outside_plan?: boolean;
 };
 
-/** One workflow Fleet holds. `crates/ipc/src/setup.rs`. */
-export type WorkflowSummary = {
-  /** What a proposal's `workflow_id` must name. Anything else is refused. */
-  id: string;
-  /** What a person reads. `bug`, where the id is what a Job points at. */
-  name: string;
-  version: number;
-  /**
-   * The steps, in order. Order is the semantics.
-   *
-   * **Objects since protocol 3, not step ids.** A field whose type changed is a
-   * major bump, and the reason it changed is that a composer offering a
-   * workflow could say how many steps it had and not whether any of them gates.
-   */
-  steps: WorkflowStep[];
-  manifest_id: string;
-};
-
-/** One step of a workflow, as the definition declares it. */
-export type WorkflowStep = {
-  step_id: string;
-  /** Always a list, never absent. Empty is the ungated step. */
-  checks: DeclaredCheck[];
-};
-
-/** One Manifest Fleet holds. */
-export type ManifestSummary = {
-  id: string;
-  /**
-   * The repository the Manifest was read from. **Not a name it declares** —
-   * `armada.yml` has no key for one, so this is the directory, which is a fact
-   * rather than an invention.
-   */
-  repository: string;
-  path: string;
-  version: number;
-  checks: string[];
-};
-
-/** The models a Job may name, and the one it gets when it names none. */
-export type ModelChoices = {
-  models: string[];
-  /** Always a member of `models`, so a picker selects it without a lookup. */
-  default: string;
-};
-
 /** A failure, flattened for the wire. `docs/contracts/error-contract.md`. */
 export type WireError = {
   /** Opaque to Bridge: looked up, never parsed. */

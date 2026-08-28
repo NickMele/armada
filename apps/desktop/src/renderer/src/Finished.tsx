@@ -40,8 +40,8 @@ import type {
   JobDetail as JobWhole,
   JobFilesChanged,
   JobSummary,
-  ManifestSummary,
 } from "../../shared/protocol";
+import type { ManifestSummary } from "../../shared/setup";
 import {
   filesOf,
   footprintNote,

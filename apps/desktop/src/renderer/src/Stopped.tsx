@@ -38,8 +38,8 @@ import type { Diff, Evidence, History, Observed } from "../../shared/bridge";
 import type {
   JobDetail as JobWhole,
   JobSummary,
-  ManifestSummary,
 } from "../../shared/protocol";
+import type { ManifestSummary } from "../../shared/setup";
 import { Changed, Claims, Moves, Turns } from "./Panels";
 import { stoppedAt } from "./rail";
 import { recourseOf } from "./recovery";

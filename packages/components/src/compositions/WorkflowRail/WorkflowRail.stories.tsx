@@ -67,6 +67,19 @@ export const RunningPulseElsewhere: Story = {
 };
 
 /**
+ * The same workflow at proposal time, every result stripped off it. Nothing has
+ * run, so a mark here would draw a verdict where there is only a declaration.
+ */
+export const AWorkflowBeforeItRuns: Story = {
+  args: {
+    steps: running.map(({ id, label, gates, declarations }) => ({
+      id, label, activity: "not_started" as const,
+      gates: gates?.map(({ command }) => ({ command })), declarations: declarations?.map(({ label: what }) => ({ label: what })),
+    })),
+  },
+};
+
+/**
  * A failed step: hued `x`, `--step-failed-bg` beneath it, and the outcome in
  * words at the trailing edge. The gate rows stay neutral — the step's state is
  * hued, the Check's exit code is measured.
@@ -244,12 +257,12 @@ export const ServedSteps: Story = {
  * The six `job_steps.state` values `crates/core-model/domain/step-states.toml`
  * declares, one row each, exactly as Bridge draws them from `GET /jobs/:job_id`.
  *
- * **Every word on every row is the wire's own.** The label is the `step_id`,
- * because neither `StepDetail` nor `WorkflowStep` carries the `label` the
- * WorkflowDef declares. The status is the state's underscored spelling, because
- * `enum-verbs.toml` has no `step_state` rows. The Check row says its name and
- * not its command, because `GET /manifests` serves check names and not their
- * `run` strings. Three wire gaps, drawn rather than papered over.
+ * **Every word on every row is the wire's own.** The label is the `step_id`
+ * because this workflow declares none and Fleet substitutes the id; the status
+ * is the state's underscored spelling, because `enum-verbs.toml` has no
+ * `step_state` rows; and the Check row says its name and not its command,
+ * because `GET /manifests` serves names and not `run` strings. Two wire gaps
+ * and one honest fallback, drawn rather than papered over.
  *
  * `not reached` and its `shield-minus` come from the criterion Check
  * vocabulary: `check_outcome`'s five are what a Check that *ran* did, and it
@@ -467,11 +480,10 @@ export const FourJobsOverAndOneResumable: StoryObj = {
  * carries no prompt at all: a question drawn here is a prompt in a screenshot.
  * `panel_size` is absent at one, so a value always means a panel.
  *
- * **`advance_gate` reads as the wire spells it.** `enum-verbs.toml` has no
- * `advance_gate` rows, so there is no sanctioned verb for `human_always` and
- * the underscored value renders — the same fallback `step_state` takes.
- * Reported. `auto` draws no row: the Checks above it are the whole gate, and a
- * row on every step would displace the sentence an ungated step owes.
+ * **`advance_gate` reads as the wire spells it.** `enum-verbs.toml` has no rows
+ * for it, so `human_always` renders underscored — the fallback `step_state`
+ * takes. Reported. `auto` draws no row: the Checks above are the whole gate, and
+ * a row on every step would displace the sentence an ungated step owes.
  */
 export const WhatAStepDeclares: Story = {
   args: {

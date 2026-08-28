@@ -9,11 +9,9 @@
 import type { Holdings, Outcome } from "../shared/bridge";
 import type {
   JobSummary,
-  ManifestSummary,
-  ModelChoices,
   WireError,
-  WorkflowSummary,
 } from "../shared/protocol";
+import type { ManifestSummary, ModelChoices, WorkflowSummary } from "../shared/setup";
 import { HOST } from "./runtime-file";
 
 /** How long a command waits for an answer before it is a transport failure. */

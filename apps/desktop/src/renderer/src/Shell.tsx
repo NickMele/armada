@@ -26,7 +26,8 @@ import { Activity } from "lucide-react";
 import { Select, TheShell, type FleetState, type StatusBarProps } from "@armada/components";
 
 import type { Connection } from "../../shared/bridge";
-import type { JobSummary, ManifestSummary } from "../../shared/protocol";
+import type { JobSummary } from "../../shared/protocol";
+import type { ManifestSummary } from "../../shared/setup";
 import type { Statement } from "./fleet";
 import { jobCount } from "./Jobs";
 

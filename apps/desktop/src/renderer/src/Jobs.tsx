@@ -84,7 +84,8 @@ import type { JobRowField } from "@armada/components";
 import { GitBranch, Layers } from "lucide-react";
 
 import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
-import type { JobSummary, WorkflowSummary } from "../../shared/protocol";
+import type { JobSummary } from "../../shared/protocol";
+import type { WorkflowSummary } from "../../shared/setup";
 import { absoluteOf, instant, span } from "./duration";
 import { activityFor } from "./frozen";
 import { readingOf } from "./reading";

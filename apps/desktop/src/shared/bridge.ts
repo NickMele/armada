@@ -9,12 +9,10 @@ import type {
   JobDetail,
   JobFilesChanged,
   JobSummary,
-  ManifestSummary,
-  ModelChoices,
   UnreadableJob,
   WireError,
-  WorkflowSummary,
 } from "./protocol";
+import type { ManifestSummary, ModelChoices, WorkflowSummary } from "./setup";
 import type { Artifact, Opened } from "./artifacts";
 import type { Recorded } from "./history";
 import type { Submitted, Work } from "./work";

@@ -7,6 +7,21 @@
 // buffering in the loop that advances the Job, in the path that must never
 // block. Watching a Job cannot be allowed to change its outcome, so the cost of
 // the join lands here, where the worst case is a row that reads "no answer yet".
+//
+// # What a run cost is drawn here and nowhere else
+//
+// `ended` carries a Drone run's turn count, its spend and its refusals, and the
+// transcript is the only per-run surface Bridge has: a Job that retried has one
+// `ended` per Drone, so a figure on the Job — a board column, an outcome row, a
+// header fact — would be a total the wire deliberately declines to compute.
+// It is also the only surface where the value can be present at all, because it
+// arrives on the Observe socket, and the outcome regions of a finished or
+// stopped Job are drawn with that socket closed. A labelled blank there would
+// be worse than the absence it replaced.
+//
+// So the run says what it spent on its own last row. **What is still missing is
+// a figure a person can compare Jobs by without opening one**, and that needs a
+// served field on `JobSummary` or `JobDetail`; neither carries one. Reported.
 
 import type { DroneTurn, TurnStep } from "@armada/components";
 
@@ -123,6 +138,12 @@ function bodyOf(saw: Saw, answers: Map<string, Answer>): Omit<DroneTurn, "id" | 
       return { subject: saw.kind, quiet: true };
     case "unreadable":
       return { subject: saw.line, said: saw.why };
+    // What the run cost, on the run's own last row. See `spent` for why the
+    // figure hedges and the two counts do not.
+    case "ended": {
+      const ran = [turned(saw.turns), spent(saw.cost_micros), refused(saw.refusals)];
+      return { subject: ran.join(" · ") };
+    }
     // An `answered` reaching here is folded above; the arm exists so a kind
     // added to the wire fails to compile rather than rendering as a blank row.
     case "answered":
@@ -144,5 +165,44 @@ const ANSWER = {
 /** `2 mcp servers`, and `1 mcp server`. */
 function count(servers: number): string {
   return servers === 1 ? "1 mcp server" : `${servers} mcp servers`;
+}
+
+/** `41 turns`, and `1 turn`. */
+function turned(turns: number): string {
+  return turns === 1 ? "1 turn" : `${turns} turns`;
+}
+
+/**
+ * What the run cost, from millionths of a dollar.
+ *
+ * **Hedged, because a spend figure is not an exit code.** The design contract's
+ * P4 spells an estimated value `~$2.40` and never `$2.40`, and every spend
+ * rendering in the component library already does: the harness reports the
+ * number, nothing here has validated it, and a cost drawn with the authority of
+ * a measured value teaches a reader to act on one that may be wrong.
+ *
+ * **Four places under a cent.** Two would round a run that cost a tenth of a
+ * penny to `~$0.00`, which reads as free — and free is the one thing a spend
+ * figure must never claim by accident.
+ */
+function spent(micros: number): string {
+  const dollars = micros / 1_000_000;
+  return `~$${dollars.toFixed(dollars > 0 && dollars < CENT ? 4 : 2)}`;
+}
+
+/** A cent, in dollars. Below this two decimal places round to nothing. */
+const CENT = 0.01;
+
+/**
+ * How many of the run's calls the harness refused.
+ *
+ * **Zero is stated rather than left out.** It is the difference between a Drone
+ * that was fenced off from what it needed and one that simply went quiet, and a
+ * row that says nothing leaves a reader unable to tell "none" from "not
+ * reported".
+ */
+function refused(refusals: number): string {
+  if (refusals === 0) return "no calls refused";
+  return refusals === 1 ? "1 call refused" : `${refusals} calls refused`;
 }
 
