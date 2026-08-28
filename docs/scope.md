@@ -38,7 +38,7 @@ He was juggling five or more agent sessions and hit these, in these words:
 | *Which agents need me right now* | The Board. One list, live, saying which Jobs are waiting on a person |
 | *Oh, that agent didn't make a worktree* | Fleet makes one, always. A Drone never decides where it works |
 | *This agent is stuck because it doesn't know how to run checks properly* | A Drone never runs the Checks. Fleet does, from the repository's own Manifest |
-| *This one got ahead of itself and did all of the work in one PR instead of three* | Workflow steps, each gated. **Not yet solved** — nothing stops a Drone doing step two's work during step one |
+| *This one got ahead of itself and did all of the work in one PR instead of three* | Workflow steps, each gated, and a Judge criterion comparing the diff to the step's own scope note. **Partly solved** — it caught one on Aug 28 2026, and it exists only on the coding workflows' `implement` steps, only where a scope note precedes them |
 
 **Armada is the orchestrator above agents.** It babysits them, and surfaces a
 review only when it is confident the work is ready to be looked at.
