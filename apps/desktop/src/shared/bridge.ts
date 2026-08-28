@@ -205,29 +205,37 @@ export type Footprint =
   | { state: "read"; jobId: string; reading: JobFilesChanged };
 
 /**
- * `GET /jobs/:job_id/events` for one Job. Four states, because "nobody asked"
- * and "the read failed" are different things to draw.
+ * One read of one route under one Job, in the four states every such read has.
+ * `Read` is what the answer carries; the other three states carry no answer.
+ *
+ * **Four, because "nobody asked" and "the read failed" are different things to
+ * draw** — a surface with one state for both says a Job has nothing where what
+ * is true is that nothing was read.
+ *
+ * `main/reader.ts` is the only thing that moves a read through these, and the
+ * reason this shape is named once rather than written out per read.
+ */
+export type JobRead<Read> =
+  | { state: "none" }
+  | { state: "reading"; jobId: string }
+  | ({ state: "read"; jobId: string } & Read)
+  | { state: "failed"; jobId: string; outcome: Outcome };
+
+/**
+ * `GET /jobs/:job_id/events` for one Job.
  *
  * **The rows are rendered, never replayed.** `crates/store/src/fold.rs` owns
  * the machine and is the only thing that may put an event back through
  * `Job::transition`; nothing on this side of the wire does.
  */
-export type History =
-  | { state: "none" }
-  | { state: "reading"; jobId: string }
-  | { state: "read"; jobId: string; moves: Recorded[] }
-  | { state: "failed"; jobId: string; outcome: Outcome };
+export type History = JobRead<{ moves: Recorded[] }>;
 
 /**
- * `GET /jobs/:job_id/evidence` for one Job. `History`'s four states, for
- * `History`'s reason — and **empty is a real answer** rather than `none`: no
- * step submitted anything is a fact about the Job, not about the read.
+ * `GET /jobs/:job_id/evidence` for one Job. **Empty is a real answer** rather
+ * than `none`: no step submitted anything is a fact about the Job, not about
+ * the read.
  */
-export type Evidence =
-  | { state: "none" }
-  | { state: "reading"; jobId: string }
-  | { state: "read"; jobId: string; steps: Submitted[] }
-  | { state: "failed"; jobId: string; outcome: Outcome };
+export type Evidence = JobRead<{ steps: Submitted[] }>;
 
 /**
  * `GET /jobs/:job_id/diff` for one Job.
@@ -237,11 +245,7 @@ export type Evidence =
  * nothing. A shape that could not tell them apart would report a Job at the
  * approval gate as a Drone that wrote nothing.
  */
-export type Diff =
-  | { state: "none" }
-  | { state: "reading"; jobId: string }
-  | { state: "read"; jobId: string; work?: Work }
-  | { state: "failed"; jobId: string; outcome: Outcome };
+export type Diff = JobRead<{ work?: Work }>;
 
 /**
  * One Job's turns, as `GET /jobs/:job_id/observe` answered.
@@ -288,15 +292,8 @@ export type Turn = {
   saw: Saw;
 };
 
-/**
- * `GET /jobs/:job_id` for the open Job. Four states, because "no detail on
- * screen" and "the read failed" are different things to draw.
- */
-export type Watched =
-  | { state: "none" }
-  | { state: "reading"; jobId: string }
-  | { state: "read"; jobId: string; detail: JobDetail }
-  | { state: "failed"; jobId: string; outcome: Outcome };
+/** `GET /jobs/:job_id` for the open Job. */
+export type Watched = JobRead<{ detail: JobDetail }>;
 
 /** The values a proposal may name. Empty until the connection answers. */
 export type Holdings = {
