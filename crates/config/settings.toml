@@ -592,7 +592,7 @@ Fleet's own operational events — startup, crashes, restart attempts, reconnect
 [settings.judge-model]
 name = "Judge model"
 scope = "Kit → Manifest"
-default = "undecided"
+default = "haiku"
 lifetime = "Frozen at spawn"
 merge_strategy = "REPLACE"
 peer_polarity = "Member of the Kit set"
@@ -600,6 +600,29 @@ owner = "Judge"
 read_by = "adapters, verification"
 notes = """
 Added by the Aug 2026 config review. Judge had no row among the original 45: the only tier in the system that measures correctness was unconfigured, unbudgeted and unversioned. Runs through ModelClient — one-shot, no tools, cheap model, tight latency budget.
+
+DECIDED 28 Aug 2026: haiku. It was already the value in the adapter, written there as a stand-in for this row; it is now this row's decision and the adapter derives it rather than stating it. What changed is not the string but who owns it.
+
+Why the cheapest tier is the right floor, rather than the safe-looking stronger one. The Judge is veto-only and one-shot: no tools, no repository, one turn, and one narrow yes/no about a diff it was handed. That is the smallest question in the system, and the tier that answers it is the cheapest one that can read a patch. A stronger default would not make the Judge see more — it cannot go looking, by construction — it would only make every criterion cost more and take longer.
+
+Why it must be a floor and not a middle. Model is a deliberate per-step dial and the reference Bug workflow already varies it: four steps on haiku, review on sonnet. A dial is only meaningful against a default it moves away from, and a default already at the middle of the roster leaves the cheap direction unreachable — the step that wants rigour can no longer be told apart from the step that got it by inheritance.
+
+Latency, not money, is what the value is chosen against. The calls sit at a gate a person is waiting behind, and criteria x panel_size multiplies them: four criteria at panel_size 3 is twelve calls in series at one gate. v1 measured a judgment at roughly 4k input / 300 output tokens, which is under a cent at this tier, so twelve of them is cents either way — the difference the default makes is seconds of wait, and it is paid on every gate of every Job.
+
+Member of the Kit set is load-bearing here, and is why the value lives where it does. The alias is a vendor's spelling, so gate rule six keeps it inside adapters; the adapter reads it as the last entry of the model roster it already states, the roster running strongest-first, so the default is a member of the offered set by construction rather than by a check. A test pins that derivation to this row's value, so a roster reordering breaks the build rather than silently redeciding this setting.
+"""
+
+[settings.job-proposer-model]
+name = "Job proposer model"
+scope = "Kit → Manifest"
+default = "undecided"
+lifetime = "Read at render"
+merge_strategy = "REPLACE"
+peer_polarity = "Member of the Kit set"
+owner = "Fleet"
+read_by = "adapters, fleet"
+notes = """
+Added with the Job proposer. Its own row rather than a second reading of judge-model: the two are the same shape of call and are raised for opposite reasons, and a machine that raised one by raising the other would pay the raise on every dispatch as well as on every criterion. One turn, no tools, no directory — the same shape as a Judge call. Overridden by ARMADA_PROPOSER_MODEL, resolved at the composition root, and nothing below Fleet reads it. Carries no value yet, so the default is the adapter's own stand-in. judge-model was in the same arrangement until 28 Aug 2026 and is now decided; this row was left where it was rather than being carried along, because the two are raised for different reasons and the proposer's own reasons have not been worked through.
 """
 
 [settings.judge-confidence-threshold]
@@ -626,6 +649,14 @@ owner = "Judge"
 read_by = "fleet, verification"
 notes = """
 Added by the Aug 2026 config review. Without it a Judge Check bills against the Job budget with no sub-limit, so verification competes for spend with the work it verifies.
+
+STAYS OPEN 28 Aug 2026, and the reason is now written rather than absent. It was reviewed alongside judge-model, which was decided in the same pass; a number was deliberately not invented for this one.
+
+Nothing can read what a Judge call cost. A Judge is rendered with --output-format text and --max-turns 1, so the call answers in prose and emits no result envelope. The cost figure this cap would be compared against — total_cost_usd, read as cost_micros — reaches Armada only on a Drone's stream-json transcript, which a Judge call deliberately is not. So a dollar written into this row today would be enforced by nothing while reading, to anyone who found it, as a limit that was set. That is the failure this row is more dangerous than useful in: an unenforced cap is worse than an absent one, because only one of the two is visible as missing.
+
+What is actually open has therefore changed, and is no longer 'what is the number'. It is: does a Judge call get a cost readout at all — which means an output format that carries a result line, and a reader for it, in adapters and fleet — and if it does, is a per-check dollar cap the right shape, given that the two bounds that exist today are both shaped differently. judge-call-count-ceiling bounds criteria x panel_size per step and needs no price to enforce; the Manifest budget cap bounds the Job. Between them the product is already bounded, and v1's measurement of a judgment at roughly 4k input / 300 output tokens puts a fully fanned-out step in cents.
+
+Judge is also not where verification's spend risk concentrates. Cost is not the driver on this tier and the Judge concept says so outright — latency is, because the calls queue at a gate a person is waiting behind. That bound is real and is enforced today, provisionally and by wall clock, in the composition root.
 """
 
 [settings.judge-trigger-set-which-mechanical-results-fire-a-judge-check]
