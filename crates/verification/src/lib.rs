@@ -67,6 +67,7 @@ mod judge;
 mod mechanical;
 mod outcome;
 mod product;
+mod quoted;
 mod request;
 mod scope;
 mod submission;

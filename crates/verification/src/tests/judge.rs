@@ -7,14 +7,15 @@
 use adapter_traits::Patch;
 use config::ResolvedWorkflow;
 use core_model::{
-    CheckOutcome, CriterionId, JudgeCriterion, JudgeVerdict, Judgment, StepCheck, StepId,
+    CheckOutcome, CriterionId, JudgeCriterion, JudgeVerdict, Judgment, StepCheck, StepEvidence,
+    StepId,
 };
 use testkit::{Gate, Sketch};
 
 use crate::mechanical::CheckFailed;
 use crate::{
-    Accepted, Brief, Claimed, NotClaimed, Product, Refusals, Request, ShownBy, Submission,
-    Unreadable, Verdict,
+    Accepted, Brief, Claimed, NotClaimed, Product, Reference, Refusals, Request, ShownBy,
+    Submission, Unreadable, Verdict,
 };
 
 /// A step that asks one question, and one that asks none.
@@ -70,6 +71,12 @@ fn patch() -> Patch {
 }
 
 fn brief(workflow: &ResolvedWorkflow) -> Brief {
+    brief_measured_against(workflow, &[])
+}
+
+/// The same brief with an earlier step's note in front of it — the shape of the
+/// Job the quotation check was written for, where a scope note is the yardstick.
+fn brief_measured_against(workflow: &ResolvedWorkflow, references: &[Reference<'_>]) -> Brief {
     let step = &workflow.steps()[0];
     let submitted = submitted();
     let patch = patch();
@@ -80,9 +87,22 @@ fn brief(workflow: &ResolvedWorkflow) -> Brief {
         &step.judge_checks()[0].criteria()[0],
         Request::of(testkit::asked_for()),
         &product,
-        &[],
+        references,
         &checks(),
     )
+}
+
+/// A scope note in the shape of the one that was misquoted: it names the wiring
+/// explicitly, which is what made the invented sentence a reversal of it.
+fn scope_note() -> StepEvidence {
+    StepEvidence {
+        evidence_type: config::EvidenceType::FactsNote,
+        claimed: "the jobs list gains an action removing every terminal job, \
+                  wired through the routes and the daemon"
+            .to_string(),
+        shown_by: "the operation is declared and the handler answers it".to_string(),
+        not_claimed: "nothing about a job that is still running".to_string(),
+    }
 }
 
 fn refusal(id: &str) -> Judgment {
@@ -146,6 +166,25 @@ fn one_call_asks_one_criterion_and_the_answer_has_two_legal_words() {
     assert!(brief.question().contains("verdict: not_met"));
 }
 
+/// The other half of the fabricated quotation, and the half a check cannot
+/// hold. A call told to name something in the work will quote in order to do
+/// it, so what a quotation mark commits it to is stated — and the consequence
+/// is stated as discarded rather than as either verdict, because a model told
+/// that a bad quotation passes the work has been given a lever.
+#[test]
+fn the_answer_format_says_what_putting_words_in_quotation_marks_commits_to() {
+    let workflow = workflow();
+    let question = brief(&workflow).question().to_string();
+    assert!(
+        question.contains("appear, exactly as written, in the material above"),
+        "{question}"
+    );
+    assert!(
+        question.contains("neither passed nor refused"),
+        "a model told the consequence is a pass would have a lever: {question}"
+    );
+}
+
 // ------------------------------------------------------ what it may answer
 
 #[test]
@@ -178,6 +217,75 @@ fn a_refusal_that_cites_nothing_is_not_a_refusal() {
         brief(&workflow).read("verdict: not_met\nexpected: \nproduced: x\nconsequence: y"),
         Err(Unreadable::RefusalCitesNothing)
     );
+}
+
+/// Rule 4, one turn further on, and the Job it was written for. A refusal
+/// quoted a sentence attributed to the Drone's scope note that was in no note,
+/// no submission, no evidence row and no file, and the step was refused on it.
+/// An invented citation is not a stricter reading — it is one nobody outside
+/// the call can check, so this is a call that failed and not a verdict.
+#[test]
+fn a_refusal_quoting_words_the_call_was_never_shown_is_not_a_refusal() {
+    let workflow = workflow();
+    let note = scope_note();
+    let brief = brief_measured_against(&workflow, &[Reference::to("scope", &note)]);
+    // The real note is in front of it, and the quotation is not in the note.
+    assert!(brief
+        .question()
+        .contains("wired through the routes and the daemon"));
+    let read = brief.read(
+        "verdict: not_met\n\
+         expected: backend only, as scope notes \"Implementation, tests, and the \
+         IPC/UI wiring itself are not done — that is parts…\"\n\
+         produced: the change wires the frontend as well\n\
+         consequence: the step lands work the note never described",
+    );
+    let Err(Unreadable::RefusalQuotesWhatIsNotThere { span }) = read else {
+        panic!("an invented quotation is not a verdict: {read:?}");
+    };
+    // It names the words it did not find, or the person is left re-reading the
+    // answer to work out which of them were invented.
+    assert!(span.starts_with("Implementation, tests"), "{span}");
+    assert!(
+        format!("{}", Unreadable::RefusalQuotesWhatIsNotThere { span }).contains("invented"),
+        "this is what a person reads in place of the refusal"
+    );
+}
+
+/// The same check, on the refusal it must not touch. Every quotation here is in
+/// the material — the note and the diff — so the refusal stands.
+#[test]
+fn a_refusal_quoting_what_it_was_actually_shown_still_refuses() {
+    let workflow = workflow();
+    let note = scope_note();
+    let judged = brief_measured_against(&workflow, &[Reference::to("scope", &note)])
+        .read(
+            "verdict: not_met\n\
+             expected: what the note called \"wired through the routes and the daemon\"\n\
+             produced: a diff whose whole change is \"let n = n - 1;\"\n\
+             consequence: whoever reads the note is promised wiring that is not there",
+        )
+        .expect("a refusal quoting the material");
+    assert_eq!(judged.verdict, JudgeVerdict::NotMet);
+}
+
+/// A quotation short enough to be a term rather than a claim about wording is
+/// left alone. Failing an honest refusal for the shape of its prose costs more
+/// than the fabrications that would catch, and the invented one was fourteen
+/// words long.
+#[test]
+fn a_quoted_word_or_two_is_a_term_and_is_not_checked() {
+    let workflow = workflow();
+    let judged = brief(&workflow)
+        .read(
+            "verdict: not_met\n\
+             expected: the loop stops at \"n\", not before it\n\
+             produced: it stops \"one early\"\n\
+             consequence: the last row is dropped",
+        )
+        .expect("a refusal whose quotations are terms")
+        .verdict;
+    assert_eq!(judged, JudgeVerdict::NotMet);
 }
 
 #[test]

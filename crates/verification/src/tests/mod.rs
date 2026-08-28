@@ -10,12 +10,15 @@
 //! what the Judge is measured *against* — and its cases are written against the
 //! two designed criteria that were dropped for wanting it. [`converging`] is the
 //! mid-step look, which gates nothing and holds the same two rules anyway.
+//! [`quoted`] is the reading under a citation — whether the words a refusal
+//! puts in quotation marks are in what the call was shown, or in nothing.
 
 mod converging;
 mod gaming;
 mod gate;
 mod judge;
 mod product;
+mod quoted;
 mod request;
 mod submission;
 

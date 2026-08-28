@@ -49,7 +49,12 @@ If it does not:
     consequence: <what that difference does to whoever consumes it>
 
 Each of the three is one line and names something in the work above. A refusal \
-that could be written about any other piece of work is not a refusal.";
+that could be written about any other piece of work is not a refusal.
+
+Quotation marks mean the words inside them appear, exactly as written, in the \
+material above. Nothing else goes in quotation marks: say in your own words \
+what should have been there instead. An answer that quotes words which are not \
+above is discarded, and the work is neither passed nor refused.";
 
 /// What one call is asked, assembled.
 ///
@@ -154,6 +159,16 @@ impl Brief {
         let expected = field(answer, "expected").ok_or(Unreadable::RefusalCitesNothing)?;
         let produced = field(answer, "produced").ok_or(Unreadable::RefusalCitesNothing)?;
         let consequence = field(answer, "consequence").ok_or(Unreadable::RefusalCitesNothing)?;
+        // Rule 4 again, one turn further on. A refusal must cite, and a
+        // citation of something that was never in front of the call is not a
+        // stricter refusal — it is one nobody can check, which is the only
+        // kind that cannot be argued with. `self.question` is the whole of
+        // what the call was shown, so this is containment and costs no call.
+        for cited in [&expected, &produced, &consequence] {
+            if let Some(span) = crate::quoted::invented(cited, &self.question) {
+                return Err(Unreadable::RefusalQuotesWhatIsNotThere { span });
+            }
+        }
         Ok(Judgment {
             criterion_id: self.criterion.clone(),
             verdict,
@@ -183,12 +198,21 @@ pub fn field(answer: &str, name: &str) -> Option<String> {
 ///
 /// **Never a verdict.** A verification that could not run is not a refusal, and
 /// it is not a pass either.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+///
+/// **Not `Copy`**, because one variant carries the words it is refusing to
+/// accept. A failure that could not say which quotation it did not find would
+/// have the defect it exists to catch, one level up: unactionable for the
+/// person, who would have to re-read the whole answer to see what was meant.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Unreadable {
     /// No `verdict:` line, or one naming neither word.
     NoVerdict,
     /// A refusal with no `expected`, `produced` or `consequence`.
     RefusalCitesNothing,
+    /// A refusal quoting a run of words that is in none of what the call was
+    /// shown. See [`quoted`](mod@crate::quoted) for the defect, and for what
+    /// is deliberately not checked.
+    RefusalQuotesWhatIsNotThere { span: String },
     /// No `flag:` line on a gaming answer, or one saying neither yes nor no.
     NoFlag,
     /// A gaming answer that flags and cites nothing.
@@ -208,6 +232,11 @@ impl core::fmt::Display for Unreadable {
             Unreadable::RefusalCitesNothing => f.write_str(
                 "the answer refuses and cites nothing, and an uncited refusal is \
                  unactionable for the Drone and for the person",
+            ),
+            Unreadable::RefusalQuotesWhatIsNotThere { span } => write!(
+                f,
+                "the answer refuses and quotes \"{span}\", which is in nothing \
+                 the call was shown, so it refuses on a source it invented",
             ),
             Unreadable::NoFlag => {
                 f.write_str("the answer says neither yes nor no, so nothing was checked")

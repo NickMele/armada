@@ -58,6 +58,8 @@ Why: open-ended prompts produce agreeable prose, and a narrow question has a wro
 **4. A refusal must cite.** A refusal names the specific evidence it is refusing on.
 Why: that citation is the artifact the Drone retries against and the human reads — no separate summary exists, so an uncited refusal is unactionable for both audiences.
 
+**And the citation is checked against what the call was shown.** A refusal that puts words in quotation marks is claiming those words appear in the material above it; where they appear in none of it, the call failed and no verdict was reached — same shape as an answer in prose or an empty one, never a refusal and never a pass. Why: a citation is what makes a refusal persuasive, so an invented one is not a stricter reading but an unfalsifiable one, and a criterion of the form *does this do anything the scope note did not describe* is only as good as the Judge's reading of the note. The check is containment over the brief and costs no second call; it is deliberately blind to quotations under four words, which are terms rather than claims about wording.
+
 **5. Unanimity, not majority.** A `panel_size` above 1 runs independent judges against identical inputs, none seeing the others' verdicts, and **any single refusal fails the step**.
 Why: majority voting would let the Judge grant by consensus, breaking rule 1, so a panel stays a stricter veto rather than a vote.
 
