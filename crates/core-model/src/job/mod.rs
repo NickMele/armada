@@ -35,6 +35,7 @@
 //! transition into it, which is the point: a test that constructs its way there
 //! asserts nothing about the machine it claims to be testing.
 
+mod attempt;
 mod check;
 mod drone;
 mod escalation;
@@ -54,6 +55,7 @@ mod workflow;
 #[cfg(test)]
 mod tests;
 
+pub use attempt::Attempt;
 pub use check::{CheckOutcome, StepCheck};
 pub use drone::{DroneAssigned, DroneMoved, DronePresence, IllegalDroneMove};
 pub use escalation::{EscalationTrigger, StepLevelTrigger, TriggerKind, TriggerLevel};

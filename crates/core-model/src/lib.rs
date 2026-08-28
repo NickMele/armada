@@ -44,8 +44,8 @@ pub use envelope::{
 };
 pub use job::under;
 pub use job::{
-    AcceptanceCriterion, AdvanceGate, Attachment, BlankBranch, BlankModel, BlankTitle, Branch,
-    CheckOutcome, ContextSource, CriteriaOwed, CriterionId, CriterionSource, DecidedBy,
+    AcceptanceCriterion, AdvanceGate, Attachment, Attempt, BlankBranch, BlankModel, BlankTitle,
+    Branch, CheckOutcome, ContextSource, CriteriaOwed, CriterionId, CriterionSource, DecidedBy,
     DeclarePlanAt, DeclaredPaths, DependencyDirection, DependencyEdge, DispatchOrigin,
     DroneAssigned, DroneId, DroneMoved, DronePresence, Edge, EscalationTrigger, EvidenceRef,
     EvidenceScope, EvidenceType, Facts, FrozenWorkflow, GamingCheck, GamingFlag, GamingPattern,

@@ -52,6 +52,7 @@
 //! Schema versioning is a migration list plus a version row, applied on open.
 //! `job_events` is append-only in the database itself, by trigger.
 
+mod attempt;
 mod columns;
 mod error;
 mod fold;
@@ -68,6 +69,7 @@ mod write;
 #[cfg(test)]
 mod tests;
 
+pub use attempt::Attempted;
 pub use error::{DatabaseFault, LoadAllError, LoadJobError, OpenError, RowError, WriteError};
 pub use fold::{Moved, RecordedEvent};
 pub use forget::Forgotten;

@@ -9,18 +9,22 @@
 
 use core_model::{GamingFlag, GamingPattern, JobId, StepId, Timestamp};
 
+use crate::attempt::attempt_now;
 use crate::error::{fault, LoadJobError, WriteError};
 use crate::open::Store;
 use crate::row::{enum_value, string};
 
 impl Store {
-    /// Record which patterns one step's evidence tripped, replacing whatever an
-    /// earlier pass over the same step wrote.
+    /// Record which patterns one run of one step tripped, replacing whatever an
+    /// earlier pass **over that same run** wrote.
     ///
     /// Same shape as [`record_step_judgments`](Store::record_step_judgments)
     /// and for the same reason: a step is looked at afresh each time it
     /// submits, and two passes interleaved would read as one pass that found
-    /// twice as much.
+    /// twice as much. A second *run* of the step is not a second pass over the
+    /// same evidence, so its flags are kept beside the first run's — the same
+    /// pattern flagged on three runs is what says the Drone did not stop doing
+    /// it.
     ///
     /// **No event.** A flag is a fact Fleet observed, and the escalation it led
     /// to is already a row in the log.
@@ -36,22 +40,25 @@ impl Store {
             .transaction()
             .map_err(fault("starting the gaming record"))
             .map_err(WriteError::Database)?;
+        let attempt = attempt_now(&tx, job_id, step_id).map_err(WriteError::Database)?;
 
         tx.execute(
-            "DELETE FROM job_step_gaming_flags WHERE job_id = ?1 AND step_id = ?2",
-            (job_id.as_str(), step_id.as_str()),
+            "DELETE FROM job_step_gaming_flags
+             WHERE job_id = ?1 AND step_id = ?2 AND attempt = ?3",
+            (job_id.as_str(), step_id.as_str(), attempt.number()),
         )
-        .map_err(fault("clearing the previous pass"))
+        .map_err(fault("clearing this run's previous pass"))
         .map_err(WriteError::Database)?;
 
         for (ordinal, flag) in flags.iter().enumerate() {
             tx.execute(
                 "INSERT INTO job_step_gaming_flags (
-                     job_id, step_id, ordinal, pattern, cited, flagged_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                     job_id, step_id, attempt, ordinal, pattern, cited, flagged_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 rusqlite::params![
                     job_id.as_str(),
                     step_id.as_str(),
+                    attempt.number(),
                     ordinal as i64,
                     flag.pattern.as_wire(),
                     flag.cited,
@@ -67,21 +74,29 @@ impl Store {
             .map_err(WriteError::Database)
     }
 
-    /// What the gaming check flagged on each of a Job's steps, in the order it
-    /// answered them.
+    /// What the gaming check flagged on each of a Job's steps **on its latest
+    /// run**, in the order it answered them.
     ///
     /// Read beside the record for the reason `step_checks` is: a flag is not a
     /// field of `core_model::Job`. A step with no rows is absent from the list,
     /// which is what "nothing was flagged" looks like — and it is the ordinary
     /// case, because most steps declare no gaming check at all.
+    ///
+    /// **The latest run and not every run**, which is what this answered before
+    /// a step could have more than one. An escalation and a Board row are about
+    /// where the step stands now; the history is
+    /// [`step_gaming_flags_every_attempt`](Store::step_gaming_flags_every_attempt).
     pub fn step_gaming_flags(
         &self,
         job_id: &JobId,
     ) -> Result<Vec<(StepId, Vec<GamingFlag>)>, LoadJobError> {
         let rows = self
             .collect(
-                "SELECT step_id, pattern, cited FROM job_step_gaming_flags
-                 WHERE job_id = ?1 ORDER BY step_id, ordinal",
+                "SELECT step_id, pattern, cited FROM job_step_gaming_flags AS f
+                 WHERE job_id = ?1
+                   AND attempt = (SELECT max(attempt) FROM job_step_gaming_flags
+                                  WHERE job_id = f.job_id AND step_id = f.step_id)
+                 ORDER BY step_id, ordinal",
                 job_id,
                 "reading gaming flags",
                 |row| {

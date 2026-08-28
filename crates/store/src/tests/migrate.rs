@@ -458,3 +458,101 @@ fn branch_of(store: &Store, job_id: &str) -> Option<String> {
         )
         .expect("the Job is there")
 }
+
+// ------------------------------------------------------------ version thirteen
+
+/// A file at version 12, with one Job carrying a row in each of the four
+/// per-step tables. None of them has an `attempt` column to hold anything.
+fn version_twelve(dir: &TempDir, id: &str) {
+    let conn = Connection::open(dir.db()).expect("a file to put version 12 in");
+    for migration in &MIGRATIONS[..12] {
+        conn.execute_batch(migration).expect("a migration");
+    }
+    conn.execute(
+        "INSERT INTO armada_meta (key, value) VALUES (?1, '12')",
+        (SCHEMA_VERSION_KEY,),
+    )
+    .expect("recorded as version 12");
+    conn.execute(
+        "INSERT INTO jobs (
+             job_id, title, status, workflow_id, owner_manifest_id, origin, urgency,
+             atomic, model, acceptance_criteria, dependencies, facts, scope_revisions,
+             write_targets_known, created_at
+         ) VALUES (?1, 'a job from before the attempt column', 'running', '01WORKFLOW',
+                   '01OWNERMANIFEST', 'manual', 'normal', 0, 'a-model-name', '[]', '[]',
+                   '', '[]', 0, '2026-08-26T09:00:00.000Z')",
+        (id,),
+    )
+    .expect("a Job as version 12 wrote it");
+    for statement in [
+        "INSERT INTO job_step_checks (job_id, step_id, ordinal, name, outcome, ran_at)
+         VALUES (?1, 'fix', 0, 'build', 'passed', '2026-08-26T09:30:00.000Z')",
+        "INSERT INTO job_step_judgments (job_id, step_id, ordinal, criterion, verdict, judged_at)
+         VALUES (?1, 'fix', 0, 'c1', 'met', '2026-08-26T09:31:00.000Z')",
+        "INSERT INTO job_step_gaming_flags (job_id, step_id, ordinal, pattern, cited, flagged_at)
+         VALUES (?1, 'fix', 0, 'assertion_weakened', 'src/read.rs:88',
+                 '2026-08-26T09:32:00.000Z')",
+        "INSERT INTO job_step_evidence (
+             job_id, step_id, evidence_type, claimed, shown_by, not_claimed, recorded_at
+         ) VALUES (?1, 'fix', 'diff', 'the fix', 'the patch', 'nothing else',
+                   '2026-08-26T09:33:00.000Z')",
+    ] {
+        conn.execute(statement, (id,))
+            .expect("a per-step row as version 12 wrote it");
+    }
+}
+
+/// **The one migration that rebuilds a table, and every row has to come out the
+/// other side.**
+///
+/// `SQLite` cannot widen a primary key, so the four per-step tables are
+/// recreated and copied rather than altered. That is the migration shape most
+/// able to lose rows silently, and there is real data in a store on disk — so
+/// the test is that each row is still there and is called attempt one.
+///
+/// One is not a guess about an old row, unlike V2's title. Nothing before this
+/// migration could write a second run's rows, because every writer deleted the
+/// first run's; so one is the only thing an existing row can be.
+#[test]
+fn version_thirteen_carries_every_existing_row_across_as_the_first_attempt() {
+    let dir = TempDir::new();
+    version_twelve(&dir, "01BEFOREATTEMPTS");
+
+    let store = Store::open(&dir.db()).expect("a version 12 file opens and is migrated");
+    assert_eq!(recorded_version(&store), KNOWN_SCHEMA_VERSION.to_string());
+
+    for (table, column, value) in [
+        ("job_step_checks", "name", "build"),
+        ("job_step_judgments", "criterion", "c1"),
+        ("job_step_gaming_flags", "cited", "src/read.rs:88"),
+        ("job_step_evidence", "claimed", "the fix"),
+    ] {
+        let found: (i64, String) = store
+            .conn
+            .query_row(
+                &format!("SELECT attempt, {column} FROM {table} WHERE job_id = ?1"),
+                ("01BEFOREATTEMPTS",),
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap_or_else(|cause| panic!("the row in {table} survived: {cause}"));
+        assert_eq!(found, (1, value.to_string()), "{table} kept its row");
+    }
+}
+
+/// The rule the rebuilt tables hold from underneath. Zero is not an attempt,
+/// and `Attempt` cannot hold one — so a row written by something that did not
+/// share the type is refused rather than read as a first run.
+#[test]
+fn an_attempt_of_zero_is_refused_by_the_database_itself() {
+    let dir = TempDir::new();
+    version_twelve(&dir, "01BEFOREATTEMPTS");
+    let store = Store::open(&dir.db()).expect("migrated");
+
+    let refused = store.conn.execute(
+        "INSERT INTO job_step_judgments (
+             job_id, step_id, attempt, ordinal, criterion, verdict, judged_at
+         ) VALUES ('01BEFOREATTEMPTS', 'fix', 0, 1, 'c1', 'met', '2026-08-26T09:34:00.000Z')",
+        [],
+    );
+    assert!(refused.is_err(), "a run numbered zero never happened");
+}

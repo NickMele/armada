@@ -47,7 +47,7 @@ pub const KNOWN_SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 /// **Nothing is ever edited here.** Changing entry zero changes what an already
 /// migrated file is assumed to contain, which is the one thing the version
 /// number exists to stop.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13];
 
 /// Version 1 — the Job record, the rows beneath it, and the log.
 const V1: &str = r#"
@@ -592,4 +592,121 @@ CREATE TABLE job_step_gaming_flags (
     flagged_at TEXT NOT NULL,
     PRIMARY KEY (job_id, step_id, ordinal)
 ) STRICT;
+"#;
+
+/// Version 13 — a step that runs twice keeps both runs.
+///
+/// All four per-step tables were keyed by step alone and every writer replaced
+/// the step's rows, so a second run erased the first in each of them.
+/// `docs/concepts/workflow.md` requires the opposite and says why: "keeping all
+/// the verdicts is what shows the same note went unaddressed three times, which
+/// is the judgement `iteration_cap` exists to force."
+///
+/// `attempt` is derived rather than declared — the number of times the step's
+/// own `job_events` rows say it entered `running`, counted inside the writing
+/// transaction. `job_events` stays the source of truth, the fold reads none of
+/// this, and no caller supplies an ordinal that could disagree with the
+/// history. `crate::attempt` carries the rest of the reasoning.
+///
+/// # Why the tables are rebuilt rather than altered
+///
+/// `SQLite` can add a column and cannot widen a primary key, and the key is
+/// what had to change: `(job_id, step_id, ordinal)` refuses a second run's
+/// ordinal zero outright, so a column added beside the old key would have kept
+/// the defect behind a constraint error.
+///
+/// **Every existing row is carried across as attempt one**, observed rather
+/// than assumed in V5's sense: nothing before this could write a second run's
+/// rows, so one is the only thing an old row can be. The `CHECK` is the
+/// append-only triggers' argument — zero is not an attempt and `Attempt` cannot
+/// hold one, so the database refuses such a row rather than reading it as a
+/// first run.
+const V13: &str = r#"
+CREATE TABLE job_step_checks_wide (
+    job_id      TEXT NOT NULL REFERENCES jobs(job_id),
+    step_id     TEXT NOT NULL,
+    attempt     INTEGER NOT NULL CHECK (attempt >= 1),
+    ordinal     INTEGER NOT NULL,
+    name        TEXT NOT NULL,
+    outcome     TEXT NOT NULL,
+    expected    TEXT,
+    produced    TEXT,
+    ran_at      TEXT NOT NULL,
+    output_path TEXT,
+    PRIMARY KEY (job_id, step_id, attempt, ordinal)
+) STRICT;
+
+INSERT INTO job_step_checks_wide (
+    job_id, step_id, attempt, ordinal, name, outcome, expected, produced, ran_at, output_path
+) SELECT job_id, step_id, 1, ordinal, name, outcome, expected, produced, ran_at, output_path
+  FROM job_step_checks;
+
+DROP TABLE job_step_checks;
+ALTER TABLE job_step_checks_wide RENAME TO job_step_checks;
+
+CREATE TABLE job_step_judgments_wide (
+    job_id      TEXT NOT NULL REFERENCES jobs(job_id),
+    step_id     TEXT NOT NULL,
+    attempt     INTEGER NOT NULL CHECK (attempt >= 1),
+    ordinal     INTEGER NOT NULL,
+    criterion   TEXT NOT NULL,
+    verdict     TEXT NOT NULL,
+    expected    TEXT,
+    produced    TEXT,
+    consequence TEXT,
+    judged_at   TEXT NOT NULL,
+    PRIMARY KEY (job_id, step_id, attempt, ordinal)
+) STRICT;
+
+INSERT INTO job_step_judgments_wide (
+    job_id, step_id, attempt, ordinal, criterion, verdict, expected, produced,
+    consequence, judged_at
+) SELECT job_id, step_id, 1, ordinal, criterion, verdict, expected, produced,
+         consequence, judged_at
+  FROM job_step_judgments;
+
+DROP TABLE job_step_judgments;
+ALTER TABLE job_step_judgments_wide RENAME TO job_step_judgments;
+
+CREATE TABLE job_step_gaming_flags_wide (
+    job_id     TEXT NOT NULL REFERENCES jobs(job_id),
+    step_id    TEXT NOT NULL,
+    attempt    INTEGER NOT NULL CHECK (attempt >= 1),
+    ordinal    INTEGER NOT NULL,
+    pattern    TEXT NOT NULL,
+    cited      TEXT NOT NULL,
+    flagged_at TEXT NOT NULL,
+    PRIMARY KEY (job_id, step_id, attempt, ordinal)
+) STRICT;
+
+INSERT INTO job_step_gaming_flags_wide (
+    job_id, step_id, attempt, ordinal, pattern, cited, flagged_at
+) SELECT job_id, step_id, 1, ordinal, pattern, cited, flagged_at
+  FROM job_step_gaming_flags;
+
+DROP TABLE job_step_gaming_flags;
+ALTER TABLE job_step_gaming_flags_wide RENAME TO job_step_gaming_flags;
+
+-- One row per step per run, where the other three are one row per record per
+-- run. A run submits one piece of evidence and may resubmit within itself, and
+-- a superseded submission inside the same run is still not a baseline.
+CREATE TABLE job_step_evidence_wide (
+    job_id        TEXT NOT NULL REFERENCES jobs(job_id),
+    step_id       TEXT NOT NULL,
+    attempt       INTEGER NOT NULL CHECK (attempt >= 1),
+    evidence_type TEXT NOT NULL,
+    claimed       TEXT NOT NULL,
+    shown_by      TEXT NOT NULL,
+    not_claimed   TEXT NOT NULL,
+    recorded_at   TEXT NOT NULL,
+    PRIMARY KEY (job_id, step_id, attempt)
+) STRICT;
+
+INSERT INTO job_step_evidence_wide (
+    job_id, step_id, attempt, evidence_type, claimed, shown_by, not_claimed, recorded_at
+) SELECT job_id, step_id, 1, evidence_type, claimed, shown_by, not_claimed, recorded_at
+  FROM job_step_evidence;
+
+DROP TABLE job_step_evidence;
+ALTER TABLE job_step_evidence_wide RENAME TO job_step_evidence;
 "#;
