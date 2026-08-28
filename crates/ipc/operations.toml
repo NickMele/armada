@@ -543,6 +543,23 @@ It is not read on every turn. A reading happens only while a Drone holds the wor
 The footprint is the whole list rather than a delta, so a reverted file leaves the view by being absent from the next reading. There is no message that removes one.
 """
 
+[operations."job.judging"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A Judge call goes out on a step, or the one that was out comes back"
+notes = """
+The one thing Armada does that costs money and takes wall-clock while nothing else moves had no representation on this seam. A step waiting on a model call, a step whose Drone is thinking and a step that had quietly become unreachable were the same pixels, and the question "is a judge running in the background I cannot see" was asked twice in one day with a different true answer each time.
+
+Not a step state. `step-states.toml` declares six, a seventh would be a variant the other side matches on — a major bump by this seam's own table — and it would be the wrong fact anyway: a step whose gate is asking is still `running`, and it stops asking without moving. So the call rides beside the state and the six are untouched.
+
+Two messages per call and never a third. The one going out carries the instant it went out and the budget it has to answer inside; the one coming back carries nothing. A surface subtracts for itself, so a call that legitimately takes the whole two-minute budget costs this channel two messages rather than one a second — and a spinner, which says neither ninety seconds nor two, is what the pair exists instead of.
+
+It names which call of how many, because one step is several calls: criteria times panel size, plus the drift look. "Judging" without saying what is judging is the spinner one level up.
+
+Unlike `job.files_changed` it does not ask whether anybody is watching. That one declines because producing the value is a repository read; this value is already in hand when the call goes out, so there is nothing to decline and a publish nobody is subscribed to is a free drop.
+"""
+
 [operations."job.state_changed"]
 kind = "event"
 transport = "WebSocket"

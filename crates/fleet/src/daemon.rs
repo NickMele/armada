@@ -63,7 +63,7 @@ use crate::drafting::StatedBy;
 use crate::drone::{aftermath, environment, Aftermath, Ending, HostPaths};
 use crate::evidence::{Decline, EvidenceInbox};
 use crate::gate::{CheckBudget, Ruling};
-use crate::judging::{JudgeBudget, Judging};
+use crate::judging::{Aloft, JudgeBudget, Judging, Marking};
 use crate::mint::Mint;
 use crate::proposal::Proposing;
 use crate::scope::Drifting;
@@ -217,6 +217,10 @@ pub struct Fleet<H, V, W> {
     liveness: Liveness,
     judge: Arc<dyn ModelClient + Send + Sync>,
     judge_budget: JudgeBudget,
+    /// The Judge call that is out right now, or none. **The one piece of Fleet
+    /// state that is only ever true for as long as it takes** — it is never
+    /// written down, because a record of it would outlive the fact.
+    aloft: Aloft,
     judge_model: Model,
     proposer_model: Model,
     models: ipc::ModelChoices,
@@ -267,6 +271,7 @@ where
             liveness: fittings.liveness,
             judge: fittings.judge,
             judge_budget: fittings.judge_budget,
+            aloft: Aloft::default(),
             judge_model: fittings.judge_model,
             proposer_model: fittings.proposer_model,
             models: fittings.models,
@@ -581,7 +586,13 @@ where
     /// The environment is the Drone's own list, built the same way and by the
     /// same function — a Judge call needs the credential floor for the reason a
     /// Drone does, and a second list here would be a second answer.
-    pub(crate) fn judging(&self) -> Result<Judging, SpawnConfigRefused> {
+    ///
+    /// **The Job is a parameter for one reason**: a call that is out has to be
+    /// nameable while it is out, and a wait that cannot say whose it is is a
+    /// fact no surface can place. Nothing else here reads it — a Judge call is
+    /// still assembled from the step and the workflow, and there is no
+    /// arrangement of this argument that could reach the Judge.
+    pub(crate) fn judging(&self, job: &JobId) -> Result<Judging, SpawnConfigRefused> {
         Ok(Judging {
             client: Arc::clone(&self.judge),
             budget: self.judge_budget,
@@ -591,7 +602,22 @@ where
                 user: &self.host.user,
                 home: &self.host.home,
             })?,
+            marking: Marking::on(
+                job.into(),
+                self.aloft.clone(),
+                self.events.clone(),
+                Arc::clone(&self.clock),
+                self.judge_budget,
+            ),
         })
+    }
+    /// The Judge call that is out, for `serving` to put on `get_job`.
+    ///
+    /// **Read, never written, from here.** The only writer is the guard in
+    /// `crate::judging`, which puts the mark up before a call and takes it down
+    /// however the call ends.
+    pub(crate) fn aloft(&self) -> &Aloft {
+        &self.aloft
     }
     /// What the dispatch path needs in order to ask the proposer.
     ///

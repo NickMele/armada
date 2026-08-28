@@ -71,6 +71,14 @@ pub struct StepFacts {
     /// What the gaming check flagged, in the order it answered. Empty on a step
     /// that declares none and on a step nothing was found on.
     pub flagged: Vec<Flagged>,
+    /// The Judge call out on this step **right now**. `None` on every step but
+    /// the one Fleet is asking about, and on that one too between calls.
+    ///
+    /// **Not from the store.** The other five fields here are what was written
+    /// down; this one is read out of the live slot the gate writes while it
+    /// waits, and it is gone the moment the call comes back. A column for it
+    /// would be a record of something that is only ever true now.
+    pub judging: Option<JudgeInFlight>,
 }
 
 /// One Job, whole.
@@ -253,10 +261,100 @@ pub struct StepDetail {
     /// found and where — the same relation `judged` has to a `gate_failure`.
     /// Empty on every step nothing was flagged on, which is nearly all of them.
     pub flagged: Vec<Flagged>,
+    /// The Judge call out on this step **right now**, where one is.
+    ///
+    /// **Absent is the ordinary case and it is not a gap.** A step nothing is
+    /// asking about carries nothing here, which is what makes the absence as
+    /// legible as the presence: a step that is not judging and a step that is
+    /// look the same because they *are* the same, and the field is the only
+    /// thing that separates them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub judging: Option<JudgeInFlight>,
     /// When the step was entered. Stamped at creation and moved on entering
     /// `running`, so `entered_at` to `updated_at` is how long the step took.
     pub entered_at: Instant,
     pub updated_at: Instant,
+}
+
+/// One Judge call, while it is still out.
+///
+/// **The fact this seam had no way to state.** A step waiting on a model call,
+/// a step whose Drone is thinking and a step that had quietly become
+/// unreachable were the same pixels, so the question "is a Judge running where
+/// I cannot see it" was asked twice in one day with a different true answer
+/// each time.
+///
+/// # It is not a `StepState`
+///
+/// `domain/step-states.toml` declares six, a seventh is a variant the other
+/// side matches on — a major bump by this seam's own table — and it would be
+/// the wrong fact anyway. A step whose gate is asking is still `running`, and
+/// it stops asking without moving. **So this rides beside the state**, and
+/// nothing about the six changes.
+///
+/// # `since`, because a spinner says nothing
+///
+/// A Board is scanned, and ninety seconds is a different fact from two against
+/// a two-minute budget. What crosses is the instant the call went out and the
+/// budget it has to answer inside; every surface subtracts for itself.
+/// **Nothing ticks** — no second message ages this one, which is what keeps a
+/// two-minute call to two messages rather than a hundred and twenty.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JudgeInFlight {
+    /// Which of Fleet's four looks is out: `criterion`, `drift`, `gaming` or
+    /// `convergence`, spelled as `crates/fleet/src/judging.rs` spells them.
+    ///
+    /// A string rather than a closed set, for the reason [`Verdict::named`] and
+    /// [`DeclaredCheck::kind`] are strings: **no registry declares this set.**
+    /// It is decided by the code that makes the calls, and a mirrored enum here
+    /// would be a second authority for a list that has exactly one. It is
+    /// deliberately not a `core-model` vocabulary — a look is something Fleet
+    /// does, not a state anything is in, and nothing is stored under these
+    /// names.
+    pub look: String,
+    /// Which criterion the call is about. **The join to
+    /// [`judged`](StepDetail::judged)**, where the same `criterion_id` reappears
+    /// once the answer comes back — first asked with no verdict, then answered
+    /// with one.
+    ///
+    /// Absent on `gaming`, which is about a `pattern`, and on `convergence`,
+    /// which is about neither. On `drift` it is the one criterion Fleet adds
+    /// itself, which is why the id is a name rather than one of the Job's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub criterion_id: Option<CriterionId>,
+    /// Which gaming pattern the call is about, spelled as `flag_if` spells it.
+    /// **The join to [`flagged`](StepDetail::flagged)**, exactly as
+    /// `criterion_id` is the join to `judged`. Absent on every other look.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pattern: Option<String>,
+    /// Which model is out. The dial that decides what the wait costs and how
+    /// long it is likely to be, and a `String` for
+    /// [`JobSummary::model`](crate::JobSummary::model)'s reason — naming a
+    /// closed set would put a vendor's vocabulary on the wire.
+    pub model: String,
+    /// Which call of how many this pass over the step is making. Counted from
+    /// one.
+    ///
+    /// **This is what `panel_size` and a multi-criterion step need.** One step
+    /// is several calls, and a surface that says "judging" without saying which
+    /// of them is the spinner this pair exists instead of.
+    pub call: u32,
+    /// How many calls this pass will make in total — criteria × panel size,
+    /// plus the drift look where the work drifted.
+    ///
+    /// The same arithmetic [`DeclaredJudge`] already lets a client do, carried
+    /// so that it does not have to and so that the two cannot disagree about
+    /// the drift look, which no declaration mentions.
+    pub of: u32,
+    /// When the call went out.
+    pub since: Instant,
+    /// How long the call may take before it is a failed call, in milliseconds.
+    ///
+    /// **Fleet's own budget, not a setting** — `crates/config/settings.toml`
+    /// names no Judge latency budget. It crosses so a surface can draw the wait
+    /// against its ceiling instead of against nothing, which is the difference
+    /// between "this is taking a while" and "this is nearly out of time".
+    pub budget_ms: u64,
 }
 
 impl StepDetail {
@@ -289,6 +387,7 @@ impl StepDetail {
                 ),
             judged: facts.map(|facts| facts.judged.clone()).unwrap_or_default(),
             flagged: facts.map(|facts| facts.flagged.clone()).unwrap_or_default(),
+            judging: facts.and_then(|facts| facts.judging.clone()),
             entered_at: step.entered_at().into(),
             updated_at: step.updated_at().into(),
         }

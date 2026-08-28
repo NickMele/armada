@@ -138,10 +138,12 @@ where
         // Assembled here rather than inside the gate: a Judge call
         // authenticates as Fleet, and a value that could not be built is a
         // configuration failure against this Job rather than a verdict.
-        let judging = self.judging().map_err(|cause| Adrift::NotConfigurable {
-            job: job_id.clone(),
-            cause,
-        })?;
+        let judging = self
+            .judging(&job_id)
+            .map_err(|cause| Adrift::NotConfigurable {
+                job: job_id.clone(),
+                cause,
+            })?;
         let declared = at_work.declared().cloned();
         // Read before the gate rather than inside it: `rule_on` reaches no
         // database, and a baseline is a row like any other.

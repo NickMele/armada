@@ -74,7 +74,8 @@ mod tests;
 pub use checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use detail::{
-    Criterion, Dependency, Flagged, JobDetail, Judged, StepDetail, StepFacts, Verdict,
+    Criterion, Dependency, Flagged, JobDetail, JudgeInFlight, Judged, StepDetail, StepFacts,
+    Verdict,
 };
 pub use enums::{
     Actor, AdvanceGate, CheckOutcome, CriterionSource, DependencyDirection, DronePresence,
@@ -84,7 +85,8 @@ pub use enums::{
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
     ChangeKind, ChangedFile, Cursor, Delivered, DroneExited, DroneSpawned, Event, JobCreated,
-    JobFilesChanged, JobStateChanged, JobStepAdvanced, Missed, Reason, Resync, StreamMessage,
+    JobFilesChanged, JobJudging, JobStateChanged, JobStepAdvanced, Missed, Reason, Resync,
+    StreamMessage,
 };
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use ids::{CriterionId, DroneId, Instant, JobId, ManifestId, StepId, WorkflowId};

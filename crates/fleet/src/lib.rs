@@ -138,7 +138,7 @@ pub use drone::{
 };
 pub use evidence::{Call, Decline, EvidenceInbox, EvidenceTool, Landed, Recorded, Standing};
 pub use gate::{apply, rule_on, CheckBudget, CheckOutput, Ruling};
-pub use judging::{CallFailed, JudgeBudget, Judging};
+pub use judging::{Aloft, CallFailed, JudgeBudget, Judging, Look, Marking};
 pub use mint::{Mint, UlidMint};
 pub use overruling::Overruling;
 pub use process::{holder_of, Holder, ProbeFailed, StartedAt};

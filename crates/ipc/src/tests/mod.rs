@@ -140,6 +140,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             ran: Vec::new(),
             judged: Vec::new(),
             flagged: Vec::new(),
+            judging: None,
         }],
         None,
     );
@@ -157,6 +158,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             ran: Vec::new(),
             judged: Vec::new(),
             flagged: Vec::new(),
+            judging: None,
         }],
         None,
     );
@@ -187,6 +189,7 @@ fn a_step_with_no_label_reads_as_its_id() {
             ran: Vec::new(),
             judged: Vec::new(),
             flagged: Vec::new(),
+            judging: None,
         }],
         None,
     );
@@ -221,6 +224,7 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
             }],
             judged: Vec::new(),
             flagged: Vec::new(),
+            judging: None,
         }],
         None,
     );
@@ -270,6 +274,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
                 },
             ],
             flagged: Vec::new(),
+            judging: None,
         }],
         None,
     );
