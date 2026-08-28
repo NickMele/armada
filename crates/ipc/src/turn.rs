@@ -14,10 +14,15 @@
 //!
 //! # A withheld row has no constructor
 //!
-//! `docs/concepts/observe.md` withholds three kinds from a viewer that the file
-//! still records. [`Shown`] is the narrowing, and it is a type rather than a
-//! filter at the call site: a row the design withholds cannot be put on the
-//! wire by somebody forgetting to check.
+//! `docs/concepts/observe.md` withholds two kinds from a viewer that the file
+//! still records — dispatch gating, and the sink's own losses. [`Shown`] is the
+//! narrowing, and it is a type rather than a filter at the call site: a row the
+//! design withholds cannot be put on the wire by somebody forgetting to check.
+//!
+//! A third was withheld until somebody checked the reason. [`Saw::Ended`]'s
+//! cost and turn count were held back because the Job's rail was said to state
+//! them, no rail ever did, and nothing else on the wire carries either — so
+//! what a Drone spent was reachable from nowhere.
 
 use core::fmt;
 
@@ -87,8 +92,18 @@ pub enum Saw {
         window: String,
         status: String,
     },
-    /// The Job's rail states the cost and the turn count, so a row restating
-    /// them would be a second answer to a question already answered.
+    /// The last row a Drone writes: what the run cost, how many turns it took,
+    /// and how many of them the harness refused.
+    ///
+    /// **Spend crosses here and nowhere else.** A Job's rail carries a step's
+    /// state and how long it took, and no DTO in this crate has a cost field —
+    /// so a Job that burned a dollar over forty turns and produced nothing read
+    /// exactly like one that gave up in four.
+    ///
+    /// **A run's own total and never a Job's.** A Job that retried has a row
+    /// per Drone, and adding them up is the reader's — which keeps the Job-wide
+    /// figure a question somebody decides rather than a number this crate
+    /// invents.
     Ended {
         turns: u32,
         cost_micros: u64,
@@ -147,12 +162,13 @@ impl TryFrom<TranscriptRow> for Shown {
     /// than defaulting into a viewer's window or out of it.
     fn try_from(row: TranscriptRow) -> Result<Shown, Withheld> {
         match row.saw {
-            Saw::QuotaMoved { .. } | Saw::Ended { .. } | Saw::Missed { .. } => Err(Withheld),
+            Saw::QuotaMoved { .. } | Saw::Missed { .. } => Err(Withheld),
             Saw::Started { .. }
             | Saw::Called { .. }
             | Saw::Answered { .. }
             | Saw::Said { .. }
             | Saw::Refused { .. }
+            | Saw::Ended { .. }
             | Saw::Unrecognised { .. }
             | Saw::Unreadable { .. } => Ok(Shown(row)),
         }

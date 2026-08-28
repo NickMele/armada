@@ -92,6 +92,7 @@ What that gives up is a payload the vocabulary has no variant for: `Unrecognised
 | `Started` | Session, model, MCP server count | The session, and whether confinement held |
 | `Unrecognised` | The kind | The stream carried something the vocabulary has no variant for — a new event, or the Drone's reasoning |
 | `Unreadable` | The line as the decoder saw it, and why | A line that did not decode |
+| `Ended` | The turn count, what the run cost, and how many turns the harness refused | The Drone stopped, and what it spent getting there |
 
 **`Missed` is the one row that is not a `DroneEvent`.** It is the sink saying how much of the record is not there, which the vocabulary has no way to say. It is written to the file and is not shown to a viewer, whose losses are the subscription's rather than the sink's.
 
@@ -112,8 +113,11 @@ What that gives up is a payload the vocabulary has no variant for: `Unrecognised
 | Withheld | Why |
 | --- | --- |
 | `QuotaMoved` | Belongs to dispatch gating, not to this Job |
-| `Ended` cost and turn count | The Job's rail states these, and a row would restate them |
 | Raw `stream-json` | The row vocabulary is the view; nothing needs the wire shape |
+
+**`Ended`'s cost and turn count were withheld here, because the Job's rail was said to state them.** It states a step's state and how long the step took, and no other row and no other shape on the wire carries a spend at all — so the one irreversible thing about a Drone was reachable from nowhere, and a Job that burned a dollar over forty turns read exactly like one that gave up in four. The row is shown.
+
+**A row is one Drone's run and never a Job's total.** A retry is a second Drone under one Job, so a Job that retried has a row apiece; what a Job cost is the sum, and where that sum is drawn — a scanned Board, or a finished Job's outcome — is the surface's question rather than this one's.
 
 ## Observing is not a Job state
 

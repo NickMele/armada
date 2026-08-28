@@ -25,7 +25,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::checks::DeclaredCheck;
+use crate::checks::{DeclaredCheck, DeclaredJudge};
+use crate::enums::AdvanceGate;
 use crate::ids::{ManifestId, StepId, WorkflowId};
 
 /// One step of a workflow, as the definition declares it.
@@ -35,6 +36,12 @@ use crate::ids::{ManifestId, StepId, WorkflowId};
 /// declaration stored twice is a registry that drifts; the Job's frozen rows
 /// carry where a step *got to*, which is a different fact with a different
 /// authority.
+///
+/// **The same declarations [`StepDetail`](crate::StepDetail) carries** — the
+/// Checks, what the step asks the Judge, and what it takes to advance — in the
+/// same shapes. What a person approves before a dispatch and what the rail
+/// shows during one are one sentence read at two moments, so a second
+/// vocabulary for the earlier one would be two spellings of one declaration.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkflowStep {
     pub step_id: StepId,
@@ -49,13 +56,37 @@ pub struct WorkflowStep {
     /// the same thing, so the wire spells it one way — always a list, never
     /// absent — and a reader never has to infer an ungated step from a gap.
     pub checks: Vec<DeclaredCheck>,
+    /// What the step asks of the Judge, in the order it asks it. Counts and
+    /// panel sizes; **the questions themselves do not cross**, which is
+    /// [`DeclaredJudge`]'s own rule and not a second one here.
+    ///
+    /// **Empty is "the Judge is never called on this step"**, which is most
+    /// steps — and it is a sentence rather than a gap for the reason `checks`
+    /// is. Absent has no meaning on this shape: a workflow Fleet is serving is
+    /// a workflow Fleet holds, so there is no "cannot say" to spell, which is
+    /// what the same field on [`StepDetail`](crate::StepDetail) is optional for.
+    ///
+    /// **An inert entry does not cross**, on the same ground the rail's does:
+    /// the domain spells a disabled judge check and an absent one identically,
+    /// so an entry that asks nothing and looks for nothing would make a step
+    /// preview as judged when no Judge will be called.
+    pub judge_checks: Vec<DeclaredJudge>,
+    /// What it takes to advance past this step.
+    ///
+    /// **This is the whole of what a preview was missing.** A workflow that
+    /// will stop and wait for a person at `handoff` is what somebody is
+    /// agreeing to when they approve the dispatch, and it previewed as a step
+    /// with nothing on it — the same defect the rail had, one moment earlier
+    /// and on the surface where the decision is actually taken.
+    pub advance_gate: AdvanceGate,
 }
 
 /// One workflow Fleet holds, as a picker offers it.
 ///
-/// The steps are their ids, labels and Checks rather than the whole definition:
-/// a composer needs the count and the words to say "4 steps, ending at close",
-/// and the gates and the evidence types are still `get_job`'s business.
+/// The steps are what each one declares rather than the whole definition: a
+/// composer needs the count and the words to say "4 steps, ending at close",
+/// and what each step will gate on before anybody approves it. The evidence
+/// types are still `get_job`'s business.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkflowSummary {
     /// What a proposal's `workflow_id` must name. **The only value Fleet

@@ -204,6 +204,8 @@ It also makes the row readable. Bridge showed a ULID where it should have said `
 One workflow at M1 — `Fittings` holds exactly one — and the row is still a list, because the reason there is one is that nothing could look a second one up, and that reason has now gone.
 
 A step was a bare id until `mechanical_checks` was added to it. Bridge printed "No operation serves this step's checks" under every step because nothing on the wire could say otherwise, and for the `bug` workflow the truth is that none of its four steps declares one. `get_job` answers from these same values rather than a second copy.
+
+**A step now carries its advance gate and what it asks the Judge, which is the whole of what this answers that `get_job` does not answer sooner.** This is where a person decides whether to approve a dispatch: afterwards the rail says what happened, and here they are agreeing to it. A workflow that will stop and wait for them at `handoff`, and spend Judge calls at `implement`, previewed as neither. Both are the shapes the rail already uses, and the criteria themselves stay off the wire — counts and states, never a question.
 """
 
 [operations.observe_job]
@@ -219,6 +221,8 @@ It does not travel `/events`. That stream is one drop-oldest channel of fixed ca
 `helm_access` is `No` for the reason `get_events_since` gives about tokens: a Drone's whole transcript streamed into a Helm session stays in that session for its remainder, and Helm has `get_drone` for the snapshot. The viewer this is for is a person.
 
 Not `get_drone`, which is a snapshot of one Drone over HTTP. This is one Job across every Drone it has had, and it continues.
+
+**The row a Drone ends on is what carries a spend.** It was withheld because the Job's rail was said to state the cost and the turn count; the rail states neither, and no other operation here answers with either — so this is the only place on the wire a Drone's cost appears. A Job that retried has one such row per Drone, and what the Job cost is the sum of them.
 """
 
 
