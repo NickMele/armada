@@ -55,8 +55,10 @@ That file is read on both sides, but not the same way:
 Because the TypeScript half is generated-then-committed, it can drift from its
 source the same way any generated-then-committed file can: someone edits the
 `ipc` crate and doesn't rerun codegen, or edits the generated `.ts` file by
-hand because it was faster. `cargo xtask verify-protocol` exists to make that
-drift a build failure instead of a runtime surprise. It checks two things:
+hand because it was faster. `cargo xtask verify-protocol` is what would make
+that drift a build failure instead of a runtime surprise. **It does not exist
+yet** — see `[verify-protocol-task]` below — so what follows is what it is for,
+and none of it is enforced today. It would check two things:
 
 1. The checked-in generated TypeScript matches what codegen would produce from
    the current `ipc` source, right now.
@@ -87,8 +89,11 @@ harmless in review.
    enum vocabulary, not the DTO types** — nothing generates those from the
    `ipc` source yet, so a shape change is still hand-mirrored on the TS side
    and that is the gap `[protocol-codegen]` names.
-4. Run `cargo xtask verify-protocol`. It fails if step 3 was skipped or done
-   against a stale build, or if anything still hard-codes the version.
+4. **There is no check to run.** `cargo xtask verify-protocol` does not exist
+   — `[verify-protocol-task]` below — so until it does, step 3 is verified by
+   reading: the generated file's version matches `protocol-version.toml`, and
+   nothing hard-codes it. `xtask` offers `verify-foundations`, `verify-tokens`,
+   `verify-docs` and `verify-roadmap`, and none of them checks this.
 5. Commit the `ipc` source change and the regenerated files in the same
    change. A generated-file diff with no corresponding source diff, or vice
    versa, is the thing review should bounce.
@@ -407,9 +412,12 @@ Naming these rather than deciding them, per this document's brief:
   reach `core-model` or `adapter-traits` (their `cargo tree` is a gate rule:
   no codegen framework belongs under either).
 - **[verify-protocol-task]** How `cargo xtask verify-protocol` gets wired into `xtask`. Today `xtask`
-  implements `verify-foundations`, `verify-tokens` and `verify-docs`; there is
-  no `verify-protocol` task and no `ipc` crate for it to check. It needs to exist
-  before anything above is enforceable rather than aspirational.
+  implements `verify-foundations`, `verify-tokens`, `verify-docs` and
+  `verify-roadmap`; there is no `verify-protocol` task. The `ipc` crate now
+  exists and is generated-then-committed, so the thing to check is there and the
+  check is not: the version was bumped four times on 2026-08-28 and mirrored by
+  hand each time. It needs to exist before anything above is enforceable rather
+  than aspirational.
 - **[broadcast-capacity]** The bounded broadcast channel's capacity, and whether it's one number
   for all event types or tuned per event type.
 - **[lifeboat-router]** Whether the lifeboat's four routes live inside the

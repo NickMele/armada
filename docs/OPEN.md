@@ -233,7 +233,7 @@ on purpose and makes the gate name what was waiting.
 ## docs/practices/protocol.md
 
 - **[protocol-codegen]** What generates the TypeScript from `ipc`. Hand-rolled build script, `ts-rs`, `specta`, something else — not decided. Whatever it is, it must not reach `core-model` or `adapter-traits` (their `cargo tree` is a gate rule: no codegen framework belongs under either).
-- **[verify-protocol-task]** How `cargo xtask verify-protocol` gets wired into `xtask`. Today `xtask` implements `verify-foundations`, `verify-tokens` and `verify-docs`; there is no `verify-protocol` task and no `ipc` crate for it to check. It needs to exist before anything above is enforceable rather than aspirational.
+- **[verify-protocol-task]** How `cargo xtask verify-protocol` gets wired into `xtask`. Today `xtask` implements `verify-foundations`, `verify-tokens`, `verify-docs` and `verify-roadmap`; there is no `verify-protocol` task. The `ipc` crate now exists and is generated-then-committed, so the thing to check is there and the check is not: the version was bumped four times on 2026-08-28 and mirrored by hand each time. It needs to exist before anything above is enforceable rather than aspirational.
 - **[broadcast-capacity]** The bounded broadcast channel's capacity, and whether it's one number for all event types or tuned per event type.
 - **[lifeboat-router]** Whether the lifeboat's four routes live inside the same `axum` `Router` as the main protocol or a separate one. Either can satisfy "no shared dependency with the versioned protocol"; which one hasn't been decided.
 
