@@ -208,7 +208,9 @@ in_code = "Not yet"
 from = "running"
 to = "completed_failed"
 on = "Retries exhausted. At M1, a failed Check"
+guard = "no_step_running"
 in_code = "Not yet"
+notes = "The step that failed is stopped and carries its verdict before the Job ends — #156 made `gate_undecided` do that and #179 found the failure path had not. The guard is on this edge alone: `escalated -> completed_failed` is a person accepting a `stalled` Job's failure and legitimately holds a `running` step, so `completed_failed`'s `step_states` does not narrow behind it."
 
 [[transitions]]
 from = "running"

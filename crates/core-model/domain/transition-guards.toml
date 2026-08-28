@@ -47,3 +47,17 @@ It reads the `state` column of each `job_steps` row, which is the latest attempt
 
 The inner machine is frozen everywhere but `running` and `awaiting_review`, so a Job satisfies this guard by advancing its steps before it leaves one of those two. That is the order `fleet::landing` and `fleet::reviewing` already walk.
 """
+
+[guards.no_step_running]
+asserts = "No step is still being worked"
+holds_steps = ["advanced", "awaiting_human", "not_started", "retrying", "stopped"]
+on_edges = ["running -> completed_failed"]
+refused_as = "GuardRefused"
+in_code = "Yes"
+notes = """
+On one inbound edge of `completed_failed` and deliberately not on the other two, which is where this guard parts company with `every_step_advanced`. That one guards all four edges into `completed_success` because a status is the union of what arrives at it. Here one inbound edge legitimately carries a running step: `escalated -> completed_failed` is a person accepting the failure of a Job escalated on `stalled`, and such a Job holds a step that is still `running` — which is the row #184 corrected `escalated` to admit. **So `completed_failed`'s `step_states` cannot narrow, and that is this machine read honestly rather than a guard left half-applied.**
+
+Everything but `running` is admitted, because the guard asserts what its name says and no more. `retrying` is passed through rather than rested in — see `step_machine` — and `awaiting_human` is a state nothing writes yet.
+
+Defence in depth. `fleet::dispatch` stops the step before it moves the Job on every ruling that ends one, so nothing in the workspace should reach this refusal. **"Already correct at the one call site" is exactly how #179 happened**: `gate_undecided` was fixed the same way in #156, the failure path was not, and a Job's `tests` step read `running` beneath a terminal status with no verdict on it.
+"""

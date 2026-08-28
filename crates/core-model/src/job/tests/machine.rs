@@ -352,18 +352,133 @@ fn a_refused_guard_leaves_the_job_exactly_as_it_was() {
 
 /// **Only the edges the registry guards are guarded.** A condition that leaked
 /// onto its neighbours would stop a Job being killed or escalated mid-step,
-/// which is the opposite of what the machine has to allow.
+/// which is the opposite of what the machine has to allow — an escalation is
+/// how a running step gets a person, so guarding that edge would trap the Job
+/// this one exists to rescue.
 #[test]
-fn no_other_edge_out_of_running_carries_a_condition() {
+fn only_the_two_endings_out_of_running_carry_a_condition() {
     for edge in EDGES.iter().filter(|e| e.from == JobStatus::Running) {
+        let expected = match edge.to {
+            JobStatus::CompletedSuccess => Some(Guard::EveryStepAdvanced),
+            JobStatus::CompletedFailed => Some(Guard::NoStepRunning),
+            _ => None,
+        };
         assert_eq!(
-            edge.guard.is_some(),
-            edge.to == JobStatus::CompletedSuccess,
+            edge.guard,
+            expected,
             "{} -> {} carries the wrong condition",
             edge.from.as_wire(),
             edge.to.as_wire()
         );
     }
+}
+
+/// **The guard is on the one inbound edge, and the other two are unguarded on
+/// purpose.** `escalated -> completed_failed` is a person accepting the failure
+/// of a Job escalated on `stalled`, which holds a `running` step legitimately —
+/// so `completed_failed`'s `step_states` row does not narrow behind this guard
+/// and is not waiting to. Guarding all three, the way `every_step_advanced`
+/// guards all four of its own, would refuse that person's decision.
+#[test]
+fn only_the_edge_from_running_ends_a_job_on_a_condition() {
+    for edge in EDGES.iter().filter(|e| e.to == JobStatus::CompletedFailed) {
+        assert_eq!(
+            edge.guard.is_some(),
+            edge.from == JobStatus::Running,
+            "{} -> {} carries the wrong condition",
+            edge.from.as_wire(),
+            edge.to.as_wire()
+        );
+    }
+}
+
+/// The write #179 observed, refused. A Job whose step is still being worked
+/// cannot be ended as failed from `running`, and the refusal names the step
+/// rather than only the Job — "cannot complete" is useless, "step `fix` is
+/// running" is the finding.
+#[test]
+fn completed_failed_is_refused_from_running_while_a_step_is_being_worked() {
+    let job = reach(JobStatus::Running);
+    let job = job
+        .transition_step(
+            &StepId::new("fix"),
+            StepTarget::Running,
+            Actor::Fleet,
+            at("2026-08-26T09:30:00.000Z"),
+        )
+        .expect("a step is entered")
+        .job;
+    let error = job
+        .transition(
+            Target::CompletedFailed,
+            Actor::Fleet,
+            at("2026-08-26T10:00:00.000Z"),
+        )
+        .expect_err("a step still being worked cannot be left running beneath a terminal Job");
+    assert_eq!(
+        error,
+        IllegalTransition::GuardRefused {
+            from: JobStatus::Running,
+            to: JobStatus::CompletedFailed,
+            guard: Guard::NoStepRunning,
+            step_id: StepId::new("fix"),
+            holding: StepState::Running,
+        }
+    );
+    let said = format!("{error}");
+    assert!(said.contains("fix"), "{said}");
+    assert!(said.contains("no_step_running"), "{said}");
+}
+
+/// The half the guard would be useless without: the step is stopped with the
+/// trigger that stopped it, and the Job then ends. **This is the order
+/// `fleet::dispatch` walks**, and the states the machine leaves behind are the
+/// ones `completed_failed` declares.
+#[test]
+fn completed_failed_is_admitted_once_the_worked_step_is_stopped() {
+    let why = StepLevelTrigger::of(EscalationTrigger::GateFailure).expect("a step-level trigger");
+    let mut job = reach(JobStatus::Running);
+    for target in [StepTarget::Running, StepTarget::Stopped(why)] {
+        job = job
+            .transition_step(
+                &StepId::new("fix"),
+                target,
+                Actor::Fleet,
+                at("2026-08-26T09:30:00.000Z"),
+            )
+            .expect("a step is entered and stopped")
+            .job;
+    }
+    let moved = job
+        .transition(
+            Target::CompletedFailed,
+            Actor::Fleet,
+            at("2026-08-26T10:00:00.000Z"),
+        )
+        .expect("no step is running");
+    assert_eq!(moved.job.status(), JobStatus::CompletedFailed);
+    assert!(moved
+        .job
+        .steps()
+        .iter()
+        .all(|row| row.state() != StepState::Running));
+}
+
+/// **A step that was never entered does not hold the Job open.** The guard says
+/// no step is running, not that every step ran: a Job that fails on its first
+/// step leaves the rest `not_started`, and refusing that would make a failure
+/// unrecordable.
+#[test]
+fn a_step_that_never_started_does_not_refuse_the_ending() {
+    let job = reach(JobStatus::Running);
+    let moved = job
+        .transition(
+            Target::CompletedFailed,
+            Actor::Fleet,
+            at("2026-08-26T10:00:00.000Z"),
+        )
+        .expect("a step that was never entered is not being worked");
+    assert_eq!(moved.job.status(), JobStatus::CompletedFailed);
 }
 
 // ------------------------------------------------------- what does not move

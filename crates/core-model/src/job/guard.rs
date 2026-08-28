@@ -35,17 +35,30 @@ pub enum Guard {
     /// What `completed_success` has always claimed — "Frozen, every step
     /// advanced" — and could not hold while an edge had no condition.
     EveryStepAdvanced,
+    /// No step is still being worked.
+    ///
+    /// **On `running -> completed_failed` alone**, and not on the two other
+    /// edges into that status: `escalated -> completed_failed` is a person
+    /// accepting the failure of a Job escalated on `stalled`, which holds a
+    /// `running` step legitimately. So `completed_failed`'s `step_states` row
+    /// does not narrow behind this guard, and is not meant to.
+    ///
+    /// It is defence in depth — `fleet::dispatch` stops the step before the Job
+    /// moves — and #179 is why it exists anyway: that path was correct at three
+    /// of its four rulings for a month.
+    NoStepRunning,
 }
 
 impl Guard {
     /// Every variant, in registry order. What a set-comparison rule reads.
-    pub const ALL: &'static [Guard] = &[Guard::EveryStepAdvanced];
+    pub const ALL: &'static [Guard] = &[Guard::EveryStepAdvanced, Guard::NoStepRunning];
 
     /// The wire value, which is also the registry key. What a refusal names,
     /// so that a caller reporting one says the condition rather than the edge.
     pub fn as_wire(&self) -> &'static str {
         match self {
             Guard::EveryStepAdvanced => "every_step_advanced",
+            Guard::NoStepRunning => "no_step_running",
         }
     }
 
@@ -62,6 +75,19 @@ impl Guard {
     pub const fn holds(&self) -> &'static [StepState] {
         match self {
             Guard::EveryStepAdvanced => &[StepState::Advanced],
+            // Every state but `running`, written out rather than derived: the
+            // gate reads these arms out of the source text, so a set built by
+            // filtering `StepState::ALL` would be a set it could not read. The
+            // list says what the name says and no more — a `retrying` step is
+            // passed through and not rested in, and `awaiting_human` is a state
+            // nothing writes yet.
+            Guard::NoStepRunning => &[
+                StepState::Advanced,
+                StepState::AwaitingHuman,
+                StepState::NotStarted,
+                StepState::Retrying,
+                StepState::Stopped,
+            ],
         }
     }
 
