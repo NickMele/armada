@@ -109,6 +109,18 @@ wire_enum! {
     StepState, core_model::StepState, "a step state"
 }
 wire_enum! {
+    /// What it takes to advance past one step. Three, from
+    /// `domain/workflowdef-fields.toml`.
+    ///
+    /// **Two name a tier and the third names an actor.** `auto` and
+    /// `auto_if_judge_passes` say which of Fleet's tiers is the whole gate;
+    /// `human_always` says the tiers do not decide at all and the step holds at
+    /// `awaiting_review` for a person. The schema's fourth form,
+    /// `manifest_rule:<key>`, is refused where a definition is parsed and so
+    /// cannot arrive here.
+    AdvanceGate, core_model::AdvanceGate, "an advance gate"
+}
+wire_enum! {
     /// Which way a dependency edge points.
     DependencyDirection, core_model::DependencyDirection, "a dependency direction"
 }

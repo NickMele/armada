@@ -20,11 +20,14 @@
 //! receives `branch: null` cannot tell "no worktree yet" from "Fleet forgot".
 //! Evidence and a pointer to `.armada/logs/` are absent because nothing
 //! produces either, and a field that is always empty reads as working.
+//!
+//! Two of a step's four declared facts are read off the Job's own frozen
+//! workflow rather than handed in — [`StepFacts`] says which, and why.
 
 use serde::{Deserialize, Serialize};
 
-use crate::checks::{CheckRun, DeclaredCheck};
-use crate::enums::{CriterionSource, DependencyDirection, JudgeVerdict, StepState};
+use crate::checks::{CheckRun, DeclaredCheck, DeclaredJudge};
+use crate::enums::{AdvanceGate, CriterionSource, DependencyDirection, JudgeVerdict, StepState};
 use crate::ids::{CriterionId, Instant, JobId, StepId};
 use crate::job::{JobSummary, Subject};
 
@@ -36,6 +39,16 @@ use crate::job::{JobSummary, Subject};
 ///
 /// Built by Fleet, which is the only side holding both the workflow and the
 /// store. It is not a wire type and is never serialised.
+///
+/// **It carries two of a step's declared facts and not the other two.**
+/// [`StepDetail::advance_gate`] and [`StepDetail::judge_checks`] do not come
+/// through here: [`JobDetail::of`] is given the `core_model::Job`, a Job
+/// carries the workflow it froze, and that is the same value Fleet reads to
+/// fill `declares` below. Reaching it directly is one authority rather than
+/// two, and a declaration a caller cannot forget to hand in — forgetting is
+/// what left a `human_always` step reading as a step with nothing on it. The
+/// split is a known cost, and `label` and `declares` follow at the next reason
+/// to touch them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StepFacts {
     pub step_id: StepId,
@@ -114,7 +127,13 @@ impl JobDetail {
             steps: job
                 .steps()
                 .iter()
-                .map(|step| StepDetail::of(step, facts_for(steps, step.step_id())))
+                .map(|step| {
+                    StepDetail::of(
+                        step,
+                        job.workflow().step(step.step_id()),
+                        facts_for(steps, step.step_id()),
+                    )
+                })
                 .collect(),
             acceptance_criteria: job
                 .acceptance_criteria()
@@ -162,6 +181,29 @@ pub struct StepDetail {
     /// What each declared Check did, in the same order. Empty until the gate
     /// has run them, which is not the same as declaring none.
     pub check_runs: Vec<CheckRun>,
+    /// What this step declares for the semantic tier, in the workflow's order.
+    ///
+    /// **Empty and absent are the two sentences `checks` has**, for the same
+    /// reason: empty is a step the Judge will not look at, absent is Fleet
+    /// unable to say. Neither is "nothing will happen here" — read it beside
+    /// `advance_gate`, which is what says whether the step stops for a person.
+    ///
+    /// **An inert entry does not cross.** The domain represents a disabled
+    /// judge check and an absent one identically, as an entry with no
+    /// criteria, so an entry that asks nothing and looks for nothing would
+    /// lengthen this list without a Judge ever being called. What is here
+    /// fires.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub judge_checks: Option<Vec<DeclaredJudge>>,
+    /// What it takes to advance past this step, as the workflow declares it.
+    ///
+    /// **This is what lets a step say it will stop before it stops.**
+    /// `human_always` holds the Job at `awaiting_review` for a person, and a
+    /// screen that could not read this drew the commonest halt in the fleet as
+    /// a step with nothing on it. Absent on the same grounds as `checks`: the
+    /// frozen workflow does not declare the step.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub advance_gate: Option<AdvanceGate>,
     /// Absent until a gate has ruled on the step.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_verdict: Option<Verdict>,
@@ -186,7 +228,11 @@ pub struct StepDetail {
 }
 
 impl StepDetail {
-    fn of(step: &core_model::JobStep, facts: Option<&StepFacts>) -> StepDetail {
+    fn of(
+        step: &core_model::JobStep,
+        declared: Option<&core_model::ResolvedStep>,
+        facts: Option<&StepFacts>,
+    ) -> StepDetail {
         StepDetail {
             step_id: step.step_id().into(),
             label: facts
@@ -197,6 +243,17 @@ impl StepDetail {
             state: step.state().into(),
             checks: facts.and_then(|facts| facts.declares.clone()),
             check_runs: facts.map(|facts| facts.ran.clone()).unwrap_or_default(),
+            judge_checks: declared.map(|declared| {
+                declared
+                    .judge_checks()
+                    .iter()
+                    .filter(|check| {
+                        check.fires() || check.gaming().is_some_and(core_model::GamingCheck::fires)
+                    })
+                    .map(DeclaredJudge::from)
+                    .collect()
+            }),
+            advance_gate: declared.map(|declared| declared.advance_gate().into()),
             last_verdict: step.last_verdict().map(Verdict::of),
             judged: facts.map(|facts| facts.judged.clone()).unwrap_or_default(),
             flagged: facts.map(|facts| facts.flagged.clone()).unwrap_or_default(),

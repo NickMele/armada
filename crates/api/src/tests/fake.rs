@@ -29,6 +29,34 @@ pub fn run_id() -> RunId {
     RunId::carried("01RUN")
 }
 
+/// One step of the rail, declared and not yet run.
+///
+/// **Built out of `ipc` and nothing else**, which is the file's whole claim: a
+/// gate and a judge declaration a Bridge can construct are a gate and a judge
+/// declaration a Bridge can read.
+fn step_rail(
+    step_id: &str,
+    ordinal: u32,
+    gate: &str,
+    judge_checks: Vec<ipc::DeclaredJudge>,
+) -> ipc::StepDetail {
+    ipc::StepDetail {
+        step_id: StepId::carried(step_id),
+        label: step_id.to_string(),
+        ordinal,
+        state: ipc::StepState::from_wire("not_started").expect("a step state the registry has"),
+        checks: Some(Vec::new()),
+        check_runs: Vec::new(),
+        judge_checks: Some(judge_checks),
+        advance_gate: Some(ipc::AdvanceGate::from_wire(gate).expect("a gate the registry has")),
+        last_verdict: None,
+        judged: Vec::new(),
+        flagged: Vec::new(),
+        entered_at: Instant::carried("2026-08-26T09:00:00.000Z"),
+        updated_at: Instant::carried("2026-08-26T09:00:00.000Z"),
+    }
+}
+
 pub struct FakeDaemon {
     jobs: Mutex<Vec<JobSummary>>,
     unreadable: Mutex<Vec<UnreadableJob>>,
@@ -142,10 +170,14 @@ impl Daemon for FakeDaemon {
         })
     }
 
-    /// One Job, with nothing the fake does not hold. **Every list is empty and
-    /// every option absent**, because this daemon holds `JobSummary` and
-    /// nothing beneath it — the shape is what is under test here, and the real
-    /// fields are asserted against a real Fleet in `fleet`'s own suite.
+    /// One Job, with nothing the fake does not hold — except a step rail,
+    /// which it holds because the rail is the shape a client draws a Job from.
+    ///
+    /// **Two steps, and they are the pair the rail turns on**: one the Judge
+    /// gates, one a person does. Every other list is empty and every other
+    /// option absent, because this daemon holds `JobSummary` and nothing
+    /// beneath it, and the real values are asserted against a real Fleet in
+    /// `fleet`'s own suite.
     async fn get_job(&self, job_id: JobId) -> Result<JobDetail, Refusal> {
         let jobs = self.jobs.lock().expect("not poisoned");
         let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
@@ -155,7 +187,19 @@ impl Daemon for FakeDaemon {
             job: job.clone(),
             created_at: Instant::carried("2026-08-26T09:00:00.000Z"),
             branch: None,
-            steps: Vec::new(),
+            steps: vec![
+                step_rail(
+                    "implement",
+                    0,
+                    "auto_if_judge_passes",
+                    vec![ipc::DeclaredJudge {
+                        criteria: 2,
+                        panel_size: Some(3),
+                        gaming_check: true,
+                    }],
+                ),
+                step_rail("handoff", 1, "human_always", Vec::new()),
+            ],
             acceptance_criteria: Vec::new(),
             facts: None,
             write_targets: None,

@@ -162,6 +162,48 @@ async fn every_operation_runs_with_no_network() {
     assert_eq!(ended.status.as_wire(), "killed");
 }
 
+/// **A step's gates cross before any of them acts, over HTTP and whole.**
+///
+/// This is the JSON a rail is drawn from, and until it carried these two keys
+/// a step gated `human_always` — where the Job halts for a person — drew as a
+/// step with nothing on it. What is asserted here is the serialised body
+/// rather than the struct: the defect was a field that never left Rust.
+#[tokio::test]
+async fn a_steps_judge_and_its_human_gate_cross_before_either_acts() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    running(&daemon, "01RUNNING");
+    let app = wired(daemon, events);
+
+    let (status, body) = call(&app, "GET", "/jobs/01RUNNING", "").await;
+    assert_eq!(status, StatusCode::OK);
+    let json = String::from_utf8(body.clone()).expect("a JSON body");
+    let detail: ipc::JobDetail = ipc::decode("a Job in full", &body).expect("a detail");
+
+    let gated = &detail.steps[1];
+    assert_eq!(
+        gated.advance_gate.expect("the gate crosses").as_wire(),
+        "human_always",
+        "the step the Job stops on says so: {json}"
+    );
+
+    let judged = detail.steps[0]
+        .judge_checks
+        .as_ref()
+        .expect("the declaration crosses");
+    assert_eq!(judged[0].criteria, 2);
+    assert_eq!(judged[0].panel_size, Some(3), "the owner asked by name");
+    assert!(judged[0].gaming_check);
+    assert!(
+        gated
+            .judge_checks
+            .as_ref()
+            .expect("an answer, not a gap")
+            .is_empty(),
+        "asking the Judge nothing is not the same as stopping for nobody: {json}"
+    );
+}
+
 /// **The case that proves the two operations are not one.** A Job at the
 /// approval gate has no Drone — nothing has spawned — and the registry still
 /// carries `awaiting_approval -> killed`, an operator act carrying no verdict.
