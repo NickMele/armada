@@ -45,6 +45,8 @@ fn spellings(of: &[(&str, &str)]) -> BTreeMap<String, String> {
 /// The `StepState` variants the small machine's registry may name.
 fn states() -> BTreeMap<String, String> {
     spellings(&[
+        ("Advanced", "advanced"),
+        ("AwaitingHuman", "awaiting_human"),
         ("NotStarted", "not_started"),
         ("Running", "running"),
         ("Stopped", "stopped"),
@@ -359,4 +361,122 @@ fn the_seed_state_is_the_one_a_step_row_is_written_with() {
     let text = "    pub fn written_at_creation(job_id: JobId) -> Self {\n        \
                 JobStep {\n            state: StepState::NotStarted,\n        }\n    }\n";
     assert_eq!(written_at_creation(text).as_deref(), Some("NotStarted"));
+}
+
+// --------------------------------------------------------- the transcription
+
+/// The relation's third copy, in Rust, returning a `&'static [JobStatus]` a
+/// surface can read. Here the finding does name a side: the registry is the
+/// authority on the set, and the arm is a hand transcription of it.
+const ARMS: &str = "    pub fn seen_under(&self) -> &'static [JobStatus] {\n        \
+                    match self {\n            \
+                    StepState::Advanced => &[],\n            \
+                    StepState::Stopped => &[JobStatus::Escalated],\n        }\n    }\n";
+
+fn owed(of: &[(&str, &[&str])]) -> BTreeMap<String, BTreeSet<String>> {
+    of.iter()
+        .map(|(state, under)| {
+            let under = under.iter().map(|s| s.to_string()).collect();
+            (state.to_string(), under)
+        })
+        .collect()
+}
+
+fn transcription(owed: &BTreeMap<String, BTreeSet<String>>) -> Vec<String> {
+    let mut report = Report::new("test");
+    check_transcription(ARMS, owed, &statuses(), &states(), &mut report);
+    said(&report)
+}
+
+#[test]
+fn an_arm_that_matches_the_registry_reports_nothing() {
+    let found = transcription(&owed(&[("advanced", &[]), ("stopped", &["escalated"])]));
+    assert_eq!(found, Vec::<String>::new());
+}
+
+#[test]
+fn an_arm_the_registry_widened_past_names_the_arm_as_what_changes() {
+    let found = transcription(&owed(&[
+        ("advanced", &[]),
+        ("stopped", &["escalated", "killed"]),
+    ]));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].contains("returns [escalated]"), "{found:?}");
+    assert!(
+        found[0].contains("declares [escalated, killed]"),
+        "{found:?}"
+    );
+    assert!(found[0].contains("the arm is what changes"), "{found:?}");
+}
+
+/// An empty arm is a real answer — `advanced` returned one for a milestone —
+/// so it is compared rather than read as "no arm".
+#[test]
+fn an_empty_arm_is_compared_rather_than_treated_as_absent() {
+    let found = transcription(&owed(&[
+        ("advanced", &["running"]),
+        ("stopped", &["escalated"]),
+    ]));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].contains("returns nothing"), "{found:?}");
+}
+
+#[test]
+fn an_arm_for_a_state_the_registry_does_not_declare_is_named() {
+    let found = transcription(&owed(&[("advanced", &[])]));
+    assert!(
+        found
+            .iter()
+            .any(|f| f.contains("has a `seen_under` arm and")),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn a_missing_function_is_refused_rather_than_read_as_agreement() {
+    let mut report = Report::new("test");
+    check_transcription(
+        "impl StepState {}",
+        &owed(&[("stopped", &["escalated"])]),
+        &statuses(),
+        &states(),
+        &mut report,
+    );
+    assert!(
+        said(&report)[0].contains("`StepState::seen_under` is missing"),
+        "{:?}",
+        said(&report)
+    );
+}
+
+/// An arm meaning every status says `JobStatus::ALL` rather than retyping
+/// twelve names, and the reader resolves it. A retyped list is the copy that
+/// drifts, which is the defect one level down from the one this rule catches.
+#[test]
+fn an_arm_saying_all_is_read_as_every_status() {
+    let text = "    pub fn seen_under(&self) -> &'static [JobStatus] {\n        \
+                match self {\n            \
+                StepState::Advanced => JobStatus::ALL,\n            \
+                StepState::Retrying => &[JobStatus::Running],\n        }\n    }\n";
+    let arms = super::machine::seen_under_arms(text, &statuses(), &states()).unwrap();
+    assert_eq!(
+        arms["advanced"].iter().collect::<BTreeSet<_>>(),
+        statuses().values().collect::<BTreeSet<_>>()
+    );
+    assert_eq!(arms["retrying"], vec!["running".to_string()]);
+}
+
+/// An arm `rustfmt` wrapped is one arm, not two unreadable halves.
+#[test]
+fn a_wrapped_arm_is_accumulated_until_its_brackets_balance() {
+    let text = "    pub fn seen_under(&self) -> &'static [JobStatus] {\n        \
+                match self {\n            \
+                StepState::Stopped => &[\n                \
+                JobStatus::Escalated,\n                \
+                JobStatus::Killed,\n            ],\n        }\n    }\n";
+    let arms = super::machine::seen_under_arms(text, &statuses(), &states()).unwrap();
+    assert_eq!(
+        arms["stopped"],
+        vec!["escalated".to_string(), "killed".to_string()]
+    );
 }

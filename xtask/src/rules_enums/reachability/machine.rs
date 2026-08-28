@@ -16,7 +16,8 @@ use std::path::Path;
 
 use crate::Report;
 
-use super::{read, resolve, spelled, Machine, MACHINE, RECORD, STEP};
+use super::reading::{read, resolve, spelled};
+use super::{Machine, MACHINE, RECORD, STEP};
 
 /// The machine, read out of the three sources that declare it.
 ///
@@ -171,6 +172,58 @@ pub(super) fn read_step_edges(
         found.push((from, to));
     }
     found
+}
+
+/// `StepState::seen_under`'s arms, as `state -> statuses` in wire spellings.
+///
+/// The relation is written a third time here, in the crate itself, and it is a
+/// hand transcription like `EDGES` is. `None` where the function is absent,
+/// which the caller reports: a transcription nothing compares is the shape of
+/// the whole defect.
+///
+/// **`JobStatus::ALL` is read as every status**, and it is the honest answer
+/// where an arm means every one — a list of twelve names retyped is the copy
+/// that drifts, and the point of the check is that it cannot. An arm is
+/// accumulated until its brackets balance, so one `rustfmt` wrapped is one arm.
+pub(super) fn seen_under_arms(
+    text: &str,
+    statuses: &BTreeMap<String, String>,
+    states: &BTreeMap<String, String>,
+) -> Option<BTreeMap<String, Vec<String>>> {
+    let body = text.split("fn seen_under").nth(1)?;
+    let body = body.split("\n    }").next().unwrap_or(body);
+    let mut found = BTreeMap::new();
+    let mut pending = String::new();
+    for line in body.lines().map(str::trim) {
+        pending.push_str(line);
+        let balanced = pending.matches('[').count() == pending.matches(']').count();
+        if !pending.contains("=>") || !balanced || !pending.ends_with(',') {
+            continue;
+        }
+        let arm = core::mem::take(&mut pending);
+        let Some((variant, listed)) = arm.split_once(" => ") else {
+            continue;
+        };
+        let Some(state) = spelled(variant, states) else {
+            continue;
+        };
+        let listed = listed.trim().trim_end_matches(',');
+        let named = if listed.ends_with("::ALL") {
+            statuses.values().cloned().collect()
+        } else {
+            let inner = listed
+                .trim_start_matches("&[")
+                .split(']')
+                .next()
+                .unwrap_or_default();
+            inner
+                .split(',')
+                .filter_map(|arg| spelled(arg, statuses))
+                .collect()
+        };
+        found.insert(state, named);
+    }
+    Some(found)
 }
 
 /// The `JobStatus` variant each `Job::create(…)` call passes as the entry

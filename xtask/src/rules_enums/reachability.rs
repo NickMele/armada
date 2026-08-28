@@ -24,16 +24,19 @@
 //! somewhere and not here is two built things disagreeing, and fails.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::path::Path;
 
 use crate::Report;
+
+use reading::{difference, list, read, read_rows, strs, Row};
 
 const STATUSES: &str = "crates/core-model/domain/job-statuses.toml";
 const STATES: &str = "crates/core-model/domain/step-states.toml";
 const MACHINE: &str = "crates/core-model/src/job/step_machine.rs";
 const RECORD: &str = "crates/core-model/src/job/record.rs";
 const STEP: &str = "crates/core-model/src/job/step.rs";
+const SOURCE: &str = "crates/core-model/src/job/status.rs";
+const SOURCE_IS: &str = "the source `StepState::seen_under` is written in";
 
 /// The two machines joined, in wire spellings throughout.
 pub(super) struct Machine {
@@ -130,24 +133,12 @@ pub fn every_status_declares_the_step_states_it_holds(root: &Path) -> Report {
     };
     let declared = check_statuses(&statuses_text, &reachable, &anywhere, states, &mut report);
     if !declared.is_empty() {
-        check_states(&states_text, &declared, statuses, &mut report);
+        let transpose = check_states(&states_text, &declared, statuses, &mut report);
+        if let Some(source) = read(root, SOURCE, SOURCE_IS, &mut report) {
+            check_transcription(&source, &transpose, statuses, states, &mut report);
+        }
     }
     report
-}
-
-// ------------------------------------------------------------------ the rows
-
-/// One `[prefix<key>]` table, and the arrays it declares.
-struct Row {
-    key: String,
-    line: usize,
-    arrays: BTreeMap<String, Array>,
-}
-
-/// One `key = ["a", "b"]`, and the line it is on.
-struct Array {
-    values: BTreeSet<String>,
-    line: usize,
 }
 
 /// `job-statuses.toml`'s `step_states`, row by row, against the machine.
@@ -274,20 +265,27 @@ fn check_states(
     declared: &BTreeMap<String, BTreeSet<String>>,
     statuses: &BTreeMap<String, String>,
     report: &mut Report,
-) {
+) -> BTreeMap<String, BTreeSet<String>> {
     let mut transpose: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
     for (status, states) in declared {
         for state in states {
             transpose.entry(state).or_default().insert(status);
         }
     }
+    let owed: BTreeMap<String, BTreeSet<String>> = transpose
+        .iter()
+        .map(|(state, statuses)| {
+            let statuses = statuses.iter().map(|s| (*s).to_string()).collect();
+            ((*state).to_string(), statuses)
+        })
+        .collect();
     let rows = read_rows(text, "states.", STATES, report);
     if rows.is_empty() {
         report.fail(format!(
             "{STATES} has no `[states.<key>]` table at all — `step_states` was transposed \
              against nothing"
         ));
-        return;
+        return owed;
     }
     for row in &rows {
         let key = &row.key;
@@ -328,135 +326,62 @@ fn check_states(
             strs(&only_here.into_iter().chain(only_there).copied().collect())
         ));
     }
+    owed
 }
 
-// ----------------------------------------------------------------- the parts
-
-/// Every `[prefix<key>]` table in a registry, with the arrays it declares.
+/// `StepState::seen_under`, the relation's third copy, against the registry.
 ///
-/// `"""` blocks are skipped for the reason [`super`]'s reader skips them: a
-/// `notes` field quoting a bracketed line is prose, not a table. An array that
-/// does not close on its line is reported rather than dropped.
-fn read_rows(text: &str, prefix: &str, path: &str, report: &mut Report) -> Vec<Row> {
-    let mut rows: Vec<Row> = Vec::new();
-    let mut in_string = false;
-    for (n, raw) in text.lines().enumerate() {
-        let line = raw.trim();
-        let fences = line.matches("\"\"\"").count();
-        if in_string {
-            in_string = fences % 2 == 0;
-            continue;
-        }
-        in_string = fences % 2 == 1;
-        if line.starts_with('#') {
-            continue;
-        }
-        if let Some(inner) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
-            if let Some(key) = inner.strip_prefix(prefix) {
-                if !key.is_empty() && !key.contains('.') {
-                    rows.push(Row {
-                        key: key.to_string(),
-                        line: n + 1,
-                        arrays: BTreeMap::new(),
-                    });
-                }
-            }
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        let Some(open) = value.trim().strip_prefix('[') else {
-            continue;
-        };
-        let Some(row) = rows.last_mut() else { continue };
-        let key = key.trim().to_string();
-        match open.strip_suffix(']') {
-            Some(body) => {
-                let values = body.split('"').skip(1).step_by(2).map(str::to_string);
-                row.arrays.insert(
-                    key,
-                    Array {
-                        values: values.collect(),
-                        line: n + 1,
-                    },
-                );
-            }
-            None => report.fail(format!(
-                "{path}:{} — `{key}` opens an array that does not close on its line. A field \
-                 this rule cannot read is a field it does not compare",
-                n + 1
-            )),
-        }
-    }
-    rows
-}
-
-/// A file, or a finding naming what could not be read.
-pub(super) fn read(root: &Path, path: &str, what: &str, report: &mut Report) -> Option<String> {
-    match fs::read_to_string(root.join(path)) {
-        Ok(text) => Some(text),
-        Err(_) => {
-            report.fail(format!("{path} — {what}"));
-            None
-        }
-    }
-}
-
-/// A variant identifier as the wire spelling it carries. The qualifier is
-/// optional, for the reason [`super::edges`]'s reader makes it optional.
-pub(super) fn spelled(arg: &str, variants: &BTreeMap<String, String>) -> Option<String> {
-    variants
-        .get(arg.rsplit("::").next().unwrap_or(arg).trim())
-        .cloned()
-}
-
-/// Variant names as wire spellings, naming any that has none.
-pub(super) fn resolve(
-    variants: &[String],
-    spellings: &BTreeMap<String, String>,
-    enum_name: &str,
-    path: &str,
+/// This one is in Rust and returns a `&'static [JobStatus]`, so a surface can
+/// read it and get an answer the registry never sanctioned — which is the
+/// defect one step further along than the row itself. It is a hand
+/// transcription, like `EDGES` is, and **the registry is the authority on the
+/// set**: the finding names the side to change, unlike the comparison against
+/// the machine, where neither side is derivable from the other.
+fn check_transcription(
+    text: &str,
+    owed: &BTreeMap<String, BTreeSet<String>>,
+    statuses: &BTreeMap<String, String>,
+    states: &BTreeMap<String, String>,
     report: &mut Report,
-) -> BTreeSet<String> {
-    let mut found = BTreeSet::new();
-    for variant in variants {
-        match spellings.get(variant) {
-            Some(wire) => {
-                found.insert(wire.clone());
-            }
-            None => report.fail(format!(
-                "{path} — `{enum_name}::{variant}` has no wire spelling. The machine cannot be \
-                 walked in the registry's own spellings"
-            )),
+) {
+    let Some(arms) = machine::seen_under_arms(text, statuses, states) else {
+        report.fail(format!(
+            "{SOURCE} — `StepState::seen_under` is missing or this rule could not read its \
+             arms. It is the registry relation transcribed by hand, and an unread \
+             transcription is the defect this rule exists for"
+        ));
+        return;
+    };
+    for (state, sanctioned) in owed {
+        let returned: BTreeSet<String> = arms
+            .get(state)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+        if returned == *sanctioned {
+            continue;
+        }
+        report.fail(format!(
+            "{SOURCE} — `StepState::{state}`'s `seen_under` returns {}, and {STATES} declares \
+             {}. The registry is the authority on the set, so the arm is what changes",
+            list(&returned),
+            list(sanctioned)
+        ));
+    }
+    for state in arms.keys() {
+        if !owed.contains_key(state) {
+            report.fail(format!(
+                "{SOURCE} — `StepState::{state}` has a `seen_under` arm and {STATES} has no \
+                 `[states.{state}]` row. The arm answers for a state the registry does not \
+                 declare"
+            ));
         }
     }
-    found
-}
-
-/// What is in the first and not the second.
-fn difference(left: &BTreeSet<String>, right: &BTreeSet<String>) -> BTreeSet<String> {
-    left.difference(right).cloned().collect()
-}
-
-/// A set as a finding should say it. `nothing` rather than `[]`, because an
-/// empty bracket in a sentence reads as a formatting slip.
-fn list<'a>(values: impl IntoIterator<Item = &'a String>) -> String {
-    let values: Vec<&str> = values.into_iter().map(String::as_str).collect();
-    strs(&values.into_iter().collect())
-}
-
-fn strs(values: &BTreeSet<&str>) -> String {
-    if values.is_empty() {
-        return "nothing".to_string();
-    }
-    format!(
-        "[{}]",
-        values.iter().copied().collect::<Vec<_>>().join(", ")
-    )
 }
 
 mod machine;
+mod reading;
 
 #[cfg(test)]
 mod tests;
