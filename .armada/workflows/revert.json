@@ -41,6 +41,7 @@
       "id": "revert",
       "label": "Undo the change",
       "evidence_type": "diff",
+      "retry_limit": 2,
       "mechanical_checks": [
         {
           "type": "manifest_check",

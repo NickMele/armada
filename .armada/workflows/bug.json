@@ -56,10 +56,30 @@
 # because a repository's workflows are the shape `workflow-samples/` already
 # established.
 #
-# Nine fields, and no others. `version`, `workflow_id`, `name`, `structure`,
+# Ten fields, and no others. `version`, `workflow_id`, `name`, `structure`,
 # `steps[]`, and within a step `id`, `label`, `evidence_type`,
-# `mechanical_checks[]`, `judge_checks[]`, `evidence_scope`, `declare_plan_at`
-# and `advance_gate`. Everything else in the schema is refused by name.
+# `mechanical_checks[]`, `judge_checks[]`, `evidence_scope`, `declare_plan_at`,
+# `retry_limit` and `advance_gate`. Everything else in the schema is refused by
+# name.
+#
+# **`retry_limit` is on the steps that can fail mechanically, and nowhere else.**
+# Two hand-backs, so `implement` is worked three times before the failure stands
+# -- which is the "3 attempts per step" `settings.toml` names as the Kit-level
+# default, written where an author reading the step can see it. There is no
+# Kit-level anything for the parser to read it from, and a three invented in the
+# parser would put the budget in the one place nobody looking at a workflow
+# would find it, so absent means none and this file says what it wants.
+#
+# A step with no `mechanical_checks` and no `scope_diff_check` cannot produce a
+# mechanical failure at all, so a budget on `plan` or `handoff` would be a
+# number nothing could spend. Those steps stop on a Judge refusal or a person,
+# and neither is a retry: a refusal is the work not being what was asked for and
+# goes to a person, and `handoff` is a person by construction.
+#
+# Two is a guess, and it is the registry's guess rather than this file's. What
+# it is bounding is a Drone handed a failure it cannot understand burning turns
+# reproducing it; #83's mid-step look is what catches that inside one attempt,
+# and this bounds how many attempts there are.
 #
 # `advance_gate` and `judge_checks[]` are two statements of one thing and a
 # file that makes them disagree is refused: `auto_if_judge_passes` with no
@@ -153,6 +173,7 @@
       "id": "implement",
       "label": "Implement",
       "evidence_type": "diff",
+      "retry_limit": 2,
       "mechanical_checks": [
         {
           "type": "manifest_check",

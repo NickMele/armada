@@ -112,6 +112,7 @@
       "id": "implement",
       "label": "Implement",
       "evidence_type": "diff",
+      "retry_limit": 2,
       "mechanical_checks": [
         {
           "type": "manifest_check",
@@ -157,6 +158,7 @@
       "id": "tests",
       "label": "Write tests",
       "evidence_type": "diff",
+      "retry_limit": 2,
       "mechanical_checks": [
         {
           "type": "manifest_check",

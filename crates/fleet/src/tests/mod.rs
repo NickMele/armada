@@ -112,6 +112,7 @@ mod process;
 mod proposing;
 mod queued;
 mod redispatch;
+mod retrying;
 mod reviewing;
 mod runtime;
 mod scope;

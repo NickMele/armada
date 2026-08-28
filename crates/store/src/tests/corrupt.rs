@@ -317,37 +317,65 @@ fn a_step_state_column_this_build_cannot_spell_is_refused() {
     }
 }
 
-/// The two states M1 cannot reach have no `StepTarget`, so a logged move into
-/// one is a machine this build does not have. Refused, never folded as
-/// something else.
+/// The one state M1 cannot reach has no `StepTarget`, so a logged move into it
+/// is a machine this build does not have. Refused, never folded as something
+/// else.
+///
+/// `retrying` was the second until it had a budget to be inside. It now has a
+/// target and two edges, and the row below is what a hand-back writes — which
+/// is why this one is `awaiting_human`, still unreachable because a step at a
+/// human gate stays `running`.
 #[test]
 fn a_logged_step_state_nothing_reaches_is_named_rather_than_folded() {
     let dir = TempDir::new();
-    let store = seeded(&dir, "01RETRYING");
+    let store = seeded(&dir, "01ATTHEGATE");
     store
         .conn
         .execute(
             "INSERT INTO job_events (
                  kind, job_id, status_from, status_to, reason_kind, reason_value,
                  step_id, state_from, state_to, actor, at
-             ) VALUES ('step_transition', '01RETRYING', 'awaiting_approval',
+             ) VALUES ('step_transition', '01ATTHEGATE', 'awaiting_approval',
                  'awaiting_approval', 'unqualified', NULL, 'fix', 'not_started',
-                 'retrying', 'fleet', '2026-08-26T10:00:00.000Z')",
+                 'awaiting_human', 'fleet', '2026-08-26T10:00:00.000Z')",
             [],
         )
         .expect("a machine that does not exist, writing");
 
-    match store.load_job(&job_id("01RETRYING")) {
+    match store.load_job(&job_id("01ATTHEGATE")) {
         Err(crate::LoadJobError::Unreadable(RowError::StepStateNotReachable {
             step_id,
             state,
             ..
         })) => {
             assert_eq!(step_id.as_str(), "fix");
-            assert_eq!(state, StepState::Retrying);
+            assert_eq!(state, StepState::AwaitingHuman);
         }
         other => panic!("expected a refusal, found {other:?}"),
     }
+}
+
+/// The other side of the same rule. A hand-back carries the failure it is
+/// answering, and the shape trigger refuses one written without it — so a
+/// `retrying` row cannot reach the log unable to say what it is for.
+#[test]
+fn a_hand_back_written_without_the_failure_it_answers_is_refused_at_the_insert() {
+    let dir = TempDir::new();
+    let store = seeded(&dir, "01RETRYING");
+    let written = store.conn.execute(
+        "INSERT INTO job_events (
+             kind, job_id, status_from, status_to, reason_kind, reason_value,
+             step_id, state_from, state_to, actor, at
+         ) VALUES ('step_transition', '01RETRYING', 'running', 'running',
+             'unqualified', NULL, 'fix', 'running', 'retrying', 'fleet',
+             '2026-08-26T10:00:00.000Z')",
+        [],
+    );
+    assert!(
+        written.is_err(),
+        "an unqualified hand-back would fold as a step being reattempted with \
+         nothing saying what for"
+    );
 }
 
 /// `last_verdict` admits step-level triggers only, and the shape trigger cannot
