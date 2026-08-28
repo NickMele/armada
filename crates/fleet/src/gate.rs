@@ -47,7 +47,7 @@ use core_model::{
 };
 use verification::{
     decide, Accepted, Baseline, CheckFailed, Flagged, InScope, NotWhatTheStepAsked, Observed,
-    OutcomeTurn, Ran, Refusals, Submission, Verdict,
+    OutcomeTurn, OutsideScope, Ran, Refusals, Submission, Verdict,
 };
 
 use crate::at_step::AtStep;
@@ -101,7 +101,7 @@ pub enum Ruling {
         /// What each Manifest Check printed, in the step's order.
         output: Vec<CheckOutput>,
         /// Every criterion the Judge answered. Empty on the ordinary step,
-        /// which asks nothing.
+        /// which asks nothing and did not drift.
         judged: Vec<Judgment>,
     },
     /// The last step passed. The Drone is told, then terminated, and the Job
@@ -253,9 +253,9 @@ impl Ruling {
         }
     }
 
-    /// Every criterion the Judge answered, in the order asked. **Empty on most
-    /// rulings**, because most steps ask nothing and a failing Check never
-    /// reaches the Judge at all.
+    /// Every criterion the Judge answered, in the order asked, with the
+    /// mandatory drift look last. **Empty on most rulings**, because most steps
+    /// ask nothing, stay on plan, and a failing Check never reaches the Judge.
     pub fn judged(&self) -> &[Judgment] {
         match self {
             Ruling::Advanced { judged, .. }
@@ -416,16 +416,32 @@ where
 
     let mut checks = ran.recorded();
     let mechanical = decide(accepted, &ran);
-    // The scope tier, between the mechanical one and the Judge — the order the
-    // registry gives, so a step that did another step's work never reaches a
-    // model call. **Cold unless the step declares an evidence scope**, which is
-    // what leaves a step without one behaving exactly as it did before.
-    let scope = match step.evidence_scope() {
-        None => None,
+    // The scope tier, and it answers into two tiers rather than one.
+    // `docs/concepts/judge.md` gives declared plan drift to the Judge and says
+    // it does not fail the step, because legitimate investigation sometimes
+    // moves the work. What stays mechanical is the other two: nothing drifted
+    // where nothing was declared, and a denylist a model could excuse is not a
+    // denylist.
+    //
+    // This used to fold drift in here too, arguing that a step which did
+    // another step's work should never reach a model call. That was true about
+    // the cost and wrong about the consequence — the Judge is asked only where
+    // the mechanical tier held, so the same line made the mandatory look
+    // unreachable.
+    //
+    // **Cold unless the step declares an evidence scope**, which is what leaves
+    // a step without one behaving exactly as it did before.
+    let (scope, off_plan) = match step.evidence_scope() {
+        None => (None, Vec::new()),
         Some(scope) => match work.changed_files(at.worktree()) {
-            Ok(changed) => InScope::resolved(scope, declared, &changed.paths())
-                .err()
-                .map(CheckFailed::OutOfScope),
+            Ok(changed) => match InScope::resolved(scope, declared, &changed.paths()) {
+                Ok(_) => (None, Vec::new()),
+                Err(OutsideScope::Undeclared { changed }) => (None, changed),
+                // A variant added to `OutsideScope` lands here and fails the
+                // step, which is the safe default: drift is named, not
+                // inferred.
+                Err(outside) => (Some(CheckFailed::OutOfScope(outside)), Vec::new()),
+            },
             Err(cause) => {
                 return Ruling::CouldNotDecide {
                     artifact: "the Job's changed files",
@@ -438,11 +454,12 @@ where
     };
     checks.extend(scope.as_ref().and_then(CheckFailed::recorded));
     let mechanical = mechanical.and_also(scope);
-    // **The trigger, and the whole of it.** The Judge is asked only where the
-    // mechanical tier already held and the step declares a criterion — so a
-    // failing Check spends nothing, an ordinary step spends nothing, and no
-    // timer reaches this line.
-    let (judged, verdict) = match mechanical.advanced() && step.asks_the_judge() {
+    // **The trigger, and the whole of it.** The Judge is asked where the
+    // mechanical tier held and either the step declares a criterion or the step
+    // drifted — the second being the one look `judge.md` calls mandatory, which
+    // fires on a step that declares no criterion of its own.
+    let asked = step.asks_the_judge() || !off_plan.is_empty();
+    let (judged, verdict) = match mechanical.advanced() && asked {
         false => (Vec::new(), mechanical),
         true => {
             let patch = match work.patch(at.worktree()) {
@@ -456,7 +473,7 @@ where
                     }
                 }
             };
-            match judging::judged(step, &patch, &checks, judging).await {
+            match judging::judged(step, &patch, &checks, &off_plan, judging).await {
                 Ok((judged, refusals)) => (judged, mechanical.but_for(refusals)),
                 // A verification that could not run is not a refusal, and it is
                 // not a pass. The step neither advances nor fails.

@@ -39,20 +39,27 @@ pub struct InScope {
 /// What the declaration and the worktree disagreed about.
 ///
 /// **Never empty**, in either list, in the variant that carries it.
+///
+/// # One variant is the Judge's and two are mechanical
+///
+/// `docs/concepts/judge.md` gives declared plan drift to the Judge and says it
+/// does not fail the step. That is [`Undeclared`](OutsideScope::Undeclared)
+/// alone — the other two are not drift, and the split is made where the gate
+/// matches on this enum.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OutsideScope {
-    /// Files changed that no declared path covers. **This is the recycling the
-    /// title names**: work whose footprint is outside the step's scope is work
-    /// that belongs to another step.
+    /// Files changed that no declared path covers. **Declared plan drift**, and
+    /// the Judge's: the step said where its work would be and the work went
+    /// elsewhere, which is a question about whether the task required it.
     Undeclared { changed: Vec<RepoPath> },
     /// Declared paths that the step's own `exclude_paths` denies. The denylist
-    /// resolves last, so it wins over anything the Drone declared.
+    /// resolves last, so it wins over anything the Drone declared — and over
+    /// any model, which is why this one stays mechanical.
     Excluded { declared: Vec<RepoPath> },
     /// The step wants a declaration and none arrived.
     ///
-    /// Its own variant because nothing was compared: the Drone did not claim
-    /// too much, it claimed nothing, and the two need different things said to
-    /// it.
+    /// Nothing drifted, because there was no plan to drift from, and a Judge
+    /// asked about it would have no declaration to compare the diff against.
     NothingDeclared,
 }
 

@@ -168,8 +168,15 @@ pub(super) fn judging() -> Judging {
 }
 
 pub(super) fn judged_by(client: FakeJudge) -> Judging {
+    judged_by_shared(Arc::new(client))
+}
+
+/// The same, keeping the test's own handle on the judge — what a case asserting
+/// **which** questions were asked needs, since `Judging` owns its client as a
+/// trait object and cannot hand it back.
+pub(super) fn judged_by_shared(client: Arc<FakeJudge>) -> Judging {
     Judging {
-        client: Arc::new(client),
+        client,
         budget: JudgeBudget::of(Duration::from_secs(20)),
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),

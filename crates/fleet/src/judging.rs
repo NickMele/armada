@@ -75,14 +75,19 @@ pub struct Judging {
 
 /// Judge one step, and answer with the refusals or with none.
 ///
-/// **Called only after the mechanical tier passed**, and only on a step that
-/// declares a criterion. Both of those are the caller's to establish, which is
-/// what makes the tier cold: this function costs money every time it is
-/// entered.
+/// **Called only after the mechanical tier passed**, and only where the step
+/// declares a criterion or its work drifted off the declared plan. Both of
+/// those are the caller's to establish, which is what makes the tier cold: this
+/// function costs money every time it is entered.
+///
+/// `off_plan` is the mandatory drift look. It is one call, on the step's own
+/// model dial, and it asks its question after the step's own criteria so that a
+/// refusal a step declared is not preceded by one Fleet added.
 pub(crate) async fn judged(
     step: &ResolvedStep,
     patch: &Patch,
     checks: &[StepCheck],
+    off_plan: &[RepoPath],
     judging: &Judging,
 ) -> Result<(Vec<Judgment>, Option<Refusals>), CallFailed> {
     let mut judgments = Vec::new();
@@ -100,6 +105,17 @@ pub(crate) async fn judged(
                 judgments.push(brief.read(&said).map_err(CallFailed::Unreadable)?);
             }
         }
+    }
+    // **No panel.** `panel_size` is what a step declared for the questions it
+    // declared, and multiplying a look the step never asked for would let a
+    // step's own rigour dial bill it for drift.
+    if let Some(criterion) = verification::drift_criterion(off_plan) {
+        let model = fleets_model(step, &judging.default_model)?;
+        let brief = Brief::about(step, &criterion, patch, checks);
+        let ask = Ask::put(model, brief.question(), judging.environment.clone())
+            .map_err(|_| CallFailed::NothingToAsk)?;
+        let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
+        judgments.push(brief.read(&said).map_err(CallFailed::Unreadable)?);
     }
     let refusals = Refusals::among(&judgments);
     Ok((judgments, refusals))
@@ -156,7 +172,7 @@ pub(crate) async fn converging(
     off_plan: &[RepoPath],
     judging: &Judging,
 ) -> Result<Convergence, CallFailed> {
-    let model = mid_step_model(step, &judging.default_model)?;
+    let model = fleets_model(step, &judging.default_model)?;
     let brief = ConvergenceBrief::about(step, patch, declared, off_plan);
     let ask = Ask::put(model, brief.question(), judging.environment.clone())
         .map_err(|_| CallFailed::NothingToAsk)?;
@@ -164,13 +180,13 @@ pub(crate) async fn converging(
     brief.read(&said).map_err(CallFailed::Unreadable)
 }
 
-/// Which model the mid-step look runs on.
+/// Which model a look Fleet asks for — drift, or convergence — runs on.
 ///
 /// The step's own dial where it declares one, so a step that pays for a
-/// stronger judge at its gate is looked at by the same one part-way through.
-/// A step declaring no Judge check at all still gets the look, on the default:
-/// converging is Fleet's question rather than something a step opts into.
-fn mid_step_model(step: &ResolvedStep, default: &Model) -> Result<Model, CallFailed> {
+/// stronger judge at its gate is looked at by the same one. A step declaring no
+/// Judge check at all still gets the look, on the default: neither question is
+/// something a step opts into.
+fn fleets_model(step: &ResolvedStep, default: &Model) -> Result<Model, CallFailed> {
     match step.judge_checks().first() {
         Some(check) => model_for(check, default),
         None => Ok(default.clone()),
