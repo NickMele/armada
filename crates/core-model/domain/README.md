@@ -47,6 +47,17 @@ carries `structure` when `verdict_routing` already implies it. Declared intent
 checked against what was actually wired is worth the redundancy; a rule reads
 both and fails where they disagree. As carried, they agree.
 
+`step_states` on a status and `seen_under` on a step state are one relation
+written twice, and both are derived from the step machine the same way. **They
+had gone stale before anything read either**: `escalated` said `["stopped"]`
+while a Job escalated on `stalled` holds a step that is `running`, `advanced`
+was a state no status named, and seven rows declared nothing at all. Issue #184
+is the rule that reads them, and it walks `STEP_EDGES` beneath
+`ADVANCING_STATUSES` and carries a frozen step across the status edges rather
+than reading the `StepState` enum, every variant of which exists. Where a row
+and the walk disagree it names both and stops — which side is stale is not
+something a comparison knows, and here it was this file.
+
 The WorkflowDef samples are JSON rather than TOML because that is the shape a
 repo authors and Fleet interprets, and embedding them in a TOML string would
 make them unparseable as what they are. A rule can read one and check every key
@@ -59,10 +70,15 @@ Nothing here was repaired to make it consistent and no row was dropped. Samples
 declare `structure: "linear"` while carrying a `verdict_routing` that
 `structure`'s own row says is rejected at config load; escalation triggers carry
 no `level` while `last_verdict` in `job-fields.toml` says only step-level
-triggers may appear in it; `advanced` is a step state no status names. Those are
-the findings, and repairing them here would have destroyed them. Each survives
-on the row it belongs to — in `notes`, or as the empty field that says the
-source left it undecided — for whoever decides it.
+triggers may appear in it. Those are the findings, and repairing them here would
+have destroyed them. Each survives on the row it belongs to — in `notes`, or as
+the empty field that says the source left it undecided — for whoever decides it.
+
+**One was repaired, because a rule arrived that could arbitrate it.** `advanced`
+was a step state no status named, recorded here as a preserved disagreement. It
+is now named by every status, because the step machine says every status can
+hold one — the disagreement was the file's, and a finding is only worth
+preserving while nothing can settle it.
 
 ## What did not survive the move
 

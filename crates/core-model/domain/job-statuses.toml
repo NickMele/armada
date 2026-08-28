@@ -14,13 +14,25 @@
 # own `structure` field is carried: declared intent checked against what was
 # actually wired. A rule reads both and fails where they disagree.
 #
+# `step_states` is derived the same way and checked the same way, against the
+# step machine rather than against this file's neighbour: STEP_EDGES walked
+# beneath ADVANCING_STATUSES, carried across the status edges. It reads almost
+# identically on every row, and that is the machine rather than a slip — the
+# status machine admits a move without looking at any step, so the only
+# coupling between the two levels is which statuses advance one, and a frozen
+# step crosses every other edge holding whatever it held. `escalated` is the
+# row that made this concrete: it said `stopped`, and a Job escalated on
+# `stalled` arrives holding a step that is `running`. What a status is
+# *characteristically* doing is `step_machine` beside it, which is prose and
+# is not checked.
+#
 # Fields:
 #   terminal          - whether the Job is over here
 #   mode              - Waited on | Working | N/A. What the Job is doing
 #   who_is_acting     - Person | Drone | None
 #   drone_process     - what happens to the Drone's OS process here
 #   step_machine      - what the inner step machine is doing meanwhile
-#   step_states       - the step states observed under this status
+#   step_states       - the step states a Job can hold beneath this status
 #   reason_storage    - Stored | Derived | None. Where a qualifying reason lives
 #   reason_vocabulary - the set that reason is drawn from
 #   transitions_in    - the edges that arrive, as "from -> to"
@@ -34,8 +46,8 @@ terminal = false
 mode = "Waited on"
 who_is_acting = "Person"
 drone_process = "None"
-step_machine = "Initialised, every step not_started"
-step_states = ["not_started"]
+step_machine = "Initialised at creation. Frozen where it stood on a re-approval"
+step_states = ["advanced", "not_started", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["queued -> awaiting_approval", "running -> awaiting_approval"]
@@ -51,6 +63,7 @@ mode = "Waited on"
 who_is_acting = "Person"
 drone_process = "None"
 step_machine = "Frozen, final step advanced"
+step_states = ["advanced", "not_started", "running", "stopped"]
 reason_storage = "Stored"
 reason_vocabulary = "The criterion_ids owed — a reference, not an enum"
 transitions_in = ["running -> awaiting_attestation", "awaiting_review -> awaiting_attestation"]
@@ -65,7 +78,7 @@ mode = "Waited on"
 who_is_acting = "Person"
 drone_process = "Alive, idle. Clock suspended"
 step_machine = "Live, current step awaiting_human"
-step_states = ["awaiting_human"]
+step_states = ["advanced", "awaiting_human", "not_started", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["running -> awaiting_review"]
@@ -84,6 +97,7 @@ mode = "N/A"
 who_is_acting = "None"
 drone_process = "None"
 step_machine = "Frozen at the failed step"
+step_states = ["advanced", "not_started", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["running -> completed_failed", "escalated -> completed_failed", "awaiting_attestation -> completed_failed"]
@@ -96,6 +110,7 @@ mode = "N/A"
 who_is_acting = "None"
 drone_process = "None"
 step_machine = "Frozen, every step advanced"
+step_states = ["advanced", "not_started", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["running -> completed_success", "awaiting_review -> completed_success", "piloted -> completed_success", "awaiting_attestation -> completed_success"]
@@ -112,8 +127,8 @@ terminal = false
 mode = "Waited on"
 who_is_acting = "Person"
 drone_process = "Alive, idle. Gone only on interrupted"
-step_machine = "Frozen at the failed step, stopped"
-step_states = ["stopped"]
+step_machine = "Frozen where the step stood — stopped where retries were spent, running where the Job escalated on liveness"
+step_states = ["advanced", "not_started", "running", "stopped"]
 reason_storage = "Stored"
 reason_vocabulary = "The escalation trigger enum, which Workflow owns"
 transitions_in = ["queued -> escalated", "running -> escalated", "awaiting_review -> escalated"]
@@ -128,6 +143,7 @@ mode = "N/A"
 who_is_acting = "None"
 drone_process = "Terminated"
 step_machine = "Frozen where it stood"
+step_states = ["advanced", "not_started", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["awaiting_approval -> killed", "queued -> killed", "running -> killed", "awaiting_review -> killed", "escalated -> killed", "piloted -> killed", "awaiting_attestation -> killed"]
@@ -140,6 +156,7 @@ mode = "Working"
 who_is_acting = "Person"
 drone_process = "Terminated. Parked under Assist"
 step_machine = "Frozen where the Drone left it"
+step_states = ["advanced", "not_started", "running", "stopped"]
 reason_storage = "Stored"
 reason_vocabulary = "take_over / restart_step / assist"
 transitions_in = ["running -> piloted", "awaiting_review -> piloted", "escalated -> piloted", "awaiting_attestation -> piloted"]
@@ -153,8 +170,8 @@ terminal = false
 mode = "Waited on"
 who_is_acting = "Drone"
 drone_process = "None"
-step_machine = "Initialised, every step not_started"
-step_states = ["not_started"]
+step_machine = "Initialised at creation. Frozen where it stood on a re-approval"
+step_states = ["advanced", "not_started", "running", "stopped"]
 reason_storage = "Derived"
 reason_vocabulary = "blocked_by_dependency / waiting_on_resources / none"
 transitions_in = ["awaiting_approval -> queued"]
@@ -168,6 +185,7 @@ mode = "N/A"
 who_is_acting = "None"
 drone_process = "None"
 step_machine = "Frozen at the gate step"
+step_states = ["advanced", "not_started", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["awaiting_approval -> rejected", "awaiting_review -> rejected"]
@@ -180,7 +198,7 @@ mode = "Working"
 who_is_acting = "Drone"
 drone_process = "Alive, working"
 step_machine = "Live, advancing"
-step_states = ["running", "retrying"]
+step_states = ["advanced", "not_started", "retrying", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["queued -> running", "awaiting_review -> running", "escalated -> running", "piloted -> running"]
@@ -194,6 +212,7 @@ mode = "N/A"
 who_is_acting = "None"
 drone_process = "Terminated"
 step_machine = "Frozen, and no longer describes the work"
+step_states = ["advanced", "not_started", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["piloted -> superseded"]
