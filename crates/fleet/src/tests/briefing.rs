@@ -5,14 +5,32 @@
 //! change. What is asserted is the structure the contract's M1 rendering
 //! requires, and the rule `docs/concepts/drone.md` puts on every Drone-facing
 //! surface: **a Drone is never told what the Checks are.**
+//!
+//! The last two groups are about moments rather than renderings. A step
+//! boundary drives a whole Fleet, because the defect it is about was not in any
+//! block's text — every block was right and the turn carrying them was never
+//! sent. A restart asserts the opposite failure: **the sentence has to be the
+//! one the record supports**, because a Drone told its work did not pass will
+//! change work that was correct.
 
+use std::time::Duration;
+
+use adapter_traits::DroneEvent;
 use core_model::{
-    AcceptanceCriterion, CriterionId, CriterionSource, Facts, Job, JobId, ManifestId, ModelName,
-    NewJob, StepId, StepSeed, Timestamp, TopLevelOrigin, Ulid, Urgency,
+    AcceptanceCriterion, CriterionId, CriterionSource, EscalationTrigger, Facts, Job, JobId,
+    JudgeVerdict, Judgment, ManifestId, ModelName, NewJob, StepId, StepLevelTrigger, StepSeed,
+    StepVerdict, Timestamp, TopLevelOrigin, Ulid, Urgency,
 };
-use testkit::{Gate, Sketch};
+use ipc::mcp::DeclareScope;
+use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Gate, Scoped, Sketch};
+use verification::{Claimed, NotClaimed, ShownBy};
 
-use crate::briefing::{first_turn, BASELINE};
+use crate::briefing::{first_turn, resuming_turn, Stopped, BASELINE};
+use crate::daemon::Fleet;
+use crate::evidence::Call;
+use crate::gate::Ruling;
+use crate::tests::daemon::{a_fleet_holding, a_proposal, worktree_directory};
+use crate::tests::tmp::TempDir;
 
 fn a_job() -> Job {
     Job::create_top_level(
@@ -197,4 +215,285 @@ fn a_scoped_step_is_told_to_declare_before_it_starts() {
         !said.contains("mcp__") && !said.to_lowercase().contains("declare_scope"),
         "described rather than named, like the Evidence tool: {said}"
     );
+}
+
+// ------------------------------------------------------ the step boundary
+
+/// The two-step Job the boundary cases run: the first step scoped, the second
+/// one scoped or not according to the argument.
+fn plan_then_do(second_is_scoped: bool) -> config::ResolvedWorkflow {
+    let scoped = Some(Scoped {
+        diff_check: true,
+        at_step_start: true,
+        exclude: &[],
+    });
+    testkit::resolved(&[
+        Sketch {
+            id: "plan",
+            label: "Plan",
+            evidence_type: Some("diff"),
+            gates: &[],
+            judged_on: &[],
+            scope: scoped,
+            gaming: None,
+        },
+        Sketch {
+            id: "implement",
+            label: "Implement",
+            evidence_type: Some("diff"),
+            gates: &[],
+            judged_on: &[],
+            scope: second_is_scoped.then_some(scoped).flatten(),
+            gaming: None,
+        },
+    ])
+}
+
+fn a_diff_call<'a>() -> Call<'a> {
+    Call {
+        evidence_type: config::EvidenceType::Diff,
+        claimed: Claimed("The plan is written."),
+        shown_by: ShownBy("docs/plan.md"),
+        not_claimed: NotClaimed(""),
+    }
+}
+
+/// Every turn Fleet has written down the pipe, as the Drone echoed it back.
+///
+/// The fake Drone is `/bin/cat`, so a turn Fleet sends comes back as a line of
+/// transcript — which is the only way to read an injected turn from outside the
+/// process that sent it. It comes back on the reader's own task, so this waits
+/// for `turns` of them rather than reading once and hoping.
+async fn turns_sent(
+    fleet: &Fleet<FakeHarness, FakeVcs, FakeWorkProduct>,
+    turns: usize,
+) -> Vec<String> {
+    for _ in 0..600 {
+        let echoed: Vec<String> = {
+            let slot = fleet.slot().lock().await;
+            slot.as_ref()
+                .map(|at_work| {
+                    at_work
+                        .heard()
+                        .into_iter()
+                        .filter_map(|event| match event {
+                            DroneEvent::Said { text } => Some(text),
+                            _ => None,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        if echoed.len() >= turns {
+            return echoed;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    panic!("the Drone never echoed {turns} turns back");
+}
+
+/// Drive a Job through its first step and answer with what its Drone was told.
+async fn told_across_the_boundary(
+    home: &TempDir,
+    second_is_scoped: bool,
+) -> (Fleet<FakeHarness, FakeVcs, FakeWorkProduct>, Vec<String>) {
+    let fleet = a_fleet_holding(
+        home,
+        FakeWorkProduct::changed(&["docs/plan.md"]),
+        plan_then_do(second_is_scoped),
+        1,
+    );
+    let job = fleet
+        .propose(a_proposal("plan then do"))
+        .await
+        .expect("a proposal");
+    worktree_directory(home, job.id());
+    fleet.approve(job.id()).await.expect("it is approved");
+    fleet
+        .declare_scope(&DeclareScope {
+            context_paths: vec!["docs".to_string()],
+        })
+        .await
+        .expect("the first step's plan");
+    fleet
+        .submit_evidence(a_diff_call())
+        .await
+        .expect("evidence lands");
+    let turned = fleet.turn().await.expect("a turn");
+    assert!(
+        matches!(turned.ruled, Some(Ruling::Advanced { .. })),
+        "the first step advanced: {:?}",
+        turned.ruled
+    );
+    let sent = turns_sent(&fleet, 2).await;
+    (fleet, sent)
+}
+
+/// **The one that cost twenty-two minutes of correct work.**
+///
+/// `Working::now_on` clears the declaration at the boundary, which is right: a
+/// plan inherited from the step before is not a plan. Nothing said so. The
+/// Drone declared once, on the step that asked at spawn, worked the next step
+/// for sixty-eight turns and failed `evidence_scope` on a call nobody had
+/// requested. The ask belongs on every boundary that clears one.
+#[tokio::test]
+async fn a_step_boundary_asks_again_for_the_declaration_it_just_cleared() {
+    let home = TempDir::new();
+    let (_fleet, sent) = told_across_the_boundary(&home, true).await;
+
+    assert!(
+        sent[1].contains("BEFORE YOU START"),
+        "the boundary turn asks for the next part's plan: {}",
+        sent[1]
+    );
+    assert!(
+        sent[1].contains("scope tool"),
+        "described rather than named, as the first turn describes it: {}",
+        sent[1]
+    );
+    assert!(
+        sent[1].contains("does not carry over"),
+        "and says why it is being asked again: {}",
+        sent[1]
+    );
+}
+
+/// **The cold switch, at the boundary this time.** A step with no evidence
+/// scope is told exactly what it was told before any of this existed, so the
+/// turn that moves a Drone on to one is the outcome and nothing else.
+#[tokio::test]
+async fn a_step_boundary_says_nothing_where_the_next_step_wants_no_plan() {
+    let home = TempDir::new();
+    let (_fleet, sent) = told_across_the_boundary(&home, false).await;
+
+    assert!(
+        !sent[1].contains("BEFORE YOU START"),
+        "no tool is put in front of a Drone that has nothing to declare: {}",
+        sent[1]
+    );
+    assert!(
+        sent[1].contains("Implement"),
+        "it is still told where it is going: {}",
+        sent[1]
+    );
+}
+
+// ------------------------------------------- what a restarted Drone is told
+
+fn stopped_by(trigger: EscalationTrigger) -> Stopped {
+    Stopped {
+        verdict: Some(StepVerdict::Failed(
+            StepLevelTrigger::of(trigger).expect("a step-level trigger"),
+        )),
+        judged: Vec::new(),
+        flagged: Vec::new(),
+    }
+}
+
+fn restarted(stopped: &Stopped) -> String {
+    resuming_turn(&a_job(), &a_workflow(), &StepId::new("implement"), stopped)
+        .expect("a prompt")
+        .as_str()
+        .to_string()
+}
+
+/// **The one that changes work that was right.** `gate_undecided` is the gate
+/// saying it could not read what it needed, which is the whole point of
+/// `CouldNotDecide`: a machine that cannot answer must not produce a verdict in
+/// either direction. The briefing then produced one anyway and handed it over
+/// as fact, and a Drone told its work did not pass goes looking for what was
+/// wrong with it.
+#[test]
+fn a_restart_after_a_gate_that_could_not_decide_is_not_told_its_work_failed() {
+    let said = restarted(&stopped_by(EscalationTrigger::GateUndecided));
+
+    assert!(
+        !said.contains("did not pass"),
+        "nothing was checked, so nothing failed: {said}"
+    );
+    assert!(
+        said.contains("never checked"),
+        "it is told what actually happened: {said}"
+    );
+    assert!(
+        said.contains("nothing was decided about the work"),
+        "and that no verdict exists to go looking for: {said}"
+    );
+    assert!(
+        !said.contains("Address this"),
+        "there is nothing cited to address: {said}"
+    );
+}
+
+/// The ordinary failure still reads as one, and still carries the two fields
+/// the refusal reprompt specifies.
+#[test]
+fn a_restart_after_a_gate_failure_is_told_its_work_did_not_pass() {
+    let mut stopped = stopped_by(EscalationTrigger::GateFailure);
+    stopped.judged = vec![Judgment {
+        criterion_id: CriterionId::new("c1"),
+        verdict: JudgeVerdict::NotMet,
+        expected: Some(String::from("the reader stops one line later")),
+        produced: Some(String::from("the reader stops where it did")),
+        consequence: Some(String::from("every caller still reads short")),
+    }];
+    let said = restarted(&stopped);
+
+    assert!(said.contains("checked and did not pass"), "{said}");
+    assert!(said.contains("the reader stops one line later"), "{said}");
+    assert!(said.contains("the reader stops where it did"), "{said}");
+    assert!(
+        !said.contains("every caller still reads short"),
+        "consequence is the person's field: {said}"
+    );
+    assert!(said.contains("Address this and submit again"), "{said}");
+}
+
+/// **Four stops, four sentences.** A Drone acts on what it is told, so a
+/// restart after thrashing and a restart after a refusal cannot read the same
+/// — and neither may claim a check ran where none did.
+#[test]
+fn no_two_triggers_hand_a_drone_the_same_sentence() {
+    let four = [
+        EscalationTrigger::GateFailure,
+        EscalationTrigger::EvidenceSuspect,
+        EscalationTrigger::GateUndecided,
+        EscalationTrigger::Thrashing,
+    ];
+    let mut said: Vec<String> = four
+        .iter()
+        .map(|trigger| {
+            let block = restarted(&stopped_by(*trigger));
+            block
+                .rsplit("WHY THIS PART IS BEING DONE AGAIN")
+                .next()
+                .expect("the block is there")
+                .to_string()
+        })
+        .collect();
+    said.sort();
+    said.dedup();
+    assert_eq!(said.len(), 4, "one sentence each: {said:#?}");
+
+    for trigger in [
+        EscalationTrigger::GateUndecided,
+        EscalationTrigger::Thrashing,
+    ] {
+        let block = restarted(&stopped_by(trigger));
+        assert!(
+            !block.contains("did not pass"),
+            "{trigger:?} weighed nothing: {block}"
+        );
+    }
+}
+
+/// A `Stopped` carrying no verdict says so rather than inventing one. It is
+/// what `Default` builds, and a record that lost its `last_verdict` must not
+/// become a refusal on the way to a Drone.
+#[test]
+fn a_stop_with_no_verdict_recorded_claims_none() {
+    let said = restarted(&Stopped::default());
+
+    assert!(said.contains("holds no verdict against its work"), "{said}");
+    assert!(!said.contains("did not pass"), "{said}");
 }

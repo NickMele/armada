@@ -65,7 +65,9 @@ where
         // The Job is moved before the Drone is told, so a session that has gone
         // deaf cannot leave a finished Job at `running`.
         self.applied(&job, ruling).await?;
-        let told = self.tell(job_id, tell, working).await;
+        // No next step, so nothing is asked. A Job that has finished asks its
+        // Drone for nothing.
+        let told = self.tell(job_id, tell, None, working).await;
         self.end_the_drone(working).await;
         landed?;
         told

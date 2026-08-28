@@ -174,6 +174,12 @@ impl Working {
     /// declaration is about one step; carrying it forward would let step two's
     /// footprint be measured against step one's promise.
     ///
+    /// **What is cleared here has to be asked for again**, by the caller that
+    /// moved the step, in the turn the Drone gets for the new one — see
+    /// [`crate::briefing::Declaring`]. A Drone whose plan is cleared and who is
+    /// not asked has no reason to declare, and the gate then fails it for a
+    /// call nobody made.
+    ///
     /// **The transcript is told here and nowhere else.** Its sinks stamp each
     /// row with the step as they build it, so a row written after this call
     /// carries the new step and one already built carries the old — which is

@@ -30,6 +30,7 @@ use std::path::Path;
 use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
+use crate::briefing::Declaring;
 use crate::daemon::Fleet;
 use crate::resume::Redirection;
 use crate::session::LiveSession;
@@ -80,7 +81,11 @@ where
         // The approved step's work is what the next step inherits, read at the
         // boundary for `crate::dispatch`'s reason.
         self.marked(&mut working);
-        self.tell(job_id, &told, &working).await?;
+        // The ask the approved step's successor makes, sent with the
+        // acceptance: `now_on` above has just cleared whatever the step being
+        // left had declared, and an unasked Drone declares nothing.
+        self.tell(job_id, &told, Declaring::at(&next).as_ref(), &working)
+            .await?;
         Ok(job)
     }
 
@@ -148,7 +153,7 @@ where
         let job = self
             .move_job(job, Target::CompletedSuccess, Actor::Human)
             .await?;
-        let said = self.tell(job_id, told, working).await;
+        let said = self.tell(job_id, told, None, working).await;
         self.end_the_drone(working).await;
         self.admit_next(working).await?;
         landed?;

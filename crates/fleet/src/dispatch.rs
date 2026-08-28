@@ -35,7 +35,7 @@ use store::Moved;
 use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
-use crate::briefing;
+use crate::briefing::{self, Declaring};
 use crate::daemon::Fleet;
 use crate::drone::{aftermath, Aftermath, Ending, Left};
 use crate::gate::{apply, Ruling};
@@ -258,6 +258,11 @@ where
                 let job = self.move_step(&job, step, StepTarget::Advanced).await?;
                 let next = self.step_after(&job, step)?;
                 self.move_step(&job, &next, StepTarget::Running).await?;
+                // **Read before the slot moves and sent with the verdict.**
+                // `now_on` clears the declaration the last step carried, so a
+                // Drone that is not asked here is a Drone working a scoped step
+                // having declared nothing — which the gate then fails it for.
+                let asked = job.workflow().step(&next).and_then(Declaring::at);
                 if let Some(at_work) = working.as_mut() {
                     at_work.now_on(next, self.now());
                 }
@@ -277,7 +282,7 @@ where
                 // step starts from the one that is there.
                 self.marked(working);
                 let tell = tell.clone().and(caught_up.as_ref().ok().cloned().flatten());
-                self.tell(job_id, &tell, working).await?;
+                self.tell(job_id, &tell, asked.as_ref(), working).await?;
                 caught_up.map(|_| ())
             }
             // The whole of what finishing a Job is, including the commit that
@@ -435,15 +440,21 @@ where
         }
     }
 
-    /// Inject the gate's outcome into the live session.
+    /// Inject the gate's outcome into the live session, with whatever the step
+    /// it moves the Drone on to asks for.
     ///
     /// **Only ever reached from the advance path.** `Ruling::tell` answers
     /// `None` on every ruling that is not an advance, so there is no call here
     /// that could deliver a verdict to a Drone about to be terminated.
+    ///
+    /// `declaring` is `None` where the next step asks for no plan, and where
+    /// there is no next step at all — a Job that has finished asks its Drone
+    /// for nothing.
     pub(crate) async fn tell(
         &self,
         job_id: &JobId,
         turn: &OutcomeTurn,
+        declaring: Option<&Declaring>,
         working: &Option<Working>,
     ) -> Result<(), Adrift> {
         let Some(at_work) = working.as_ref() else {
@@ -451,7 +462,7 @@ where
         };
         at_work
             .session()
-            .tell(turn)
+            .tell(turn, declaring)
             .await
             .map_err(|cause| Adrift::NotTold {
                 job: job_id.clone(),
