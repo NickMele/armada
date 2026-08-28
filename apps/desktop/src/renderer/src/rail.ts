@@ -8,11 +8,13 @@
 import type {
   CriterionVerdict,
   StepActivity,
+  WorkflowRailDeclaration,
   WorkflowRailGate,
   WorkflowRailStep,
 } from "@armada/components";
 
 import {
+  ADVANCE_GATE,
   CHECK_OUTCOME,
   CRITERION_VERDICT_CHECK,
   CRITERION_VERDICT_JUDGE,
@@ -23,6 +25,7 @@ import type {
   CheckRun,
   Criterion,
   DeclaredCheck,
+  DeclaredJudge,
   JobDetail as JobWhole,
   Judged,
   StepDetail,
@@ -67,6 +70,7 @@ export function railOf(whole: JobWhole, now: number): WorkflowRailStep[] {
       verdict: step.last_verdict === undefined ? undefined : verdictOf(step),
       verdictNamed: step.last_verdict?.named,
       gates: gatesOf(step),
+      declarations: declarationsOf(step),
       verdicts: verdictsOf(step, whole.acceptance_criteria),
       ungatedLabel: ungatedOf(step),
       evidence: { label: "" },
@@ -179,6 +183,10 @@ function gatesOf(step: StepDetail): WorkflowRailGate[] | undefined {
  * whose `not_reached` row carries the `shield-minus` that `icons.toml` reserves
  * to Check results. Borrowed from the registry, not written here. Reported: the
  * variant belongs under `check_outcome` too.
+ *
+ * **A declared judge check borrows the word and not the glyph.** Not reached is
+ * the same fact whichever tier is waiting; `shield-minus` is reserved to Check
+ * results, and a declaration draws no mark at all.
  */
 const NOT_REACHED = CRITERION_VERDICT_CHECK["not_reached"];
 
@@ -215,11 +223,87 @@ function resultOf(run: CheckRun): string | undefined {
  * gates on nothing and a Fleet that cannot answer are not the same fact — and
  * the running screen's design says an ungated step must say so in words rather
  * than leaving a gap.
+ *
+ * **Neither sentence is reached on a step that declares a Judge or stops for a
+ * person.** The rail draws those rows and falls back to a sentence only where
+ * there is nothing beneath the step at all. That is the defect this sits beside:
+ * `handoff` is `human_always` in six of the seven shipped workflows and read "no
+ * check on this step" — the opposite of what the step does.
  */
 function ungatedOf(step: StepDetail): string | undefined {
   // A step that declares none takes the rail's own default — "no check on this
   // step" — which is the contract's sentence and not one written here.
   return step.checks === undefined ? "Fleet cannot say what this step checks" : undefined;
+}
+
+/**
+ * The two tiers a step declares beyond its Checks: the Judge that will read its
+ * evidence, and the gate it advances through.
+ *
+ * **Declared, not in flight.** Both are frozen into the workflow at Job creation
+ * and knowable before the step runs, which is the whole point — a step that will
+ * halt for a person has to say so before it halts. Nothing here claims a Judge
+ * call is out; no state carries that.
+ *
+ * **Counts, never a question.** `DeclaredJudge` carries how many criteria are
+ * asked and how many judges answer, and deliberately carries no prompt: a
+ * question drawn on this rail is a prompt in a screenshot.
+ */
+function declarationsOf(step: StepDetail): WorkflowRailDeclaration[] {
+  const declared = (step.judge_checks ?? []).map((judge) => ({
+    label: judgeOf(judge),
+    // Not reached until the Judge has answered something. Once it has, the
+    // criterion rows beneath carry every verdict and its citation — more than a
+    // word here could say — so this slot goes quiet rather than restating them
+    // one line above.
+    result: step.judged.length === 0 ? (NOT_REACHED?.verb ?? undefined) : undefined,
+  }));
+  const advance = advanceOf(step);
+  return advance === undefined ? declared : [...declared, advance];
+}
+
+/**
+ * One declared `judge_checks[]` entry, in counts.
+ *
+ * `judge` is the verification source named in text, which the iconography
+ * contract settles for exactly this reason — Check, Judge and Attestation are
+ * shorter and more precise as words than any glyph, and every verdict family is
+ * reserved to a source rather than to a declaration.
+ *
+ * **`panel_size` is absent at one**, so a value here always means a panel and
+ * nothing compares against a default that is already the domain's. An entry
+ * asking no criteria only looks for gaming, and says that and nothing else.
+ */
+function judgeOf(judge: DeclaredJudge): string {
+  const said = ["judge"];
+  if (judge.criteria > 0) {
+    said.push(`${judge.criteria} ${judge.criteria === 1 ? "criterion" : "criteria"}`);
+  }
+  if (judge.panel_size !== undefined) said.push(`panel of ${judge.panel_size}`);
+  if (judge.gaming_check) said.push("gaming check");
+  return said.join(" · ");
+}
+
+/** The one gate whose whole meaning is that the Checks above are the whole gate. */
+const AUTO = "auto";
+
+/**
+ * What it takes to advance past the step, where that is more than its Checks.
+ *
+ * **`auto` draws no row.** It says the mechanical tier is the whole gate, which
+ * the gate rows above already are — and a row on every step of every workflow
+ * would bury the two values that matter and displace the sentence the design
+ * contract requires on a step that genuinely checks nothing.
+ *
+ * **The word is the wire's own.** `enum-verbs.toml` carries no `advance_gate`
+ * rows, so `ADVANCE_GATE` is empty and `human_always` renders as itself — the
+ * same fallback `step_state` takes. A phrase chosen here would be the second
+ * vocabulary the generated module exists to prevent. Reported.
+ */
+function advanceOf(step: StepDetail): WorkflowRailDeclaration | undefined {
+  const gate = step.advance_gate;
+  if (gate === undefined || gate === AUTO) return undefined;
+  return { label: `advance_gate · ${ADVANCE_GATE[gate]?.verb ?? gate}` };
 }
 
 /**

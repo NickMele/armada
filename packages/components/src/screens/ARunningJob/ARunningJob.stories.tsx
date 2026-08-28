@@ -55,6 +55,10 @@ const steps: WorkflowRailStep[] = [
         iconLabel: "Not reached",
       },
     ],
+    declarations: [
+      { label: "judge · 2 criteria", result: "not reached" },
+      { label: "advance_gate · auto_if_judge_passes" },
+    ],
   },
   {
     id: "verify",
@@ -69,15 +73,20 @@ const steps: WorkflowRailStep[] = [
         iconLabel: "Not reached",
       },
     ],
+    declarations: [
+      { label: "judge · 1 criterion · gaming check", result: "not reached" },
+      { label: "advance_gate · auto_if_judge_passes" },
+    ],
   },
   {
     id: "handoff",
     label: "Summarise",
     activity: "not_started",
     status: "not started",
-    // The drawing draws no row under Summarise. The rail always draws one,
-    // because a blank would read as a gate that failed to render. Reported.
-    evidence: { icon: NO_GLYPH_IN_REGISTRY, iconLabel: "Evidence", label: "" },
+    // The drawing draws no row under Summarise, and the rail drew "no check on
+    // this step" — on the step the Job halts at. What it declares is a person,
+    // and that is the row it gets.
+    declarations: [{ label: "advance_gate · human_always" }],
   },
 ];
 

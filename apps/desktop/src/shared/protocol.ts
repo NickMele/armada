@@ -110,6 +110,21 @@ export type StepDetail = {
   checks?: DeclaredCheck[];
   /** What each declared Check did. Empty until the gate has run them. */
   check_runs: CheckRun[];
+  /**
+   * The semantic tier this step declares, in the workflow's order. **Empty is
+   * "the Judge will not look here"; absent is "Fleet cannot say"** — the two
+   * sentences `checks` has. Neither is "nothing happens here", which is what
+   * `advance_gate` answers.
+   */
+  judge_checks?: DeclaredJudge[];
+  /**
+   * What it takes to advance past this step — `auto`, `auto_if_judge_passes` or
+   * `human_always`, left as `string` like every other closed set. **This is
+   * what lets a step say it will stop before it stops**: `human_always` holds
+   * the Job at `awaiting_review`, which six of the seven shipped workflows now
+   * do. Absent on the same grounds as `checks`.
+   */
+  advance_gate?: string;
   /** Absent until a gate has ruled on the step. */
   last_verdict?: Verdict;
   /**
@@ -139,6 +154,23 @@ export type DeclaredCheck = {
   run?: string;
   /** The exit code the step expects, where there is a command to return one. */
   expect_exit_code?: number;
+};
+
+/**
+ * One `judge_checks[]` entry a step declares, counted rather than quoted.
+ * `crates/ipc/src/checks.rs`. **The declaration, never the answer** — what the
+ * Judge said is `Judged`, one row per criterion. No question crosses: a
+ * question is a prompt in a screenshot.
+ */
+export type DeclaredJudge = {
+  /** How many yes/no questions this entry asks. Zero looks only for gaming. */
+  criteria: number;
+  /** How many judges answer each one. **Absent at one**, so present means a
+   * panel — a client comparing against `1` would restate the domain's default. */
+  panel_size?: number;
+  /** Whether a second look asks whether the evidence was gamed. It does not
+   * gate; what it found arrives as an escalation, not as a verdict. */
+  gaming_check: boolean;
 };
 
 /**
