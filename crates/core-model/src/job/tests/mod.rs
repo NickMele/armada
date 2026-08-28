@@ -44,6 +44,7 @@ fn workflow() -> FrozenWorkflow {
                 AdvanceGate::Auto,
                 Vec::new(),
                 None,
+                0,
             ),
             ResolvedStep::frozen(
                 StepId::new("fix"),
@@ -53,6 +54,7 @@ fn workflow() -> FrozenWorkflow {
                 AdvanceGate::Auto,
                 Vec::new(),
                 None,
+                0,
             ),
         ],
     )

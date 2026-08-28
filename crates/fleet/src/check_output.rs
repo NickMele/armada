@@ -10,19 +10,22 @@
 //!
 //! # The path is a function of the row's key, and nothing else
 //!
-//! `.armada/checks/<job-id>/<step-id>.<ordinal>.log`, where the ordinal is the
-//! Check's position in the step. `record_step_checks` replaces a step's rows
-//! whole on a rerun, so a second run overwrites the same files — the file and
-//! the row it belongs to have one lifetime. A path carrying a run id would
-//! leave output no row points at, which is a directory that grows and a
-//! question nobody can answer.
+//! `.armada/checks/<job-id>/<step-id>.<attempt>.<ordinal>.log`, which is the
+//! row's key exactly: `job_step_checks` is keyed by Job, step, attempt and
+//! ordinal, and every one of the four is here.
+//!
+//! The attempt was missing while nothing could run a step twice. Now a failed
+//! Check hands the step back, so a second run wrote over the first run's files
+//! while `store` kept both runs' rows — leaving the first attempt's row
+//! pointing at the second attempt's output, which is worse than pointing at
+//! nothing. A path that is the whole key cannot do that.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use checks_runner::Output;
-use core_model::{JobId, StepCheck, StepId};
+use core_model::{Attempt, JobId, StepCheck, StepId};
 
 use verification::Submission;
 
@@ -52,6 +55,7 @@ where
         &self,
         job_id: &JobId,
         step: &StepId,
+        attempt: Attempt,
         ruling: &Ruling,
     ) -> Result<(), Adrift> {
         if ruling.checks().is_empty() {
@@ -66,6 +70,7 @@ where
             &self.host().repo_root,
             job_id,
             step,
+            attempt,
             ruling.checks(),
             &printed,
         );
@@ -173,6 +178,7 @@ pub fn kept(
     repo_root: &str,
     job: &JobId,
     step: &StepId,
+    attempt: Attempt,
     checks: &[StepCheck],
     output: &[(String, Output)],
 ) -> Vec<StepCheck> {
@@ -186,7 +192,7 @@ pub fn kept(
             let Some((_, printed)) = output.iter().find(|(name, _)| name == &check.name) else {
                 return check.clone();
             };
-            let Some(name) = file_name(step, ordinal) else {
+            let Some(name) = file_name(step, attempt, ordinal) else {
                 return check.clone();
             };
             let mut kept = check.clone();
@@ -209,7 +215,7 @@ fn writable(repo_root: &str, job: &JobId) -> Option<PathBuf> {
 /// text a workflow author typed and nothing validates it, so one holding a
 /// separator would put the file somewhere other than the directory named above.
 /// The output is then not kept and the row says so by having no path.
-fn file_name(step: &StepId, ordinal: usize) -> Option<String> {
+fn file_name(step: &StepId, attempt: Attempt, ordinal: usize) -> Option<String> {
     let id = step.as_str();
     let plain = !id.is_empty()
         && id != "."
@@ -217,7 +223,7 @@ fn file_name(step: &StepId, ordinal: usize) -> Option<String> {
         && !id.contains('/')
         && !id.contains('\\')
         && !id.contains('\0');
-    plain.then(|| format!("{id}.{ordinal}.log"))
+    plain.then(|| format!("{id}.{attempt}.{ordinal}.log"))
 }
 
 /// Both streams in one file, each behind a marker line.

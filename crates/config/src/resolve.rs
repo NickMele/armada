@@ -148,5 +148,6 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
         step.advance_gate(),
         step.judge_checks().to_vec(),
         step.evidence_scope().cloned(),
+        step.retry_limit(),
     )
 }

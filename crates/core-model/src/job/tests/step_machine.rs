@@ -75,13 +75,23 @@ fn every_edge_in_the_table_is_admitted() {
                 &first(),
                 StepTarget::Stopped(gate_failure().expect("gate_failure is step-level")),
             ),
+            // Also two moves past the start, and the only way to stand here:
+            // a hand-back is `running -> retrying`, which is what makes
+            // `retrying -> running` the other half of the pair.
+            StepState::Retrying => step(
+                &step(&running(), &first(), StepTarget::Running),
+                &first(),
+                StepTarget::Retrying(gate_failure().expect("gate_failure is step-level")),
+            ),
             other => panic!("no way to reach {} by transitioning", other.as_wire()),
         };
         // The reason follows the *edge* and not the destination alone, which
         // is the rule `arriving_at` holds once `advanced` has two ways in: a
-        // stop carries one and must, an override carries the trigger it
-        // overrules, and an ordinary advance carries none.
+        // stop carries one and must, a hand-back carries the failure it
+        // answers, an override carries the trigger it overrules, and an
+        // ordinary advance carries none.
         let qualified = edge.to == StepState::Stopped
+            || edge.to == StepState::Retrying
             || (edge.to == StepState::Advanced && edge.from == StepState::Stopped);
         let target = StepTarget::arriving_at(edge.to, qualified.then(gate_failure).flatten())
             .expect("a table edge names a target");
@@ -298,18 +308,17 @@ fn naming_a_step_the_job_does_not_have_is_refused_rather_than_ignored() {
 
 #[test]
 fn the_two_states_m1_cannot_reach_have_no_target_to_arrive_by() {
-    for state in [StepState::AwaitingHuman, StepState::Retrying] {
-        assert!(
-            StepTarget::arriving_at(state, None).is_none(),
-            "{} needs a human gate or a retry budget, and M1 has neither",
-            state.as_wire()
-        );
-        assert!(
-            StepTarget::arriving_at(state, gate_failure()).is_none(),
-            "and a trigger does not buy one: {}",
-            state.as_wire()
-        );
-    }
+    // One state, now that `retrying` has a budget to be inside. `awaiting_human`
+    // has its gate and is still unreachable, because a step at that gate stays
+    // `running` — `step_machine`'s own comment says what changing that costs.
+    assert!(
+        StepTarget::arriving_at(StepState::AwaitingHuman, None).is_none(),
+        "awaiting_human needs a variant and two edges, and M1 has neither"
+    );
+    assert!(
+        StepTarget::arriving_at(StepState::AwaitingHuman, gate_failure()).is_none(),
+        "and a trigger does not buy one"
+    );
     assert!(
         StepTarget::arriving_at(StepState::NotStarted, None).is_none(),
         "not_started is written at creation and is not a destination"

@@ -4,12 +4,27 @@
 //!
 //! `version`, `name`, `structure`, `steps[]`, and within a step `id`, `label`,
 //! `evidence_type`, `mechanical_checks[]`, `judge_checks[]` and `advance_gate`.
-//! The rest of the schema — `evidence_scope`, `retry_limit`, `verdict_routing`,
-//! `iteration_cap`, `hard_prerequisite`, `default_gate_policy`, `on_fail`,
-//! `on_gaming_flag` — is refused, because there is no retry ledger and no loop.
-//! A field nothing reads is a promise the file makes and the system does not
-//! keep. `evidence_scope` and `declare_plan_at` are read; see [`crate::scope`]
-//! for the two keys inside the block that are not.
+//! The rest of the schema — `verdict_routing`, `iteration_cap`,
+//! `hard_prerequisite`, `default_gate_policy`, `on_fail`, `on_gaming_flag` — is
+//! refused, because there is no loop. A field nothing reads is a promise the
+//! file makes and the system does not keep. `evidence_scope` and
+//! `declare_plan_at` are read; see [`crate::scope`] for the two keys inside the
+//! block that are not.
+//!
+//! # `retry_limit` is read, and absent means none
+//!
+//! It was refused with the loop keys until there was a retry ledger to spend.
+//! There is one now — `store::attempt` counts a step's runs off its own log —
+//! so the key is carried onto the frozen step and `fleet::gate` asks it whether
+//! a failed mechanical gate goes back to the Drone or stands.
+//!
+//! **A step that declares none gets none**, which is exactly what every step
+//! did before the key was read. `settings.toml` names three attempts per step
+//! as the Kit-level default and there is no Kit-level anything here to read it
+//! from; inventing three in this parser would put a threshold in the one place
+//! nobody looking at a workflow would find it. The workflows under
+//! `.armada/workflows/` declare their own, in the file, where an author reading
+//! the step can see what it costs.
 //!
 //! # Three closed sets, each narrowed
 //!
@@ -65,6 +80,7 @@ const STEP_KEYS: &[&str] = &[
     "advance_gate",
     "evidence_scope",
     "declare_plan_at",
+    "retry_limit",
 ];
 
 /// How the steps are wired. **One variant, of two.**
@@ -148,6 +164,7 @@ pub struct Step {
     judge_checks: Vec<JudgeCheck>,
     advance_gate: AdvanceGate,
     evidence_scope: Option<EvidenceScope>,
+    retry_limit: u32,
 }
 
 impl Step {
@@ -177,6 +194,13 @@ impl Step {
     /// the semantic tier cold by default.
     pub fn judge_checks(&self) -> &[JudgeCheck] {
         &self.judge_checks
+    }
+
+    /// How many times a failed mechanical gate hands this step back to its
+    /// Drone. **Zero where the file declares none**, which is what every step
+    /// meant before the key was read.
+    pub fn retry_limit(&self) -> u32 {
+        self.retry_limit
     }
 
     pub fn advance_gate(&self) -> AdvanceGate {
@@ -392,6 +416,14 @@ fn step(
         .unwrap_or_default();
     let judge_checks = judge::checks(&mut table, out);
     let evidence_scope = scope::evidence_scope(&mut table, out);
+    // **Absent is none, and a malformed one is a refusal rather than none.**
+    // A file that writes `retry_limit: "three"` meant to buy retries, and
+    // silently giving it zero would be the parser deciding the budget.
+    let retry_key = table.at("retry_limit");
+    let retry_limit = match table.optional("retry_limit") {
+        None => Some(0),
+        Some(value) => yaml::counted(&retry_key, value, out),
+    };
     let gate_key = table.at("advance_gate");
     let advance_gate = table
         .required("advance_gate", out)
@@ -462,6 +494,7 @@ fn step(
         judge_checks,
         advance_gate: advance_gate?,
         evidence_scope,
+        retry_limit: retry_limit?,
     })
 }
 
