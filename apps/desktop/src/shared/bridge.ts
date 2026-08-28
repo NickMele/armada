@@ -15,6 +15,7 @@ import type {
   WireError,
   WorkflowSummary,
 } from "./protocol";
+import type { Artifact, Opened } from "./artifacts";
 import type { Recorded } from "./history";
 import type { Submitted, Work } from "./work";
 import type { Saw } from "./turn";
@@ -445,6 +446,19 @@ export type BridgeApi = {
    * three, and the three differ by whether anything survives.
    */
   rejectWork: (jobId: string) => Promise<Outcome>;
+  /**
+   * Open one of a Job's artifacts in whatever the OS opens it with.
+   *
+   * **One entry taking which, where the kills and the decisions are three.**
+   * Those are split because they differ in what survives them; these three
+   * differ only in which file, they change nothing about the Job, and a Job id
+   * plus a word from a closed set is deliberately less than a path — main
+   * derives the path, so the renderer never holds the argument that matters.
+   *
+   * The branch is absent from `Artifact` and stays a copy: it is served rather
+   * than derived, and it is not a path.
+   */
+  openArtifact: (jobId: string, what: Artifact) => Promise<Opened>;
 };
 
 /**
@@ -493,4 +507,5 @@ export const CHANNELS = {
   approveReview: "bridge:approve-review",
   requestChanges: "bridge:request-changes",
   rejectWork: "bridge:reject-work",
+  openArtifact: "bridge:open-artifact",
 } as const;

@@ -4,9 +4,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import tokens from "@armada/tokens/tokens.json";
-import { CHANNELS } from "../shared/bridge";
+import { CHANNELS, NOTHING_YET } from "../shared/bridge";
 import type { BridgeState, Draft } from "../shared/bridge";
+import type { Artifact } from "../shared/artifacts";
 import { FleetConnection } from "./connection";
+import { openArtifact } from "./open";
 
 // Bridge's window, and the one connection under it.
 //
@@ -93,8 +95,18 @@ function createWindow(): BrowserWindow {
   return window;
 }
 
+/**
+ * What main last published.
+ *
+ * Kept here rather than read back off the connection, because the one caller
+ * needs a Job and its Manifest and nothing else — and `FleetConnection.state`
+ * is five round trips to Fleet, which is the wrong price for a click on a path.
+ */
+let published: BridgeState = NOTHING_YET;
+
 /** Every window sees the same state, because there is one connection behind it. */
 function publish(state: BridgeState): void {
+  published = state;
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) window.webContents.send(CHANNELS.changed, state);
   }
@@ -188,6 +200,13 @@ void app.whenReady().then(() => {
   );
   ipcMain.handle(CHANNELS.rejectWork, (_event, jobId: string) =>
     connection?.commands.rejectWork(jobId),
+  );
+  // The one channel that reaches the OS, and the only one carrying no Fleet
+  // request at all. **The path is built here** from the Job and the repository
+  // its Manifest was read from; what crosses is a Job id and one of three
+  // words, so no string the renderer composed reaches `shell.openPath`.
+  ipcMain.handle(CHANNELS.openArtifact, (_event, jobId: string, what: Artifact) =>
+    openArtifact(published, jobId, what),
   );
 
   createWindow();

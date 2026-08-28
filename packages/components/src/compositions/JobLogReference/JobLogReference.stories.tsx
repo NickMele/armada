@@ -24,10 +24,13 @@ type Story = StoryObj<typeof JobLogReference>;
  */
 const LOG = File;
 
+/** An open that worked. Nothing is drawn — the file opened behind the window. */
+const OPENS = { label: "Open the log", go: () => Promise.resolve(null) };
+
 /**
  * A running job. The log is being written now, and the counts are the reason
  * to look: a person reaches the file without knowing the sink layout, and it
- * costs one row and one button rather than a viewer.
+ * costs one row and one control rather than a viewer.
  */
 export const OnARunningJob: Story = {
   args: {
@@ -38,10 +41,10 @@ export const OnARunningJob: Story = {
         value: ".armada/logs/job_2d90bb.jsonl",
         copyValue: ".armada/logs/job_2d90bb.jsonl",
         meta: "142 lines · 0 error",
+        open: OPENS,
       },
     ],
     children: "Fleet, the drone and Bridge in one order, keyed on this job. It is being written now.",
-    actions: <Button ground="sunken">Open the log</Button>,
   },
 };
 
@@ -63,7 +66,13 @@ export const OnAFailedJob: Story = {
         copyValue: "feat/manifest-cache",
         meta: "2 files +48 −11",
       },
-      { icon: Folder, iconLabel: "Worktree", value: "~/.armada/worktrees/job_91ab" },
+      {
+        icon: Folder,
+        iconLabel: "Worktree",
+        value: "~/.armada/worktrees/job_91ab",
+        copyValue: "~/.armada/worktrees/job_91ab",
+        open: { label: "Open the worktree", go: () => Promise.resolve(null) },
+      },
       {
         icon: LOG,
         iconLabel: "Log",
@@ -71,16 +80,11 @@ export const OnAFailedJob: Story = {
         copyValue: ".armada/logs/job_91ab.jsonl",
         meta: "318 lines · 4 error",
         separated: true,
+        open: OPENS,
       },
     ],
     children:
       "The worktree and the branch are left in place. Armada will not touch either. The log holds Fleet, the drone and Bridge in one order, keyed on this job.",
-    actions: (
-      <>
-        <Button ground="sunken">Open the log</Button>
-        <Button ground="sunken">Open the worktree</Button>
-      </>
-    ),
   },
 };
 
@@ -175,5 +179,75 @@ export const LongPaths: Story = {
     ],
     children:
       "The worktree, the log and the transcripts directory follow from this job's id and the repository its manifest was read from. The branch is served.",
+  },
+};
+
+/**
+ * **Both acts on one row, and they are two controls.** The value copies, which
+ * is how a path reaches a shell; the trailing `external-link` opens it in
+ * whatever the OS opens it with. The branch has no control at all — it is
+ * served rather than derived, it is not a path, and copying it is the whole of
+ * what it was ever asked to do.
+ *
+ * A row's height comes from the small control, so the branch lines up with the
+ * rows that open rather than reading as a different kind of row.
+ */
+export const WhatOpensAndWhatOnlyCopies: Story = {
+  args: {
+    rows: [
+      {
+        icon: Folder,
+        iconLabel: "Worktree",
+        value: "/Users/user/Development/armada/.armada/worktrees/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+        copyValue: "/Users/user/Development/armada/.armada/worktrees/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+        open: { label: "Open the worktree", go: () => Promise.resolve(null) },
+      },
+      {
+        icon: GitBranch,
+        iconLabel: "Branch",
+        value: "armada/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+        copyValue: "armada/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+      },
+      {
+        icon: LOG,
+        iconLabel: "Log",
+        value: "/Users/user/Development/armada/.armada/logs/01JQ8ZK4T7WY3N2VXB6RGM5D9C.jsonl",
+        copyValue: "/Users/user/Development/armada/.armada/logs/01JQ8ZK4T7WY3N2VXB6RGM5D9C.jsonl",
+        separated: true,
+        open: OPENS,
+      },
+    ],
+    children:
+      "The worktree and the log open in whatever this machine opens them with. The branch copies.",
+  },
+};
+
+/**
+ * **A path that is gone says so on the row.** `armada clean` reclaims
+ * worktrees and a job outlives its own directory, so this is the ordinary end
+ * of an old job rather than an exception — and an open that did nothing and
+ * said nothing would be the silent failure Bridge is not allowed to have.
+ *
+ * Inline rather than a toast, because the blast radius is one row. Press the
+ * control to see it.
+ */
+export const WhenThePathIsGone: Story = {
+  args: {
+    rows: [
+      {
+        icon: Folder,
+        iconLabel: "Worktree",
+        value: "/Users/user/Development/armada/.armada/worktrees/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+        copyValue: "/Users/user/Development/armada/.armada/worktrees/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+        open: {
+          label: "Open the worktree",
+          go: () =>
+            Promise.resolve({
+              because: "Nothing is at that worktree. It was reclaimed, and the branch survives it.",
+            }),
+        },
+      },
+    ],
+    children: "The branch is still there. The directory it was checked out into is not.",
   },
 };

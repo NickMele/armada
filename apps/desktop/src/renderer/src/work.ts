@@ -4,14 +4,18 @@
 // # Derived is not served, and the region says which
 //
 // `branch` is served. The worktree, the log and the transcript directory are
-// **derived here** from the Job's id and the repository its Manifest was read
-// from: `<repo>/.armada/worktrees/<job-id>`, `logs/<job-id>.jsonl`,
-// `transcripts/`. The architecture fixes that layout, says it is not
-// configurable, and says any path Fleet needs is derived rather than stored —
-// so a path derived on this side is the same path, not a guess. What Bridge
-// cannot derive is which repository: `Host.repo_root` is not on the wire, and
-// the Manifest's `path` — the absolute `armada.yml` — has that directory as
-// its parent, which is the same value Fleet resolves it from.
+// **derived**, from the Job's id and the repository its Manifest was read from
+// — see `shared/artifacts.ts`, which owns that arithmetic for both sides. The
+// architecture fixes the layout, says it is not configurable, and says any
+// path Fleet needs is derived rather than stored, so a path derived on this
+// side is the same path and not a guess.
+//
+// # A row opens by naming itself, never by handing over its path
+//
+// `open` sends the Job id and one of three words. Main derives the path again
+// and hands that to the OS — a string composed here and passed to
+// `shell.openPath` would be an arbitrary-file capability wearing a row's
+// clothes. So this file draws the path and main opens it, from one derivation.
 //
 // # No count, ever
 //
@@ -22,30 +26,18 @@
 // nothing under any of these paths.
 
 import { File, Folder, GitBranch } from "lucide-react";
-import type { JobBriefProps, JobDetailLog, JobLogReferenceRow } from "@armada/components";
+import type { JobBriefProps, JobDetailLog, JobLogReferenceRow, NotOpened } from "@armada/components";
 
 import type { Watched } from "../../shared/bridge";
+import { artifactPath, repoOf } from "../../shared/artifacts";
+import type { Artifact, Opened } from "../../shared/artifacts";
 import type {
   JobDetail as JobWhole,
   JobSummary,
   ManifestSummary,
 } from "../../shared/protocol";
 
-/** The per-repo directory the architecture fixes. Not configurable. */
-const ARMADA = ".armada";
-
-/**
- * The repository a Job's artifacts sit under, or `null`.
- *
- * The Manifest's `path` is the absolute `armada.yml`, and its parent is the
- * workspace root Fleet canonicalises into `repo_root`. `null` where Fleet
- * holds no Manifest by that id — an older Job, or a Manifest that was removed.
- */
-export function repoOf(manifest: ManifestSummary | undefined): string | null {
-  if (manifest === undefined) return null;
-  const cut = manifest.path.lastIndexOf("/");
-  return cut <= 0 ? null : manifest.path.slice(0, cut);
-}
+export { repoOf };
 
 /** What the Job was told, and what done means for it. Both are served. */
 export function briefOf(whole: JobWhole): JobBriefProps {
@@ -61,6 +53,45 @@ export function briefOf(whole: JobWhole): JobBriefProps {
       "means for it. Bridge's composer does not offer them yet.",
     facts: whole.facts,
     factsAbsent: "This job was given no context beyond its title.",
+  };
+}
+
+/**
+ * Why an open did not happen, in the app's voice.
+ *
+ * **Four sentences, not one.** A reclaimed worktree, a Manifest Fleet no
+ * longer holds and an OS with no handler for `.jsonl` need three different
+ * next steps, and a shared sentence would send a person to look for the wrong
+ * one. Beside the paths rather than in `copy.ts` because each names what these
+ * rows are, the way `noteOf` below does.
+ */
+function whyNotOpened(opened: Opened, what: Artifact): string | null {
+  if (opened.ok) return null;
+  switch (opened.why) {
+    case "unknown_job":
+      return "Bridge no longer holds this job, so it could not work out where that is.";
+    case "no_repository":
+      return (
+        "Fleet holds no manifest with this job's id, so Bridge cannot say which repository " +
+        "the work is in. The path above follows from the job id once it can."
+      );
+    case "not_there":
+      return what === "worktree"
+        ? "Nothing is at that worktree. It was reclaimed, and the branch survives it."
+        : "That file has not been written, or it has been removed. The path is still where it goes.";
+    case "refused":
+      return `This machine did not open it: ${opened.detail}`;
+  }
+}
+
+/** Open one of a Job's artifacts, and say why it did not when it did not. */
+function opener(jobId: string, what: Artifact, label: string) {
+  return {
+    label,
+    go: async (): Promise<NotOpened> => {
+      const because = whyNotOpened(await window.armada.openArtifact(jobId, what), what);
+      return because === null ? null : { because };
+    },
   };
 }
 
@@ -84,18 +115,22 @@ export function workOf(
   const rows: JobLogReferenceRow[] = [];
 
   if (repo !== null) {
+    const worktree = artifactPath("worktree", repo, job.id, job.assigned_drone);
     rows.push({
       // `folder` means "workspace" in the registry and a worktree is not one;
       // there is no row for a worktree. Reported, and no glyph is invented.
       icon: Folder,
       iconLabel: "Worktree",
-      value: `${repo}/${ARMADA}/worktrees/${job.id}`,
-      copyValue: `${repo}/${ARMADA}/worktrees/${job.id}`,
+      value: worktree,
+      copyValue: worktree,
+      open: opener(job.id, "worktree", "Open the worktree"),
       meta: dispatched ? undefined : NOT_WRITTEN,
     });
   }
 
   if (withBranch && whole.branch !== undefined) {
+    // No `open`, and none is coming. A branch is served rather than derived,
+    // it is not a path, and copying it is the whole of what it is for.
     rows.push({
       icon: GitBranch,
       iconLabel: "Branch",
@@ -105,11 +140,13 @@ export function workOf(
   }
 
   if (repo !== null) {
+    const log = artifactPath("log", repo, job.id, job.assigned_drone);
     rows.push({
       icon: File,
       iconLabel: "Log",
-      value: `${repo}/${ARMADA}/logs/${job.id}.jsonl`,
-      copyValue: `${repo}/${ARMADA}/logs/${job.id}.jsonl`,
+      value: log,
+      copyValue: log,
+      open: opener(job.id, "log", "Open the log"),
       meta: dispatched ? undefined : NOT_WRITTEN,
       separated: true,
     });
@@ -128,21 +165,24 @@ const NOT_WRITTEN = "not written yet";
  * **The file is named by a drone id that is stored nowhere.** `assigned_drone`
  * has no event that sets it, so the only record the id existed is the line
  * Fleet writes into the Job log named above. The row names the directory and
- * says that, rather than printing a path with a hole in it. No glyph: nothing
- * in the registry means a transcript, and `file` is reserved to the log row.
+ * says that, rather than printing a path with a hole in it — and opening it
+ * lands in the directory, which is where a person would look anyway. No glyph:
+ * nothing in the registry means a transcript, and `file` is reserved to the
+ * log row.
  */
 function transcript(repo: string, job: JobSummary): JobLogReferenceRow {
-  const directory = `${repo}/${ARMADA}/transcripts/`;
+  const path = artifactPath("transcript", repo, job.id, job.assigned_drone);
+  const open = opener(job.id, "transcript", "Open the transcript");
   if (job.assigned_drone === undefined) {
     return {
       iconLabel: "Transcript",
-      value: directory,
-      copyValue: directory,
+      value: path,
+      copyValue: path,
+      open,
       meta: "named by a drone id nothing serves — the job log above names it",
     };
   }
-  const path = `${directory}${job.assigned_drone}.jsonl`;
-  return { iconLabel: "Transcript", value: path, copyValue: path };
+  return { iconLabel: "Transcript", value: path, copyValue: path, open };
 }
 
 /** What the paths are, said once beneath them rather than on every row. */

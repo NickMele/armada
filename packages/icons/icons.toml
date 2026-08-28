@@ -139,10 +139,18 @@
   notes = "The square-with-radiating-ticks outline is unique in the system, which is what matters at 12px."
 
 [icons.external-link]
-  means = "open a PR externally"
-  group = "Chrome"
-  size = "16px"
   status = "Specified"
+
+  [[icons.external-link.usage]]
+    means = "open a PR externally"
+    group = "Chrome"
+    size = "16px"
+
+  [[icons.external-link.usage]]
+    means = "hand a path to the OS — a job's worktree, log or transcript"
+    group = "Chrome"
+    size = "16px"
+    notes = "The log-reference row's trailing control. The same reading as the PR use one step down: the thing opens outside Bridge, in whatever the machine opens it with. Deliberately not the copy glyph — the value beside it already copies on click, and a value that copies does not also get a button that copies it."
 
 [icons.eye]
   means = "An eye — an almond outline around a circle"

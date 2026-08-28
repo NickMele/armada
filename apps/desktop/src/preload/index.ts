@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import { CHANNELS } from "../shared/bridge";
 import type { BridgeApi, BridgeState, Draft, Outcome } from "../shared/bridge";
+import type { Artifact, Opened } from "../shared/artifacts";
 import type { ProtocolVersion } from "../shared/version";
 import { PROTOCOL_VERSION } from "../shared/generated/protocol-version";
 
@@ -100,6 +101,16 @@ const api: BridgeApi = {
 
   rejectWork: (jobId: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.rejectWork, jobId),
+
+  // The one entry that reaches outside the app, and the narrowest it can be:
+  // a Job id and one of three words. **No path crosses here.** Main derives
+  // the path from the Job and the repository its Manifest was read from, so
+  // the renderer never holds the argument that decides what is opened — which
+  // is what keeps this from being an arbitrary-file capability under a
+  // friendly name. It is one entry rather than three because the three differ
+  // only in which file and none of them changes anything about the Job.
+  openArtifact: (jobId: string, what: Artifact): Promise<Opened> =>
+    ipcRenderer.invoke(CHANNELS.openArtifact, jobId, what),
 };
 
 contextBridge.exposeInMainWorld("armada", api);
