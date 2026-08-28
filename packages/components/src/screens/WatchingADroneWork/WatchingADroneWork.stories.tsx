@@ -56,12 +56,23 @@ const turns: DroneTurn[] = [
     kind: "said",
     said: "Reading the settings module before I split anything, so the public signature survives.",
   },
-  { id: "3", at: "09:14:04", kind: "called", subject: "Read · call_7f21", answer: "Answered." },
   {
-    id: "4",
+    id: "3",
+    at: "09:14:04",
+    kind: "called",
+    subject: "Read",
+    detail: "src/settings.rs",
+    answer: "Answered.",
+  },
+  // No detail: the wire had no name for this tool's arguments, so the call id
+  // is what tells the row from the next one and the row leads with it.
+  { id: "4", at: "09:14:08", kind: "called", subject: "TodoWrite · call_7f22", answer: "Answered." },
+  {
+    id: "5",
     at: "09:14:11",
     kind: "called",
-    subject: "Edit · call_7f23",
+    subject: "Edit",
+    detail: "src/settings.rs +42 -18",
     answer: "No answer yet.",
   },
 ];

@@ -46,7 +46,7 @@ A live mismatch does not auto-fail, because legitimate investigation sometimes r
 
 ### How a Job gets one
 
-**You do not have to pick.** A Job can be dispatched from a prompt or a link to a ticket, and the [Job proposer](job-proposer.md) reads that request and proposes which workflow the work should run under, alongside its scope. 
+**You do not have to pick.** A Job can be dispatched from a prompt or a link to a ticket, and the [Job proposer](job-proposer.md) reads that request and proposes which workflow the work should run under. 
 Picking one by hand stays available and is the override, not the path. That document owns the call.
 
 **What is proposed is not what is stored.** The resolved `WorkflowDef` is frozen into the Job at creation, as above. The proposal chooses which one; freezing is what stops it moving afterwards, so a workflow edited in the repo between the proposal and the dispatch reaches no Job already created against it.

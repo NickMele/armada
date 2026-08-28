@@ -33,6 +33,7 @@ use tokio::process::ChildStderr;
 
 use crate::converging::{elapsed, Chain};
 use crate::drone::Started;
+use crate::footprint::Publishing;
 use crate::session::DroneSession;
 use crate::transcript::Taps;
 use crate::watch::Watching;
@@ -78,6 +79,9 @@ pub(crate) struct Working {
     rested_before: usize,
     /// Where this step stands in the thrashing chain.
     chain: Chain,
+    /// When the worktree was last read for the live file list, and what was
+    /// last published from it.
+    publishing: Publishing,
     /// What the worktree held when this step began.
     ///
     /// **The baseline `diff_nonempty` is decided against.** `WorkProduct` reads
@@ -135,6 +139,7 @@ impl Working {
             calls_before: 0,
             rested_before: 0,
             chain: Chain::Working,
+            publishing: Publishing::default(),
             entered_with: None,
         }
     }
@@ -170,6 +175,10 @@ impl Working {
         self.step_began = at;
         self.calls_before = self.transcript.progress().calls;
         self.chain = Chain::Working;
+        // A new step is a new pen holder. Keeping the memo would let step two's
+        // first reading match step one's last and publish nothing, leaving a
+        // watcher reading a list attributed to the step before.
+        self.publishing = Publishing::default();
     }
 
     /// The step this Drone is on has been resumed by a person.
@@ -178,6 +187,12 @@ impl Working {
     /// leaves the step and its plan exactly where they were — what is stale is
     /// how long the step has been running and the look it already spent, and a
     /// Drone that thrashed once and was steered can thrash again.
+    ///
+    /// **The step's baseline does not move either.** A redirect is the same
+    /// step being done again, so what it entered with is still what it entered
+    /// with — remeasuring here would hand the step whatever it had written
+    /// before the person spoke, and it would then pass `diff_nonempty` on
+    /// nothing.
     pub(crate) fn resumed(&mut self, at: Timestamp) {
         self.step_began = at;
         self.calls_before = self.transcript.progress().calls;
@@ -279,6 +294,14 @@ impl Working {
             .collect();
         self.drifted.extend(fresh.iter().cloned());
         fresh
+    }
+
+    /// When the worktree was last read for the live file list. **Mutable, and
+    /// there is no read-only view of it**: every question anybody asks it is
+    /// asked in the course of deciding whether to read again, which is a
+    /// decision that records itself.
+    pub(crate) fn publishing(&mut self) -> &mut Publishing {
+        &mut self.publishing
     }
 
     /// Whether the Drone has exited, **and reap it if it has**. See

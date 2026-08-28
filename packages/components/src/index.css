@@ -50,6 +50,12 @@
 @import "./compositions/JobBrief/JobBrief.css";
 @import "./compositions/DroneTurns/DroneTurns.css";
 @import "./compositions/CriterionVerdicts/CriterionVerdicts.css";
+@import "./compositions/ChangedFiles/ChangedFiles.css";
+@import "./compositions/TransitionHistory/TransitionHistory.css";
+@import "./compositions/JobOutcome/JobOutcome.css";
+@import "./compositions/JobRecord/JobRecord.css";
+@import "./compositions/UnifiedDiff/UnifiedDiff.css";
+@import "./compositions/ReviewDecision/ReviewDecision.css";
 
 /* Screens. Not components — an arrangement of the above around fixture data,
    with nothing to export. One stylesheet, owned by the screens tree, because

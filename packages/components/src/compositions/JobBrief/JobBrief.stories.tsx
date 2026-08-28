@@ -53,3 +53,17 @@ export const NoFacts: Story = {
     factsAbsent: "This job was given no context beyond its title.",
   },
 };
+
+/**
+ * One half, where the two are placed in two regions. A finished Job leads with
+ * what it was asked to achieve and folds the context it was given into the
+ * record, so each half is drawn on its own and neither is drawn twice.
+ */
+export const CriteriaOnly: Story = {
+  args: { criteria, only: "criteria" },
+};
+
+/** The other half, as the folded record draws it. */
+export const FactsOnly: Story = {
+  args: { criteria: [], facts, only: "facts" },
+};

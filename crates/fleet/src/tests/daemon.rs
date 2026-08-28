@@ -121,6 +121,73 @@ fn two_steps() -> config::ResolvedWorkflow {
     ])
 }
 
+/// Two steps, each gated on a non-empty diff. What the boundary needs: a
+/// second step whose `diff_nonempty` can fail, which `two_steps` cannot express
+/// because its second step is gated on nothing.
+fn two_steps_both_gated_on_a_diff() -> config::ResolvedWorkflow {
+    testkit::resolved(&[
+        Sketch {
+            id: "implement",
+            label: "Implement",
+            evidence_type: Some("diff"),
+            gates: &[Gate::DiffNonempty],
+            judged_on: &[],
+            scope: None,
+            gaming: None,
+        },
+        Sketch {
+            id: "verify",
+            label: "Verify",
+            evidence_type: Some("diff"),
+            gates: &[Gate::DiffNonempty],
+            judged_on: &[],
+            scope: None,
+            gaming: None,
+        },
+    ])
+}
+
+/// The same two steps, with a person on the gate of the one named, and
+/// optionally one question to the Judge on that same step.
+///
+/// **Written as a file rather than through `testkit::Sketch`**, which fixes a
+/// step's gate from whether it declares a criterion and so cannot express a
+/// human gate at all. It goes through both parsers for the reason every other
+/// fixture does: a workflow a real `armada.yml` could not produce would prove
+/// nothing about the gate — and a human gate carrying a Judge is exactly the
+/// pairing the parser's agreement rule is asked about.
+pub fn two_steps_gated_on_a_person(
+    gate_on: &str,
+    question: Option<&str>,
+) -> config::ResolvedWorkflow {
+    let gate = |step: &str| match step == gate_on {
+        true => "human_always",
+        false => "auto",
+    };
+    let judge = match question {
+        None => String::new(),
+        Some(question) => format!(
+            "    judge_checks:\n      - model: haiku\n        criteria:\n          - \
+             criterion_id: c1\n            question: {question}\n"
+        ),
+    };
+    let def = config::WorkflowDef::parse(
+        std::path::Path::new("fixture.yml"),
+        &format!(
+            "version: 1\nworkflow_id: fixture-workflow\nname: fixture\nstructure: linear\n\
+             steps:\n  - id: implement\n    label: \"Implement\"\n    evidence_type: diff\n    \
+             mechanical_checks:\n      - type: diff_nonempty\n{judge}    advance_gate: {}\n  - \
+             id: summarise\n    label: \"Summarise\"\n    evidence_type: facts_note\n    \
+             advance_gate: {}\n",
+            gate("implement"),
+            gate("summarise"),
+        ),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
+    config::ResolvedWorkflow::resolve(&def, &manifest())
+        .unwrap_or_else(|refused| panic!("the fixture workflow did not resolve: {refused}"))
+}
+
 /// One workflow, keyed by its own id — what `fittings` holds when a case
 /// wants nothing more than the fixture.
 pub fn one(
@@ -230,6 +297,7 @@ pub fn fitted_with(
         judge: Arc::new(FakeJudge::that_fails("a Judge that should never be asked")),
         judge_budget: JudgeBudget::of(Duration::from_secs(5)),
         judge_model: Model::named("the-cheap-model").expect("a model name"),
+        proposer_model: Model::named("the-cheap-model").expect("a model name"),
         // Planted, not read. The composition root resolves these from the
         // environment and the adapter; a test that read the same sources would
         // be asserting against a machine rather than against Fleet.
@@ -259,6 +327,21 @@ pub fn a_fleet_committing_through(
     vcs: FakeVcs,
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
+    fittings.vcs = vcs;
+    Fleet::assembled(fittings)
+}
+
+/// A Fleet whose workflow puts a person on one step's gate, committing through
+/// this version control — the second half is what the last-step case needs,
+/// since approving there lands the work.
+pub fn a_fleet_gated_on_a_person(
+    home: &TempDir,
+    work: FakeWorkProduct,
+    gate_on: &str,
+    vcs: FakeVcs,
+) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
+    let mut fittings = fittings(home, work);
+    fittings.workflows = one(two_steps_gated_on_a_person(gate_on, None));
     fittings.vcs = vcs;
     Fleet::assembled(fittings)
 }
@@ -337,6 +420,26 @@ pub fn a_fleet_judged_by(
     Fleet::assembled(fittings)
 }
 
+/// A Fleet whose dispatch requests are read by this client, holding these
+/// workflows.
+///
+/// The workflows are an argument because they are half of what the proposer is
+/// told: a catalogue it cannot choose from proves nothing about it choosing.
+pub fn a_fleet_proposing_through(
+    home: &TempDir,
+    work: FakeWorkProduct,
+    workflows: Vec<config::ResolvedWorkflow>,
+    proposer: FakeJudge,
+) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
+    let mut fittings = fittings(home, work);
+    fittings.workflows = workflows
+        .into_iter()
+        .map(|workflow| (workflow.id().clone(), workflow))
+        .collect();
+    fittings.judge = Arc::new(proposer);
+    Fleet::assembled(fittings)
+}
+
 /// A Fleet over a store another Fleet wrote to. See [`Counted::from_next`].
 pub fn a_fleet_minting_from(
     home: &TempDir,
@@ -377,6 +480,7 @@ pub fn a_proposal(title: &str) -> ipc::ProposeJob {
             source: ipc::CriterionSource::from_wire("check").expect("a source"),
         }],
         subject: None,
+        dependencies: Vec::new(),
         facts: "the reader is off by one".to_string(),
         write_targets: None,
         attachments: Vec::new(),
@@ -683,4 +787,66 @@ async fn a_drone_that_leaves_without_submitting_does_not_leave_the_job_running()
         "escalated holds the worktree until a person answers — it does not end the Job"
     );
     assert_eq!(fleet.working_on().await, None, "the slot came free");
+}
+
+/// **The boundary is read, and a step is gated on what it did rather than on
+/// what the branch holds.**
+///
+/// A Job's first step writes a file and advances. Its second writes nothing,
+/// submits well-formed Evidence, and must fail — before this, it was credited
+/// with the first step's file and advanced `passed`, which made every step
+/// after the first that wrote anything pass `diff_nonempty` for free.
+///
+/// The only thing standing between the two submissions is `Fleet::turn`, so
+/// what is under test is the boundary reading the worktree — not the gate,
+/// which `tests::gate` asks directly.
+#[tokio::test]
+async fn a_second_step_that_writes_nothing_is_not_credited_with_the_first_step_s_file() {
+    let home = TempDir::new();
+    let mut fittings = fittings(&home, FakeWorkProduct::untouched());
+    fittings.workflows = one(two_steps_both_gated_on_a_diff());
+    let fleet = Fleet::assembled(fittings);
+
+    let job = fleet
+        .propose(a_proposal("fix the off-by-one"))
+        .await
+        .unwrap();
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.unwrap();
+
+    // The first step's Drone puts something on disk, then submits.
+    fleet
+        .work()
+        .wrote(&[("src/log.rs", adapter_traits::Change::Modified)]);
+    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    let turned = fleet.turn().await.unwrap();
+    assert!(
+        matches!(turned.ruled, Some(Ruling::Advanced { .. })),
+        "the first step wrote a file: {:?}",
+        turned.ruled
+    );
+    assert_eq!(
+        fleet
+            .load(job.id())
+            .await
+            .unwrap()
+            .current_step_id()
+            .map(|id| id.as_str()),
+        Some("verify")
+    );
+
+    // The second step's Drone writes nothing at all and submits anyway.
+    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    let turned = fleet.turn().await.unwrap();
+    let Some(Ruling::Failed { failures, .. }) = &turned.ruled else {
+        panic!(
+            "the second step advanced having written nothing: {:?}",
+            turned.ruled
+        );
+    };
+    assert_eq!(failures, &[verification::CheckFailed::DiffEmpty]);
+    assert_eq!(
+        fleet.load(job.id()).await.unwrap().status(),
+        JobStatus::CompletedFailed
+    );
 }

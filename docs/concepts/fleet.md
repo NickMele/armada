@@ -215,7 +215,7 @@ Each piece of Fleet's behavior lives where it is specified:
 - Own health status — [Doctor](doctor.md), Fleet module
 - What a repo may declare about ports, Check timeouts and teardown — [Manifest](manifest.md)
 
-The Job shapes are single-workspace, linked-DAG sub-Jobs and [Convoy](convoy.md), proposed per dispatched request by the Job proposer. Only the linked-DAG shape decomposes into sub-Jobs; a Convoy has **no children**. Shape is derived from `write_targets` and `atomic` rather than stored, so Fleet branches on those two fields and a new combination of them costs no migration.
+The Job shapes are single-workspace, linked-DAG sub-Jobs and [Convoy](convoy.md). Only the linked-DAG shape decomposes into sub-Jobs; a Convoy has **no children**. Shape is derived from `write_targets` and `atomic` rather than stored, so Fleet branches on those two fields and a new combination of them costs no migration.
 
 ## Open questions
 

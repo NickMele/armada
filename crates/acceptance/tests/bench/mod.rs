@@ -353,6 +353,7 @@ impl Bench {
 
     /// Move one step of the frozen workflow. **Always Fleet**: the inner
     /// machine has no human actor at M1.
+    ///
     pub fn step_moved(&self, run: &mut Run, step: &StepId, to: StepTarget) {
         let moved = run
             .job

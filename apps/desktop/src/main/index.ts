@@ -153,6 +153,32 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.observeJob, (_event, jobId: string | null) =>
     connection?.observeJob(jobId),
   );
+  // Which Job's transition history is unfolded. One HTTP read, kept current
+  // while it is open, and dropped when the section closes — a history is its
+  // own operation precisely so a Job opened does not pay for it.
+  ipcMain.handle(CHANNELS.readHistory, (_event, jobId: string | null) =>
+    connection?.readHistory(jobId),
+  );
+  // The two reads a review is made of. Two channels because they are two
+  // operations: the claims are four lines a step and the diff is the patch,
+  // and the patch is read only where somebody is looking at one.
+  ipcMain.handle(CHANNELS.readEvidence, (_event, jobId: string | null) =>
+    connection?.readEvidence(jobId),
+  );
+  ipcMain.handle(CHANNELS.readDiff, (_event, jobId: string | null) =>
+    connection?.readDiff(jobId),
+  );
+  // The three decisions on the work, and they stay three channels. Approving
+  // takes it, requesting changes sends the drone back to the same step, and
+  // rejecting is terminal and ends the drone — a single channel taking which
+  // one as an argument would make that difference a flag.
+  ipcMain.handle(CHANNELS.approveReview, (_event, jobId: string) =>
+    connection?.approveReview(jobId),
+  );
+  ipcMain.handle(CHANNELS.requestChanges, (_event, jobId: string, note: string) =>
+    connection?.requestChanges(jobId, note),
+  );
+  ipcMain.handle(CHANNELS.rejectWork, (_event, jobId: string) => connection?.rejectWork(jobId));
 
   createWindow();
   connection.start();

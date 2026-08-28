@@ -41,7 +41,9 @@ use serde::{Deserialize, Serialize};
 use crate::event::Reason;
 use crate::ids::{DroneId, Instant, JobId, ManifestId, StepId, WorkflowId};
 
-use crate::enums::{CriterionSource, JobStatus, Origin, TopLevelOrigin, Urgency};
+use crate::enums::{
+    CriterionSource, DependencyDirection, JobStatus, Origin, TopLevelOrigin, Urgency,
+};
 
 /// One Job, as a Board row.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -240,6 +242,14 @@ pub struct ProposeJob {
     /// empty is determined to write nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub write_targets: Option<Vec<String>>,
+    /// The peers this Job is sequenced against. **Additive, like `model`** — a
+    /// caller with no graph to draw sends nothing.
+    ///
+    /// A peer named here must already exist: an edge is a pointer, and Fleet
+    /// mints the ids. That is what makes a plan's Jobs creatable in dependency
+    /// order and no other.
+    #[serde(default)]
+    pub dependencies: Vec<DependencyEdge>,
     /// Files a person attached to the brief before proposing it. **Additive,
     /// like `model`** — a caller that predates this field sends nothing and
     /// decodes exactly as it did before.
@@ -251,6 +261,53 @@ pub struct ProposeJob {
     /// does not exist is refused rather than silently dropped.
     #[serde(default)]
     pub attachments: Vec<AttachmentRef>,
+}
+
+/// What a person described, before anything has decided what it is. The request
+/// half of `propose_from_request`.
+///
+/// **One field, and no `workflow_id` among them.** Naming the workflow is the
+/// act this operation exists to remove; a request that carried one would be
+/// `propose_job` with an extra model call in front of it.
+///
+/// Blank is refused at the Fleet boundary rather than here, the division
+/// [`ProposeJob::title`] already draws: a decoded request is well-formed, and a
+/// description with nothing in it is a value that cannot work.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobRequest {
+    /// What the person wrote — a prompt, or a link to a ticket. **Carried
+    /// verbatim**: Fleet opens no link and fetches nothing, so what the
+    /// proposer reads is what was typed.
+    pub request: String,
+}
+
+/// One DAG link, sequencing this Job against a peer.
+///
+/// **`blocks` is expressible and the proposer never writes one.** A plan is
+/// created in dependency order, so the Job being created can only point
+/// backwards — `depends_on` at the pointing end says the same thing as
+/// `blocks` at the other, and one direction written consistently is one
+/// direction to read.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DependencyEdge {
+    pub direction: DependencyDirection,
+    pub peer: JobId,
+}
+
+/// What one reading of a request proposed. The answer half of
+/// `propose_from_request`.
+///
+/// **A list even where it holds one**, because approving is a different act
+/// depending on how many: one Job is dispatched by its approval, and several
+/// are a plan whose members each take their own approval in turn. A shape that
+/// answered with one Job would make the second case unrepresentable rather
+/// than merely unbuilt.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProposedPlan {
+    /// Every Job the request became, in dependency order — an upstream always
+    /// before what points at it. **All at `awaiting_approval`**: nothing here
+    /// has been approved and nothing is running.
+    pub jobs: Vec<JobSummary>,
 }
 
 /// One staged file, named by where Bridge already wrote it.

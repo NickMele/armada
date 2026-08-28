@@ -16,10 +16,12 @@
 //! was stopped and is being worked again either way. Which act a Job admits is
 //! decided by whether it holds a Drone, which is `fleet::resume`'s to ask.
 //!
-//! `awaiting_human` needs a human advance gate and `retrying` a retry budget,
-//! and M1 has neither. Both stay declared on [`StepState`], because a stored
-//! row may render any of the six, and **neither is reachable**: [`StepTarget`]
-//! has no variant naming one.
+//! `retrying` needs a retry budget, which M1 lacks. `awaiting_human` has the
+//! human advance gate it was waiting on and is **still unreachable**, on a
+//! smaller point: a step at that gate stays `running`, since `approve_review`
+//! advances it while the Job is still there. Both stay declared on
+//! [`StepState`], because a stored row may render any of the six, and neither
+//! has a [`StepTarget`] — see that type for what a third one would cost.
 //!
 //! # The outer machine gates the inner one
 //!
@@ -71,9 +73,12 @@ pub const ADVANCING_STATUSES: &[JobStatus] = &[JobStatus::Running, JobStatus::Aw
 /// Where a step is going.
 ///
 /// Three variants for the three destinations M1 reaches. `not_started` is
-/// written at creation and is not a destination; `awaiting_human` and
-/// `retrying` need a human gate or a retry budget, and cannot be passed to
-/// [`Job::transition_step`](crate::Job::transition_step) because there is
+/// written at creation and is not a destination. `retrying` needs a retry
+/// budget, and `awaiting_human` needs a fourth variant here plus two edges plus
+/// the matching `CHECK` in `store`'s schema — a step at a human gate stays
+/// `running` instead, which renders less honestly and behaves identically.
+/// Neither can be passed to
+/// [`Job::transition_step`](crate::Job::transition_step), because there is
 /// nothing to pass.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StepTarget {

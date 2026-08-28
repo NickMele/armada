@@ -32,6 +32,7 @@ export * from "./primitives/Tooltip/Tooltip";
 // Compositions — what M1 composes its screens from.
 export * from "./compositions/ActiveJobsList/ActiveJobsList";
 export * from "./compositions/BoardEmptyState/BoardEmptyState";
+export * from "./compositions/ChangedFiles/ChangedFiles";
 export * from "./compositions/CriterionVerdicts/CriterionVerdicts";
 export * from "./compositions/EvidenceCard/EvidenceCard";
 export * from "./compositions/DroneTurns/DroneTurns";
@@ -41,11 +42,16 @@ export * from "./compositions/JobComposer/JobComposer";
 export * from "./compositions/JobBrief/JobBrief";
 export * from "./compositions/JobDetailHeaderActions/JobDetailHeaderActions";
 export * from "./compositions/JobLogReference/JobLogReference";
+export * from "./compositions/JobOutcome/JobOutcome";
+export * from "./compositions/JobRecord/JobRecord";
 export * from "./compositions/JobRowStacked/JobRowStacked";
+export * from "./compositions/ReviewDecision/ReviewDecision";
 export * from "./compositions/Sidebar/Sidebar";
 export * from "./compositions/StatusBar/StatusBar";
 export * from "./compositions/StepActivityMark/StepActivityMark";
 export * from "./compositions/StepBar/StepBar";
+export * from "./compositions/TransitionHistory/TransitionHistory";
+export * from "./compositions/UnifiedDiff/UnifiedDiff";
 export * from "./compositions/WorkflowRail/WorkflowRail";
 
 // Job detail — the three renders a Job's status chooses between. A screen was
@@ -53,7 +59,8 @@ export * from "./compositions/WorkflowRail/WorkflowRail";
 // props, and the stories render them with the same fixtures they held.
 export * from "./screens/detail";
 export * from "./screens/AFailedJobADeadEndReadAsOne/AFailedJobADeadEndReadAsOne";
-export * from "./screens/AFinishedJobABranchAndAnEvidenceTrail/AFinishedJobABranchAndAnEvidenceTrail";
+export * from "./screens/AFinishedJobWhatItWasAndWhatItProduced/AFinishedJobWhatItWasAndWhatItProduced";
+export * from "./screens/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop";
 export * from "./screens/ARunningJob/ARunningJob";
 
 // Observe — one Job's turns, read while they are still being written. A screen

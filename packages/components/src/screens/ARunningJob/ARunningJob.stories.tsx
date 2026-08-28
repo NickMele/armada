@@ -117,6 +117,25 @@ const WORK_ROWS = [
   },
 ];
 
+/**
+ * What the drone has touched so far. `job.files_changed` carries the whole
+ * footprint on every reading, so the list is replaced rather than folded into —
+ * a file that stopped being changed leaves by not being in the next one.
+ *
+ * Names and a change kind only. The patch is the expensive read and it is not
+ * on this seam.
+ */
+const FOOTPRINT = {
+  emptyNote: "This drone has not changed anything yet.",
+  note: "Read from the worktree while the drone was working. This step declared no plan, so no row is marked.",
+  files: [
+    { path: "src/settings.rs", change: "modified" },
+    { path: "src/settings/reducer.rs", change: "added" },
+    { path: "src/settings/selectors.rs", change: "added" },
+    { path: "src/settings/mod.rs", change: "added" },
+  ],
+};
+
 const heading = {
   status: "running",
   statusIcon: CircleDot,
@@ -139,6 +158,7 @@ export const RunningJob: Story = {
       <ARunningJob
         heading={heading}
         steps={steps}
+        footprint={FOOTPRINT}
         evidence={{
           icon: NO_GLYPH_IN_REGISTRY,
           iconLabel: "Evidence",
@@ -268,6 +288,7 @@ export const AsBridgeDrawsItToday: Story = {
             evidence: { label: "" },
           },
         ]}
+        footprint={FOOTPRINT}
         log={{
           brief: {
             criteria: [],

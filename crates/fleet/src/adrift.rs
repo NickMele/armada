@@ -34,6 +34,8 @@ use core_model::{
 };
 use store::{LoadAllError, LoadJobError, WriteError};
 
+use crate::proposing::{NotProposed, Unresolved};
+
 /// A Job that could not be carried forward, and what stopped it.
 #[derive(Debug)]
 pub enum Adrift {
@@ -163,6 +165,31 @@ pub enum Adrift {
     /// have kept, and the record would say a person injected context into a
     /// session that did not exist.
     NoDroneToRedirect { job: JobId },
+    /// A review act was asked for on a Job that is not at a human gate.
+    ///
+    /// **Not an illegal transition.** Two of the three moves a review makes are
+    /// edges the machine has from elsewhere — `awaiting_approval -> rejected`
+    /// is the dispatch gate's denial, and plenty of statuses reach `running` —
+    /// so the machine would take them and the record would say a person
+    /// reviewed work nobody was ever shown.
+    NotUnderReview { job: JobId, status: JobStatus },
+    /// Changes were asked for on a Job whose Drone is gone.
+    ///
+    /// **The note has nowhere to go.** A Job put back to `running` with no
+    /// process on it escalates as `interrupted` a moment later, having lost
+    /// what the person wrote — so it is refused while the Job is still at the
+    /// gate. A Drone that dies at a gate escalates on its own, and a restart is
+    /// the act from there.
+    NoDroneToTell { job: JobId },
+    /// A Job's work product could not be read out of its worktree.
+    ///
+    /// **Never an empty diff.** A repository that will not open and a Drone
+    /// that changed nothing are opposite answers, and a reviewer handed the
+    /// second when the first happened would take work that was never read.
+    WorkUnreadable {
+        job: JobId,
+        cause: Box<dyn Error + Send + Sync>,
+    },
     /// A restart was asked for on a Job whose Drone is alive.
     ///
     /// The inverse refusal. Ending a live session to spawn a replacement onto
@@ -215,6 +242,48 @@ pub enum Adrift {
         filename: String,
         cause: io::Error,
     },
+    /// A request arrived with nothing in it to read.
+    NothingToPropose,
+    /// The repository root or the minted id could not name a checkout for the
+    /// reading. **Unreachable in practice** — both are Fleet's own values —
+    /// and carried rather than unwrapped for the reason every other
+    /// `WorktreeSpecRefused` is.
+    NoReadingWorktree(WorktreeSpecRefused),
+    /// The reading's checkout would not be made, so the proposer had nowhere
+    /// to look. **Nothing was asked and nothing was created.**
+    NoReading {
+        request: String,
+        cause: Box<dyn Error + Send + Sync>,
+    },
+    /// The proposal was made and the reading's checkout would not go back.
+    ///
+    /// **The Jobs are not created and the person is told.** A reading nothing
+    /// removes is a directory nothing owns — `armada clean` deletes what a
+    /// record derives and a reading has no record — so it would be reported as
+    /// unclaimed for ever, and silence here is how a repository fills up with
+    /// them.
+    ReadingNotDiscarded {
+        path: String,
+        cause: Box<dyn Error + Send + Sync>,
+    },
+    /// The proposer call could not be configured — the same environment a Drone
+    /// and a Judge are built from would not build.
+    NotProposable(SpawnConfigRefused),
+    /// **The request was read and no workflow resolved.** It is refused at
+    /// dispatch and comes back unchanged, and no Job exists.
+    ///
+    /// Not a fault and never a default: the resolved definition is frozen into
+    /// the Job and becomes the yardstick the work is judged against, so a
+    /// nearest fit would be the standard rather than a guess a person could
+    /// correct.
+    NoWorkflowFits { request: String, why: Unresolved },
+    /// **The call could not be made, which is a different thing.** The network,
+    /// the quota, the budget, or an answer nothing could be read out of.
+    ///
+    /// Deliberately not [`Adrift::NoWorkflowFits`]. A proposal that could not
+    /// be made says nothing about the request, and turning an outage into "no
+    /// workflow fits" refuses a dispatch on the strength of one.
+    NotProposed { request: String, cause: NotProposed },
 }
 
 impl fmt::Display for Adrift {
@@ -339,6 +408,24 @@ impl fmt::Display for Adrift {
                  the worktree it left behind",
                 job.as_str()
             ),
+            Adrift::NotUnderReview { job, status } => write!(
+                out,
+                "{} is {} and is not standing at a human gate. Approve, request changes and \
+                 reject all answer `awaiting_review` and nothing else",
+                job.as_str(),
+                status.as_wire()
+            ),
+            Adrift::NoDroneToTell { job } => write!(
+                out,
+                "{} has no Drone to tell — it is gone, so there is nobody to act on the note. \
+                 The Job will escalate as interrupted, and a restart is what answers that",
+                job.as_str()
+            ),
+            Adrift::WorkUnreadable { job, cause } => write!(
+                out,
+                "{}'s worktree would not be read, so there is no diff to show: {cause}",
+                job.as_str()
+            ),
             Adrift::DroneStillThere { job } => write!(
                 out,
                 "{}'s Drone is alive and idle, holding its session. Redirect it rather than \
@@ -352,6 +439,36 @@ impl fmt::Display for Adrift {
                 job.as_str()
             ),
             Adrift::Unnameable => out.write_str("a Job needs a title somebody can read"),
+            Adrift::NothingToPropose => {
+                out.write_str("a request needs something in it to read before it can be a Job")
+            }
+            Adrift::NoReadingWorktree(cause) => write!(
+                out,
+                "the reading's checkout could not be named: {}",
+                cause.said()
+            ),
+            Adrift::NoReading { cause, .. } => write!(
+                out,
+                "the proposer had nowhere to read: {cause}. Nothing was created"
+            ),
+            Adrift::ReadingNotDiscarded { path, cause } => write!(
+                out,
+                "the reading's checkout at {path} would not go back: {cause}. Remove it by \
+                 hand — `armada clean` will report it and leave it, because no Job derives it"
+            ),
+            Adrift::NotProposable(cause) => write!(
+                out,
+                "the proposer call could not be configured: {}",
+                cause.said()
+            ),
+            Adrift::NoWorkflowFits { why, .. } => write!(
+                out,
+                "{why}. Nothing was created and the request is unchanged — say it again                  differently, or name a workflow yourself with `propose_job`"
+            ),
+            Adrift::NotProposed { cause, .. } => write!(
+                out,
+                "the request could not be read: {cause}. Nothing was created and the                  request is unchanged — this is the call failing rather than the                  request being refused, so asking again is reasonable"
+            ),
             Adrift::NoSuchWorkflow { named, held } => {
                 let names: Vec<String> = held.iter().map(|id| format!("`{id}`")).collect();
                 write!(
@@ -432,9 +549,24 @@ impl Error for Adrift {
             | Adrift::NotResumable { .. }
             | Adrift::NoStepStopped { .. }
             | Adrift::NoDroneToRedirect { .. }
+            // The two review refusals join them: a Job that is not at a gate
+            // has nothing underneath saying why, only the state it is in.
+            | Adrift::NotUnderReview { .. }
+            | Adrift::NoDroneToTell { .. }
             | Adrift::DroneStillThere { .. }
             | Adrift::WorktreeGone { .. }
+            | Adrift::NothingToPropose
+            | Adrift::NoReadingWorktree(_)
+            | Adrift::NoWorkflowFits { .. }
+            // `SpawnConfigRefused` is not an `Error` — it says what a value
+            // cannot be rather than wrapping a failure — so it prints into the
+            // message above and has nothing to chain to.
+            | Adrift::NotProposable(_)
             | Adrift::Modelless => None,
+            Adrift::NotProposed { cause, .. } => Some(cause),
+            Adrift::NoReading { cause, .. }
+            | Adrift::ReadingNotDiscarded { cause, .. }
+            | Adrift::WorkUnreadable { cause, .. } => Some(cause.as_ref()),
         }
     }
 }

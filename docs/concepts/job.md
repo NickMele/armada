@@ -269,7 +269,7 @@ Three fields, three readers, and none of them substitutes for another.
 
 **Facts is redacted from every list and a title is not.** Facts is the likeliest place on the record for a secret to land, which is why it never travels on a list row; a title is the one string on a Job written to be read off a screen. Deriving a row label from the first line of Facts would put the redacted field on the Board instead.
 
-**The [Job proposer](job-proposer.md) generates it**, from the same reading of the request that produces `workflow_id` and `write_targets[]`. Hand entry is the override.
+**The [Job proposer](job-proposer.md) generates it**, from the same reading of the request that produces `workflow_id`. Hand entry is the override.
 
 ## Other fields
 

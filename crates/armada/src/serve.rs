@@ -82,7 +82,10 @@ use fleet::{
 use ipc::PROTOCOL_VERSION;
 use store::Store;
 
-use crate::{agent_binary, judge_model, model_choices, Setup, AGENT_BINARY, JUDGE_MODEL, MODEL};
+use crate::{
+    agent_binary, judge_model, model_choices, proposer_model, Setup, AGENT_BINARY, JUDGE_MODEL,
+    MODEL, PROPOSER_MODEL,
+};
 
 /// The store, beside the runtime file rather than inside the repository.
 ///
@@ -119,11 +122,15 @@ const PROVISIONAL_DRONE_PATH: &[&str] = &[
 /// be.
 pub const PROVISIONAL_CHECK_BUDGET: Duration = Duration::from_secs(900);
 
-/// How long one Judge call may take. **Provisional**: the `judge-cost-cap` and
-/// the Judge latency rows in `crates/config/settings.toml` both read
-/// `undecided`, so nothing has measured what the ceiling should be. It is short
-/// because the calls sit at a gate a person is waiting behind — latency is what
-/// this bounds, not money.
+/// How long one Judge call may take. **Provisional**: the Judge latency row in
+/// `crates/config/settings.toml` reads `undecided`, so nothing has measured what
+/// the ceiling should be. It is short because the calls sit at a gate a person
+/// is waiting behind — latency is what this bounds, not money.
+///
+/// `judge-cost-cap-per-check` is open for a different reason and does not
+/// belong in this sentence: a Judge is rendered `--output-format text
+/// --max-turns 1` and emits no result envelope, so nothing can read what one
+/// cost. A dollar cap there would be enforced by nothing.
 pub const PROVISIONAL_JUDGE_BUDGET: Duration = Duration::from_secs(120);
 
 /// What a step is expected to cost before the thrashing chain looks at it.
@@ -397,6 +404,8 @@ fn assemble(
     let judge_binary = agent.program().to_string();
     let judge_model =
         judge_model(std::env::var(JUDGE_MODEL).ok()).map_err(|refused| refused.said())?;
+    let proposer_model =
+        proposer_model(std::env::var(PROPOSER_MODEL).ok()).map_err(|refused| refused.said())?;
 
     Ok(Fleet::assembled(Fittings {
         store: Store::open(&machine.join(STORE_FILE))?,
@@ -422,6 +431,7 @@ fn assemble(
         judge: Arc::new(HeadlessAgent::at(judge_binary)),
         judge_budget: JudgeBudget::of(PROVISIONAL_JUDGE_BUDGET),
         judge_model,
+        proposer_model,
         models,
         events: api::Broadcaster::new(),
     }))

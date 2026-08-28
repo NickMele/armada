@@ -11,6 +11,7 @@
 import type { DroneTurn } from "@armada/components";
 
 import type { Turn } from "../../shared/bridge";
+import { clock } from "./duration";
 
 /**
  * The rows, with each call carrying whatever came back for it.
@@ -69,9 +70,11 @@ function bodyOf(saw: Saw, answers: Map<string, Answer>): Omit<DroneTurn, "id" | 
       const answer = answers.get(saw.call);
       const said = answer === undefined ? ANSWER.pending : ANSWER[answer.failed ? "failed" : "ok"];
       // With what the call did in hand, the call id stops being the only thing
-      // telling one `Bash` row from the next and stops leading the row. Without
-      // it the id is all there is, so it stays.
-      if (saw.detail === undefined) return { subject: `${saw.tool} · ${saw.call}`, answer: said };
+      // telling one `Bash` row from the next and stops leading the row. Empty
+      // is the wire saying the vocabulary had no name for this tool's
+      // arguments — not a field that failed to arrive — and there the id is all
+      // there is, so it stays.
+      if (saw.detail === "") return { subject: `${saw.tool} · ${saw.call}`, answer: said };
       return { subject: saw.tool, detail: saw.detail, truncated: saw.truncated, answer: said };
     }
     case "said":
@@ -108,13 +111,3 @@ function count(servers: number): string {
   return servers === 1 ? "1 mcp server" : `${servers} mcp servers`;
 }
 
-/**
- * The instant, as a wall clock. **Not a relative age** — a transcript is read
- * down, and "4m ago" on every row of a history changes meaning while it is
- * being read. The date is dropped: every row on screen is one Job's.
- */
-function clock(instant: string): string {
-  const at = new Date(instant);
-  if (Number.isNaN(at.getTime())) return instant;
-  return at.toLocaleTimeString([], { hour12: false });
-}

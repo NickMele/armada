@@ -1,17 +1,34 @@
-# Refactor, reduced to what M1's parser accepts. See `bug.json` beside this
-# file for why a reduced form exists at all, and for the six fields this one
-# also holds to.
+# Refactor, reduced to what M1's parser accepts.
+# See `bug.json` beside this file for the shape all seven hold to, for why a
+# reduced form exists at all, and for the three ways the designed samples under
+# `crates/core-model/domain/workflow-samples/` are stale against the parser --
+# `question` where it reads `criteria[]`, `declare_plan_at` inside
+# `evidence_scope` where the registry parents it to the step, and
+# `reference_docs` / `max_context_size`, which M1 does not read. The questions
+# below are ported from the designed files; none of the shape is.
 #
-# The designed `refactor.json` (`crates/core-model/domain/workflow-samples/`)
-# runs six steps in a loop, with a Judge on three of them, `hard_prerequisite`
-# on `regression_verify`, and a gaming check comparing the test diff against
-# `scope`. None of that is M1's to enforce, which leaves the same shape
-# `bug.json` already reduces to: `scope` renamed `plan`, `refactor` renamed
-# `implement`, and `review` + `merge` + `close` folded into one auto
-# `handoff`. `implement` carries `regression_verify`'s `test` check itself
-# rather than a separate step — Fleet runs it after the Drone reports the
-# diff, and a step blocked until it passes needs no second step to say so
-# again.
+# The designed `refactor.json` runs six steps in a loop with a Judge on four.
+# This form is `bug.json`'s shape: `scope` renamed `plan`, `refactor` renamed
+# `implement`, and `review` + `merge` + `close` folded into one auto `handoff`.
+#
+# `implement` carries `regression_verify`'s `test` check and its gaming check
+# both. **Refactor is the workflow where the gaming check earns most**: a
+# restructure that breaks a test has an obvious cheap fix -- weaken the test --
+# and `test_scope_narrowed`, `assertion_weakened`, `test_skipped` and
+# `test_deleted` are exactly that fix's signatures.
+#
+# `handoff` carries no Judge. A step with no criterion asks the Judge nothing.
+#
+# **`handoff` is gated `human_always`.** The designed file reaches a human gate
+# through `manifest_rule:review_gate`, which is still refused as `OutsideM1`, so
+# this is not ported -- it is the owner's decision, taken Aug 28 2026: every
+# workflow that produces code stops before it lands. A Job that writes a diff and
+# finishes without a person having read it is the thing this gate exists to
+# prevent, and `refactor` is the workflow actually dispatched most.
+#
+# The gate-and-judge agreement rule does not apply to it. That rule compares a
+# gate naming a *tier* against that tier's declaration; `human_always` names an
+# *actor*, so a step may carry it with or without a Judge.
 {
   "version": 1,
   "workflow_id": "refactor",
@@ -22,23 +39,85 @@
       "id": "plan",
       "label": "Scope the refactor",
       "evidence_type": "facts_note",
-      "advance_gate": "auto"
+      "evidence_scope": {
+        "context_source": "drone_declared",
+        "exclude_paths": [
+          ".env",
+          "node_modules/",
+          "target/"
+        ]
+      },
+      "judge_checks": [
+        {
+          "enabled": true,
+          "model": "haiku",
+          "criteria": [
+            {
+              "criterion_id": "structure_only",
+              "question": "Does this plan describe a change to structure only, with no intended change to behaviour?"
+            }
+          ]
+        }
+      ],
+      "advance_gate": "auto_if_judge_passes"
     },
     {
       "id": "implement",
       "label": "Restructure",
       "evidence_type": "diff",
       "mechanical_checks": [
-        { "type": "manifest_check", "check": "test", "expect_exit_code": 0 },
-        { "type": "diff_nonempty" }
+        {
+          "type": "manifest_check",
+          "check": "test",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "diff_nonempty"
+        }
       ],
-      "advance_gate": "auto"
+      "declare_plan_at": "step_start",
+      "evidence_scope": {
+        "context_source": "drone_declared",
+        "exclude_paths": [
+          ".env",
+          "node_modules/",
+          "target/"
+        ],
+        "scope_diff_check": true
+      },
+      "judge_checks": [
+        {
+          "enabled": true,
+          "model": "sonnet",
+          "criteria": [
+            {
+              "criterion_id": "restructures_without_changing",
+              "question": "Does this diff restructure code without changing what it does?"
+            },
+            {
+              "criterion_id": "test_changes_justified",
+              "question": "Given the stated refactor, are the changes to test files justified by it -- or has test scope been narrowed, have assertions been weakened, or have tests been skipped or deleted?"
+            }
+          ],
+          "gaming_check": {
+            "enabled": true,
+            "baseline_ref": "plan.evidence",
+            "flag_if": [
+              "test_scope_narrowed",
+              "assertion_weakened",
+              "test_skipped",
+              "test_deleted"
+            ]
+          }
+        }
+      ],
+      "advance_gate": "auto_if_judge_passes"
     },
     {
       "id": "handoff",
       "label": "Summarise",
       "evidence_type": "facts_note",
-      "advance_gate": "auto"
+      "advance_gate": "human_always"
     }
   ]
 }

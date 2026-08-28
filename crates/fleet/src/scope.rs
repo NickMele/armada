@@ -19,7 +19,7 @@
 //! for free. What changed is [`WorkProduct::changed_files`], Fleet's own
 //! reading — the rule `diff_nonempty` already follows.
 
-use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
+use adapter_traits::{AgentHarness, Changed, Delivery, Vcs, WorkProduct};
 use core_model::{Component, DeclaredPaths, Envelope, FieldValue, JobId, Level, RepoPath, StepId};
 use ipc::mcp::DeclareScope;
 use verification::{drifted, InScope, OutsideScope};
@@ -112,7 +112,16 @@ where
     /// **Cold unless the step asked.** A step with no evidence scope, or one
     /// that does not declare its plan at step start, reads no worktree here —
     /// which is what keeps an ordinary turn as cheap as it was.
-    pub(crate) async fn watch_scope(&self, working: &mut Option<Working>) -> Option<Drifting> {
+    ///
+    /// `taken` is the footprint reading [`crate::footprint`] already made this
+    /// turn, where it made one. It is reused rather than re-read: the two
+    /// checks ask the same repository the same question, and the answer costing
+    /// twice would be this capability charging the drift check for it.
+    pub(crate) async fn watch_scope(
+        &self,
+        working: &mut Option<Working>,
+        taken: Option<&Changed>,
+    ) -> Option<Drifting> {
         let at_work = working.as_ref()?;
         let (job, step, worktree) = at_work.standing();
         let record = self.load(&job).await.ok()?;
@@ -121,8 +130,15 @@ where
             return None;
         }
         let declared = at_work.declared()?.clone();
-        let changed = self.work().changed_files(&worktree).ok()?;
-        let seen = drifted(&declared, changed.paths());
+        let read;
+        let changed = match taken {
+            Some(changed) => changed,
+            None => {
+                read = self.work().changed_files(&worktree).ok()?;
+                &read
+            }
+        };
+        let seen = drifted(&declared, &changed.paths());
         let fresh = working.as_mut()?.drifting(seen);
         if fresh.is_empty() {
             return None;

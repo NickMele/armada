@@ -194,13 +194,13 @@ Summary prose is prompt plus mechanical lint. **Substance requirement: every Jud
 
 **`enabled`.** Bug's `regression_verify` is purely mechanical and asks no semantic question.
 
-**`model` is a deliberate per-step dial, not fixed fleet-wide.** Routine steps use a cheap/fast model for cost and latency; the advisory final-review gate uses a stronger one. **The fleet-wide default is undecided** (see Open questions) — the Judge model config row carries no value.
+**`model` is a deliberate per-step dial, not fixed fleet-wide.** Routine steps use a cheap/fast model for cost and latency; the advisory final-review gate uses a stronger one. **The fleet-wide default is the cheapest model on the roster**, decided 28 Aug 2026 and carried by the Judge model config row. It is deliberately the floor rather than the middle: the dial is only legible against a default it moves away from, and Bug raising `review` to a stronger model says nothing if every step started there. A stronger default would not let the Judge see more — it has one turn, no tools and no repository — it would only make every criterion cost more and take longer at a gate somebody is waiting behind.
 
 **Judge prompts are compiled into the binary and are not user-editable.** No Kit library, no Manifest override, so prompt version is the binary version and no prompt hash is recorded on the verdict. Where the prompt library lives, and whether a prompt version is recorded on the verdict, is tracked in `../contracts/agent-prompt.md`; what a Judge is and is not told is specified there, sections 2 and 7.
 
 **`review_gate` is the repo's trust decision**, same pattern as `auto_merge`. `auto_if_judge_high_confidence` is retired vocabulary — no confidence scale ever existed; see [Workflow](workflow.md).
 
-**The Judge model row and the Judge cost cap per check row both read `undecided`** (see Open questions), so the rigor-scaling dial and the spend sub-limit are named but unset. Without the cap, verification bills against the Job budget and competes for spend with the work it verifies.
+**The Judge cost cap per check row still reads `undecided`**, and was reviewed and left open on 28 Aug 2026 rather than guessed at (see Open questions). Verification bills against the Job budget with no sub-limit of its own. What bounds Judge spend today is count-shaped rather than money-shaped: the call-count ceiling bounds `criteria × panel_size` per step and the Manifest budget cap bounds the Job.
 
 **Verification `max_context_size` is deliberately ownerless.** Why: the cap bounds all of verification rather than the Judge Check alone.
 
@@ -224,8 +224,7 @@ Evidence Scope governs what the Judge may read — `context_paths` (what changed
 ## Open questions
 
 - **[judge-unresolved-verdict-state]** Should there be an unresolved third verdict state, alongside pass and refuse? The verdict is currently strictly binary — a refusal fails the step.
-- **[judge-model-default]** What is the fleet-wide default Judge model? Model is a deliberate per-step dial, but the config row carrying the default currently carries no value.
-- **[judge-cost-cap-per-check]** What is the Judge cost cap per check? Without it, verification bills against the Job budget and competes for spend with the work it verifies.
+- **[judge-cost-cap-per-check]** Does a Judge call get a cost readout, and is a per-check dollar cap the right shape for the sub-limit? Reviewed 28 Aug 2026 alongside the model default and deliberately left open: nothing can read what a Judge call cost, because the call is rendered as one-shot text and emits no result envelope, so the figure a cap would compare against never reaches Armada. A number written into the row today would be enforced by nothing while reading as a limit that was set, which is worse than an absent cap because only the absent one is visible as missing. Without it verification bills against the Job budget and competes for spend with the work it verifies — bounded meanwhile by the call-count ceiling and the Manifest budget cap, both of which need no price to enforce.
 - **[judge-triggers-removal-guard]** What now guards a Manifest from removing Judge triggers entirely? A Manifest could once add Judge triggers and never remove them — a repo that removes them can opt out of semantic verification while every other signal still reads green, and Judge is the only tier measuring correctness. That protection was the config direction rule, since withdrawn, and nothing has replaced it.
 - **[judge-confidence-threshold-disposal]** Is the Judge confidence threshold config row deleted or repurposed? It is superseded and currently awaiting disposal.
 - **[judge-gaming-baseline-ref-bug]** Is Bug's gaming-check baseline `root_cause.evidence` or `repro`'s failing assertion? Bug's sample schema sets `root_cause.evidence` while its own Compliance table still names `repro`'s failing assertion — the two catch different things.

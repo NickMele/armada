@@ -24,10 +24,12 @@
 //! written on the trait. A failed Job's branch is exactly as its Drone left it,
 //! which is what "a person reads the branch" depends on.
 
+use std::collections::BTreeMap;
+
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{
-    Actor, Branch, EscalationTrigger, Job, JobId, JobStatus, StepId, StepTarget, Target,
-    Transitioned,
+    Actor, Branch, DependencyDirection, EscalationTrigger, Job, JobId, JobStatus, StepId,
+    StepTarget, Target, Transitioned,
 };
 use store::Moved;
 use verification::OutcomeTurn;
@@ -84,9 +86,20 @@ where
     /// here.
     async fn next_queued(&self) -> Result<Option<Job>, Adrift> {
         let (loaded, _) = self.every_job().await?;
+        let standing: BTreeMap<JobId, JobStatus> = loaded
+            .jobs
+            .iter()
+            .map(|job| (job.id().clone(), job.status()))
+            .collect();
         let mut waiting = Vec::new();
         for job in loaded.jobs {
             if job.status() != JobStatus::Queued {
+                continue;
+            }
+            // Approved and still waiting on a peer. It is skipped rather than
+            // reordered — the queue is by approval and this is not a Job's turn
+            // being taken, it is a Job that has nothing to work against yet.
+            if !clear_to_run(&job, &standing) {
                 continue;
             }
             waiting.push((self.approved_at(job.id()).await?, job));
@@ -207,12 +220,18 @@ where
         let Some(landed) = self.take_evidence() else {
             return Ok(None);
         };
-        // A submission from the idle Drone of a Job that has already stopped.
-        // The gate ruled on this step and the inner machine is frozen beneath
-        // `escalated`, so a second ruling has nowhere to be written. It is
-        // dropped rather than held: a held one would be ruled on by the turn a
-        // redirect produces, and the person's instruction would be answered by
-        // a verdict on work done before they wrote it.
+        // A submission from the idle Drone of a Job that is no longer being
+        // worked. The gate ruled on this step already, and it is dropped rather
+        // than held: a held one would be ruled on by the turn a redirect
+        // produces, and the person's instruction would be answered by a verdict
+        // on work done before they wrote it.
+        //
+        // Two statuses reach here and the drop is right for both. Beneath
+        // `escalated` the inner machine is frozen and a second ruling has
+        // nowhere to be written. Beneath `awaiting_review` it is not frozen,
+        // and that is the sharper case: a Job at a human gate is a person's,
+        // and a second submission must not be able to re-rule the step out from
+        // under them.
         if self.load(&job_id).await?.status() != JobStatus::Running {
             return Ok(None);
         }
@@ -332,6 +351,17 @@ where
             // The whole of what finishing a Job is, including the commit that
             // makes its branch mergeable, is `landing`'s.
             Ruling::Finished { tell, .. } => self.finish(ruling, tell, job_id, step, working).await,
+            // The Job moves and **nothing else does**. The step stays `running`
+            // — it is what the person is standing at, and `approve_review`
+            // advances it from there while the Job is still at the gate. The
+            // Drone is neither told nor ended: it holds its context so that a
+            // `request_changes` costs a turn rather than a respawn, and the
+            // person's answer is the next thing its session hears.
+            Ruling::HeldForReview { .. } => {
+                let job = self.load(job_id).await?;
+                self.applied(&job, ruling).await?;
+                Ok(())
+            }
             // Three endings, one shape: the work stops here, the Drone is not
             // told, and `apply` decides which status and which trigger.
             // `Suspect` joins them because a person is being asked either way —
@@ -578,6 +608,22 @@ where
         )));
         Ok(moved.job)
     }
+}
+
+/// Whether every Job this one waits on has finished, and finished well.
+///
+/// **`completed_success` and nothing weaker.** A dependent admitted after a
+/// failed upstream would do its work against a base that never landed, which is
+/// the half-landed upstream the linked-DAG shape exists to prevent.
+///
+/// A peer that is not in the list at all counts as unfinished. An edge pointing
+/// at a Job that was retained out is a sequence nothing can establish, and of
+/// the two answers only "run it" cannot be taken back.
+fn clear_to_run(job: &Job, standing: &BTreeMap<JobId, JobStatus>) -> bool {
+    job.dependencies()
+        .iter()
+        .filter(|edge| edge.direction == DependencyDirection::DependsOn)
+        .all(|edge| standing.get(&edge.peer) == Some(&JobStatus::CompletedSuccess))
 }
 
 /// Copy every attachment the Job carries into this worktree, under

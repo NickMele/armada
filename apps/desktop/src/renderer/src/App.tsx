@@ -18,8 +18,8 @@
 // failure. **Nothing here mints one.** An id from a process that writes no log
 // line joins to nothing, and a labelled blank is worse than an absent row.
 
-import { useEffect, useState, type ReactNode } from "react";
-import { Alert, Button, Dialog, Kbd } from "@armada/components";
+import { useEffect, useState } from "react";
+import { Alert, Button, Dialog } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
 import type { BridgeState, Draft, Outcome } from "../../shared/bridge";
@@ -27,9 +27,11 @@ import { Boundary } from "./Boundary";
 import { CopiedToast, useCopied } from "./CopiedToast";
 import { FailureBlock } from "./FailureSurface";
 import { fleetFailure, jobFailure, refusalFailure, uncaughtFailure } from "./failures";
+import { headOf } from "./Head";
 import { statementOf } from "./fleet";
 import { Composer } from "./Composer";
 import { ACT_LABEL, JobDetail, type ConfirmableAct } from "./JobDetail";
+import { renderFor } from "./render";
 import { CONFIRM, said } from "./copy";
 import { atTheGate, Jobs, summaryOf } from "./Jobs";
 import { Observe } from "./Observe";
@@ -61,6 +63,9 @@ export function App() {
   // Whether the open Job's turns are being watched. **A second piece of
   // navigation, because watching is a second act** — it is opened on one Job
   // deliberately and closed, and it changes nothing about the Job either way.
+  // It says the socket is open, not which surface is up: a finished Job holds
+  // the turns in its own record, so there the flag is set by a tab and swaps no
+  // screen. `watching` is the one that does.
   const [observing, setObserving] = useState(false);
   // Whether the composer is open. It used to sit permanently above the list;
   // `New job` is what opens it now, so the surface is the list until somebody
@@ -81,6 +86,19 @@ export function App() {
     null,
   );
   const [refreshing, setRefreshing] = useState(false);
+  // Which Job has a decision on its work in flight. Separate from `acting`,
+  // the header's act set: sharing one flag would grey out the header's kills
+  // while a review note was being sent.
+  const [deciding, setDeciding] = useState<string | null>(null);
+
+  // The open Job, read out of the list rather than copied beside it. A Job that
+  // leaves the list — superseded, or gone from a resync — closes its own detail
+  // rather than leaving a row on screen that Fleet no longer has.
+  const reading = openJob === null ? null : (state.jobs.find((job) => job.id === openJob) ?? null);
+  // Whether the turns have a screen of their own up. A finished Job holds them
+  // in its record instead, so the socket being open there must not replace the
+  // page a person is reading — and must not take the Escape that closes it.
+  const watching = reading !== null && observing && renderFor(reading) !== "finished";
 
   useEffect(() => {
     void window.armada.state().then(setState);
@@ -130,12 +148,12 @@ export function App() {
       // The pane first: Escape leaves the innermost view, which is what a
       // reader who opened two things in order expects to get back.
       if (event.key !== "Escape") return;
-      if (observing) setObserving(false);
+      if (watching) setObserving(false);
       else close();
     };
     window.addEventListener("keydown", pressed);
     return () => window.removeEventListener("keydown", pressed);
-  }, [openJob, observing]);
+  }, [openJob, watching]);
 
   // The row is back in the document only after the list re-renders, so the
   // focus move is an effect rather than part of the click that closed it.
@@ -151,10 +169,6 @@ export function App() {
   const fleet = fleetFailure(state.connection, statement, state.bridge, now);
   const refused = outcome !== null && !outcome.ok && outcome.why === "refused" ? outcome.error : null;
   const guarded = { bridge: state.bridge, onCopied: setCopied };
-  // The open Job, read out of the list rather than copied beside it. A Job that
-  // leaves the list — superseded, or gone from a resync — closes its own detail
-  // rather than leaving a row on screen that Fleet no longer has.
-  const reading = openJob === null ? null : (state.jobs.find((job) => job.id === openJob) ?? null);
 
   async function propose(draft: Draft): Promise<void> {
     setOutcome(await window.armada.proposeJob(draft));
@@ -207,6 +221,29 @@ export function App() {
   }
 
   /**
+   * Answer the review gate. **Three preload calls, not one with a
+   * discriminator** — approving takes the work, requesting changes sends the
+   * drone back to the same step with the note, and rejecting is terminal and
+   * ends the drone. **Nothing confirms here**: approving is the ordinary path,
+   * and rejecting is confirmed by the review render's own dialog, where the
+   * diff being decided on is still on screen.
+   */
+  async function decide(jobId: string, what: "approve" | "changes" | "reject", note = ""): Promise<void> {
+    setDeciding(jobId);
+    try {
+      setOutcome(
+        what === "approve"
+          ? await window.armada.approveReview(jobId)
+          : what === "changes"
+            ? await window.armada.requestChanges(jobId, note)
+            : await window.armada.rejectWork(jobId),
+      );
+    } finally {
+      setDeciding(null);
+    }
+  }
+
+  /**
    * Ask Fleet for current state over the connection Bridge already holds.
    *
    * **It re-reads; it does not reconnect.** The stream keeps the board current
@@ -230,76 +267,19 @@ export function App() {
 
   const summary = summaryOf(state.jobs.length, atTheGate(state.jobs));
   const scoped = state.holds.manifests.find((held) => held.id === scope);
-  const head = headOf();
-
-  /**
-   * What the panel head says, and what it offers. Three views and one head:
-   * the list, the composer `New job` opens, and one Job read whole. **`Back to
-   * the list` and `Cancel` live here rather than in the body** — a control that
-   * leaves a view belongs beside the view's name, not scrolled into it.
-   */
-  function headOf(): { title: string; summary?: string; actions: ReactNode } {
-    if (reading !== null && observing) {
-      return {
-        title: "Active jobs",
-        summary,
-        actions: (
-          <>
-            {/* Leaves the pane. **Never an act on the Drone** — closing this
-                ends the watching and nothing else, which is the whole
-                difference between observing and taking over. */}
-            <Button variant="ghost" size="sm" onClick={() => setObserving(false)}>
-              Back to the job
-            </Button>
-            <Kbd>Esc</Kbd>
-          </>
-        ),
-      };
-    }
-    if (reading !== null) {
-      return {
-        title: "Active jobs",
-        summary,
-        actions: (
-          <>
-            <Button variant="ghost" size="sm" onClick={close}>
-              Back to the list
-            </Button>
-            <Kbd>Esc</Kbd>
-          </>
-        ),
-      };
-    }
-    if (composing) {
-      return {
-        title: "New job",
-        summary: "It lands at the approval gate. Nothing runs until you release it.",
-        actions: (
-          <Button variant="ghost" size="sm" onClick={() => setComposing(false)}>
-            Cancel
-          </Button>
-        ),
-      };
-    }
-    return {
-      title: "Active jobs",
-      summary,
-      actions: (
-        <>
-          {/* Re-reads over the connection Bridge already holds. It does not
-              reconnect: dropping a working socket does not fix one that is
-              broken, and the runtime-file path already retries on its own. */}
-          <Button variant="ghost" size="sm" onClick={() => void refresh()} disabled={refreshing}>
-            {refreshing ? "Refreshing" : "Refresh"}
-          </Button>
-          {/* The one accent fill on the surface. */}
-          <Button variant="primary" onClick={() => setComposing(true)} disabled={!live}>
-            New job
-          </Button>
-        </>
-      ),
-    };
-  }
+  const head = headOf({
+    watching,
+    reading: reading !== null,
+    composing,
+    summary,
+    live,
+    refreshing,
+    onCloseTurns: () => setObserving(false),
+    onCloseJob: close,
+    onCloseComposer: () => setComposing(false),
+    onCompose: () => setComposing(true),
+    onRefresh: () => void refresh(),
+  });
 
   return (
     <>
@@ -380,7 +360,7 @@ export function App() {
           {/* One Job, read whole, in place of the board. Reviewing and deciding
               is one loop, so the detail is not a panel beside the list — and the
               list is what Escape and the control in the head both return to. */}
-          {reading !== null && observing ? (
+          {watching && reading !== null ? (
             /* One Job's turns, read while they are still being written. It
                replaces the detail rather than sitting beside it: watching is
                opened on one Job deliberately and closed, and Bridge stays a
@@ -406,10 +386,21 @@ export function App() {
                 now={now}
                 acting={acting === reading.id}
                 approving={state.approving.includes(reading.id)}
+                deciding={deciding === reading.id}
+                observed={state.observed}
+                recorded={{
+                  footprint: state.footprint,
+                  history: state.history,
+                  evidence: state.evidence,
+                  diff: state.diff,
+                }}
                 onAct={(what, jobId) => setConfirming({ act: what, jobId })}
                 onRedirect={(jobId, instruction) => void redirect(jobId, instruction)}
                 onApprove={(jobId) => void approve(jobId)}
-                onObserve={() => setObserving(true)}
+                onApproveReview={(jobId) => void decide(jobId, "approve")}
+                onRequestChanges={(jobId, note) => void decide(jobId, "changes", note)}
+                onReject={(jobId) => void decide(jobId, "reject")}
+                onObserve={setObserving}
                 onCopied={setCopied}
               />
             </Boundary>

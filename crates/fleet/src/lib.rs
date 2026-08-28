@@ -95,14 +95,18 @@ pub mod drafting;
 pub mod drone;
 mod drone_moves;
 pub mod evidence;
-pub mod gate;
+pub mod footprint;
+mod gate;
 pub mod judging;
 mod landing;
 pub mod mint;
 pub mod process;
+pub mod proposal;
+pub mod proposing;
 pub mod redispatch;
 pub mod resume;
 mod review;
+pub mod reviewing;
 pub mod runtime;
 pub mod scope;
 pub mod serving;
@@ -131,6 +135,8 @@ pub use gate::{apply, rule_on, CheckBudget, CheckOutput, Ruling};
 pub use judging::{CallFailed, JudgeBudget, Judging};
 pub use mint::{Mint, UlidMint};
 pub use process::{holder_of, Holder, ProbeFailed, StartedAt};
+pub use proposal::{proposed, Proposing};
+pub use proposing::{NotProposed, Proposal, ProposedJob, Unresolved};
 pub use redispatch::Replacement;
 pub use runtime::{
     machine_path, provisional_address, Presence, PublishError, Published, ReadError, RuntimeFile,

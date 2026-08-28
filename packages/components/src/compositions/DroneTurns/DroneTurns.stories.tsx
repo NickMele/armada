@@ -40,7 +40,14 @@ function thinking(from: number, rows: number, at: string): DroneTurn[] {
   }));
 }
 
-/** The ordinary transcript: a session, some prose, and calls with their answers. */
+/**
+ * The ordinary transcript: a session, some prose, and calls with their answers.
+ *
+ * The third call carries no detail, which is the wire saying it had no name for
+ * that tool's arguments rather than a field that failed to arrive — so the row
+ * falls back to the call id, which is then the only thing telling it from the
+ * next `Bash`.
+ */
 const turns: DroneTurn[] = [
   {
     id: "1",
@@ -60,21 +67,31 @@ const turns: DroneTurn[] = [
     id: "3",
     at: "09:14:04",
     kind: "called",
-    subject: "Read · call_7f21",
+    subject: "Read",
+    detail: "src/settings.rs",
     answer: "Answered.",
   },
   {
     id: "4",
     at: "09:14:09",
     kind: "called",
-    subject: "Bash · call_7f22",
+    subject: "Bash",
+    detail: "cargo test -p settings --lib",
     answer: "Answered, and the tool itself failed.",
   },
   {
     id: "5",
+    at: "09:14:10",
+    kind: "called",
+    subject: "TodoWrite · call_7f23",
+    answer: "Answered.",
+  },
+  {
+    id: "6",
     at: "09:14:11",
     kind: "called",
-    subject: "Edit · call_7f23",
+    subject: "Edit",
+    detail: "src/settings.rs +42 -18",
     answer: "No answer yet.",
   },
 ];
@@ -125,13 +142,13 @@ export const RefusedUnrecognisedAndUnreadable: Story = {
 };
 
 /**
- * What a call did, where the wire carries it.
+ * What a call did, as the wire carries it.
  *
- * **Not derived from the tool name, ever.** Until `Saw::Called` carries it a
- * row shows the tool and the opaque call id, which is what made twenty-two
- * rows read alike. The last row is a value the wire cut short — a `Write`
- * argument is a whole file — and it renders as cut rather than as the whole
- * thing.
+ * **Not derived from the tool name, ever.** A row that has no detail shows the
+ * tool and the opaque call id instead, which is what made twenty-two rows read
+ * alike and is why the wire carries this at all. The last row is a value the
+ * wire cut short — a `Write` argument is a whole file — and it renders as cut
+ * rather than as the whole thing.
  */
 export const WhatEachCallDid: Story = {
   args: {

@@ -1,0 +1,131 @@
+/* Job outcome — what a finished Job produced. A well, because it is a record
+   being read rather than a surface being acted on: the same treatment the rail
+   and the transcript take, and for the same reason. */
+.armada-outcome {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+}
+
+/* Five tracks declared once on the list and borrowed by each row through
+   `subgrid`, so the names and the values line up down the whole region rather
+   than per row. Each is a floor and never a fixed width — a fixed one truncates
+   the longest branch name against empty space, which is the defect the
+   fixed-width column rule produced. The value track is the `minmax(0, 1fr)`
+   that absorbs the slack, so growth lands in one deliberate place. */
+.armada-outcome__parts {
+  display: grid;
+  grid-template-columns:
+    min-content
+    max-content
+    minmax(0, 1fr)
+    max-content
+    max-content;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-outcome__part {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  min-width: 0;
+}
+
+/* A glyph the icon registry has no row for keeps its column, so the rows stay
+   aligned; it just renders empty. Nothing is borrowed to fill it. */
+.armada-outcome__mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-4);
+  color: var(--fg-muted);
+}
+
+/* What the part is. Sans, muted: it labels the value rather than being one. */
+.armada-outcome__name {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+/* The value. Mono, because every one of these is machine-derived, and one step
+   under the sans beside it. It copies on click and says so by going to
+   --accent on hover — no `copy` glyph: the affordance token is the affordance. */
+.armada-outcome__value {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-outcome__value:hover {
+  color: var(--accent);
+}
+
+/* Why there is no value. Sans, because it is a sentence and not a fact, and
+   --fg-subtle because the row is still there and the value is not. */
+.armada-outcome__absent {
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+/* What is known beside the value. Mono and neutral — nothing below Job level
+   declares a hue for a file count, so it stays neutral. */
+.armada-outcome__meta {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.armada-outcome__action {
+  display: flex;
+  align-items: center;
+}
+
+/* What is still owed. Muted because it is standing copy rather than a value,
+   and inside the well because it is about the branch the well names. */
+.armada-outcome__note {
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: var(--border-width) solid var(--border-subtle);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* The mark's accessible name. The value beside it is machine text, so the row
+   would otherwise read as a bare path with nothing saying what it is of. */
+.armada-outcome__sr {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  padding: 0;
+  margin: calc(var(--border-width) * -1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

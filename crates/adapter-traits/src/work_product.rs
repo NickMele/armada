@@ -16,8 +16,8 @@
 //!
 //! # Paths and a patch, read separately
 //!
-//! [`Changed`] carries which files moved; [`Patch`] carries what changed in
-//! them. Two calls rather than one because the mechanical tier only ever needs
+//! [`Changed`] carries which files moved and how — added, modified, deleted;
+//! [`Patch`] carries what changed inside them. Two calls rather than one because the mechanical tier only ever needs
 //! a count, and the bytes are read solely when a step's Judge fires — which on
 //! most steps is never. A single call returning both would put the expensive
 //! read behind every `diff_nonempty`.
@@ -27,41 +27,111 @@ use alloc::vec::Vec;
 
 use crate::worktree::Worktree;
 
+/// What happened to one file.
+///
+/// **A closed set that cannot need widening**, which is why every delta the
+/// implementation can report has a variant here rather than a shared "other".
+/// It is read by a person watching a Drone work, and the moment it grows a
+/// variant the surface reading it has a case it was not built for — so the set
+/// is drawn once, from what git itself can say, and left alone.
+///
+/// An untracked file is [`Change::Added`]: a Drone that wrote a new file and
+/// did not stage it has added it, and the staging is not the part anyone
+/// watching is asking about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Change {
+    /// The file did not exist at the base. Staged or not.
+    Added,
+    /// The file existed and its contents moved.
+    Modified,
+    /// The file existed at the base and does not now.
+    Deleted,
+    /// The same content under a different path.
+    Renamed,
+    /// The same content under a second path, the first still there.
+    Copied,
+    /// A file became a directory, a symlink, or the reverse. Not a content
+    /// change, and a surface that showed it as one would be wrong.
+    TypeChanged,
+    /// A merge left conflict markers rather than a resolved file.
+    Conflicted,
+    /// The file is in the diff and could not be read. **Not an empty change** —
+    /// the reading of that one path failed and the rest did not.
+    Unreadable,
+}
+
+/// One file the Job has changed, and what happened to it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChangedFile {
+    path: String,
+    change: Change,
+}
+
+impl ChangedFile {
+    pub fn new(path: String, change: Change) -> ChangedFile {
+        ChangedFile { path, change }
+    }
+
+    /// Repository-relative, as the implementation read it.
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    pub fn change(&self) -> Change {
+        self.change
+    }
+}
+
 /// The files a Job has changed in its worktree.
 ///
 /// **Fleet's own reading**, never a number a Drone reported. `diff_nonempty` is
 /// a gating check, and a gating fact that arrives from the thing being gated is
 /// not a fact.
+///
+/// It carries a [`Change`] per file and not only a path. The kind costs
+/// nothing — the delta the implementation already walked is where it comes
+/// from — and a list of bare names cannot tell a file the Drone deleted from
+/// one it wrote, which is the difference a person watching is looking for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Changed {
-    paths: Vec<String>,
+    files: Vec<ChangedFile>,
 }
 
 impl Changed {
     /// Record what an implementation found. Called by the implementation that
     /// read the repository, and by a fake standing in for one.
-    pub fn of(paths: Vec<String>) -> Changed {
-        Changed { paths }
+    pub fn of(files: Vec<ChangedFile>) -> Changed {
+        Changed { files }
     }
 
     /// Nothing changed. Named, because it is the answer that fails a
     /// `diff_nonempty` check and a caller writing `Changed::of(Vec::new())`
     /// reads as though something went wrong.
     pub fn nothing() -> Changed {
-        Changed { paths: Vec::new() }
+        Changed { files: Vec::new() }
+    }
+
+    /// Every file, with its kind, in the order the implementation reported
+    /// them.
+    pub fn files(&self) -> &[ChangedFile] {
+        &self.files
     }
 
     /// Repository-relative, in the order the implementation reported them.
-    pub fn paths(&self) -> &[String] {
-        &self.paths
+    ///
+    /// A fresh `Vec` rather than a borrow: the scope comparison takes a slice
+    /// of owned paths, and the kind lives beside each path rather than in a
+    /// second list that could disagree with the first.
+    pub fn paths(&self) -> Vec<String> {
+        self.files.iter().map(|file| file.path.clone()).collect()
     }
 
     pub fn len(&self) -> usize {
-        self.paths.len()
+        self.files.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.paths.is_empty()
+        self.files.is_empty()
     }
 }
 

@@ -59,11 +59,13 @@ use crate::adrift::Adrift;
 use crate::clock::Clock;
 use crate::converging::{StepNorms, Wandering};
 use crate::delivery::Delivered;
+use crate::drafting::StatedBy;
 use crate::drone::{aftermath, environment, Aftermath, Ending, HostPaths};
 use crate::evidence::EvidenceInbox;
 use crate::gate::{CheckBudget, Ruling};
 use crate::judging::{JudgeBudget, Judging};
 use crate::mint::Mint;
+use crate::proposal::Proposing;
 use crate::scope::Drifting;
 use crate::working::Working;
 
@@ -133,6 +135,10 @@ pub struct Fittings<H, V, W> {
     /// composition root**, like every other input here — which model is cheap
     /// is a vendor's fact, and nothing below Fleet may spell one.
     pub judge_model: Model,
+    /// What a dispatch request is read by. **Its own dial and not the Judge's**
+    /// — this call fires on every dispatch rather than on every criterion, so
+    /// the two are raised for different reasons and at different prices.
+    pub proposer_model: Model,
     /// The models a Job may name, and the one it gets when it names none.
     ///
     /// **Resolved by the composition root, like every other input here.**
@@ -197,6 +203,7 @@ pub struct Fleet<H, V, W> {
     judge: Arc<dyn ModelClient + Send + Sync>,
     judge_budget: JudgeBudget,
     judge_model: Model,
+    proposer_model: Model,
     models: ipc::ModelChoices,
     events: api::Broadcaster,
     /// Every Job somebody could be watching. **Minted here, not a fitting** —
@@ -245,6 +252,7 @@ where
             judge: fittings.judge,
             judge_budget: fittings.judge_budget,
             judge_model: fittings.judge_model,
+            proposer_model: fittings.proposer_model,
             models: fittings.models,
             events: fittings.events,
             turns: api::Turns::new(),
@@ -306,11 +314,16 @@ where
     /// that holds one Job.
     pub async fn turn(&self) -> Result<Turned, Adrift> {
         let mut working = self.working.lock().await;
+        // First, because the reading it takes is the one the drift check needs
+        // and a turn must not open the same repository twice. It answers `None`
+        // on the turns it declines to read, and the drift check then reads for
+        // itself exactly as it did before this existed.
+        let footprint = self.watch_footprint(&mut working).await;
         // Before the gate, so a step whose evidence lands this turn has its
         // last live reading taken while its Drone is still the one being
         // watched — and after nothing, because the check reads a worktree and
         // must not run against a slot the gate has just cleared.
-        let drifting = self.watch_scope(&mut working).await;
+        let drifting = self.watch_scope(&mut working, footprint.as_ref()).await;
         // After the drift reading it consumes and before the gate, which is the
         // one place both are true: a step whose evidence lands this turn is at
         // the gate rather than thrashing, and `settle` may clear the slot.
@@ -341,8 +354,22 @@ where
     /// creates no Job of its own accord at M1, and the log envelope's actor
     /// vocabulary has no fourth value to distinguish the two with.
     pub async fn propose(&self, proposal: ipc::ProposeJob) -> Result<Job, Adrift> {
+        // Hand entry, which is the override rather than the path. Entry zero
+        // records that a person stated this scope and not the call, which is
+        // what makes the call evaluable against the decisions people made.
+        self.proposed_job(proposal, StatedBy::APerson).await
+    }
+
+    /// The same creation, with who stated the scope carried through to entry
+    /// zero. **The only difference between the two dispatch paths**, which is
+    /// why they share everything below it.
+    pub(crate) async fn proposed_job(
+        &self,
+        proposal: ipc::ProposeJob,
+        stated: StatedBy,
+    ) -> Result<Job, Adrift> {
         let at = self.now();
-        let (new, origin) = self.drafted(proposal)?;
+        let (new, origin) = self.drafted(proposal, stated, &at)?;
         let job = Job::create_top_level(new, origin, at.clone());
         self.store
             .lock()
@@ -519,6 +546,23 @@ where
             client: Arc::clone(&self.judge),
             budget: self.judge_budget,
             default_model: self.judge_model.clone(),
+            environment: environment(HostPaths {
+                path: &self.host.path,
+                user: &self.host.user,
+                home: &self.host.home,
+            })?,
+        })
+    }
+    /// What the dispatch path needs in order to ask the proposer.
+    ///
+    /// **The Judge's client and the Judge's budget**, because the call is the
+    /// same call: one turn, no toolset, no directory. Only the model differs,
+    /// and only because it is a separate dial.
+    pub(crate) fn proposing(&self) -> Result<Proposing, SpawnConfigRefused> {
+        Ok(Proposing {
+            client: Arc::clone(&self.judge),
+            budget: self.judge_budget,
+            model: self.proposer_model.clone(),
             environment: environment(HostPaths {
                 path: &self.host.path,
                 user: &self.host.user,

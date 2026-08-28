@@ -1,0 +1,149 @@
+/* Transition history — a well, because it is a record being read rather than a
+   surface being acted on. The same treatment the rail and the transcript take,
+   and for the same reason: nothing in it is actionable, and nothing in it can
+   be. */
+.armada-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+}
+
+/* Five tracks declared once on the list and borrowed by each row through
+   `subgrid`, so the key, the instant, the kind and the actor line up down the
+   whole history rather than per row — which is what makes a sequence readable
+   as a sequence. Each is a floor and never a fixed width; the body is the
+   `minmax(0, 1fr)` that absorbs the slack, so growth lands in one place. */
+.armada-history__moves {
+  display: grid;
+  grid-template-columns:
+    max-content
+    max-content
+    max-content
+    minmax(0, 1fr)
+    max-content;
+  column-gap: var(--space-3);
+  row-gap: calc(var(--space-1) / 2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-history__move {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+/* Every one of these is machine-derived, so every one of them is mono and none
+   of them is hued: no vocabulary in the repository colours a movement kind, and
+   hue below Job level exists only where the status tokens declare it. */
+.armada-history__seq,
+.armada-history__at,
+.armada-history__kind,
+.armada-history__subject,
+.armada-history__moved,
+.armada-history__actor {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  white-space: nowrap;
+}
+
+/* The log's own key. Drawn as well as obeyed — it is what a person joins to
+   when they go and look at the row. Subtle: it orders the list, it is not the
+   fact the list carries. */
+.armada-history__seq {
+  color: var(--fg-subtle);
+  text-align: end;
+}
+
+.armada-history__at {
+  color: var(--fg-subtle);
+}
+
+/* What moved. The scan column, in place of a glyph the registry does not have
+   for any of the three. */
+.armada-history__kind {
+  color: var(--fg-muted);
+}
+
+.armada-history__body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+.armada-history__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Which one moved. With a move beside it the id is the label and the move is
+   the value, so the id takes the lower weight. */
+.armada-history__subject {
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.armada-history__moved {
+  color: var(--fg-default);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+/* Why it moved. Sans, because a reason is read as language rather than looked
+   up as a value — and it is the one thing on the row a person is chasing. */
+.armada-history__why {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+
+/* Who caused it. Three values, at the trailing edge, subtle: it qualifies the
+   move rather than being it. */
+.armada-history__actor {
+  color: var(--fg-subtle);
+}
+
+/* What the list is. Sans, because it is a sentence about the history rather
+   than a row of it. */
+.armada-history__note {
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: var(--border-width) solid var(--border-subtle);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* No moves at all. A job created and not yet moved is an ordinary answer, so
+   this is a sentence in the well rather than an error treatment. */
+.armada-history__empty {
+  margin: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}

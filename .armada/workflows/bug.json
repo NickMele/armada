@@ -4,48 +4,84 @@
 # `crates/core-model/domain/workflow-samples/bug.json`, and the two are not
 # duplicates. Read this before reconciling them:
 #
-#   - **That one is the designed workflow, and it is correct.** Seven steps —
-#     repro, root_cause, fix, regression_verify, review, merge, close — with
-#     judge checks, evidence scopes, gate policy, and a `review` step that
+#   - **That one is the designed workflow.** Seven steps -- repro, root_cause,
+#     fix, regression_verify, review, merge, close -- with a `review` step that
 #     routes `request_changes` back to `fix`. It declares `structure: "loop"`,
 #     which is what that routing makes it. It is the authority on what Bug
 #     becomes, and it lives with the registry that records that decision.
 #
-#   - **This one is M1's reduced form, and it is what runs today.** Three
-#     steps, no Judge, no loop, `advance_gate: auto` throughout. Reducing it
-#     is the only way to have a workflow that dispatches at all right now.
-#     `implement` carries the test check itself rather than handing off to a
-#     separate `verify` step — the Drone never runs a Check; Fleet does, after
-#     the Drone reports its diff, and a step the Drone cannot advance past
-#     until build and test both pass needs no second step to say so again.
+#     **It is stale in three ways that matter here**, and `crates/config`
+#     refuses each: it spells a judge check's question as a bare `question` key
+#     where the parser reads `criteria[]` of `{criterion_id, question}`; it
+#     parents `declare_plan_at` inside `evidence_scope` where the registry
+#     parents it to the step; and it carries `reference_docs` and
+#     `max_context_size` inside `evidence_scope`, neither of which M1 reads.
+#     Do not port from it by copying. The questions are worth taking; the
+#     shape is not.
 #
-#   - **The designed one does not load at M1, and that is not a defect in it.**
-#     `crates/config` carries one of the two structures and one of the four
-#     advance gates, because there is no Judge to answer
-#     `auto_if_judge_passes` and no verdict to route a loop on. Its refusal is
-#     `OutsideM1` — a value the schema sanctions that this milestone has not
-#     built. The fix is a later milestone, not an edit to that file.
+#   - **This one is M1's reduced form, and it is what runs today.** Three
+#     steps, no loop. It is no longer Judgeless: `plan` and `implement` each
+#     carry a `judge_checks[]` entry and gate on `auto_if_judge_passes`, and
+#     `implement` declares its plan at step start so Fleet compares live edits
+#     against it throughout the step. `implement` carries the build and test
+#     checks itself rather than handing off to a separate `verify` step -- the
+#     Drone never runs a Check; Fleet does, after the Drone reports its diff,
+#     and a step the Drone cannot advance past until build and test both pass
+#     needs no second step to say so again.
+#
+#   - **`handoff` carries no Judge, and that is deliberate.** A step with no
+#     criterion asks the Judge nothing; `merge` and `close` carry none in the
+#     designed file for the same reason. A Judge on a summary would spend a
+#     call on an answer nothing gates.
+#
+#   - **The designed one still does not load at M1.** `crates/config` carries
+#     one of the two structures and three of the four advance gates: `auto`,
+#     `auto_if_judge_passes` and `human_always` are read, `manifest_rule:*` is
+#     refused as `OutsideM1`. Bug's own `review` step is one of the refused
+#     ones -- its gate is `manifest_rule:review_gate`, which resolves per
+#     repository and across a Convoy's gating Manifests, and neither is built.
+#     **That is why Bug has no human gate below while Feature, Revert,
+#     Prototype and Design Plan do**: those four spell `human_always` as a
+#     literal in the designed file, and this one does not.
 #
 # So: do not reconcile them, and do not copy one over the other. When M1's
-# gates grow a Judge and a loop, this file goes away and the designed
+# gates grow a loop and a Manifest rule, this file goes away and the designed
 # definition is what a repository ships.
 #
 # A `#` comment is YAML, not JSON. `crates/config` reads both files with a YAML
-# parser — JSON is a subset of YAML — so this loads, but a strict JSON reader
+# parser -- JSON is a subset of YAML -- so this loads, but a strict JSON reader
 # will not take it. The extension is kept because the step names this path and
 # because a repository's workflows are the shape `workflow-samples/` already
 # established.
 #
-# Six fields, and no others. `version`, `workflow_id`, `name`, `structure`,
+# Nine fields, and no others. `version`, `workflow_id`, `name`, `structure`,
 # `steps[]`, and within a step `id`, `label`, `evidence_type`,
-# `mechanical_checks[]` and `advance_gate`. Everything else in the schema is
-# refused by name.
+# `mechanical_checks[]`, `judge_checks[]`, `evidence_scope`, `declare_plan_at`
+# and `advance_gate`. Everything else in the schema is refused by name.
 #
-# `workflow_id` is the key the designed definition beside this one already
-# carried and M1 did not read. Without it nothing joined a proposal's
-# `workflow_id` to a workflow, so a Job could be proposed against a workflow
-# that does not exist, stored, and shown on the board claiming one Fleet has
-# never heard of. The value is the slug, exactly as the designed file spells it.
+# `advance_gate` and `judge_checks[]` are two statements of one thing and a
+# file that makes them disagree is refused: `auto_if_judge_passes` with no
+# firing check, or `auto` with one, is a refusal rather than something the
+# parser resolves.
+#
+# **`human_always` is outside that rule, in both directions.** The rule compares
+# a gate that names a tier against that tier's declaration, and `human_always`
+# names an actor: a person answers, and no tier decides. A Judge on such a step
+# is not spent on an answer nothing reads -- a refusal stops the step before the
+# work reaches a person, and a criterion it did not refuse is written down
+# beside the evidence they open. So a human gate loads with a Judge and without
+# one, and the designed samples declare it both ways.
+#
+# **`handoff` is gated `human_always`.** The designed file reaches a human gate
+# through `manifest_rule:review_gate`, which is still refused as `OutsideM1`, so
+# this is not ported -- it is the owner's decision, taken Aug 28 2026: every
+# workflow that produces code stops before it lands. A Job that writes a diff and
+# finishes without a person having read it is the thing this gate exists to
+# prevent, and `bug` is the workflow actually dispatched most.
+#
+# The gate-and-judge agreement rule does not apply to it. That rule compares a
+# gate naming a *tier* against that tier's declaration; `human_always` names an
+# *actor*, so a step may carry it with or without a Judge.
 {
   "version": 1,
   "workflow_id": "bug",
@@ -56,24 +92,96 @@
       "id": "plan",
       "label": "Plan the change",
       "evidence_type": "facts_note",
-      "advance_gate": "auto"
+      "evidence_scope": {
+        "context_source": "drone_declared",
+        "exclude_paths": [
+          ".env",
+          "node_modules/",
+          "target/"
+        ]
+      },
+      "judge_checks": [
+        {
+          "enabled": true,
+          "model": "haiku",
+          "criteria": [
+            {
+              "criterion_id": "names_a_root_cause",
+              "question": "Does this plan name a specific root cause, rather than restating the reported symptom?"
+            },
+            {
+              "criterion_id": "plan_matches_request",
+              "question": "Does this plan address what was actually asked, without expanding beyond it?"
+            }
+          ]
+        }
+      ],
+      "advance_gate": "auto_if_judge_passes"
     },
     {
       "id": "implement",
       "label": "Implement",
       "evidence_type": "diff",
       "mechanical_checks": [
-        { "type": "manifest_check", "check": "build", "expect_exit_code": 0 },
-        { "type": "manifest_check", "check": "test", "expect_exit_code": 0 },
-        { "type": "diff_nonempty" }
+        {
+          "type": "manifest_check",
+          "check": "build",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "test",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "diff_nonempty"
+        }
       ],
-      "advance_gate": "auto"
+      "declare_plan_at": "step_start",
+      "evidence_scope": {
+        "context_source": "drone_declared",
+        "exclude_paths": [
+          ".env",
+          "node_modules/",
+          "target/"
+        ],
+        "scope_diff_check": true
+      },
+      "judge_checks": [
+        {
+          "enabled": true,
+          "model": "haiku",
+          "criteria": [
+            {
+              "criterion_id": "addresses_the_cause",
+              "question": "Does this diff address the root cause named in the plan, rather than masking the symptom?"
+            },
+            {
+              "criterion_id": "nothing_beyond_the_plan",
+              "question": "Does this diff change anything the plan did not describe?"
+            }
+          ],
+          "gaming_check": {
+            "enabled": true,
+            "baseline_ref": "plan.evidence",
+            "flag_if": [
+              "assertion_weakened",
+              "test_scope_narrowed",
+              "tautological_test",
+              "test_skipped",
+              "test_deleted",
+              "check_config_edited"
+            ]
+          }
+        }
+      ],
+      "advance_gate": "auto_if_judge_passes"
     },
     {
       "id": "handoff",
       "label": "Summarise",
       "evidence_type": "facts_note",
-      "advance_gate": "auto"
+      "advance_gate": "human_always"
     }
   ]
 }

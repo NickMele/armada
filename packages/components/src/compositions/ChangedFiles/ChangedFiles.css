@@ -1,0 +1,119 @@
+/* Changed files — a well, because it is a record being read rather than a
+   surface being acted on. The same treatment the rail and the transcript take,
+   and for the same reason: nothing in it is actionable. */
+.armada-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+}
+
+/* Three tracks declared once on the list and borrowed by each row through
+   `subgrid`, so the kind and the drift mark line up down the whole list rather
+   than per row. Each is a floor and never a fixed width — a fixed one truncates
+   the longest path against empty space, which is the defect the fixed-width
+   column rule produced. The path is the `minmax(0, 1fr)` that absorbs the
+   slack, so growth lands in one deliberate place. */
+.armada-files__list {
+  display: grid;
+  grid-template-columns:
+    max-content
+    minmax(0, 1fr)
+    max-content;
+  column-gap: var(--space-3);
+  row-gap: calc(var(--space-1) / 2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-files__file {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+/* The wire's own word for what happened. Mono and muted: it is machine-derived
+   and it labels the path rather than being one. No hue — `enum-verbs.toml`
+   carries no `change_kind` rows, and everything below Job level stays neutral
+   unless `tokens/status.css` declares otherwise. */
+.armada-files__change {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+/* The path. Mono, because it is machine-derived, and it copies on click —
+   a path is a thing that gets pasted into a shell. It says so by going to
+   --accent on hover: no `copy` glyph, the affordance token is the affordance. */
+.armada-files__path {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-files__path:hover {
+  color: var(--accent);
+}
+
+/* Outside the declared plan. Sans, because it is a phrase and not a value, and
+   --fg-default against muted neighbours — weight, not hue. A drift state is one
+   of the things the design system names as staying neutral below Job level, and
+   a hued one would read as a judgement the mark does not make. */
+.armada-files__mark {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+  white-space: nowrap;
+}
+
+/* The surface is the other half of the mark: it keeps a drifted row findable
+   while the list is scrolled, which a trailing word alone does not. Constant,
+   never selection — nothing in this list is selectable. */
+.armada-files__file[data-outside] {
+  background: var(--bg-raised);
+}
+
+/* Where the reading came from. Sans, because it is a sentence about the list
+   rather than a row of it. */
+.armada-files__note {
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: var(--border-width) solid var(--border-subtle);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* No files at all. A drone that has changed nothing yet is an ordinary answer,
+   so this is a sentence in the well rather than an error treatment. */
+.armada-files__empty {
+  margin: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}

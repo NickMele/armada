@@ -34,7 +34,10 @@
 //! `mechanical_checks`, **all entries must pass** — the array exists because
 //! `implement` needs both that the build succeeded and that the diff is
 //! non-empty, since a build passes cleanly on an empty diff and a Drone that
-//! did nothing would otherwise advance on the build alone.
+//! did nothing would otherwise advance on the build alone. `human_always`
+//! means the tiers still run and a person decides; the gate reader says why
+//! the fourth value is still refused, and the step reader why the agreement
+//! rule does not reach a human gate.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -85,7 +88,7 @@ const GATE_LEGAL: &[&str] = &[
     "human_always",
     "manifest_rule:<key>",
 ];
-const GATE_CARRIED: &[&str] = &["auto", "auto_if_judge_passes"];
+const GATE_CARRIED: &[&str] = &["auto", "auto_if_judge_passes", "human_always"];
 
 const EVIDENCE_CARRIED: &[(&str, EvidenceType)] = &[
     ("diff", EvidenceType::Diff),
@@ -399,6 +402,21 @@ fn step(
     // Judge that asks nothing would advance on the mechanical tier alone while
     // reading as verified; a step that asks and is gated `auto` spends money on
     // an answer nothing reads.
+    //
+    // **`human_always` is in neither disagreement, in either direction**, and
+    // that is not an exemption carved for it — it is the rule's own premise not
+    // applying. The rule compares a gate that names a *tier* against that
+    // tier's declaration. `human_always` names an actor: a person answers, and
+    // no tier decides. So neither failure it detects can arise. Nothing advances
+    // on the mechanical tier alone while reading as verified, because nothing
+    // advances on the machine's say-so at all. And a Judge here is not spent on
+    // an answer nothing reads — a refusal stops the step before the work reaches
+    // a person, and a criterion it did not refuse is written down beside the
+    // evidence they open. The designed samples declare a human gate both ways —
+    // Feature's and Revert's `review` carry a Judge, Design Plan's `present` and
+    // Prototype's `build` carry none — and both are legitimate, which is what
+    // separates this from `auto` with a Judge, where the answer has nowhere to
+    // go at all.
     let judged = judge_checks.iter().any(JudgeCheck::fires);
     let disagrees = matches!(
         (advance_gate, judged),
@@ -432,6 +450,13 @@ fn step(
 /// a prefix form — `manifest_rule:<key>` — and a closed word list cannot match
 /// it. Getting this wrong would refuse `manifest_rule:auto_merge` as a typo
 /// when it is a real value M1 has not reached.
+///
+/// **That prefix form is the only one still refused.** It names a key resolved
+/// against a Manifest-level policy and then across a Convoy's gating Manifests,
+/// and neither is built — so reading it as the value the settings row happens to
+/// default it to would be this parser answering a repository's question for it.
+/// `human_always` needs none of that machinery: it names a person, and the acts
+/// a person takes at the gate are `fleet::reviewing`'s and exist.
 fn gate(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<AdvanceGate> {
     let found = yaml::text(at, value, out)?;
     if found == "auto" {
@@ -440,7 +465,14 @@ fn gate(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<AdvanceGate> 
     if found == "auto_if_judge_passes" {
         return Some(AdvanceGate::AutoIfJudgePasses);
     }
-    let deferred = found.starts_with("manifest_rule:") || found == "human_always";
+    if found == "human_always" {
+        return Some(AdvanceGate::HumanAlways);
+    }
+    // The prefix form and nothing else. A `manifest_rule:<key>` names a policy
+    // that resolves per repository and across a Convoy's gating Manifests, and
+    // reading it as the value that policy would most often produce would be
+    // this parser deciding a repository's question for it.
+    let deferred = found.starts_with("manifest_rule:");
     let fault = if deferred {
         Fault::OutsideM1 {
             value: found,

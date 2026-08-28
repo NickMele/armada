@@ -30,8 +30,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-use adapter_traits::{Changed, Footprint, Patch, WorkProduct, Worktree};
-use git2::{Diff, DiffOptions, Oid, Repository};
+use adapter_traits::{Change, Changed, ChangedFile, Footprint, Patch, WorkProduct, Worktree};
+use git2::{Delta, Diff, DiffOptions, Oid, Repository};
 
 use crate::error::ReadWorkProductError;
 use crate::worktree::GitVcs;
@@ -41,29 +41,8 @@ impl WorkProduct for GitVcs {
 
     fn changed_files(&self, worktree: &Worktree) -> Result<Changed, Self::Error> {
         let (repo, base) = opened(worktree)?;
-        let path = worktree.path();
-        let tree = repo
-            .find_commit(base)
-            .and_then(|commit| commit.tree())
-            .map_err(|cause| ReadWorkProductError::BaseUnreadable {
-                worktree: path.to_string(),
-                base: base.to_string(),
-                cause,
-            })?;
-
-        let mut options = DiffOptions::new();
-        options
-            .include_untracked(true)
-            .recurse_untracked_dirs(true)
-            .include_typechange(true);
-        let diff = repo
-            .diff_tree_to_workdir_with_index(Some(&tree), Some(&mut options))
-            .map_err(|cause| ReadWorkProductError::DiffFailed {
-                worktree: path.to_string(),
-                cause,
-            })?;
-
-        Ok(Changed::of(paths(&diff)))
+        let diff = diff_of(&repo, base, worktree)?;
+        Ok(Changed::of(files(&diff)))
     }
 
     fn footprint(&self, worktree: &Worktree) -> Result<Footprint, Self::Error> {
@@ -71,35 +50,15 @@ impl WorkProduct for GitVcs {
         let root = Path::new(path);
         let changed = self.changed_files(worktree)?;
         let mut entries = Vec::with_capacity(changed.len());
-        for named in changed.paths() {
-            entries.push((named.clone(), held(root, named, path)?));
+        for file in changed.files() {
+            entries.push((file.path().to_string(), held(root, file.path(), path)?));
         }
         Ok(Footprint::of(entries))
     }
 
     fn patch(&self, worktree: &Worktree) -> Result<Patch, Self::Error> {
         let (repo, base) = opened(worktree)?;
-        let path = worktree.path();
-        let tree = repo
-            .find_commit(base)
-            .and_then(|commit| commit.tree())
-            .map_err(|cause| ReadWorkProductError::BaseUnreadable {
-                worktree: path.to_string(),
-                base: base.to_string(),
-                cause,
-            })?;
-
-        let mut options = DiffOptions::new();
-        options
-            .include_untracked(true)
-            .recurse_untracked_dirs(true)
-            .include_typechange(true);
-        let diff = repo
-            .diff_tree_to_workdir_with_index(Some(&tree), Some(&mut options))
-            .map_err(|cause| ReadWorkProductError::DiffFailed {
-                worktree: path.to_string(),
-                cause,
-            })?;
+        let diff = diff_of(&repo, base, worktree)?;
 
         // Whole-diff rendering, patches and headers together, in git's own
         // text. A structured walk would be Armada deciding what a hunk means,
@@ -113,11 +72,46 @@ impl WorkProduct for GitVcs {
             true
         })
         .map_err(|cause| ReadWorkProductError::DiffFailed {
-            worktree: path.to_string(),
+            worktree: worktree.path().to_string(),
             cause,
         })?;
         Ok(Patch::of(text))
     }
+}
+
+/// The branch's whole diff: every change since the commit the branch was cut
+/// from, untracked files included.
+fn diff_of<'r>(
+    repo: &'r Repository,
+    base: Oid,
+    worktree: &Worktree,
+) -> Result<Diff<'r>, ReadWorkProductError> {
+    let path = worktree.path();
+    let tree = repo
+        .find_commit(base)
+        .and_then(|commit| commit.tree())
+        .map_err(|cause| ReadWorkProductError::BaseUnreadable {
+            worktree: path.to_string(),
+            base: base.to_string(),
+            cause,
+        })?;
+
+    let mut options = DiffOptions::new();
+    options
+        .include_untracked(true)
+        .recurse_untracked_dirs(true)
+        // Without it a new file the Drone never staged prints as a header and
+        // no lines, so the Judge is handed an empty patch for work that is
+        // plainly there — the same silence `include_untracked` is set to stop
+        // one call earlier. The file list already counted it; this is the
+        // rendering catching up with what this module says it does.
+        .show_untracked_content(true)
+        .include_typechange(true);
+    repo.diff_tree_to_workdir_with_index(Some(&tree), Some(&mut options))
+        .map_err(|cause| ReadWorkProductError::DiffFailed {
+            worktree: path.to_string(),
+            cause,
+        })
 }
 
 /// What one changed path holds, as a value two readings can be compared on.
@@ -156,8 +150,8 @@ fn held(root: &Path, named: &str, worktree: &str) -> Result<String, ReadWorkProd
     }
 }
 
-/// The worktree's repository and the commit its branch was cut from — the two
-/// readings both methods above start from.
+/// The worktree's repository and the commit its branch was cut from — what
+/// every reading above starts from.
 fn opened(worktree: &Worktree) -> Result<(Repository, Oid), ReadWorkProductError> {
     let path = worktree.path();
     let repo =
@@ -234,19 +228,45 @@ fn shared_git_dir(repo: &Repository) -> PathBuf {
     git_dir.to_path_buf()
 }
 
-/// Every path the diff names, deletions included.
+/// Every path the diff names with what happened to it, deletions included.
 ///
 /// A delta's new path is `None` for a deletion, and a deletion is a change —
 /// so the old path stands in. Nothing is deduplicated: git reports one delta
 /// per path already, and a rename arrives as two.
-fn paths(diff: &Diff<'_>) -> Vec<String> {
+fn files(diff: &Diff<'_>) -> Vec<ChangedFile> {
     diff.deltas()
         .filter_map(|delta| {
             delta
                 .new_file()
                 .path()
                 .or_else(|| delta.old_file().path())
-                .map(|path| path.to_string_lossy().into_owned())
+                .map(|path| {
+                    ChangedFile::new(path.to_string_lossy().into_owned(), change(delta.status()))
+                })
         })
         .collect()
+}
+
+/// git's word for what happened, in the vocabulary the wire carries.
+///
+/// **Untracked is added.** The options above ask for untracked files precisely
+/// because a Drone that wrote a file and did not stage it has produced work,
+/// and reporting the staging rather than the writing would answer a question
+/// nobody asked.
+///
+/// `Unmodified` and `Ignored` are not requested — no `include_unmodified`, no
+/// `include_ignored` — so neither reaches this function. They read as
+/// `Modified` rather than as a variant of their own, because a variant that
+/// cannot arrive is a case every reader has to handle and none can produce.
+fn change(status: Delta) -> Change {
+    match status {
+        Delta::Added | Delta::Untracked => Change::Added,
+        Delta::Deleted => Change::Deleted,
+        Delta::Renamed => Change::Renamed,
+        Delta::Copied => Change::Copied,
+        Delta::Typechange => Change::TypeChanged,
+        Delta::Conflicted => Change::Conflicted,
+        Delta::Unreadable => Change::Unreadable,
+        Delta::Modified | Delta::Unmodified | Delta::Ignored => Change::Modified,
+    }
 }

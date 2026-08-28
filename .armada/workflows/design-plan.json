@@ -6,10 +6,25 @@
 # is Armada's only instantiated loop: `draft` and `present`, with
 # `present`'s `request_changes` verdict routing back to `draft`. `structure:
 # loop` is not in M1's carried set, so this form keeps both steps and drops
-# the loop — one pass through `draft` then `present`, both auto, neither
-# gated, since the loop-back edge and the human gate it depends on are both
-# outside this milestone. A workflow this thin is not a defect in the
-# reduction; Design Plan has no mechanical tier even in the designed form.
+# the loop — one pass through `draft` then `present`.
+#
+# **`present` carries the designed `human_always`, which is now in M1's
+# carried set.** That is the half of the loop this milestone can honour: the
+# thing that ends a design plan is a person reading it, and they can now read
+# it. What is still missing is where `request_changes` goes -- the designed
+# file routes it back to `draft`, and without `structure: loop` it puts the
+# Drone back on `present` instead. Re-presenting is a nearer approximation of
+# a design conversation than advancing unread, which is what `auto` did.
+#
+# **This workflow carries no Judge, and that is a decision rather than an
+# omission.** The designed `design-plan.json` carries none either. Design Plan
+# is a back-and-forth the engineer ends when the design is in a good place --
+# `workflowdef-fields.toml` says treating that as a config error would break
+# it. The thing that ends a design plan is a person reading it, and the loop
+# that carries the reading back is `structure: loop`, which M1 does not have.
+#
+# So this stays thin until the loop lands, and a Judge would not make it less
+# thin -- it would gate a draft on a machine's opinion of a conversation.
 {
   "version": 1,
   "workflow_id": "design_plan",
@@ -26,7 +41,7 @@
       "id": "present",
       "label": "Present",
       "evidence_type": "document",
-      "advance_gate": "auto"
+      "advance_gate": "human_always"
     }
   ]
 }

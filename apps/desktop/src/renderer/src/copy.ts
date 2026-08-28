@@ -37,6 +37,10 @@ export function said(outcome: Outcome): string {
       return "That restart is already in flight. It was not sent twice.";
     case "empty_instruction":
       return "A redirect needs an instruction. Nothing was sent.";
+    case "already_deciding":
+      return "A decision on that job's work is already in flight. It was not sent twice.";
+    case "empty_note":
+      return "Requesting changes needs a note. Nothing was sent, and the job is still waiting.";
     case "refused":
       // Drawn as a failure notice above, with everything it carries.
       return "";

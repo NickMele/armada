@@ -36,6 +36,21 @@ transport = "HTTP"
 helm_access = "Yes"
 description = "Completed Jobs, chronological"
 
+[operations.get_diff]
+kind = "query"
+transport = "HTTP"
+helm_access = "No"
+description = "One Job's whole patch, with the file list beside it"
+notes = """
+The expensive half of the work product, and the one operation that spends it. `adapter-traits`' `WorkProduct` splits `changed_files` from `patch` because the bytes are large and most steps ask no semantic question, so a call returning both would pay for the patch on every gate. A person reading a diff to decide whether to take the work is the case those bytes are for, and this is the route that fetches them — not `get_job`, which is read on every open of a Job to draw a summary.
+
+Not `job.files_changed` either. That event is the cheap half, published while a Drone works and only while somebody is watching; it carries a name and a kind and deliberately never bytes, because a stream carrying diffs at Drone speed is what the event channel's bound exists to keep off it. This is request-response, asked for once, by a person who opened a review.
+
+`work` is absent where there was no worktree to read — a Job at the approval gate, or one whose worktree was reclaimed. An empty file list is a Drone that changed nothing, which is a different answer and fails a `diff_nonempty` check; one shape for both would report a Job that never ran as one that did nothing.
+
+`helm_access` is `No` for the reason `observe_job` is: a whole patch pulled into a Helm session stays in that session for the rest of it, and the tokens are the cost `get_events_since` names.
+"""
+
 [operations.get_drone]
 kind = "query"
 transport = "HTTP"
@@ -56,6 +71,13 @@ kind = "query"
 transport = "HTTP"
 helm_access = "Yes"
 description = "Per-step Evidence bundles"
+notes = """
+The claims, without the bytes. Its own route beside `get_diff` rather than folded into it: evidence is a handful of sentences per step and a patch is however large the work is, so a surface wanting only the claims would otherwise fetch a megabyte to read four lines.
+
+A step that submitted none is absent from the list rather than present and blank, which is the shape the store already answers in — and it is what lets a reader tell a step that claimed nothing from one that has not claimed anything yet, since the step's state on `get_job` says which.
+
+It carries no `source`. A Drone marking its own evidence human-attested is impossible on both sides of the write, and a field on the wire is a field somebody eventually lets a Drone set.
+"""
 
 [operations.get_health]
 kind = "query"
@@ -81,7 +103,20 @@ The declaration is read from the workflow and never from the Job's frozen rows, 
 kind = "query"
 transport = "HTTP"
 helm_access = "Yes"
-description = "Audit trail, 3-way actor separated"
+description = "One Job's whole transition history, oldest first — every status move, every step move, every Drone arriving and leaving"
+notes = """
+The audit trail, and the actor on every row is what makes it one: a move says whether a person, Helm or Fleet caused it, and nothing can reconstruct that afterwards.
+
+`job_events` is the store's source of truth rather than a side record, append-only by database trigger, and validated on the way out — the fold puts every row back through `Job::transition` and refuses a history the machine would not admit. So what this serves is already ordered and already trustworthy; the operation exists because the fold's output is the current Job and the sequence was discarded.
+
+**The rows are rendered and never replayed.** `crates/store/src/fold.rs` owns the machine and is the only thing that may put a recorded move back through `Job::transition`. A client that folded these would be a second machine, agreeing with the first until one of them changed.
+
+Not on `get_job`. A detail view is fetched to draw a summary, on every open of a Job; a history has no bound — it grows for as long as the Job lives, and a retried step is a row per attempt plus the moves around it. A field on `JobDetail` would make the common read pay for the rare one. The surface is folded away by default and one interaction from open, so it is fetched when it is asked for.
+
+Not the turn stream either. `observe_job` renders what a Drone said; this renders what Armada did. A Job that went wrong usually needs both, side by side rather than merged.
+
+Helm may reach it for the reason it may reach the other queries: reading what happened is not doing anything about it. What that costs is the tokens `get_events_since` names — a long history stays in the session for the rest of it — so it is asked about one Job rather than swept.
+"""
 
 [operations.get_manifest]
 kind = "query"
@@ -203,6 +238,13 @@ kind = "command"
 transport = "HTTP"
 helm_access = "No"
 description = "Advances past a human gate"
+notes = """
+The counterpart to `approve_dispatch`, at the other end: that one is the gate before a Job runs and this is the decision after it has. Both are human acts and neither is reachable by Helm.
+
+**It goes through the machine like any other move.** The step advances on the inner machine — which is legal beneath `awaiting_review`, one of the two statuses a step moves under — and then the Job either goes back to `running` at the next step or, where the step that passed was the workflow's last, is committed, delivered and recorded `completed_success`. Nothing here writes a status directly.
+
+Refused with a 409 on a Job that is not at `awaiting_review`. The three review acts share that refusal, and it is what keeps this from quietly becoming `approve_dispatch`: `awaiting_approval -> rejected` is a legal edge too, and it belongs to `deny_dispatch`.
+"""
 
 [operations.deny_dispatch]
 kind = "command"
@@ -248,6 +290,41 @@ helm_access = "Drafts only"
 description = "Drafts a Job onto the approval gate"
 notes = """
 The gate is unchanged.
+"""
+
+[operations.propose_from_request]
+kind = "command"
+transport = "HTTP"
+helm_access = "Drafts only"
+description = "Reads a request and drafts the Jobs it proposes onto the approval gate"
+notes = """
+The dispatch path a person describing work takes, and the only caller of the Job
+proposer. What comes back is every Job the request became, all at
+awaiting_approval, exactly as propose_job answers for one — this adds no gate and
+removes none, and the person approves the same proposal at the same place.
+
+It answers with a plan rather than a Job because one request can be several, and
+approving is a different act depending on how many: one Job is dispatched by its
+approval, several are a plan whose members each take their own in turn. A member
+approved before the one it waits on stays queued until that one reaches
+completed_success, which Fleet enforces at admission rather than trusting the
+order approvals arrived in.
+
+It does not propose write_targets. Which files the work touches is the first
+step's, declared through declare_scope by a Drone that has read the code, and
+checked against the real diff by the drift check that already exists. A Job
+therefore reaches the gate with write_targets null — not empty — and its shape
+underivable until that step runs.
+
+Where no workflow resolves the request is refused and returned unchanged, on the
+error envelope's `request` field, and no Job is created. Nothing here assigns a
+workflow by default: the resolved definition is frozen into the Job and becomes
+what the work is judged against, so a nearest fit would be the standard rather
+than a guess somebody could correct.
+
+A call that could not be made — the network, the quota, the timeout — is a
+fault and not that refusal. The two answer different statuses because a person
+does different things about them.
 """
 
 [operations.pause_job]
@@ -296,6 +373,10 @@ helm_access = "No"
 description = "Hard stop"
 notes = """
 Reserved for hard stops only.
+
+**Terminal, and that is what makes it a hard stop.** `rejected` is a verdict on the work — the registry's own line is "approval denied, or `reject` at a human gate" — and no terminal has an outbound edge, so the Job is over and its Drone is ended. The act for work that is nearly right is `request_changes`, which keeps the Job, the worktree and the session.
+
+Refused on a Job that is not at `awaiting_review`. `awaiting_approval -> rejected` is a legal edge and it belongs to `deny_dispatch`, which is a different act on a Job that has never run.
 """
 
 [operations.request_changes]
@@ -303,6 +384,13 @@ kind = "command"
 transport = "HTTP"
 helm_access = "No"
 description = "Design Plan feedback loop"
+notes = """
+The third answer at a human gate, between taking the work and ending the Job. The Job goes back to `running` at the same step and the note is a turn injected into the session that was waiting — so the Drone, the worktree and every step so far survive, which is what separates this from a redispatch.
+
+**It needs the Drone that is there**, and refuses with a 409 where it is gone, for the reason `redirect_drone` does: there is nobody to tell, and a Job put back to `running` with no process on it is a Job that will escalate as `interrupted` a moment later having lost the note. A Drone that dies at the gate escalates on its own, and `restart_step` is the act from there.
+
+The body carries the person's own words and is a type of its own rather than a redirect's — a redirect steers a Drone whose step stopped, and this answers a gate the Drone is waiting at. Blank is refused.
+"""
 
 [operations.restart_step]
 kind = "command"
@@ -370,6 +458,21 @@ Added because a Job proposed while a client was connected never reached it: crea
 A kind of its own rather than a `job.state_changed` on creation. That message has a `from` and a `to` and a created Job has no `from` — the honest fields would name a transition from a status the Job was never in, which the edge table does not contain and which every client folding the stream would apply as a move that did not happen. A row appearing and a row moving are different messages.
 
 It carries the whole summary, so a Board inserts the row rather than fetching the one it was just told about.
+"""
+
+[operations."job.files_changed"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "The files the working Drone has changed in its worktree, as of one reading"
+notes = """
+Names and change kind, never the diff. What changed inside a file is the patch, which adapter-traits keeps as a second and more expensive read for exactly one caller — a Judge that fires — and putting it on a stream would pay for it continuously so that somebody might look.
+
+Fleet already took this reading and threw it away. The live scope check read the footprint on every turn of a step that watched its scope, kept the paths outside the declared plan and discarded the rest; this carries the whole list, and marks the rows that check already found outside the plan rather than deciding anything new.
+
+It is not read on every turn. A reading happens only while a Drone holds the working slot, only while some client is subscribed to the stream, and at most once in a fixed interval — so an idle Fleet, a Fleet nobody is watching, and the seven turns out of eight between readings all open no repository. The event is published only when the list has moved since the last one, except on the first reading after a client connects, which republishes so a Bridge that joined mid-Job is not left with an empty list until the Drone next writes.
+
+The footprint is the whole list rather than a delta, so a reverted file leaves the view by being absent from the next reading. There is no message that removes one.
 """
 
 [operations."job.state_changed"]

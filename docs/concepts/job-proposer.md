@@ -1,6 +1,6 @@
 # Job proposer
 
-**What it is:** The model call that reads a dispatch request — a prompt, a ticket link — and proposes a Job: which workflow it should run, where it will write, whether those targets must land together, and where the work is several Jobs, the graph between them. Proposes only; a person approves at the dispatch gate.
+**What it is:** The model call that reads a dispatch request — a prompt, a ticket link — and proposes a Job: which workflow it should run, what to call it, and where the work is several Jobs, the order between them. Proposes only; a person approves at the dispatch gate.
 
 ---
 
@@ -14,7 +14,7 @@ Formalises the Job proposer. Its rules previously lived across [Convoy](convoy.m
 flowchart TD
   REQ["Request - a prompt or a ticket link"] --> CALL["Job proposer - one model call"]
   CALL -->|no workflow resolves| REF["Refused at dispatch - request returned unchanged"]
-  CALL --> PROP["Proposal - workflow_id, write_targets, atomic"]
+  CALL --> PROP["Proposal - workflow_id, title, the graph"]
   PROP --> GATE["Dispatch approval gate - approve or override"]
   GATE -->|one Job| ONE["Approving dispatches it"]
   GATE -->|several Jobs| PLAN["Approving accepts a plan"]
@@ -33,9 +33,9 @@ One model call on the dispatch path. It reads the request a person dispatched �
 
 ## Why it exists
 
-**So that dispatching is describing the work, not filling in a form.** A request arrives as a prompt or a ticket link. Someone has to decide what kind of work it is, which workflow fits, where it will write and whether those writes must land together.
+**So that dispatching is describing the work, not filling in a form.** A request arrives as a prompt or a ticket link. Someone has to decide what kind of work it is, which workflow fits, and whether it is one Job or several.
 
-Doing that by hand means knowing the workflow catalogue and the Workspace graph before you can ask for anything. Hand entry stays available and is the **override**, not the path.
+Doing that by hand means knowing the workflow catalogue before you can ask for anything. Hand entry stays available and is the **override**, not the path.
 
 ## What it proposes
 
@@ -43,17 +43,21 @@ Doing that by hand means knowing the workflow catalogue and the Workspace graph 
 | --- | --- |
 | `title` | What the Job is called, written from the description or the prompt |
 | `workflow_id` | Which WorkflowDef the work should run under |
-| `write_targets[]` | The paths the Job intends to write |
-| `atomic` | Whether those targets must land as one unit |
-| A graph, where the work is several Jobs | With `atomic` decided per group |
+| A graph, where the work is several Jobs | The order they must land in |
 
 **Naming the Job is part of the same reading**, so nobody types a title for work they have already described — the call has the description in front of it and a [Job](job.md) requires a name.
 
-[Workflow](workflow.md) owns the workflow catalogue. The resolved definition is frozen into the Job at creation, so the proposer chooses which one and the freeze is what stops it moving afterwards. A graph is proposed in one pass — a [Convoy](convoy.md) landing a coupled pair, with a downstream Job consuming it.
+[Workflow](workflow.md) owns the workflow catalogue. The resolved definition is frozen into the Job at creation, so the proposer chooses which one and the freeze is what stops it moving afterwards. A graph is proposed in one pass, and each member waits on the one before it reaching `completed_success`.
 
-**Shape is not among them.** A Job's shape follows from `write_targets` and `atomic` and is stored nowhere, so there is no shape value to choose and `origin` never needed one. [Convoy](convoy.md) — Three shapes, not two carries what the three are.
+**One call, because it is one reading.** Which workflow, what to call it and whether it is one Job or several answer the same question — *what is this work* — off the same input.
 
-**One call rather than two, because it is one reading.** Choosing a workflow and stating scope answer the same question — *what is this work* — off the same input. Splitting them means reading the request twice, and means a person approving a workflow chosen against one understanding beside a scope chosen against another.
+### Scope is not among them
+
+**It proposes no `write_targets` and no `atomic`.** Which files the work touches belongs to the workflow's own scope step, declared through the scope tool by a [Drone](drone.md) that has read the code.
+
+Why: naming paths credibly needs the repository, and a guess would be a second source for something settled later with better information.
+
+**Shape is therefore not among them either.** A Job's shape follows from `write_targets` and `atomic`, so it is underivable until the scope step runs. [Convoy](convoy.md) — Three shapes, not two carries what the three are.
 
 ### When it cannot resolve a workflow
 
@@ -63,26 +67,24 @@ Why: the resolved definition is frozen into the Job at creation and becomes the 
 
 ## What it reads
 
-- **Scan-gathered dependency evidence** — workspace-protocol deps in package manifests, carried forward from Scan for exactly this purpose and never written into any `armada.yml`.
-- **External dependency-graph tooling**, optionally, as an input signal.
-- **A root-Manifest default-posture setting** as a per-repo prior. Defined on [Manifest](manifest.md) — Cross-Workspace Jobs, which owns the `armada.yml` field.
+| Given | Detail |
+| --- | --- |
+| The request | Verbatim. Fleet opens no link and fetches nothing |
+| The workflows this Manifest holds | Each one's id, name and step labels |
+
+**It is given nothing else.** Not the repository, not the `armada.yml`, not the Board, not the Jobs already running.
+
+Why: every extra token is money on a call that fires on every dispatch, and a call that can reach the repository is a [Drone](drone.md) under another name.
+
+**Step labels are how one workflow is told from another.** A name alone separates Bug from Revert and does not separate Feature from Refactor.
 
 ## It runs on every dispatch
 
-| Repo | What the call still has to decide |
-| --- | --- |
-| Several Workspaces | The workflow, the paths, whether those paths land together, and the graph |
-| One Workspace | The paths |
+**One dispatch path, not two.** The call runs whether the repository holds one Workspace or several, so there is no case in which a person types the workflow instead of approving one.
 
-In a one-Workspace repo the owning Manifest, the gate list and `atomic` are all forced, so the shape question collapses. `write_targets` still holds paths, and a Job may touch one file or twelve.
+Skipping it where the answer looks obvious would cost the Job its entry zero, which is what a revert inherits and a rescope recomputes against.
 
-**The same call, a narrower question.** Skipping it in the single-Workspace case would cost three things:
-
-- The Job would have no entry zero — which is what a revert inherits and a rescope recomputes against.
-- The write-scope overlap warning would have nothing real to compare.
-- Or every Job would claim its whole Workspace, so the warning fires on every pair and is learned to be ignored.
-
-**Cost accepted:** a cheap model call, its latency and its budget, on the dispatch path of the commonest kind of repo, bought with one dispatch path instead of two.
+**Cost accepted:** a cheap model call, its latency and its budget, on every dispatch.
 
 ## Where the proposal is approved
 
@@ -94,7 +96,7 @@ In a one-Workspace repo the owning Manifest, the gate list and `atomic` are all 
 | 4 | The proposal is visible filling in as it is worked out |
 | 5 | The person approves. That is what starts the work |
 
-At step 3 the proposer works out what kind of work it is, what it will touch and which workflow it runs under. At step 4 the proposal fills in progressively rather than appearing complete at the end.
+At step 3 the proposer works out what kind of work it is and which workflow it runs under. At step 4 the proposal fills in progressively rather than appearing complete at the end.
 
 **The Job exists before it is approved.** Step 3 creates it at `awaiting_approval` and step 5 dispatches it — see [Job Board](job-board.md), Job status on the Board.
 
@@ -107,31 +109,37 @@ What step 5 does depends on how much was proposed.
 
 Where several Jobs were proposed, each still takes its own one-by-one dispatch approval when its turn comes, so [Fleet](fleet.md)'s strictly-one-by-one rule and the no-batch-approve rule both hold.
 
-**It is the dispatch gate, not a gate of its own.** What the proposer emits is scope, and a mid-flight scope revision already returns to that same gate; the same decision passing through two different gates depending on when it is made would be arbitrary. This is what holds the things called approval on a Job's path to two — this gate, and a workflow's own human gate over finished work.
+**It is the dispatch gate, not a gate of its own.** A proposal is approved where a mid-flight scope revision is approved, so the things called approval on a Job's path stay two — this gate, and a workflow's own human gate over finished work.
 
-**Cost accepted:** two taps for a single-Workspace Job whose proposal is obvious, mitigated by such a proposal being trivially acceptable.
+**Cost accepted:** two taps for a Job whose proposal is obvious, mitigated by such a proposal being trivially acceptable.
 
 **Beyond the progressive fill, the surface is not drawn.** Dispatch a Job is design order 1 and everything else reuses its approval pattern.
 
 ## What is recorded
 
-**Its output is not stored as its own record.** `write_targets` and `atomic` land on the [Job](job.md); shape is derived from them; no field says a proposal happened.
+**Its output is not stored as its own record.** `workflow_id` and `title` land on the [Job](job.md), and no field says a proposal happened.
 
-**Its reasoning is.** Entry zero of a Job's `scope_revisions[]` is the Job proposer's initial statement of scope, carrying a `rationale` — the dependency evidence read and the posture prior applied. With shape derived rather than stored, that rationale is the only durable trace the call ever ran.
+**Its reasoning is.** Entry zero of a Job's `scope_revisions[]` carries a `rationale` — why that workflow. It names no paths, because none were proposed; the scope step's own declaration is the entry that names them. That rationale is the only durable trace the call ever ran.
 
 | Depends on it | What it reads | Why |
 | --- | --- | --- |
-| A revert | Entry zero of its `subject` | It reads rather than proposing afresh, so it cannot reach a different shape |
+| A revert | Its `subject`'s scope revisions (see Open questions) | It reads rather than proposing afresh, so it cannot reach a different shape |
 | A rescope | The previous entry | It recomputes against what was there rather than from scratch |
-| A human override | `approved_by` | Not the Job proposer, which makes the call evaluable |
+| A human override | `approved_by` | `human` on entry zero, never `fleet`, which makes the call evaluable |
 
-A revert cannot arrive at a different shape from the Job it reverses. A human override is evaluable against the decisions people actually made.
+A human override is evaluable against the decisions people actually made.
 
-## Scope is settled before dispatch, never after
+## Scope is the workflow's first step, not the proposer's
 
-**The dispatch approval gate's whole content is scope**, so a Job arriving there without it gives a person nothing to approve.
+**A Job reaches the dispatch gate with `write_targets` null.** Null is scope not yet determined; empty would claim the Job writes nothing.
 
-**Proposing after a discovery step is rejected.** It needs a second scope gate after that step — the arbitrary split that merging the gates removed. Its one real merit is conceded: it declines to guess rather than correcting a guess. Rescope-and-respawn is the correction path, and it returns a widening to the same gate.
+**What the gate approves is the workflow, the name and the split.** Approving says this is a Bug and it is one Job. It does not say which files.
+
+**Proposing scope at dispatch is rejected.** A call that has not read the repository can only guess at paths, and one that has read it is a [Drone](drone.md) at many times the price.
+
+The scope step declares its paths through the scope tool, and the drift check compares that declaration against the real diff. A proposal made before anything was read is not something that check can weigh.
+
+**Rescope-and-respawn stays the correction path**, and a widening returns to this same gate.
 
 ## Relationship to Helm
 
@@ -146,3 +154,7 @@ A revert cannot arrive at a different shape from the Job it reverses. A human ov
 **They share a prompt library and an output schema, not an implementation.**
 
 It shares the `ModelClient` adapter with the [Judge](judge.md) — same client, different callers, model as a parameter.
+
+## Open questions
+
+- **[revert-inherits-which-scope-revision]** Which of a Job's scope revisions a revert reads from the Job it undoes. What decides it: entry zero carries the proposer's rationale and no paths, so a revert reading entry zero inherits no scope at all. The two candidates are the scope step's own entry, which is the first that names paths, and the latest entry, which is what the Job actually ran under. They differ only on a Job that was rescoped mid-flight. The property this has to preserve is that a revert cannot arrive at a different shape from the Job it reverses, and that holds for either candidate as long as a revert reads rather than proposing afresh.

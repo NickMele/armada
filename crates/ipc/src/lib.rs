@@ -32,10 +32,16 @@
 //!
 //! Not the full protocol surface. `operations.toml` inventories every
 //! operation; the types here serve the ones M1 needs — `list_jobs`,
-//! `get_job`, `propose_job`, `approve_dispatch`, `kill_drone`, `kill_job`,
-//! `redispatch_job` and the event stream. Neither kill adds a type: both name
-//! a Job and answer with one. `redispatch_job` adds [`Redispatched`], because
-//! it is the one command that leaves two Jobs behind. The `/v0` lifeboat is
+//! `get_job`, `get_job_events`, `propose_job`, `propose_from_request`,
+//! `approve_dispatch`, `kill_drone`, `kill_job`, `redispatch_job`, the three
+//! acts a person takes on finished work — `approve_review`, `request_changes`,
+//! `reject_job` — with `get_evidence` and `get_diff`, which are the material
+//! those acts are taken on, and the event
+//! stream. Neither
+//! kill adds a type: both name a Job and answer with one. `redispatch_job`
+//! adds [`Redispatched`] because it is the one command that leaves two Jobs
+//! behind, and `propose_from_request` adds [`JobRequest`] because it is the one
+//! that carries no Job at all. The `/v0` lifeboat is
 //! the Ship milestone's and is deliberately absent rather than stubbed: a
 //! lifeboat that shares a type with the protocol it is the lifeboat for is not
 //! one. [`Skew`] decides when Bridge needs it.
@@ -46,6 +52,7 @@ mod detail;
 mod enums;
 mod error;
 mod event;
+mod history;
 mod ids;
 mod job;
 /// The Evidence tool's transport. **A different seam** — Fleet to Drone, not
@@ -57,6 +64,8 @@ mod turn;
 /// The two numbers both sides read, and what a mismatch between them means.
 /// `build.rs` embeds them from `protocol-version.toml`.
 mod version;
+/// The material a reviewing person reads, and what their note carries.
+mod work;
 
 #[cfg(test)]
 mod tests;
@@ -67,19 +76,21 @@ pub use detail::{
     Criterion, Dependency, Flagged, JobDetail, Judged, StepDetail, StepFacts, Verdict,
 };
 pub use enums::{
-    Actor, CheckOutcome, CriterionSource, DependencyDirection, JobStatus, JudgeVerdict, Origin,
-    StepState, TopLevelOrigin, Urgency,
+    Actor, CheckOutcome, CriterionSource, DependencyDirection, DronePresence, EvidenceType,
+    JobStatus, JudgeVerdict, Origin, StepState, TopLevelOrigin, Urgency,
 };
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
-    Cursor, Delivered, DroneExited, DroneSpawned, Event, JobCreated, JobStateChanged,
-    JobStepAdvanced, Missed, Reason, Resync, StreamMessage,
+    ChangeKind, ChangedFile, Cursor, Delivered, DroneExited, DroneSpawned, Event, JobCreated,
+    JobFilesChanged, JobStateChanged, JobStepAdvanced, Missed, Reason, Resync, StreamMessage,
 };
+pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use ids::{CriterionId, DroneId, Instant, JobId, ManifestId, StepId, WorkflowId};
 pub use job::{
-    AttachmentRef, JobList, JobSummary, ProposeJob, ProposedCriterion, Redirection, Redispatched,
-    Subject, UnreadableJob,
+    AttachmentRef, DependencyEdge, JobList, JobRequest, JobSummary, ProposeJob, ProposedCriterion,
+    ProposedPlan, Redirection, Redispatched, Subject, UnreadableJob,
 };
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
 pub use turn::{Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage, Withheld};
 pub use version::{ProtocolVersion, Skew, PROTOCOL_VERSION};
+pub use work::{ChangesRequested, JobDiff, JobEvidence, Submitted, Work};

@@ -49,10 +49,28 @@
 //! them — what a Drone is told, and the one place a clock is read and an id is
 //! invented.
 //!
+//! `footprint` is the thirteenth: what a Drone has changed on disk, while it is
+//! still changing it. Most of its cases assert that nothing was read — an idle
+//! Fleet, a Fleet nobody has open, a turn inside the interval — because the
+//! risk in a live view is a repository read on a 250ms loop that nobody asked
+//! for.
+//!
 //! `converging` is the twelfth: a Drone working and not getting anywhere. Most
 //! of its cases assert an absence — a tripwire that escalates nothing, a look
 //! that stops the chain, a Drone that reports when told to — because what the
 //! chain is for is refusing to escalate early.
+//!
+//! `history` is the fourteenth, and it is the one read that does not answer
+//! from the fold: a Job's log, in the order it was written, over the router
+//! that ships. What it proves is that the sequence survives — both machines and
+//! the Drone's arrival among each other, each row standing where the last one
+//! left the Job — and that reading it replays nothing.
+//!
+//! `reviewing` is the fifteenth: the material a person decides on and the
+//! three answers they may give. Its cases are the refusals as much as the acts
+//! — a review that reaches a Job nobody was shown, and a note with nobody to
+//! tell — because those are what keep the three from becoming acts they are
+//! not.
 //!
 //! `attachments` is the eleventh: a file staged before a Job exists, promoted
 //! at creation, refused where the staged path cannot be read, and copied again
@@ -69,14 +87,20 @@ mod detach;
 mod detail;
 mod drone;
 mod evidence;
+mod footprint;
 mod frozen;
 mod gaming;
 mod gate;
+mod history;
 mod host;
+mod http;
 mod judging;
 mod landing;
+mod planning;
 mod process;
+mod proposing;
 mod redispatch;
+mod reviewing;
 mod runtime;
 mod scope;
 mod serving;

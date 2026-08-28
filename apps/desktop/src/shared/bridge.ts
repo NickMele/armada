@@ -7,14 +7,17 @@
 
 import type {
   JobDetail,
+  JobFilesChanged,
   JobSummary,
   ManifestSummary,
   ModelChoices,
-  Saw,
   UnreadableJob,
   WireError,
   WorkflowSummary,
 } from "./protocol";
+import type { Recorded } from "./history";
+import type { Submitted, Work } from "./work";
+import type { Saw } from "./turn";
 import { connects, skew } from "./version";
 import type { ProtocolVersion, Skew } from "./version";
 import { PROTOCOL_VERSION } from "./generated/protocol-version";
@@ -157,7 +160,89 @@ export type BridgeState = {
    * evict the state changes that draw it. Separate here for the same reason.
    */
   observed: Observed;
+  /**
+   * What the open Job's Drone has changed in its worktree.
+   *
+   * **Only the open Job's, and only while the event arrives.**
+   * `job.files_changed` is published for every Job on the one stream; keeping
+   * every Job's footprint would make the Board pay for a detail nobody has
+   * open, which is the thing this read is meant to stay off.
+   */
+  footprint: Footprint;
+  /**
+   * One Job's transition history, where a surface asked for one.
+   *
+   * **Read when it is asked for, not on every open.** It is its own operation
+   * for that reason: a detail is fetched to draw a summary and a history has no
+   * bound — it grows for as long as the Job lives, and a retried step is a row
+   * per attempt plus the moves around it.
+   */
+  history: History;
+  /**
+   * What one Job's Drones claimed, where a surface asked for it. The cheap half
+   * of the pair, and still asked for rather than paid for on every open.
+   */
+  evidence: Evidence;
+  /**
+   * One Job's worktree against the branch it was cut from, where a surface asked
+   * for it. **The expensive half, and the one place the patch bytes are spent.**
+   * `crates/adapter-traits/src/work_product.rs` splits it off the file list
+   * because the bytes are large and most steps ask no semantic question; this is
+   * read on the act they were split for, never folded into `watched`, which is
+   * re-read every time an event names the open Job.
+   */
+  diff: Diff;
 };
+
+/**
+ * The last `job.files_changed` reading for the open Job.
+ *
+ * Two states and not four: nothing is fetched, so there is no reading and no
+ * failed read. The event either arrived or it has not, and a surface says which
+ * in its own words rather than sharing one sentence with a failed query.
+ */
+export type Footprint =
+  | { state: "none" }
+  | { state: "read"; jobId: string; reading: JobFilesChanged };
+
+/**
+ * `GET /jobs/:job_id/events` for one Job. Four states, because "nobody asked"
+ * and "the read failed" are different things to draw.
+ *
+ * **The rows are rendered, never replayed.** `crates/store/src/fold.rs` owns
+ * the machine and is the only thing that may put an event back through
+ * `Job::transition`; nothing on this side of the wire does.
+ */
+export type History =
+  | { state: "none" }
+  | { state: "reading"; jobId: string }
+  | { state: "read"; jobId: string; moves: Recorded[] }
+  | { state: "failed"; jobId: string; outcome: Outcome };
+
+/**
+ * `GET /jobs/:job_id/evidence` for one Job. `History`'s four states, for
+ * `History`'s reason — and **empty is a real answer** rather than `none`: no
+ * step submitted anything is a fact about the Job, not about the read.
+ */
+export type Evidence =
+  | { state: "none" }
+  | { state: "reading"; jobId: string }
+  | { state: "read"; jobId: string; steps: Submitted[] }
+  | { state: "failed"; jobId: string; outcome: Outcome };
+
+/**
+ * `GET /jobs/:job_id/diff` for one Job.
+ *
+ * **`work` stays optional on `read`, keeping the wire's distinction.** Absent is
+ * a Job with no worktree; present with an empty `files` is a Drone that changed
+ * nothing. A shape that could not tell them apart would report a Job at the
+ * approval gate as a Drone that wrote nothing.
+ */
+export type Diff =
+  | { state: "none" }
+  | { state: "reading"; jobId: string }
+  | { state: "read"; jobId: string; work?: Work }
+  | { state: "failed"; jobId: string; outcome: Outcome };
 
 /**
  * One Job's turns, as `GET /jobs/:job_id/observe` answered.
@@ -231,6 +316,8 @@ export type Outcome =
   | { ok: false; why: "already_redirecting" }
   | { ok: false; why: "already_restarting" }
   | { ok: false; why: "empty_instruction" }
+  | { ok: false; why: "already_deciding" }
+  | { ok: false; why: "empty_note" }
   | { ok: false; why: "refused"; error: WireError }
   | { ok: false; why: "transport"; detail: string };
 
@@ -316,6 +403,48 @@ export type BridgeApi = {
    * which is a different act with a transition on the record.
    */
   observeJob: (jobId: string | null) => Promise<void>;
+  /**
+   * Read one Job's transition history, or `null` to stop.
+   *
+   * **Its own entry because it is its own operation.** A history is not on
+   * `JobDetail`, so folding it into `watchJob` would make every Job opened pay
+   * for a surface that is folded away by default. Read-only, like the two above
+   * it: a recorded move is a fact, and nothing here can add one.
+   */
+  readHistory: (jobId: string | null) => Promise<void>;
+  /**
+   * Read what one Job's Drones claimed, or `null` to stop. Read-only, and its
+   * own entry rather than folded into `readDiff`: they are two operations on
+   * the Rust side because a surface wanting only the claims would otherwise
+   * fetch a megabyte to read four lines.
+   */
+  readEvidence: (jobId: string | null) => Promise<void>;
+  /**
+   * Read one Job's worktree against its branch, or `null` to stop. Read-only.
+   * **The one capability here that spends the patch bytes**, and deliberately
+   * not reachable by opening a Job — the renderer calls it from the surface
+   * that draws a diff, which is the act the bytes were separated for.
+   */
+  readDiff: (jobId: string | null) => Promise<void>;
+  /**
+   * Take the work. **The counterpart to `approveDispatch`, at the other end of
+   * the Job.** On the workflow's last step Fleet commits and delivers before
+   * recording the Job done. Legal only at `awaiting_review`, like the two below.
+   */
+  approveReview: (jobId: string) => Promise<Outcome>;
+  /**
+   * Send the work back with a note. **The Job comes back `running`**, same step,
+   * same Drone — nothing is spawned and nothing done is thrown away.
+   */
+  requestChanges: (jobId: string, note: string) => Promise<Outcome>;
+  /**
+   * A verdict on the work, and the Job is over. **Terminal, and it ends the
+   * Drone** — that is what separates it from `requestChanges`, and it is not
+   * `killJob`, which clears the Board and carries no verdict at all. Three
+   * entries and not one taking which: that would read as one act and perform
+   * three, and the three differ by whether anything survives.
+   */
+  rejectWork: (jobId: string) => Promise<Outcome>;
 };
 
 /**
@@ -338,6 +467,10 @@ export const NOTHING_YET: BridgeState = {
   holds: { workflows: [], manifests: [], models: null },
   watched: { state: "none" },
   observed: { state: "none" },
+  footprint: { state: "none" },
+  history: { state: "none" },
+  evidence: { state: "none" },
+  diff: { state: "none" },
 };
 
 /** The channels the preload is allowed to name. There is no general `invoke`. */
@@ -354,4 +487,10 @@ export const CHANNELS = {
   restartStep: "bridge:restart-step",
   watchJob: "bridge:watch-job",
   observeJob: "bridge:observe-job",
+  readHistory: "bridge:read-history",
+  readEvidence: "bridge:read-evidence",
+  readDiff: "bridge:read-diff",
+  approveReview: "bridge:approve-review",
+  requestChanges: "bridge:request-changes",
+  rejectWork: "bridge:reject-work",
 } as const;

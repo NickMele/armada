@@ -79,8 +79,7 @@ fn a_judge_call_names_no_directory_and_carries_the_environment_it_was_given() {
     );
 }
 
-/// The per-step dial is what arrives; the default is stated here because
-/// configuration states none.
+/// The per-step dial is what arrives; the default is what it moves away from.
 #[test]
 fn the_model_on_the_list_is_the_one_the_ask_named() {
     let call = HeadlessAgent::on_path().render(&ask());
@@ -89,4 +88,28 @@ fn the_model_on_the_list_is_the_one_the_ask_named() {
         Some("the-cheap-model")
     );
     assert!(HeadlessAgent::models().contains(&HeadlessAgent::judge_model()));
+}
+
+/// The default is `crates/config/settings.toml`'s decision, and this is where
+/// the two are held to each other.
+///
+/// **The derivation is what needs pinning, not the string.** `judge_model` does
+/// not write the value down — it takes the last entry of the roster, on the
+/// assumption that the roster runs strongest first. That assumption is about a
+/// list this module does not own, so a reordered or extended roster would
+/// redecide a setting without anybody deciding anything. Here it costs a red
+/// test instead, which is the point at which somebody either updates the row or
+/// puts the order back.
+#[test]
+fn the_default_judge_model_is_the_value_the_settings_row_carries() {
+    assert_eq!(HeadlessAgent::judge_model(), "haiku");
+    // Cheapest, not merely present: it is the end of the roster rather than
+    // somewhere in the middle of it.
+    assert_eq!(
+        HeadlessAgent::models().last().copied(),
+        Some(HeadlessAgent::judge_model())
+    );
+    // And below the model a Job itself gets. A Judge that cost what the work it
+    // checks costs would be a second Drone rather than a veto.
+    assert_ne!(HeadlessAgent::judge_model(), HeadlessAgent::default_model());
 }

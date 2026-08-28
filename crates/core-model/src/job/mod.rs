@@ -61,8 +61,8 @@ pub use event::{JobEvent, StepEvent};
 pub use fields::{
     AcceptanceCriterion, Attachment, BlankBranch, Branch, CriterionSource, DependencyDirection,
     DependencyEdge, DispatchOrigin, Facts, GateManifest, GateOutcome, NotRunDisposition,
-    NotRunReason, Origin, ScopeRevision, ScopeRevisionOutcome, Subject, TopLevelOrigin, Urgency,
-    WriteTargets,
+    NotRunReason, Origin, QueuedReason, ScopeRevision, ScopeRevisionOutcome, Subject,
+    TopLevelOrigin, Urgency, WriteTargets,
 };
 pub use gaming::{DecidedBy, EvidenceRef, GamingCheck, GamingFlag, GamingPattern};
 pub use ids::{

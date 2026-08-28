@@ -5,9 +5,20 @@
 # The designed `prototype.json` (`crates/core-model/domain/workflow-samples/`)
 # is already linear, already three steps, and already the one workflow
 # carrying gateless steps by design — `frame` and `write_up` have no
-# mechanical tier and no Judge in the designed form either. Only `build`'s
-# gate changes here: designed as `human_always`, reduced to `auto` since a
-# human gate is not in M1's carried set.
+# mechanical tier and no Judge in the designed form either. **Nothing is
+# reduced here any more.** `build` was written `auto` while `human_always`
+# was outside M1's carried set; it is inside it now, so the step reads as the
+# designed file spells it, and a prototype stops for the person who asked for
+# it before the write-up is drafted.
+#
+# **This workflow carries no Judge, and that is a decision rather than an
+# omission.** The designed `prototype.json` carries none either. A prototype is
+# built to answer a question and is thrown away; there is no criterion it
+# either meets or fails, so there is nothing for a veto-only Judge to refuse.
+# `docs/core-model/domain/workflows.toml` names Prototype and Documentation as
+# the workflows where gateless steps are the common case, not the edge one.
+#
+# Adding a Judge here would spend a call per step on an answer nothing gates.
 {
   "version": 1,
   "workflow_id": "prototype",
@@ -24,7 +35,7 @@
       "id": "build",
       "label": "Build",
       "evidence_type": "diff",
-      "advance_gate": "auto"
+      "advance_gate": "human_always"
     },
     {
       "id": "write_up",

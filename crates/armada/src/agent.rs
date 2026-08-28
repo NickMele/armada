@@ -1,4 +1,4 @@
-//! Which binary a Drone is started as, and which model it and a Judge run on.
+//! Which binary a Drone is started as, and which model each caller runs on.
 //!
 //! **One reader, because they are one missing piece.** Each was "nothing reads
 //! configuration yet", and each is answered the same way — a default the
@@ -54,17 +54,42 @@ pub const MODEL: &str = "ARMADA_MODEL";
 /// pay Drone prices on every criterion.
 pub const JUDGE_MODEL: &str = "ARMADA_JUDGE_MODEL";
 
+/// The environment variable naming the model a Job proposer call is made on.
+///
+/// A third variable and not a third pattern: same shape as [`JUDGE_MODEL`],
+/// same adapter-stated default, read here and nowhere below Fleet. It is its
+/// own dial because it fires on every dispatch rather than on every criterion,
+/// and the two are raised for different reasons.
+pub const PROPOSER_MODEL: &str = "ARMADA_PROPOSER_MODEL";
+
 /// What a step naming no model of its own is judged by.
 ///
-/// **`crates/config/settings.toml` supplies none** — the `judge-model` row
-/// reads `undecided` — so the default is the adapter's, the same stand-in
-/// arrangement [`model_choices`] is in, and this module never learns the
-/// spelling of either.
+/// **`crates/config/settings.toml` decides it and this module still never
+/// learns the spelling.** The `judge-model` row carries `haiku` as of Aug 2026,
+/// and `adapters` derives the value from its own roster rather than naming it
+/// twice — so the default arrives from there, as it always did. What changed is
+/// that it is now a decision rather than a stand-in; [`model_choices`] is the
+/// arrangement that is still provisional.
 pub fn judge_model(named: Option<String>) -> Result<Model, SpawnConfigRefused> {
-    let named = named.map(|named| named.trim().to_string());
-    match named {
+    resolved(named, HeadlessAgent::judge_model())
+}
+
+/// What a dispatch request is read by when nothing names one.
+///
+/// `crates/config/settings.toml`'s `job-proposer-model` row reads `undecided`,
+/// so the default is the adapter's — the same stand-in [`judge_model`] is in,
+/// and this module never learns the spelling of either.
+pub fn proposer_model(named: Option<String>) -> Result<Model, SpawnConfigRefused> {
+    resolved(named, HeadlessAgent::proposer_model())
+}
+
+/// An override where one is set and not blank, and the adapter's default
+/// otherwise. **One reader for both dials**, because a second copy is how the
+/// two would come to disagree about what an empty variable means.
+fn resolved(named: Option<String>, default: &str) -> Result<Model, SpawnConfigRefused> {
+    match named.map(|named| named.trim().to_string()) {
         Some(named) if !named.is_empty() => Model::named(&named),
-        _ => Model::named(HeadlessAgent::judge_model()),
+        _ => Model::named(default),
     }
 }
 

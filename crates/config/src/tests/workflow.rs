@@ -187,23 +187,53 @@ fn verdict_routing_on_a_linear_workflow_is_refused_and_names_the_step() {
     );
 }
 
+/// The prefix form, and it is the only gate still outside the milestone. It
+/// names a key resolved against a Manifest-level policy and across a Convoy's
+/// gating Manifests, and neither is built — so it is refused rather than read
+/// as the value that policy would most often produce.
 #[test]
 fn a_gate_needing_a_manifest_policy_is_refused() {
-    // Two of the schema's four values resolve through a Manifest-level policy
-    // that does not exist. The other two — `auto` and `auto_if_judge_passes` —
-    // are carried, because both tiers they name are built.
-    for gate in ["human_always", "manifest_rule:review_gate"] {
+    for key in ["review_gate", "auto_merge"] {
+        let gate = format!("manifest_rule:{key}");
         let refused = refusals(bug_with(&format!(
             "  - id: review\n    label: Review\n    advance_gate: {gate}\n"
         )));
         assert_eq!(
             fault_at(&refused, "steps[3].advance_gate"),
             &Fault::OutsideM1 {
-                value: gate.to_string(),
-                carried: &["auto", "auto_if_judge_passes"],
+                value: gate,
+                carried: &["auto", "auto_if_judge_passes", "human_always"],
             }
         );
     }
+}
+
+/// The gate that makes `awaiting_review` reachable. It carries with no Judge,
+/// which is what Design Plan's `present` and Prototype's `build` declare.
+#[test]
+fn a_human_gate_loads_and_needs_no_judge_to_do_it() {
+    let def = bug_with("  - id: review\n    label: Review\n    advance_gate: human_always\n")
+        .expect("a step a person answers");
+    assert_eq!(def.steps()[3].advance_gate(), AdvanceGate::HumanAlways);
+}
+
+/// **The gate-and-judge agreement rule does not reach a human gate**, in either
+/// direction, because the rule compares a gate that names a tier against that
+/// tier's declaration and this gate names an actor. A Judge here is not spent
+/// on an answer nothing reads: a refusal stops the step before the work reaches
+/// a person, and a criterion it did not refuse is written down beside the
+/// evidence they open. Feature's and Revert's `review` declare exactly this.
+#[test]
+fn a_human_gate_takes_a_judge_and_takes_none() {
+    let asks = bug_with(&judged("human_always", 1, true)).expect("a human gate the Judge feeds");
+    let step = &asks.steps()[3];
+    assert_eq!(step.advance_gate(), AdvanceGate::HumanAlways);
+    assert_eq!(step.judge_checks()[0].criteria().len(), 1);
+
+    let unjudged = bug_with(&judged("human_always", 1, false))
+        .expect("and a human gate that asks the Judge nothing");
+    assert_eq!(unjudged.steps()[3].advance_gate(), AdvanceGate::HumanAlways);
+    assert!(!unjudged.steps()[3].judge_checks()[0].fires());
 }
 
 #[test]

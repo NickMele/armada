@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ChangedFiles, type ChangedFilesProps } from "../../compositions/ChangedFiles/ChangedFiles";
 import { EvidenceCard, type EvidenceCardProps } from "../../compositions/EvidenceCard/EvidenceCard";
 import { JobBrief } from "../../compositions/JobBrief/JobBrief";
 import { JobDetailHeaderActions } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
@@ -17,6 +18,13 @@ import type { JobDetailHeading, JobDetailLog } from "../detail";
  * `evidence` and `log` are optional because nothing serves either yet. An
  * absent one is named rather than dropped — a region that closes up reads as a
  * screen that is finished.
+ *
+ * **The footprint sits under the rail, in the wide column.** A drone that is
+ * working and a drone that is thrashing look identical from the outside, and
+ * the files it has touched are the cheapest thing that tells them apart — so it
+ * reads beside what ran rather than below what came out. The wide column is
+ * also the one that can hold a repository-relative path without truncating it,
+ * which is the defect the narrow column would reintroduce.
  */
 export type ARunningJobProps = {
   heading: JobDetailHeading;
@@ -26,6 +34,12 @@ export type ARunningJobProps = {
   ranLabel?: ReactNode;
   /** Why there are no steps to draw, where there are none. */
   stepsAbsent?: string;
+  /** What the drone has changed in its worktree, as of the last reading. */
+  footprint?: ChangedFilesProps;
+  /** The label over it. */
+  footprintLabel?: ReactNode;
+  /** Why there is no footprint to draw, where there is none. */
+  footprintAbsent?: string;
   /** The newest work submission. */
   evidence?: EvidenceCardProps;
   /** Why there is no submission to draw, where there is none. */
@@ -44,6 +58,9 @@ export function ARunningJob({
   steps,
   ranLabel = "What ran",
   stepsAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
+  footprint,
+  footprintLabel = "Files changed",
+  footprintAbsent = "Nothing has reported this drone's changed files yet.",
   evidence,
   evidenceAbsent = "Nothing serves a work submission yet.",
   log,
@@ -64,6 +81,19 @@ export function ARunningJob({
             </div>
           ) : (
             <WorkflowRail steps={steps} pulsing onCopied={onCopied} />
+          )}
+
+          <span className="armada-screen__eyebrow" data-spaced>
+            {footprintLabel}
+          </span>
+          {footprint === undefined ? (
+            <div className="armada-screen__slot">
+              <Absent name="Files changed" note={footprintAbsent} />
+            </div>
+          ) : (
+            /* Never pulsing. The rail already carries the one animated mark
+               this screen is allowed, and it is on the more specific thing. */
+            <ChangedFiles {...footprint} onCopied={onCopied} />
           )}
         </div>
 

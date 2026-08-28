@@ -374,7 +374,7 @@ Never frozen. A title is a name and a name can be corrected — the contrast is 
 
 Empty is not a title. `core-model` carries a `Title` newtype whose only constructor refuses a blank string, so a Job with no readable name is unconstructable rather than refused on write.
 
-**The Job proposer will generate it** from the description or the prompt, the same call and the same reading that produces `workflow_id` and `write_targets[]`. Hand entry stays the override, as it is for every other output of that call.
+**The Job proposer will generate it** from the description or the prompt, the same call and the same reading that produces `workflow_id`. Hand entry stays the override, as it is for every other output of that call.
 """
 why = "Deriving a row label from `subject` or from the first line of `Facts` was the alternative: `subject` is null on most Jobs and is a reference rather than a phrase, and a prefix of `Facts` puts redacted text on every Board."
 

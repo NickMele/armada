@@ -129,6 +129,47 @@ impl Urgency {
     }
 }
 
+/// Why an approved Job has not started. **Derived, never stored.**
+///
+/// `job-statuses.toml` applies the recomputed-label rule literally on `queued`:
+/// a held port span never self-clears, so a stored value would go stale the
+/// moment headroom frees. It is computed from `dependencies` and live headroom
+/// at read time.
+///
+/// **Two variants and not three.** The registry's vocabulary reads
+/// `blocked_by_dependency / waiting_on_resources / none`, and `none` is the
+/// absence of one — `Option<QueuedReason>` carries it, so there is no variant
+/// meaning "no reason" for a renderer to have a case for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QueuedReason {
+    /// A Job it depends on has not reached `completed_success`.
+    BlockedByDependency,
+    /// Nothing is in its way but the slot.
+    WaitingOnResources,
+}
+
+impl QueuedReason {
+    /// Both variants, in the order `job-statuses.toml` names them.
+    pub const ALL: &'static [QueuedReason] = &[
+        QueuedReason::BlockedByDependency,
+        QueuedReason::WaitingOnResources,
+    ];
+
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            QueuedReason::BlockedByDependency => "blocked_by_dependency",
+            QueuedReason::WaitingOnResources => "waiting_on_resources",
+        }
+    }
+
+    pub fn from_wire(value: &str) -> Option<QueuedReason> {
+        QueuedReason::ALL
+            .iter()
+            .copied()
+            .find(|reason| reason.as_wire() == value)
+    }
+}
+
 /// Which verification source answers a criterion.
 ///
 /// **The registry underspecifies `source`.** `acceptance_criteria[]` is typed

@@ -9,6 +9,10 @@
 //! the tool at all. There is no parameter on any function in this module
 //! through which a Drone could supply a fact that gates its own step.
 //!
+//! It held when a Drone said outright that its step had failed and the step
+//! advanced: reading prose catches an honest Drone and believes a dishonest
+//! one. See [`rule_on`] for what should have caught it.
+//!
 //! # This runs after the tool call has returned
 //!
 //! The Evidence tool queues and returns `recorded`; this drains the queue. The
@@ -37,8 +41,9 @@ use std::time::Duration;
 use adapter_traits::{Footprint, WorkProduct};
 use checks_runner::Output;
 use core_model::{
-    Actor, DeclaredPaths, EscalationTrigger, IllegalTransition, Job, Judgment, ResolvedCheck,
-    StepCheck, StepEvidence, StepId, StepLevelTrigger, Target, Timestamp, Transitioned,
+    Actor, AdvanceGate, DeclaredPaths, EscalationTrigger, IllegalTransition, Job, Judgment,
+    ResolvedCheck, StepCheck, StepEvidence, StepId, StepLevelTrigger, Target, Timestamp,
+    Transitioned,
 };
 use verification::{
     decide, Accepted, Baseline, CheckFailed, Flagged, InScope, NotWhatTheStepAsked, Observed,
@@ -76,10 +81,12 @@ pub struct CheckOutput {
 
 /// What Fleet decided, and what follows from it.
 ///
-/// **Only [`Ruling::Advanced`] and [`Ruling::Finished`] are reached through
-/// [`Verdict::Advance`]**, and that verdict needs evidence and a full set of
-/// passing checks. Nothing else in this enum can be produced by a Drone doing
-/// anything at all.
+/// **Only [`Ruling::Advanced`], [`Ruling::Finished`] and
+/// [`Ruling::HeldForReview`] are reached through [`Verdict::Advance`]**, and
+/// that verdict needs evidence and a full set of passing checks. Nothing else
+/// in this enum can be produced by a Drone doing anything at all — and the
+/// third of the three advances nothing, so a Drone cannot reach the far side of
+/// a human gate by satisfying it.
 #[derive(Debug)]
 pub enum Ruling {
     /// The step passed. The Drone is told and goes on to the next step. The Job
@@ -101,6 +108,31 @@ pub enum Ruling {
     /// reaches `completed_success`.
     Finished {
         tell: OutcomeTurn,
+        checks: Vec<StepCheck>,
+        output: Vec<CheckOutput>,
+        judged: Vec<Judgment>,
+    },
+    /// Every tier the step declared held, and the step is gated `human_always`.
+    /// **The Job reaches `awaiting_review` and the step does not move.**
+    ///
+    /// It is the only ruling that stops a Job without anything having gone
+    /// wrong, which is why it carries no failure of any kind: the checks, the
+    /// output and the judgments below are all passes, and they are carried
+    /// because they are the material a person opens rather than a record of a
+    /// verdict.
+    ///
+    /// **No turn.** The Drone is not told anything, and is not terminated
+    /// either — it waits, holding its context, and the person's answer is the
+    /// next turn its session gets: `approve_review` injects one,
+    /// `request_changes` injects the note, `reject` ends it. A turn here would
+    /// spend a Drone's remaining tool call to say "someone is looking at this".
+    ///
+    /// The step stays `running` while the Job stands at the gate.
+    /// `ADVANCING_STATUSES` admits `awaiting_review`, so the inner machine is
+    /// still live there and `approve_review` moves the step before it moves the
+    /// Job. `step_machine`'s own comment says what rendering it as
+    /// `awaiting_human` instead would cost.
+    HeldForReview {
         checks: Vec<StepCheck>,
         output: Vec<CheckOutput>,
         judged: Vec<Judgment>,
@@ -173,7 +205,13 @@ pub enum Ruling {
 
 impl Ruling {
     /// Whether the step advanced. **The one question the whole milestone is
-    /// about**, and three of the five variants answer no.
+    /// about**, and most variants answer no.
+    ///
+    /// [`HeldForReview`](Ruling::HeldForReview) is the one that answers no
+    /// having failed nothing: every tier held and the step still did not move,
+    /// because the gate names a person. Folding it in with the two that did
+    /// advance would make "the machine is satisfied" and "the step advanced"
+    /// one sentence, which is exactly what a human gate separates.
     pub fn advanced(&self) -> bool {
         matches!(self, Ruling::Advanced { .. } | Ruling::Finished { .. })
     }
@@ -196,6 +234,7 @@ impl Ruling {
         match self {
             Ruling::Advanced { checks, .. }
             | Ruling::Finished { checks, .. }
+            | Ruling::HeldForReview { checks, .. }
             | Ruling::Failed { checks, .. }
             | Ruling::Refused { checks, .. }
             | Ruling::Suspect { checks, .. }
@@ -221,6 +260,7 @@ impl Ruling {
         match self {
             Ruling::Advanced { judged, .. }
             | Ruling::Finished { judged, .. }
+            | Ruling::HeldForReview { judged, .. }
             | Ruling::Refused { judged, .. }
             | Ruling::Suspect { judged, .. } => judged,
             Ruling::Failed { .. }
@@ -239,6 +279,7 @@ impl Ruling {
         match self {
             Ruling::Advanced { output, .. }
             | Ruling::Finished { output, .. }
+            | Ruling::HeldForReview { output, .. }
             | Ruling::Failed { output, .. }
             | Ruling::Refused { output, .. }
             | Ruling::Suspect { output, .. }
@@ -258,6 +299,11 @@ impl Ruling {
     /// to `escalated` alone, and `completed_failed`'s step machine is "frozen
     /// at the failed step" with no state named. Stopping a step under a
     /// terminal status would be this file deciding that.
+    ///
+    /// [`Ruling::HeldForReview`] answers `None` for the opposite reason: its
+    /// step is not stopped at all. It is still `running` and still the Job's
+    /// cursor, waiting on the person rather than on a trigger, and a
+    /// `last_verdict` written there would say the gate failed when it held.
     pub fn stops_the_step(&self) -> Option<StepLevelTrigger> {
         match self {
             Ruling::Refused { .. } => StepLevelTrigger::of(EscalationTrigger::GateFailure),
@@ -288,6 +334,11 @@ impl Ruling {
 /// `recorded` is what every step of this Job has submitted so far. **The
 /// gaming check is its only reader**, through [`AtStep::baseline`], which will
 /// not answer with anything but a strictly earlier step's.
+/// `entered_with` is what the worktree held when this step began, and
+/// `diff_nonempty` is decided by comparing it against a second reading taken
+/// here. That is what catches the step that advanced having written nothing:
+/// the check used to read the whole branch and count an earlier step's file as
+/// this step's work.
 pub async fn rule_on<W>(
     at: AtStep<'_>,
     evidence: &Submission,
@@ -307,7 +358,6 @@ where
         Ok(accepted) => accepted,
         Err(mismatch) => return Ruling::NotWhatTheStepAsked(mismatch),
     };
-
     let mut observed = Vec::with_capacity(step.checks().len());
     let mut output = Vec::new();
     for check in step.checks() {
@@ -373,7 +423,7 @@ where
     let scope = match step.evidence_scope() {
         None => None,
         Some(scope) => match work.changed_files(at.worktree()) {
-            Ok(changed) => InScope::resolved(scope, declared, changed.paths())
+            Ok(changed) => InScope::resolved(scope, declared, &changed.paths())
                 .err()
                 .map(CheckFailed::OutOfScope),
             Err(cause) => {
@@ -399,7 +449,7 @@ where
                 Ok(patch) => patch,
                 Err(cause) => {
                     return Ruling::CouldNotDecide {
-                        artifact: "the Job's patch",
+                        artifact: "the step's patch",
                         cause: Box::new(cause),
                         checks,
                         output,
@@ -435,18 +485,33 @@ where
     }
 
     match verdict {
-        Verdict::Advance => match at.next() {
-            Some(next) => Ruling::Advanced {
-                tell: OutcomeTurn::advanced(step, Some(next)),
+        // **The advance gate is read here and nowhere earlier**, which is what
+        // makes a human gate cost the same as an auto one: every tier the step
+        // declared has already run, and what the gate decides is only who acts
+        // on the result. A gate read before the tiers would be a step whose
+        // Checks a person waits on after deciding.
+        //
+        // Matched exhaustively rather than through a helper, so a fourth gate
+        // is a compile error here rather than a step that quietly advances.
+        Verdict::Advance => match step.advance_gate() {
+            AdvanceGate::HumanAlways => Ruling::HeldForReview {
                 checks,
                 output,
                 judged,
             },
-            None => Ruling::Finished {
-                tell: OutcomeTurn::advanced(step, None),
-                checks,
-                output,
-                judged,
+            AdvanceGate::Auto | AdvanceGate::AutoIfJudgePasses => match at.next() {
+                Some(next) => Ruling::Advanced {
+                    tell: OutcomeTurn::advanced(step, Some(next)),
+                    checks,
+                    output,
+                    judged,
+                },
+                None => Ruling::Finished {
+                    tell: OutcomeTurn::advanced(step, None),
+                    checks,
+                    output,
+                    judged,
+                },
             },
         },
         Verdict::Failed(failures) => Ruling::Failed {
@@ -492,7 +557,7 @@ where
         Ok(patch) => patch,
         Err(cause) => {
             return Some(Ruling::CouldNotDecide {
-                artifact: "the Job's patch",
+                artifact: "the step's patch",
                 cause: Box::new(cause),
                 checks: checks.to_vec(),
                 output: output.to_vec(),
@@ -554,6 +619,11 @@ pub fn apply(
     let target = match ruling {
         Ruling::Finished { .. } => Target::CompletedSuccess,
         Ruling::Failed { .. } => Target::CompletedFailed,
+        // The one move in this function that is not an ending. `running ->
+        // awaiting_review` is the edge `fleet::reviewing`'s three acts all
+        // start from, and Fleet is the actor: the person has not answered yet,
+        // they have only been asked.
+        Ruling::HeldForReview { .. } => Target::AwaitingReview,
         // **The rulings that escalate are exactly the rulings that stop the
         // step**, which is why this reads the trigger off that answer instead
         // of naming one. `None` covers the three that move nothing: a step

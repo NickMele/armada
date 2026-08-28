@@ -27,8 +27,9 @@ use std::future::Future;
 use crate::observing::Observed;
 use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    JobDetail, JobId, JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redirection,
-    Redispatched, WireError, WorkflowSummary,
+    ChangesRequested, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList, JobSummary,
+    ManifestSummary, ModelChoices, ProposeJob, Redirection, Redispatched, WireError,
+    WorkflowSummary,
 };
 
 /// The request-response operations M1 serves.
@@ -58,6 +59,66 @@ pub trait Daemon: Send + Sync + 'static {
     /// the list without Fleet answering for the fields the list redacts.
     fn get_job(&self, job_id: JobId) -> impl Future<Output = Result<JobDetail, Refusal>> + Send;
 
+    /// `get_job_events` — every move one Job made, oldest first.
+    ///
+    /// **The path taken, which [`Daemon::get_job`] deliberately does not
+    /// carry.** A detail view answers where a Job is now; this answers how it
+    /// got there — every status transition, every step move, every Drone
+    /// arriving and leaving, with the actor and the instant on each.
+    ///
+    /// # A separate operation because a history has no bound
+    ///
+    /// `get_job` is read on opening a Job and is the size of a summary. A
+    /// history grows for as long as the Job lives, and the surface that draws
+    /// it is folded away by default. One read paying for the other, on every
+    /// open, is what a field on [`ipc::JobDetail`] would have cost.
+    ///
+    /// # It replays nothing
+    ///
+    /// The rows are read and rendered. `crates/store/src/fold.rs` is the only
+    /// thing that puts a recorded move back through `Job::transition`, and an
+    /// implementation that folded here would be a second machine.
+    ///
+    /// A Job that is not there is [`Refusal::NoSuchJob`] and never an empty
+    /// history: empty is a real answer, and it means a Job that has not moved.
+    fn get_job_events(
+        &self,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobHistory, Refusal>> + Send;
+
+    /// `get_evidence` — every claim a Job's Drones have submitted, step by
+    /// step.
+    ///
+    /// **The material a person decides on, and the cheap half of it.** A step
+    /// that has submitted nothing is absent rather than present and blank,
+    /// which is the shape the store answers in and the only one that tells a
+    /// step claiming nothing from a step that has not claimed yet.
+    ///
+    /// Its own operation beside [`Daemon::get_diff`] rather than folded into
+    /// it: this is a handful of sentences per step and that is however large
+    /// the work is.
+    fn get_evidence(
+        &self,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobEvidence, Refusal>> + Send;
+
+    /// `get_diff` — one Job's whole patch, with the file list beside it.
+    ///
+    /// **The expensive half, and the one call that spends it.**
+    /// `WorkProduct` splits the file list from the patch because the bytes are
+    /// large and most steps ask no semantic question, so a call returning both
+    /// would pay for the patch on every gate. A person reading a diff to decide
+    /// whether to take the work is the case those bytes are for — and this is a
+    /// route of its own so that [`Daemon::get_job`], read on every open, never
+    /// pays for them.
+    ///
+    /// A Job with no worktree answers with [`ipc::JobDiff::work`] absent rather
+    /// than an empty reading: a Drone that changed nothing is a real and
+    /// different answer, and one shape for both would draw a Job that never ran
+    /// as one that did nothing. A worktree that will not open is
+    /// [`Refusal::Fault`], never an empty patch.
+    fn get_diff(&self, job_id: JobId) -> impl Future<Output = Result<JobDiff, Refusal>> + Send;
+
     /// `list_workflows` — the workflows Fleet holds, with their steps.
     ///
     /// **What makes a `workflow_id` checkable.** Nothing joined one to a
@@ -83,6 +144,36 @@ pub trait Daemon: Send + Sync + 'static {
         &self,
         proposal: ProposeJob,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `propose_from_request` — reads a request and drafts the Job it proposes
+    /// onto the approval gate.
+    ///
+    /// **The dispatch path for a person who describes work rather than filling
+    /// in a form**, and the only caller of the Job proposer. What comes back is
+    /// the same thing [`Daemon::propose_job`] answers: a Job at
+    /// `awaiting_approval`. This adds no gate and removes none.
+    ///
+    /// # Two failures, and they are not the same failure
+    ///
+    /// A request no workflow fits is [`Refusal::Unacceptable`], and the request
+    /// comes back on the error's `request` field with no Job created — nothing
+    /// is assigned by default, because the resolved definition is frozen into
+    /// the Job and becomes the yardstick the work is judged against.
+    ///
+    /// A call that could not be made — the network, the quota, the budget — is
+    /// [`Refusal::Fault`]. It says nothing about the request, and a caller that
+    /// could not tell the two apart would read an outage as a refusal.
+    ///
+    /// # It answers with a plan, not a Job
+    ///
+    /// One request can be several Jobs, and approving is a different act
+    /// depending on how many: one is dispatched by its approval, several are a
+    /// plan whose members each take their own. A signature answering one Job
+    /// would make the second case unrepresentable rather than merely unbuilt.
+    fn propose_from_request(
+        &self,
+        request: ipc::JobRequest,
+    ) -> impl Future<Output = Result<ipc::ProposedPlan, Refusal>> + Send;
 
     /// `approve_dispatch` — releases a Job to spawn. The primary autonomy
     /// control, and a human act: `helm_access` on this row is `No`.
@@ -157,6 +248,57 @@ pub trait Daemon: Send + Sync + 'static {
         &self,
         job_id: JobId,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `approve_review` — the person takes the work, and the Job goes on.
+    ///
+    /// **The counterpart to [`Daemon::approve_dispatch`]**, at the other end of
+    /// the Job: that one is the gate before anything runs and this is the
+    /// decision after it has. Both are human acts.
+    ///
+    /// It moves the machine and never writes a status: the step advances on the
+    /// inner machine, which is legal beneath `awaiting_review`, and then the
+    /// Job goes back to `running` at the next step — or, where the step that
+    /// passed was the workflow's last, is committed, delivered and recorded
+    /// `completed_success`.
+    ///
+    /// **Refused with a 409 anywhere but `awaiting_review`.** All three review
+    /// acts share that refusal, and it is what stops this from quietly becoming
+    /// the dispatch gate: `awaiting_approval` has its own approval and its own
+    /// denial.
+    fn approve_review(
+        &self,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `request_changes` — the work is not right yet, and here is what to fix.
+    ///
+    /// **It keeps everything.** The Job goes back to `running` at the same
+    /// step, and the note is a turn injected into the session that was waiting
+    /// at the gate — so the Drone, the worktree and every step so far survive.
+    ///
+    /// **Refused where the Drone is gone**, for [`Daemon::redirect_drone`]'s
+    /// reason: there is nobody to tell, and a Job put back to `running` with no
+    /// process on it escalates as `interrupted` a moment later having lost the
+    /// note. A blank note is refused as well — a Drone told nothing resumes
+    /// with exactly the information that was not enough.
+    fn request_changes(
+        &self,
+        job_id: JobId,
+        note: ChangesRequested,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `reject_job` — the work is not wanted, and the Job is over.
+    ///
+    /// **Terminal, which is what makes it the hard stop.** `rejected` is a
+    /// verdict on the work rather than an operator clearing the Board, which is
+    /// [`Daemon::kill_job`]. The act for work that is nearly right is
+    /// [`Daemon::request_changes`], which keeps the Job.
+    ///
+    /// Refused anywhere but `awaiting_review`. `awaiting_approval -> rejected`
+    /// is a legal edge and it belongs to `deny_dispatch`, which is a different
+    /// act on a Job that has never run.
+    fn reject_job(&self, job_id: JobId)
+        -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `observe_job` — one Job's turns, the history and then the live ones.
     ///

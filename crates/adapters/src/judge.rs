@@ -24,18 +24,47 @@ use adapter_traits::{Ask, JudgeCall, ModelClient};
 
 use crate::harness::HeadlessAgent;
 
-/// The model a Judge call gets when nothing names one: the cheapest alias this
-/// CLI takes.
+/// The model a request is read by when nothing names one.
 ///
-/// **`crates/config/settings.toml` names none** — the `judge-model` row reads
-/// `undecided` — so the value comes from here for the reason the Drone's
-/// default does, and is a stand-in until that row carries one.
-const JUDGE_MODEL: &str = "haiku";
+/// **A constant, where the Judge's is derived.** They are separate dials for
+/// the reason `ARMADA_JUDGE_MODEL` is not `ARMADA_MODEL`: a machine that raised
+/// one by raising the other would pay the raise on every dispatch as well as on
+/// every criterion. `crates/config/settings.toml`'s `job-proposer-model` row
+/// still reads `undecided`, so this one is a stand-in stating what the binary
+/// takes — the arrangement [`HeadlessAgent::judge_model`] was in until that
+/// row was decided.
+const PROPOSER_MODEL: &str = "haiku";
 
 impl HeadlessAgent {
-    /// The model a step that names none is judged by.
+    /// The model a step that names none is judged by: **the cheapest alias on
+    /// the roster**, which is what `crates/config/settings.toml`'s
+    /// `judge-model` row decided on 28 Aug 2026.
+    ///
+    /// **Read off the roster rather than written down again.** A constant here
+    /// would be a second statement of a value the settings row now owns, and
+    /// two statements is how the second one goes stale. The row's peer polarity
+    /// is *member of the Kit set*, and an entry of [`HeadlessAgent::models`] is
+    /// a member by construction rather than by a check.
+    ///
+    /// **The last entry, because the roster runs strongest first** — the order
+    /// a picker offers, so its end is its cheap end. That is an assumption
+    /// about a list this file does not own, which is why a test pins what comes
+    /// back to the settings row's value: a reordered roster breaks the build
+    /// rather than quietly redeciding a setting.
     pub fn judge_model() -> &'static str {
-        JUDGE_MODEL
+        match HeadlessAgent::models().last() {
+            Some(cheapest) => cheapest,
+            // The roster is a non-empty constant, so nothing reaches here. The
+            // arm exists so that deriving a value cannot panic at a gate, and
+            // it falls back to the model a Job itself would get rather than to
+            // a fourth spelling written for the fallback's sake.
+            None => HeadlessAgent::default_model(),
+        }
+    }
+
+    /// The model a dispatch request is read by when nothing names one.
+    pub fn proposer_model() -> &'static str {
+        PROPOSER_MODEL
     }
 }
 

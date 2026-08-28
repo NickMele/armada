@@ -141,7 +141,11 @@ impl Brief {
 ///
 /// Leading prose is tolerated and a blank value is not: a model that wrote
 /// `expected:` and stopped has cited nothing.
-pub(crate) fn field(answer: &str, name: &str) -> Option<String> {
+///
+/// **Public because the Job proposer reads its answer the same way.** A second
+/// copy of this rule in `fleet` would be a second answer to what counts as a
+/// filled-in line.
+pub fn field(answer: &str, name: &str) -> Option<String> {
     answer.lines().find_map(|line| {
         let rest = line.trim().strip_prefix(name)?.strip_prefix(':')?.trim();
         (!rest.is_empty()).then(|| rest.to_string())

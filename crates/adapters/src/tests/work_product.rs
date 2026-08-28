@@ -6,7 +6,7 @@
 //! each of those, and the guess about untracked directories has already been
 //! wrong once (see [`repo::TempRepo::status_via_the_library`]).
 
-use adapter_traits::{Vcs, WorkProduct, WorktreeSpec};
+use adapter_traits::{Change, Vcs, WorkProduct, WorktreeSpec};
 
 use crate::tests::repo::TempRepo;
 use crate::worktree::GitVcs;
@@ -68,6 +68,41 @@ fn a_deleted_file_counts() {
     assert_eq!(changed.paths(), ["doomed.txt"]);
 }
 
+/// **What the file list is for.** A person watching a Drone needs to tell a
+/// file it wrote from one it deleted, and the kinds come from the same delta
+/// walk the paths do — so git says which, and this crate does not guess.
+///
+/// The untracked file reads as **added** rather than as a kind of its own: the
+/// diff asks for untracked precisely because an unstaged new file is work, and
+/// reporting the staging would answer a question nobody asked.
+#[test]
+fn each_file_carries_what_happened_to_it() {
+    let repo = TempRepo::with_a_commit();
+    repo.write("doomed.txt", "here for now");
+    repo.write("edited.txt", "before");
+    repo.commit_everything("two files to work on");
+    let worktree = worktree_for(&repo);
+    std::fs::remove_file(format!("{}/doomed.txt", worktree.path())).expect("the removal");
+    std::fs::write(format!("{}/edited.txt", worktree.path()), "after").expect("the edit");
+    std::fs::write(format!("{}/written.txt", worktree.path()), "new").expect("the new file");
+
+    let changed = GitVcs::new().changed_files(&worktree).expect("a reading");
+    let mut seen: Vec<(&str, Change)> = changed
+        .files()
+        .iter()
+        .map(|file| (file.path(), file.change()))
+        .collect();
+    seen.sort_by_key(|(path, _)| *path);
+    assert_eq!(
+        seen,
+        vec![
+            ("doomed.txt", Change::Deleted),
+            ("edited.txt", Change::Modified),
+            ("written.txt", Change::Added),
+        ]
+    );
+}
+
 /// The main line moving on must not make a Job look busier than it is. The base
 /// is the merge base, so a commit made on the repository's own branch after the
 /// worktree was cut is not the Job's work.
@@ -115,4 +150,17 @@ fn commit_in(path: &str, message: &str) {
         .expect("a parent commit");
     repo.commit(Some("HEAD"), &who, &who, message, &tree, &[&parent])
         .expect("a commit");
+}
+
+/// The rendering follows the file list. A Drone that wrote a file and never
+/// staged it has produced work — this module says so of the count, and a patch
+/// that printed a header and no lines would tell the Judge otherwise.
+#[test]
+fn a_file_the_drone_never_staged_reaches_the_judge_with_its_contents() {
+    let repo = TempRepo::with_a_commit();
+    let worktree = worktree_for(&repo);
+    std::fs::write(format!("{}/answer.txt", worktree.path()), "42\n").expect("the file");
+
+    let patch = GitVcs::new().patch(&worktree).expect("a reading");
+    assert!(patch.as_str().contains("+42"), "{}", patch.as_str());
 }
