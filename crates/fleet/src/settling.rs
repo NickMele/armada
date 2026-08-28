@@ -113,8 +113,17 @@ where
         // when a Job ends, so this cannot be a submission about some other Job.
         // Kept because the alternative to a guard here is a gate ruling on one
         // Job's step from another Job's evidence.
+        //
+        // The one way it becomes reachable is the strand arriving by a longer
+        // road: a submission held over a turn with no slot, and the *next* Job
+        // admitted into it before the gate came back. So it escalates the Job
+        // it named, for the same reason and by the same rule as `stranded` —
+        // Fleet works one Job at a time, so a running Job that is not the one
+        // in the slot is a running Job with no Drone.
         if landed.job != job_id {
-            return Ok(self.declined(&landed.job, None, Decline::AnotherJob));
+            let declined = self.declined(&landed.job, None, Decline::AnotherJob);
+            self.unreachable(&landed.job).await?;
+            return Ok(declined);
         }
 
         let job = self.load(&job_id).await?;
@@ -192,23 +201,27 @@ where
             self.noted_decline(&job_id, None, &why);
             return Ok(Settled::declining(why));
         }
+        // Taken here rather than inside, because the Job stops being `running`
+        // on the way out: a submission left behind would be declined at a guard
+        // with nothing new to say, on every turn, for ever.
+        self.take_evidence();
         self.unreachable(&job_id).await?;
         Ok(Settled::declining(why))
     }
 
-    /// A submission nothing will ever rule on, and the Job it was for.
+    /// A Job whose submission nothing will ever rule on.
     ///
-    /// The evidence is taken here rather than left, because the Job stops being
-    /// `running` on the way out: leaving it would have the next turn decline it
-    /// at a guard with nothing new to say, for ever.
+    /// **The submission is the caller's to have dealt with**, because the two
+    /// callers arrive holding it differently — one has taken it and one has
+    /// left it in the inbox — and a take in here would swallow whatever was
+    /// behind it.
     ///
     /// `interrupted` is the trigger, and it is not borrowed — the registry's
     /// own words for it are a Job marked running with no matching OS process,
-    /// which is exactly what an empty slot under a running Job is. It is the
-    /// same trigger the boot reconciliation writes for the same fact.
+    /// which is exactly what a running Job outside the slot is. It is the same
+    /// trigger the boot reconciliation writes for the same fact.
     async fn unreachable(&self, job_id: &JobId) -> Result<(), Adrift> {
         let job = self.load(job_id).await?;
-        self.take_evidence();
         let escalating = job.status() == JobStatus::Running;
         self.noted_stranded(job_id, escalating);
         // Already stopped, by a person or by an earlier turn. The submission

@@ -154,6 +154,52 @@ async fn a_submission_no_slot_will_ever_hold_escalates_the_job_it_was_for() {
     assert!(written.contains("\"escalated\":true"), "{written}");
 }
 
+/// **The same strand, reached by the longer road.** A submission is held over a
+/// turn with no slot, and the next approved Job is admitted into that slot
+/// before the gate comes back. The evidence is then for a Job that is not the
+/// one being worked, which is the third guard — and dropping it there without
+/// saying anything would leave the first Job running with no Drone, which is
+/// the same silence one guard along.
+#[tokio::test]
+async fn a_submission_overtaken_by_the_next_job_escalates_the_one_it_was_for() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+
+    let first = fleet.propose(a_proposal("fix the reader")).await.unwrap();
+    worktree_directory(&home, first.id());
+    fleet.approve(first.id()).await.unwrap();
+    fleet.submit_evidence(diff_evidence()).await.unwrap();
+
+    // The slot emptied while the submission stays where it is — which is the
+    // state the fix creates and nothing else in Fleet can produce, since every
+    // path that clears the slot empties the inbox with it. The Drone is held
+    // rather than dropped so its pipes do not close under the test.
+    let _held = fleet.slot().lock().await.take();
+    assert_eq!(fleet.evidence_waiting(), 1);
+
+    // The next approved Job goes straight into the slot it found free.
+    let second = fleet.propose(a_proposal("fix the writer")).await.unwrap();
+    worktree_directory(&home, second.id());
+    fleet.approve(second.id()).await.unwrap();
+    assert_eq!(fleet.working_on().await.as_ref(), Some(second.id()));
+
+    // The gate now sees a submission for a Job that is not the one being worked.
+    let turned = fleet.turn().await.unwrap();
+    assert!(turned.ruled.is_none(), "no step of the second Job advanced");
+    assert_eq!(turned.declined, Some(Decline::AnotherJob));
+
+    let overtaken = fleet.load(first.id()).await.unwrap();
+    assert_eq!(overtaken.status(), JobStatus::Escalated);
+    assert_eq!(
+        fleet.last_reason(first.id()).await.unwrap(),
+        Some(TransitionReason::Escalation(EscalationTrigger::Interrupted))
+    );
+    assert!(
+        logged(&home, first.id()).contains("another_job"),
+        "the guard that refused is named in the log of the Job it refused about"
+    );
+}
+
 /// **A decline is recorded on the transition, not on the condition.** The loop
 /// ticks four times a second, so a line per tick is a log nobody can read.
 ///
