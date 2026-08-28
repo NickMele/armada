@@ -58,6 +58,16 @@ const api: BridgeApi = {
   restartStep: (jobId: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.restartStep, jobId),
 
+  // Overrule a Judge that refused the work. **Its own entry and never a flag on
+  // `approveReview`** — that one answers a gate nothing objected to, this one
+  // answers a gate that refused, and one capability taking which would let a
+  // refusal be taken with the act built for work nobody argued about. The
+  // reason is the second argument because it is required: Fleet answers 422
+  // without one, and an override that says nothing is the thing the act is
+  // refused for.
+  overrideVerdict: (jobId: string, reason: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.overrideVerdict, jobId, reason),
+
   watchJob: (jobId: string | null): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.watchJob, jobId),
 

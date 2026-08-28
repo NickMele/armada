@@ -15,7 +15,13 @@
 // what makes "kill the Drone" a request to the daemon that spawned it.
 
 import type { BridgeState, Draft, Outcome } from "../shared/bridge";
-import type { JobSummary, ProposeJob, Redirection, Redispatched } from "../shared/protocol";
+import type {
+  JobSummary,
+  Overruled,
+  ProposeJob,
+  Redirection,
+  Redispatched,
+} from "../shared/protocol";
 import { ask, isJobSummary, type Answer } from "./request";
 import { decide, type Decision } from "./review";
 
@@ -51,6 +57,7 @@ type Busy =
   | "already_killing"
   | "already_redirecting"
   | "already_restarting"
+  | "already_overruling"
   | "already_deciding";
 
 /** A route under one Job. The id is a path segment, so it is encoded. */
@@ -72,6 +79,8 @@ export class JobCommands {
   private readonly killing = new Set<string>();
   private readonly redirecting = new Set<string>();
   private readonly restarting = new Set<string>();
+  /** Jobs with an override in flight. Its own set: it is its own act. */
+  private readonly overruling = new Set<string>();
   /** Jobs with a decision on the work in flight. One press sends one decision. */
   private readonly deciding = new Set<string>();
 
@@ -267,6 +276,27 @@ export class JobCommands {
   async restartStep(jobId: string): Promise<Outcome> {
     return this.act(jobId, this.restarting, "already_restarting", (port) =>
       ask(port, "POST", route(jobId, "restart_step")),
+    );
+  }
+
+  /**
+   * Overrule a Judge that refused the work. **The step advances still carrying
+   * its failure** — nothing about the verdict is rewritten, and the Job goes on
+   * at the next step, or commits and delivers where the refused step was the
+   * last one.
+   *
+   * Its own act rather than a mode on `approveReview`: that one answers
+   * `awaiting_review`, this one answers `escalated`, and one call taking which
+   * would let a refusal be taken with the act built for work nobody objected
+   * to. Blank is refused before the request is sent, matching the 422 Fleet
+   * would give it — and refused at all because an override that says nothing
+   * gives the rate and never the cause.
+   */
+  async overrideVerdict(jobId: string, reason: string): Promise<Outcome> {
+    if (reason.trim() === "") return { ok: false, why: "empty_reason" };
+    const body: Overruled = { reason };
+    return this.act(jobId, this.overruling, "already_overruling", (port) =>
+      ask(port, "POST", route(jobId, "override_verdict"), body),
     );
   }
 

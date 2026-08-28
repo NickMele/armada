@@ -149,6 +149,24 @@
   color: var(--step-advanced);
 }
 
+/* A person overruled the gate and the step advanced carrying the refusal.
+   Beside the verdict rather than in place of it: what the Judge said is still
+   on the row, and this says only that it did not stand.
+
+   Weight, not hue. The verdict next to it already carries the one --step-failed
+   this row is allowed, and a second red would read as one louder failure rather
+   than as two facts — the same argument the review decision's terminal sentence
+   makes for --fg-default against the muted ones around it. */
+.armada-rail__overridden {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
 /* How long the step took. Measured, so it stays flat even under a hued row —
    the same rule the gate row's exit code follows. */
 .armada-rail__elapsed {

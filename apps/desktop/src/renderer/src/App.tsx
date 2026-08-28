@@ -225,6 +225,21 @@ export function App() {
   }
 
   /**
+   * Overrule a Judge that refused the work. **Not through `act`**, for
+   * `redirect`'s reason: the dialog that collected the reason was the
+   * confirmation. **And not through `decide`**, which answers a gate nothing
+   * objected to — this one answers a gate that refused.
+   */
+  async function overrule(jobId: string, reason: string): Promise<void> {
+    setActing(jobId);
+    try {
+      setOutcome(await window.armada.overrideVerdict(jobId, reason));
+    } finally {
+      setActing(null);
+    }
+  }
+
+  /**
    * Answer the review gate. **Three preload calls, not one with a
    * discriminator** — approving takes the work, requesting changes sends the
    * drone back to the same step with the note, and rejecting is terminal and
@@ -401,6 +416,7 @@ export function App() {
                 }}
                 onAct={(what, jobId) => setConfirming({ act: what, jobId })}
                 onRedirect={(jobId, instruction) => void redirect(jobId, instruction)}
+                onOverrule={(jobId, reason) => void overrule(jobId, reason)}
                 onApprove={(jobId) => void approve(jobId)}
                 onApproveReview={(jobId) => void decide(jobId, "approve")}
                 onRequestChanges={(jobId, note) => void decide(jobId, "changes", note)}

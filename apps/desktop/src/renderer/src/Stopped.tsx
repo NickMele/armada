@@ -166,7 +166,7 @@ export function Stopped({
     <AFailedJobADeadEndReadAsOne
       heading={heading}
       why={whyOf(job, whole)}
-      recourse={recourseOf(job).note}
+      recourse={recourseOf(job, whole).note}
       steps={steps}
       stepsAbsent={stepsAbsent}
       work={workOf(job, whole, manifest, true)}

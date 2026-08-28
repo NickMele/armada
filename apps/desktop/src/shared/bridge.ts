@@ -321,7 +321,9 @@ export type Outcome =
   | { ok: false; why: "already_killing" }
   | { ok: false; why: "already_redirecting" }
   | { ok: false; why: "already_restarting" }
+  | { ok: false; why: "already_overruling" }
   | { ok: false; why: "empty_instruction" }
+  | { ok: false; why: "empty_reason" }
   | { ok: false; why: "already_deciding" }
   | { ok: false; why: "empty_note" }
   | { ok: false; why: "refused"; error: WireError }
@@ -393,6 +395,21 @@ export type BridgeApi = {
    * still alive, or where the worktree itself is gone.
    */
   restartStep: (jobId: string) => Promise<Outcome>;
+  /**
+   * Overrule a Judge that refused the work, and let the Job go on.
+   *
+   * **Not an approval, and its own entry for that reason.** `approveReview`
+   * answers a gate nothing objected to; this answers one that refused, and it
+   * says a machine was wrong rather than that the work was right. The step
+   * advances still carrying `failed`, and the reason is written to the Job's log
+   * where it stays.
+   *
+   * Legal only on an escalated Job whose step stopped on `gate_failure` —
+   * Fleet refuses 409 for `evidence_suspect`, for `gate_undecided` and for a
+   * step that stopped on anything else, and 422 for a blank reason. Whether the
+   * Drone is still there decides only how the Job carries on.
+   */
+  overrideVerdict: (jobId: string, reason: string) => Promise<Outcome>;
   /**
    * Read one Job whole and keep it current, or `null` to stop.
    *
@@ -504,6 +521,7 @@ export const CHANNELS = {
   killJob: "bridge:kill-job",
   redirectDrone: "bridge:redirect-drone",
   restartStep: "bridge:restart-step",
+  overrideVerdict: "bridge:override-verdict",
   watchJob: "bridge:watch-job",
   observeJob: "bridge:observe-job",
   readHistory: "bridge:read-history",

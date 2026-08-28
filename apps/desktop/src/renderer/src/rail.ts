@@ -67,6 +67,10 @@ export function railOf(whole: JobWhole, now: number): WorkflowRailStep[] {
       elapsed: took(step, now, frozen !== undefined),
       verdict: step.last_verdict === undefined ? undefined : verdictOf(step),
       verdictNamed: step.last_verdict?.named,
+      // Served, not worked out here. A step that advanced still carrying a
+      // failure is one a person overruled, and the wire decides that once so
+      // that no rail has to notice the pair — see `StepDetail.overridden`.
+      overridden: step.overridden ? OVERRULED : undefined,
       gates: gatesOf(step),
       declarations: declarationsOf(step),
       verdicts: verdictsOf(step, whole.acceptance_criteria),
@@ -75,6 +79,21 @@ export function railOf(whole: JobWhole, now: number): WorkflowRailStep[] {
     };
   });
 }
+
+/**
+ * What the rail says on a step a person overruled.
+ *
+ * **It names the actor, and it never names an outcome.** "advanced" is already
+ * on the row and "failed" is already beside it; what neither says is that a
+ * person is why. No word here implies the work was accepted — `approve_review`
+ * is a different act on a different status and means the work was right, and
+ * this one means a machine was wrong.
+ *
+ * No registry carries it: `enum-verbs.toml` spells statuses, step states and
+ * verdicts, and an override is none of the three. So it is copy, and it is
+ * written once here rather than in each of the three screens that draw a rail.
+ */
+const OVERRULED = "overruled by a person";
 
 /** Where a Job that is over stopped, and what the gate found there. */
 export type StoppedAt = {
