@@ -84,6 +84,19 @@ const NOT_UNDER_REVIEW: &str = "fleet.not_under_review";
 /// them to retry something that will fail identically for ever.
 const NOT_RESUMABLE: &str = "fleet.not_resumable";
 
+/// A path as the filesystem knows it, or as it was given where it cannot be
+/// resolved.
+///
+/// A Manifest that has just been read exists, so the fallback covers the case
+/// where it stopped existing between the read and the ask — and a path saying
+/// where Fleet looked beats an empty string saying nothing.
+fn canonical(path: &std::path::Path) -> String {
+    std::fs::canonicalize(path)
+        .unwrap_or_else(|_| path.to_path_buf())
+        .to_string_lossy()
+        .to_string()
+}
+
 impl<H, V, W> Daemon for Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
@@ -309,7 +322,19 @@ where
                 // A Manifest at the filesystem root has no directory to name.
                 // Its own path is the next most useful true thing.
                 .unwrap_or_else(|| path.to_string_lossy().to_string()),
-            path: path.to_string_lossy().to_string(),
+            // **Absolute, and it has to be.** Bridge derives every artifact path
+            // from this one — the worktree, the Job log, the transcripts — and
+            // then hands the result to the OS to open. A relative path answers
+            // a question about Fleet's working directory, which is not a fact
+            // about the repository and is not a directory Bridge is in: served
+            // as `./armada.yml`, every one of those opens resolved against the
+            // Electron process and found nothing.
+            //
+            // `$HOME` therefore appears on this wire, which the log envelope
+            // and the failure record both refuse. It is a different surface:
+            // those are written down and read later, and this is two processes
+            // on one machine agreeing where a file is.
+            path: canonical(path),
             version: manifest.version(),
             checks: manifest.check_names(),
         }])
