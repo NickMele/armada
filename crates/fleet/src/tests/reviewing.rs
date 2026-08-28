@@ -16,16 +16,17 @@
 
 use std::sync::Arc;
 
+use adapter_traits::{BroughtUpToDate, Standing};
 use axum::http::StatusCode;
 use core_model::{JobId, JobStatus, StepState};
 use ipc::{JobDiff, JobEvidence, RunId};
-use testkit::{FakeJudge, FakeVcs, FakeWorkProduct};
+use testkit::{Delivered, Delivering, FakeJudge, FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
 use crate::gate::Ruling;
 use crate::tests::daemon::{
-    a_fleet_gated_on_a_person, a_fleet_judged_by, a_proposal, diff_evidence, note_evidence,
-    two_steps_gated_on_a_person, worktree_directory,
+    a_fleet_gated_on_a_person, a_fleet_judged_by, a_proposal, diff_evidence, fittings,
+    note_evidence, one, two_steps_gated_on_a_person, worktree_directory,
 };
 use crate::tests::http::call;
 use crate::tests::tmp::TempDir;
@@ -107,6 +108,202 @@ async fn approving_advances_the_step_and_the_job_goes_on() {
         Some("summarise"),
         "the cursor moved to the step that follows"
     );
+}
+
+/// A repository whose base moved on by three commits while a person was
+/// reading, and whose branch goes back on top of it cleanly.
+fn three_commits_behind() -> Delivering {
+    Delivering {
+        standing: Standing::Behind { commits: 3 },
+        rebase: Some(BroughtUpToDate::Clean {
+            base: String::from("main"),
+            commits: 3,
+        }),
+        ..Delivering::default()
+    }
+}
+
+/// **The defect this file was extended for.** A boundary a machine advanced
+/// runs the catch-up and a boundary a person advanced did not, so the same Job
+/// took a different path depending on who let it through and the human-approved
+/// step's successor started on a branch that was three commits behind.
+///
+/// Nothing rebases while the person is reading, which is the other half of the
+/// claim: the rebase belongs on the far side of the decision, because what it
+/// moves is the tree the *next* step starts from and not the diff that was
+/// read.
+#[tokio::test]
+async fn a_boundary_a_person_approved_catches_the_branch_up() {
+    let home = TempDir::new();
+    let fleet = a_fleet_gated_on_a_person(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        "implement",
+        FakeVcs::new().delivering(three_commits_behind()),
+    );
+    let job_id = at_the_gate(&fleet, &home).await;
+    assert!(
+        fleet.vcs().delivered().is_empty(),
+        "nothing moves under a reviewer while they are still reading"
+    );
+
+    let job = fleet
+        .approve_review(&job_id)
+        .await
+        .expect("the work is taken");
+
+    assert_eq!(job.status(), JobStatus::Running);
+    assert_eq!(
+        fleet.vcs().delivered(),
+        vec![Delivered::BroughtUpToDate {
+            branch: format!("armada/{}", job_id.as_str()),
+            base: String::from("main"),
+        }],
+        "a step a person let through starts from the same place an auto-advanced one does"
+    );
+}
+
+/// A base that did not move is not rebased and nothing is announced, at a human
+/// boundary exactly as at a mechanical one — the catch-up is attempted at every
+/// boundary and is a no-op at most of them.
+#[tokio::test]
+async fn a_branch_that_is_not_behind_is_left_alone_at_a_human_boundary() {
+    let home = TempDir::new();
+    let fleet = a_fleet_reviewing_the_first_step(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let job_id = at_the_gate(&fleet, &home).await;
+
+    fleet
+        .approve_review(&job_id)
+        .await
+        .expect("the work is taken");
+
+    assert!(fleet.vcs().delivered().is_empty());
+}
+
+/// A conflict at a human gate is handed to the Drone that is standing there.
+///
+/// `HeldForReview` keeps the Drone alive holding its context, so the ordinary
+/// human gate has somebody to give the resolution to — and a conflict is work
+/// rather than a verdict, so the Job carries on and the step the person
+/// approved still advanced.
+#[tokio::test]
+async fn a_conflict_at_a_human_boundary_goes_to_the_drone_that_is_still_there() {
+    let home = TempDir::new();
+    let fleet = a_fleet_gated_on_a_person(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        "implement",
+        FakeVcs::new().delivering(Delivering {
+            standing: Standing::Behind { commits: 1 },
+            rebase: Some(BroughtUpToDate::Conflicted {
+                base: String::from("main"),
+                files: vec![String::from("src/log.rs")],
+            }),
+            ..Delivering::default()
+        }),
+    );
+    let job_id = at_the_gate(&fleet, &home).await;
+
+    let job = fleet
+        .approve_review(&job_id)
+        .await
+        .expect("a conflict is not a refusal of the person's decision");
+
+    assert_eq!(
+        job.status(),
+        JobStatus::Running,
+        "a conflict is work for the Drone, not a verdict on the Job"
+    );
+    let reloaded = fleet.load(&job_id).await.expect("the Job is there");
+    assert_eq!(
+        reloaded
+            .step(&core_model::StepId::new("implement".to_string()))
+            .map(|step| step.state()),
+        Some(StepState::Advanced),
+        "and the step the person approved still advanced"
+    );
+    assert!(
+        fleet.working_on().await.is_some(),
+        "the Drone is still there to be handed it"
+    );
+}
+
+/// **#131's ordering holds on the human path too.** The baseline is read after
+/// the catch-up, so a rebase's output is inherited by the next step rather than
+/// credited to it: a Drone that resolves none of the markers differs from what
+/// it was handed in nothing, and `diff_nonempty` fails it.
+///
+/// The workflow is built here rather than taken from the fixtures because the
+/// shape needed is a specific one — a person on the first step's gate and a
+/// diff check on the second — and no fixture has it.
+#[tokio::test]
+async fn a_step_after_a_human_boundary_does_not_advance_on_a_rebase_it_did_not_resolve() {
+    let home = TempDir::new();
+    let work = FakeWorkProduct::untouched();
+    let mut fittings = fittings(&home, FakeWorkProduct::untouched());
+    let def = config::WorkflowDef::parse(
+        std::path::Path::new("fixture.yml"),
+        "version: 1\nworkflow_id: fixture-workflow\nname: fixture\nstructure: linear\n\
+         steps:\n  - id: implement\n    label: \"Implement\"\n    evidence_type: diff\n    \
+         mechanical_checks:\n      - type: diff_nonempty\n    advance_gate: human_always\n  - \
+         id: verify\n    label: \"Verify\"\n    evidence_type: diff\n    \
+         mechanical_checks:\n      - type: diff_nonempty\n    advance_gate: auto\n",
+    )
+    .expect("the fixture workflow parses");
+    let workflow = config::ResolvedWorkflow::resolve(&def, &fittings.manifest)
+        .expect("the fixture workflow resolves");
+    fittings.workflows = one(workflow);
+    fittings.vcs = FakeVcs::new()
+        .delivering(Delivering {
+            standing: Standing::Behind { commits: 1 },
+            rebase: Some(BroughtUpToDate::Conflicted {
+                base: String::from("main"),
+                files: vec![String::from("src/reader.rs")],
+            }),
+            ..Delivering::default()
+        })
+        // **A file the approved step never touched**, so that the two possible
+        // orderings give different answers. Read after the rebase the baseline
+        // holds it and the next step differs from that in nothing; read before,
+        // git's own output is the next step's work and it advances on it.
+        .writing_into(work.holding(), &["src/reader.rs"]);
+    fittings.work = work;
+    let fleet = Fleet::assembled(fittings);
+
+    let job = fleet
+        .propose(a_proposal("fix the off-by-one in the log reader"))
+        .await
+        .expect("a Job at the approval gate");
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.expect("it dispatches");
+
+    // The first step does real work and stops at the person's gate.
+    fleet
+        .work()
+        .wrote(&[("src/log.rs", adapter_traits::Change::Modified)]);
+    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    let turned = fleet.turn().await.expect("the gate runs");
+    assert!(
+        matches!(turned.ruled, Some(Ruling::HeldForReview { .. })),
+        "the first step is a person's: {:?}",
+        turned.ruled
+    );
+
+    fleet
+        .approve_review(job.id())
+        .await
+        .expect("the work is taken");
+
+    // The second step's Drone resolves nothing and submits anyway.
+    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    let turned = fleet.turn().await.expect("the gate runs again");
+    let Some(Ruling::Failed { failures, .. }) = &turned.ruled else {
+        panic!(
+            "the step advanced on markers a person's approval handed it: {:?}",
+            turned.ruled
+        );
+    };
+    assert_eq!(failures, &[verification::CheckFailed::DiffEmpty]);
 }
 
 /// A gate on the workflow's last step. **Approving there lands the work**: the
