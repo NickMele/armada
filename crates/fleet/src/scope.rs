@@ -1,16 +1,17 @@
 //! The scope tool, and the drift check that runs while the step does.
 //!
-//! # Two checks, two moments, two consequences
+//! # Two checks, two moments, and neither of them fails the step
 //!
 //! | When | What it compares | What it does |
 //! |---|---|---|
-//! | Every turn, while the step runs | Live edits against the plan | Records it. **Does not fail the step** |
-//! | At the gate | The final footprint against the plan | A mechanical gate failure |
+//! | Every turn, while the step runs | Live edits against the plan | Records it, and feeds the convergence look |
+//! | At the gate | The final footprint against the plan | Tags the step for a mandatory Judge look |
 //!
-//! The live one does not fail because investigation sometimes finds the real
-//! work outside the plan, and the answer is to call the tool again — which
-//! replaces it. A Drone that never does is failed by the gate on the same
-//! comparison, which is what stops the softer half being toothless.
+//! Neither fails because investigation sometimes finds the real work outside
+//! the plan. The answer while the step runs is to call the tool again, which
+//! replaces the plan; the answer at the gate is one narrow Judge question,
+//! which is `docs/concepts/judge.md`'s and is what stops the softer half being
+//! toothless.
 //!
 //! # Nothing here is a model call, and nothing takes the Drone's word
 //!

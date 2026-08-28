@@ -133,12 +133,14 @@ pub enum CheckFailed {
     /// **Not "the worktree is empty."** The worktree can be full of an earlier
     /// step's work; what this says is that *this* step added nothing to it.
     DiffEmpty,
-    /// The step's footprint disagreed with what the Drone declared.
+    /// The declaration itself was not one the step could be measured against —
+    /// none arrived, or it named a path the step's own denylist refuses.
     ///
-    /// **A mechanical gate failure, and a Drone-behaviour red flag** — the
-    /// registry's own reading. It is not a Judge question: work whose footprint
-    /// is outside this step's scope belongs to some other step, and no model
-    /// call is needed to see that.
+    /// **Never [`OutsideScope::Undeclared`].** This used to argue that drift
+    /// belonged here because no model call is needed to see it. That was true
+    /// about the cost and wrong about the consequence: the Judge is asked only
+    /// where the mechanical tier held, so folding drift in made the look
+    /// `docs/concepts/judge.md` calls mandatory unreachable.
     OutOfScope(OutsideScope),
 }
 
@@ -173,7 +175,9 @@ impl CheckFailed {
             CheckFailed::OutOfScope(OutsideScope::NothingDeclared) => {
                 "the step declares which paths its work is in".to_string()
             }
-            CheckFailed::OutOfScope(_) => "the step changes only what it declared".to_string(),
+            CheckFailed::OutOfScope(_) => {
+                "the step declares only paths its evidence scope allows".to_string()
+            }
         }
     }
 

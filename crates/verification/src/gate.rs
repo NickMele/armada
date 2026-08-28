@@ -110,14 +110,15 @@ impl Verdict {
         matches!(self, Verdict::Advance)
     }
 
-    /// Fold in a failure that no declared check produced — today, the step's
-    /// evidence scope.
+    /// Fold in a failure that no declared check produced — today, a
+    /// declaration the step could not be measured against.
     ///
     /// **Nothing here constructs [`Verdict::Advance`]**, which is what it has
-    /// in common with [`Verdict::but_for`]: it can only narrow. The scope tier
-    /// sits between the mechanical one and the Judge for the reason the
-    /// registry gives — the footprint is verified before the Judge runs, so a
-    /// step that did another step's work never reaches a model call.
+    /// in common with [`Verdict::but_for`]: it can only narrow.
+    ///
+    /// Declared plan drift does not arrive here. It is the Judge's, and
+    /// folding it in was what made that look unreachable — see
+    /// [`CheckFailed::OutOfScope`].
     pub fn and_also(self, failed: Option<CheckFailed>) -> Verdict {
         match (self, failed) {
             (Verdict::Advance, Some(failed)) => Verdict::Failed(vec![failed]),

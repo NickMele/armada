@@ -1,26 +1,34 @@
 //! Evidence bound to what the step actually touched.
 //!
-//! Two moments and two consequences, which is why they are two groups of
-//! cases: at the gate a footprint outside the declaration fails the step, and
-//! during the step it is recorded and the Drone may declare again.
+//! Two moments, and neither fails the step: at the gate a footprint outside the
+//! declaration tags the step for a mandatory Judge look, and during the step it
+//! is recorded and the Drone may declare again.
 //!
 //! The third group is the one that matters most and asserts nothing new: a step
 //! carrying no `evidence_scope` reads no worktree for a scope it does not have
 //! and behaves exactly as it did before any of this existed.
 
+use std::sync::Arc;
+
 use adapter_traits::Footprint;
-use core_model::{CheckOutcome, DeclaredPaths, RepoPath};
+use core_model::{
+    CheckOutcome, CriterionId, DeclaredPaths, EscalationTrigger, JobStatus, JudgeVerdict, RepoPath,
+    Timestamp, TransitionReason,
+};
 use ipc::mcp::DeclareScope;
-use testkit::{FakeWorkProduct, Gate, Scoped, Sketch};
-use verification::{CheckFailed, Claimed, NotClaimed, OutsideScope, ShownBy, EVIDENCE_SCOPE};
+use testkit::{FakeJudge, FakeWorkProduct, Gate, Scoped, Sketch};
+use verification::{CheckFailed, Claimed, NotClaimed, OutsideScope, ShownBy, DECLARED_PLAN_DRIFT};
 
 use crate::adrift::NotDeclared;
 use crate::at_step::AtStep;
 use crate::daemon::Fleet;
 use crate::evidence::Call;
-use crate::gate::{rule_on, Ruling};
-use crate::tests::daemon::{a_fleet_holding, a_proposal, worktree_directory};
-use crate::tests::gate::{budget, diff_evidence, judging, worktree};
+use crate::gate::{apply, rule_on, Ruling};
+use crate::judging::Judging;
+use crate::tests::daemon::{a_fleet_holding, a_fleet_judged_by, a_proposal, worktree_directory};
+use crate::tests::gate::{
+    budget, diff_evidence, judged_by, judged_by_shared, judging, running_job, worktree,
+};
 use crate::tests::tmp::TempDir;
 
 fn a_diff_call<'a>() -> Call<'a> {
@@ -54,7 +62,18 @@ fn declared(paths: &[&str]) -> DeclaredPaths {
     DeclaredPaths::of(paths.iter().copied().map(RepoPath::new).collect())
 }
 
+/// Ruled on by a Judge that must never be asked. Every case below that uses it
+/// asserts the tier stayed cold as much as it asserts the ruling.
 async fn ruled_on(
+    workflow: &config::ResolvedWorkflow,
+    declared: Option<&DeclaredPaths>,
+    changed: &[&str],
+) -> Ruling {
+    ruled_by(&judging(), workflow, declared, changed).await
+}
+
+async fn ruled_by(
+    judging: &Judging,
     workflow: &config::ResolvedWorkflow,
     declared: Option<&DeclaredPaths>,
     changed: &[&str],
@@ -70,20 +89,54 @@ async fn ruled_on(
         &[],
         &work,
         budget(),
-        &judging(),
+        judging,
     )
     .await
 }
 
 // ------------------------------------------------------------ at the gate
 
-/// **The recycling this capability is named for.** A step that changed a file
-/// belonging to some other step did that step's work, and no model call is
-/// needed to see it.
+/// **The mandatory look, on a step that declares no criterion of its own.**
+/// `judge.md` gives declared plan drift to the Judge; the step here asks
+/// nothing, so the only thing that can have made a call is the drift.
 #[tokio::test]
-async fn a_step_that_changed_what_it_did_not_declare_does_not_advance() {
+async fn a_step_that_changed_what_it_did_not_declare_reaches_the_judge() {
     let workflow = scoped(true, &[]);
-    let ruling = ruled_on(
+    let judge = Arc::new(FakeJudge::with_no_objection());
+    let ruling = ruled_by(
+        &judged_by_shared(Arc::clone(&judge)),
+        &workflow,
+        Some(&declared(&["docs"])),
+        &["docs/plan.md", "crates/fleet/src/gate.rs"],
+    )
+    .await;
+
+    assert!(
+        ruling.advanced(),
+        "a step that drifted and whose Judge is content advances: {ruling:?}"
+    );
+    let asked = judge.asked();
+    assert_eq!(asked.len(), 1, "one call, and no panel: {asked:?}");
+    assert!(
+        asked[0].contains("outside that declaration: crates/fleet/src/gate.rs."),
+        "the question names the path that drifted, and only that path — \
+         `docs/plan.md` was declared: {}",
+        asked[0]
+    );
+}
+
+/// **Escalated, never terminal.** Job `01M148ZF0D001BYXWN9XWHYGYF` reached
+/// `completed_failed` on drift, which `restart_step` cannot come back from. A
+/// refusal is a person's to answer.
+#[tokio::test]
+async fn drift_the_judge_refuses_escalates_rather_than_ending_the_job() {
+    let workflow = scoped(true, &[]);
+    let ruling = ruled_by(
+        &judged_by(FakeJudge::refusing(
+            "the step touches only what it declared",
+            "it also rewrote an unrelated module",
+            "the next step's work is already half done and unreviewed",
+        )),
         &workflow,
         Some(&declared(&["docs"])),
         &["docs/plan.md", "crates/fleet/src/gate.rs"],
@@ -91,34 +144,122 @@ async fn a_step_that_changed_what_it_did_not_declare_does_not_advance() {
     .await;
 
     assert!(!ruling.advanced());
-    let Ruling::Failed { failures, .. } = &ruling else {
-        panic!("a footprint outside the declaration is a gate failure: {ruling:?}");
+    let Ruling::Refused { refusals, .. } = &ruling else {
+        panic!("a drift refusal is a refusal, not a gate failure: {ruling:?}");
     };
     assert_eq!(
-        failures,
-        &vec![CheckFailed::OutOfScope(OutsideScope::Undeclared {
-            changed: vec![RepoPath::new("crates/fleet/src/gate.rs")]
-        })],
-        "the failure names the file, and only the file that was outside"
+        refusals.criteria(),
+        vec![&CriterionId::new(DECLARED_PLAN_DRIFT)]
+    );
+    assert!(
+        !ruling.ends_the_drone(),
+        "the Drone stays alive and idle, which is what a redirect resumes"
+    );
+    let moved = apply(
+        &running_job(),
+        &ruling,
+        Timestamp::from_rfc3339("2026-08-26T09:00:00.000Z"),
+    )
+    .expect("a refusal moves the Job")
+    .expect("a legal move");
+    assert_eq!(moved.job.status(), JobStatus::Escalated);
+    assert!(!moved.job.status().is_terminal(), "drift is answerable");
+    assert_eq!(
+        moved.event.reason(),
+        &TransitionReason::Escalation(EscalationTrigger::GateFailure)
     );
 }
 
-/// The refusal is a row like any other failure, so a person reading the record
-/// sees which gate stopped the step rather than only that one did.
+/// Drift writes no failed Check row. `CheckOutcome` has no value meaning "seen
+/// and did not stop the step", and `Failed` would say the gate failed when it
+/// held — the record of the look is the judgment, cited by criterion.
 #[tokio::test]
-async fn the_scope_check_is_written_down_as_a_check_that_failed() {
+async fn drift_is_recorded_as_a_judgment_rather_than_a_failed_check() {
     let workflow = scoped(true, &[]);
-    let ruling = ruled_on(&workflow, Some(&declared(&["docs"])), &["src/lib.rs"]).await;
+    let ruling = ruled_by(
+        &judged_by(FakeJudge::with_no_objection()),
+        &workflow,
+        Some(&declared(&["docs"])),
+        &["src/lib.rs"],
+    )
+    .await;
 
     let recorded: Vec<(&str, CheckOutcome)> = ruling
         .checks()
         .iter()
         .map(|check| (check.name.as_str(), check.outcome))
         .collect();
-    assert_eq!(recorded, vec![(EVIDENCE_SCOPE, CheckOutcome::Failed)]);
+    assert_eq!(recorded, Vec::new());
+    let judged = ruling.judged();
+    assert_eq!(judged.len(), 1);
     assert_eq!(
-        ruling.checks()[0].expected.as_deref(),
-        Some("the step changes only what it declared")
+        judged[0].criterion_id,
+        CriterionId::new(DECLARED_PLAN_DRIFT)
+    );
+    assert_eq!(judged[0].verdict, JudgeVerdict::Met);
+}
+
+/// A declaration the step's own denylist refuses is **not** drift, and stays
+/// mechanical: a model that could excuse a denylist is not a denylist. The
+/// Judge here would fail if it were asked.
+#[tokio::test]
+async fn a_declaration_the_denylist_refuses_is_still_a_gate_failure() {
+    let workflow = scoped(true, &["secrets"]);
+    let ruling = ruled_on(
+        &workflow,
+        Some(&declared(&["secrets/keys.toml"])),
+        &["secrets/keys.toml"],
+    )
+    .await;
+
+    assert!(
+        matches!(
+            &ruling,
+            Ruling::Failed { failures, .. }
+                if failures == &vec![CheckFailed::OutOfScope(OutsideScope::Excluded {
+                    declared: vec![RepoPath::new("secrets/keys.toml")]
+                })]
+        ),
+        "{ruling:?}"
+    );
+}
+
+/// The whole of the defect, through a real Fleet: a Job that drifts stops at
+/// `escalated`, from which `restart_step` and Pilot are both reachable, rather
+/// than at `completed_failed`, from which neither is.
+#[tokio::test]
+async fn a_job_that_drifted_is_answerable_rather_than_over() {
+    let home = TempDir::new();
+    let fleet = a_fleet_judged_by(
+        &home,
+        FakeWorkProduct::changed(&["docs/plan.md", "protocol-version.toml"]),
+        scoped(true, &[]),
+        FakeJudge::refusing(
+            "the bump is this step's own work",
+            "it belongs to the step that adds the operation",
+            "two steps' changes land under one review",
+        ),
+    );
+    let job = fleet.propose(a_proposal("write the plan")).await.unwrap();
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.unwrap();
+    fleet
+        .declare_scope(&DeclareScope {
+            context_paths: vec!["docs".to_string()],
+        })
+        .await
+        .unwrap();
+
+    fleet.submit_evidence(a_diff_call()).await.unwrap();
+    let turned = fleet.turn().await.unwrap();
+    assert!(
+        matches!(turned.ruled, Some(Ruling::Refused { .. })),
+        "{:?}",
+        turned.ruled
+    );
+    assert_eq!(
+        fleet.load(job.id()).await.unwrap().status(),
+        JobStatus::Escalated
     );
 }
 
