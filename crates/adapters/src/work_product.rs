@@ -13,8 +13,6 @@
 //! knows by name — a field on a record that can disagree with the record
 //! holding it. Deriving it costs one revision walk.
 //!
-//! A reading is narrowed to one step's own work by a [`Since`]: see [`mine`].
-//!
 //! # Untracked files count
 //!
 //! A Drone that writes a new file and does not stage it has produced work, and
@@ -28,9 +26,11 @@
 //! no branch that returns "nothing changed" because something could not be
 //! opened — that would turn a broken machine into a Drone that did no work.
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-use adapter_traits::{Change, Changed, ChangedFile, Patch, Since, Was, WorkProduct, Worktree};
+use adapter_traits::{Change, Changed, ChangedFile, Footprint, Patch, WorkProduct, Worktree};
 use git2::{Delta, Diff, DiffOptions, Oid, Repository};
 
 use crate::error::ReadWorkProductError;
@@ -39,58 +39,32 @@ use crate::worktree::GitVcs;
 impl WorkProduct for GitVcs {
     type Error = ReadWorkProductError;
 
-    fn already_there(&self, worktree: &Worktree) -> Result<Since, Self::Error> {
+    fn changed_files(&self, worktree: &Worktree) -> Result<Changed, Self::Error> {
         let (repo, base) = opened(worktree)?;
         let diff = diff_of(&repo, base, worktree)?;
-        Ok(Since::was_there(
-            files(&diff)
-                .into_iter()
-                .map(|file| {
-                    let fingerprint = fingerprint(worktree, file.path());
-                    Was::new(file.path().to_string(), fingerprint)
-                })
-                .collect(),
-        ))
+        Ok(Changed::of(files(&diff)))
     }
 
-    fn changed_files(&self, worktree: &Worktree, since: &Since) -> Result<Changed, Self::Error> {
-        let (repo, base) = opened(worktree)?;
-        let diff = diff_of(&repo, base, worktree)?;
-        Ok(Changed::of(mine(worktree, files(&diff), since)))
+    fn footprint(&self, worktree: &Worktree) -> Result<Footprint, Self::Error> {
+        let path = worktree.path();
+        let root = Path::new(path);
+        let changed = self.changed_files(worktree)?;
+        let mut entries = Vec::with_capacity(changed.len());
+        for file in changed.files() {
+            entries.push((file.path().to_string(), held(root, file.path(), path)?));
+        }
+        Ok(Footprint::of(entries))
     }
 
-    fn patch(&self, worktree: &Worktree, since: &Since) -> Result<Patch, Self::Error> {
+    fn patch(&self, worktree: &Worktree) -> Result<Patch, Self::Error> {
         let (repo, base) = opened(worktree)?;
         let diff = diff_of(&repo, base, worktree)?;
-        // The step's own files, decided once and then used to drop whole deltas
-        // as the diff prints. Filtering the rendering rather than restricting
-        // the diff keeps one reading of the repository and one set of rules for
-        // what belongs to the step — a pathspec would be a second.
-        //
-        // **A file this step edited that an earlier step wrote shows its whole
-        // change since the branch, not since the step began.** The Judge is
-        // handed more context than the step wrote rather than less, which is
-        // the direction that cannot turn a step that produced nothing into one
-        // that produced something.
-        let mine: Vec<String> = mine(worktree, files(&diff), since)
-            .iter()
-            .map(|file| file.path().to_string())
-            .collect();
 
         // Whole-diff rendering, patches and headers together, in git's own
         // text. A structured walk would be Armada deciding what a hunk means,
         // and what the Judge is handed is the diff a person would read.
         let mut text = String::new();
-        diff.print(git2::DiffFormat::Patch, |delta, _, line| {
-            let path = delta
-                .new_file()
-                .path()
-                .or_else(|| delta.old_file().path())
-                .map(|path| path.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            if !mine.contains(&path) {
-                return true;
-            }
+        diff.print(git2::DiffFormat::Patch, |_, _, line| {
             if matches!(line.origin(), '+' | '-' | ' ') {
                 text.push(line.origin());
             }
@@ -140,49 +114,44 @@ fn diff_of<'r>(
         })
 }
 
-/// The files of a branch-wide reading that this step is responsible for.
+/// What one changed path holds, as a value two readings can be compared on.
 ///
-/// The merge base answers what the *Job* produced, which passes `diff_nonempty`
-/// for every step after the first that writes anything. A [`Since`] holds what
-/// the worktree held when the step began, each path with its blob id, and every
-/// file still exactly as it was found drops out here.
+/// **A hash of the bytes, not the bytes.** A footprint is taken at every step
+/// start and every gate, and holding the contents of the work would put the
+/// whole diff in memory twice for a question whose answer is one bit.
 ///
-/// **The fingerprint is what makes it a boundary rather than a commit.** A
-/// Drone may leave its work uncommitted, and a step that edits an inherited
-/// file has worked.
+/// **Not `git`'s object id.** A blob id exists for what git has stored, and the
+/// interesting case here is the opposite one — a Drone's edit sitting in the
+/// working tree, unstaged, which is precisely what a step produces before it
+/// commits anything.
 ///
-/// Nothing is dropped where nothing was inherited, so the first step of a Job
-/// and every caller asking about the whole branch pay no fingerprinting at all.
-fn mine(worktree: &Worktree, changed: Vec<ChangedFile>, since: &Since) -> Vec<ChangedFile> {
-    if since.is_empty() {
-        return changed;
+/// The hasher is `std`'s, so the value is stable within a process and promises
+/// nothing across builds. That is the whole of what
+/// [`Footprint::differs_from`] needs, and the type's own comment says a
+/// footprint is comparable only against another reading in the same process.
+///
+/// A path the diff named and the filesystem no longer has is a **deletion**,
+/// which is a change and reads as one rather than as a failure. Anything else
+/// the filesystem refuses is an error: see
+/// [`ReadWorkProductError::ContentUnreadable`].
+fn held(root: &Path, named: &str, worktree: &str) -> Result<String, ReadWorkProductError> {
+    match std::fs::read(root.join(named)) {
+        Ok(bytes) => {
+            let mut hasher = DefaultHasher::new();
+            bytes.hash(&mut hasher);
+            Ok(format!("{:016x}", hasher.finish()))
+        }
+        Err(cause) if cause.kind() == std::io::ErrorKind::NotFound => Ok(String::from("gone")),
+        Err(cause) => Err(ReadWorkProductError::ContentUnreadable {
+            worktree: worktree.to_string(),
+            path: named.to_string(),
+            cause,
+        }),
     }
-    changed
-        .into_iter()
-        .filter(|file| !since.covers(file.path(), &fingerprint(worktree, file.path())))
-        .collect()
 }
 
-/// What is in this file now, as an identity that can be compared.
-///
-/// **Hashed, never written.** `Oid::hash_file` computes a blob id without
-/// putting an object in the repository, which is what keeps this trait a
-/// capability that only reads.
-///
-/// An empty string is a path with no readable file at it — deleted, or a
-/// directory where a file was. Two such states compare equal, and they should:
-/// neither of them is this step having written something.
-fn fingerprint(worktree: &Worktree, path: &str) -> String {
-    Oid::hash_file(
-        git2::ObjectType::Blob,
-        Path::new(worktree.path()).join(path),
-    )
-    .map(|id| id.to_string())
-    .unwrap_or_default()
-}
-
-/// The worktree's repository and the commit its branch was cut from — the two
-/// readings both methods above start from.
+/// The worktree's repository and the commit its branch was cut from — what
+/// every reading above starts from.
 fn opened(worktree: &Worktree) -> Result<(Repository, Oid), ReadWorkProductError> {
     let path = worktree.path();
     let repo =

@@ -31,7 +31,7 @@ fn note_evidence() -> Submission {
 }
 
 const PASSED: Observed = Observed::Command(Exit::Code(0));
-const CHANGED: Observed = Observed::Diff { changed_files: 2 };
+const CHANGED: Observed = Observed::Diff { moved: true };
 
 #[test]
 fn evidence_and_every_check_passing_advances_the_step() {
@@ -55,7 +55,7 @@ fn evidence_with_every_check_failing_advances_nothing() {
         step,
         &[
             Observed::Command(Exit::Code(101)),
-            Observed::Diff { changed_files: 0 },
+            Observed::Diff { moved: false },
         ],
     )
     .expect("both checks ran");
@@ -81,8 +81,7 @@ fn one_failing_check_out_of_two_advances_nothing() {
     let workflow = workflow();
     let step = gated(&workflow);
     let evidence = diff_evidence();
-    let ran =
-        Ran::of(step, &[PASSED, Observed::Diff { changed_files: 0 }]).expect("both checks ran");
+    let ran = Ran::of(step, &[PASSED, Observed::Diff { moved: false }]).expect("both checks ran");
 
     let accepted = Accepted::of(step, &evidence).expect("the right kind of evidence");
     assert_eq!(

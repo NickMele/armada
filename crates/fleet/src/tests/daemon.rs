@@ -803,7 +803,7 @@ async fn a_drone_that_leaves_without_submitting_does_not_leave_the_job_running()
 #[tokio::test]
 async fn a_second_step_that_writes_nothing_is_not_credited_with_the_first_step_s_file() {
     let home = TempDir::new();
-    let mut fittings = fittings(&home, FakeWorkProduct::untouched().inherited());
+    let mut fittings = fittings(&home, FakeWorkProduct::untouched());
     fittings.workflows = one(two_steps_both_gated_on_a_diff());
     let fleet = Fleet::assembled(fittings);
 

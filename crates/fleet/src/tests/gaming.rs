@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use adapter_traits::{Environment, Model};
+use adapter_traits::{Environment, Footprint, Model};
 use config::ResolvedWorkflow;
 use core_model::{
     EscalationTrigger, EvidenceRef, EvidenceType, GamingPattern, JobStatus, StepEvidence, StepId,
@@ -22,7 +22,7 @@ use crate::gate::{apply, rule_on, Ruling};
 use crate::judging::{JudgeBudget, Judging};
 use crate::tests::daemon::{a_fleet_judged_by, a_proposal, worktree_directory};
 use crate::tests::detail::get;
-use crate::tests::gate::{budget, diff_evidence, fresh, running_job, worktree};
+use crate::tests::gate::{budget, diff_evidence, running_job, worktree};
 use crate::tests::tmp::TempDir;
 
 /// The diff a Drone submits when it narrows the gate instead of fixing the
@@ -102,7 +102,7 @@ async fn ruled(patch: &str, flag_if: &[&str], recorded: &[(StepId, StepEvidence)
         at,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         recorded,
         &work,
         budget(),
@@ -205,7 +205,7 @@ async fn a_step_that_asks_nothing_about_gaming_is_never_looked_at() {
         at,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -276,7 +276,7 @@ async fn a_flagged_step_keeps_what_the_judge_said_about_its_criteria() {
         at,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),

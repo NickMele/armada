@@ -131,7 +131,7 @@ pub use drone::{
     aftermath, environment, Aftermath, DroneNotStarted, Ending, HostPaths, Left, Started,
 };
 pub use evidence::{Call, EvidenceInbox, EvidenceTool, Landed, Recorded};
-pub use gate::{apply, rule_on, CheckBudget, CheckOutput, NoFooting, Ruling};
+pub use gate::{apply, rule_on, CheckBudget, CheckOutput, Ruling};
 pub use judging::{CallFailed, JudgeBudget, Judging};
 pub use mint::{Mint, UlidMint};
 pub use process::{holder_of, Holder, ProbeFailed, StartedAt};
@@ -146,4 +146,4 @@ pub use scope::{Declared, Drifting};
 pub use session::{DroneSession, LiveSession, Turn};
 pub use transcript::{history, log_of, transcript_of, Live, Recording, Spine, Tap, Taps};
 pub use turning::{keep_turning, Turning};
-pub use watch::{StepMark, Watching};
+pub use watch::{Progress, Watching};

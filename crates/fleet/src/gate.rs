@@ -35,11 +35,10 @@
 //! every case below be tested with no database.
 
 use std::error::Error;
-use std::fmt;
 use std::path::Path;
 use std::time::Duration;
 
-use adapter_traits::{Since, WorkProduct};
+use adapter_traits::{Footprint, WorkProduct};
 use checks_runner::Output;
 use core_model::{
     Actor, AdvanceGate, DeclaredPaths, EscalationTrigger, IllegalTransition, Job, Judgment,
@@ -72,24 +71,6 @@ impl CheckBudget {
         self.0
     }
 }
-
-/// The worktree could not be read at the instant the step began, so nothing
-/// knows which of the branch's changes are this step's.
-///
-/// Carried as the cause of a [`Ruling::CouldNotDecide`] rather than as a ruling
-/// of its own: it is one more artifact the gate could not derive, and the
-/// alternative — falling back to the whole branch — is the reading that let a
-/// step advance having written nothing.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NoFooting;
-
-impl fmt::Display for NoFooting {
-    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
-        out.write_str("the worktree could not be read when the step began")
-    }
-}
-
-impl Error for NoFooting {}
 
 /// What one Check printed, kept for a person to read.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -353,19 +334,16 @@ impl Ruling {
 /// `recorded` is what every step of this Job has submitted so far. **The
 /// gaming check is its only reader**, through [`AtStep::baseline`], which will
 /// not answer with anything but a strictly earlier step's.
-/// `since` is what this step inherited — the Job's work product as it stood
-/// when the step began. **Every reading of the worktree below is measured from
-/// it**, so `diff_nonempty`, the scope tier and the patch the Judge is handed
-/// all answer about this step rather than about the branch.
-///
-/// That is what should have caught the step that advanced having written
-/// nothing: `diff_nonempty` was reading the whole branch and counting an
-/// earlier step's file as this step's work.
+/// `entered_with` is what the worktree held when this step began, and
+/// `diff_nonempty` is decided by comparing it against a second reading taken
+/// here. That is what catches the step that advanced having written nothing:
+/// the check used to read the whole branch and count an earlier step's file as
+/// this step's work.
 pub async fn rule_on<W>(
     at: AtStep<'_>,
     evidence: &Submission,
     declared: Option<&DeclaredPaths>,
-    since: Option<&Since>,
+    entered_with: Option<&Footprint>,
     recorded: &[(StepId, StepEvidence)],
     work: &W,
     budget: CheckBudget,
@@ -380,18 +358,6 @@ where
         Ok(accepted) => accepted,
         Err(mismatch) => return Ruling::NotWhatTheStepAsked(mismatch),
     };
-    // Resolved before a Check runs, because a step whose own footprint cannot
-    // be told from the branch's cannot be gated by any of what follows — and
-    // the budget is not spent finding that out.
-    let Some(since) = since else {
-        return Ruling::CouldNotDecide {
-            artifact: "where the step's own work started from",
-            cause: Box::new(NoFooting),
-            checks: Vec::new(),
-            output: Vec::new(),
-        };
-    };
-
     let mut observed = Vec::with_capacity(step.checks().len());
     let mut output = Vec::new();
     for check in step.checks() {
@@ -406,12 +372,19 @@ where
                     output: attempt.output,
                 });
             }
-            // **The step's own files, not the branch's.** A step that wrote
-            // nothing fails here even where an earlier step of the same Job
-            // wrote something, which is the whole of what it claims to check.
-            ResolvedCheck::DiffNonempty => match work.changed_files(at.worktree(), since) {
-                Ok(changed) => observed.push(Observed::Diff {
-                    changed_files: changed.len(),
+            // **Against the step's own start, never the branch's.** A step that
+            // wrote nothing used to pass this on the files an earlier step
+            // committed; `entered_with` is what the worktree held when this
+            // step began, and the difference is what this step did.
+            //
+            // A step with no baseline is one Fleet never saw start — a Drone
+            // adopted mid-flight, or a slot that lost its reading. The honest
+            // answer there is that nothing is known to have moved, which fails
+            // the check rather than passing it: an unread baseline must not
+            // advance a step, for `Changed::nothing`'s reason.
+            ResolvedCheck::DiffNonempty => match work.footprint(at.worktree()) {
+                Ok(now) => observed.push(Observed::Diff {
+                    moved: entered_with.is_some_and(|before| now.differs_from(before)),
                 }),
                 Err(cause) => {
                     return Ruling::CouldNotDecide {
@@ -449,7 +422,7 @@ where
     // what leaves a step without one behaving exactly as it did before.
     let scope = match step.evidence_scope() {
         None => None,
-        Some(scope) => match work.changed_files(at.worktree(), since) {
+        Some(scope) => match work.changed_files(at.worktree()) {
             Ok(changed) => InScope::resolved(scope, declared, &changed.paths())
                 .err()
                 .map(CheckFailed::OutOfScope),
@@ -472,7 +445,7 @@ where
     let (judged, verdict) = match mechanical.advanced() && step.asks_the_judge() {
         false => (Vec::new(), mechanical),
         true => {
-            let patch = match work.patch(at.worktree(), since) {
+            let patch = match work.patch(at.worktree()) {
                 Ok(patch) => patch,
                 Err(cause) => {
                     return Ruling::CouldNotDecide {
@@ -505,10 +478,7 @@ where
     // stopped needs no second reason. It cannot take an advance away by
     // failing the step — it routes elsewhere entirely.
     if verdict.advanced() {
-        if let Some(suspect) = suspect(
-            at, work, since, recorded, judging, &checks, &output, &judged,
-        )
-        .await
+        if let Some(suspect) = suspect(at, work, recorded, judging, &checks, &output, &judged).await
         {
             return suspect;
         }
@@ -566,7 +536,6 @@ where
 async fn suspect<W>(
     at: AtStep<'_>,
     work: &W,
-    since: &Since,
     recorded: &[(StepId, StepEvidence)],
     judging: &Judging,
     checks: &[StepCheck],
@@ -584,7 +553,7 @@ where
     if !step.asks_about_gaming() {
         return None;
     }
-    let patch = match work.patch(at.worktree(), since) {
+    let patch = match work.patch(at.worktree()) {
         Ok(patch) => patch,
         Err(cause) => {
             return Some(Ruling::CouldNotDecide {

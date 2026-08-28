@@ -92,16 +92,6 @@ where
         // liveness lie the column is read for.
         self.drone_arrived(job, drone.clone()).await?;
 
-        // What the step inherits, read before the Drone can write anything.
-        //
-        // A restart reads it *now* rather than recovering the footing the step
-        // began with, which died with the slot the last Drone was in. The
-        // choice is between crediting this attempt with the work the dead one
-        // left and crediting it with nothing it did not write itself, and the
-        // second is the direction that fails loudly: a restarted step that
-        // produces nothing fails `diff_nonempty` rather than passing on a file
-        // nobody watched arrive.
-        let since = self.work().already_there(&worktree).ok();
         *working = Some(Working::holding(
             job_id,
             drone,
@@ -111,8 +101,12 @@ where
             Arc::clone(self.harness()),
             recording,
             self.now(),
-            since,
         ));
+        // The first step's baseline, read once the slot exists. A Job's first
+        // step ordinarily starts on a worktree holding nothing, and reading it
+        // rather than assuming so is what makes a redispatch onto a worktree
+        // somebody already worked in measure the step and not the branch.
+        self.marked(working);
         Ok(())
     }
 

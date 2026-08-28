@@ -11,6 +11,7 @@
 
 use std::time::Duration;
 
+use adapter_traits::{Footprint, WorkProduct};
 use core_model::CheckOutcome;
 use ipc::{JobDetail, RunId};
 use testkit::FakeWorkProduct;
@@ -19,9 +20,7 @@ use crate::at_step::AtStep;
 use crate::gate::{rule_on, CheckBudget};
 use crate::tests::daemon::{a_fleet, a_proposal, worktree_directory};
 use crate::tests::detail::get;
-use crate::tests::gate::{
-    budget, diff_evidence, fresh, judging, note_evidence, workflow, worktree,
-};
+use crate::tests::gate::{budget, diff_evidence, judging, note_evidence, workflow, worktree};
 use crate::tests::tmp::TempDir;
 use core_model::StepId;
 
@@ -45,7 +44,7 @@ async fn a_check_that_passes_is_written_down_as_a_pass() {
         at_step,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -79,7 +78,7 @@ async fn a_check_that_fails_records_the_code_it_returned() {
         at_step,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -111,7 +110,7 @@ async fn a_hanging_check_is_recorded_as_timed_out_and_not_as_failed() {
         at_step,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         CheckBudget::of(Duration::from_millis(300)),
@@ -141,7 +140,7 @@ async fn a_check_whose_command_does_not_exist_is_recorded_as_never_ran() {
         at_step,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -159,6 +158,114 @@ async fn a_check_whose_command_does_not_exist_is_recorded_as_never_ran() {
     assert!(!checks[0].outcome.passed());
 }
 
+/// **The defect this repository shipped.** A step that wrote nothing advanced
+/// on the files the step before it had committed.
+///
+/// `diff_nonempty` was decided from `WorkProduct::changed_files`, which reads
+/// the branch — everything since the commit it was cut from. So the second step
+/// of a workflow inherited the first step's work and passed on it, and every
+/// step after that inherited the lot. A Job reached `Write tests` having
+/// produced no code at all, credited with a `SCOPE.md` its own Drone had said,
+/// in the evidence, that it did not write.
+///
+/// The step is measured against what the worktree held when *it* began, so the
+/// inherited files are not its.
+#[tokio::test]
+async fn a_step_that_added_nothing_to_what_it_inherited_fails_its_diff_check() {
+    let workflow = workflow("/usr/bin/true");
+    let worktree = worktree();
+    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
+    // A worktree already holding an earlier step's work, which this step does
+    // not add to.
+    let work = FakeWorkProduct::inherited(&["SCOPE.md"]);
+    let entered_with = work.footprint(&worktree).expect("the step's own start");
+
+    let ruling = rule_on(
+        at_step,
+        &diff_evidence(),
+        None,
+        Some(&entered_with),
+        &[],
+        &work,
+        budget(),
+        &judging(),
+    )
+    .await;
+
+    assert!(
+        !ruling.advanced(),
+        "the branch is not empty, and this step still produced nothing"
+    );
+    assert_eq!(
+        recorded(&ruling),
+        vec![
+            ("suite".to_string(), CheckOutcome::Passed, None),
+            (
+                "diff_nonempty".to_string(),
+                CheckOutcome::Failed,
+                Some("nothing moved while this step ran".to_string()),
+            ),
+        ],
+        "the Manifest Check passes on an unchanged tree precisely because \
+         nothing changed, which is why it can never be the one that catches \
+         this — and what is recorded says the step moved nothing, not that the \
+         worktree was empty, because it was not"
+    );
+}
+
+/// The other half of the same rule: a step that *did* move the work advances,
+/// and the baseline it is measured from is a real reading rather than an
+/// assumption that the worktree started empty.
+#[tokio::test]
+async fn a_step_that_moved_work_it_inherited_advances() {
+    let workflow = workflow("/usr/bin/true");
+    let worktree = worktree();
+    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
+    let work = FakeWorkProduct::changed(&["SCOPE.md"]);
+    let entered_with = work.footprint(&worktree).expect("the step's own start");
+
+    let ruling = rule_on(
+        at_step,
+        &diff_evidence(),
+        None,
+        Some(&entered_with),
+        &[],
+        &work,
+        budget(),
+        &judging(),
+    )
+    .await;
+
+    assert!(ruling.advanced(), "the step changed the file it inherited");
+}
+
+/// A baseline Fleet never managed to read is **not** a worktree that did not
+/// move. Nothing is known to have changed, so the step does not advance.
+#[tokio::test]
+async fn a_step_whose_start_was_never_read_does_not_advance_on_the_doubt() {
+    let workflow = workflow("/usr/bin/true");
+    let worktree = worktree();
+    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
+    let work = FakeWorkProduct::changed(&["src/lib.rs"]);
+
+    let ruling = rule_on(
+        at_step,
+        &diff_evidence(),
+        None,
+        None,
+        &[],
+        &work,
+        budget(),
+        &judging(),
+    )
+    .await;
+
+    assert!(
+        !ruling.advanced(),
+        "an unread baseline fails the check rather than passing it"
+    );
+}
+
 #[tokio::test]
 async fn an_ungated_step_records_nothing_because_there_was_nothing_to_run() {
     let workflow = workflow("/usr/bin/false");
@@ -171,7 +278,7 @@ async fn an_ungated_step_records_nothing_because_there_was_nothing_to_run() {
         at_step,
         &note_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -253,7 +360,7 @@ async fn what_the_gate_found_reaches_the_detail_view() {
     assert_eq!(implement.check_runs[0].outcome.as_wire(), "failed");
     assert_eq!(
         implement.check_runs[0].produced.as_deref(),
-        Some("the worktree holds no change")
+        Some("nothing moved while this step ran")
     );
 
     let summarise = &detail.steps[1];

@@ -230,7 +230,7 @@ async fn an_idle_fleet_reads_no_worktree() {
     }
 
     assert!(
-        fleet.work().asked().is_empty(),
+        fleet.work().listed().is_empty(),
         "an empty slot has no worktree to read"
     );
 }
@@ -251,7 +251,7 @@ async fn a_drone_nobody_is_watching_is_not_read() {
     }
 
     assert!(
-        fleet.work().asked().is_empty(),
+        fleet.work().listed().is_empty(),
         "nobody is subscribed, so there is nothing to publish to"
     );
 }
@@ -268,12 +268,12 @@ async fn a_second_turn_inside_the_interval_takes_no_reading() {
 
     fleet.turn().await.expect("the first turn");
     fleet.turn().await.expect("a turn inside the interval");
-    assert_eq!(fleet.work().asked().len(), 1, "one reading, not two");
+    assert_eq!(fleet.work().listed().len(), 1, "one reading, not two");
 
     clock.advance(10);
     fleet.turn().await.expect("a turn past the interval");
     assert_eq!(
-        fleet.work().asked().len(),
+        fleet.work().listed().len(),
         2,
         "and the interval releases it"
     );
@@ -295,7 +295,7 @@ async fn an_unchanged_footprint_publishes_once() {
         fleet.turn().await.expect("a turn");
     }
 
-    assert_eq!(fleet.work().asked().len(), 4, "read on every one of them");
+    assert_eq!(fleet.work().listed().len(), 4, "read on every one of them");
     assert_eq!(
         drained(&mut watching).await.len(),
         1,

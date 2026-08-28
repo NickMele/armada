@@ -12,8 +12,7 @@ use std::time::Duration;
 
 use std::sync::Arc;
 
-use adapter_traits::WorkProduct;
-use adapter_traits::{Environment, Model, Worktree};
+use adapter_traits::{Environment, Footprint, Model, Worktree};
 use config::{EvidenceType, ResolvedWorkflow};
 use core_model::{
     AcceptanceCriterion, Actor, CriterionId, CriterionSource, Facts, Job, JobId, JobStatus,
@@ -31,13 +30,6 @@ use crate::gate::{apply, rule_on, CheckBudget, Ruling};
 use crate::judging::{JudgeBudget, Judging};
 
 const NOW: &str = "2026-08-26T09:00:00.000Z";
-
-/// A step that began with an empty worktree, which is what every case here
-/// that is not about the footing assumes: whatever the fake reports changed,
-/// this step changed.
-pub(super) fn fresh() -> adapter_traits::Since {
-    adapter_traits::Since::the_branch_started()
-}
 
 fn at(instant: &str) -> Timestamp {
     Timestamp::from_rfc3339(instant)
@@ -256,7 +248,7 @@ async fn evidence_and_every_check_passing_advances_the_step() {
         at_step,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -284,7 +276,7 @@ async fn evidence_with_every_check_failing_advances_nothing() {
         at_step,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -322,7 +314,7 @@ async fn a_step_with_no_checks_advances_on_evidence_alone() {
         at_step,
         &note_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -350,7 +342,7 @@ async fn a_hanging_check_fails_rather_than_hanging() {
         at_step,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         CheckBudget::of(Duration::from_millis(300)),
@@ -387,7 +379,7 @@ async fn a_check_whose_command_does_not_exist_fails_rather_than_passing() {
         at_step,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -421,7 +413,7 @@ async fn the_check_output_comes_back_for_a_person_to_read() {
         at_step,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -448,7 +440,7 @@ async fn evidence_of_the_wrong_kind_runs_no_checks_and_moves_nothing() {
         at_step,
         &note_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -477,7 +469,7 @@ async fn a_diff_that_cannot_be_read_decides_nothing() {
         at_step,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -501,7 +493,7 @@ async fn the_diff_fleet_reads_is_of_the_job_s_own_worktree() {
         at_step,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -525,7 +517,7 @@ async fn a_failed_check_ends_the_job_and_fleet_is_the_actor() {
         at_step,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -556,7 +548,7 @@ async fn an_advancing_step_does_not_move_the_job() {
         at_step,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -578,7 +570,7 @@ async fn the_last_step_advancing_completes_the_job() {
         at_step,
         &note_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -617,104 +609,4 @@ fn the_gate_cannot_be_pointed_at_a_step_the_workflow_does_not_declare() {
     let workflow = workflow("/usr/bin/true");
     let worktree = worktree();
     assert!(AtStep::named(workflow.frozen(), &StepId::new("invented"), &worktree).is_none());
-}
-
-// ------------------------------------------- the step's own work, not the Job's
-
-/// **The defect, at the gate that let it through.** A Job's `scope` step wrote
-/// a `SCOPE.md`; `implement` produced no code at all, said so in its own
-/// Evidence, and advanced `passed` — because `diff_nonempty` was reading the
-/// whole branch and counted the earlier step's file as this step's work. Every
-/// step after the first that writes anything passed for free, permanently.
-///
-/// **Nothing here reads what the Drone said.** The Evidence is the same
-/// well-formed submission every other case uses; what changed is the footing
-/// the worktree is measured from. A gate that read the prose would have caught
-/// this one and would believe the opposite claim just as readily.
-#[tokio::test]
-async fn a_step_that_wrote_nothing_fails_even_where_an_earlier_step_wrote_something() {
-    let workflow = workflow("/usr/bin/true");
-    let worktree = worktree();
-    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
-    let work = FakeWorkProduct::changed(&["SCOPE.md"]).inherited();
-    let since = work.already_there(&worktree).expect("a footing");
-
-    let ruling = rule_on(
-        at_step,
-        &diff_evidence(),
-        None,
-        Some(&since),
-        &[],
-        &work,
-        budget(),
-        &judging(),
-    )
-    .await;
-
-    assert!(!ruling.advanced(), "the ruling was {ruling:?}");
-    let Ruling::Failed { failures, .. } = &ruling else {
-        panic!("the ruling was {ruling:?}");
-    };
-    assert_eq!(failures, &[CheckFailed::DiffEmpty]);
-}
-
-/// The other half. A step that did write something still advances over a
-/// footing that holds an earlier step's file — the fix must not turn every
-/// step after the first into a failure.
-#[tokio::test]
-async fn a_step_that_wrote_something_advances_over_an_earlier_step_s_files() {
-    let workflow = workflow("/usr/bin/true");
-    let worktree = worktree();
-    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
-    let work = FakeWorkProduct::changed(&["SCOPE.md"]).inherited();
-    let since = work.already_there(&worktree).expect("a footing");
-    work.wrote(&[("src/lib.rs", adapter_traits::Change::Added)]);
-
-    let ruling = rule_on(
-        at_step,
-        &diff_evidence(),
-        None,
-        Some(&since),
-        &[],
-        &work,
-        budget(),
-        &judging(),
-    )
-    .await;
-
-    assert!(ruling.advanced(), "the ruling was {ruling:?}");
-}
-
-/// A footing that could not be read is not a footing of zero. Falling back to
-/// the whole branch is the reading that let a step advance having written
-/// nothing, so the gate answers that it could not decide — and the step neither
-/// advances nor fails.
-#[tokio::test]
-async fn a_step_with_no_footing_is_not_gated_against_the_whole_branch() {
-    let workflow = workflow("/usr/bin/true");
-    let worktree = worktree();
-    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
-    let work = FakeWorkProduct::changed(&["SCOPE.md"]);
-
-    let ruling = rule_on(
-        at_step,
-        &diff_evidence(),
-        None,
-        None,
-        &[],
-        &work,
-        budget(),
-        &judging(),
-    )
-    .await;
-
-    assert!(!ruling.advanced(), "the ruling was {ruling:?}");
-    assert!(
-        matches!(ruling, Ruling::CouldNotDecide { .. }),
-        "the ruling was {ruling:?}"
-    );
-    assert!(
-        work.asked().is_empty(),
-        "a Check ran before the gate knew what it was measuring"
-    );
 }

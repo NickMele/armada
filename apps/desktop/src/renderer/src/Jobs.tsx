@@ -44,6 +44,13 @@
 // at the Job's own last movement once it is over — a terminal Job whose elapsed
 // kept climbing would read as still running.
 //
+// **The same track carries when a Job was created, not just how long.** While
+// working, elapsed stays the drawn value and the creation time rides along as
+// a hover title — the glance-value people scan for stays "is this stuck," and
+// the exact instant is a hover away. Once terminal, elapsed has nothing left
+// to answer, and that slot — blank until now — draws the creation time itself
+// rather than staying empty.
+//
 // **Spend stays out of the row entirely.** Nothing measures it — not on the
 // wire, not in the store, not computed — and a labelled gap on every row reads
 // as a value that failed to load rather than one nothing serves.
@@ -78,7 +85,7 @@ import { GitBranch, Layers } from "lucide-react";
 
 import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
 import type { JobSummary, WorkflowSummary } from "../../shared/protocol";
-import { instant, span } from "./duration";
+import { absoluteOf, instant, span } from "./duration";
 import { activityFor } from "./frozen";
 import { readingOf } from "./reading";
 
@@ -312,11 +319,27 @@ function Row({
       : { value: job.current_step_id, mono: true, emphasis: true },
   ];
 
-  // Track four, appended rather than always drawn: a Job with no elapsed to
-  // state loses the field, for the reason spend is not on the row at all. An
-  // empty slot in a shared column reads as a value that failed to load.
+  // Track four, appended rather than always drawn: a Job with neither an
+  // elapsed reading nor a readable `created_at` loses the field, for the
+  // reason spend is not on the row at all. An empty slot in a shared column
+  // reads as a value that failed to load.
+  //
+  // While working, the track keeps answering "is this stuck" — elapsed stays
+  // the value — with the Job's actual creation time on hover, since that is
+  // the one instant elapsed cannot show. Once terminal there is no more
+  // elapsed to climb, and the slot that left blank now carries the same
+  // creation time outright rather than nothing.
   const elapsed = elapsedOf(job, now);
-  if (elapsed !== undefined) fields.push({ value: elapsed, mono: true, quiet: true });
+  const created = absoluteOf(job.created_at) ?? undefined;
+  if (elapsed !== undefined) {
+    fields.push({
+      value: <span title={created ? `Created ${created}` : undefined}>{elapsed}</span>,
+      mono: true,
+      quiet: true,
+    });
+  } else if (created !== undefined) {
+    fields.push({ value: created, mono: true, quiet: true });
+  }
 
   return (
     <JobRowStacked

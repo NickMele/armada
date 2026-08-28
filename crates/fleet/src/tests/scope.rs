@@ -8,6 +8,7 @@
 //! carrying no `evidence_scope` reads no worktree for a scope it does not have
 //! and behaves exactly as it did before any of this existed.
 
+use adapter_traits::Footprint;
 use core_model::{CheckOutcome, DeclaredPaths, RepoPath};
 use ipc::mcp::DeclareScope;
 use testkit::{FakeWorkProduct, Gate, Scoped, Sketch};
@@ -19,7 +20,7 @@ use crate::daemon::Fleet;
 use crate::evidence::Call;
 use crate::gate::{rule_on, Ruling};
 use crate::tests::daemon::{a_fleet_holding, a_proposal, worktree_directory};
-use crate::tests::gate::{budget, diff_evidence, fresh, judging, worktree};
+use crate::tests::gate::{budget, diff_evidence, judging, worktree};
 use crate::tests::tmp::TempDir;
 
 fn a_diff_call<'a>() -> Call<'a> {
@@ -65,7 +66,7 @@ async fn ruled_on(
         at_step,
         &diff_evidence(),
         declared,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -411,7 +412,7 @@ async fn a_step_with_no_scope_is_neither_checked_nor_read() {
         at_step,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),
@@ -449,7 +450,7 @@ async fn an_ungated_step_with_no_scope_advances_on_evidence_alone() {
         at_step,
         &diff_evidence(),
         None,
-        Some(&fresh()),
+        Some(&Footprint::nothing()),
         &[],
         &work,
         budget(),

@@ -45,20 +45,37 @@ struct Heard {
     ended: bool,
 }
 
-/// Where in a Drone's stream a step began.
+/// How far a run has got, in the only two numbers anything asks for.
 ///
-/// **Opaque, and there is no arithmetic on it.** A step's own turn count is
-/// asked of the transcript through [`Watching::turns_since`] rather than
-/// subtracted from a running total by the caller — because only the stream can
-/// say which invocation a turn count belongs to, and the caller that subtracted
-/// is the one that got it wrong. There is no cumulative total to subtract from
-/// anywhere in this file, which is what makes that mistake unavailable rather
-/// than discouraged.
+/// **Neither is a verdict and neither can become one.** `calls` is Fleet's own
+/// count of what the Drone did and is compared against a step norm;
+/// `boundaries` is how many times the Drone came to rest, which is what says a
+/// directive was acted on rather than what it said in answer.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct StepMark {
-    /// How many events had been read when the step began. `0` is the start of
-    /// the stream, which is where a Drone's first step begins.
-    seen: usize,
+pub struct Progress {
+    /// How many tool calls the Drone has made this session.
+    ///
+    /// **Cumulative and live.** A `Called` arrives as the Drone makes it, so a
+    /// step's own count is this minus its reading when the step began — and
+    /// that reading is true at the instant it is taken, which is the whole
+    /// reason the count is here rather than on the harness's own number.
+    ///
+    /// **Not the harness's `turns`.** That arrives only on `Ended`, and the
+    /// harness ends an invocation when a step ends, so at a step boundary the
+    /// finishing step's count has not been reported yet and the baseline reads
+    /// its predecessor's. It also resets per invocation rather than
+    /// accumulating, so subtracting a baseline from it underflows. Both halves
+    /// of that were load-bearing: a step was told to stop and report
+    /// twenty-three seconds in, charged with the 69 turns of the step before
+    /// it.
+    ///
+    /// Calls stand in for turns because they track them. Measured over the 32
+    /// invocations this repository has recorded, `calls / turns` runs 0.92–0.99
+    /// for any step past fifteen turns, which is the only range a norm of sixty
+    /// can care about.
+    pub calls: u32,
+    /// How many terminating events have arrived.
+    pub boundaries: usize,
 }
 
 /// A transcript being read.
@@ -125,64 +142,31 @@ impl Watching {
             .ended
     }
 
-    /// Where the stream stands now, so a step can be measured from here.
-    ///
-    /// Taken by the caller at the instant the step began. It is a position and
-    /// not a count, so it cannot go stale: the events before it stay before it
-    /// however long the step runs.
-    pub fn mark(&self) -> StepMark {
-        StepMark {
-            seen: self
-                .heard
-                .lock()
-                .expect("the transcript is not held across a panic")
-                .events
-                .len(),
-        }
-    }
-
-    /// How many times the Drone has come to rest. **Not a verdict** — it says a
-    /// directive was acted on, never what was said in answer.
+    /// How far the run has got, as two counts.
     ///
     /// **Still not a per-event accessor.** It folds under the lock and answers
-    /// a number, so there is no way to reach a Drone's claim through it — the
+    /// numbers, so there is no way to reach a Drone's claim through it — the
     /// same property [`events`](Watching::events) has by returning everything.
-    pub fn boundaries(&self) -> usize {
-        self.heard
-            .lock()
-            .expect("the transcript is not held across a panic")
-            .events
-            .iter()
-            .filter(|event| matches!(event, DroneEvent::Ended { .. }))
-            .count()
-    }
-
-    /// The Drone's own turns since a mark, over the invocations that began
-    /// after it.
-    ///
-    /// **An `Ended` before the first `Started` past the mark is not counted.**
-    /// The harness reports a turn count only when an invocation finishes, and
-    /// the one a step submits from finishes *after* Fleet has advanced — so the
-    /// first count past a boundary is the previous step's, arriving late. A
-    /// baseline taken at the boundary and subtracted from it lands that whole
-    /// count on the new step, and did: a step was poked for thrashing
-    /// twenty-three seconds in having spent no turns of its own.
-    /// [`DroneEvent::Started`] is the stream saying a new invocation began —
-    /// spike 4's second `init`, and every capture under `testkit` has one.
-    ///
-    /// **The counts are summed, because `turns` is per invocation.**
-    /// `clarification-exhausted.ndjson` reads 5, 2, 3, 2 across one session
-    /// rather than 5, 7, 10, 12, and a step that spans several has spent all.
-    ///
-    /// **It reads `0` while a step's first invocation is still running**, which
-    /// is the harness not having said rather than a low number — and quiet is
-    /// the safe direction for a tripwire whose next stage spends a call.
-    pub fn turns_since(&self, mark: StepMark) -> u32 {
+    pub fn progress(&self) -> Progress {
         let heard = self
             .heard
             .lock()
             .expect("the transcript is not held across a panic");
-        turns_over(&heard.events, mark)
+        heard
+            .events
+            .iter()
+            .fold(Progress::default(), |mut so_far, event| {
+                // A catch-all is right here and wrong in `transcript::row`.
+                // That one maps every kind onto the wire and must fail to
+                // compile when a kind is added; this one counts two of them,
+                // and a new kind is not a third thing to count.
+                match event {
+                    DroneEvent::Called { .. } => so_far.calls += 1,
+                    DroneEvent::Ended { .. } => so_far.boundaries += 1,
+                    _ => {}
+                }
+                so_far
+            })
     }
 
     /// Every event so far, in the order the Drone emitted them. What
@@ -193,30 +177,6 @@ impl Watching {
             .expect("the transcript is not held across a panic")
             .events
             .clone()
-    }
-}
-
-/// The fold itself, on a slice, so it can be exercised against a sequence
-/// rather than against a pipe whose timing a test cannot hold still.
-pub(crate) fn turns_over(events: &[DroneEvent], mark: StepMark) -> u32 {
-    let mut begun = false;
-    let mut taken = 0;
-    for event in events.iter().skip(mark.seen) {
-        match event {
-            DroneEvent::Started { .. } => begun = true,
-            DroneEvent::Ended { turns, .. } if begun => taken += turns,
-            _ => {}
-        }
-    }
-    taken
-}
-
-impl StepMark {
-    /// A mark after this many events. **Test-only**: the running system takes
-    /// one from [`Watching::mark`] and never counts to it.
-    #[cfg(test)]
-    pub(crate) fn after(seen: usize) -> StepMark {
-        StepMark { seen }
     }
 }
 

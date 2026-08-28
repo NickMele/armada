@@ -214,6 +214,16 @@ pub enum ReadWorkProductError {
         worktree: String,
         cause: git2::Error,
     },
+    /// A path the diff named would not open, **and not because it is gone.** A
+    /// deletion is a change like any other and reads as one; this is a file git
+    /// can see and the filesystem will not hand over, which must not arrive at
+    /// a footprint as an absence — two readings that both swallowed it would
+    /// compare equal and report a step that did nothing.
+    ContentUnreadable {
+        worktree: String,
+        path: String,
+        cause: std::io::Error,
+    },
 }
 
 impl fmt::Display for ReadWorkProductError {
@@ -246,6 +256,15 @@ impl fmt::Display for ReadWorkProductError {
             ReadWorkProductError::DiffFailed { worktree, cause } => {
                 write!(f, "the diff of the worktree at {worktree} failed: {cause}")
             }
+            ReadWorkProductError::ContentUnreadable {
+                worktree,
+                path,
+                cause,
+            } => write!(
+                f,
+                "{path} in the worktree at {worktree} changed and would not be \
+                 read: {cause}"
+            ),
         }
     }
 }
@@ -258,6 +277,7 @@ impl Error for ReadWorkProductError {
             | ReadWorkProductError::BranchUnreadable { cause, .. }
             | ReadWorkProductError::BaseUnreadable { cause, .. }
             | ReadWorkProductError::DiffFailed { cause, .. } => Some(cause),
+            ReadWorkProductError::ContentUnreadable { cause, .. } => Some(cause),
         }
     }
 }

@@ -57,12 +57,17 @@ use crate::working::Working;
 /// change if the measurement ever says otherwise.
 pub(crate) const FOOTPRINT_INTERVAL: Duration = Duration::from_secs(2);
 
-/// What the slot remembers between readings.
+/// What the slot remembers between readings of the live footprint.
+///
+/// **Not [`adapter_traits::Footprint`]**, which is a content reading the gate
+/// measures a step against. This is the throttle and the memo that decide
+/// whether a reading is taken at all and whether what it found is worth
+/// sending.
 ///
 /// Cleared when the step changes, for the reason the declaration is: a
 /// footprint belongs to the Drone that is holding the pen.
 #[derive(Debug, Default)]
-pub(crate) struct Footprint {
+pub(crate) struct Publishing {
     /// When the last reading was **attempted**. `None` before the first.
     read_at: Option<Timestamp>,
     /// The list as last published. `None` means the next reading publishes
@@ -72,7 +77,7 @@ pub(crate) struct Footprint {
     watchers: usize,
 }
 
-impl Footprint {
+impl Publishing {
     /// Note who is listening, and forget what was published if somebody just
     /// arrived. **Rising off zero is the whole test** — a second Bridge joining
     /// three others has already been sent nothing, but there is no per-client
@@ -133,24 +138,17 @@ where
         let watchers = self.events().watching();
         let now = self.now();
         let at_work = working.as_mut()?;
-        at_work.footprint().watched(watchers);
-        if !at_work.footprint().due(&now) {
+        at_work.publishing().watched(watchers);
+        if !at_work.publishing().due(&now) {
             return None;
         }
-        at_work.footprint().reading(&now);
+        at_work.publishing().reading(&now);
         let (job, step, worktree) = at_work.standing();
         let (_, drone) = at_work.drone();
-        // The step's own footprint, not the Job's. The event carries a
-        // `step_id` and `outside_plan` is measured against the step's
-        // declaration, so a list holding an earlier step's files would be
-        // attributed to this one in both.
-        let changed = self
-            .work()
-            .changed_files(&worktree, at_work.since()?)
-            .ok()?;
+        let changed = self.work().changed_files(&worktree).ok()?;
         let plan = at_work.declared().cloned();
         let files = seen(&changed, plan.as_ref());
-        if at_work.footprint().publishes(&files) {
+        if at_work.publishing().publishes(&files) {
             self.publish(ipc::Event::JobFilesChanged(ipc::JobFilesChanged {
                 job_id: (&job).into(),
                 step_id: (&step).into(),

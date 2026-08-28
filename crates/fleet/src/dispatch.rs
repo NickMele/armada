@@ -266,11 +266,12 @@ where
             .await
             .step_evidence(&job_id)
             .map_err(Adrift::Reading)?;
+        let entered_with = at_work.entered_with().cloned();
         let ruling = rule_on(
             at,
             &landed.submission,
             declared.as_ref(),
-            at_work.since(),
+            entered_with.as_ref(),
             &recorded,
             self.work(),
             self.budget(),
@@ -289,6 +290,33 @@ where
         Ok(Some(ruling))
     }
 
+    /// Read what the worktree holds now, and hold it as this step's baseline.
+    ///
+    /// **The reading `diff_nonempty` is decided against**, taken at the moment
+    /// a step starts so that what the gate compares is the step's own work
+    /// rather than the branch's. `WorkProduct` measures from the commit the
+    /// branch was cut from, which credits every step with everything its
+    /// predecessors wrote.
+    ///
+    /// **A failure leaves the step with no baseline, and that is deliberate.**
+    /// A reading that did not happen is not a worktree that did not move, so
+    /// there is no arm here that stores an empty footprint — the gate reads
+    /// `None` as nothing known to have moved and fails the check. An unread
+    /// baseline must not be able to advance a step, which is
+    /// `Changed::nothing`'s rule applied one level up.
+    pub(crate) fn marked(&self, working: &mut Option<Working>) {
+        let Some(at_work) = working.as_ref() else {
+            return;
+        };
+        let (_, _, worktree) = at_work.standing();
+        let Ok(footprint) = self.work().footprint(&worktree) else {
+            return;
+        };
+        if let Some(at_work) = working.as_mut() {
+            at_work.entering_with(footprint);
+        }
+    }
+
     /// The Job move a ruling implies, and the step move it implies, in the one
     /// order the two machines admit.
     async fn act_on(
@@ -304,27 +332,18 @@ where
                 let job = self.move_step(&job, step, StepTarget::Advanced).await?;
                 let next = self.step_after(&job, step)?;
                 self.move_step(&job, &next, StepTarget::Running).await?;
+                if let Some(at_work) = working.as_mut() {
+                    at_work.now_on(next, self.now());
+                }
+                // Immediately after the step moved and before the Drone is
+                // told, so that anything the Drone does on hearing the verdict
+                // counts toward the step it is now on rather than the one it
+                // just left.
+                self.marked(working);
                 // The boundary catch-up is `delivery`'s. It is told either way
                 // — a Drone that never heard the step advanced would sit there,
                 // and a base that would not read is not its fault.
                 let caught_up = self.caught_up(working).await;
-                // The new step's footing, read at the boundary and nowhere
-                // else: what is in the worktree now is what the step inherits,
-                // and everything it adds from here is its own.
-                //
-                // **After the catch-up, not before.** A rebase that conflicted
-                // leaves markers in the worktree, and a footing taken ahead of
-                // it would hand the new step those files as work it had done —
-                // so a Drone that resolved nothing would still pass
-                // `diff_nonempty`. Read afterwards, the conflict is inherited
-                // and the resolution is the step's.
-                let since = working
-                    .as_ref()
-                    .map(|at_work| at_work.standing().2)
-                    .and_then(|worktree| self.work().already_there(&worktree).ok());
-                if let Some(at_work) = working.as_mut() {
-                    at_work.now_on(next, self.now(), since);
-                }
                 let tell = tell.clone().and(caught_up.as_ref().ok().cloned().flatten());
                 self.tell(job_id, &tell, working).await?;
                 caught_up.map(|_| ())

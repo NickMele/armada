@@ -48,3 +48,17 @@ export function span(from: string, to: string | number): string | null {
 function pad(value: number): string {
   return value < 10 ? `0${value}` : String(value);
 }
+
+const ABSOLUTE = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+
+/**
+ * An instant as a clock reads it — "Aug 27, 2:14 PM" — for the one place a
+ * relative span is not the answer: what time a Job was actually created.
+ *
+ * `null` where it will not parse, same convention as `instant`: a Job whose
+ * date is unreadable says nothing rather than showing an invented time.
+ */
+export function absoluteOf(at: string): string | null {
+  const ms = instant(at);
+  return ms === null ? null : ABSOLUTE.format(ms);
+}

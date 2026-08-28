@@ -135,12 +135,24 @@ pub const PROVISIONAL_JUDGE_BUDGET: Duration = Duration::from_secs(120);
 
 /// What a step is expected to cost before the thrashing chain looks at it.
 ///
-/// **Provisional, and nothing has measured any of the three.** The registry
+/// **Provisional, and two of the three are still unmeasured.** The registry
 /// names a "step norm" and an "expected ceiling" and no value was ever put on
 /// either; these are a first guess in the one place a search will find them,
 /// sized so a step that has genuinely stopped converging is looked at while a
 /// long build is not. Tripping one of them costs a Judge call and nothing else
 /// — see `fleet::converging`, where the escalation is three stages further on.
+///
+/// The first number has since been measured, against the 32 invocations this
+/// repository has recorded: a step's median is 13.5 turns and its p90 is 38, so
+/// sixty is a ceiling roughly one and a half times the widest ordinary step
+/// rather than the coin-flip it could have been. Two of the 32 exceeded it
+/// legitimately, at 69 and 180, which is the rate of Judge calls this buys.
+/// The unit is now tool calls rather than the harness's turns and the number
+/// did not move with it; `fleet::Progress::calls` says what that substitution
+/// costs.
+///
+/// The wall clock is the one still worth doubting. At 1800s against a step
+/// whose p90 finishes in minutes, it has never been the tripwire that fired.
 ///
 /// The grace is the shortest of the three deliberately: spike 4 measured an
 /// injected turn consumed in 1.59s mid-task and 33s against a forty-second

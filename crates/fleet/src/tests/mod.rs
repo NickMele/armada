@@ -72,12 +72,6 @@
 //! tell — because those are what keep the three from becoming acts they are
 //! not.
 //!
-//! `watch` is the sixteenth, and it is one question: whose turns a step is
-//! charged with. A step advanced, and the count for the invocation it ended in
-//! arrived six seconds later — so the step that followed was poked for
-//! thrashing having spent no turns at all. Its cases are sequences rather than
-//! pipes, because what went wrong was the ordering.
-//!
 //! `attachments` is the eleventh: a file staged before a Job exists, promoted
 //! at creation, refused where the staged path cannot be read, and copied again
 //! into the worktree dispatch makes — proving the same path `briefing` writes
@@ -113,4 +107,3 @@ mod serving;
 mod session;
 mod tmp;
 mod transcript;
-mod watch;

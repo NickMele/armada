@@ -27,16 +27,16 @@ use std::sync::Arc;
 
 use std::time::Duration;
 
-use adapter_traits::{AgentHarness, DroneEvent, Since, Worktree};
+use adapter_traits::{AgentHarness, DroneEvent, Footprint, Worktree};
 use core_model::{DeclaredPaths, DroneId, JobId, RepoPath, StepId, Timestamp};
 use tokio::process::ChildStderr;
 
 use crate::converging::{elapsed, Chain};
 use crate::drone::Started;
-use crate::footprint::Footprint;
+use crate::footprint::Publishing;
 use crate::session::DroneSession;
 use crate::transcript::Taps;
-use crate::watch::{StepMark, Watching};
+use crate::watch::Watching;
 use verification::NotConverging;
 
 /// The Job being worked, and everything holding it up.
@@ -68,15 +68,12 @@ pub(crate) struct Working {
     /// When the step in this slot started, as the injected clock read it. What
     /// the wall-clock tripwire is measured from.
     step_began: Timestamp,
-    /// Where in the Drone's stream this step began. **A position, not a
-    /// count** — see [`StepMark`], and `Watching::turns_since` for what a
-    /// subtraction got wrong.
-    began: StepMark,
-    /// What the Job's work product already was when this step began, so the
-    /// gate can tell the step's own work from the work it inherited. `None`
-    /// where the reading at the boundary failed, which is a gate that cannot
-    /// decide rather than a step credited with somebody else's files.
-    since: Option<Since>,
+    /// Fleet's own call count when the step started, so a step's own count is
+    /// a subtraction rather than a second counter to keep true.
+    ///
+    /// **True at the instant it is taken**, which the harness's `turns` was
+    /// not: see [`Progress::calls`](crate::Progress::calls).
+    calls_before: u32,
     /// How many times the Drone had come to rest by the moment it was told to
     /// report. The baseline the forced report is read against.
     rested_before: usize,
@@ -84,7 +81,31 @@ pub(crate) struct Working {
     chain: Chain,
     /// When the worktree was last read for the live file list, and what was
     /// last published from it.
-    footprint: Footprint,
+    publishing: Publishing,
+    /// What the worktree held when this step began.
+    ///
+    /// **The baseline `diff_nonempty` is decided against.** `WorkProduct` reads
+    /// the branch — everything since the commit it was cut from — which is the
+    /// right question for a Job and the wrong one for a step: every step after
+    /// the first one that writes anything inherits its predecessor's files.
+    /// Armada shipped that, and a step that wrote no code advanced on the scope
+    /// note the step before it had committed.
+    ///
+    /// `None` where Fleet never saw the step start, which the gate reads as
+    /// nothing known to have moved.
+    ///
+    /// **A redirect does not clear it.** `resumed` restarts the chain and the
+    /// step's clock; the step itself is carrying on, and re-reading here would
+    /// discard the work it had already done as though some other step had done
+    /// it.
+    ///
+    /// It is not persisted. A Fleet that restarts mid-step reads a fresh
+    /// baseline when it puts a Drone back on the worktree, so the step is then
+    /// measured from where it was picked up rather than from where it began.
+    /// That fails closed — work already done stops counting toward the step
+    /// that did it — which is the direction an unknown baseline has to fail
+    /// in.
+    entered_with: Option<Footprint>,
 }
 
 impl Working {
@@ -100,29 +121,26 @@ impl Working {
         harness: Arc<H>,
         taps: Taps,
         at: Timestamp,
-        since: Option<Since>,
     ) -> Working
     where
         H: AgentHarness + Send + Sync + 'static,
     {
-        let transcript = Watching::reading(started.transcript, harness, taps.each());
-        let began = transcript.mark();
         Working {
             job,
             drone,
             step,
             worktree,
             session: started.session,
-            transcript,
+            transcript: Watching::reading(started.transcript, harness, taps.each()),
             _complaints: started.complaints,
             declared: None,
             drifted: Vec::new(),
             step_began: at,
-            began,
-            since,
+            calls_before: 0,
             rested_before: 0,
             chain: Chain::Working,
-            footprint: Footprint::default(),
+            publishing: Publishing::default(),
+            entered_with: None,
         }
     }
 
@@ -145,23 +163,22 @@ impl Working {
     /// Move to the next step, **and forget the last one's plan**. A
     /// declaration is about one step; carrying it forward would let step two's
     /// footprint be measured against step one's promise.
-    ///
-    /// `since` is what the caller read out of the worktree at this instant —
-    /// the work every earlier step of this Job left. Without it the step is
-    /// measured against the whole branch, which is how a step that wrote
-    /// nothing passed `diff_nonempty` on an earlier step's file.
-    pub(crate) fn now_on(&mut self, step: StepId, at: Timestamp, since: Option<Since>) {
+    pub(crate) fn now_on(&mut self, step: StepId, at: Timestamp) {
         self.step = step;
         self.declared = None;
         self.drifted.clear();
+        // Cleared rather than replaced, because reading the worktree needs the
+        // seam and this type holds none. The caller that moved the step reads
+        // the new baseline and hands it back through `entering_with`; until it
+        // does, the step has no baseline and the gate fails closed.
+        self.entered_with = None;
         self.step_began = at;
-        self.began = self.transcript.mark();
-        self.since = since;
+        self.calls_before = self.transcript.progress().calls;
         self.chain = Chain::Working;
         // A new step is a new pen holder. Keeping the memo would let step two's
         // first reading match step one's last and publish nothing, leaving a
         // watcher reading a list attributed to the step before.
-        self.footprint = Footprint::default();
+        self.publishing = Publishing::default();
     }
 
     /// The step this Drone is on has been resumed by a person.
@@ -170,13 +187,15 @@ impl Working {
     /// leaves the step and its plan exactly where they were — what is stale is
     /// how long the step has been running and the look it already spent, and a
     /// Drone that thrashed once and was steered can thrash again.
-    /// **The work product's footing does not move either.** A redirect is the
-    /// same step being done again, so what it inherited is still what it
-    /// inherited — remeasuring here would hand the step whatever it had written
-    /// before the person spoke, and it would pass `diff_nonempty` on nothing.
+    ///
+    /// **The step's baseline does not move either.** A redirect is the same
+    /// step being done again, so what it entered with is still what it entered
+    /// with — remeasuring here would hand the step whatever it had written
+    /// before the person spoke, and it would then pass `diff_nonempty` on
+    /// nothing.
     pub(crate) fn resumed(&mut self, at: Timestamp) {
         self.step_began = at;
-        self.began = self.transcript.mark();
+        self.calls_before = self.transcript.progress().calls;
         self.chain = Chain::Working;
     }
 
@@ -192,28 +211,28 @@ impl Working {
         self.declared.as_ref()
     }
 
+    /// Record what the worktree held as this step began.
+    pub(crate) fn entering_with(&mut self, footprint: Footprint) {
+        self.entered_with = Some(footprint);
+    }
+
+    /// The baseline this step's work is measured against.
+    pub(crate) fn entered_with(&self) -> Option<&Footprint> {
+        self.entered_with.as_ref()
+    }
+
     /// What has been seen outside the plan so far. The third tripwire, and the
     /// observation the mid-step look is given.
     pub(crate) fn off_plan(&self) -> &[RepoPath] {
         &self.drifted
     }
 
-    /// The Drone's own turns since this step started. **Asked of the stream,
-    /// never subtracted from a total** — `Watching::turns_since` says why.
-    pub(crate) fn turns_this_step(&self) -> u32 {
-        self.transcript.turns_since(self.began)
-    }
-
-    /// What this step inherited: the Job's work product as it stood when the
-    /// step began. `None` where that reading failed.
-    ///
-    /// **Every per-step question about the worktree goes through it** — the
-    /// gate's `diff_nonempty`, the scope tier, the patch the Judge is handed,
-    /// the live footprint. A caller that wants the whole branch says so with
-    /// [`Since::the_branch_started`], which is a different question and reads
-    /// as one.
-    pub(crate) fn since(&self) -> Option<&Since> {
-        self.since.as_ref()
+    /// The Drone's own tool calls since this step started.
+    pub(crate) fn calls_this_step(&self) -> u32 {
+        self.transcript
+            .progress()
+            .calls
+            .saturating_sub(self.calls_before)
     }
 
     /// Whether the Drone has come to rest since it was told to report.
@@ -222,7 +241,7 @@ impl Working {
     /// is the Drone finishing a turn, which is what complying with a stop looks
     /// like from outside — and reading the words would be reading self-report.
     pub(crate) fn came_to_rest(&self) -> bool {
-        self.transcript.boundaries() > self.rested_before
+        self.transcript.progress().boundaries > self.rested_before
     }
 
     pub(crate) fn chain(&self) -> &Chain {
@@ -241,7 +260,7 @@ impl Working {
     /// write and the next statement, and a baseline taken after it would count
     /// the reply as having been there all along.
     pub(crate) fn rested(&self) -> usize {
-        self.transcript.boundaries()
+        self.transcript.progress().boundaries
     }
 
     /// The Drone has been told to report, from this instant.
@@ -281,8 +300,8 @@ impl Working {
     /// there is no read-only view of it**: every question anybody asks it is
     /// asked in the course of deciding whether to read again, which is a
     /// decision that records itself.
-    pub(crate) fn footprint(&mut self) -> &mut Footprint {
-        &mut self.footprint
+    pub(crate) fn publishing(&mut self) -> &mut Publishing {
+        &mut self.publishing
     }
 
     /// Whether the Drone has exited, **and reap it if it has**. See

@@ -134,10 +134,7 @@ where
         let changed = match taken {
             Some(changed) => changed,
             None => {
-                read = self
-                    .work()
-                    .changed_files(&worktree, at_work.since()?)
-                    .ok()?;
+                read = self.work().changed_files(&worktree).ok()?;
                 &read
             }
         };

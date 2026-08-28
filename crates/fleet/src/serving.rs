@@ -34,7 +34,7 @@
 //! which would be a second vocabulary that agrees with the log only until
 //! something changes.
 
-use adapter_traits::{AgentHarness, Delivery, Since, Vcs, WorkProduct};
+use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Daemon, Observed, Refusal};
 use core_model::Job;
 use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
@@ -220,17 +220,14 @@ where
                 .filter(|at_work| at_work.is(job.id()))
                 .and_then(|at_work| at_work.declared().cloned())
         };
-        // **The whole branch, and the one caller that wants it.** A person
-        // opening a Job is reading everything it has produced; every other
-        // reading in Fleet is a gate on one step and says so.
-        let whole = Since::the_branch_started();
+        // **The whole branch, which is what a person opening a Job is reading.**
         let changed = self
             .work()
-            .changed_files(&worktree, &whole)
+            .changed_files(&worktree)
             .map_err(|cause| self.unreadable(job.id(), cause))?;
         let patch = self
             .work()
-            .patch(&worktree, &whole)
+            .patch(&worktree)
             .map_err(|cause| self.unreadable(job.id(), cause))?;
         Ok(JobDiff {
             job_id,

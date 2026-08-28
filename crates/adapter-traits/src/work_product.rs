@@ -135,6 +135,62 @@ impl Changed {
     }
 }
 
+/// What a worktree held at one instant, as content rather than as a file list.
+///
+/// **The baseline a step is measured against.** [`Changed`] answers what the
+/// *branch* has done since it was cut, which is the right question for a Job
+/// and the wrong one for a step: every step after the first one that writes
+/// anything inherits its predecessor's files and passes `diff_nonempty` on
+/// them. Armada shipped that, and a step that produced nothing at all advanced
+/// on the previous step's scope note.
+///
+/// Content rather than paths, because a step that edits a file an earlier step
+/// created changes nothing about which paths are listed.
+///
+/// **Comparable only against another reading of the same worktree by the same
+/// implementation, in the same process.** The strings are opaque here — an
+/// implementation says what a path holds in whatever way it can, and nothing
+/// reads them except [`differs_from`](Footprint::differs_from).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Footprint {
+    of: Vec<(String, String)>,
+}
+
+impl Footprint {
+    /// Record what an implementation read. Sorted here rather than at the call
+    /// site, so two readings that found the same worktree in a different order
+    /// are the same footprint.
+    pub fn of(mut entries: Vec<(String, String)>) -> Footprint {
+        entries.sort();
+        Footprint { of: entries }
+    }
+
+    /// A worktree holding no change at all. Named for [`Changed::nothing`]'s
+    /// reason: the empty case is an answer, not a failure to read.
+    pub fn nothing() -> Footprint {
+        Footprint { of: Vec::new() }
+    }
+
+    /// Whether anything moved between the two readings.
+    ///
+    /// **The whole of what a footprint is for.** There is no accessor for the
+    /// entries, so nothing can grow a rule about *what* changed out of a type
+    /// that only knows *that* something did.
+    pub fn differs_from(&self, before: &Footprint) -> bool {
+        self.of != before.of
+    }
+
+    /// How many paths this reading found. Never compared against another
+    /// footprint's — two readings can hold the same count and different files.
+    pub fn len(&self) -> usize {
+        self.of.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.of.is_empty()
+    }
+}
+
 /// The patch a Job's work makes, as text.
 ///
 /// **The Judge's whole sight of the repository.** It is pre-loaded into the
@@ -162,98 +218,6 @@ impl Patch {
     }
 }
 
-/// One file as it stood when a step began.
-///
-/// The fingerprint is the implementation's own identity for the bytes — git's
-/// blob id, for the one that reads a repository. It is carried alongside the
-/// path because a path alone cannot tell a file this step left untouched from
-/// one it rewrote, and a step that edits what an earlier step wrote is doing
-/// work.
-///
-/// An empty fingerprint is "no readable file at this path", which is what a
-/// deletion leaves behind. Two unreadable states compare equal, which is the
-/// right answer: neither is this step having written something.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Was {
-    path: String,
-    fingerprint: String,
-}
-
-impl Was {
-    pub fn new(path: String, fingerprint: String) -> Was {
-        Was { path, fingerprint }
-    }
-
-    pub fn path(&self) -> &str {
-        &self.path
-    }
-
-    pub fn fingerprint(&self) -> &str {
-        &self.fingerprint
-    }
-}
-
-/// What a reading of a Job's work product is measured from.
-///
-/// **Both readings take one and neither answers without it**, and there is no
-/// default. A caller either asks about the whole branch or about one step's own
-/// work, and the two are different questions that were being answered by the
-/// same call — which is how a step that produced nothing was credited with an
-/// earlier step's file.
-///
-/// # A step's footing is a reading, not a record
-///
-/// It is minted by [`WorkProduct::already_there`] at the instant a step begins
-/// and held on the working slot for as long as that step runs. Nothing writes
-/// it down. The alternative — a base commit on the step's row — is the failure
-/// this project already knows by name, a field on a record that can disagree
-/// with the record holding it; and a commit could not carry the answer anyway,
-/// because a Drone may leave the step before it ends uncommitted and a base
-/// read as `HEAD` would hand the next step its files.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Since {
-    already: Vec<Was>,
-}
-
-impl Since {
-    /// Since the branch was cut: every step's work together. What a person
-    /// reading a whole Job is shown, and never what a step is gated on.
-    pub fn the_branch_started() -> Since {
-        Since {
-            already: Vec::new(),
-        }
-    }
-
-    /// Whatever was already in the worktree, as the implementation read it.
-    /// Called by that implementation and by a fake standing in for one.
-    ///
-    /// An empty list is the same value [`the_branch_started`](Since::the_branch_started)
-    /// makes, and correctly so: a step that begins with nothing there inherits
-    /// nothing. The two names exist because the call sites are asking different
-    /// questions and a reader of either should be able to tell which.
-    pub fn was_there(already: Vec<Was>) -> Since {
-        Since { already }
-    }
-
-    /// Whether this path, holding these bytes, was already there when the step
-    /// began — and is therefore not this step's work.
-    ///
-    /// **Both halves.** A path that was there and whose bytes have moved is
-    /// this step editing what an earlier one wrote, which is work.
-    pub fn covers(&self, path: &str, fingerprint: &str) -> bool {
-        self.already
-            .iter()
-            .any(|was| was.path == path && was.fingerprint == fingerprint)
-    }
-
-    /// Whether anything was inherited at all. Where nothing was, an
-    /// implementation can skip fingerprinting entirely — there is nothing to
-    /// subtract.
-    pub fn is_empty(&self) -> bool {
-        self.already.is_empty()
-    }
-}
-
 /// Reading a Job's work product out of its worktree.
 pub trait WorkProduct {
     /// Errors this implementation can raise. Named by the implementation, so a
@@ -261,20 +225,27 @@ pub trait WorkProduct {
     /// nothing in it — which are the same empty answer and opposite meanings.
     type Error;
 
-    /// What is in the worktree now, in the form a later reading measures
-    /// against. Called once, at the instant a step begins.
-    ///
-    /// **It writes nothing.** A fingerprint is computed, never stored, so this
-    /// stays a capability that only reads — a gate that could commit could
-    /// satisfy `diff_nonempty` on the Drone's behalf.
-    fn already_there(&self, worktree: &Worktree) -> Result<Since, Self::Error>;
-
-    /// Which files have changed since `since`, committed or not.
+    /// Which files the Job has changed since its branch started, committed or
+    /// not.
     ///
     /// **A failure is never an empty answer.** A repository that will not open
     /// returns an error, so a `diff_nonempty` check cannot pass or fail on a
     /// reading that never happened.
-    fn changed_files(&self, worktree: &Worktree, since: &Since) -> Result<Changed, Self::Error>;
+    fn changed_files(&self, worktree: &Worktree) -> Result<Changed, Self::Error>;
+
+    /// What the worktree holds right now, as content, so that two readings can
+    /// be compared.
+    ///
+    /// **Read at a step's start and again at its gate.** The difference is what
+    /// *that step* produced, which is the question `diff_nonempty` asks and the
+    /// one [`changed_files`](WorkProduct::changed_files) cannot answer — it
+    /// measures against the commit the branch was cut from, so it counts every
+    /// earlier step's work as this one's.
+    ///
+    /// A failure is an error rather than an empty footprint, for
+    /// [`changed_files`](WorkProduct::changed_files)'s reason: two readings that
+    /// both failed would compare equal and report a step that did nothing.
+    fn footprint(&self, worktree: &Worktree) -> Result<Footprint, Self::Error>;
 
     /// What changed in those files, as a unified diff.
     ///
@@ -286,5 +257,5 @@ pub trait WorkProduct {
     /// A failure is an error rather than an empty patch, for the reason
     /// [`changed_files`](WorkProduct::changed_files) gives — the Judge must
     /// never be handed a reading that did not happen and told it is the work.
-    fn patch(&self, worktree: &Worktree, since: &Since) -> Result<Patch, Self::Error>;
+    fn patch(&self, worktree: &Worktree) -> Result<Patch, Self::Error>;
 }

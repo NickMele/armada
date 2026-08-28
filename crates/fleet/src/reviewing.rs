@@ -74,16 +74,12 @@ where
         };
         let job = self.move_job(&job, Target::Running, Actor::Human).await?;
         let job = self.move_step(&job, next.id(), StepTarget::Running).await?;
+        if let Some(at_work) = working.as_mut() {
+            at_work.now_on(next.id().clone(), self.now());
+        }
         // The approved step's work is what the next step inherits, read at the
         // boundary for `crate::dispatch`'s reason.
-        let since = self
-            .worktree_of(&job)
-            .ok()
-            .flatten()
-            .and_then(|worktree| self.work().already_there(&worktree).ok());
-        if let Some(at_work) = working.as_mut() {
-            at_work.now_on(next.id().clone(), self.now(), since);
-        }
+        self.marked(&mut working);
         self.tell(job_id, &told, &working).await?;
         Ok(job)
     }
