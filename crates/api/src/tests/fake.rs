@@ -206,6 +206,9 @@ impl Daemon for FakeDaemon {
             write_targets: None,
             subject: None,
             dependencies: Vec::new(),
+            // Absent, like every other option here: this daemon reads no store
+            // and a footprint is a store's answer.
+            footprint: None,
         })
     }
 

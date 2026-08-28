@@ -14,6 +14,11 @@ workspace = true
 wreckage = []
 
 [dependencies]
+# The reading a footprint record holds. `adapter-traits` has no dependencies of
+# its own, and taking the vocabulary that produced the reading is what keeps the
+# stored `change` column and the wire spelling one set of words rather than a
+# third written out here.
+adapter-traits = { path = "../adapter-traits" }
 core-model = { path = "../core-model" }
 rusqlite = { version = "0.32", features = ["bundled"] }
 # The one crate allowed to parse untyped JSON, and this is why it needs to:

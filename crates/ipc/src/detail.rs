@@ -30,6 +30,7 @@ use crate::checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 use crate::enums::{AdvanceGate, CriterionSource, DependencyDirection, JudgeVerdict, StepState};
 use crate::ids::{CriterionId, Instant, JobId, StepId};
 use crate::job::{JobSummary, Subject};
+use crate::work::JobFootprint;
 
 /// What Fleet knows about one step beyond its `job_steps` row.
 ///
@@ -104,21 +105,37 @@ pub struct JobDetail {
     pub subject: Option<Subject>,
     /// The DAG edges this Job sits on. Empty until something writes one.
     pub dependencies: Vec<Dependency>,
+    /// What the worktree held when the Job stopped.
+    ///
+    /// **Absent on every Job that is still going**, which is not a gap: a Job
+    /// with a Drone on it has a live reading, published as `job.files_changed`,
+    /// and that is the current one. This is the reading nothing else can give
+    /// back — the worktree may since have been reclaimed — and a surface that
+    /// showed a record while a Drone was still writing would be showing an
+    /// answer to a question nobody had asked yet.
+    ///
+    /// Absent is also every Job that finished before Fleet wrote these down.
+    /// Present with no files is a worktree that was read and held no change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub footprint: Option<JobFootprint>,
 }
 
 impl JobDetail {
     /// A Job in full, plus the reason its last recorded transition carried and
     /// what Fleet knows about its steps.
     ///
-    /// All three are arguments for the same reason [`JobSummary::of`] takes
-    /// two: none is a field of `core_model::Job`. The reason is in the log, the
-    /// queued reason is computed from the board, and a step's Checks are the
-    /// workflow's and the store's.
+    /// Everything past the Job is an argument for the same reason
+    /// [`JobSummary::of`] takes two: none of it is a field of
+    /// `core_model::Job`. The reason is in the log, the queued reason is
+    /// computed from the board, a step's Checks are the workflow's and the
+    /// store's, and the footprint is the store's alone — a Job carries no
+    /// record of what it touched.
     pub fn of(
         job: &core_model::Job,
         reason: Option<&core_model::TransitionReason>,
         queued_reason: Option<core_model::QueuedReason>,
         steps: &[StepFacts],
+        footprint: Option<JobFootprint>,
     ) -> JobDetail {
         JobDetail {
             job: JobSummary::of(job, reason, queued_reason),
@@ -152,6 +169,7 @@ impl JobDetail {
             }),
             subject: job.subject().map(Subject::from),
             dependencies: job.dependencies().iter().map(Dependency::from).collect(),
+            footprint,
         }
     }
 }

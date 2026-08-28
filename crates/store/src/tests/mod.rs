@@ -16,6 +16,7 @@
 mod attempt;
 mod corrupt;
 mod cursor;
+mod footprint;
 mod forget;
 mod gaming;
 mod migrate;

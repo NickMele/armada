@@ -60,6 +60,50 @@ pub enum Change {
     Unreadable,
 }
 
+impl Change {
+    /// Every variant, so [`from_wire`](Change::from_wire) is a search over the
+    /// set rather than a second `match` that could fall behind the first.
+    pub const ALL: [Change; 8] = [
+        Change::Added,
+        Change::Modified,
+        Change::Deleted,
+        Change::Renamed,
+        Change::Copied,
+        Change::TypeChanged,
+        Change::Conflicted,
+        Change::Unreadable,
+    ];
+
+    /// The stored spelling, which is also what the wire carries.
+    ///
+    /// **One spelling, not two.** A footprint kept past the Drone that made it
+    /// is written into the store by `fleet` and read back out of it by the
+    /// same crate that puts it on the wire, so a column and a JSON field that
+    /// disagreed would be one reading rendered two ways.
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            Change::Added => "added",
+            Change::Modified => "modified",
+            Change::Deleted => "deleted",
+            Change::Renamed => "renamed",
+            Change::Copied => "copied",
+            Change::TypeChanged => "type_changed",
+            Change::Conflicted => "conflicted",
+            Change::Unreadable => "unreadable",
+        }
+    }
+
+    /// Read a stored value back. `None` where the value is not one this build
+    /// knows, which the reader refuses rather than dropping the file: a
+    /// footprint missing a row reads as work that was never done.
+    pub fn from_wire(value: &str) -> Option<Change> {
+        Change::ALL
+            .iter()
+            .copied()
+            .find(|change| change.as_wire() == value)
+    }
+}
+
 /// One file the Job has changed, and what happened to it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChangedFile {

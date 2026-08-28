@@ -545,12 +545,29 @@ where
         }
     }
 
+    /// The write, the footprint a terminal Job is owed, and the publish — in
+    /// that order.
+    ///
+    /// **The footprint sits between them deliberately.** A client refetches the
+    /// Job on the event, so recording after the publish would leave a window
+    /// where the Job reads as finished with nothing to say about what it
+    /// touched — the exact absence [`kept_footprint`](Fleet::kept_footprint)
+    /// exists to end, narrowed to a race instead of removed. It costs one
+    /// repository read on the transition that ends a Job and nothing on any
+    /// other.
+    ///
+    /// [`kept_footprint`](Fleet::kept_footprint) answers nothing and refuses
+    /// nothing: the move has already landed, and a Job that ended is over
+    /// whether or not its worktree could be read.
     async fn record(&self, moved: Transitioned) -> Result<Job, Adrift> {
         self.store()
             .lock()
             .await
             .record_transition(&moved)
             .map_err(Adrift::Writing)?;
+        if moved.job.status().is_terminal() {
+            self.kept_footprint(&moved.job).await;
+        }
         self.publish(ipc::Event::JobStateChanged((&moved.event).into()));
         Ok(moved.job)
     }

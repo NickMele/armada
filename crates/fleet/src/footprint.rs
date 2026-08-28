@@ -40,14 +40,31 @@
 //! file list until the Drone next wrote — indistinguishable from a Drone that
 //! has done nothing. When the watcher count rises off zero the memo is dropped,
 //! and the next reading publishes whatever it finds.
+//!
+//! # The last reading is written down, and that one is not thrown away
+//!
+//! Everything above is a live view, and it is only taken while somebody is
+//! watching — so a Job read a week after it finished showed a different
+//! footprint from the same Job read while it ran, which teaches a person not to
+//! trust the surface. [`Fleet::kept_footprint`] takes one more reading at the
+//! terminal transition and hands it to the store.
+//!
+//! **At the transition and never afterwards.** `armada clean` gives worktrees
+//! back, so a reading taken when somebody opens the Job is a guess about a
+//! directory that may not exist. This one is a record of one that did.
+//!
+//! It carries no drift mark, and `store`'s own module note carries why.
 
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Change, Changed, Delivery, Vcs, WorkProduct};
-use core_model::{Actor, DeclaredPaths, Timestamp};
+use core_model::{
+    Actor, Component, DeclaredPaths, Envelope, FieldValue, Job, JobId, Level, Timestamp,
+};
 
 use crate::converging::elapsed;
 use crate::daemon::Fleet;
+use crate::transcript;
 use crate::working::Working;
 
 /// The shortest time between two readings of one Drone's worktree.
@@ -161,6 +178,63 @@ where
         }
         Some(changed)
     }
+
+    /// Read the worktree one last time and write it down, because nothing else
+    /// will be able to.
+    ///
+    /// Called on the transition that ends a Job, from the one path every Job
+    /// move goes through, so no terminal status is reached without passing
+    /// here. **It takes no slot lock**: the caller may be a turn already
+    /// holding it, and the worktree is derived from the Job rather than from
+    /// the Drone that was on it.
+    ///
+    /// # Nothing here can fail the transition
+    ///
+    /// The move has already landed. A Job with no worktree — one never
+    /// dispatched, one refused at the approval gate — records nothing, which is
+    /// the absent case and not an empty one. A worktree that will not open, or
+    /// a store that will not take the write, is a line in the Job's log and no
+    /// record: a Job that ended is over, and a footprint nobody could read is
+    /// not a reason to refuse to say so.
+    pub(crate) async fn kept_footprint(&self, job: &Job) {
+        let worktree = match self.worktree_of(job) {
+            Ok(Some(worktree)) => worktree,
+            Ok(None) => return,
+            Err(why) => return self.noted_unfootprinted(job.id(), &why.to_string()),
+        };
+        let changed = match self.work().changed_files(&worktree) {
+            Ok(changed) => changed,
+            Err(cause) => return self.noted_unfootprinted(job.id(), &cause.to_string()),
+        };
+        let at = self.now();
+        if let Err(why) = self
+            .store()
+            .lock()
+            .await
+            .record_footprint(job.id(), &changed, &at)
+        {
+            self.noted_unfootprinted(job.id(), &why.to_string());
+        }
+    }
+
+    /// Write into the Job's log that its footprint was not kept.
+    ///
+    /// **The one place this silence is breakable.** The record is the only
+    /// answer a finished Job has about what it touched, so a Job that ends
+    /// without one has to say why here — otherwise "nothing was recorded" on
+    /// screen is indistinguishable from a Fleet too old to record anything.
+    fn noted_unfootprinted(&self, job: &JobId, why: &str) {
+        let envelope = Envelope::new(
+            self.now(),
+            Level::Warn,
+            Component::Fleet,
+            self.run().clone(),
+            "job ended without its footprint being recorded",
+        )
+        .in_job(job.as_ulid().clone())
+        .with_field("cause", FieldValue::Str(why.to_string()));
+        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+    }
 }
 
 /// Fleet's reading, as the wire carries it.
@@ -187,6 +261,27 @@ pub(crate) fn seen(changed: &Changed, plan: Option<&DeclaredPaths>) -> Vec<ipc::
             outside_plan: plan.is_some_and(|plan| !plan.covers(file.path())),
         })
         .collect()
+}
+
+/// The record, as the wire carries it.
+///
+/// **The redaction step for a footprint that was kept**, and it is [`seen`]'s
+/// answer with the mark taken off rather than a second one: a stored reading
+/// carries no plan to be outside of, so the wire type it becomes has no field
+/// for one. Nothing else is dropped — a repository-relative path and what
+/// happened to it is the whole of a footprint either way.
+pub(crate) fn kept(recorded: &store::Footprinted) -> ipc::JobFootprint {
+    ipc::JobFootprint {
+        files: recorded
+            .files
+            .iter()
+            .map(|file| ipc::TouchedFile {
+                path: file.path().to_string(),
+                change: kind(file.change()),
+            })
+            .collect(),
+        recorded_at: (&recorded.recorded_at).into(),
+    }
 }
 
 /// The adapter's word for what happened, in the wire's spelling.

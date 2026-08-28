@@ -35,19 +35,19 @@ import {
 } from "@armada/components";
 import { FileCheck, GitBranch, GitCommitHorizontal, GitPullRequest } from "lucide-react";
 
-import type { Diff, Evidence, Footprint, History, Observed, Watched } from "../../shared/bridge";
+import type { Diff, Evidence, History, Observed, Watched } from "../../shared/bridge";
 import type {
   JobDetail as JobWhole,
-  JobFilesChanged,
+  JobFootprint,
   JobSummary,
 } from "../../shared/protocol";
 import type { ManifestSummary } from "../../shared/setup";
 import {
-  filesOf,
-  footprintNote,
-  footprintSummary,
   NOT_SERVED_WHEN_FINISHED,
-  readingFor,
+  RECORD_NOTE,
+  recordSummary,
+  touchedOf,
+  TOUCHED_NOTHING,
 } from "./files";
 import { Changed, Claims, Moves, Turns } from "./Panels";
 import { railOf } from "./rail";
@@ -104,11 +104,6 @@ export type FinishedProps = {
   manifest: ManifestSummary | undefined;
   /** What the second socket has said, where this Job's turns are being read. */
   observed: Observed;
-  /**
-   * The last `job.files_changed` reading main holds, where the window was open
-   * while this Job's Drone worked. `none` for a Job opened after it stopped.
-   */
-  footprint: Footprint;
   /** `GET /jobs/:job_id/events`, where the history section has asked for it. */
   history: History;
   /** `GET /jobs/:job_id/evidence`, where the claims section has asked for it. */
@@ -132,7 +127,6 @@ export function Finished({
   watched,
   manifest,
   observed,
-  footprint,
   history,
   evidence,
   diff,
@@ -174,21 +168,27 @@ export function Finished({
   }, [section, job.id]);
 
   const work = workOf(job, whole, manifest, false);
-  const reading = readingFor(footprint, job.id);
+  // **The record, and this screen no longer takes the live reading at all.**
+  // What main holds from the stream is whatever arrived while this window
+  // happened to be open, which is the accident of observation that made one
+  // finished Job read two ways. What `JobDetail` carries was read when the Job
+  // stopped and says the same thing to everybody, so the prop is gone rather
+  // than kept as a fallback that would bring the accident back.
+  const touched = whole?.footprint;
 
   return (
     <AFinishedJobWhatItWasAndWhatItProduced
       heading={heading}
       brief={whole === null ? undefined : briefOf(whole)}
       briefAbsent={whyNotRead(watched, job.id, "acceptance criteria")}
-      outcome={{ parts: producedOf(job, reading), note: HANDOVER_NOTE }}
+      outcome={{ parts: producedOf(job, touched), note: HANDOVER_NOTE }}
       record={recordOf({
         job,
         whole,
         watched,
         work,
         observed,
-        reading,
+        touched,
         history,
         evidence,
         diff,
@@ -206,13 +206,11 @@ export function Finished({
 /**
  * What the Job produced, one row per part.
  *
- * **One row is served and four are not.** The branch comes off the row, which
- * carries it and cannot disagree with the detail. The other four each name what
- * would have to serve them: `job.files_changed` exists and is published while a
- * Drone is working, which is not the same as a finished Job's footprint, and
- * the sentence says so rather than implying the event is missing.
+ * **Two rows are served and three are not.** The branch comes off the row, and
+ * the file count is the record Fleet wrote when the Job stopped. The other three
+ * each name what would have to serve them rather than reading as coming soon.
  */
-function producedOf(job: JobSummary, reading: JobFilesChanged | undefined): JobOutcomePart[] {
+function producedOf(job: JobSummary, touched: JobFootprint | undefined): JobOutcomePart[] {
   return [
     {
       name: "Branch",
@@ -237,11 +235,11 @@ function producedOf(job: JobSummary, reading: JobFilesChanged | undefined): JobO
     // submission that landed, so a changed-file row has nothing in the registry
     // to take and none is invented. The mark column stays and renders empty.
     //
-    // **The count is the last live reading, or nothing.** A footprint is only
-    // held where this window was open while the Drone worked; a Job opened
-    // after it stopped has none, and the row says why rather than showing a
-    // zero that would read as a Drone that changed nothing.
-    { name: "Files changed", ...counted(reading) },
+    // **The count is the record, and it does not depend on who was watching.**
+    // A Job with none finished before Fleet kept one or had a worktree that
+    // would not open, and the row says so rather than showing a zero that would
+    // read as a Drone that changed nothing.
+    { name: "Files changed", ...counted(touched) },
     {
       name: "Evidence",
       icon: FileCheck,
@@ -252,13 +250,15 @@ function producedOf(job: JobSummary, reading: JobFilesChanged | undefined): JobO
 }
 
 /**
- * The count of what was changed, or why there is none. `value` and `meta`
- * together, so the row never carries a count with no list behind it.
+ * The count of what was changed, or why there is none.
+ *
+ * **Zero is a count and not an absence.** A record with no files is a worktree
+ * that was read and held nothing, which the row shows as a count with the
+ * section below it saying what that means; a Job with no record shows the
+ * sentence instead.
  */
-function counted(reading: JobFilesChanged | undefined): Partial<JobOutcomePart> {
-  return reading === undefined
-    ? { absent: NOT_SERVED.filesChanged }
-    : footprintSummary(reading);
+function counted(touched: JobFootprint | undefined): Partial<JobOutcomePart> {
+  return touched === undefined ? { absent: NOT_SERVED.filesChanged } : recordSummary(touched);
 }
 
 /**
@@ -276,7 +276,7 @@ function recordOf({
   watched,
   work,
   observed,
-  reading,
+  touched,
   history,
   evidence,
   diff,
@@ -288,7 +288,7 @@ function recordOf({
   watched: Watched;
   work: ReturnType<typeof workOf>;
   observed: Observed;
-  reading: JobFilesChanged | undefined;
+  touched: JobFootprint | undefined;
   history: History;
   evidence: Evidence;
   diff: Diff;
@@ -326,13 +326,13 @@ function recordOf({
       id: "files",
       label: "Files changed",
       panel:
-        reading === undefined ? (
+        touched === undefined ? (
           <ChangedFiles files={[]} emptyNote={NOT_SERVED_WHEN_FINISHED} />
         ) : (
           <ChangedFiles
-            files={filesOf(reading)}
-            emptyNote={NOTHING_TOUCHED}
-            note={footprintNote(reading, false)}
+            files={touchedOf(touched)}
+            emptyNote={TOUCHED_NOTHING}
+            note={RECORD_NOTE}
             onCopied={onCopied}
           />
         ),
@@ -342,7 +342,10 @@ function recordOf({
       // deeper — and it is the one section that costs anything to open.
       id: CHANGED,
       label: "What it changed",
-      panel: <Changed job={job} diff={diff} onCopied={onCopied} />,
+      // The declaration went with the Drone, for the reason the stopped render
+      // gives. The record above this section is what a reader asking whether
+      // the work stayed in scope has, and it says what it does not carry.
+      panel: <Changed job={job} diff={diff} planReadable={false} onCopied={onCopied} />,
     },
     {
       id: CLAIMS,
@@ -365,10 +368,6 @@ function recordOf({
     },
   ];
 }
-
-/** What a footprint with no rows in it says. Ordinary, and never an error. */
-const NOTHING_TOUCHED =
-  "The last reading found no changed files. This drone had written nothing to the worktree.";
 
 /**
  * What the wire does not carry, said in the row it would have filled. One

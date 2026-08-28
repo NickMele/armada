@@ -219,7 +219,6 @@ export function JobDetail({
         watched={watched}
         manifest={manifest}
         observed={observed}
-        footprint={recorded.footprint}
         history={recorded.history}
         evidence={recorded.evidence}
         diff={recorded.diff}
