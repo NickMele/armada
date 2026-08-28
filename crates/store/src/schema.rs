@@ -50,7 +50,26 @@ pub const KNOWN_SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 /// migrated file is assumed to contain, which is the one thing the version
 /// number exists to stop.
 pub const MIGRATIONS: &[&str] = &[
-    V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16,
+    V1,
+    V2,
+    V3,
+    V4,
+    V5,
+    V6,
+    V7,
+    V8,
+    V9,
+    V10,
+    V11,
+    V12,
+    V13,
+    V14,
+    V15,
+    V16,
+    // Beside the table it creates rather than in this file, which is at the 900
+    // lines the gate refuses at — [`V16`] said the next one would not fit. The
+    // order still lives here, which is the part that may not be anywhere else.
+    crate::report::V17,
 ];
 
 /// Every table whose rows belong to one Job, asked of the file rather than

@@ -25,8 +25,8 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
 use ipc::{
-    ChangesRequested, JobId, JobRequest, Missed, Overruled, ProposeJob, Redirection, Resync, RunId,
-    StreamMessage, WireError, PROTOCOL_VERSION,
+    ChangesRequested, FileReport, JobId, JobRequest, Missed, Overruled, ProposeJob, Redirection,
+    Resync, RunId, StreamMessage, WireError, PROTOCOL_VERSION,
 };
 use serde::Serialize;
 use std::sync::Arc;
@@ -182,6 +182,20 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/restart_step",
     },
+    // What a person says went wrong, under the Job it is about, and every
+    // report filed, which is not under one — a report outlives the Job it
+    // names, so a listing reachable only through a Job would lose exactly the
+    // reports that most need reading.
+    Route {
+        operation: "file_report",
+        method: "POST",
+        path: "/jobs/:job_id/report",
+    },
+    Route {
+        operation: "list_reports",
+        method: "GET",
+        path: "/reports",
+    },
     // A socket rather than a body: it opens with what has already happened and
     // then continues, which no request-response shape carries. The path drops
     // `_job` for the reason `redispatch` does — the segment before it already
@@ -315,6 +329,8 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/redispatch", post(redispatch_job::<D>))
         .route("/jobs/:job_id/redirect", post(redirect_drone::<D>))
         .route("/jobs/:job_id/restart_step", post(restart_step::<D>))
+        .route("/jobs/:job_id/report", post(file_report::<D>))
+        .route("/reports", get(list_reports::<D>))
         .route("/jobs/:job_id/observe", get(observe_job::<D>))
         .route("/events", get(events::<D>))
         // The Evidence endpoint, on the same listener and deliberately not in
@@ -638,6 +654,50 @@ async fn restart_step<D: Daemon>(
 ) -> Response {
     match served.daemon.restart_step(JobId::carried(job_id)).await {
         Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// A person says this Job failed in error. **201, because a report now
+/// exists** — and nothing else does: no Job is proposed, no Drone is spawned,
+/// and the Job it names is exactly where it was.
+///
+/// 422 on a blank sentence. The record was already served by three other
+/// routes before anybody pressed anything, so a filing with the bundle and no
+/// sentence has added nothing at all.
+async fn file_report<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+    body: Bytes,
+) -> Response {
+    let filing: FileReport = match ipc::decode("a report", &body) {
+        Ok(filing) => filing,
+        Err(why) => {
+            return problem(
+                StatusCode::BAD_REQUEST,
+                &WireError::raised(UNDECODABLE_REQUEST, why.to_string(), served.run_id.clone())
+                    .caused_by(vec![why.to_string()]),
+            )
+        }
+    };
+    match served
+        .daemon
+        .file_report(JobId::carried(job_id), filing)
+        .await
+    {
+        Ok(report) => answer(StatusCode::CREATED, &report, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Every report filed, newest first, with the counts they are read beside.
+///
+/// **Not under `/jobs`**, and that is the shape of the claim: a report survives
+/// `armada clean` taking its Job away, so it is a record of its own rather than
+/// a row beneath one.
+async fn list_reports<D: Daemon>(State(served): State<Served<D>>) -> Response {
+    match served.daemon.list_reports().await {
+        Ok(reports) => answer(StatusCode::OK, &reports, &served.run_id),
         Err(refusal) => refused(refusal),
     }
 }

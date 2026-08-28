@@ -127,6 +127,7 @@ mod proposing;
 mod queued;
 mod redirect;
 mod redispatch;
+mod reporting;
 mod retrying;
 mod reviewing;
 mod runtime;

@@ -115,7 +115,9 @@ pub mod overruling;
 pub mod process;
 pub mod proposal;
 pub mod proposing;
+pub mod redaction;
 pub mod redispatch;
+pub mod reporting;
 pub mod resume;
 mod review;
 pub mod reviewing;
@@ -153,7 +155,9 @@ pub use overruling::Overruling;
 pub use process::{holder_of, Holder, ProbeFailed, StartedAt};
 pub use proposal::{proposed, Proposing};
 pub use proposing::{NotProposed, Proposal, ProposedJob, Unresolved};
+pub use redaction::Redactor;
 pub use redispatch::Replacement;
+pub use reporting::{Counted, Filed};
 pub use resume::Roused;
 pub use runtime::{
     machine_path, provisional_address, Presence, PublishError, Published, ReadError, RuntimeFile,
