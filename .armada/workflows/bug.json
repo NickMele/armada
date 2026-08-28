@@ -96,16 +96,23 @@
 # established and the Judge is shown it, labelled as the standard rather than
 # the target.
 #
-# **The Judge is still not shown the request.** `judge.md` says it receives the
-# original task text and the brief carries none -- the Job's title, facts and
-# `acceptance_criteria` reach the Drone and stop there, and joining
-# `acceptance_criteria[]` to a step is written down as unbuilt in
-# `config/src/judge.rs`. So every criterion below is one the note answers by
-# itself, and the designed questions that compare the work against what was
-# asked for are not ported. They are not dropped -- they wait on that.
+# **The Judge is shown the request now**, which is what `judge.md` rule 2 said
+# all along and what #169 built: the Job's title, its facts and its acceptance
+# criteria are on every brief. So `plan` carries its designed pair again, and
+# `plan_matches_request` is the half that was waiting -- a plan can name a
+# perfectly specific root cause of a problem nobody reported, and only the first
+# criterion catches that.
 #
-# `plan`'s designed pair is one criterion here. `plan_matches_request` asks
-# whether the plan addresses what was actually asked, which needs the request.
+# **What is still not joined**, and what the second criterion is worded around:
+# `acceptance_criteria[]` belongs to the Job and no criterion here names which
+# of them it tests. `config/src/judge.rs` refuses `source_ref` for that reason.
+# The brief labels them as the whole Job's bar rather than this step's, so a
+# plan is not refused for having planned rather than finished -- but a criterion
+# that wanted to test one of them by name still cannot be written.
+#
+# Each criterion is its own call, so the entry below is one more Judge call per
+# Job on Bug's cheapest step. That is the price of the front of the workflow
+# being checked at all: a plan for the wrong problem costs every step after it.
 {
   "version": 1,
   "workflow_id": "bug",
@@ -129,6 +136,10 @@
           "enabled": true,
           "model": "haiku",
           "criteria": [
+            {
+              "criterion_id": "plan_matches_request",
+              "question": "Does this plan address the problem that was actually reported, rather than a different one?"
+            },
             {
               "criterion_id": "names_a_root_cause",
               "question": "Does this plan name a specific root cause, rather than restating the reported symptom?"

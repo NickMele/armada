@@ -1,36 +1,27 @@
 //! What was asked for, in the requester's own words.
 //!
-//! # This is the outermost yardstick, and it is not the Drone's
+//! # The outermost yardstick, and it is not the Drone's
 //!
-//! Constitutional rule 2 says the Judge is blind to the Drone's account **and**
-//! that it receives the original task text. Only the first half was built: a
-//! [`Brief`](crate::Brief) carried the step, the criterion, the work product,
-//! the earlier steps' evidence and the Checks, and nothing at all about what
-//! the Job was for. So a criterion could ask whether a document was internally
-//! coherent and could not ask whether it answered the request — which is why
-//! `feature/scope` and `bug/plan_matches_request` were dropped when the
-//! workflows were restored, and why a beautifully-written scope note for the
-//! wrong task advanced.
+//! Rule 2 says the Judge is blind to the Drone's account **and** that it
+//! receives the original task text. Only the first half was built, so a
+//! criterion could ask whether a document held together and could not ask
+//! whether it answered anything — and a scope note for the wrong task passed.
 //!
 //! # The source is a type, for [`Written`](crate::Written)'s reason
 //!
-//! [`Request::of`] takes a [`Job`] and nothing else. There is no constructor
-//! from three strings and none from a [`Submission`](crate::Submission), so
-//! there is no route by which a Drone's own words could arrive labelled as the
-//! thing its work is measured against. Every field it reads is frozen at Job
-//! creation — a Drone cannot propose a Job, and nothing in `fleet` appends to
-//! `facts` after `drafted` builds it.
+//! [`Request::of`] takes a [`Job`] and nothing else: no constructor from three
+//! strings, none from a [`Submission`](crate::Submission). So there is no route
+//! by which the Drone's own words arrive labelled as the standard. Every field
+//! it reads is frozen at creation — a Drone cannot propose a Job, and nothing
+//! appends to `facts` after `fleet::drafting` builds it.
 //!
 //! # The whole Job's bar, never one step's
 //!
-//! `acceptance_criteria[]` is the Job's, and no criterion of a step names which
-//! one of them it tests. `crates/config/src/judge.rs` refuses `source_ref` for
-//! exactly that reason — the join from a Judge criterion into
-//! `job.acceptance_criteria[]` **is not built**, and nothing here builds it.
-//! What that costs is honest and stated in the text: the Judge is told these
-//! are the conditions the *Job* must satisfy, so it cannot read one of them as
-//! this step's own bar and refuse a first step for not having finished the
-//! work.
+//! No criterion of a step names which acceptance criterion it tests;
+//! `config/src/judge.rs` refuses `source_ref` because that join **is not
+//! built**, and nothing here builds it. So the text says the criteria are the
+//! *Job's*, which is what stops a Judge reading them as this step's bar and
+//! refusing a first step for not having finished the work.
 
 use core_model::Job;
 

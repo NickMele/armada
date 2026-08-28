@@ -11,25 +11,17 @@
 //!
 //! # What a call is told, and what it is denied
 //!
-//! [`Brief`] takes a step, one criterion, **the request**, the step's work
-//! product, what that work is measured against, and the Checks that ran. **It
-//! has no parameter for the submission and none for the transcript**, so
-//! constitutional rule 2 — the Judge never reads the Drone's own account of how
-//! the step went — is a signature rather than a sentence.
-//! `docs/concepts/judge.md`, and `docs/contracts/agent-prompt.md` section 7.
+//! **Rule 2 is [`Brief::about`]'s signature, both halves of it.** There is no
+//! parameter for the submission and none for the transcript, so the Judge
+//! cannot read the Drone's account of its own step; and [`Request`] is not an
+//! `Option`, so it cannot be blind to the original task text either. The second
+//! half is what let a criterion ask only whether a document was coherent with
+//! itself. `docs/concepts/judge.md`, `docs/contracts/agent-prompt.md` section 7.
 //!
-//! Rule 2 has a second half, and it was the missing one: the Judge *does*
-//! receive the original task text. [`Request`] is that half, and it is not an
-//! `Option` — there is no brief this assembles that could be blind to what was
-//! asked for, which is what let a criterion ask only whether a document was
-//! coherent with itself. See [`request`](mod@crate::request) for why the
-//! requester's words and the Drone's cannot be confused at this call site.
-//!
-//! [`Product`] is where a work product that is not a diff arrives, and the
-//! source rule that keeps it from being the Drone's testimony is that type's,
-//! not this one's — see [`product`](mod@crate::product). What matters here is
-//! that a `Product` cannot be empty, so there is no call this assembles that
-//! shows the Judge nothing.
+//! The source rules that keep those apart are the other two modules'
+//! ([`product`](mod@crate::product), [`request`](mod@crate::request)), not this
+//! one's. What matters here is that neither type can be empty, so there is no
+//! call this assembles that shows the Judge nothing.
 
 use config::ResolvedStep;
 use core_model::{CriterionId, JudgeCriterion, JudgeVerdict, Judgment, StepCheck};

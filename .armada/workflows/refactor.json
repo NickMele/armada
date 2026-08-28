@@ -42,16 +42,16 @@
 # established and the Judge is shown it, labelled as the standard rather than
 # the target.
 #
-# **The Judge is still not shown the request.** `judge.md` says it receives the
-# original task text and the brief carries none -- the Job's title, facts and
-# `acceptance_criteria` reach the Drone and stop there, and joining
-# `acceptance_criteria[]` to a step is written down as unbuilt in
-# `config/src/judge.rs`. So every criterion below is one the note answers by
-# itself, and the designed questions that compare the work against what was
-# asked for are not ported. They are not dropped -- they wait on that.
+# **The Judge is shown the request now** -- the Job's title, its facts and its
+# acceptance criteria are on every brief since #169. Nothing below changed for
+# it, and that is the honest outcome here rather than an oversight: `plan`'s
+# designed criterion ports whole, because whether a plan describes structure
+# only is answerable from the plan. Bug and Feature each got a criterion back
+# that had been dropped for wanting the request; Refactor had none owed.
 #
-# `plan`'s designed criterion ports whole: whether a plan describes structure
-# only is answerable from the plan.
+# What is still not joined is `acceptance_criteria[]` to a step. They reach a
+# brief as the whole Job's bar and no criterion can name one of them --
+# `config/src/judge.rs` refuses `source_ref` for that reason.
 {
   "version": 1,
   "workflow_id": "refactor",

@@ -50,21 +50,28 @@
 # established and the Judge is shown it, labelled as the standard rather than
 # the target.
 #
-# **The Judge is still not shown the request.** `judge.md` says it receives the
-# original task text and the brief carries none -- the Job's title, facts and
-# `acceptance_criteria` reach the Drone and stop there, and joining
-# `acceptance_criteria[]` to a step is written down as unbuilt in
-# `config/src/judge.rs`. So every criterion below is one the note answers by
-# itself, and the designed questions that compare the work against what was
-# asked for are not ported. They are not dropped -- they wait on that.
+# **The Judge is shown the request now**, which is what `judge.md` rule 2 said
+# all along and what #169 built: the Job's title, its facts and its acceptance
+# criteria are on every brief.
 #
 # **`scope` is the step that must not go unverified**, because a Drone that
 # scopes wrongly does the wrong work for every step after it. Its designed
-# criterion -- does the note address what was requested, without expanding
-# beyond it -- is exactly the half that needs the request, so the criterion here
-# is the other half: whether the note is specific enough to be scope at all. A
-# note that restates the request in other words is what a wrong scope looks like
-# before the wrong work starts, and that is readable from the note.
+# criterion is restored below in the designed wording, and it is the half that
+# needed the request: a beautifully specific note about the wrong change passes
+# every question that reads the note alone. The narrower criterion stays beside
+# it rather than being replaced -- a note can address the request and still be
+# too vague to scope anything, and the two failures look nothing alike to
+# whoever reads the refusal.
+#
+# **What is still not joined.** `acceptance_criteria[]` belongs to the Job and
+# no criterion here names which of them it tests; `config/src/judge.rs` refuses
+# `source_ref` for that reason. The brief labels them as the whole Job's bar
+# rather than the step's, so a scope note is not refused for not having shipped
+# the feature -- but a criterion that wanted to test one of them by name still
+# cannot be written.
+#
+# Each criterion is its own call, so the entry below is one more Judge call per
+# Job on Feature's cheapest step.
 {
   "version": 1,
   "workflow_id": "feature",
@@ -88,6 +95,10 @@
           "enabled": true,
           "model": "haiku",
           "criteria": [
+            {
+              "criterion_id": "addresses_the_request",
+              "question": "Does this scope note address what was actually requested, without expanding beyond it?"
+            },
             {
               "criterion_id": "names_what_it_will_touch",
               "question": "Does this scope note name the specific files, modules or behaviours the change will touch, rather than restating the request in other words?"
