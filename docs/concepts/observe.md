@@ -90,7 +90,7 @@ What that gives up is a payload the vocabulary has no variant for: `Unrecognised
 | `Said` | The Drone's own text | Prose, which advances nothing |
 | `Refused` | The tool, the call, the harness's wording | Reached for and stopped |
 | `Started` | Session, model, MCP server count | The session, and whether confinement held |
-| `Unrecognised` | The kind | The stream grew an event |
+| `Unrecognised` | The kind | The stream carried something the vocabulary has no variant for — a new event, or the Drone's reasoning |
 | `Unreadable` | The line as the decoder saw it, and why | A line that did not decode |
 
 **`Missed` is the one row that is not a `DroneEvent`.** It is the sink saying how much of the record is not there, which the vocabulary has no way to say. It is written to the file and is not shown to a viewer, whose losses are the subscription's rather than the sink's.
@@ -102,6 +102,10 @@ What that gives up is a payload the vocabulary has no variant for: `Unrecognised
 **A path under a home directory is elided to `~`.** Why: spike 3's finding was the operator's own home path in the opening event, scrubbed by hand before this repository could hold the capture. A row naming a file the Drone read would carry it again on every call.
 
 **`Unrecognised` and `Unreadable` are rows and never gaps.** Why: they are already never dropped in the vocabulary, and a view that hid them would report a quiet stream where there was a broken one.
+
+**The rule holds at the block and not only at the turn.** A turn is several content blocks, and a decoder that dropped the ones it had no variant for and synthesised a row only where the turn had nothing else would lose them on every turn that also made a call — which was the commonest turn in the stream. So each block answers for itself, and the three answers a reader can tell apart are a turn that reasoned, a block the vocabulary does not name, and a turn that held nothing at all.
+
+**A turn that carried reasoning says so, and does not carry it.** Why: reasoning is the model's working rather than its answer, it is long, and `../scope.md` records that reading a transcript is the thing Armada exists to escape. What a reader cannot do without is knowing the turn had reasoning in it — a turn that thought for thirty seconds and then made one call rendered as one call, and nothing said anything had been taken out. Whether the text is ever shown is open; see Open questions.
 
 ### Not shown
 
@@ -176,5 +180,7 @@ The flow, the placement and the copy belong to the Monitor Active Work user jour
 ## Open questions
 
 - **[observe-transcript-sharing]** May an observed transcript leave the machine, and what would have to be true first? Redaction covers credentials Armada brokered, and a transcript carries whatever the Drone read — so the bound today is that the viewer is the operator, on their own machine, reading a Job they dispatched. Attaching a transcript to an escalation, a bug report or a shared Job record would each remove that bound. `../spikes/003-does-headless-output-parse.md` is the worked example: its capture had to be redacted by hand before this repository could hold it, and what needed removing was the session's opening event. Since a `Called` row carries the call's arguments, a shared transcript would also carry every command the Drone ran and every path it touched — which is a wider scrub than the opening event, not the same one.
+
+- **[observe-reasoning-content]** Does a viewer ever get to read a Drone's reasoning, or only that there was some? The row says the turn reasoned and carries no text, which is the smaller of two readings. The larger one — a collapsed row that opens onto the working — is what a person actually wants when a Job went somewhere surprising, and it is also the whole of the transcript-reading this product exists to escape, at a size no other row comes near. It would need a place in the vocabulary that is not `Unrecognised`, a `Saw` variant with `enum-verbs.toml` rows, and an answer to `[observe-transcript-sharing]` that today's rows do not need, because the working is the one field that has never been bounded by anything.
 
 - **[observe-retention-against-the-log]** Does a Job's transcript live and die with its log, or on its own schedule? Per-Job logs are pruned on terminal status after a retention grace period, which would take the transcript with them — and the transcript is the larger artifact by a wide margin, so the setting that sizes one may be wrong for the other. `log_retention_days` does not exist yet, which is why this is answerable now rather than later.
