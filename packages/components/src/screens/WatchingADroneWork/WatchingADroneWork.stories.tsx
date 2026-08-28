@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { CircleDot, Eye } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
-import type { DroneTurn } from "../../compositions/DroneTurns/DroneTurns";
+import type { DroneTurn, TurnStep } from "../../compositions/DroneTurns/DroneTurns";
 import { WatchingADroneWork } from "./WatchingADroneWork";
 
 /**
@@ -41,9 +41,19 @@ const heading = {
   actions: <Button variant="ghost">Back to the job</Button>,
 };
 
+/**
+ * The two steps this transcript crosses. The header says step 2 of 4, and the
+ * boundary in the pane is where the second one began — the same fact twice, at
+ * two scales, which is what makes a row attributable to the step that produced
+ * it.
+ */
+const PLAN: TurnStep = { id: "plan", label: "Plan the change" };
+const IMPLEMENT: TurnStep = { id: "implement", label: "Split the reducer" };
+
 const turns: DroneTurn[] = [
   {
     id: "1",
+    step: PLAN,
     at: "09:14:02",
     kind: "started",
     // The model is whatever the Job named. A vendor spelling belongs in
@@ -52,12 +62,14 @@ const turns: DroneTurn[] = [
   },
   {
     id: "2",
+    step: PLAN,
     at: "09:14:03",
     kind: "said",
     said: "Reading the settings module before I split anything, so the public signature survives.",
   },
   {
     id: "3",
+    step: IMPLEMENT,
     at: "09:14:04",
     kind: "called",
     subject: "Read",
@@ -66,9 +78,10 @@ const turns: DroneTurn[] = [
   },
   // No detail: the wire had no name for this tool's arguments, so the call id
   // is what tells the row from the next one and the row leads with it.
-  { id: "4", at: "09:14:08", kind: "called", subject: "TodoWrite · call_7f22", answer: "Answered." },
+  { id: "4", step: IMPLEMENT, at: "09:14:08", kind: "called", subject: "TodoWrite · call_7f22", answer: "Answered." },
   {
     id: "5",
+    step: IMPLEMENT,
     at: "09:14:11",
     kind: "called",
     subject: "Edit",

@@ -233,7 +233,7 @@ function recordOf({
       // transcript is where looking happens.
       id: TURNS,
       label: "The drone's turns",
-      panel: <Turns job={job} observed={observed} />,
+      panel: <Turns job={job} whole={whole} observed={observed} />,
     },
     {
       id: CHANGED,

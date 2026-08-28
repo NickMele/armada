@@ -97,8 +97,12 @@ export class ObserveSocket {
     }
 
     if (message.message === "row") {
-      const { message: _tag, ts, ...saw } = message;
-      const row: Turn = { ts, seq: this.seq++, saw };
+      // `step` is named in the rest pattern rather than left to fall into it:
+      // the wire carries it beside the row's kind, `Saw` declares no such
+      // field, and a spread would put it on the union at runtime where no
+      // reader can see it. It travelled that way, undrawn, until #160.
+      const { message: _tag, ts, step, ...saw } = message;
+      const row: Turn = { ts, seq: this.seq++, step, saw };
       this.turns = { ...this.turns, rows: [...this.turns.rows, row] };
       this.publish({ state: "watching", jobId, turns: this.turns });
       return;

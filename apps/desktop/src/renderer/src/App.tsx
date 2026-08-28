@@ -22,7 +22,8 @@ import { useEffect, useState } from "react";
 import { Alert, Button, Dialog } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
-import type { BridgeState, Draft, Outcome } from "../../shared/bridge";
+import type { BridgeState, Draft, Outcome, Watched } from "../../shared/bridge";
+import type { JobDetail as JobWhole } from "../../shared/protocol";
 import { Boundary } from "./Boundary";
 import { CopiedToast, useCopied } from "./CopiedToast";
 import { FailureBlock } from "./FailureSurface";
@@ -372,6 +373,7 @@ export function App() {
             <Boundary region="this job's turns" {...guarded}>
               <Observe
                 job={reading}
+                whole={wholeOf(state.watched, reading.id)}
                 observed={state.observed}
                 workflows={state.holds.workflows}
                 manifests={state.holds.manifests}
@@ -479,4 +481,16 @@ export function App() {
       <CopiedToast copied={copied} />
     </>
   );
+}
+
+/**
+ * The open Job read whole, or `null` where the read has not landed.
+ *
+ * Checked against the id it was asked for: `watched` lags the selection by a
+ * round trip, so the detail on hand can still be the Job that was open a moment
+ * ago — and a transcript labelled from another Job's workflow would name steps
+ * that never ran.
+ */
+function wholeOf(watched: Watched, jobId: string): JobWhole | null {
+  return watched.state === "read" && watched.jobId === jobId ? watched.detail : null;
 }

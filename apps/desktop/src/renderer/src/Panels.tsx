@@ -70,8 +70,19 @@ export function Moves({ job, history }: { job: JobSummary; history: History }) {
  * left rows out, and a viewer that fell behind. A transcript with a silent gap
  * reads as a Drone that went quiet, which is the one thing this record exists
  * to tell apart.
+ *
+ * `whole` is here for the step boundaries and nothing else: the transcript
+ * carries `step_id`s and the frozen workflow is what names them.
  */
-export function Turns({ job, observed }: { job: JobSummary; observed: Observed }) {
+export function Turns({
+  job,
+  whole,
+  observed,
+}: {
+  job: JobSummary;
+  whole: JobWhole | null;
+  observed: Observed;
+}) {
   const mine = observed.state !== "none" && observed.jobId === job.id;
   if (!mine || observed.state === "opening") {
     return <DroneTurns turns={[]} emptyNote="Reading this job's turns." />;
@@ -96,7 +107,11 @@ export function Turns({ job, observed }: { job: JobSummary; observed: Observed }
           {`${turns.skipped} earlier turns are on disk and were left out of this history.`}
         </Alert>
       ) : null}
-      <DroneTurns turns={turnsOf(turns.rows)} emptyNote={NOTHING_RECORDED} live={turns.live} />
+      <DroneTurns
+        turns={turnsOf(turns.rows, whole)}
+        emptyNote={NOTHING_RECORDED}
+        live={turns.live}
+      />
     </>
   );
 }
