@@ -15,7 +15,10 @@
 //! Drone still costs money, and one confirmed to be thrashing is spending it
 //! without converging. That one Fleet stops itself: a Drone told to report and
 //! silent afterwards is not waiting for a person, it is burning. The worktree
-//! survives either way, which is what holding was protecting.
+//! survives either way, which is what holding was protecting. A Drone that has
+//! merely gone quiet is *not* that case and [`silence`](mod@silence) does not
+//! end one: it is spending nothing, and holding it is what leaves a person a
+//! worktree to redispatch onto.
 //!
 //! Fleet is also the only writer of Job state, and it reaches the agent only
 //! through `adapter-traits` — never the real CLI directly, anywhere.
@@ -113,6 +116,7 @@ pub mod scope;
 pub mod serving;
 pub mod session;
 mod settling;
+pub mod silence;
 pub mod spawning;
 pub mod transcript;
 pub mod turning;
@@ -148,6 +152,7 @@ pub use runtime::{
 pub use scope::{Declared, Drifting};
 pub use session::{DroneSession, LiveSession, Turn};
 pub use settling::Settled;
+pub use silence::{Liveness, Poke, Quiet, Vigil};
 pub use transcript::{history, log_of, transcript_of, Live, Recording, Spine, Tap, Taps};
 pub use turning::{keep_turning, Turning};
 pub use watch::{Progress, Watching};

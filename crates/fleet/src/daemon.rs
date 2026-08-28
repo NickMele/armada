@@ -67,6 +67,7 @@ use crate::judging::{JudgeBudget, Judging};
 use crate::mint::Mint;
 use crate::proposal::Proposing;
 use crate::scope::Drifting;
+use crate::silence::{Liveness, Quiet};
 use crate::working::Working;
 
 /// What Fleet knows about the machine it runs on.
@@ -125,6 +126,11 @@ pub struct Fittings<H, V, W> {
     /// What a step is expected to cost before the thrashing chain looks at it.
     /// See [`StepNorms`] for why it has no default.
     pub norms: StepNorms,
+    /// How long a Drone may say nothing before Fleet asks, and how many times
+    /// it asks. Its own value rather than a fourth `StepNorms` number: what it
+    /// bounds is the Drone being there at all, and nothing about it is measured
+    /// against a step's work. See [`Liveness`].
+    pub liveness: Liveness,
     /// What makes a Judge call. **A pointer rather than a type parameter**: the
     /// seam renders and cannot fail, so nothing about it needs to be generic.
     pub judge: Arc<dyn ModelClient + Send + Sync>,
@@ -189,6 +195,10 @@ pub struct Turned {
     /// How far the thrashing chain got with the step being worked. Empty on
     /// every turn of a step inside its norms, which is nearly all of them.
     pub wandering: Option<Wandering>,
+    /// What the liveness vigil did about a Drone that had stopped speaking.
+    /// Empty on every turn of a Drone that is speaking, which is nearly all of
+    /// them.
+    pub quiet: Option<Quiet>,
 }
 
 /// The daemon core: **the only writer of Job state.**
@@ -204,6 +214,7 @@ pub struct Fleet<H, V, W> {
     host: Host,
     budget: CheckBudget,
     norms: StepNorms,
+    liveness: Liveness,
     judge: Arc<dyn ModelClient + Send + Sync>,
     judge_budget: JudgeBudget,
     judge_model: Model,
@@ -253,6 +264,7 @@ where
             host: fittings.host,
             budget: fittings.budget,
             norms: fittings.norms,
+            liveness: fittings.liveness,
             judge: fittings.judge,
             judge_budget: fittings.judge_budget,
             judge_model: fittings.judge_model,
@@ -341,6 +353,12 @@ where
         // watched — and after nothing, because the check reads a worktree and
         // must not run against a slot the gate has just cleared.
         let drifting = self.watch_scope(&mut working, footprint.as_ref()).await;
+        // **Before the thrashing chain, because it is cheaper and more
+        // specific.** A Drone that has stopped speaking is not thrashing, and
+        // the chain's first stage costs a Judge call — so asking the free
+        // question first is what stops Fleet paying a model to look at the work
+        // of a Drone that is no longer doing any.
+        let quiet = self.watch_silence(&mut working).await?;
         // After the drift reading it consumes and before the gate, which is the
         // one place both are true: a step whose evidence lands this turn is at
         // the gate rather than thrashing, and `settle` may clear the slot.
@@ -357,6 +375,7 @@ where
             delivered,
             drifting,
             wandering,
+            quiet,
         })
     }
 
@@ -552,6 +571,9 @@ where
     }
     pub(crate) fn norms(&self) -> StepNorms {
         self.norms
+    }
+    pub(crate) fn liveness(&self) -> Liveness {
+        self.liveness
     }
 
     /// What the gate needs in order to ask the Judge.

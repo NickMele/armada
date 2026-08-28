@@ -28,19 +28,21 @@
 //! that cost is zero: a Drone that has just submitted evidence is between turns
 //! by definition, which is exactly the moment the gate speaks.
 //!
-//! # Five methods, and none of them can start anything
+//! # Six methods, and none of them can start anything
 //!
 //! [`tell`](LiveSession::tell), [`notice`](LiveSession::notice),
-//! [`redirect`](LiveSession::redirect), [`interrupt`](LiveSession::interrupt)
-//! and [`terminate`](LiveSession::terminate). There is no spawn, no respawn and
-//! no restart, because the gate must not be able to produce a Drone — and no
-//! way to remove a worktree, because nothing in this workspace can. A restart
-//! is `crate::resume`'s, and it reaches a spawn rather than this trait.
+//! [`redirect`](LiveSession::redirect), [`interrupt`](LiveSession::interrupt),
+//! [`poke`](LiveSession::poke) and [`terminate`](LiveSession::terminate). There
+//! is no spawn, no respawn and no restart, because the gate must not be able to
+//! produce a Drone — and no way to remove a worktree, because nothing in this
+//! workspace can. A restart is `crate::resume`'s, and it reaches a spawn rather
+//! than this trait.
 //!
 //! Each carries a different authorship, which is why one method taking text
 //! would be wrong: a verdict Fleet reached, something Fleet observed while the
-//! step ran, a person's own words, and Fleet's own directive at the third stage
-//! of the thrashing chain.
+//! step ran, a person's own words, Fleet's own directive at the third stage of
+//! the thrashing chain, and Fleet asking a Drone that has gone quiet whether it
+//! is still there.
 
 use std::future::Future;
 use std::io;
@@ -54,6 +56,7 @@ use verification::OutcomeTurn;
 use crate::briefing::{Declaring, Redeclaring};
 use crate::converging::ReportNow;
 use crate::resume::Redirection;
+use crate::silence::Poke;
 
 /// A Drone's live session, from the gate's side.
 pub trait LiveSession {
@@ -122,6 +125,15 @@ pub trait LiveSession {
         &self,
         directive: &ReportNow,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// Ask a Drone that has said nothing whether it is still there.
+    ///
+    /// **The liveness nudge and nothing else** — see `crate::silence`. It is
+    /// not [`interrupt`](LiveSession::interrupt): that one tells a Drone to
+    /// stop, and this one is explicit that a Drone which is working should
+    /// carry on. Reading them as one method would make the poke an
+    /// interruption, which is what it must never be.
+    fn poke(&self, nudge: &Poke) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// End the Drone.
     ///
@@ -198,6 +210,13 @@ impl Turn {
     /// text under it.
     pub fn reporting(directive: &ReportNow) -> Turn {
         Turn::of(directive.text())
+    }
+
+    /// Fleet's own liveness nudge, injected into a session that has said
+    /// nothing for a while. The wording is `Poke`'s and there is no way to send
+    /// other text under it.
+    pub fn poking(nudge: &Poke) -> Turn {
+        Turn::of(nudge.text())
     }
 
     fn of(content: &str) -> Turn {
@@ -305,6 +324,10 @@ impl LiveSession for DroneSession {
 
     async fn interrupt(&self, directive: &ReportNow) -> Result<(), io::Error> {
         self.say(&Turn::reporting(directive)).await
+    }
+
+    async fn poke(&self, nudge: &Poke) -> Result<(), io::Error> {
+        self.say(&Turn::poking(nudge)).await
     }
 
     /// End the Drone and reap it.

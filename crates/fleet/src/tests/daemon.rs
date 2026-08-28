@@ -42,6 +42,7 @@ use crate::evidence::Call;
 use crate::gate::{CheckBudget, Ruling};
 use crate::judging::JudgeBudget;
 use crate::mint::Mint;
+use crate::silence::Liveness;
 use crate::tests::tmp::TempDir;
 
 /// A clock that answers a different second each time it is asked.
@@ -254,6 +255,11 @@ pub const UNTRIPPABLE: StepNorms = StepNorms::of(
     Duration::from_secs(86_400),
 );
 
+/// A silence threshold no fixture reaches, for the same reason: every test but
+/// `silence`'s own has a Drone that says nothing for the whole of a short run,
+/// which is what a real one does for two minutes and no test can wait for.
+pub const NEVER_QUIET: Liveness = Liveness::of(Duration::from_secs(86_400), 2);
+
 /// Everything a Fleet is assembled from, over one temporary directory.
 pub fn fittings(
     home: &TempDir,
@@ -291,6 +297,7 @@ pub fn fitted_with(
         },
         budget: CheckBudget::of(Duration::from_secs(5)),
         norms: UNTRIPPABLE,
+        liveness: NEVER_QUIET,
         // A Judge that fails every call, because no step in these fixtures
         // declares a criterion. One that answered would let a cold-by-default
         // regression pass unseen.
