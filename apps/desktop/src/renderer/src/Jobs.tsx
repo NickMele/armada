@@ -78,16 +78,33 @@
 // A row the store refused is a different thing and is not here. It is a failure
 // with a fault and a log, so `App` draws it as a failure notice — a Job that
 // will not render and a Job that will not load are told apart.
+//
+// # A redispatch chain is one piece of work and gets one row
+//
+// Five goes at one ask were five rows, four of them over. `lineage.ts` groups
+// the board by `redispatched_from` and this draws what it returns: the live
+// member of each chain, its title carrying which dispatch it is. The word is
+// `dispatch` rather than `attempt` because `attempt` counts a step's runs
+// inside one Job and would be a second counter under one name — that file owns
+// the reasoning.
+//
+// **The earlier dispatches are one press away and nothing is dropped.** They
+// carry the Judge verdicts and the worktrees the chain exists to keep. The
+// press is beneath the frame rather than on a row: a listbox holds options and
+// nothing else, and the row shape carries one secondary control which a queued
+// replacement already spends on `Approve dispatch`.
 
 import { ActiveJobsList, BoardEmptyState, Button, JobRowStacked, StepBar } from "@armada/components";
 import type { JobRowField } from "@armada/components";
 import { GitBranch, Layers } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
 import type { JobSummary } from "../../shared/protocol";
 import type { WorkflowSummary } from "../../shared/setup";
 import { absoluteOf, instant, span } from "./duration";
 import { activityFor } from "./frozen";
+import { foldedNote, foldLineages, headlineOf } from "./lineage";
 import { readingOf } from "./reading";
 
 /**
@@ -96,6 +113,9 @@ import { readingOf } from "./reading";
  * it left out, which is the honest half of the same rule.
  */
 const DRAWN = 200;
+
+/** What the fold sentence says once the fold has been undone. */
+const EARLIER_SHOWN = "Every dispatch is drawn, including the ones that are over.";
 
 /**
  * Newest first. A created Job is folded onto whichever end the caller put it
@@ -148,7 +168,16 @@ export function Jobs({
   onApprove,
   onCopied,
 }: JobsProps) {
-  const bounded = newestFirst(jobs).slice(0, DRAWN);
+  // Folded once for the whole board rather than per row. The dependency is the
+  // array Bridge published, which is replaced on every event and never mutated,
+  // so identity is the right key.
+  const board = useMemo(() => foldLineages(jobs), [jobs]);
+  // Folded by default, and the surface returns to folded when it is left: the
+  // list is a scanning surface, and an expansion is a question asked of one
+  // moment rather than a preference.
+  const [unfolded, setUnfolded] = useState(false);
+  const showing = unfolded ? [...board.shown, ...board.folded] : board.shown;
+  const bounded = newestFirst(showing).slice(0, DRAWN);
   const drawn = bounded.filter((job) => readingOf(job).as === "badge");
   const undrawable = bounded.filter((job) => readingOf(job).as !== "badge");
 
@@ -180,6 +209,7 @@ export function Jobs({
           <Row
             key={job.id}
             job={job}
+            headline={headlineOf(job, board.dispatch.get(job.id))}
             approving={approving.includes(job.id)}
             stale={stale}
             now={now}
@@ -192,9 +222,20 @@ export function Jobs({
         ))}
       </ActiveJobsList>
 
-      {jobs.length > bounded.length ? (
+      {/* Named whether or not it is pressed. A fold nobody is told about is
+          rows that vanished. */}
+      {board.folded.length === 0 ? null : (
         <p className="text-fg-muted">
-          {`${bounded.length} of ${jobs.length} jobs drawn. The rest are on Fleet and not on screen.`}
+          {unfolded ? EARLIER_SHOWN : foldedNote(board.folded.length)}{" "}
+          <Button variant="ghost" size="sm" onClick={() => setUnfolded(!unfolded)}>
+            {unfolded ? "Fold them again" : "Show them"}
+          </Button>
+        </p>
+      )}
+
+      {showing.length > bounded.length ? (
+        <p className="text-fg-muted">
+          {`${bounded.length} of ${showing.length} rows drawn. The rest are on Fleet and not on screen.`}
         </p>
       ) : null}
 
@@ -205,7 +246,7 @@ export function Jobs({
         if (reading.as === "badge") return null;
         return (
           <p key={job.id} className="text-fg-muted">
-            {`${job.title} — `}
+            {`${headlineOf(job, board.dispatch.get(job.id))} — `}
             <span className="mono">{reading.wire}</span>
             {`. The registry carries no ${reading.missing.join(" and no ")} for it, so the row shape cannot draw it.`}
           </p>
@@ -239,6 +280,7 @@ export function atTheGate(jobs: readonly JobSummary[]): number {
 
 function Row({
   job,
+  headline,
   approving,
   stale,
   now,
@@ -249,6 +291,8 @@ function Row({
   onCopied,
 }: {
   job: JobSummary;
+  /** The title, plus which dispatch of the work this is where there is more than one. */
+  headline: string;
   approving: boolean;
   stale: boolean;
   now: number;
@@ -350,7 +394,7 @@ function Row({
       status={reading.status}
       statusIcon={reading.icon}
       statusLabel={reading.verb}
-      headline={job.title}
+      headline={headline}
       jobId={job.id}
       fields={fields}
       pulsing={job.status === "running" && !stale}
