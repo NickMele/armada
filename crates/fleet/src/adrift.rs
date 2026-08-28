@@ -30,7 +30,8 @@ use std::io;
 
 use adapter_traits::{NotDelivered, SpawnConfigRefused, WorktreeSpecRefused};
 use core_model::{
-    IllegalDroneMove, IllegalStepTransition, IllegalTransition, JobId, JobStatus, StepId,
+    EscalationTrigger, IllegalDroneMove, IllegalStepTransition, IllegalTransition, JobId,
+    JobStatus, StepId,
 };
 use store::{LoadAllError, LoadJobError, WriteError};
 
@@ -190,6 +191,37 @@ pub enum Adrift {
         job: JobId,
         cause: Box<dyn Error + Send + Sync>,
     },
+    /// An override was asked for on a step stopped by something other than the
+    /// Judge refusing a criterion.
+    ///
+    /// **`gate_failure` is the only verdict that is a matter of opinion.** A
+    /// step stopped on `gate_undecided` was never weighed at all, so advancing
+    /// it would pass work no tier ruled on; a step stopped on
+    /// `evidence_suspect` carries a claim about how the step was satisfied
+    /// rather than about whether it was, which `docs/concepts/judge.md`
+    /// deliberately routes away from the retry flow. Neither is what a person
+    /// disagreeing with a Judge is disagreeing about.
+    NotTheJudges {
+        job: JobId,
+        step: StepId,
+        trigger: EscalationTrigger,
+    },
+    /// An override was asked for on a step one of whose mechanical Checks did
+    /// not pass.
+    ///
+    /// **`build` failing is not a matter of opinion**, and this is the guard
+    /// that says so out of the record rather than out of the tier ordering. A
+    /// refusal implies the mechanical tier held, so ordinarily this cannot
+    /// fire; a gate that could not decide *after* running the Checks records
+    /// what they did and stops the step, and that path can leave a stopped step
+    /// with a failing Check on it. The check runs are read again before
+    /// anything moves so that no arrangement of triggers turns this route into
+    /// an approve-anything.
+    CheckDidNotPass {
+        job: JobId,
+        step: StepId,
+        check: String,
+    },
     /// A restart was asked for on a Job whose Drone is alive.
     ///
     /// The inverse refusal. Ending a live session to spawn a replacement onto
@@ -205,6 +237,14 @@ pub enum Adrift {
     WorktreeGone { job: JobId, path: String },
     /// A proposal carried a title nothing could be picked out of a list by.
     Unnameable,
+    /// An override carried no reason.
+    ///
+    /// **Nothing else on this route would hold it.** A redirect with a blank
+    /// note is refused because a Drone told nothing resumes with exactly the
+    /// information that failed; here nothing is told anything, so what an empty
+    /// string loses is the only account there will ever be of why a verdict was
+    /// overruled — which is the half a rate cannot supply.
+    Unreasoned { job: JobId },
     /// A proposal named a workflow this Fleet does not hold.
     ///
     /// **Nothing checked this until now.** `ResolvedWorkflow` carried no id, so
@@ -426,6 +466,22 @@ impl fmt::Display for Adrift {
                 "{}'s worktree would not be read, so there is no diff to show: {cause}",
                 job.as_str()
             ),
+            Adrift::NotTheJudges { job, step, trigger } => write!(
+                out,
+                "{}'s step `{}` stopped on {}, which is not the Judge refusing a criterion. Only \
+                 gate_failure is an opinion a person can overrule; the others say the gate never \
+                 weighed the work, or that the evidence itself is not to be trusted",
+                job.as_str(),
+                step.as_str(),
+                trigger.as_wire()
+            ),
+            Adrift::CheckDidNotPass { job, step, check } => write!(
+                out,
+                "{}'s step `{}` has a Check that did not pass — `{check}`. A mechanical Check is \
+                 not a matter of opinion and no override lifts one",
+                job.as_str(),
+                step.as_str()
+            ),
             Adrift::DroneStillThere { job } => write!(
                 out,
                 "{}'s Drone is alive and idle, holding its session. Redirect it rather than \
@@ -439,6 +495,13 @@ impl fmt::Display for Adrift {
                 job.as_str()
             ),
             Adrift::Unnameable => out.write_str("a Job needs a title somebody can read"),
+            Adrift::Unreasoned { job } => write!(
+                out,
+                "overruling {}'s verdict needs a reason. Nobody is told it and nothing acts on \
+                 it; it is the record of why the Judge was wrong, and a count of overrides with \
+                 no reasons beside it says the rate and never the cause",
+                job.as_str()
+            ),
             Adrift::NothingToPropose => {
                 out.write_str("a request needs something in it to read before it can be a Job")
             }
@@ -548,6 +611,9 @@ impl Adrift {
             | Adrift::NotUnderReview { job, .. }
             | Adrift::NoDroneToTell { job }
             | Adrift::WorkUnreadable { job, .. }
+            | Adrift::NotTheJudges { job, .. }
+            | Adrift::CheckDidNotPass { job, .. }
+            | Adrift::Unreasoned { job }
             | Adrift::DroneStillThere { job }
             | Adrift::WorktreeGone { job, .. }
             | Adrift::AttachmentUnreadable { job, .. } => Some(job),
@@ -609,6 +675,11 @@ impl Error for Adrift {
             // has nothing underneath saying why, only the state it is in.
             | Adrift::NotUnderReview { .. }
             | Adrift::NoDroneToTell { .. }
+            // And the two an override makes, which say what the record holds
+            // rather than wrapping something that failed.
+            | Adrift::NotTheJudges { .. }
+            | Adrift::CheckDidNotPass { .. }
+            | Adrift::Unreasoned { .. }
             | Adrift::DroneStillThere { .. }
             | Adrift::WorktreeGone { .. }
             | Adrift::NothingToPropose

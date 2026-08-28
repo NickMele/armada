@@ -45,8 +45,8 @@ use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
     ChangesRequested, CheckRun, DeclaredCheck, DeclaredJudge, Flagged, JobDetail, JobDiff,
     JobEvidence, JobHistory, JobId, JobList, JobSummary, Judged, ManifestId, ManifestSummary,
-    ModelChoices, ProposeJob, Redirection, Redispatched, RunId, StepFacts, StepId, Submitted,
-    WireError, WireValue, Work, WorkflowId, WorkflowStep, WorkflowSummary,
+    ModelChoices, Overruled, ProposeJob, Redirection, Redispatched, RunId, StepFacts, StepId,
+    Submitted, WireError, WireValue, Work, WorkflowId, WorkflowStep, WorkflowSummary,
 };
 use store::{LoadJobError, Moved, RecordedEvent, WriteError};
 
@@ -56,6 +56,7 @@ use crate::dispatch::clear_to_run;
 // The wire's `Redirection` is a struct with a public field; Fleet's is a
 // newtype that cannot hold an empty instruction. Both names are in scope here,
 // which is the one place they meet.
+use crate::overruling::Overruling;
 use crate::resume::Redirection as Instruction;
 
 /// The codes this boundary raises, declared beside the thing that raises them.
@@ -82,6 +83,15 @@ const NOT_REDISPATCHABLE: &str = "fleet.not_redispatchable";
 /// own code because a caller reading `ILLEGAL_MOVE` would look for an edge that
 /// exists — the machine was never asked.
 const NOT_UNDER_REVIEW: &str = "fleet.not_under_review";
+/// An act on a stopped step asked for on a Job that has no stopped step to act
+/// on, or one whose step stopped for a reason the act does not answer. A 409
+/// for [`NOT_UNDER_REVIEW`]'s reason — the machine was never asked, so a caller
+/// reading `ILLEGAL_MOVE` would go looking for an edge that is there.
+///
+/// **These reached a caller as 500s.** A resume on a Job that is not escalated
+/// is the caller asking for the wrong act, not Fleet breaking, and a 500 sends
+/// them to retry something that will fail identically for ever.
+const NOT_RESUMABLE: &str = "fleet.not_resumable";
 
 impl<H, V, W> Daemon for Fleet<H, V, W>
 where
@@ -354,6 +364,29 @@ where
         let said =
             Instruction::saying(&note.note).ok_or_else(|| self.refusal(Adrift::Unnameable))?;
         let job = Fleet::request_changes(self, &job_id.to_domain(), &said)
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
+    /// The Judge refused, a person disagrees, and the step advances anyway.
+    ///
+    /// **A blank reason is refused here rather than recorded**, for the reason
+    /// `request_changes` refuses a blank note, turned around: nothing is
+    /// delivered to a Drone, so what an empty string would lose is the only
+    /// account of why a verdict was overruled — and an override that says
+    /// nothing is how this becomes the act somebody uses to quiet a gate.
+    async fn override_verdict(
+        &self,
+        job_id: JobId,
+        overruling: Overruled,
+    ) -> Result<JobSummary, Refusal> {
+        let said = Overruling::saying(&overruling.reason).ok_or_else(|| {
+            self.refusal(Adrift::Unreasoned {
+                job: job_id.to_domain(),
+            })
+        })?;
+        let job = Fleet::override_verdict(self, &job_id.to_domain(), &said)
             .await
             .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
@@ -762,6 +795,17 @@ where
                         .about_job(ipc::JobId::from(job)),
                 )
             }
+            // The four an act on a stopped step refuses with. `NotTheJudges`
+            // and `CheckDidNotPass` are the two an override adds, and they are
+            // conflicts of the same kind: the Job is somewhere, or its step
+            // stopped for something, that this act does not answer.
+            Adrift::NotResumable { job, .. }
+            | Adrift::NoStepStopped { job }
+            | Adrift::NotTheJudges { job, .. }
+            | Adrift::CheckDidNotPass { job, .. } => Refusal::IllegalMove(
+                WireError::raised(NOT_RESUMABLE, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
             Adrift::NotRedispatchable { job, .. }
             | Adrift::NeverRan { job }
             | Adrift::NotReplaceable { job }
@@ -773,6 +817,7 @@ where
             // a 500: retrying it will fail identically forever, and the message
             // names what to send instead.
             Adrift::Unnameable
+            | Adrift::Unreasoned { .. }
             | Adrift::NoSuchWorkflow { .. }
             | Adrift::NoSuchManifest { .. }
             | Adrift::Modelless

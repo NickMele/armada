@@ -77,9 +77,13 @@ fn every_edge_in_the_table_is_admitted() {
             ),
             other => panic!("no way to reach {} by transitioning", other.as_wire()),
         };
-        // The reason follows the destination, which is the rule
-        // `arriving_at` holds: only a stop carries one, and it must.
-        let target = StepTarget::arriving_at(edge.to, stopping(edge.to))
+        // The reason follows the *edge* and not the destination alone, which
+        // is the rule `arriving_at` holds once `advanced` has two ways in: a
+        // stop carries one and must, an override carries the trigger it
+        // overrules, and an ordinary advance carries none.
+        let qualified = edge.to == StepState::Stopped
+            || (edge.to == StepState::Advanced && edge.from == StepState::Stopped);
+        let target = StepTarget::arriving_at(edge.to, qualified.then(gate_failure).flatten())
             .expect("a table edge names a target");
         let moved = step(&job, &first(), target);
         assert_eq!(
@@ -318,11 +322,52 @@ fn the_two_states_m1_cannot_reach_have_no_target_to_arrive_by() {
 #[test]
 fn a_stored_state_and_its_reason_are_read_as_one_value() {
     assert!(StepTarget::arriving_at(StepState::Stopped, None).is_none());
-    assert!(StepTarget::arriving_at(StepState::Advanced, gate_failure()).is_none());
     assert!(StepTarget::arriving_at(StepState::Running, gate_failure()).is_none());
     assert_eq!(
         StepTarget::arriving_at(StepState::Stopped, gate_failure()),
         gate_failure().map(StepTarget::Stopped)
+    );
+    // `advanced` is the one state two targets reach, and the trigger is what
+    // tells them apart. Without the reason a stored override would fold back as
+    // an ordinary pass, and the verdict a person overruled would be gone.
+    assert_eq!(
+        StepTarget::arriving_at(StepState::Advanced, None),
+        Some(StepTarget::Advanced)
+    );
+    assert_eq!(
+        StepTarget::arriving_at(StepState::Advanced, gate_failure()),
+        gate_failure().map(StepTarget::Overridden)
+    );
+}
+
+/// A stopped step advances **only** as an override.
+///
+/// The edge is there and only one of the two targets that reach `advanced` may
+/// walk it. `StepTarget::Advanced` records `passed`, which over a stopped step
+/// would erase the verdict the person is disagreeing with — and an override
+/// that reads like an ordinary advance is how a Judge becomes decorative
+/// without anybody deciding it should be.
+#[test]
+fn a_stopped_step_advances_only_by_overruling_what_stopped_it() {
+    let why = gate_failure().expect("gate_failure is step-level");
+    let stopped = step(
+        &step(&running(), &first(), StepTarget::Running),
+        &first(),
+        StepTarget::Stopped(why),
+    );
+
+    match stopped.transition_step(&first(), StepTarget::Advanced, Actor::Human, when()) {
+        Err(IllegalStepTransition::StepDidNotPass { step_id }) => assert_eq!(step_id, first()),
+        other => panic!("a stopped step was advanced as a pass: {other:?}"),
+    }
+
+    let overridden = step(&stopped, &first(), StepTarget::Overridden(why));
+    let row = overridden.step(&first()).expect("the row is there");
+    assert_eq!(row.state(), StepState::Advanced);
+    assert_eq!(
+        row.last_verdict(),
+        Some(StepVerdict::Failed(why)),
+        "the gate's ruling stands beside the state a person moved it to"
     );
 }
 
@@ -342,14 +387,6 @@ fn a_job_level_trigger_cannot_be_made_into_a_step_stop() {
 
 fn gate_failure() -> Option<StepLevelTrigger> {
     StepLevelTrigger::of(EscalationTrigger::GateFailure)
-}
-
-/// The reason a table edge's destination requires, where it requires one.
-fn stopping(to: StepState) -> Option<StepLevelTrigger> {
-    match to {
-        StepState::Stopped => gate_failure(),
-        _ => None,
-    }
 }
 
 #[test]

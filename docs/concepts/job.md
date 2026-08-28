@@ -108,7 +108,7 @@ flowchart LR
   Q -->|dependency_failed| ESC["escalated"]
   R -->|escalation trigger| ESC
   AR -->|interrupted| ESC
-  ESC -->|redirect| R
+  ESC -->|"redirect / restart / override"| R
 
   R -->|escape_hatch| P["piloted"]
   AR -->|escape_hatch| P
@@ -127,15 +127,31 @@ flowchart LR
 
 ## Recovering an escalated Job
 
-Four acts reach an escalated Job and **none of them is another one wearing a
+Five acts reach an escalated Job and **none of them is another one wearing a
 different name.** They are ordered here by how much they take away.
 
 | Act | What the Drone is | What survives | Where it lands |
 |---|---|---|---|
+| **Override the verdict** | Either | Everything, including the refused step's own work | `running`, the **next** step |
 | **Redirect** | Alive and idle | The session, the worktree, every step so far | `running`, the same step |
 | **Restart a step** | Gone | The worktree and the branch; earlier steps' work | `running`, the same step, a new Drone |
 | **Redispatch** | Irrelevant | Nothing. A new Job carries a reference back | A replacement at the approval gate |
 | **Pilot** | Terminated | The worktree, handed to a person | `piloted` |
+
+**The first one takes nothing away, and that is what it is for.** A Judge that
+refuses correct work leaves the other four offering only to discard that work or
+to repeat it, and a verdict that cannot be appealed is worse than no verdict —
+a verifier a person cannot overrule is one they route around, by weakening
+criteria or by not dispatching. It advances the refused step **recorded as an
+override**: the step reads `advanced` with `failed(gate_failure)` still on it,
+so what the Judge said stays beside the fact that it did not stand, and an
+override rate is countable off `job_events`.
+
+**It lifts `gate_failure` and nothing else.** `gate_undecided` means the gate
+never weighed the work, `evidence_suspect` is a claim about the evidence rather
+than an opinion about the work, and a failed mechanical Check ends the Job at
+`completed_failed` — terminal, stopping no step, and out of reach. `build`
+failing is not a matter of opinion.
 
 **An escalated Job keeps its Drone.** `job-statuses.toml` says so —
 `drone_process = "Alive, idle. Gone only on interrupted"` — and the liveness
@@ -152,7 +168,11 @@ above it kept.
 
 **Which act applies is decided by the Drone, not by the person.** Redirect needs
 one alive; restart is what exists when it is gone. A surface that offers both
-regardless is offering one that will fail.
+regardless is offering one that will fail. The override is the exception and
+says so: the person is disagreeing with a verdict, which is the same act whether
+or not a process is still holding the session, so the Drone decides only how the
+Job carries on — a turn into the session that is there, or a fresh Drone on the
+next step.
 
 **Where a step-level escalation pays off.** Only a step-level trigger reaches a
 step's `last_verdict`, so only a step-level escalation names the step that

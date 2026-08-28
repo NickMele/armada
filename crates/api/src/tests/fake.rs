@@ -50,6 +50,7 @@ fn step_rail(
         judge_checks: Some(judge_checks),
         advance_gate: Some(ipc::AdvanceGate::from_wire(gate).expect("a gate the registry has")),
         last_verdict: None,
+        overridden: false,
         judged: Vec::new(),
         flagged: Vec::new(),
         entered_at: Instant::carried("2026-08-26T09:00:00.000Z"),
@@ -535,6 +536,29 @@ impl Daemon for FakeDaemon {
             return Err(Refusal::IllegalMove(ipc::WireError::raised(
                 "fake.drone_still_there",
                 "this Job still has a Drone — redirect it rather than restarting".to_string(),
+                run_id(),
+            )));
+        }
+        Ok(job.clone())
+    }
+
+    /// The one act on a refused step, faked on the one thing the route refuses
+    /// on that the transport can see: **a blank reason is not an override.**
+    /// Which trigger stopped the step is Fleet's to read off the record and
+    /// nothing a `JobSummary` carries, so the fake does not pretend to know it.
+    async fn override_verdict(
+        &self,
+        job_id: JobId,
+        overruling: ipc::Overruled,
+    ) -> Result<JobSummary, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+            return Err(self.no_such_job(&job_id));
+        };
+        if overruling.reason.trim().is_empty() {
+            return Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fake.unreasoned_override",
+                "overruling a verdict needs a reason".to_string(),
                 run_id(),
             )));
         }

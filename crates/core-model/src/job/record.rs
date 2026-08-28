@@ -20,9 +20,9 @@
 //!
 //! [`transition_step`](Job::transition_step) moves a step and the cursor, and
 //! it obeys the same rule as [`transition`](Job::transition): `&self` in, a new
-//! [`Job`] out. What it may do is narrowed by [`StepTarget`], which names three
-//! destinations of the six states — so the two M1 cannot reach are not refused
-//! at runtime, they cannot be asked for.
+//! [`Job`] out. What it may do is narrowed by [`StepTarget`], which names four
+//! moves across three of the six states — so the two M1 cannot reach are not
+//! refused at runtime, they cannot be asked for.
 //!
 //! # The other mutators, and what each may touch
 //!
@@ -320,11 +320,12 @@ impl Job {
 
     /// Move one step of the frozen WorkflowDef, or say why it cannot move.
     ///
-    /// The second and last mutator. Three things can refuse it: the Job has no
+    /// The second and last mutator. Four things can refuse it: the Job has no
     /// such step, the Job is not in a status the inner machine advances
-    /// beneath, or no edge joins the two states. A fourth refusal is absent
-    /// because it is unrepresentable — [`StepTarget`] names no state a step
-    /// may not be moved to.
+    /// beneath, no edge joins the two states, or a stopped step was advanced as
+    /// a pass rather than as an override. A refusal for the destination itself
+    /// is absent because it is unrepresentable — [`StepTarget`] names no state
+    /// a step may not be moved to.
     ///
     /// **Entering `running` is what moves `current_step_id`, and nothing
     /// clears it.** `job-fields.toml` says the nested machine is "frozen

@@ -10,18 +10,16 @@
 //! `last_verdict` at all — and `stopped -> running`, which is how a person
 //! resumes it.
 //!
-//! **`stopped -> running` is one edge for two acts.** A redirect speaks to the
-//! Drone that is still there and a restart puts a new one on the worktree, and
-//! the difference between them is the process rather than the step: the step
-//! was stopped and is being worked again either way. Which act a Job admits is
-//! decided by whether it holds a Drone, which is `fleet::resume`'s to ask.
+//! **`stopped -> running` is one edge for two acts**, and which of them a Job
+//! admits is decided by whether it holds a Drone — `fleet::resume`'s to ask,
+//! not this file's. **`stopped -> advanced` is one edge for one**, and the only
+//! edge two targets could reach: [`StepTarget::Overridden`] alone may walk it.
 //!
-//! `retrying` needs a retry budget, which M1 lacks. `awaiting_human` has the
-//! human advance gate it was waiting on and is **still unreachable**, on a
-//! smaller point: a step at that gate stays `running`, since `approve_review`
-//! advances it while the Job is still there. Both stay declared on
-//! [`StepState`], because a stored row may render any of the six, and neither
-//! has a [`StepTarget`] — see that type for what a third one would cost.
+//! `retrying` needs a retry budget, which M1 lacks. `awaiting_human` has its
+//! human advance gate now and is **still unreachable**: a step at that gate
+//! stays `running`, since `approve_review` advances it while the Job is still
+//! there. Both stay declared on [`StepState`], because a stored row may render
+//! any of the six, and neither has a [`StepTarget`].
 //!
 //! # The outer machine gates the inner one
 //!
@@ -55,6 +53,7 @@ pub static STEP_EDGES: &[StepEdge] = &[
     step_edge(StepState::Running, StepState::Advanced),
     step_edge(StepState::Running, StepState::Stopped),
     step_edge(StepState::Stopped, StepState::Running),
+    step_edge(StepState::Stopped, StepState::Advanced),
 ];
 
 const fn step_edge(from: StepState, to: StepState) -> StepEdge {
@@ -72,9 +71,10 @@ pub const ADVANCING_STATUSES: &[JobStatus] = &[JobStatus::Running, JobStatus::Aw
 
 /// Where a step is going.
 ///
-/// Three variants for the three destinations M1 reaches. `not_started` is
+/// Four moves across the three destinations M1 reaches — `advanced` is arrived
+/// at two ways and the trigger is what tells them apart. `not_started` is
 /// written at creation and is not a destination. `retrying` needs a retry
-/// budget, and `awaiting_human` needs a fourth variant here plus two edges plus
+/// budget, and `awaiting_human` needs a variant here plus two edges plus
 /// the matching `CHECK` in `store`'s schema — a step at a human gate stays
 /// `running` instead, which renders less honestly and behaves identically.
 /// Neither can be passed to
@@ -106,6 +106,26 @@ pub enum StepTarget {
     /// exactly the payload. [`StepLevelTrigger`] is why the reason cannot be a
     /// Job-level one, which `last_verdict` does not admit.
     Stopped(StepLevelTrigger),
+    /// A person read what stopped the step, disagreed, and advanced it anyway.
+    ///
+    /// **It arrives at `advanced` and it is not [`Advanced`](StepTarget::Advanced).**
+    /// That one records `passed`, which here would erase the verdict being
+    /// overruled and leave a surface unable to tell a step the gate cleared
+    /// from a step a person cleared over the gate — the way a Judge becomes
+    /// decorative without anybody deciding it should be.
+    ///
+    /// **The payload is the trigger it overrules**, so the row keeps
+    /// `failed(<trigger>)` and the state says `advanced`. The pair is the whole
+    /// record: what the gate said, and that it did not stand. Only a
+    /// [`StepLevelTrigger`] can be overruled, for the reason
+    /// [`Stopped`](StepTarget::Stopped) takes one — a Job-level escalation
+    /// stops no step, so there is nothing to advance.
+    ///
+    /// **Which triggers a person may lift is not decided here.** The machine
+    /// admits the move; `fleet::overruling` is where the tier is read, because
+    /// a failing mechanical Check is not a matter of opinion and this type
+    /// cannot see one.
+    Overridden(StepLevelTrigger),
 }
 
 impl StepTarget {
@@ -113,7 +133,7 @@ impl StepTarget {
     pub fn state(&self) -> StepState {
         match self {
             StepTarget::Running => StepState::Running,
-            StepTarget::Advanced => StepState::Advanced,
+            StepTarget::Advanced | StepTarget::Overridden(_) => StepState::Advanced,
             StepTarget::Stopped(_) => StepState::Stopped,
         }
     }
@@ -123,7 +143,7 @@ impl StepTarget {
     pub fn why(&self) -> Option<StepLevelTrigger> {
         match self {
             StepTarget::Running | StepTarget::Advanced => None,
-            StepTarget::Stopped(why) => Some(*why),
+            StepTarget::Stopped(why) | StepTarget::Overridden(why) => Some(*why),
         }
     }
 
@@ -138,6 +158,11 @@ impl StepTarget {
         match (state, why) {
             (StepState::Running, None) => Some(StepTarget::Running),
             (StepState::Advanced, None) => Some(StepTarget::Advanced),
+            // The trigger is what tells the two arrivals at `advanced` apart,
+            // which is why an override stores one on a destination that
+            // otherwise stores none. A row carrying it says the gate ruled and
+            // was overruled; a row without it says the gate cleared the step.
+            (StepState::Advanced, Some(why)) => Some(StepTarget::Overridden(why)),
             (StepState::Stopped, Some(why)) => Some(StepTarget::Stopped(why)),
             _ => None,
         }
@@ -163,6 +188,16 @@ pub enum IllegalStepTransition {
         from: StepState,
         to: StepState,
     },
+    /// A stopped step was advanced as a pass.
+    ///
+    /// The edge is there and the target is the wrong one. `advanced` means the
+    /// step passed its advance gate, and a stopped step did not — so the only
+    /// way out of `stopped` into `advanced` is
+    /// [`StepTarget::Overridden`], which keeps the trigger it overruled on the
+    /// row. Without this refusal the one edge would name two different moves
+    /// and the record could lose the refusal a person disagreed with, which is
+    /// the whole of what an override is for.
+    StepDidNotPass { step_id: StepId },
 }
 
 impl fmt::Display for IllegalStepTransition {
@@ -184,6 +219,12 @@ impl fmt::Display for IllegalStepTransition {
                 step_id.as_str(),
                 from.as_wire(),
                 to.as_wire()
+            ),
+            IllegalStepTransition::StepDidNotPass { step_id } => write!(
+                f,
+                "step `{}` is stopped and did not pass its advance gate, so it advances only as \
+                 an override, carrying the trigger it overrules",
+                step_id.as_str()
             ),
         }
     }
@@ -229,6 +270,15 @@ pub(crate) fn admits_step(
             step_id: step_id.clone(),
             from,
             to: arriving,
+        });
+    }
+    // The one edge two targets reach, narrowed to the one that is honest about
+    // it. `stopped -> advanced` exists for an override and for nothing else,
+    // and an unqualified advance across it would write `passed` over the
+    // verdict a person was disagreeing with.
+    if from == StepState::Stopped && matches!(to, StepTarget::Advanced) {
+        return Err(IllegalStepTransition::StepDidNotPass {
+            step_id: step_id.clone(),
         });
     }
     Ok(())

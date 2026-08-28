@@ -128,3 +128,25 @@ pub struct ChangesRequested {
     /// either.
     pub note: String,
 }
+
+/// What a person says when they overrule a gate that refused the work.
+///
+/// A type of its own rather than [`ChangesRequested`], which is structurally
+/// the same string, for that type's own reason turned around: a review note
+/// tells a Drone what to change, and this one goes nowhere near a Drone. **It
+/// is written for the record and for whoever later asks how often the Judge was
+/// wrong** — a person disagreeing is the strongest signal there is that a
+/// criterion is mis-stated, and a count of overrides with no reasons beside it
+/// gives the rate and never the cause.
+///
+/// Blank is refused at the Fleet boundary rather than here, for
+/// [`ChangesRequested`]'s reason. It is refused at all because an override that
+/// says nothing is how the act this route exists to keep visible becomes the
+/// one somebody reaches for to make a gate stop complaining.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Overruled {
+    /// Why the verdict is wrong, in the person's own words. It is not sent to
+    /// the Drone: the Drone did nothing wrong, and is told only that the step
+    /// was accepted.
+    pub reason: String,
+}

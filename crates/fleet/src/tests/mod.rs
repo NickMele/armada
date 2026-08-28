@@ -77,6 +77,11 @@
 //! keeps the submission where it can still be ruled on, says which guard
 //! refused, and escalates rather than sitting once nothing can reach it.
 //!
+//! `overruling` is the seventeenth, and its proportion is the claim: one case
+//! where a refused step advances because a person disagreed with the Judge, and
+//! four where nothing moves. What keeps an appeal from being an
+//! approve-anything is the four.
+//!
 //! `attachments` is the eleventh: a file staged before a Job exists, promoted
 //! at creation, refused where the staged path cannot be read, and copied again
 //! into the worktree dispatch makes — proving the same path `briefing` writes
@@ -101,6 +106,7 @@ mod host;
 mod http;
 mod judging;
 mod landing;
+mod overruling;
 mod planning;
 mod process;
 mod proposing;
