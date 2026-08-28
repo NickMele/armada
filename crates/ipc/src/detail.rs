@@ -97,16 +97,18 @@ impl JobDetail {
     /// A Job in full, plus the reason its last recorded transition carried and
     /// what Fleet knows about its steps.
     ///
-    /// Both are arguments for the same reason [`JobSummary::of`] takes one:
-    /// neither is a field of `core_model::Job`. The reason is in the log; a
-    /// step's Checks are the workflow's and the store's.
+    /// All three are arguments for the same reason [`JobSummary::of`] takes
+    /// two: none is a field of `core_model::Job`. The reason is in the log, the
+    /// queued reason is computed from the board, and a step's Checks are the
+    /// workflow's and the store's.
     pub fn of(
         job: &core_model::Job,
         reason: Option<&core_model::TransitionReason>,
+        queued_reason: Option<core_model::QueuedReason>,
         steps: &[StepFacts],
     ) -> JobDetail {
         JobDetail {
-            job: JobSummary::of(job, reason),
+            job: JobSummary::of(job, reason, queued_reason),
             created_at: job.created_at().into(),
             branch: job.branch().map(|branch| branch.as_str().to_string()),
             steps: job

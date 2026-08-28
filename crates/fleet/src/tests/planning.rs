@@ -13,7 +13,7 @@ use crate::tests::daemon::{a_fleet_proposing_through, diff_evidence, worktree_di
 use crate::tests::proposing::{a_catalogue, read};
 use crate::tests::tmp::TempDir;
 
-const A_PLAN: &str = "\
+pub(crate) const A_PLAN: &str = "\
 job: 1
 workflow: feature
 title: Add the endpoint
