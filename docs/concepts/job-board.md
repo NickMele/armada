@@ -108,7 +108,7 @@ The `snake_case` form (`auto_detected`, `manual`, `helm_drafted`, `sub_dispatche
 
 ### No field distinguishes a Convoy
 
-**No origin value or shape field distinguishes a Convoy on this Board (see Open questions).** Shape is derived from a Job's `write_targets` and its `atomic` flag rather than stored — nothing on Job records the Job proposer's choice — so `origin` was never going to carry it and no shape field exists to read.
+**No origin value or shape field distinguishes a Convoy on this Board (see Open questions).** Shape is derived from a Job's `write_targets` and its `atomic` flag rather than stored — nothing on Job records a shape at all — so `origin` was never going to carry it and no shape field exists to read.
 
 The consequence: a Convoy is visually identical to a single-workspace Job on the very surface whose stated purpose is "what's queued and why", and the Board must compute the distinction from those two fields rather than render a stored label.
 
@@ -132,7 +132,7 @@ Approving anyway is allowed and is the ordinary case — the overlap is a fact, 
 
 ### Where the proposal is approved or overridden
 
-**This card is where the [Job proposer](job-proposer.md)'s proposal is approved or overridden.** A Job dispatched from a prompt or a ticket link arrives here with its workflow and its scope already proposed, and the card is where either is changed. Why this gate and not one of its own, and what approving a proposal does and does not dispatch, are on that document.
+**This card is where the [Job proposer](job-proposer.md)'s proposal is approved or overridden.** A Job dispatched from a prompt or a ticket link arrives here with its workflow and its name already proposed, and the card is where either is changed. Why this gate and not one of its own, and what approving a proposal does and does not dispatch, are on that document.
 
 What this surface looks like is deliberately undecided; no journey has UI design started and this one is design order 1 — see [Convoy](convoy.md), Open questions.
 

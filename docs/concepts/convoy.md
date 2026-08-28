@@ -60,7 +60,7 @@ The alternative to one Job spanning coupled Workspaces is several Jobs touching 
 
 ## Three shapes, not two
 
-**Job shape** is the category covering all three — it is what the [Job proposer](job-proposer.md) picks. **Cross-Workspace Jobs** is the narrower name for the two that actually span Workspaces: linked-DAG sub-Jobs and Convoy. A single-workspace Job is contained to one Workspace and belongs to neither.
+**Job shape** is the category covering all three. **Cross-Workspace Jobs** is the narrower name for the two that actually span Workspaces: linked-DAG sub-Jobs and Convoy. A single-workspace Job is contained to one Workspace and belongs to neither.
 
 Cross-Workspace Jobs is not a synonym for Convoy — linked-DAG sub-Jobs span Workspaces too and are not Convoys, and collapsing the two destroys the distinction the Job proposer exists to draw.
 
@@ -76,7 +76,7 @@ The dependent Job stays `blocked_by_dependency` until the upstream one reaches `
 
 ## How a Convoy is chosen
 
-You do not hand-draft the shape. The [Job proposer](job-proposer.md) reads the request and proposes a Job — its workflow and its scope — and a Convoy is what a proposal of several `write_targets` with `atomic` set amounts to. That document owns what the call reads, what it proposes, where the proposal is approved and what its reasoning records; none of it is restated here.
+You do not hand-draft the shape. A Convoy is what several `write_targets` with `atomic` set amount to, and both are settled by the workflow's scope step — so a Convoy is arrived at once the work has been read, not approved as a category at dispatch. The [Job proposer](job-proposer.md) owns why scope is not proposed earlier; none of it is restated here.
 
 **The shape is never chosen directly.** There is no shape value to propose: it falls out of the pair, so a Convoy is arrived at by proposing coupling rather than by naming a category.
 

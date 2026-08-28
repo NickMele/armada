@@ -74,7 +74,7 @@ The dependent Job stays `blocked_by_dependency` until the upstream one reaches `
 
 One Drone, one worktree spanning them; each gating workspace's Checks run independently against its own Manifest; one combined approval; one PR. The shape follows from those two fields, and nothing on the record carries a shape name. Full definition, open items and the naming decision are on [Convoy](convoy.md) — see also the `../contracts/design-system.md` lexicon.
 
-**You don't hand-draft which shape applies.** The [Job proposer](job-proposer.md) emits a Job's `write_targets` and its `atomic` flag, and the shape follows from those two fields — there is no shape value for it to choose. What that call reads, when it runs and where its proposal is approved are on that document.
+**You don't hand-draft which shape applies.** A Job's shape follows from `write_targets` and its `atomic` flag, and both are settled by the workflow's scope step rather than at dispatch — there is no shape value for anything to choose. What the [Job proposer](job-proposer.md) does propose, and why scope is not among it, are on that document.
 
 **The one input this file supplies is a root-Manifest-level default-posture setting** — "prefer atomic" against "prefer strict per-workspace boundaries" — giving the Job proposer a per-repo prior. A prototype repo might not care about workspace boundaries at all; a real work monorepo usually does. It is declared in the root `armada.yml`, which is why it is defined here.
 
