@@ -15,6 +15,7 @@ use adapter_traits::{Footprint, WorkProduct};
 use core_model::CheckOutcome;
 use ipc::{JobDetail, RunId};
 use testkit::FakeWorkProduct;
+use verification::Request;
 
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, CheckBudget};
@@ -42,6 +43,7 @@ async fn a_check_that_passes_is_written_down_as_a_pass() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -76,6 +78,7 @@ async fn a_check_that_fails_records_the_code_it_returned() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -108,6 +111,7 @@ async fn a_hanging_check_is_recorded_as_timed_out_and_not_as_failed() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -138,6 +142,7 @@ async fn a_check_whose_command_does_not_exist_is_recorded_as_never_ran() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -182,6 +187,7 @@ async fn a_step_that_added_nothing_to_what_it_inherited_fails_its_diff_check() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&entered_with),
@@ -226,6 +232,7 @@ async fn a_step_that_moved_work_it_inherited_advances() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&entered_with),
@@ -250,6 +257,7 @@ async fn a_step_whose_start_was_never_read_does_not_advance_on_the_doubt() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         None,
@@ -276,6 +284,7 @@ async fn an_ungated_step_records_nothing_because_there_was_nothing_to_run() {
 
     let ruling = rule_on(
         at_step,
+        Request::of(testkit::asked_for()),
         &note_evidence(),
         None,
         Some(&Footprint::nothing()),

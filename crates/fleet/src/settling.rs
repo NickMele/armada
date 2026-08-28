@@ -26,6 +26,7 @@
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{Component, Envelope, FieldValue, JobId, JobStatus, Level, StepId};
+use verification::Request;
 
 use crate::adrift::Adrift;
 use crate::at_step::AtStep;
@@ -151,8 +152,14 @@ where
             .step_evidence(&job_id)
             .map_err(Adrift::Reading)?;
         let entered_with = at_work.entered_with().cloned();
+        // Read off the Job that is being ruled on, and off nothing else. The
+        // borrow is the whole guarantee: `Request::of` takes a `&Job`, so the
+        // yardstick the Judge is shown is the requester's frozen text and there
+        // is no arrangement of this call that could substitute the Drone's.
+        let request = Request::of(&job);
         let ruling = rule_on(
             at,
+            request,
             &landed.submission,
             declared.as_ref(),
             entered_with.as_ref(),

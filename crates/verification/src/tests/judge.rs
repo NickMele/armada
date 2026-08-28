@@ -13,8 +13,8 @@ use testkit::{Gate, Sketch};
 
 use crate::mechanical::CheckFailed;
 use crate::{
-    Accepted, Brief, Claimed, NotClaimed, Product, Refusals, ShownBy, Submission, Unreadable,
-    Verdict,
+    Accepted, Brief, Claimed, NotClaimed, Product, Refusals, Request, ShownBy, Submission,
+    Unreadable, Verdict,
 };
 
 /// A step that asks one question, and one that asks none.
@@ -78,6 +78,7 @@ fn brief(workflow: &ResolvedWorkflow) -> Brief {
     Brief::about(
         step,
         &step.judge_checks()[0].criteria()[0],
+        Request::of(testkit::asked_for()),
         &product,
         &[],
         &checks(),

@@ -11,12 +11,19 @@
 //!
 //! # What a call is told, and what it is denied
 //!
-//! [`Brief`] takes a step, one criterion, the step's work product, what that
-//! work is measured against, and the Checks that ran. **It has no parameter for
-//! the submission and none for the transcript**, so constitutional rule 2 — the
-//! Judge never reads the Drone's own account of how the step went — is a
-//! signature rather than a sentence. `docs/concepts/judge.md`, and
-//! `docs/contracts/agent-prompt.md` section 7.
+//! [`Brief`] takes a step, one criterion, **the request**, the step's work
+//! product, what that work is measured against, and the Checks that ran. **It
+//! has no parameter for the submission and none for the transcript**, so
+//! constitutional rule 2 — the Judge never reads the Drone's own account of how
+//! the step went — is a signature rather than a sentence.
+//! `docs/concepts/judge.md`, and `docs/contracts/agent-prompt.md` section 7.
+//!
+//! Rule 2 has a second half, and it was the missing one: the Judge *does*
+//! receive the original task text. [`Request`] is that half, and it is not an
+//! `Option` — there is no brief this assembles that could be blind to what was
+//! asked for, which is what let a criterion ask only whether a document was
+//! coherent with itself. See [`request`](mod@crate::request) for why the
+//! requester's words and the Drone's cannot be confused at this call site.
 //!
 //! [`Product`] is where a work product that is not a diff arrives, and the
 //! source rule that keeps it from being the Drone's testimony is that type's,
@@ -28,6 +35,7 @@ use config::ResolvedStep;
 use core_model::{CriterionId, JudgeCriterion, JudgeVerdict, Judgment, StepCheck};
 
 use crate::product::{Product, Reference};
+use crate::request::Request;
 
 /// The two words a Judge may answer with, and the three fields a refusal owes.
 ///
@@ -68,9 +76,17 @@ impl Brief {
     /// the Drone said about how its step went is not an input to the thing
     /// checking it — and what the step *produced* arrives as a [`Product`],
     /// which is a different object with a different rule.
+    ///
+    /// `request` is not optional, and it is the whole of what #169 closed. A
+    /// criterion that compares the work against what was asked for — *does this
+    /// scope note address what was actually requested*, *does this plan address
+    /// what was actually asked* — is answerable here because every call carries
+    /// it, and there is no arrangement of arguments that assembles a brief
+    /// without it.
     pub fn about(
         step: &ResolvedStep,
         criterion: &JudgeCriterion,
+        request: Request<'_>,
         product: &Product<'_>,
         references: &[Reference<'_>],
         checks: &[StepCheck],
@@ -81,6 +97,11 @@ impl Brief {
              Answer only the question at the end.\n\n",
         );
         question.push_str(&format!("Step: {}\n\n", step.label()));
+        // **First, and above the step's own evidence.** The request is the
+        // outermost yardstick — an earlier step's note is measured against it
+        // too — so it is read before anything it is the standard for, which is
+        // the ordering `Reference::all` already argues for one level down.
+        question.push_str(&request.told());
         question.push_str("Checks that already ran, and what they answered:\n");
         if checks.is_empty() {
             question.push_str("  (the step declared none)\n");

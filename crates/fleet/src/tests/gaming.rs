@@ -16,6 +16,7 @@ use core_model::{
 
 use ipc::{JobDetail, RunId};
 use testkit::{FakeJudge, FakeWorkProduct, Gaming, Sketch};
+use verification::Request;
 
 use crate::at_step::AtStep;
 use crate::gate::{apply, rule_on, Ruling};
@@ -100,6 +101,7 @@ async fn ruled(patch: &str, flag_if: &[&str], recorded: &[(StepId, StepEvidence)
     let work = FakeWorkProduct::changed(&["jest.config.js"]).showing(patch);
     rule_on(
         at,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -203,6 +205,7 @@ async fn a_step_that_asks_nothing_about_gaming_is_never_looked_at() {
     let work = FakeWorkProduct::changed(&["jest.config.js"]).showing(GAMED);
     let ruling = rule_on(
         at,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -274,6 +277,7 @@ async fn a_flagged_step_keeps_what_the_judge_said_about_its_criteria() {
     };
     let ruling = rule_on(
         at,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),

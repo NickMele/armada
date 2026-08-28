@@ -47,7 +47,7 @@ use core_model::{
 };
 use verification::{
     decide, Accepted, Baseline, CheckFailed, Flagged, InScope, NotWhatTheStepAsked, Observed,
-    OutcomeTurn, OutsideScope, Ran, Refusals, Submission, Verdict,
+    OutcomeTurn, OutsideScope, Ran, Refusals, Request, Submission, Verdict,
 };
 
 use crate::at_step::AtStep;
@@ -369,6 +369,15 @@ impl Ruling {
 /// not run for a submission the step did not ask for, and no path in this
 /// function reaches a verdict without one.
 ///
+/// `request` is what the Job was asked for, and it is a parameter rather than
+/// something reached from `at`: a position knows the frozen workflow, and the
+/// requester's text is on the Job row. It is not an `Option` — a gate that
+/// could rule without it is the gate this had until #169, which judged a scope
+/// note against itself and never against what was asked. **It reaches the Judge
+/// and nothing
+/// else here**; no Check and no mechanical tier reads it, so a request cannot
+/// pass or fail a step by itself.
+///
 /// `recorded` is what every step of this Job has submitted so far. It has two
 /// readers — the gaming check's baseline and a step's `reference_docs` — and
 /// both reach it through [`AtStep::baseline`], which will not answer with
@@ -381,6 +390,7 @@ impl Ruling {
 /// count an earlier step's file as this step's work.
 pub async fn rule_on<W>(
     at: AtStep<'_>,
+    request: Request<'_>,
     evidence: &Submission,
     declared: Option<&DeclaredPaths>,
     entered_with: Option<&Footprint>,
@@ -517,7 +527,10 @@ where
                     }
                 }
             };
-            match judging::judged(at, accepted, &patch, &checks, &off_plan, recorded, judging).await
+            match judging::judged(
+                at, request, accepted, &patch, &checks, &off_plan, recorded, judging,
+            )
+            .await
             {
                 Ok((judged, refusals)) => (judged, mechanical.but_for(refusals)),
                 // A verification that could not run is not a refusal, and it is

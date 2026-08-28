@@ -27,6 +27,7 @@ use core_model::{
 use testkit::{FakeJudge, FakeWorkProduct, Gate, Scoped, Sketch};
 
 use ipc::{JobDetail, RunId};
+use verification::Request;
 
 use crate::at_step::AtStep;
 use crate::gate::{apply, rule_on, Ruling};
@@ -75,6 +76,7 @@ async fn ruled(judge: FakeJudge, worktree: &Worktree) -> Ruling {
     let work = FakeWorkProduct::changed(&["src/log.rs"]).showing("+    let n = n - 1;\n");
     rule_on(
         at,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -167,6 +169,7 @@ async fn a_failed_check_still_ends_the_job_where_a_refusal_does_not() {
     let work = FakeWorkProduct::changed(&["src/log.rs"]);
     let ruling = rule_on(
         at,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -365,6 +368,7 @@ async fn a_step_that_declares_no_criterion_never_asks() {
 
     let ruling = rule_on(
         at,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -411,6 +415,7 @@ async fn a_failing_check_never_reaches_the_judge() {
 
     let ruling = rule_on(
         at,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -449,6 +454,7 @@ async fn the_call_carries_the_patch_and_the_facts_and_nothing_the_drone_wrote() 
 
     rule_on(
         at,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -525,6 +531,7 @@ async fn a_step_whose_work_product_is_a_note_is_judged_against_the_note() {
 
     let ruling = rule_on(
         at,
+        Request::of(testkit::asked_for()),
         &note_evidence(),
         None,
         Some(&Footprint::nothing()),
@@ -574,6 +581,7 @@ async fn a_later_step_is_measured_against_what_an_earlier_one_established() {
 
     let ruling = rule_on(
         at,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         Some(&declared),
         Some(&Footprint::nothing()),
@@ -618,6 +626,7 @@ async fn a_step_with_nothing_to_show_costs_no_call_and_draws_no_verdict() {
     // and the one that fires here.
     let ruling = rule_on(
         at,
+        Request::of(testkit::asked_for()),
         &diff_evidence(),
         Some(&declared),
         Some(&Footprint::nothing()),

@@ -12,7 +12,8 @@ use core_model::StepEvidence;
 use testkit::{Gate, Scoped, Sketch};
 
 use crate::{
-    Accepted, Brief, Claimed, NotClaimed, NothingToJudge, Product, Reference, ShownBy, Submission,
+    Accepted, Brief, Claimed, NotClaimed, NothingToJudge, Product, Reference, Request, ShownBy,
+    Submission,
 };
 
 /// Feature's opening pair, reduced: a step that writes a scope note, and a step
@@ -98,6 +99,7 @@ fn a_step_whose_work_product_is_a_note_is_judged_against_the_note() {
     let brief = Brief::about(
         step,
         &step.judge_checks()[0].criteria()[0],
+        Request::of(testkit::asked_for()),
         &product,
         &[],
         &[],
@@ -141,6 +143,7 @@ fn a_step_whose_work_product_is_the_change_shows_the_judge_no_submission() {
     let brief = Brief::about(
         step,
         &step.judge_checks()[0].criteria()[0],
+        Request::of(testkit::asked_for()),
         &product,
         &[],
         &[],
@@ -172,6 +175,7 @@ fn what_an_earlier_step_established_reaches_the_brief_labelled_as_the_yardstick(
     let brief = Brief::about(
         step,
         &step.judge_checks()[0].criteria()[0],
+        Request::of(testkit::asked_for()),
         &product,
         &[Reference::to("scope", &earlier)],
         &[],
@@ -239,6 +243,7 @@ fn a_written_step_that_also_changed_files_carries_both_and_labels_them() {
     let brief = Brief::about(
         step,
         &step.judge_checks()[0].criteria()[0],
+        Request::of(testkit::asked_for()),
         &product,
         &[],
         &[],
