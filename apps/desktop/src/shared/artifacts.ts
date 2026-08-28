@@ -84,5 +84,14 @@ export type Opened =
   | { ok: false; why: "no_repository" }
   /** The path was derived and nothing is at it. */
   | { ok: false; why: "not_there"; path: string }
-  /** The OS was handed the path and declined it. Its words, not Bridge's. */
+  /**
+   * The path was derived, it is there, and nothing opened it.
+   *
+   * Two things can decline: the OS handed the path, whose words are carried
+   * through rather than replaced, and the editor `$VISUAL` or `$EDITOR` names,
+   * which is Bridge saying which variable named what is not there. **One
+   * variant rather than two**, because a distinct `why` would have to be read
+   * by `whyNotOpened` in the renderer — worth doing, and it is the shape to
+   * reach for the next time this is opened.
+   */
   | { ok: false; why: "refused"; path: string; detail: string };
