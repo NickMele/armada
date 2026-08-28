@@ -22,6 +22,12 @@
 //! block that was answered. The scope block is written **only** where the step
 //! declares one — the only step where the call exists.
 //!
+//! One block is assembled that the rendering does not show: [`notekeeping`],
+//! which names the one path a Drone's own files belong under. Its wording is
+//! **drafted**, like the gaming half of [`Stopped`] and the whole of
+//! [`Redeclaring`] — the contract has no sanctioned copy for it, and sanctioned
+//! copy is the contract's to write.
+//!
 //! # A Drone is never told what the Checks are
 //!
 //! `docs/concepts/drone.md` governs every Drone-facing surface, and nothing in
@@ -37,8 +43,8 @@
 
 use adapter_traits::{Prompt, SpawnConfigRefused};
 use core_model::{
-    EscalationTrigger, FrozenWorkflow, GamingFlag, Job, Judgment, RepoPath, ResolvedStep, StepId,
-    StepVerdict,
+    EscalationTrigger, FrozenWorkflow, GamingFlag, Job, JobId, Judgment, RepoPath, ResolvedStep,
+    StepId, StepVerdict,
 };
 
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering.
@@ -242,6 +248,8 @@ impl Stopped {
 fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId) -> String {
     let mut text = String::from(BASELINE);
     text.push_str("\n\n");
+    text.push_str(&notekeeping(job.id()));
+    text.push_str("\n\n");
     text.push_str(&job_brief(job));
     text.push_str("\n\n");
     text.push_str(&where_you_are(workflow, at));
@@ -394,6 +402,48 @@ impl Redeclaring {
     pub fn text(&self) -> &str {
         &self.0
     }
+}
+
+/// Where a file a Drone writes for itself goes, which is not the repository
+/// root.
+///
+/// **Every other per-Job artifact is already keyed by Job id**: the log at
+/// `.armada/logs/<job-id>.jsonl`, a Check's output under
+/// `.armada/checks/<job-id>/`, the worktree itself, and the brief's
+/// attachments, which `drafting` keeps under `<attachments_dir>/<job_id>/` and
+/// [`job_brief`] names a line at a time. A plan was the one piece that was
+/// not, and one shared slot at the root cannot say whether what is in it is
+/// still live — the `PLAN.md` this repository carried belonged to a Job that
+/// finished and merged, and every worktree cut after it inherited a confident
+/// plan for work nobody had asked for.
+///
+/// **No Drone is known to have been misled by it.** Nothing pointed at that
+/// file — not this module, not the Manifest, not the agent files — so a Drone
+/// reached it only by going looking. The reason for this block is that the
+/// Job-keyed path is the correct home, not that harm was observed.
+///
+/// **It offers a place; it does not ask for a plan.** A block a Drone reads as
+/// an instruction puts every Job through a planning step nobody requested, so
+/// the whole of it is conditional and the last sentence says so outright.
+///
+/// **"Plan" already means something else here.** [`Declaring`] calls the
+/// declared scope "the plan you declared", and a second meaning in the same
+/// turn is the second-vocabulary defect in prose. So this block leads with what
+/// a Drone is actually holding — a file it wrote for itself — and a plan is one
+/// kind of it rather than the subject.
+///
+/// A private function rather than one of the three types above: it is rendered
+/// where the turn is assembled and nowhere else, and does not outlive it.
+fn notekeeping(job: &JobId) -> String {
+    format!(
+        "FILES YOU WRITE FOR YOURSELF\n\nA plan, a checklist, notes you want \
+         to keep between turns — anything you write for yourself rather than \
+         for the work goes under .armada/{}/, which is this task's alone. \
+         None of it belongs at the repository root, where a file outlives the \
+         task that wrote it with nothing to say that task is over. Nothing \
+         here is asking you to write any of it.",
+        job.as_str()
+    )
 }
 
 /// What the Job is about, in the requester's own words.

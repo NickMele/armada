@@ -33,10 +33,21 @@ out/
 storybook-static/
 
 # What a Fleet pointed at this repository writes into it. `.armada/workflows/`
-# is checked in and stays; a Job's log and its Drones' transcripts are records
-# of one run on one machine. `.armada/worktrees/` is already untracked here and
-# unignored, which is a leak this does not close.
-.armada/logs/
-.armada/transcripts/
-.armada/checks/
-.armada/worktrees/
+# is this repository declaring its own workflows and is checked in; everything
+# else under `.armada/` is a record of one run on one machine — a Job's log, its
+# Checks' output, its worktree, its Drones' transcripts, the files attached to
+# its brief, and `.armada/<job-id>/`, where a Drone puts anything it writes for
+# itself.
+#
+# Listed as an allowlist rather than one line per directory. The list form left
+# `.armada/worktrees/` untracked but unignored for a while, and a path keyed by
+# a Job id cannot be named in advance at all.
+#
+# **A Drone's plan is ignored here, and that is this repository's call rather
+# than Armada's.** A repository that wants its plans in history deletes the
+# first line and gets them, keyed by Job id and colliding with nothing. This one
+# is public and the workspace the plans would quote is not — the same reason
+# `.gnhf/` and `.lavish/` are above. The cost is that a plan is reclaimed with
+# the worktree it sits in, so it lives as long as the Job does and no longer.
+.armada/*
+!.armada/workflows/
