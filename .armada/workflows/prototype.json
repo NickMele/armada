@@ -19,6 +19,16 @@
 # the workflows where gateless steps are the common case, not the edge one.
 #
 # Adding a Judge here would spend a call per step on an answer nothing gates.
+#
+# **`build` declares no `evidence_scope`, and that is deliberate.** Decided by
+# the owner Aug 28 2026, closing #146. It is the one runtime step that produces
+# a diff with no declared footprint, and it stays that way: a prototype is built
+# to answer a question and thrown away, so declaring a plan for exploratory work
+# is friction with no reader. Nobody is going to measure a throwaway's diff
+# against a promise it had no reason to make.
+#
+# Same reasoning as the Judge above. Neither a criterion nor a footprint has
+# anything here to be true about.
 {
   "version": 1,
   "workflow_id": "prototype",
