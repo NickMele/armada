@@ -26,11 +26,14 @@
 #   meaning         - the condition, in one sentence
 #   job_transitions - the edge this trigger fires. A "from -> to" pair whose
 #                     ends are keys in job-statuses.toml
-#   in_code         - whether v2 implements it. Every value is "Not yet": no
-#                     crate implements a trigger, and core-model holds only the
-#                     log envelope. The source recorded "In code" for
-#                     evidence_suspect, fan_out, gate_failure, stalled, thrashing — that was v1, and v1 is deleted, so as a
-#                     claim about this repository it was false.
+#   in_code         - what the source recorded, and provenance rather than fact.
+#                     It recorded "In code" for evidence_suspect, fan_out,
+#                     gate_failure, stalled, thrashing — that was v1, and v1 is
+#                     deleted, so as a claim about this repository it was false;
+#                     every row carried across says "Not yet" instead. A row
+#                     authored here has no source value to carry and leaves it
+#                     empty. Which triggers Fleet actually produces is answered
+#                     by reading Fleet, never by this field.
 #   open_questions  - questions the source left open against this row
 #   notes           - the reasoning the row's page carried
 
@@ -110,6 +113,28 @@ notes = """
 The ordinary failure: nothing is wrong with the Drone, the evidence, or the machinery — the work did not clear the bar within the attempts allowed.
 
 `loop_cap` is not this, because nothing failed. `check_timeout` is not this, because the Check did not fail, it did not finish. `evidence_suspect` is not this, because the evidence passed mechanically and resubmitting would reproduce the same gaming.
+"""
+
+[triggers.gate_undecided]
+kind = "Trigger"
+level = "Step"
+meaning = "Fleet could not read what it needed in order to rule — the Job's diff, its changed files, the step's patch, or an answer the Judge never gave. The step neither passed nor failed."
+in_code = ""
+notes = """
+Not `gate_failure`, and the two are opposites about the same step: that one is the ordinary failure, where nothing is wrong with the Drone, the evidence or the machinery and the work did not clear the bar. Here the machinery is what is wrong and the step's criteria were never reached at all.
+
+Not `check_timeout`: a Check that did not finish is a Check that ran. This fires where the gate could not obtain an artifact at all, which happens before the Checks and again after them.
+
+Step-level, and it has to be: the artifact belongs to one step's gate, and only a step-level trigger reaches `last_verdict` and leaves a `stopped` row a person can redirect or restart from.
+
+Fires on the first occurrence and is never retried. A worktree momentarily unreadable and a Judge that cannot be handed a patch look identical from where the gate stands, and the second is not fixed by trying again — so the artifact and the cause are written down and a person decides which it was.
+
+`in_code` is empty rather than "Not yet": there is no source value to carry, because this row was authored in this repository rather than moved from the design workspace's database.
+"""
+why = """
+No existing row covered it. `Ruling::CouldNotDecide` was written into `crates/fleet/src/gate.rs` naming its own absence — a Job that landed there stayed `running` and was reached, if at all, by the liveness clock, which knows nothing about why it is stuck. A Job sat on one step for eight minutes with a one-line log, and the truthful answer to the person watching was that the gate had already tried, failed to read something, and told nobody.
+
+A verdict was the alternative and is refused: a machine that cannot answer must not produce one, in either direction. So the Job stops and names the artifact instead of failing the work.
 """
 
 [triggers.hatch_unbidden]

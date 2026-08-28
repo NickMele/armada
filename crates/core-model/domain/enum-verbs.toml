@@ -209,6 +209,14 @@ vocabulary = "Escalation reason"
 notes = "Read `failed a check` on `shield-x` until the Judge existed. `crates/fleet/src/gate.rs` produces this trigger from `Ruling::Refused` and from nothing else — a failed mechanical Check ends the Job at `completed_failed` and never escalates — so the Check family's word and glyph described a case that cannot reach this row. `circle-x` is the Judge's, which is what Bridge already draws the citation with, so the badge and the criterion beneath it now agree. The `meaning` was always right: \"honestly did not pass\" is a refusal rather than gaming, which is `evidence_suspect`."
 in_code = "In code"
 
+[verbs.escalation_reason.gate_undecided]
+verb = "the gate could not decide"
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = ""
+notes = "The verb says the gate could not decide rather than that the work failed, which is the whole distinction the trigger carries: `refused by the judge` is `gate_failure`'s and says the opposite about the same step. What could not be read is on the Job's log as `artifact`, and the badge does not try to hold it. No glyph, for `check_timeout`'s reason — the shield-* family is reserved to gates and checks, so the natural candidate sits there. `in_code` is empty because there is no source value to carry: the row was authored here."
+
 [verbs.escalation_reason.hatch_unbidden]
 verb = "stalled"
 icon = "octagon-alert"

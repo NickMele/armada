@@ -15,8 +15,8 @@ use std::sync::Arc;
 use adapter_traits::{Environment, Footprint, Model, Worktree};
 use config::{EvidenceType, ResolvedWorkflow};
 use core_model::{
-    AcceptanceCriterion, Actor, CriterionId, CriterionSource, Facts, Job, JobId, JobStatus,
-    ManifestId, ModelName, NewJob, StepId, StepSeed, Subject, Target, Timestamp, Title,
+    AcceptanceCriterion, Actor, CriterionId, CriterionSource, EscalationTrigger, Facts, Job, JobId,
+    JobStatus, ManifestId, ModelName, NewJob, StepId, StepSeed, Subject, Target, Timestamp, Title,
     TopLevelOrigin, Ulid, Urgency,
 };
 use testkit::{FakeJudge, FakeWorkProduct, Gate, Sketch};
@@ -465,8 +465,14 @@ async fn evidence_of_the_wrong_kind_runs_no_checks_and_moves_nothing() {
 
 /// A machine that cannot answer must not answer. An unreadable work product is
 /// not an empty diff, and it is not a failed step either.
+///
+/// **What it is instead is a stop.** `apply` used to answer `None` here, which
+/// left the Job `running` with the gate having tried, failed to read something
+/// and told nobody — the eight minutes in #156. The escalation is not a verdict
+/// creeping back in: the trigger says the gate could not decide, and no
+/// criterion was ever weighed.
 #[tokio::test]
-async fn a_diff_that_cannot_be_read_decides_nothing() {
+async fn a_diff_that_cannot_be_read_decides_nothing_and_stops_the_job() {
     let workflow = workflow("/usr/bin/true");
     let worktree = worktree();
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
@@ -486,7 +492,20 @@ async fn a_diff_that_cannot_be_read_decides_nothing() {
 
     assert!(!ruling.advanced());
     assert!(matches!(ruling, Ruling::CouldNotDecide { .. }));
-    assert!(apply(&running_job(), &ruling, at(NOW)).is_none());
+    assert_eq!(
+        ruling.undecided().map(|(artifact, _)| artifact),
+        Some("the Job's diff"),
+        "what could not be read is carried out, or the stop says nothing"
+    );
+    let moved = apply(&running_job(), &ruling, at(NOW))
+        .expect("a gate that could not read stops the Job")
+        .expect("running -> escalated is a legal move");
+    assert_eq!(moved.job.status(), JobStatus::Escalated);
+    assert_eq!(
+        ruling.stops_the_step().map(|why| why.trigger()),
+        Some(EscalationTrigger::GateUndecided),
+        "gate_failure would say the work did not pass a bar nothing measured"
+    );
 }
 
 #[tokio::test]
