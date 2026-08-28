@@ -100,6 +100,7 @@ mod gate;
 pub mod judging;
 mod landing;
 pub mod mint;
+pub mod overruling;
 pub mod process;
 pub mod proposal;
 pub mod proposing;
@@ -135,6 +136,7 @@ pub use evidence::{Call, Decline, EvidenceInbox, EvidenceTool, Landed, Recorded,
 pub use gate::{apply, rule_on, CheckBudget, CheckOutput, Ruling};
 pub use judging::{CallFailed, JudgeBudget, Judging};
 pub use mint::{Mint, UlidMint};
+pub use overruling::Overruling;
 pub use process::{holder_of, Holder, ProbeFailed, StartedAt};
 pub use proposal::{proposed, Proposing};
 pub use proposing::{NotProposed, Proposal, ProposedJob, Unresolved};

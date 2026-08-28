@@ -25,7 +25,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
 use ipc::{
-    ChangesRequested, JobId, JobRequest, Missed, ProposeJob, Redirection, Resync, RunId,
+    ChangesRequested, JobId, JobRequest, Missed, Overruled, ProposeJob, Redirection, Resync, RunId,
     StreamMessage, WireError, PROTOCOL_VERSION,
 };
 use serde::Serialize;
@@ -142,6 +142,16 @@ pub const SERVED: &[Route] = &[
         operation: "reject_job",
         method: "POST",
         path: "/jobs/:job_id/reject",
+    },
+    // The answer at a gate that refused, which is a different place from the
+    // three above: those answer `awaiting_review` and this answers `escalated`.
+    // Its own route rather than a flag on `approve_review` — one route taking
+    // either would let a refusal be taken with the act built for work nothing
+    // objected to, which is exactly the confusion the record has to keep apart.
+    Route {
+        operation: "override_verdict",
+        method: "POST",
+        path: "/jobs/:job_id/override_verdict",
     },
     Route {
         operation: "kill_drone",
@@ -292,6 +302,10 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/approve_review", post(approve_review::<D>))
         .route("/jobs/:job_id/request_changes", post(request_changes::<D>))
         .route("/jobs/:job_id/reject", post(reject_job::<D>))
+        .route(
+            "/jobs/:job_id/override_verdict",
+            post(override_verdict::<D>),
+        )
         .route(
             "/jobs/:job_id/approve_dispatch",
             post(approve_dispatch::<D>),
@@ -506,6 +520,39 @@ async fn reject_job<D: Daemon>(
     Path(job_id): Path<String>,
 ) -> Response {
     match served.daemon.reject_job(JobId::carried(job_id)).await {
+        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// The Judge refused, a person disagrees, and the step advances anyway. **The
+/// Job comes back `running`** at the step that follows, with everything the
+/// refused Drone did still on the branch.
+///
+/// 409 anywhere but an `escalated` Job stopped on `gate_failure`: a gate that
+/// never weighed the work and a gaming flag are not opinions to be overruled,
+/// and a failed mechanical Check is terminal and reaches this route as a Job
+/// with no stopped step. 422 on a blank reason.
+async fn override_verdict<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+    body: Bytes,
+) -> Response {
+    let overruling: Overruled = match ipc::decode("an override", &body) {
+        Ok(overruling) => overruling,
+        Err(why) => {
+            return problem(
+                StatusCode::BAD_REQUEST,
+                &WireError::raised(UNDECODABLE_REQUEST, why.to_string(), served.run_id.clone())
+                    .caused_by(vec![why.to_string()]),
+            )
+        }
+    };
+    match served
+        .daemon
+        .override_verdict(JobId::carried(job_id), overruling)
+        .await
+    {
         Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
         Err(refusal) => refused(refusal),
     }

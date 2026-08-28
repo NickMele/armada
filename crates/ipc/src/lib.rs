@@ -36,7 +36,8 @@
 //! `approve_dispatch`, `kill_drone`, `kill_job`, `redispatch_job`, the three
 //! acts a person takes on finished work — `approve_review`, `request_changes`,
 //! `reject_job` — with `get_evidence` and `get_diff`, which are the material
-//! those acts are taken on, and the event
+//! those acts are taken on, and `override_verdict`, which is the act on work a
+//! gate refused rather than work a gate held, and the event
 //! stream. Neither
 //! kill adds a type: both name a Job and answer with one. `redispatch_job`
 //! adds [`Redispatched`] because it is the one command that leaves two Jobs
@@ -94,4 +95,4 @@ pub use job::{
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
 pub use turn::{Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage, Withheld};
 pub use version::{ProtocolVersion, Skew, PROTOCOL_VERSION};
-pub use work::{ChangesRequested, JobDiff, JobEvidence, Submitted, Work};
+pub use work::{ChangesRequested, JobDiff, JobEvidence, Overruled, Submitted, Work};

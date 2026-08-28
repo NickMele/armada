@@ -211,6 +211,18 @@ pub struct JobStepAdvanced {
     pub to: StepState,
     /// The status the step moved beneath. Unchanged by this event.
     pub status: JobStatus,
+    /// The trigger the move carried, on the two moves that carry one: a step
+    /// stopping, and a stopped step advanced by a person who overruled the
+    /// verdict.
+    ///
+    /// The same field [`StepMoved::why`](crate::StepMoved) carries in the
+    /// history, and a string for that field's reason — a trigger spelling
+    /// belongs to the registry, and a closed set restated here would be a
+    /// second authority for a list that already has one. **Absent on every
+    /// other move**, and `from: stopped, to: advanced` is what makes it an
+    /// override rather than a stop.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
     pub actor: Actor,
     pub at: Instant,
 }
@@ -226,6 +238,7 @@ impl JobStepAdvanced {
             from: event.from().into(),
             to: event.to().into(),
             status: event.under().into(),
+            why: event.why().map(|why| why.as_wire().to_string()),
             actor: event.actor().into(),
             at: event.at().into(),
         }

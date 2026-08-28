@@ -49,7 +49,7 @@ pub const KNOWN_SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 /// **Nothing is ever edited here.** Changing entry zero changes what an already
 /// migrated file is assumed to contain, which is the one thing the version
 /// number exists to stop.
-pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13];
+pub const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14];
 
 /// Every table whose rows belong to one Job, asked of the file rather than
 /// listed here.
@@ -745,4 +745,67 @@ INSERT INTO job_step_evidence_wide (
 
 DROP TABLE job_step_evidence;
 ALTER TABLE job_step_evidence_wide RENAME TO job_step_evidence;
+"#;
+
+/// Version 14 — a step may advance carrying the trigger a person overruled.
+///
+/// [`V11`] bound a step move's reason to `state_to = 'stopped'` both ways,
+/// which held while `stopped` was the only destination that said anything. An
+/// override advances a stopped step without the gate having cleared it, and the
+/// trigger it overrules is what tells that row from an ordinary pass —
+/// `job_steps.last_verdict` is a cache of the fold, so an override written
+/// without its trigger rebuilds as a step that passed and the refusal a person
+/// disagreed with is gone from the record.
+///
+/// The four arms are `StepTarget::arriving_at` and `admits_step`'s stopped-step
+/// rule said in SQL: `advanced` from `running` is unqualified and `advanced`
+/// from `stopped` must carry an escalation, so neither of the two moves that
+/// reach `advanced` can be written wearing the other's shape. The trigger is
+/// rewritten whole because `SQLite` cannot alter one. **Nothing to backfill**:
+/// no step could advance from `stopped` before this, so every existing row
+/// satisfies one of the first three arms.
+const V14: &str = r#"
+DROP TRIGGER job_events_hold_one_whole_shape;
+
+CREATE TRIGGER job_events_hold_one_whole_shape
+BEFORE INSERT ON job_events
+WHEN NOT (
+    (NEW.kind = 'job_transition'
+        AND NEW.step_id IS NULL
+        AND NEW.state_from IS NULL
+        AND NEW.state_to IS NULL
+        AND NEW.drone_id IS NULL
+        AND NEW.status_from <> NEW.status_to)
+ OR (NEW.kind = 'step_transition'
+        AND NEW.step_id IS NOT NULL
+        AND NEW.state_from IS NOT NULL
+        AND NEW.state_to IS NOT NULL
+        AND NEW.drone_id IS NULL
+        AND NEW.status_from = NEW.status_to
+        AND ((NEW.state_to NOT IN ('stopped', 'advanced')
+                AND NEW.reason_kind = 'unqualified'
+                AND NEW.reason_value IS NULL)
+          OR (NEW.state_to = 'stopped'
+                AND NEW.reason_kind = 'escalation'
+                AND NEW.reason_value IS NOT NULL)
+          OR (NEW.state_to = 'advanced'
+                AND NEW.state_from <> 'stopped'
+                AND NEW.reason_kind = 'unqualified'
+                AND NEW.reason_value IS NULL)
+          OR (NEW.state_to = 'advanced'
+                AND NEW.state_from = 'stopped'
+                AND NEW.reason_kind = 'escalation'
+                AND NEW.reason_value IS NOT NULL)))
+ OR (NEW.kind IN ('drone_spawned', 'drone_exited')
+        AND NEW.step_id IS NULL
+        AND NEW.state_from IS NULL
+        AND NEW.state_to IS NULL
+        AND NEW.drone_id IS NOT NULL
+        AND NEW.status_from = NEW.status_to
+        AND NEW.reason_kind = 'unqualified'
+        AND NEW.reason_value IS NULL)
+)
+BEGIN
+    SELECT RAISE(ABORT, 'a job_events row is one whole shape: a job transition with no step or drone columns, a step move beneath an unchanged status carrying a trigger only where it stops the step or advances one that stopped, or a drone arriving or leaving beneath one');
+END;
 "#;

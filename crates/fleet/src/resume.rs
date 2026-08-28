@@ -173,7 +173,7 @@ where
     /// silently becoming one. `armada clean` keeps a branch the base cannot
     /// reach, and a worktree can still be reclaimed — at which point the
     /// earlier steps' work is not on disk and there is nothing to resume onto.
-    fn surviving_worktree(&self, job: &Job) -> Result<Worktree, Adrift> {
+    pub(crate) fn surviving_worktree(&self, job: &Job) -> Result<Worktree, Adrift> {
         let spec =
             WorktreeSpec::for_job(&self.host().repo_root, job.id().as_str()).map_err(|cause| {
                 Adrift::Unworkable {

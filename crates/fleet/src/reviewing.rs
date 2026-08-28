@@ -142,7 +142,7 @@ where
     /// comes before the Job is recorded complete, so a `completed_success` on
     /// the Board is a Job whose work is on its branch, and the failure is held
     /// until the Drone has been told and the slot freed.
-    async fn completed(
+    pub(crate) async fn completed(
         &self,
         job: &Job,
         told: &OutcomeTurn,
@@ -184,7 +184,7 @@ where
     /// The frozen workflow's declaration of a step, which is what a turn is
     /// worded from. A step the workflow does not name is a fault in Fleet, not
     /// a review that can be answered.
-    fn declared_step<'a>(
+    pub(crate) fn declared_step<'a>(
         &self,
         job: &'a Job,
         step: &StepId,

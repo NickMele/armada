@@ -287,6 +287,41 @@ pub trait Daemon: Send + Sync + 'static {
         note: ChangesRequested,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
+    /// `override_verdict` — the Judge refused, a person disagrees, and the step
+    /// advances anyway.
+    ///
+    /// **The fifth act on an escalated Job, and the only one that keeps the
+    /// work.** [`Daemon::approve_review`] cannot be it: a Job a gate refused is
+    /// `escalated`, not `awaiting_review`. [`Daemon::restart_step`] cannot be
+    /// it either — it re-runs the step, which discards work that was right and
+    /// may draw the same refusal. A verdict with no appeal is worse than no
+    /// verdict, because a verifier a person cannot overrule is one they route
+    /// around.
+    ///
+    /// # It is not an approve-anything
+    ///
+    /// Only `gate_failure` is liftable — the Judge refusing a criterion, which
+    /// is a matter of opinion. A step stopped on `gate_undecided` was never
+    /// weighed and one stopped on `evidence_suspect` is a claim about the
+    /// Drone's honesty; both are [`Refusal::IllegalMove`]. A failed mechanical
+    /// Check is out of reach twice over: it ends the Job at `completed_failed`,
+    /// which is terminal and stops no step, and the recorded Check runs are
+    /// read again before anything moves.
+    ///
+    /// # It is recorded as an override
+    ///
+    /// The step move is `stopped -> advanced` carrying the trigger it
+    /// overruled, so the row still says `failed` beside a state that says
+    /// `advanced`, and [`ipc::StepDetail::overridden`] is that pair read once
+    /// here rather than by every surface. A blank reason is
+    /// [`Refusal::Unacceptable`]: an override that says nothing is how this
+    /// becomes the way somebody quiets a gate.
+    fn override_verdict(
+        &self,
+        job_id: JobId,
+        overruling: ipc::Overruled,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
     /// `reject_job` — the work is not wanted, and the Job is over.
     ///
     /// **Terminal, which is what makes it the hard stop.** `rejected` is a

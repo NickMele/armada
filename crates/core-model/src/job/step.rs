@@ -141,11 +141,20 @@ impl JobStep {
             last_verdict: match to {
                 StepTarget::Running => self.last_verdict,
                 StepTarget::Advanced => Some(StepVerdict::Passed),
-                StepTarget::Stopped(why) => Some(StepVerdict::Failed(*why)),
+                // **The verdict does not move on an override**, which is the
+                // whole difference between this and `Advanced`. The gate ruled
+                // `failed` and a person advanced the step over that ruling; a
+                // row rewritten to `passed` would say the gate cleared the
+                // work, and nothing anywhere would still say it had not.
+                StepTarget::Stopped(why) | StepTarget::Overridden(why) => {
+                    Some(StepVerdict::Failed(*why))
+                }
             },
             entered_at: match to {
                 StepTarget::Running => at.clone(),
-                StepTarget::Advanced | StepTarget::Stopped(_) => self.entered_at.clone(),
+                StepTarget::Advanced | StepTarget::Stopped(_) | StepTarget::Overridden(_) => {
+                    self.entered_at.clone()
+                }
             },
             updated_at: at,
         }

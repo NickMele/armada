@@ -24,7 +24,7 @@
 //! of that has happened, and the worktree is untouched. Delivery is held the
 //! same way; see [`crate::delivery`].
 
-use adapter_traits::{AgentHarness, CommitTime, Committed, Delivery, Vcs, WorkProduct};
+use adapter_traits::{AgentHarness, CommitTime, Committed, Delivery, Vcs, WorkProduct, Worktree};
 use core_model::{Job, JobId, StepId, StepTarget};
 use verification::OutcomeTurn;
 
@@ -105,29 +105,20 @@ where
 
     /// Deliver the Job's branch, from the worktree the slot is holding.
     ///
-    /// An empty slot delivers nothing, for the reason [`land`](Fleet::land)
-    /// gives about the same read: it cannot happen, and neither case is
-    /// distinguished here because neither exists.
+    /// Deliver the branch of [`the worktree that is there`](Fleet::landable).
+    /// A Job with none delivers nothing.
     async fn delivered(&self, job: &Job, working: &Option<Working>) -> Result<Delivered, Adrift> {
-        let Some(at_work) = working.as_ref() else {
+        let Some(worktree) = self.landable(job, working)? else {
             return Ok(Delivered::default());
         };
-        let (_, _, worktree) = at_work.standing();
         self.deliver(job, &worktree).await
     }
 
     /// Put the Job's work on its branch.
-    ///
-    /// The worktree comes from the slot, which is the only thing holding one.
     async fn land(&self, job: &Job, working: &Option<Working>) -> Result<Committed, Adrift> {
-        // Unreachable: a ruling exists because the slot was full when the gate
-        // read it, and nothing empties it in between. An empty slot is a Job
-        // with no worktree to commit in rather than one with nothing in it, and
-        // the two are not distinguished here because neither can happen.
-        let Some(at_work) = working.as_ref() else {
+        let Some(worktree) = self.landable(job, working)? else {
             return Ok(Committed::NothingToCommit);
         };
-        let (_, _, worktree) = at_work.standing();
         // Seconds, floored, because git's signature has no finer field and a
         // reading before 1970 must not round the wrong way.
         let at = CommitTime::seconds_since_epoch(
@@ -142,6 +133,27 @@ where
                 job: job.id().clone(),
                 cause: Box::new(cause),
             })
+    }
+
+    /// The worktree a Job's work lands from: the slot's where the slot holds
+    /// one, and otherwise the directory on disk.
+    ///
+    /// **The fallback is not decoration.** Everything else that lands is
+    /// reached with the Drone still in the slot — a gate ruling exists because
+    /// the slot was full when it read it — but a person can advance the last
+    /// step of a Job whose Drone has gone, and until now that path recorded
+    /// `completed_success` over an uncommitted branch. Correct, verified and
+    /// unmergeable is the thing `land` exists to prevent, and the slot being
+    /// empty does not make it acceptable.
+    ///
+    /// `None` is a Job with nothing to land — one that never had a worktree, or
+    /// one whose worktree has been reclaimed — which is the answer
+    /// [`worktree_of`](Fleet::worktree_of) already gives.
+    fn landable(&self, job: &Job, working: &Option<Working>) -> Result<Option<Worktree>, Adrift> {
+        match working.as_ref() {
+            Some(at_work) => Ok(Some(at_work.standing().2)),
+            None => self.worktree_of(job),
+        }
     }
 }
 

@@ -207,6 +207,20 @@ pub struct StepDetail {
     /// Absent until a gate has ruled on the step.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_verdict: Option<Verdict>,
+    /// **The step advanced because a person overruled the gate, not because it
+    /// passed.**
+    ///
+    /// A field rather than a rule a client applies, and that is the point: the
+    /// fact is already on the wire as `state: advanced` beside
+    /// `last_verdict: failed`, and leaving a surface to notice the pair is how
+    /// an override comes to read like an ordinary advance. Every screen that
+    /// draws a rail would have to spell the same rule, and the first one that
+    /// forgot would draw a Judge that had been overruled as a Judge that had
+    /// cleared the work.
+    ///
+    /// What was overruled is on `last_verdict`, which still names the trigger.
+    /// The person's reason is in the Job's own log, not here.
+    pub overridden: bool,
     /// Every criterion the Judge answered on this step, in the order asked.
     ///
     /// **This is where a refusal's citation arrives**, and it is the whole
@@ -246,6 +260,15 @@ impl StepDetail {
             judge_checks: declared.map(|declared| DeclaredJudge::firing(declared.judge_checks())),
             advance_gate: declared.map(|declared| declared.advance_gate().into()),
             last_verdict: step.last_verdict().map(Verdict::of),
+            // The one place the pair is read, so that no surface has to. A step
+            // that advanced still carrying a failure is a step a person
+            // advanced over the gate's ruling — the ordinary advance writes
+            // `passed` and the two cannot be confused.
+            overridden: step.state() == core_model::StepState::Advanced
+                && matches!(
+                    step.last_verdict(),
+                    Some(core_model::StepVerdict::Failed(_))
+                ),
             judged: facts.map(|facts| facts.judged.clone()).unwrap_or_default(),
             flagged: facts.map(|facts| facts.flagged.clone()).unwrap_or_default(),
             entered_at: step.entered_at().into(),

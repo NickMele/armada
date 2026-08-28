@@ -21,6 +21,7 @@
 [states.advanced]
 meaning = "The step passed its advance gate"
 in_code = "Not yet"
+notes = "Reached a second way, from `stopped`, when a person overrules the gate that refused it. The state is the same and the verdict is not: an overridden step keeps `failed(<trigger>)`, so a step the gate cleared and a step a person cleared over the gate are told apart by the pair and never by the state alone."
 
 [states.awaiting_human]
 meaning = "The step's advance gate is a human gate, and it is open"

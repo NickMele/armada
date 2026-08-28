@@ -568,8 +568,27 @@ where
         step: &StepId,
         to: StepTarget,
     ) -> Result<Job, Adrift> {
+        self.move_step_by(job, step, to, Actor::Fleet).await
+    }
+
+    /// The same move, said by somebody other than Fleet.
+    ///
+    /// **Only one act needs it.** Every step move above follows from something
+    /// Fleet derived — a gate ruling, a dispatch, a reap — so Fleet is the
+    /// actor and [`move_step`](Fleet::move_step) is the spelling. An override
+    /// is a person advancing a step the gate refused, and the actor is the
+    /// whole content of that row: the log cannot reconstruct afterwards who
+    /// disagreed with the Judge, and a `stopped -> advanced` recorded against
+    /// Fleet would say Fleet overruled itself.
+    pub(crate) async fn move_step_by(
+        &self,
+        job: &Job,
+        step: &StepId,
+        to: StepTarget,
+        by: Actor,
+    ) -> Result<Job, Adrift> {
         let moved = job
-            .transition_step(step, to, Actor::Fleet, self.now())
+            .transition_step(step, to, by, self.now())
             .map_err(Adrift::IllegalStepMove)?;
         self.store()
             .lock()
