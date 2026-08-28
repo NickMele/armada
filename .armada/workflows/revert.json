@@ -4,8 +4,9 @@
 # `crates/core-model/domain/workflow-samples/` are stale against the parser --
 # `question` where it reads `criteria[]`, `declare_plan_at` inside
 # `evidence_scope` where the registry parents it to the step, and
-# `reference_docs` / `max_context_size`, which M1 does not read. The questions
-# below are ported from the designed files; none of the shape is.
+# `max_context_size`, which M1 does not read. `reference_docs` was a fourth and
+# is not any more -- M1 reads it. The questions below are ported from the
+# designed files; none of the shape is.
 #
 # The designed `revert.json` runs five steps in a loop and opens on `revert`
 # itself -- there is no plan step, since a revert's scope is inherited from the

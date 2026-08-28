@@ -14,8 +14,10 @@
 #     refuses each: it spells a judge check's question as a bare `question` key
 #     where the parser reads `criteria[]` of `{criterion_id, question}`; it
 #     parents `declare_plan_at` inside `evidence_scope` where the registry
-#     parents it to the step; and it carries `reference_docs` and
-#     `max_context_size` inside `evidence_scope`, neither of which M1 reads.
+#     parents it to the step; and it carries `max_context_size` inside
+#     `evidence_scope`, which M1 does not read and which nobody has decided a
+#     number for. `reference_docs` was the fourth and is no longer -- M1 reads
+#     it, and the entries below are ported from that file.
 #     Do not port from it by copying. The questions are worth taking; the
 #     shape is not.
 #
@@ -83,17 +85,27 @@
 # gate naming a *tier* against that tier's declaration; `human_always` names an
 # *actor*, so a step may carry it with or without a Judge.
 #
-# **A step whose `evidence_type` is `facts_note` carries no Judge, and that is
-# forced rather than chosen.** The Judge is shown a patch and nothing else --
-# `crates/verification/src/judge.rs:59` is explicit that there is no
-# `submission` parameter, because what a Drone says about its own work is not an
-# input to the thing checking it. On a step whose work product *is* a written
-# note there is no patch, so the Judge is handed an empty one and refuses every
-# time. It did, on a real Job, at its first step.
+# **A step whose `evidence_type` is `facts_note` carries a Judge again.** The
+# Judge is shown what the step produced, and on a written step that is the note
+# -- `verification::Product` reads the step's own declared `evidence_type` to
+# decide which. The rule that a Drone's account of *how the step went* stays out
+# is untouched; what changed is that its deliverable is no longer folded into
+# that account. See #153.
 #
-# The designed workflow feeds prior evidence to the Judge through
-# `reference_docs`, which M1's parser does not read. Until it does, a Judge here
-# cannot see the thing it is being asked about. See #153.
+# `reference_docs` is read now too, so a later step names what an earlier step
+# established and the Judge is shown it, labelled as the standard rather than
+# the target.
+#
+# **The Judge is still not shown the request.** `judge.md` says it receives the
+# original task text and the brief carries none -- the Job's title, facts and
+# `acceptance_criteria` reach the Drone and stop there, and joining
+# `acceptance_criteria[]` to a step is written down as unbuilt in
+# `config/src/judge.rs`. So every criterion below is one the note answers by
+# itself, and the designed questions that compare the work against what was
+# asked for are not ported. They are not dropped -- they wait on that.
+#
+# `plan`'s designed pair is one criterion here. `plan_matches_request` asks
+# whether the plan addresses what was actually asked, which needs the request.
 {
   "version": 1,
   "workflow_id": "bug",
@@ -112,7 +124,19 @@
           "target/"
         ]
       },
-      "advance_gate": "auto"
+      "judge_checks": [
+        {
+          "enabled": true,
+          "model": "haiku",
+          "criteria": [
+            {
+              "criterion_id": "names_a_root_cause",
+              "question": "Does this plan name a specific root cause, rather than restating the reported symptom?"
+            }
+          ]
+        }
+      ],
+      "advance_gate": "auto_if_judge_passes"
     },
     {
       "id": "implement",
@@ -140,6 +164,9 @@
           ".env",
           "node_modules/",
           "target/"
+        ],
+        "reference_docs": [
+          "plan.evidence"
         ],
         "scope_diff_check": true
       },
