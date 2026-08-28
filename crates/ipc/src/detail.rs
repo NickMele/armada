@@ -243,16 +243,7 @@ impl StepDetail {
             state: step.state().into(),
             checks: facts.and_then(|facts| facts.declares.clone()),
             check_runs: facts.map(|facts| facts.ran.clone()).unwrap_or_default(),
-            judge_checks: declared.map(|declared| {
-                declared
-                    .judge_checks()
-                    .iter()
-                    .filter(|check| {
-                        check.fires() || check.gaming().is_some_and(core_model::GamingCheck::fires)
-                    })
-                    .map(DeclaredJudge::from)
-                    .collect()
-            }),
+            judge_checks: declared.map(|declared| DeclaredJudge::firing(declared.judge_checks())),
             advance_gate: declared.map(|declared| declared.advance_gate().into()),
             last_verdict: step.last_verdict().map(Verdict::of),
             judged: facts.map(|facts| facts.judged.clone()).unwrap_or_default(),

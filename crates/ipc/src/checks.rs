@@ -87,6 +87,30 @@ pub struct DeclaredJudge {
     pub gaming_check: bool,
 }
 
+impl DeclaredJudge {
+    /// The entries that will actually reach the Judge, in the order the step
+    /// declares them.
+    ///
+    /// **An inert entry does not cross.** The domain spells a disabled judge
+    /// check and an absent one identically — an entry with no criterion and no
+    /// pattern — so passing one through would lengthen the list without a Judge
+    /// ever being called.
+    ///
+    /// One function rather than the same filter at each call site: the running
+    /// Job's rail and the proposal-time preview are the same declaration read
+    /// at two moments, and two spellings of "this fires" agree only until one
+    /// of them changes.
+    pub fn firing(checks: &[core_model::JudgeCheck]) -> Vec<DeclaredJudge> {
+        checks
+            .iter()
+            .filter(|check| {
+                check.fires() || check.gaming().is_some_and(core_model::GamingCheck::fires)
+            })
+            .map(DeclaredJudge::from)
+            .collect()
+    }
+}
+
 impl From<&core_model::JudgeCheck> for DeclaredJudge {
     fn from(check: &core_model::JudgeCheck) -> DeclaredJudge {
         DeclaredJudge {

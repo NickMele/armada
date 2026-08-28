@@ -290,7 +290,9 @@ impl Daemon for FakeDaemon {
             version: 1,
             steps: vec![
                 // Gated, and ungated. The pair is the distinction `get_job`'s
-                // rail turns on, so the fake carries both rather than one.
+                // rail turns on, so the fake carries both rather than one — and
+                // the second is the step that stops for a person, which a
+                // preview drew as a step with nothing on it.
                 ipc::WorkflowStep {
                     step_id: StepId::carried("implement"),
                     label: "Implement the change".to_string(),
@@ -300,11 +302,21 @@ impl Daemon for FakeDaemon {
                         run: Some("cargo build --workspace --locked".to_string()),
                         expect_exit_code: Some(0),
                     }],
+                    judge_checks: vec![ipc::DeclaredJudge {
+                        criteria: 2,
+                        panel_size: None,
+                        gaming_check: false,
+                    }],
+                    advance_gate: ipc::AdvanceGate::from_wire("auto_if_judge_passes")
+                        .expect("a gate the registry has"),
                 },
                 ipc::WorkflowStep {
-                    step_id: StepId::carried("summarise"),
-                    label: "Summarise".to_string(),
+                    step_id: StepId::carried("handoff"),
+                    label: "Hand the work back".to_string(),
                     checks: Vec::new(),
+                    judge_checks: Vec::new(),
+                    advance_gate: ipc::AdvanceGate::from_wire("human_always")
+                        .expect("a gate the registry has"),
                 },
             ],
             manifest_id: ManifestId::carried("01MF"),

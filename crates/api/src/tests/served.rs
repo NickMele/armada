@@ -204,6 +204,46 @@ async fn a_steps_judge_and_its_human_gate_cross_before_either_acts() {
     );
 }
 
+/// **The same two declarations, one moment earlier.** The rail says what a
+/// running Job's step did; this is the preview a person approves a dispatch
+/// from, and it is the more consequential of the two — a workflow that will
+/// stop and wait at `handoff`, and spend Judge calls at `implement`, previewed
+/// as neither.
+#[tokio::test]
+async fn a_workflow_previews_the_judge_and_the_gate_it_will_stop_at() {
+    let events = Broadcaster::new();
+    let app = wired(FakeDaemon::new(events.clone()), events);
+
+    let (status, body) = call(&app, "GET", "/workflows", "").await;
+    assert_eq!(status, StatusCode::OK);
+    let json = String::from_utf8(body.clone()).expect("a JSON body");
+    let held: Vec<ipc::WorkflowSummary> = ipc::decode("the workflows", &body).expect("a list");
+    let steps = &held[0].steps;
+
+    assert_eq!(
+        steps[0].advance_gate.as_wire(),
+        "auto_if_judge_passes",
+        "what the first step advances on: {json}"
+    );
+    assert_eq!(
+        steps[0].judge_checks[0].criteria, 2,
+        "and how many questions that costs"
+    );
+    assert_eq!(
+        steps[1].advance_gate.as_wire(),
+        "human_always",
+        "the step the dispatch will stop and wait on, said before it is approved"
+    );
+    assert!(
+        steps[1].judge_checks.is_empty(),
+        "which is not the same as a step the Judge is asked about: {json}"
+    );
+    assert!(
+        !json.contains("question") && !json.contains("does the diff"),
+        "counts and states cross, and a criterion's wording does not: {json}"
+    );
+}
+
 /// **The case that proves the two operations are not one.** A Job at the
 /// approval gate has no Drone — nothing has spawned — and the registry still
 /// carries `awaiting_approval -> killed`, an operator act carrying no verdict.

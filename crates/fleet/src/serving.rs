@@ -43,10 +43,10 @@ use core_model::{
 };
 use ipc::mcp::{DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    ChangesRequested, CheckRun, DeclaredCheck, Flagged, JobDetail, JobDiff, JobEvidence,
-    JobHistory, JobId, JobList, JobSummary, Judged, ManifestId, ManifestSummary, ModelChoices,
-    ProposeJob, Redirection, Redispatched, RunId, StepFacts, StepId, Submitted, WireError,
-    WireValue, Work, WorkflowId, WorkflowStep, WorkflowSummary,
+    ChangesRequested, CheckRun, DeclaredCheck, DeclaredJudge, Flagged, JobDetail, JobDiff,
+    JobEvidence, JobHistory, JobId, JobList, JobSummary, Judged, ManifestId, ManifestSummary,
+    ModelChoices, ProposeJob, Redirection, Redispatched, RunId, StepFacts, StepId, Submitted,
+    WireError, WireValue, Work, WorkflowId, WorkflowStep, WorkflowSummary,
 };
 use store::{LoadJobError, Moved, RecordedEvent, WriteError};
 
@@ -524,12 +524,15 @@ fn reads_as(label: &str, step_id: &str) -> String {
     }
 }
 
-/// A workflow's steps with the Checks each declares, in the workflow's order.
+/// A workflow's steps with what each one declares, in the workflow's order.
 ///
 /// **This is what the next Job would freeze**, and `get_job` answers from what
 /// its Job already froze. The two can now differ, which is the point: a
 /// workflow edited under a running Job shows the new declaration here and the
 /// approved one there.
+///
+/// Both tiers and the gate, because this is read *before* a dispatch: after the
+/// fact the rail says what happened, and here a person is agreeing to it.
 fn declared(workflow: &config::ResolvedWorkflow) -> Vec<WorkflowStep> {
     workflow
         .steps()
@@ -538,6 +541,11 @@ fn declared(workflow: &config::ResolvedWorkflow) -> Vec<WorkflowStep> {
             step_id: StepId::from(step.id()),
             label: reads_as(step.label(), step.id().as_str()),
             checks: step.checks().iter().map(declared_check).collect(),
+            // The rail's own narrowing, called rather than restated: an entry
+            // that asks nothing and looks for nothing is not a Judge call, and
+            // a preview that counted one would promise a call nothing makes.
+            judge_checks: DeclaredJudge::firing(step.judge_checks()),
+            advance_gate: step.advance_gate().into(),
         })
         .collect()
 }
