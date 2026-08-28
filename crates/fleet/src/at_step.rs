@@ -69,8 +69,13 @@ impl<'a> AtStep<'a> {
         self.worktree
     }
 
-    /// The evidence a `baseline_ref` names, **and only where it names a step
-    /// strictly earlier than this one**.
+    /// The evidence a `baseline_ref` or a `reference_docs` entry names, **and
+    /// only where it names a step strictly earlier than this one**.
+    ///
+    /// Both keys are spelled `<step_id>.evidence` through the same
+    /// [`EvidenceRef`], and both resolve here, so the gaming baseline and the
+    /// Judge's yardstick cannot come to disagree about which steps are
+    /// reachable from where.
     ///
     /// A reference forward, or at this step, answers `None`: a baseline that
     /// has not happened yet is not a baseline, and a step comparing against

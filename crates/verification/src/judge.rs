@@ -11,15 +11,23 @@
 //!
 //! # What a call is told, and what it is denied
 //!
-//! [`Brief`] takes a step, one criterion, the patch and the Checks that ran.
-//! **It has no parameter for the submission**, so constitutional rule 2 — the
-//! Judge never reads the Drone's own account — is a signature rather than a
-//! sentence. `docs/concepts/judge.md`, and `docs/contracts/agent-prompt.md`
-//! section 7.
+//! [`Brief`] takes a step, one criterion, the step's work product, what that
+//! work is measured against, and the Checks that ran. **It has no parameter for
+//! the submission and none for the transcript**, so constitutional rule 2 — the
+//! Judge never reads the Drone's own account of how the step went — is a
+//! signature rather than a sentence. `docs/concepts/judge.md`, and
+//! `docs/contracts/agent-prompt.md` section 7.
+//!
+//! [`Product`] is where a work product that is not a diff arrives, and the
+//! source rule that keeps it from being the Drone's testimony is that type's,
+//! not this one's — see [`product`](mod@crate::product). What matters here is
+//! that a `Product` cannot be empty, so there is no call this assembles that
+//! shows the Judge nothing.
 
-use adapter_traits::Patch;
 use config::ResolvedStep;
 use core_model::{CriterionId, JudgeCriterion, JudgeVerdict, Judgment, StepCheck};
+
+use crate::product::{Product, Reference};
 
 /// The two words a Judge may answer with, and the three fields a refusal owes.
 ///
@@ -40,8 +48,8 @@ If it does not:
     produced: <what is seen instead>
     consequence: <what that difference does to whoever consumes it>
 
-Each of the three is one line and names something in the diff above. A refusal \
-that could be written about any other change is not a refusal.";
+Each of the three is one line and names something in the work above. A refusal \
+that could be written about any other piece of work is not a refusal.";
 
 /// What one call is asked, assembled.
 ///
@@ -56,18 +64,20 @@ pub struct Brief {
 impl Brief {
     /// Assemble the question for one criterion.
     ///
-    /// There is no `submission` parameter and no `transcript` parameter. What
-    /// the Drone said about its own work is not an input to the thing checking
-    /// it.
+    /// There is no `transcript` parameter and no `submission` parameter. What
+    /// the Drone said about how its step went is not an input to the thing
+    /// checking it — and what the step *produced* arrives as a [`Product`],
+    /// which is a different object with a different rule.
     pub fn about(
         step: &ResolvedStep,
         criterion: &JudgeCriterion,
-        patch: &Patch,
+        product: &Product<'_>,
+        references: &[Reference<'_>],
         checks: &[StepCheck],
     ) -> Brief {
         let mut question = String::new();
         question.push_str(
-            "You are verifying one condition on a change somebody else made. \
+            "You are verifying one condition on work somebody else did. \
              Answer only the question at the end.\n\n",
         );
         question.push_str(&format!("Step: {}\n\n", step.label()));
@@ -78,9 +88,13 @@ impl Brief {
         for check in checks {
             question.push_str(&format!("  {} — {}\n", check.name, check.outcome.as_wire()));
         }
-        question.push_str("\nThe change, as a diff:\n\n");
-        question.push_str(patch.as_str());
-        question.push_str("\n\nThe question, which is yes or no:\n\n");
+        question.push('\n');
+        // The yardstick before the product, the way the gaming brief puts its
+        // baseline first: what the work is measured against is context for
+        // reading it, and it is labelled as not being the thing under judgment.
+        question.push_str(&Reference::all(references));
+        question.push_str(&product.told());
+        question.push_str("\nThe question, which is yes or no:\n\n");
         question.push_str(&criterion.question);
         question.push_str("\n\n");
         question.push_str(ANSWER_FORMAT);

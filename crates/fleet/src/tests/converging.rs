@@ -286,6 +286,7 @@ async fn work_outside_the_plan_asks_the_judge_and_fails_nothing() {
             diff_check: true,
             at_step_start: true,
             exclude: &[],
+            references: &[],
         })),
     );
     let job = started(&fleet, &home).await;

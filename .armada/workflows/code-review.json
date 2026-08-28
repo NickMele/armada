@@ -4,8 +4,9 @@
 # `crates/core-model/domain/workflow-samples/` are stale against the parser --
 # `question` where it reads `criteria[]`, `declare_plan_at` inside
 # `evidence_scope` where the registry parents it to the step, and
-# `reference_docs` / `max_context_size`, which M1 does not read. The questions
-# below are ported from the designed files; none of the shape is.
+# `max_context_size`, which M1 does not read. `reference_docs` was a fourth and
+# is not any more -- M1 reads it. The questions below are ported from the
+# designed files; none of the shape is.
 #
 # The designed `code-review.json` is already linear and already three steps --
 # `read`, `assess`, `deliver` -- so nothing here is folded. What is still
@@ -15,30 +16,34 @@
 # rather than the designed `review_findings`, which is not a value the schema
 # has -- see `[review-findings-evidence-type]` in `docs/OPEN.md`.
 #
-# **The Judge panel on `assess` is no longer dropped.** This is the one
-# workflow whose gaming patterns exist for it and nothing else:
-# `no_findings_on_substantial_diff`, `findings_not_tied_to_changed_lines` and
-# `findings_generic` describe a review that went through the motions. A review
-# workflow with no semantic tier is the exact failure those patterns name --
-# it produces prose, and prose is not a claim.
-#
-# `sonnet` rather than `haiku`, as the designed file has it: this step reads a
-# diff and a set of findings together and judges whether they engage.
+# **The Judge panel on `assess` is what this workflow most needs and is the one
+# it cannot have yet.** This is the one workflow whose gaming patterns exist for
+# it and nothing else: `no_findings_on_substantial_diff`,
+# `findings_not_tied_to_changed_lines` and `findings_generic` describe a review
+# that went through the motions. A review workflow with no semantic tier is the
+# exact failure those patterns name -- it produces prose, and prose is not a
+# claim. The paragraph below says what stands in the way.
 #
 # `read` and `deliver` carry no Judge. Reading is not a work product, and
 # delivering is a hand-off.
 #
-# **A step whose `evidence_type` is `facts_note` carries no Judge, and that is
-# forced rather than chosen.** The Judge is shown a patch and nothing else --
-# `crates/verification/src/judge.rs:59` is explicit that there is no
-# `submission` parameter, because what a Drone says about its own work is not an
-# input to the thing checking it. On a step whose work product *is* a written
-# note there is no patch, so the Judge is handed an empty one and refuses every
-# time. It did, on a real Job, at its first step.
+# **`assess` still carries no Judge, and #153 is not what is holding it.** A
+# written work product reaches the Judge now, so the note `assess` produces
+# would. What does not reach it is the diff the review is about: on Code Review
+# the diff is the Drone's *input* rather than its output, so it is not in the
+# worktree and `WorkProduct::patch` reads nothing. Every criterion and every
+# `flag_if` pattern this step would declare -- does the review engage with what
+# the diff does, are the findings tied to changed lines, would they read the
+# same about a different diff -- is a question about that diff.
 #
-# The designed workflow feeds prior evidence to the Judge through
-# `reference_docs`, which M1's parser does not read. Until it does, a Judge here
-# cannot see the thing it is being asked about. See #153.
+# `no_findings_on_substantial_diff` and its two siblings go through
+# `GamingBrief`, which takes a patch and nothing else. On this workflow that
+# patch is empty, which is the same shape of blindness #153 named and a
+# different cause.
+#
+# This is the "Code Review inverts" exception `docs/concepts/workflow.md` flags
+# against its own evidence-type table. It needs a step whose work product is a
+# review of a diff Armada holds somewhere it can read.
 {
   "version": 1,
   "workflow_id": "code_review",

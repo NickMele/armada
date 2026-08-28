@@ -178,6 +178,7 @@ fn a_scoped_step_is_told_to_declare_before_it_starts() {
             diff_check: true,
             at_step_start: true,
             exclude: &["secrets"],
+            references: &[],
         }),
         gaming: None,
     }]);

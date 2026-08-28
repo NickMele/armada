@@ -184,6 +184,7 @@ async fn a_path_outside_the_declared_plan_is_marked_on_its_row() {
         diff_check: true,
         at_step_start: true,
         exclude: &[],
+        references: &[],
     };
     let fleet = a_fleet_reading(&home, three_kinds(), Arc::clone(&clock), Some(scope));
     let mut watching = fleet.events().subscribe();

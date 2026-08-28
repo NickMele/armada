@@ -296,6 +296,8 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
                 "context_source": scope.context_source().as_wire(),
                 "exclude_paths": scope.exclude_paths().iter()
                     .map(|path| path.as_str()).collect::<Vec<&str>>(),
+                "reference_docs": scope.reference_docs().iter()
+                    .map(EvidenceRef::as_wire).collect::<Vec<String>>(),
                 "scope_diff_check": scope.scope_diff_check(),
                 "declare_plan_at": scope.declare_plan_at().map(|at| at.as_wire()),
             })),
@@ -392,10 +394,25 @@ fn read_evidence_scope(entry: &Map<String, Value>) -> Result<Option<EvidenceScop
                 })?));
         }
     }
+    // **Absent reads as none**, the same backfill every other key on this
+    // object gets: a workflow frozen before a yardstick existed named none.
+    let mut reference_docs = Vec::new();
+    if let Some(Value::Array(referenced)) = scope.get("reference_docs") {
+        for named in referenced {
+            let named = named
+                .as_str()
+                .ok_or_else(|| "a reference doc is not a string".to_string())?;
+            reference_docs.push(
+                EvidenceRef::parse(named)
+                    .ok_or_else(|| format!("`reference_docs` holds `{named}`"))?,
+            );
+        }
+    }
     Ok(Some(EvidenceScope::declared(
         ContextSource::from_wire(&source)
             .ok_or_else(|| format!("`context_source` holds `{source}`"))?,
         exclude_paths,
+        reference_docs,
         scope
             .get("scope_diff_check")
             .and_then(Value::as_bool)

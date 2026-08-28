@@ -6,8 +6,8 @@
 //! answered by reading the diff, never a runner's output.
 //!
 //! The Judge is a veto and not a grant. It fires on mechanical triggers, is
-//! blind to the Drone, and judges whether evidence satisfies the step's intent.
-//! It cannot vouch for something an exit code already contradicted, and
+//! blind to how the step went, and judges whether evidence satisfies the step's
+//! intent. It cannot vouch for something an exit code already contradicted, and
 //! [`Verdict::but_for`] has no arm that produces an advance.
 //!
 //! # The property this crate exists to hold
@@ -40,6 +40,17 @@
 //! writing "exit 0" into it has moved no check. The artifact and the report of
 //! the artifact are different objects, and only the first one gates.
 //!
+//! # The one place a Drone's own words do reach the Judge, and why it is not a
+//! hole
+//!
+//! On a step whose declared work product is a document — a `facts_note`, a
+//! Design Plan — the writing **is** the deliverable rather than a report of
+//! one, and a Judge shown no diff there refuses every time on every Job. It
+//! did. [`Product`] is where that arrives, and [`product`](mod@product) holds
+//! the rule that keeps it from being a loophole: the source is a type, so a
+//! step whose product is the change cannot get its submission in front of a
+//! Judge at all. The transcript reaches nothing, on any step.
+//!
 //! # Why the diff computation lives behind this crate
 //!
 //! The raw diff-computation adapter method is exposed **only** here, so exactly
@@ -55,6 +66,7 @@ mod gate;
 mod judge;
 mod mechanical;
 mod outcome;
+mod product;
 mod scope;
 mod submission;
 
@@ -70,5 +82,6 @@ pub use mechanical::{
     CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran, EVIDENCE_SCOPE,
 };
 pub use outcome::{OutcomeTurn, TheBaseMoved};
+pub use product::{NothingToJudge, Product, Reference, Written};
 pub use scope::{drifted, InScope, OutsideScope};
 pub use submission::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};

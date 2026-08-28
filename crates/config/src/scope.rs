@@ -8,22 +8,40 @@
 //! that says which object it belongs to, not "unknown key", which would read as
 //! a field M1 has not reached.
 //!
-//! # `max_context_size` and `reference_docs` are refused as deferred
+//! # `reference_docs` is read, and it names evidence rather than a file
 //!
-//! Both are legal schema keys and neither is read yet. `max_context_size`'s
-//! number is undecided and its owner is verification rather than the Judge;
-//! `reference_docs` needs the Judge brief to carry a yardstick, which it does
-//! not. A key nothing reads is a promise the file makes and the system does not
-//! keep — `crate::workflow`'s reason, applied here.
+//! Each entry is `<step_id>.evidence`, parsed through `EvidenceRef` — the same
+//! type and the same spelling `baseline_ref` uses, so the yardstick and the
+//! gaming baseline cannot drift into two forms of one thing. Anything else is
+//! refused rather than resolved: a definition pointing the Judge at a path on
+//! disk would be naming something nothing recorded.
+//!
+//! **Which step it names is not checked here.** Whether it is strictly earlier
+//! is a question about the Job's position in the workflow, and `fleet` answers
+//! it where the position is known — the rule `crate::judge`'s `baseline_ref`
+//! already follows.
+//!
+//! # `max_context_size` is refused as deferred
+//!
+//! It is a legal schema key and it is not read. The number is undecided and its
+//! owner is verification rather than the Judge — `docs/concepts/judge.md` says
+//! the cap is deliberately ownerless because it bounds all of verification, not
+//! the Judge Check alone. A key nothing reads is a promise the file makes and
+//! the system does not keep — `crate::workflow`'s reason, applied here.
 
-use core_model::{ContextSource, DeclarePlanAt, EvidenceScope, RepoPath};
+use core_model::{ContextSource, DeclarePlanAt, EvidenceRef, EvidenceScope, RepoPath};
 use serde_yaml_ng::Value;
 
 use crate::error::{Fault, Refusal};
 use crate::yaml::{self, Table};
 
 /// The keys read inside `evidence_scope`.
-const SCOPE_KEYS: &[&str] = &["context_source", "exclude_paths", "scope_diff_check"];
+const SCOPE_KEYS: &[&str] = &[
+    "context_source",
+    "exclude_paths",
+    "reference_docs",
+    "scope_diff_check",
+];
 
 const SOURCE_CARRIED: &[(&str, ContextSource)] = &[
     ("drone_declared", ContextSource::DroneDeclared),
@@ -88,17 +106,18 @@ fn read(
             Fault::BelongsToTheResolvedObject,
         ));
     }
-    for deferred in ["max_context_size", "reference_docs"] {
-        if table.present(deferred) {
-            table.ignore(deferred);
-            out.push(Refusal::new(
-                table.at(deferred),
-                Fault::OutsideM1 {
-                    value: deferred.to_string(),
-                    carried: SCOPE_KEYS,
-                },
-            ));
-        }
+    // **The number is undecided and the owner is verification, not the Judge.**
+    // Carried as a refusal rather than as a default, because a cap invented
+    // here would be a threshold enforced by nothing and findable by nobody.
+    if table.present("max_context_size") {
+        table.ignore("max_context_size");
+        out.push(Refusal::new(
+            table.at("max_context_size"),
+            Fault::OutsideM1 {
+                value: "max_context_size".to_string(),
+                carried: SCOPE_KEYS,
+            },
+        ));
     }
 
     let source_key = table.at("context_source");
@@ -123,6 +142,16 @@ fn read(
                 .collect::<Vec<RepoPath>>()
         })
         .unwrap_or_default();
+    let reference_docs = table
+        .optional("reference_docs")
+        .and_then(|value| yaml::list(&table.at("reference_docs"), value, out))
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|(at, item)| reference(at, item, out))
+                .collect::<Vec<EvidenceRef>>()
+        })
+        .unwrap_or_default();
     let scope_diff_check = table
         .optional("scope_diff_check")
         .and_then(|value| yaml::flag(&table.at("scope_diff_check"), value, out))
@@ -132,7 +161,29 @@ fn read(
     Some(EvidenceScope::declared(
         context_source?,
         exclude_paths,
+        reference_docs,
         scope_diff_check,
         declare_plan_at,
     ))
+}
+
+/// One `reference_docs` entry: `<step_id>.evidence`, and nothing else.
+///
+/// A bare step id is refused too. Naming a step is not naming its evidence, and
+/// `EvidenceRef` has no constructor through which the two could blur.
+fn reference(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<EvidenceRef> {
+    let named = yaml::text(at, value, out)?;
+    match EvidenceRef::parse(&named) {
+        Some(reference) => Some(reference),
+        None => {
+            out.push(Refusal::new(
+                at,
+                Fault::NotInTheSchema {
+                    value: named,
+                    legal: &["<step_id>.evidence"],
+                },
+            ));
+            None
+        }
+    }
 }
