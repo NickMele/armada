@@ -2,37 +2,26 @@
 //!
 //! # The distinction that keeps rule 2 intact is source, not shape
 //!
-//! Constitutional rule 2 says the Judge never reads the Drone's account of its
-//! own work. A transcript is that account: why it struggled, what it tried,
-//! whether it thinks it did well. **A facts note is not.** It is a deliverable
-//! submitted as evidence and judged as one — the Judge asks *is this a sound
-//! root-cause analysis*, never *did the Drone work hard*.
-//! `docs/concepts/workflow.md` draws that line and calls it the thing that
-//! keeps `facts_note` from reading as a loophole.
-//!
-//! Folding the first into the second is what produced a Judge that could not
-//! see: a step whose product is written has no diff, so the Judge was handed an
-//! empty one and refused every time.
+//! Rule 2 says the Judge never reads the Drone's account of its own work: why
+//! it struggled, what it tried, whether it thinks it did well. **A facts note
+//! is not that.** It is a deliverable submitted as evidence and judged as one,
+//! which `docs/concepts/workflow.md` calls the thing that keeps `facts_note`
+//! from reading as a loophole. Folding the first into the second is what
+//! produced a Judge with no diff, an empty patch and a refusal every time.
 //!
 //! # The source is a type, so a call site cannot blur it
 //!
-//! [`Written::of`] answers `None` on every evidence type whose work product is
-//! the change itself. There is no way to reach a `diff` step's submission from
-//! here and no constructor taking prose — so "the note is the deliverable" is
-//! true exactly on the steps whose definition says so, rather than wherever a
-//! caller decided it was.
-//!
-//! [`Product::of`] takes an [`Accepted`], which is a submission already matched
-//! against the step's declared type. So the type the product is read as is the
-//! type the *definition* named, not the one the Drone sent.
+//! [`Written::of`] answers `None` on every evidence type whose product is the
+//! change itself, so there is no route from a coding step's submission into a
+//! brief. It takes an [`Accepted`], so the type it reads the product as is the
+//! one the *definition* declared and never the one the Drone sent.
 //!
 //! # There is no empty product
 //!
-//! [`Product`] cannot be built holding neither a document nor a diff.
-//! [`Product::of`] answers [`NothingToJudge`] instead, and `fleet` turns that
-//! into a call that could not be made — which is neither a refusal nor a pass.
-//! A step that would have drawn a guaranteed refusal now draws an honest
-//! "could not decide", and a person sees it.
+//! [`Product::of`] answers [`NothingToJudge`] rather than an empty product, and
+//! `fleet` turns that into a call that could not be made. A step that would
+//! have drawn a guaranteed refusal draws an honest "could not decide" instead,
+//! which a person sees.
 
 use adapter_traits::Patch;
 use config::{EvidenceType, ResolvedStep};
