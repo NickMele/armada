@@ -70,6 +70,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::detail::JudgeInFlight;
 use crate::enums::{Actor, JobStatus, StepState};
 use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
 use crate::job::{JobList, JobSummary};
@@ -149,6 +150,8 @@ pub enum Event {
     DroneExited(DroneExited),
     #[serde(rename = "job.files_changed")]
     JobFilesChanged(JobFilesChanged),
+    #[serde(rename = "job.judging")]
+    JobJudging(JobJudging),
 }
 
 /// A Job exists that did not before, whole enough to draw.
@@ -387,6 +390,49 @@ pub struct JobFilesChanged {
     /// Always Fleet. Carried for the reason [`DroneSpawned`] carries one — a
     /// field absent on one kind and present on the rest is a shape a client has
     /// to special-case.
+    pub actor: Actor,
+    pub at: Instant,
+}
+
+/// A Judge call went out on a step, or the one that was out came back.
+///
+/// **Two messages per call and never a third.** The one that goes out carries
+/// [`judging`](JobJudging::judging) and the instant it went out; the one that
+/// comes back carries nothing. A surface ages the wait from `since` rather than
+/// being told the time, so a call that legitimately takes the whole two-minute
+/// budget costs this channel two messages and not a hundred and twenty.
+///
+/// **It names no [`JobSummary`].** Nothing on the Board's row changes when a
+/// call goes out — the Job is `running` before and after — and this is read by
+/// a detail view somebody has open on one Job, exactly as
+/// [`JobFilesChanged`] is.
+///
+/// # What it costs the channel, stated
+///
+/// The bound is `api::stream::BACKLOG` and it is shared by every kind. This one
+/// produces at the rate the *step's own declaration* implies: two messages per
+/// call, criteria × panel size calls, plus the looks Fleet adds. A step
+/// declaring nothing produces none at all. Unlike the footprint it does not ask
+/// whether anybody is watching, because there is nothing to decline — the value
+/// is already in hand when the call goes out, and a publish nobody is
+/// subscribed to is a drop that costs nothing.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobJudging {
+    pub job_id: JobId,
+    /// Which step is being asked about. The Job may be `running` under any of
+    /// its steps, and a Job's gate asks about one at a time.
+    pub step_id: StepId,
+    /// The call that went out. **Absent because it came back** — however it
+    /// came back, with a verdict or with a failure, and the answer itself
+    /// arrives as `judged`/`flagged` on the step rather than here.
+    ///
+    /// This is the field that makes the absence legible: a step nobody is
+    /// asking about and a step whose call has just returned are the same, and
+    /// they are both this message with nothing in it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub judging: Option<JudgeInFlight>,
+    /// Always Fleet. A Judge call authenticates as Fleet and no Drone can cause
+    /// one. Carried for the reason [`DroneSpawned`] carries one.
     pub actor: Actor,
     pub at: Instant,
 }
