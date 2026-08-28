@@ -23,8 +23,9 @@
 // that made the surface reachable. Re-reading a megabyte on every event would
 // spend the bytes the split exists to save.
 
-import type { Diff, Evidence, Outcome } from "../shared/bridge";
-import type { JobDiff, JobEvidence } from "../shared/work";
+import type { Diff, Evidence } from "../shared/bridge";
+import type { JobDiff, JobEvidence, Submitted, Work } from "../shared/work";
+import { JobReader } from "./reader";
 import { ask, type Answer } from "./request";
 
 /** What each act is called on the route table. `crates/api/src/routes.rs`. */
@@ -38,57 +39,6 @@ export type Decision = "approve_review" | "request_changes" | "reject";
  * that surface pay for bytes it does not draw.
  */
 export class ReviewMaterial {
-  /** The Job whose claims are wanted. `null` is no read. */
-  private claiming: string | null = null;
-  /** The Job whose patch is wanted. `null` is no read. */
-  private showing: string | null = null;
-  private readonly publish: (change: { evidence?: Evidence; diff?: Diff }) => void;
-
-  constructor(publish: (change: { evidence?: Evidence; diff?: Diff }) => void) {
-    this.publish = publish;
-  }
-
-  /** Both reads end with the window. Neither is written onto the Job. */
-  close(): void {
-    this.claiming = null;
-    this.showing = null;
-  }
-
-  /** Read what one Job's Drones claimed, or `null` to stop. */
-  async evidence(port: number | null, jobId: string | null): Promise<void> {
-    this.claiming = jobId;
-    if (jobId === null) {
-      this.publish({ evidence: { state: "none" } });
-      return;
-    }
-    this.publish({ evidence: { state: "reading", jobId } });
-    if (port === null) {
-      this.publish({ evidence: failed(jobId) });
-      return;
-    }
-    await this.readClaims(port);
-  }
-
-  /** Read one Job's worktree against its branch, or `null` to stop. */
-  async diff(port: number | null, jobId: string | null): Promise<void> {
-    this.showing = jobId;
-    if (jobId === null) {
-      this.publish({ diff: { state: "none" } });
-      return;
-    }
-    this.publish({ diff: { state: "reading", jobId } });
-    if (port === null) {
-      this.publish({ diff: failed(jobId) });
-      return;
-    }
-    await this.readWork(port);
-  }
-
-  /** Both again, for whichever is open. The bar's Refresh reaches this. */
-  async reread(port: number): Promise<void> {
-    await Promise.all([this.readClaims(port), this.readWork(port)]);
-  }
-
   /**
    * `GET /jobs/:job_id/evidence`, published whole.
    *
@@ -97,20 +47,7 @@ export class ReviewMaterial {
    * that could not tell them apart would say a Drone reported nothing when what
    * is true is that nothing was read.
    */
-  private async readClaims(port: number): Promise<void> {
-    const jobId = this.claiming;
-    if (jobId === null) return;
-    const answer = await ask(port, "GET", `/jobs/${encodeURIComponent(jobId)}/evidence`);
-    // The open Job changed mid-read: nobody has this answer's Job open.
-    if (this.claiming !== jobId) return;
-    if (answer.ok !== true) {
-      this.publish({ evidence: { state: "failed", jobId, outcome: answer.outcome } });
-      return;
-    }
-    const read = answer.body as JobEvidence;
-    this.publish({ evidence: { state: "read", jobId, steps: read.steps } });
-  }
-
+  private readonly claims: JobReader<{ steps: Submitted[] }>;
   /**
    * `GET /jobs/:job_id/diff`, published whole.
    *
@@ -119,17 +56,40 @@ export class ReviewMaterial {
    * nothing, which is what fails a `diff_nonempty` check. Filling in an empty
    * reading here would erase the difference before any surface saw it.
    */
-  private async readWork(port: number): Promise<void> {
-    const jobId = this.showing;
-    if (jobId === null) return;
-    const answer = await ask(port, "GET", `/jobs/${encodeURIComponent(jobId)}/diff`);
-    if (this.showing !== jobId) return;
-    if (answer.ok !== true) {
-      this.publish({ diff: { state: "failed", jobId, outcome: answer.outcome } });
-      return;
-    }
-    const read = answer.body as JobDiff;
-    this.publish({ diff: { state: "read", jobId, work: read.work } });
+  private readonly patch: JobReader<{ work?: Work }>;
+
+  constructor(publish: (change: { evidence?: Evidence; diff?: Diff }) => void) {
+    this.claims = new JobReader<{ steps: Submitted[] }>({
+      route: (jobId) => `/jobs/${encodeURIComponent(jobId)}/evidence`,
+      keeps: (body) => ({ steps: (body as JobEvidence).steps }),
+      publish: (evidence) => publish({ evidence }),
+    });
+    this.patch = new JobReader<{ work?: Work }>({
+      route: (jobId) => `/jobs/${encodeURIComponent(jobId)}/diff`,
+      keeps: (body) => ({ work: (body as JobDiff).work }),
+      publish: (diff) => publish({ diff }),
+    });
+  }
+
+  /** Both reads end with the window. Neither is written onto the Job. */
+  close(): void {
+    this.claims.close();
+    this.patch.close();
+  }
+
+  /** Read what one Job's Drones claimed, or `null` to stop. */
+  async evidence(port: number | null, jobId: string | null): Promise<void> {
+    await this.claims.want(port, jobId);
+  }
+
+  /** Read one Job's worktree against its branch, or `null` to stop. */
+  async diff(port: number | null, jobId: string | null): Promise<void> {
+    await this.patch.want(port, jobId);
+  }
+
+  /** Both again, for whichever is open. The bar's Refresh reaches this. */
+  async reread(port: number): Promise<void> {
+    await Promise.all([this.claims.again(port), this.patch.again(port)]);
   }
 }
 
@@ -151,9 +111,4 @@ export function decide(
   return note === undefined
     ? ask(port, "POST", path)
     : ask(port, "POST", path, { note });
-}
-
-/** Not connected, in the shape both reads publish it. */
-function failed(jobId: string): { state: "failed"; jobId: string; outcome: Outcome } {
-  return { state: "failed", jobId, outcome: { ok: false, why: "not_connected" } };
 }
