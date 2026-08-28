@@ -120,6 +120,12 @@ pub enum Fault {
     /// The two are one statement made twice, and a file where they disagree has
     /// no reading that is not a guess about which the author meant.
     GateAndJudgeDisagree { gate: &'static str },
+    /// **A step asks the Judge and declares nothing for it to look at.** A step
+    /// with no `evidence_type` produces no work product, so every criterion on
+    /// it is a call made against nothing and a refusal that could not have gone
+    /// otherwise. Four such checks shipped in one commit and nobody noticed
+    /// until a Job escalated at its first step — see #153.
+    JudgedWithNothingToShow,
 }
 
 impl fmt::Display for Fault {
@@ -164,6 +170,11 @@ impl fmt::Display for Fault {
                 f,
                 "says when the plan is declared and the step declares no \
                  `evidence_scope` for it to be measured against"
+            ),
+            Fault::JudgedWithNothingToShow => write!(
+                f,
+                "asks the Judge a question and declares no `evidence_type`, so \
+                 the step produces nothing the Judge could be shown"
             ),
             Fault::GateAndJudgeDisagree { gate: "auto" } => write!(
                 f,

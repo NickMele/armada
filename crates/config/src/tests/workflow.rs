@@ -66,6 +66,9 @@ fn judged(gate: &str, panel_size: u32, enabled: bool) -> String {
     [
         "  - id: review".to_string(),
         "    label: Review".to_string(),
+        // A judged step declares what it produces, because the Judge is shown
+        // the work product and a step declaring none produces nothing.
+        "    evidence_type: diff".to_string(),
         format!("    advance_gate: {gate}"),
         "    judge_checks:".to_string(),
         format!("      - enabled: {enabled}"),
@@ -253,6 +256,35 @@ fn a_judge_gate_with_no_criterion_is_refused_and_so_is_a_criterion_with_no_judge
         fault_at(&no_gate, "steps[3].advance_gate"),
         &Fault::GateAndJudgeDisagree { gate: "auto" }
     );
+}
+
+/// **The blind judge check, refused where it is written.** A step with no
+/// `evidence_type` produces nothing, so a criterion on it is a call made
+/// against an empty page and a refusal that could not have gone otherwise.
+/// Four of these shipped in one commit and the first Job to reach one
+/// escalated at step one — #153.
+#[test]
+fn a_step_that_asks_the_judge_and_produces_nothing_is_refused() {
+    let blind = refusals(bug_with(
+        "  - id: review\n    label: Review\n    advance_gate: auto_if_judge_passes\n    \
+         judge_checks:\n      - criteria:\n          - criterion_id: c1\n            \
+         question: Is this right?\n",
+    ));
+    assert_eq!(
+        fault_at(&blind, "steps[3].judge_checks"),
+        &Fault::JudgedWithNothingToShow
+    );
+}
+
+/// The same rule does not reach a step that asks nothing. Bug's `merge`
+/// declares no evidence type and no Judge, and it is the common shape for a
+/// hand-off step rather than an edge case.
+#[test]
+fn a_step_that_produces_nothing_and_asks_nothing_still_loads() {
+    let def = bug_with("  - id: merge\n    label: Merge\n    advance_gate: auto\n")
+        .expect("a step that produces nothing a Judge reads");
+    assert!(def.steps()[3].evidence_type().is_none());
+    assert!(def.steps()[3].judge_checks().is_empty());
 }
 
 #[test]

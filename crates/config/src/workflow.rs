@@ -418,6 +418,25 @@ fn step(
     // separates this from `auto` with a Judge, where the answer has nowhere to
     // go at all.
     let judged = judge_checks.iter().any(JudgeCheck::fires);
+
+    // **A blind judge check is refused where it is written, not discovered on a
+    // Job.** The Judge is shown what the step produced, and what a step produces
+    // is `evidence_type`. A step declaring none produces nothing, so a criterion
+    // on it is a call made against an empty page — which is not a refusal the
+    // Drone can retry against and not a pass either.
+    //
+    // This is the narrowest form of the rule that is true at parse time. Whether
+    // a `diff` step will actually have a diff is a runtime fact, answered by
+    // `verification::Product::of` and carried as a call that could not be made.
+    // Whether a step has anything at all is knowable from the file, and four
+    // checks that did not landed in one commit.
+    if judged && evidence_type.is_none() {
+        out.push(Refusal::new(
+            format!("{at}.judge_checks"),
+            Fault::JudgedWithNothingToShow,
+        ));
+    }
+
     let disagrees = matches!(
         (advance_gate, judged),
         (Some(AdvanceGate::AutoIfJudgePasses), false) | (Some(AdvanceGate::Auto), true)
@@ -431,7 +450,7 @@ fn step(
         ));
     }
     table.close(STEP_KEYS, out);
-    if disagrees {
+    if disagrees || (judged && evidence_type.is_none()) {
         return None;
     }
 
