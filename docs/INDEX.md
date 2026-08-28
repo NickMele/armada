@@ -158,3 +158,4 @@ can find them.
 | Writing anything a person reads on a surface | `armada-voice` |
 | Starting, checking or cleaning up a local Fleet | `armada-local` |
 | Reporting something Armada got wrong | `armada-bug` |
+| Working one issue end to end — worktree, plan, implement, test, commit, merge | `work-issue` |
