@@ -219,6 +219,8 @@ It does not travel `/events`. That stream is one drop-oldest channel of fixed ca
 `helm_access` is `No` for the reason `get_events_since` gives about tokens: a Drone's whole transcript streamed into a Helm session stays in that session for its remainder, and Helm has `get_drone` for the snapshot. The viewer this is for is a person.
 
 Not `get_drone`, which is a snapshot of one Drone over HTTP. This is one Job across every Drone it has had, and it continues.
+
+**The row a Drone ends on is what carries a spend.** It was withheld because the Job's rail was said to state the cost and the turn count; the rail states neither, and no other operation here answers with either — so this is the only place on the wire a Drone's cost appears. A Job that retried has one such row per Drone, and what the Job cost is the sum of them.
 """
 
 

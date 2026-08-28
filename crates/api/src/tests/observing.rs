@@ -125,6 +125,54 @@ async fn one_connection_answers_with_the_history_and_then_the_live_rows() {
     assert_eq!(closed.because, Silence::DroneEnded);
 }
 
+/// What a Drone spent reaches the person watching it. **The only place on the
+/// wire either number appears** — it was withheld because the Job's rail was
+/// said to state both, and no rail states either.
+#[tokio::test]
+async fn the_last_row_carries_what_the_run_cost_and_how_many_turns_it_took() {
+    let (daemon, app) = wired();
+    let job = a_job(&app).await;
+    let feed = daemon.dispatching(&job);
+
+    let mut socket = connected(app, &format!("/jobs/{}/observe", job.as_str()), 8192).await;
+    let TurnMessage::Opened(_) = read(&mut socket).await else {
+        panic!("it opens");
+    };
+
+    // A quota move offered first, because a viewer must not be told about
+    // dispatch gating: if it crossed, it would be the message read below.
+    feed.offer(TranscriptRow {
+        ts: Instant::carried("2026-08-27T14:11:00.000Z"),
+        step: None,
+        saw: Saw::QuotaMoved {
+            window: "five_hour".to_string(),
+            status: "warning".to_string(),
+        },
+    });
+    feed.offer(TranscriptRow {
+        ts: Instant::carried("2026-08-27T14:12:00.000Z"),
+        step: None,
+        saw: Saw::Ended {
+            turns: 41,
+            cost_micros: 1_530_000,
+            refusals: 0,
+        },
+    });
+
+    let TurnMessage::Row(shown) = read(&mut socket).await else {
+        panic!("the row a Drone ends on is shown");
+    };
+    assert_eq!(
+        shown.row().saw,
+        Saw::Ended {
+            turns: 41,
+            cost_micros: 1_530_000,
+            refusals: 0,
+        },
+        "forty-one turns and a dollar fifty-three, whole"
+    );
+}
+
 /// A Job nothing ever wrote a transcript for. **Ordinary, not an error** — it
 /// was never dispatched, or its Drone went with the Fleet that spawned it.
 #[tokio::test]
