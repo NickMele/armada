@@ -164,10 +164,10 @@ If thrashing, force-interrupt with a "stop, report current state now" directive.
 ### Evidence gaming
 
 - **Symptom:** evidence is technically true but substantively worthless — weakened assertion, narrowed test scope, tautological test. Mechanical *and* naive Judge checks can both pass.
-- **Detection:** the Judge is explicitly prompted to check for gaming patterns via `judge_check.gaming_check` — a baseline comparison against an earlier step's evidence, named by `baseline_ref`.
+- **Detection:** `judge_check.gaming_check` compares the current step's evidence against an earlier step's, named by `baseline_ref`. Not every `flag_if` pattern reaches the Judge to do it: a pattern the patch text itself settles — a test file removed whole, a skip marker added to a test that used to run, a change to the configuration a Check's command resolves through — is read straight off the diff, and costs no call, because a model call spent on a question `git diff` already answers is money for nothing. The rest need the change understood — an assertion that now asserts less, tests still running but covering less than they did, a test that would pass whatever the code under it did — so each of those is one narrow Judge question.
 - **Response:** routes as its own `evidence_suspect` trigger, not gate-failure — resubmission under the same instructions likely reproduces the same gaming.
 
-`flag_if` names the patterns: scope narrowed, assertions weakened, tests skipped, tests deleted, and **a change to the configuration a Check's command resolves through** — `package.json` `scripts.test`, a Makefile target.
+`flag_if` names the patterns: scope narrowed, assertions weakened, a tautological test, tests skipped, tests deleted, and **a change to the configuration a Check's command resolves through** — `package.json` `scripts.test`, a Makefile target.
 
 **The config-edit pattern is there because the others are all phrased in terms of *test code*.** Editing the script a frozen `run: "pnpm test"` resolves to honours the frozen string exactly while narrowing the gate, and fell outside all of them. Freezing harder is not available: the no-parsing rule refuses to model what a tool command expands to.
 
