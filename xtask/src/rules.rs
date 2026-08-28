@@ -162,6 +162,23 @@ pub fn every_failure_mode_has_a_fixture(root: &Path) -> Report {
 
 // -------------------------------------------------------------- rule three
 
+/// The one file this rule does not read, and why.
+///
+/// **A migration restates the whole trigger it changes**, so `schema.rs` grows
+/// by roughly a trigger every time a row shape moves — four migrations have.
+/// That is structural rather than reasoning that stopped fitting, which is what
+/// the rule is for, and the obvious split is worse: one module per migration
+/// breaks the `V1..V16` sequence that has to stay readable in order, and
+/// separating triggers from tables puts a row's shape in a different file from
+/// the row.
+///
+/// Exempted by the owner Aug 28 2026, on the same footing as the `serde_json`
+/// allowance for `store` and `ipc` below — a named file with a stated reason,
+/// not an allowlist. **It buys no ceiling**: nothing now tells anyone this file
+/// has grown too far, so the next person to reorganise it will decide to
+/// without the gate asking.
+const LENGTH_EXEMPT: &[&str] = &["crates/store/src/schema.rs"];
+
 /// No source file over 900 lines. Warn at 500.
 ///
 /// A long file is not wrong on its own; it is where the reasoning stopped
@@ -170,6 +187,9 @@ pub fn no_file_too_long(root: &Path) -> Report {
     let mut report = Report::new("no source file over 900 lines, warn at 500");
     for source_root in SOURCE_ROOTS {
         for path in files_with_ext(root, &root.join(source_root), SOURCE_EXTS) {
+            if LENGTH_EXEMPT.iter().any(|exempt| path == *exempt) {
+                continue;
+            }
             let Ok(text) = fs::read_to_string(root.join(&path)) else {
                 continue;
             };
