@@ -28,7 +28,7 @@ use core_model::{
 use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
-use crate::briefing::{self, Declaring};
+use crate::briefing::{Declaring, Opening};
 use crate::daemon::Fleet;
 use crate::transcript;
 
@@ -119,15 +119,15 @@ where
             // machinery pointed one step further along. Doing nothing here
             // would leave a `running` Job with no process on it, which the
             // reaper escalates as `interrupted` a moment later.
+            //
+            // **This arm had `restart_step`'s hole too**, and nothing had named
+            // it: `carried_on` above rebases and this did not, so the same
+            // override advanced onto a current branch or a stale one depending
+            // on whether a process happened to still be alive. It is closed the
+            // same way — the catch-up is inside `put_a_drone_on` and this arm
+            // reaches it rather than calling it.
             false => {
-                let brief =
-                    briefing::first_turn(&job, job.workflow(), next.id()).map_err(|cause| {
-                        Adrift::NotConfigurable {
-                            job: job_id.clone(),
-                            cause,
-                        }
-                    })?;
-                self.put_a_drone_on(&job, next.id(), onwards, brief, &mut working)
+                self.put_a_drone_on(&job, next.id(), onwards, Opening::Fresh, &mut working)
                     .await?;
             }
         }

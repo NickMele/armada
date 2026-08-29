@@ -1,10 +1,26 @@
 //! Putting a Drone on a worktree: the config, the transcript, the process, the
 //! slot.
 //!
-//! Split from [`dispatch`](mod@crate::dispatch) because two things do it. A
-//! dispatch makes the worktree first and a restart finds one already there,
-//! and everything after that point is identical — so it is written once, here,
-//! and the brief is the parameter that differs.
+//! Split from [`dispatch`](mod@crate::dispatch) because three things do it. A
+//! dispatch makes the worktree first, a restart finds one already there, and an
+//! override onto a Drone that has gone finds one too — and everything after
+//! that point is identical, so it is written once, here, and
+//! [`Opening`](crate::briefing::Opening) is the parameter that differs.
+//!
+//! # Every spawn catches the branch up, and this is the one place it happens
+//!
+//! **Rebasing is Fleet's, on every path.** `crate::delivery` carries the rule
+//! and `docs/concepts/fleet.md` states it. The three acts that advance a step
+//! under a live Drone call `caught_up` and tell it in the turn; the three that
+//! *start* a Drone have no session to inject a turn into, so the rebase runs
+//! here, before the process exists, and what it came to rides in the opening
+//! brief. That is why the brief is assembled inside this function rather than
+//! handed to it: it is not known until the rebase has answered.
+//!
+//! **A conflict is the Drone's opening work and not a refusal.** The alternative
+//! — refusing the restart until somebody resolves it — puts a person at a
+//! merge conflict in a Drone's worktree, which is the one job the Drone is
+//! already sitting in the right place to do.
 //!
 //! # Nothing is inherited from the Drone that went before
 //!
@@ -22,6 +38,7 @@ use adapter_traits::{
 use core_model::{DroneId, Job, JobId, StepId};
 
 use crate::adrift::Adrift;
+use crate::briefing::Opening;
 use crate::daemon::Fleet;
 use crate::drone::{self, environment, HostPaths};
 use crate::transcript::{Spine, Taps};
@@ -46,15 +63,37 @@ where
     ///
     /// Every failure leaves the Job `escalated` and returns the cause. A person
     /// decides; Fleet does not retry.
+    ///
+    /// **The branch is caught up first, and the brief is assembled after.**
+    /// See this module's header for why the order is that way round and why the
+    /// prompt is not a parameter. A catch-up that will not run joins the other
+    /// three pre-flight failures: the Job is interrupted and the cause is
+    /// returned, because a Drone put on a tree Fleet could not reconcile starts
+    /// from a state nobody has read. A rebase that ran and *conflicted* is not
+    /// that case — it is an answer, and it goes into the brief.
     pub(crate) async fn put_a_drone_on(
         &self,
         job: &Job,
         step: &StepId,
         worktree: Worktree,
-        brief: Prompt,
+        opening: Opening,
         working: &mut Option<Working>,
     ) -> Result<(), Adrift> {
         let job_id = job.id().clone();
+        let moved = match self.caught_up_onto(&job_id, &worktree).await {
+            Ok(moved) => moved,
+            Err(cause) => {
+                self.interrupt(job).await?;
+                return Err(cause);
+            }
+        };
+        let brief = match opening.turn(job, job.workflow(), step, moved.as_ref()) {
+            Ok(brief) => brief,
+            Err(cause) => {
+                self.interrupt(job).await?;
+                return Err(Adrift::NotConfigurable { job: job_id, cause });
+            }
+        };
         let config = match self.spawn_config(job, &worktree, brief) {
             Ok(config) => config,
             Err(cause) => {
@@ -102,10 +141,19 @@ where
             recording,
             self.now(),
         ));
-        // The first step's baseline, read once the slot exists. A Job's first
-        // step ordinarily starts on a worktree holding nothing, and reading it
+        // This step's baseline, read once the slot exists. A Job's first step
+        // ordinarily starts on a worktree holding nothing, and reading it
         // rather than assuming so is what makes a redispatch onto a worktree
         // somebody already worked in measure the step and not the branch.
+        //
+        // **After the catch-up above, which is #131's ordering arriving on the
+        // spawn path.** A rebase writes content — a clean one replays the
+        // branch onto a base that moved, a conflicted one leaves markers — and
+        // a baseline read before it would credit this step with git's output.
+        // On a restart that matters twice over: the step is being re-run, so
+        // `diff_nonempty` is asking whether *this* attempt wrote something, and
+        // a Drone that resolved nothing would pass it on the markers it was
+        // handed.
         self.marked(working);
         Ok(())
     }

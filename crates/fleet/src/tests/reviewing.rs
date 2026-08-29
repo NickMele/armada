@@ -142,10 +142,11 @@ async fn a_boundary_a_person_approved_catches_the_branch_up() {
         FakeVcs::new().delivering(three_commits_behind()),
     );
     let job_id = at_the_gate(&fleet, &home).await;
-    assert!(
-        fleet.vcs().delivered().is_empty(),
-        "nothing moves under a reviewer while they are still reading"
-    );
+    // The spawn's catch-up, and only that one: every spawn rebases now (#180)
+    // and this fake is scripted behind on every call. What is asserted below is
+    // the delta across the approval — nothing moves under a reviewer while they
+    // are still reading.
+    let before = fleet.vcs().delivered().len();
 
     let job = fleet
         .approve_review(&job_id)
@@ -154,7 +155,7 @@ async fn a_boundary_a_person_approved_catches_the_branch_up() {
 
     assert_eq!(job.status(), JobStatus::Running);
     assert_eq!(
-        fleet.vcs().delivered(),
+        fleet.vcs().delivered().split_off(before),
         vec![Delivered::BroughtUpToDate {
             branch: format!("armada/{}", job_id.as_str()),
             base: String::from("main"),

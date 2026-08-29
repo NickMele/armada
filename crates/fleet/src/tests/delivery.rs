@@ -91,12 +91,23 @@ async fn a_behind_branch_is_brought_up_to_date_at_a_step_boundary() {
         delivered.pushed, None,
         "a boundary that is not the last publishes nothing"
     );
+    // **Two, and the first one is the spawn's.** A fake scripted `Behind` is
+    // behind on every call, including the one `put_a_drone_on` makes before the
+    // first Drone exists — every spawn catches its branch up now, which is
+    // #180. Against a real repository a worktree cut a moment ago is not
+    // behind anything and the first entry does not appear.
     assert_eq!(
         fleet.vcs().delivered(),
-        vec![Delivered::BroughtUpToDate {
-            branch: format!("armada/{}", job.id().as_str()),
-            base: String::from("main")
-        }]
+        vec![
+            Delivered::BroughtUpToDate {
+                branch: format!("armada/{}", job.id().as_str()),
+                base: String::from("main")
+            },
+            Delivered::BroughtUpToDate {
+                branch: format!("armada/{}", job.id().as_str()),
+                base: String::from("main")
+            }
+        ]
     );
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),
@@ -418,13 +429,18 @@ async fn the_declared_base_overrides_what_would_have_been_inferred() {
         delivered.base,
         Some(Base::Declared(String::from("release")))
     );
-    assert_eq!(
-        fleet.vcs().delivered(),
-        vec![Delivered::BroughtUpToDate {
-            branch: format!("armada/{}", job.id().as_str()),
-            base: String::from("release")
-        }],
-        "the rebase named the declared branch, not the inferred one"
+    assert!(
+        fleet
+            .vcs()
+            .delivered()
+            .iter()
+            .all(|did| did
+                == &Delivered::BroughtUpToDate {
+                    branch: format!("armada/{}", job.id().as_str()),
+                    base: String::from("release")
+                }),
+        "every rebase named the declared branch, not the inferred one: {:?}",
+        fleet.vcs().delivered()
     );
 }
 

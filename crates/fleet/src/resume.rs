@@ -17,6 +17,14 @@
 //! [`watch_redirect`](Fleet::watch_redirect) seeing the Drone turn: a Job
 //! moved on the sending would read as recovered whether or not anything woke.
 //!
+//! # Both acts leave the branch current, and neither one rebases
+//!
+//! A redirect is a turn into a live session mid-step and moves no boundary, so
+//! there is nothing to catch up to that the step boundary either side of it
+//! does not already do. A restart spawns, and every spawn catches the branch up
+//! inside `crate::spawning` — one funnel, reached rather than called. See
+//! `docs/concepts/fleet.md`, *Catching a branch up*.
+//!
 //! # Nothing here is bounded
 //!
 //! A person who can redirect can redirect for ever. Whether that is capped is
@@ -32,7 +40,7 @@ use core_model::{
 };
 
 use crate::adrift::Adrift;
-use crate::briefing::{self, Stopped};
+use crate::briefing::{Opening, Stopped};
 use crate::daemon::Fleet;
 use crate::session::LiveSession;
 use crate::transcript;
@@ -243,6 +251,22 @@ where
     /// steps that advanced did so on real verdicts and their evidence is
     /// recorded; re-running them is a redispatch, and an expensive one.
     ///
+    /// **The branch is caught up, and that is not in tension with the line
+    /// above.** A rebase updates the worktree that is there — the same path,
+    /// the same branch, the same work, with the base moved underneath it.
+    /// Nothing is created and nothing is discarded, so `#62`'s surviving
+    /// worktree survives and the base it is measured against is current. The
+    /// catch-up runs inside [`put_a_drone_on`](Fleet::put_a_drone_on), which is
+    /// the one funnel every spawn goes through; this method does not call it,
+    /// which is `#180`'s point.
+    ///
+    /// **A restart is the case a rebase most often conflicts on.** It re-runs
+    /// the *same* step on a worktree already holding an attempt at it, so a
+    /// moved base is being reconciled against edits already made. Where that
+    /// conflicts the markers ride the opening brief and are the new Drone's
+    /// first piece of work — there is no session to inject a turn into at the
+    /// moment the rebase runs, so the spawn carries it.
+    ///
     /// **Nothing is inherited from the Drone that went before.** The toolset,
     /// the model and the environment are resolved again from what the Manifest
     /// and the Job hold now — see `crate::spawning`.
@@ -259,14 +283,7 @@ where
         let stopped = self.what_stopped(&job, &step).await?;
 
         let job = self.resumed(&job, &step, Actor::Human).await?;
-        let brief =
-            briefing::resuming_turn(&job, job.workflow(), &step, &stopped).map_err(|cause| {
-                Adrift::NotConfigurable {
-                    job: job_id.clone(),
-                    cause,
-                }
-            })?;
-        self.put_a_drone_on(&job, &step, worktree, brief, &mut working)
+        self.put_a_drone_on(&job, &step, worktree, Opening::Resuming(stopped), &mut working)
             .await?;
         self.load(job_id).await
     }
