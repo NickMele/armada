@@ -286,6 +286,159 @@ fn an_unreadable_answer_is_neither_a_flag_nor_a_clearance() {
 }
 
 // ---------------------------------------------------------------------------
+// A flag quoting something the call was never shown
+// ---------------------------------------------------------------------------
+
+/// A diff with one assertion loosened, indented as source is and marked as a
+/// diff marks it — which is what a citation of it has to survive.
+const A_LOOSENED_ASSERTION: &str = "\
+diff --git a/tests/window.test.ts b/tests/window.test.ts
+@@ -3,6 +3,6 @@ describe(\"rollover\", () => {
+-    expect(rollover.boundary).toBe(windowMs * 2);
++    expect(rollover.boundary).toBeGreaterThan(0);
+";
+
+fn about_the_loosened_assertion(evidence: &StepEvidence) -> GamingBrief {
+    about(
+        GamingPattern::AssertionWeakened,
+        A_LOOSENED_ASSERTION,
+        Some(Baseline::of("scope", evidence)),
+    )
+}
+
+/// **The case that must not break**, and the reason the standard is
+/// `quoted::invented` rather than a substring of the patch. A model quoting a
+/// diff carries the `+` and the indentation with it, and an exact match would
+/// discard a true flag over a leading space — which is worse than the gap this
+/// check closes.
+#[test]
+fn a_citation_carrying_the_diff_marker_and_its_indentation_is_a_citation() {
+    let evidence = baseline_evidence();
+    let brief = about_the_loosened_assertion(&evidence);
+    for cited in [
+        // The marker and the indentation, carried verbatim.
+        "the loop now asserts \"+    expect(rollover.boundary).toBeGreaterThan(0);\"",
+        // Both sides of the edit read off as one run, which is how a model
+        // quotes a hunk: no markers, and the source's line break gone.
+        "it replaces \"expect(rollover.boundary).toBe(windowMs * 2); \
+         expect(rollover.boundary).toBeGreaterThan(0);\"",
+    ] {
+        let flag = brief
+            .read(&format!("flag: yes\ncited: {cited}"))
+            .expect("a readable answer")
+            .expect("a flag");
+        assert!(!flag.cited.contains("unchecked"), "{}", flag.cited);
+    }
+}
+
+/// The gap this closes: a flag quoting a line no one wrote reaches the overrule
+/// dialog looking exactly like a true one, and the only way to catch it is to
+/// go and read the diff — which is the work the gate exists to spare.
+///
+/// **The flag survives.** A dropped flag is a missed game, and this check has
+/// no standing to decide the finding was wrong — only that the one part of it a
+/// machine can check did not check out.
+#[test]
+fn a_flag_quoting_what_the_call_was_never_shown_is_kept_and_marked() {
+    let evidence = baseline_evidence();
+    let brief = about_the_loosened_assertion(&evidence);
+    let flag = brief
+        .read(
+            "flag: yes\ncited: the suite drops \"the rollover window is pinned to a whole \
+             multiple of the sample rate\" and asserts nothing in its place",
+        )
+        .expect("a readable answer")
+        .expect("a flag");
+    assert_eq!(flag.pattern, GamingPattern::AssertionWeakened);
+    assert!(
+        flag.cited.contains("the suite drops"),
+        "what the model wrote is still there: {}",
+        flag.cited
+    );
+    assert!(
+        flag.cited.contains("unchecked")
+            && flag
+                .cited
+                .contains("pinned to a whole multiple of the sample rate"),
+        "and it says which quotation is nowhere: {}",
+        flag.cited
+    );
+}
+
+/// **The guard is only worth having if the answers arrive in the shape it
+/// reads.** It reads quoted spans, and this module's own `in_the_diff` writes
+/// its citations in backticks — so without this clause most flags would walk
+/// past a check that reads like coverage.
+#[test]
+fn the_format_asks_for_the_line_quoted_rather_than_described() {
+    let evidence = baseline_evidence();
+    let question = about_the_loosened_assertion(&evidence)
+        .question()
+        .to_string();
+    assert!(
+        question.contains("between double quotes, copied rather than described"),
+        "{question}"
+    );
+    assert!(
+        question.contains("its leading `+` or `-` and its indentation make no difference"),
+        "a model told to copy exactly would strip the marker: {question}"
+    );
+}
+
+/// **A finding with no line must not be pushed into inventing one**, which is
+/// the defect the guard exists to catch, arriving through the guard's own
+/// prompt. `no_findings_on_substantial_diff` is the pattern that always takes
+/// this route: what it flags is that a review reported nothing.
+#[test]
+fn a_finding_that_no_one_line_shows_is_told_to_write_no_quotation() {
+    let evidence = baseline_evidence();
+    let question = about_the_loosened_assertion(&evidence)
+        .question()
+        .to_string();
+    assert!(
+        question.contains("write `cited` with no quotation marks at all"),
+        "{question}"
+    );
+    assert!(
+        question.contains("That is a complete answer and not a lesser one"),
+        "an escape a model reads as second-best is one it will not take: {question}"
+    );
+}
+
+/// And the guard tolerates it, because an unquoted citation claims nothing
+/// about wording and there is nothing to check.
+#[test]
+fn an_unquoted_citation_is_a_whole_flag() {
+    let evidence = baseline_evidence();
+    let flag = about(
+        GamingPattern::NoFindingsOnSubstantialDiff,
+        A_LOOSENED_ASSERTION,
+        Some(Baseline::of("scope", &evidence)),
+    )
+    .read("flag: yes\ncited: REVIEW.md reports nothing against a hunk that loosens an assertion")
+    .expect("a readable answer")
+    .expect("a flag");
+    assert!(!flag.cited.contains("unchecked"), "{}", flag.cited);
+}
+
+/// A citation of the baseline is a citation. The material is everything the
+/// call was shown, which is `Brief`'s standard and not a second one — the
+/// yardstick was put in front of the call to be reasoned against.
+#[test]
+fn a_citation_of_the_baseline_is_in_the_material() {
+    let evidence = baseline_evidence();
+    let brief = about_the_loosened_assertion(&evidence);
+    let flag = brief
+        .read(
+            "flag: yes\ncited: \"the window boundary is fixed to multiples of windowMs\" \
+             is no longer asserted anywhere",
+        )
+        .expect("a readable answer")
+        .expect("a flag");
+    assert!(!flag.cited.contains("unchecked"), "{}", flag.cited);
+}
+
+// ---------------------------------------------------------------------------
 // The change the first production flag was raised against
 // ---------------------------------------------------------------------------
 
