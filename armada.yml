@@ -2,7 +2,7 @@
 #
 # This is the file `armada serve` loads when it is pointed at this repository,
 # and the file `armada check` and `armada run` read to resolve a name. It
-# is not a sample and not a fixture: the five Checks below are the commands this
+# is not a sample and not a fixture: the six Checks below are the commands this
 # workspace is actually built and tested with, and a Job dispatched here runs
 # them verbatim.
 #
@@ -41,6 +41,11 @@ base: main
 # Checks gate advancement. A step's `mechanical_checks` names one of these by
 # name; a name a step asks for and this file does not declare is refused before
 # anything is dispatched.
+#
+# **`format` is the sixth and it is not about a half.** It is here because PR
+# #199 merged nine unformatted files past every gate — the same shape as the
+# three below, one lint smaller. Its own entry says why there is no `clippy`
+# beside it.
 #
 # **This repository has two halves and every Check used to compile one of
 # them.** `build` and `test` say nothing at all about `apps/` or `packages/`,
@@ -122,6 +127,33 @@ checks:
     # types — worth having as that package's sole compiler, and worth knowing
     # is not a typecheck.
     run: pnpm -C packages/components build-storybook
+
+  # **Named `format` and not `fmt`, because `fmt` is a Command below and a name
+  # in both registries is refused.** The two are not the same thing wearing one
+  # name: the Command writes and is what a Drone is given, this reads and is
+  # what advances a step. A Drone that fails this runs `fmt` and submits again.
+  #
+  # PR #199 is why it exists. Nine unformatted files merged past both gates and
+  # both Judges, for #200's reason one lint over: `cargo fmt --check` was not a
+  # Check, so nothing in this repository ever ran it.
+  #
+  # **No `when`, deliberately.** It is about a second, so scoping it would save
+  # nothing and add a way to be wrong — `when` earns its place on `storybook`,
+  # which is eleven.
+  #
+  # There is no `clippy` beside it. `cargo clippy --workspace --all-targets`
+  # reports **19 warnings on `main` today across 8 lints**, so a bare run exits
+  # 0 and gates nothing, and `-D warnings` makes every step red from its first
+  # run. Eleven of the nineteen are mechanical; the other eight are
+  # `too_many_arguments`, `large_enum_variant` and `result_large_err`, which is
+  # clippy disagreeing with decisions this repository took on purpose —
+  # `rule_on` takes nine parameters because none of them is optional, and that
+  # is the type-system-first pattern rather than an oversight. Which of the
+  # eight Armada agrees with is a person's answer, and a Check cannot be written
+  # before it. `[clippy-as-a-check]` in `docs/OPEN.md` is that question, with
+  # the eight lints and what each one is actually asking.
+  format:
+    run: cargo fmt --all --check
 
 # Commands gate nothing. They are what a Drone is given to run, distinct from
 # the Checks that decide whether it advances — which is why they are a second

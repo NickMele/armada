@@ -63,14 +63,18 @@ fn this_repositorys_own_setup_loads_and_resolves() {
         vec![
             "bridge_build".to_string(),
             "build".to_string(),
+            "format".to_string(),
             "storybook".to_string(),
             "test".to_string(),
             "typecheck".to_string(),
         ],
-        "the five Checks this workspace is built and tested with — two for the \
+        "the six Checks this workspace is built and tested with — two for the \
          Rust half and three for the Bridge, which is #200: every Check used to \
          compile Rust, so a Job that changed only `apps/` was verified entirely \
-         on the code it had not touched"
+         on the code it had not touched. `format` is the sixth and is the same \
+         defect one lint over: PR #199 also merged nine unformatted files, \
+         because `cargo fmt --check` was not a Check. There is no `clippy` — \
+         `[clippy-as-a-check]` in `docs/OPEN.md` says why"
     );
     assert_eq!(bug(&setup).name(), "bug");
     let steps: Vec<&str> = bug(&setup)
@@ -114,6 +118,7 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
         vec![
             ("build", "cargo build --workspace --locked"),
             ("test", "cargo nextest run --workspace --exclude acceptance"),
+            ("format", "cargo fmt --all --check"),
             ("typecheck", "pnpm -C apps/desktop typecheck"),
             ("bridge_build", "pnpm -C apps/desktop build"),
             ("storybook", "pnpm -C packages/components build-storybook"),

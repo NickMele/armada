@@ -61,6 +61,11 @@
         },
         {
           "type": "manifest_check",
+          "check": "format",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
           "check": "typecheck",
           "expect_exit_code": 0
         },

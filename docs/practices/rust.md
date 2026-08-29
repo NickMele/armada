@@ -300,6 +300,25 @@ and `xtask`. `docs/` is prose and isn't gated by it.
 It's not per-crate and not a `#![deny]` you'll find repeated anywhere — it's
 already on for everything in this workspace.
 
+**`cargo fmt --all --check` is a Check** and `clippy` is not. PR #199 merged
+nine unformatted files past both gates and both Judges because nothing here ran
+`fmt --check`; `armada.yml` declares it as `format`, named around the `fmt`
+Command beside it since a name in both registries is refused.
+
+Clippy cannot be a Check yet. `cargo clippy --workspace --all-targets` reports
+**19 warnings on `main` across 8 lints**, so the two obvious commands are a
+tautological gate and a permanently-red one:
+
+| Lint | Sites | What it is asking |
+|---|---|---|
+| `write_with_newline` | 7 | nothing — mechanical |
+| `single_element_loop`, `manual_pattern_char_comparison`, `unnecessary_lazy_evaluations`, `type_complexity` | 4 | nothing — mechanical |
+| `too_many_arguments` | 4 | `rule_on` takes nine parameters because **none of them is optional**. That is section 2's pattern, not an oversight |
+| `large_enum_variant`, `result_large_err` | 4 | boxing a `Ruling` variant puts an allocation on the gate's path to satisfy a size heuristic |
+
+Eleven are a chore. The other eight are clippy disagreeing with decisions taken
+on purpose, and the question is `[clippy-as-a-check]` below.
+
 **No vendor literal outside `adapters`** (rule six) is checked case-insensitive
 against `anthropic`, `claude`, `openai`, `gpt-4`, `gemini`, `copilot`,
 `github`, `gitlab`, `bitbucket`, `docker` — the vendor list is `xtask`'s own,
@@ -387,3 +406,12 @@ isn't this document's job:
 - **[cargo-tree-gate]** The `cargo tree` check on `core-model` and
   `adapter-traits` is stated as gated in `.claude/agents/rust-engineer.md` but
   is still not one of the gate's rules. Run it by hand until someone adds it.
+
+- **[clippy-as-a-check]** Which of the eight clippy lints warning on `main`
+  does Armada agree with? Until that is answered `armada.yml` can declare no
+  `clippy` Check — a bare run exits 0 on 19 warnings and gates nothing, and
+  `-D warnings` makes every step red on its first run. The eight are in the
+  table above, with what each one is actually asking. What decides it: three of
+  them are clippy disagreeing with decisions this repository took on purpose,
+  and allowing those workspace-wide buys a green gate at the cost of never
+  hearing about a real instance again. That trade is the owner's.

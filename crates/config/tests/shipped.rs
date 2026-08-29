@@ -89,7 +89,14 @@ fn every_shipped_workflow_resolves_against_this_repositorys_manifest() {
 fn the_manifest_declares_a_check_for_each_half_of_the_repository() {
     let manifest_path = root().join("armada.yml");
     let manifest = config::Manifest::load(&manifest_path).expect("the shipped manifest");
-    for name in ["build", "test", "typecheck", "bridge_build", "storybook"] {
+    for name in [
+        "build",
+        "test",
+        "format",
+        "typecheck",
+        "bridge_build",
+        "storybook",
+    ] {
         assert!(
             manifest.check(name).is_some(),
             "`{name}` is not declared; {} has {:?}",
@@ -100,7 +107,13 @@ fn the_manifest_declares_a_check_for_each_half_of_the_repository() {
 }
 
 /// Every step that produces a diff and gates on anything gates on the Bridge
-/// too.
+/// and on formatting too.
+///
+/// **`format` is here for the same reason the three Bridge Checks are.** PR
+/// #199 merged nine unformatted files past both gates and both Judges, because
+/// `cargo fmt --check` was not a Check — one lint over from the renderer that
+/// did not compile. There is no `clippy` in this list: `armada.yml`'s `format`
+/// entry says why, and it is a person's answer rather than an omission.
 ///
 /// **The rule is stated as steps that already carry a Manifest Check**, not as
 /// steps whose evidence is a diff. `prototype`'s `build` produces a diff and
@@ -109,7 +122,7 @@ fn the_manifest_declares_a_check_for_each_half_of_the_repository() {
 /// decision rather than a guard on this one.
 #[test]
 fn a_step_that_compiles_the_rust_half_compiles_the_bridge_half() {
-    const BRIDGE: [&str; 3] = ["typecheck", "bridge_build", "storybook"];
+    const WANTED: [&str; 4] = ["format", "typecheck", "bridge_build", "storybook"];
 
     let mut guarded = 0;
     for (path, text) in shipped() {
@@ -126,11 +139,11 @@ fn a_step_that_compiles_the_rust_half_compiles_the_bridge_half() {
             if named.is_empty() {
                 continue;
             }
-            for wanted in BRIDGE {
+            for wanted in WANTED {
                 assert!(
                     named.contains(&wanted),
                     "{} step `{}` gates on {named:?} and not on `{wanted}`, so a diff \
-                     that breaks the Bridge advances past it",
+                     that breaks the Bridge, or that is not formatted, advances past it",
                     path.display(),
                     step.id().as_str()
                 );
