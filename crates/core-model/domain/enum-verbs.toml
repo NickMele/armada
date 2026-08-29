@@ -377,3 +377,11 @@ status_token = "--status-not-started"
 vocabulary = "Check outcome"
 in_code = "In code"
 notes = "The token is not a mistake and is the one somebody will later try to correct. A Check whose command is not installed measured nothing: it must not read green, because a missing command is a failure and never a vacuous pass, and it must not read as a failed Check either, because nothing ran to fail. --status-not-started is the only one of the three that says what actually happened."
+
+[verbs.check_outcome.skipped]
+verb = "not run"
+icon = "shield-off"
+status_token = "--status-not-started"
+vocabulary = "Check outcome"
+in_code = "In code"
+notes = "Its own glyph, and that is the whole point of the row. Reusing never_ran's shield-minus would draw a Check nobody asked to run identically to a Check whose command is missing, and one of those is a failure. The verb is \"not run\" rather than \"skipped\": skipped reads as something being got away with, and this is the gate declining to spend a Check on paths the step did not touch. The token is not-started for never_ran's reason — nothing measured, so neither green nor red is true."

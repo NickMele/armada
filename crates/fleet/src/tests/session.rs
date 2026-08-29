@@ -9,7 +9,7 @@
 
 use config::{ResolvedStep, ResolvedWorkflow};
 use testkit::Sketch;
-use verification::OutcomeTurn;
+use verification::{OutcomeTurn, Ran, Verified};
 
 use crate::briefing::Declaring;
 use crate::session::Turn;
@@ -41,6 +41,14 @@ fn step(of: &ResolvedWorkflow) -> &ResolvedStep {
     of.steps().first().expect("a workflow has a first step")
 }
 
+/// The mechanical tier having run everything the step declared, which for these
+/// fixtures is nothing at all. Built from a real `Ran` rather than from two
+/// numbers, because `Verified` has no constructor that takes them — the counts
+/// are read off the set a step actually produced.
+fn every_check_ran(of: &ResolvedWorkflow) -> Verified {
+    Verified::of(&Ran::of(step(of), &[]).expect("a step declaring no check"))
+}
+
 fn encoded(turn: &Turn) -> String {
     ipc::encode(turn).expect("a turn is plain data and always encodes")
 }
@@ -69,7 +77,11 @@ fn the_gate_s_outcome_and_the_first_turn_take_the_same_shape() {
     // carries what the gate decided, so there is no second encoding to keep
     // correct — and no second one to get wrong on a Job that has already run.
     let workflow = workflow();
-    let outcome = OutcomeTurn::advanced(step(&workflow), workflow.steps().get(1));
+    let outcome = OutcomeTurn::advanced(
+        step(&workflow),
+        workflow.steps().get(1),
+        every_check_ran(&workflow),
+    );
 
     let injected = encoded(&Turn::outcome(&outcome, None));
     assert!(injected.starts_with(r#"{"type":"user""#), "{injected}");
@@ -93,7 +105,7 @@ fn a_turn_carries_no_counter_and_no_check_name() {
     // than do the work. Whatever `OutcomeTurn` says, this is the shape of the
     // envelope around it and it adds nothing.
     let workflow = workflow();
-    let outcome = OutcomeTurn::advanced(step(&workflow), None);
+    let outcome = OutcomeTurn::advanced(step(&workflow), None, every_check_ran(&workflow));
     let injected = encoded(&Turn::outcome(&outcome, None));
 
     let added = injected.len() - outcome.text().len();
@@ -125,7 +137,7 @@ fn the_ask_the_next_step_makes_rides_on_the_same_turn_as_the_verdict() {
     }]);
     let next = step(&workflow);
     let asked = Declaring::at(next).expect("a scoped step asks");
-    let outcome = OutcomeTurn::advanced(next, Some(next));
+    let outcome = OutcomeTurn::advanced(next, Some(next), every_check_ran(&workflow));
 
     let injected = encoded(&Turn::outcome(&outcome, Some(&asked)));
     assert!(!injected.contains('\n'), "still one line: {injected}");
@@ -141,7 +153,11 @@ fn the_ask_the_next_step_makes_rides_on_the_same_turn_as_the_verdict() {
 #[test]
 fn a_step_that_asks_for_no_plan_leaves_the_outcome_turn_alone() {
     let workflow = workflow();
-    let outcome = OutcomeTurn::advanced(step(&workflow), workflow.steps().get(1));
+    let outcome = OutcomeTurn::advanced(
+        step(&workflow),
+        workflow.steps().get(1),
+        every_check_ran(&workflow),
+    );
     let none = workflow.steps().get(1).expect("a second step");
     assert_eq!(Declaring::at(none), None, "the fixture asks for nothing");
     assert_eq!(

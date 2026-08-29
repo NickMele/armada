@@ -434,17 +434,26 @@ export type DeclaredJudge = {
  * One declared Check, as the gate found it.
  *
  * **`produced` is absent on a pass because a pass measured nothing** — the
- * outcome is the whole sentence. The other four each say something different
- * about why a step did not advance, and none of them is `failed`.
+ * outcome is the whole sentence. The other five each say something different
+ * about why a step did not pass, and none of them is `failed`.
+ *
+ * **`skipped` is the one that did not stop the step.** The Check declares which
+ * paths it covers and this step changed none of them, so it was not run — it is
+ * not a pass and it is not a failure, and a surface that drew it as either
+ * would be reporting a verification that never happened. `produced` names the
+ * paths it covers.
  */
 export type CheckRun = {
   /** The Manifest Check's name, or the built-in's kind. Joins to `checks`. */
   name: string;
-  /** `check-outcomes.toml`: `passed`, `failed`, `signalled`, `timed_out`, `never_ran`. */
+  /** `check-outcomes.toml`: `passed`, `failed`, `signalled`, `timed_out`, `never_ran`, `skipped`. */
   outcome: string;
-  /** What the Check was measured against. Absent on a pass. */
+  /** What the Check was measured against. Absent on a pass, and on a skip. */
   expected?: string;
-  /** The exit code, the signal, the budget it outran, or what is not installed. */
+  /**
+   * The exit code, the signal, the budget it outran, what is not installed —
+   * or, on a skip, the paths the Check covers and this step did not touch.
+   */
   produced?: string;
   /**
    * Where the Check's stdout and stderr were written, relative to the

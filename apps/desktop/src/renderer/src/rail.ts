@@ -15,6 +15,7 @@ import type {
 } from "@armada/components";
 
 import {
+  CHECK_ADVANCES,
   CHECK_OUTCOME,
   CRITERION_VERDICT_CHECK,
   CRITERION_VERDICT_JUDGE,
@@ -134,21 +135,22 @@ export function stoppedAt(whole: JobWhole): StoppedAt | undefined {
   };
 }
 
-/** The token the one passing outcome carries. Named once, like `SUCCEEDED`. */
-const PASSED = "--status-completed-success";
-
 /**
- * A Check that did not pass, read off its token rather than its spelling —
- * status tokens are the pass and fail palette, so the one that means passed is
- * what a pass is.
+ * A Check that stopped the step, read off `check-outcomes.toml`'s own
+ * `advances` rather than off a status token.
+ *
+ * **The token cannot answer this and used to be asked.** `skipped` and
+ * `never_ran` both carry `--status-not-started`, and only one of them is a
+ * failure: a Check the step's paths never reached did not stop anything, and a
+ * Check whose command is missing stopped everything. Reading the palette named
+ * the first as the reason a Job ended.
  *
  * **A spelling the registry does not hold is claimed neither way.** Calling an
  * unknown outcome a failure would name a Check as the reason a Job ended on no
  * evidence at all.
  */
 function didNotPass(run: CheckRun): boolean {
-  const reading = CHECK_OUTCOME[run.outcome];
-  return reading !== undefined && reading.statusToken !== PASSED;
+  return CHECK_ADVANCES[run.outcome] === false;
 }
 
 /**
@@ -211,13 +213,19 @@ const NOT_REACHED = CRITERION_VERDICT_CHECK["not_reached"];
 /**
  * What one Check did, or nothing where the gate has not run it.
  *
- * **The five outcomes stay five.** A pass carries no `produced` because a pass
- * measured nothing; the other four say different things — an answer that was
- * not what the step declared, a signal, a budget that expired, a command that
- * never started — and folding them into "failed" would hide the one difference
- * a reader acts on. The verb comes from the registry where the registry has
- * one; today it has no `check_outcome` rows at all, so the wire spelling
- * renders. Reported.
+ * **Six outcomes, each drawn as itself.** A pass carries no `produced` because
+ * a pass measured nothing; four of the rest say different things about why a
+ * step did not advance — an answer that was not what the step declared, a
+ * signal, a budget that expired, a command that never started — and folding
+ * them into "failed" would hide the one difference a reader acts on.
+ *
+ * **`skipped` is the sixth and it stopped nothing.** It reads "not run", with
+ * `produced` naming the paths the Check covers and this step did not touch. It
+ * has its own glyph on purpose: drawn as a pass it would claim a verification
+ * that never happened, and drawn as `never_ran`'s `shield-minus` it would look
+ * like a Check whose command is missing.
+ *
+ * The verb comes from the registry, which now has a row for all six.
  */
 function resultOf(run: CheckRun): string | undefined {
   const outcome = CHECK_OUTCOME[run.outcome]?.verb ?? run.outcome;

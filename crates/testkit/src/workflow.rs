@@ -32,6 +32,10 @@ pub enum Gate<'a> {
         name: &'a str,
         run: &'a str,
         expect_exit_code: i64,
+        /// Which paths the fixture's Manifest says this Check covers. **Empty
+        /// writes no `when:` key at all**, which is the Check that always runs
+        /// and the shape every fixture written before `when` existed has.
+        when: &'a [&'a str],
     },
     /// The step produced a non-empty diff.
     DiffNonempty,
@@ -217,11 +221,14 @@ fn workflow_text(steps: &[Sketch<'_>], retry_limit: u32) -> String {
 /// commands is a mistake in the test and the second wins loudly enough to see
 /// in the resolved command.
 fn manifest_text(steps: &[Sketch<'_>]) -> String {
-    let mut declared: BTreeMap<&str, &str> = BTreeMap::new();
+    let mut declared: BTreeMap<&str, (&str, &[&str])> = BTreeMap::new();
     for step in steps {
         for gate in step.gates {
-            if let Gate::Check { name, run, .. } = gate {
-                declared.insert(name, run);
+            if let Gate::Check {
+                name, run, when, ..
+            } = gate
+            {
+                declared.insert(name, (run, when));
             }
         }
     }
@@ -230,8 +237,15 @@ fn manifest_text(steps: &[Sketch<'_>]) -> String {
         return text;
     }
     text.push_str("checks:\n");
-    for (name, run) in declared {
+    for (name, (run, when)) in declared {
         text.push_str(&format!("  {name}:\n    run: \"{run}\"\n"));
+        // No key at all where the fixture declares no path, because that is
+        // what an `armada.yml` without a `when` looks like — and an empty list
+        // is refused by the parser this fixture runs through.
+        if !when.is_empty() {
+            let quoted: Vec<String> = when.iter().map(|p| format!("\"{p}\"")).collect();
+            text.push_str(&format!("    when: [{}]\n", quoted.join(", ")));
+        }
     }
     text
 }

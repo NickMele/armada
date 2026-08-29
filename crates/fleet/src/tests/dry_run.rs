@@ -99,6 +99,7 @@ fn one_step(run: &str) -> ResolvedWorkflow {
                 name: "suite",
                 run,
                 expect_exit_code: 0,
+                when: &[],
             },
             Gate::DiffNonempty,
         ],
@@ -259,21 +260,25 @@ async fn every_check_the_step_declares_gets_a_row_however_many_there_are() {
                 name: "build",
                 run: "/usr/bin/true",
                 expect_exit_code: 0,
+                when: &[],
             },
             Gate::Check {
                 name: "typecheck",
                 run: "/usr/bin/false",
                 expect_exit_code: 0,
+                when: &[],
             },
             Gate::Check {
                 name: "bridge_build",
                 run: "/usr/bin/true",
                 expect_exit_code: 0,
+                when: &[],
             },
             Gate::Check {
                 name: "storybook",
                 run: "/usr/bin/true",
                 expect_exit_code: 0,
+                when: &[],
             },
             Gate::DiffNonempty,
         ],
@@ -712,4 +717,68 @@ async fn wait_until_checking(fleet: &Fixture) {
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
     panic!("the run never started");
+}
+
+/// One step whose named Check covers `packages/**` — paths the fixture Fleet's
+/// worktree, which holds `src/parse.rs`, does not touch.
+fn one_scoped_step() -> ResolvedWorkflow {
+    testkit::resolved(&[Sketch {
+        id: "implement",
+        label: "Implement",
+        evidence_type: Some("diff"),
+        gates: &[
+            Gate::Check {
+                name: "storybook",
+                run: "/usr/bin/false",
+                expect_exit_code: 0,
+                when: &["packages/**"],
+            },
+            Gate::DiffNonempty,
+        ],
+        judged_on: &[],
+        scope: None,
+        gaming: None,
+    }])
+}
+
+/// **The rehearsal has to agree with the gate.** The report's own closing
+/// sentence promises the Drone the same Checks, run by Fleet — so a dry run
+/// that spent a Check the gate will skip would be telling a Drone its work
+/// failed something no gate is going to ask.
+#[tokio::test]
+async fn a_dry_run_skips_the_same_check_the_gate_would() {
+    let home = TempDir::new();
+    let fleet = Arc::new(a_fleet_checking(
+        &home,
+        one_scoped_step(),
+        Arc::new(Held::started()),
+        3,
+    ));
+    let app = router(&fleet);
+    let _job = started(&fleet, &home).await;
+
+    let said = ask(&app).await;
+    assert!(!said.is_error, "{}", said.text);
+    // The command exits 1. A row that is not FAILED is a Check that never ran.
+    assert!(
+        said.text.contains("storybook") && said.text.contains("SKIPPED"),
+        "the Check is named and said to have been skipped: {}",
+        said.text
+    );
+    assert!(
+        !said.text.contains("FAILED"),
+        "nothing failed, so nothing may say so: {}",
+        said.text
+    );
+    // And the closing line does not report a pass nobody earned.
+    assert!(
+        said.text.contains("cover paths this step did not touch"),
+        "the summary says what was not run: {}",
+        said.text
+    );
+    assert!(
+        !said.text.contains("2 of 2 passed"),
+        "one of the two was never run: {}",
+        said.text
+    );
 }

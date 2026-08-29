@@ -126,6 +126,29 @@ Stating the rule as per-context means per-container Checks need no exception wri
 
 In the Set Up a Project (Manifest) journey's proposal panel, a Check row shows its prerequisites in the same cell as its command.
 
+### Which paths a Check covers
+
+**A Check may declare `when`, a list of path patterns, and a Job that changed none of them does not run it.**
+
+```yaml
+checks:
+  storybook:
+    run: pnpm -C packages/components build-storybook
+    when: ["packages/**", "apps/desktop/**"]
+```
+
+Decided 29 Aug 2026. **The pattern lives on the Check, not on the step in a workflow.** The repository declares once what a Check covers and every workflow inherits it — the same glob repeated across `bug`, `feature`, `refactor` and `revert` would drift, and a Check that unexpectedly did not run would have two places to look. There is no step-level override, and adding one is a change to this paragraph first.
+
+Rules that follow:
+
+- **Absent means always.** A Check with no `when` runs on every step that names it, which is every Manifest written before the key existed. An empty list is refused: `when: []` is a Check that can never run.
+- **The dialect is one dialect**, and the Configuration contract states it in full. A pattern from another dialect is refused at load rather than matched literally.
+- **The kind of change is not read.** A file deleted from `packages/` is a change to `packages/`, and a rename arrives as two paths — the old one deleted and the new one added — so either side covers the Check on its own.
+- **Skipped is not passed, and not `did not run` either.** A step that advanced because every Check was skipped verified nothing, and the record says so: `check_runs` carries a `skipped` row per Check, naming the paths it covers, and the Drone is told which of the three happened rather than being told it passed.
+- **It is frozen with the workflow.** A Job resolves `when` at creation alongside the Check's command, so editing `armada.yml` mid-Job changes the next Job rather than moving the gate under this one.
+
+`armada check`, the dry run a Drone can ask for, skips exactly what the gate would. A rehearsal that ran a Check the gate will not run would tell a Drone its work failed something nobody is going to ask.
+
 ### Check timeout
 
 A configured bound applies to every Check, and an optional per-Check field narrows it.

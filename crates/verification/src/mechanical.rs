@@ -17,6 +17,14 @@
 //! [`Exit::Code`] is the only variant an expectation is ever compared against,
 //! so none of the three can be compared into a pass.
 //!
+//! # A skipped check is a third answer, not a pass
+//!
+//! [`Observed::Skipped`] is a check whose declared paths the step did not
+//! touch. It is still an observation, so [`Ran::of`] keeps refusing a short
+//! list. It fails nothing and passes nothing: [`Ran::advances`] is the gate's
+//! question and [`Ran::all_passed`] answers no, because a step that measured
+//! nothing must not be recorded as one whose checks held.
+//!
 //! # Why the outcomes are built against the step
 //!
 //! [`Ran`] pairs the step's checks with what was observed of each, in order,
@@ -101,6 +109,15 @@ pub enum Observed {
     /// nothing passed `diff_nonempty` on its predecessor's files. A count
     /// cannot express "not since this step began", so it is not a count.
     Diff { moved: bool },
+    /// The check declares which paths it covers and the step changed none of
+    /// them, so it was not run.
+    ///
+    /// **Not one variant per check kind**, unlike the two above, because a skip
+    /// is not something a check *did* — it is the gate deciding not to ask. It
+    /// therefore pairs with any [`ResolvedCheck`], and `covers` is the sentence
+    /// the recorded row carries: the patterns, so a reader's first question is
+    /// already answered.
+    Skipped { covers: String },
 }
 
 impl Observed {
@@ -108,6 +125,7 @@ impl Observed {
         match self {
             Observed::Command(_) => "a command run",
             Observed::Diff { .. } => "a diff",
+            Observed::Skipped { .. } => "a skipped check",
         }
     }
 }
@@ -258,7 +276,25 @@ impl CheckFailed {
 /// wrote down nothing is indistinguishable from a step that ran none.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ran {
-    each: Vec<(String, Option<CheckFailed>)>,
+    each: Vec<(String, Answer)>,
+}
+
+/// What one declared check answered. **Three, and never two.**
+///
+/// `Option<CheckFailed>` used to be the whole of it, which made "passed" the
+/// absence of a failure — and a skipped check has no failure either. Folding
+/// the two would record a step that ran nothing as a step whose checks held,
+/// which is the vacuous pass this module exists to refuse, arriving by a new
+/// route.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Answer {
+    Passed,
+    /// The check covers paths this step did not touch. Carries the patterns,
+    /// which is what the recorded row says instead of a failure.
+    Skipped {
+        covers: String,
+    },
+    Failed(CheckFailed),
 }
 
 /// Why a set of observations is not a run of the step's checks.
@@ -316,16 +352,49 @@ impl Ran {
         self.each.len()
     }
 
-    /// Every check that did not pass, in the step's order. Empty means every
-    /// declared check passed — and, because a short list is refused at
-    /// construction, that every declared check ran.
+    /// Every check that did not pass, in the step's order. Empty means no
+    /// declared check failed — and, because a short list is refused at
+    /// construction, that every declared check was either run or deliberately
+    /// skipped.
     pub fn failures(&self) -> Vec<CheckFailed> {
-        self.each.iter().filter_map(|(_, f)| f.clone()).collect()
+        self.each
+            .iter()
+            .filter_map(|(_, answer)| match answer {
+                Answer::Failed(failed) => Some(failed.clone()),
+                _ => None,
+            })
+            .collect()
     }
 
-    /// Whether every declared check passed.
+    /// Whether every declared check ran and passed.
+    ///
+    /// **A skipped check answers no.** Nothing was measured, so this is not the
+    /// question a gate asks — [`Ran::advances`] is. Keeping the two apart is
+    /// what stops a step that skipped every check reading as a step that passed
+    /// them.
     pub fn all_passed(&self) -> bool {
-        self.each.iter().all(|(_, failed)| failed.is_none())
+        self.each
+            .iter()
+            .all(|(_, answer)| matches!(answer, Answer::Passed))
+    }
+
+    /// Whether the step may advance on what its checks did. **No check
+    /// failed**, which is a pass on every check that ran and says nothing about
+    /// the ones that did not.
+    pub fn advances(&self) -> bool {
+        !self
+            .each
+            .iter()
+            .any(|(_, answer)| matches!(answer, Answer::Failed(_)))
+    }
+
+    /// How many declared checks were skipped. Zero on every step whose Checks
+    /// declare no `when`.
+    pub fn skipped(&self) -> usize {
+        self.each
+            .iter()
+            .filter(|(_, answer)| matches!(answer, Answer::Skipped { .. }))
+            .count()
     }
 
     /// Every declared check with what it did, in the step's order, as the row
@@ -338,14 +407,28 @@ impl Ran {
     pub fn recorded(&self) -> Vec<StepCheck> {
         self.each
             .iter()
-            .map(|(name, failed)| StepCheck {
+            .map(|(name, answer)| StepCheck {
                 name: name.clone(),
-                outcome: match failed {
-                    None => CheckOutcome::Passed,
-                    Some(failed) => failed.outcome(),
+                outcome: match answer {
+                    Answer::Passed => CheckOutcome::Passed,
+                    Answer::Skipped { .. } => CheckOutcome::Skipped,
+                    Answer::Failed(failed) => failed.outcome(),
                 },
-                expected: failed.as_ref().map(CheckFailed::expected),
-                produced: failed.as_ref().map(CheckFailed::produced),
+                expected: match answer {
+                    Answer::Failed(failed) => Some(failed.expected()),
+                    _ => None,
+                },
+                // A skip carries the patterns and no `expected`, because
+                // nothing was measured against anything. It is the one outcome
+                // whose first question is "why not", and the sentence is the
+                // answer.
+                produced: match answer {
+                    Answer::Failed(failed) => Some(failed.produced()),
+                    Answer::Skipped { covers } => {
+                        Some(format!("no changed file is under {covers}"))
+                    }
+                    Answer::Passed => None,
+                },
                 // Absent here on purpose. This crate never touches a disk, so
                 // where a Check's output was written is filled in by whoever
                 // wrote it — see `fleet::check_output`.
@@ -355,13 +438,19 @@ impl Ran {
     }
 }
 
-/// One check against one observation. `None` is a pass.
+/// One check against one observation.
 fn verdict(
     at: usize,
     check: &ResolvedCheck,
     observed: &Observed,
-) -> Result<Option<CheckFailed>, ChecksOutstanding> {
+) -> Result<Answer, ChecksOutstanding> {
     match (check, observed) {
+        // First, and matching every check kind: a skip is the gate declining to
+        // ask, so it is not the answer of one kind of check rather than
+        // another.
+        (_, Observed::Skipped { covers }) => Ok(Answer::Skipped {
+            covers: covers.clone(),
+        }),
         (
             ResolvedCheck::ManifestCheck {
                 name,
@@ -369,9 +458,9 @@ fn verdict(
                 ..
             },
             Observed::Command(exit),
-        ) => Ok(command(name, *expect_exit_code, exit)),
+        ) => Ok(answered(command(name, *expect_exit_code, exit))),
         (ResolvedCheck::DiffNonempty, Observed::Diff { moved }) => {
-            Ok((!*moved).then_some(CheckFailed::DiffEmpty))
+            Ok(answered((!*moved).then_some(CheckFailed::DiffEmpty)))
         }
         (ResolvedCheck::ManifestCheck { .. }, other) => Err(ChecksOutstanding::WrongKind {
             at,
@@ -383,6 +472,14 @@ fn verdict(
             check: "diff_nonempty",
             observed: other.kind(),
         }),
+    }
+}
+
+/// A pass is the absence of a failure, for the two checks that actually run.
+fn answered(failed: Option<CheckFailed>) -> Answer {
+    match failed {
+        None => Answer::Passed,
+        Some(failed) => Answer::Failed(failed),
     }
 }
 

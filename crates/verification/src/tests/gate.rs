@@ -195,6 +195,7 @@ fn a_signalled_check_is_not_compared_against_an_expected_code() {
             name: "build",
             run: "true",
             expect_exit_code: 137,
+            when: &[],
         }],
         judged_on: &[],
         scope: None,
@@ -222,6 +223,7 @@ fn a_step_expecting_a_non_zero_code_passes_on_that_code() {
             name: "suite",
             run: "false",
             expect_exit_code: 1,
+            when: &[],
         }],
         judged_on: &[],
         scope: None,
@@ -299,4 +301,171 @@ fn a_failure_names_what_was_expected_and_what_was_produced() {
     };
     assert_eq!(failed.expected(), "`build` can be run");
     assert_eq!(failed.produced(), "`pnpm` is not installed");
+}
+
+/// The step of [`crate::tests::scoped`], whose one Check declares `when`.
+fn covered(workflow: &config::ResolvedWorkflow) -> &config::ResolvedStep {
+    &workflow.steps()[0]
+}
+
+#[test]
+fn a_skipped_check_advances_the_step_and_is_not_a_pass() {
+    // **The three-way distinction, in one assertion.** The step advances
+    // because nothing failed; `all_passed` says no because nothing was
+    // measured. A gate that asked the second question would fail a step for
+    // Checks it chose not to run; one that folded them would record a
+    // verification it never did.
+    let workflow = crate::tests::scoped();
+    let step = covered(&workflow);
+    let evidence = diff_evidence();
+    let ran = Ran::of(
+        step,
+        &[Observed::Skipped {
+            covers: "packages/**".to_string(),
+        }],
+    )
+    .expect("one observation for one check");
+
+    assert!(ran.advances(), "nothing failed");
+    assert!(!ran.all_passed(), "and nothing passed either");
+    assert_eq!(ran.skipped(), 1);
+    assert!(ran.failures().is_empty());
+
+    let accepted = Accepted::of(step, &evidence).expect("the right kind of evidence");
+    assert_eq!(decide(accepted, &ran), Verdict::Advance);
+}
+
+#[test]
+fn a_skipped_check_is_recorded_as_skipped_and_says_why() {
+    let workflow = crate::tests::scoped();
+    let ran = Ran::of(
+        covered(&workflow),
+        &[Observed::Skipped {
+            covers: "packages/**".to_string(),
+        }],
+    )
+    .expect("one observation for one check");
+
+    let recorded = ran.recorded();
+    assert_eq!(recorded.len(), 1, "a skip is a row like any other");
+    assert_eq!(recorded[0].name, "storybook");
+    assert_eq!(recorded[0].outcome, core_model::CheckOutcome::Skipped);
+    assert!(!recorded[0].outcome.passed());
+    assert!(recorded[0].outcome.advances());
+    // Nothing was measured, so there is no `expected`; the sentence a reader
+    // wants is which paths the Check covers.
+    assert_eq!(recorded[0].expected, None);
+    assert_eq!(
+        recorded[0].produced.as_deref(),
+        Some("no changed file is under packages/**")
+    );
+}
+
+#[test]
+fn a_step_that_skipped_every_check_cannot_be_read_as_one_that_passed_them() {
+    // Two `Ran` over the same step, one skipped and one passed. They advance
+    // alike and they are not equal, and the record is where the difference
+    // survives — which is the whole of what `check_runs` is for.
+    let workflow = crate::tests::scoped();
+    let step = covered(&workflow);
+    let skipped = Ran::of(
+        step,
+        &[Observed::Skipped {
+            covers: "packages/**".to_string(),
+        }],
+    )
+    .expect("one observation");
+    let passed = Ran::of(step, &[PASSED]).expect("one observation");
+
+    assert!(skipped.advances() && passed.advances());
+    assert_ne!(skipped.recorded(), passed.recorded());
+    assert_eq!(skipped.skipped(), 1);
+    assert_eq!(passed.skipped(), 0);
+}
+
+#[test]
+fn a_skip_is_still_an_observation_so_a_short_list_is_still_refused() {
+    // The invariant #201's concurrent loop has to preserve: one observation per
+    // declared Check, skips included. A loop that collected only the Checks it
+    // ran would produce a short list, and a short list is the vacuous pass.
+    let workflow = crate::tests::scoped();
+    assert!(matches!(
+        Ran::of(covered(&workflow), &[]),
+        Err(ChecksOutstanding::NotEveryCheckRan {
+            declared: 1,
+            observed: 0
+        })
+    ));
+}
+
+/// A step with two Checks: one covering the Rust tree, one covering nothing
+/// this step touched.
+fn mixed() -> config::ResolvedWorkflow {
+    testkit::resolved(&[testkit::Sketch {
+        id: "implement",
+        label: "Implement",
+        evidence_type: Some("diff"),
+        gates: &[
+            testkit::Gate::Check {
+                name: "build",
+                run: "true",
+                expect_exit_code: 0,
+                when: &["crates/**"],
+            },
+            testkit::Gate::Check {
+                name: "storybook",
+                run: "true",
+                expect_exit_code: 0,
+                when: &["packages/**"],
+            },
+        ],
+        judged_on: &[],
+        scope: None,
+        gaming: None,
+    }])
+}
+
+#[test]
+fn the_turn_says_which_of_the_three_things_happened() {
+    use crate::outcome::{OutcomeTurn, Verified};
+
+    let workflow = mixed();
+    let step = &workflow.steps()[0];
+    let skip = Observed::Skipped {
+        covers: "packages/**".to_string(),
+    };
+
+    // All ran. The sentence that was always told, unchanged.
+    let all = Ran::of(step, &[PASSED, PASSED]).expect("two observations");
+    let told = OutcomeTurn::advanced(step, None, Verified::of(&all))
+        .text()
+        .to_string();
+    assert!(
+        told.contains("passed every check the step declared"),
+        "{told}"
+    );
+
+    // One ran, one did not. The Drone is told both halves, and neither is a
+    // number it could try to satisfy.
+    let some = Ran::of(step, &[PASSED, skip.clone()]).expect("two observations");
+    let told = OutcomeTurn::advanced(step, None, Verified::of(&some))
+        .text()
+        .to_string();
+    assert!(
+        told.contains("every check that covers what you changed"),
+        "{told}"
+    );
+    assert!(told.contains("were not run"), "{told}");
+    assert!(
+        !told.chars().any(|c| c.is_ascii_digit()),
+        "no count: {told}"
+    );
+
+    // None ran. The sentence that must never be "it passed".
+    let none = Ran::of(step, &[skip.clone(), skip]).expect("two observations");
+    let told = OutcomeTurn::advanced(step, None, Verified::of(&none))
+        .text()
+        .to_string();
+    assert!(!told.contains("passed"), "nothing passed: {told}");
+    assert!(told.contains("none was run"), "{told}");
 }

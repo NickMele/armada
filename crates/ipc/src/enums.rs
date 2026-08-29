@@ -85,8 +85,10 @@ wire_enum! {
     Origin, DomainOrigin, "an origin"
 }
 wire_enum! {
-    /// What one declared mechanical Check did. Five, from
-    /// `domain/check-outcomes.toml`, and only `passed` advances a step.
+    /// What one declared mechanical Check did. Six, from
+    /// `domain/check-outcomes.toml`. **Two of them advance a step and only one
+    /// of those is a pass** — `skipped` is a Check whose declared paths the step
+    /// did not touch, which measured nothing and stopped nothing.
     CheckOutcome, core_model::CheckOutcome, "a check outcome"
 }
 wire_enum! {

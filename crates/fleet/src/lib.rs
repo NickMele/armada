@@ -122,6 +122,7 @@ pub mod reporting;
 pub mod resume;
 mod review;
 pub mod reviewing;
+mod ruling;
 pub mod runtime;
 pub mod scope;
 pub mod serving;

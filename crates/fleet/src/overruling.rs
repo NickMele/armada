@@ -208,6 +208,10 @@ where
     ///
     /// **The first failure names itself**, because a person told a Check failed
     /// needs to know which one to go and run.
+    ///
+    /// A skipped Check is not one: `advances` asks whether anything failed, and
+    /// a Check whose paths the step never touched is not a reason to refuse an
+    /// override.
     async fn every_check_passed(&self, job: &Job, step: &StepId) -> Result<(), Adrift> {
         let runs = self
             .store()
@@ -219,7 +223,7 @@ where
             .iter()
             .filter(|(id, _)| id == step)
             .flat_map(|(_, checks)| checks.iter())
-            .find(|check| !check.outcome.passed());
+            .find(|check| !check.outcome.advances());
         match failed {
             None => Ok(()),
             Some(check) => Err(Adrift::CheckDidNotPass {

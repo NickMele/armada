@@ -7,10 +7,16 @@
 # enum `core-model` holds without a mapping in between. The `outcome` column on
 # `job_step_checks` takes its values from here, and nothing else does.
 #
-# Only `passed` advances a step. The other four are the four different things a
-# person does about a Check that did not, which is why they are four rows and
-# not one — a hanging Check and a Check whose command is not installed need
-# opposite responses, and neither is ever a vacuous pass.
+# Only `passed` is a Check that ran and held. The next four are the four
+# different things a person does about a Check that did not, which is why they
+# are four rows and not one — a hanging Check and a Check whose command is not
+# installed need opposite responses, and neither is ever a vacuous pass.
+#
+# `skipped` is the sixth and the only deliberate one: the Check declared which
+# paths it covers and the step touched none of them. It advances and it did not
+# pass, which is why `advances` and a pass are two questions here and two
+# methods in code — a step that advanced having skipped every Check verified
+# nothing, and the record must be able to say that.
 #
 # Fields:
 #   meaning  - what the outcome asserts about the Check
@@ -40,3 +46,8 @@ notes = "The budget is a parameter with no default — nothing in `crates/config
 meaning = "The command never started"
 advances = false
 notes = "The failure a fresh machine actually produces. `produced` on the row names which — a program that is not installed, a `run` string holding no program, a worktree that is gone, or a spawn refused for some other reason."
+
+[outcomes.skipped]
+meaning = "The Check declares which paths it covers and this step changed none of them"
+advances = true
+notes = "The only outcome that advances without measuring anything. The paths are `checks.<name>.when` in `armada.yml`, frozen onto the Job's workflow at creation; absent means always, so a Manifest written before `when` existed is unaffected. `produced` on the row names the patterns, because why a Check did not run is the first thing a reader asks."

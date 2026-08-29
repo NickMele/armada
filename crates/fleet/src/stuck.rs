@@ -83,6 +83,11 @@ where
 /// **True where none ran**, which is the same answer `overruling`'s guard
 /// gives: it looks for a failure and finds none. An ungated step is not a step
 /// whose Checks failed.
+///
+/// **A skipped Check is true here too**, for the same reason and by the same
+/// method: `advances` asks whether anything failed, and a Check the step's
+/// paths did not reach failed nothing. Asking `passed` would tell a person the
+/// Checks failed on a step where nothing was run.
 fn checks_passed(ran: &[(StepId, Vec<StepCheck>)], step: Option<&StepId>) -> bool {
     let Some(step) = step else {
         return true;
@@ -90,5 +95,5 @@ fn checks_passed(ran: &[(StepId, Vec<StepCheck>)], step: Option<&StepId>) -> boo
     ran.iter()
         .filter(|(id, _)| id == step)
         .flat_map(|(_, checks)| checks.iter())
-        .all(|check| check.outcome.passed())
+        .all(|check| check.outcome.advances())
 }

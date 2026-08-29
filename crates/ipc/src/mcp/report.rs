@@ -59,10 +59,24 @@ pub struct CheckReport {
 impl CheckReport {
     /// How many did not pass. A count for the summary line and not a verdict:
     /// see this module's comment.
+    ///
+    /// **A skipped Check is not one of them.** `advances` is the question —
+    /// did anything fail — and a Drone told that a Check it never touched the
+    /// paths of "failed" would go and try to fix it.
     pub fn failed(&self) -> usize {
         self.ran
             .iter()
-            .filter(|check| !check.outcome.domain().passed())
+            .filter(|check| !check.outcome.domain().advances())
+            .count()
+    }
+
+    /// How many the run did not spend, because the Check covers paths this
+    /// step did not touch. **Counted apart from the passes**, so the closing
+    /// line cannot say a Check passed that nobody ran.
+    pub fn skipped(&self) -> usize {
+        self.ran
+            .iter()
+            .filter(|check| matches!(check.outcome.domain(), core_model::CheckOutcome::Skipped))
             .count()
     }
 }
@@ -106,11 +120,27 @@ impl fmt::Display for CheckReport {
             }
         }
         let failed = self.failed();
+        let skipped = self.skipped();
         let total = self.ran.len();
         writeln!(out)?;
-        match failed {
-            0 => writeln!(out, "{total} of {total} passed.")?,
-            _ => writeln!(out, "{failed} of {total} did not pass.")?,
+        // Three counts and never two. "{total} of {total} passed" over a run
+        // that skipped half of them would be the report claiming a
+        // verification it did not do — the same sentence the outcome turn
+        // refuses to tell a Drone at the gate.
+        match (failed, skipped) {
+            (0, 0) => writeln!(out, "{total} of {total} passed.")?,
+            (0, _) => writeln!(
+                out,
+                "{} of {total} passed. {skipped} cover paths this step did not touch \
+                 and were not run.",
+                total - skipped
+            )?,
+            (_, 0) => writeln!(out, "{failed} of {total} did not pass.")?,
+            _ => writeln!(
+                out,
+                "{failed} of {total} did not pass. {skipped} cover paths this step \
+                 did not touch and were not run."
+            )?,
         }
         write!(out, "\n{NOT_A_VERDICT}")
     }

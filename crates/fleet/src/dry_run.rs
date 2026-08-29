@@ -281,11 +281,35 @@ where
                 }
             },
         };
+        // **The same skip the gate takes, from the same reading.** A dry run
+        // that ran a Check the gate will not run would tell a Drone its work
+        // failed something no gate is going to ask — and this report's closing
+        // sentence promises the opposite: the same Checks, run by Fleet.
+        let touched: Vec<String> = match declared
+            .checks()
+            .iter()
+            .any(ResolvedCheck::needs_changed_paths)
+        {
+            false => Vec::new(),
+            true => match self.work().changed_files(&plan.worktree) {
+                Ok(changed) => changed.paths(),
+                Err(cause) => {
+                    return Err(NotRun::CouldNotRead {
+                        cause: cause.to_string(),
+                    })
+                }
+            },
+        };
         let mut observed = Vec::with_capacity(declared.checks().len());
         let mut printed = Vec::new();
         let mut took = Vec::with_capacity(declared.checks().len());
         for check in declared.checks() {
             let began = self.now();
+            if let Some(skip) = crate::gate::not_covered(check, &touched) {
+                observed.push(skip);
+                took.push(elapsed(&began, &self.now()));
+                continue;
+            }
             match check {
                 ResolvedCheck::ManifestCheck { name, run, .. } => {
                     let attempt = checks_runner::run(
