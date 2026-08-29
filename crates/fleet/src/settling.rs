@@ -316,7 +316,11 @@ where
     /// reason first stands. There is no per-tick risk here: the submission is
     /// taken before the gate runs, so a second line means a second submission
     /// was read and a second reading failed.
-    fn noted_undecided(&self, job: &JobId, step: &StepId, ruling: &Ruling) {
+    ///
+    /// **`crate::regating` is the second caller**, and it is the same sentence
+    /// about the same fact: a person asked the gate again and it still could
+    /// not read what it needed. A line per press is what that act is for.
+    pub(crate) fn noted_undecided(&self, job: &JobId, step: &StepId, ruling: &Ruling) {
         let Some((artifact, cause)) = ruling.undecided() else {
             return;
         };

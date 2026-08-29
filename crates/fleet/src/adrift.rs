@@ -228,6 +228,33 @@ pub enum Adrift {
         step: StepId,
         check: String,
     },
+    /// The gate was asked again on a step it had already ruled on.
+    ///
+    /// **[`NotTheJudges`](Adrift::NotTheJudges) from the other side**, and the
+    /// two partition the triggers: an override lifts a decision, a re-run
+    /// answers the absence of one, and no trigger reaches both. Asking a gate
+    /// that ruled the same question draws the same answer.
+    NotUndecided {
+        job: JobId,
+        step: StepId,
+        trigger: EscalationTrigger,
+    },
+    /// The gate was asked again on a Job Fleet is no longer standing at.
+    ///
+    /// **The baseline lives in the working slot and nowhere else.** A re-run
+    /// derives the same artifacts against the same reading of what the worktree
+    /// held when the step began; a Fleet restarted since the escalation has
+    /// none, so `diff_nonempty` would decide on nothing known to have moved and
+    /// the second reading would answer a different question from the first.
+    /// `restart_step` puts a fresh Drone on the worktree the last one left.
+    NotStandingThere { job: JobId },
+    /// The gate was asked again on a step with no evidence to be asked about.
+    ///
+    /// **Both halves of it**: nothing was recorded, or what was recorded will
+    /// not read back as a submission — a row written by something that did not
+    /// share `verification`'s constructor. Ordinarily unreachable, because the
+    /// gate records the evidence it ruled on whatever it ruled.
+    NothingToRuleOn { job: JobId, step: StepId },
     /// A restart was asked for on a Job whose Drone is alive.
     ///
     /// The inverse refusal. Ending a live session to spawn a replacement onto
@@ -489,6 +516,29 @@ impl fmt::Display for Adrift {
                 job.as_str(),
                 step.as_str()
             ),
+            Adrift::NotUndecided { job, step, trigger } => write!(
+                out,
+                "{}'s step `{}` stopped on {}, which is a decision. Running the gate again would \
+                 ask a question that was answered and draw the same answer; disagreeing with it \
+                 is an override, and it takes a reason",
+                job.as_str(),
+                step.as_str(),
+                trigger.as_wire()
+            ),
+            Adrift::NotStandingThere { job } => write!(
+                out,
+                "{} is not the Job Fleet is standing at, so the reading the gate failed to make \
+                 cannot be made again — the baseline the step began from went with the slot. \
+                 Restart the step to put a fresh Drone on the worktree it left",
+                job.as_str()
+            ),
+            Adrift::NothingToRuleOn { job, step } => write!(
+                out,
+                "{}'s step `{}` has no evidence the gate could be asked about again: none was \
+                 recorded, or what was recorded will not read back as a submission",
+                job.as_str(),
+                step.as_str()
+            ),
             Adrift::DroneStillThere { job } => write!(
                 out,
                 "{}'s Drone is alive and idle, holding its session. Redirect it rather than \
@@ -620,6 +670,9 @@ impl Adrift {
             | Adrift::WorkUnreadable { job, .. }
             | Adrift::NotTheJudges { job, .. }
             | Adrift::CheckDidNotPass { job, .. }
+            | Adrift::NotUndecided { job, .. }
+            | Adrift::NotStandingThere { job }
+            | Adrift::NothingToRuleOn { job, .. }
             | Adrift::Unreasoned { job }
             | Adrift::DroneStillThere { job }
             | Adrift::WorktreeGone { job, .. }
@@ -686,6 +739,11 @@ impl Error for Adrift {
             // rather than wrapping something that failed.
             | Adrift::NotTheJudges { .. }
             | Adrift::CheckDidNotPass { .. }
+            // And the three a gate re-run makes, which say the same: what the
+            // record holds, not what failed underneath.
+            | Adrift::NotUndecided { .. }
+            | Adrift::NotStandingThere { .. }
+            | Adrift::NothingToRuleOn { .. }
             | Adrift::Unreasoned { .. }
             | Adrift::DroneStillThere { .. }
             | Adrift::WorktreeGone { .. }

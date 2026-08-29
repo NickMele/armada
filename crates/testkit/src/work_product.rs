@@ -195,6 +195,31 @@ impl FakeWorkProduct {
         }
     }
 
+    /// The same worktree, unreadable for now.
+    ///
+    /// **A transient cause needs both halves**: what the worktree holds, and a
+    /// reading that fails before anything can see it. [`refusing`] has only the
+    /// second, so a fake built that way answers an empty patch and no files the
+    /// moment the cause lifts — which is a different failure, not a recovery.
+    ///
+    /// [`refusing`]: FakeWorkProduct::refusing
+    pub fn but_refusing(self, standing_in_for: &'static str) -> FakeWorkProduct {
+        *self.refuse.lock().expect("not poisoned") = Some(standing_in_for);
+        self
+    }
+
+    /// The refusal lifts, and every reading after this one answers.
+    ///
+    /// **The transient cause, which nothing else here can express.** A worktree
+    /// momentarily unreadable and one that will never read again arrive at the
+    /// gate as the same value, and a fake that could only be one of the two
+    /// could not tell a re-run that succeeds from a re-run that cannot. Takes
+    /// `&self` because the fake is behind a Fleet by the time a test wants the
+    /// cause to have passed.
+    pub fn reads_now(&self) {
+        *self.refuse.lock().expect("not poisoned") = None;
+    }
+
     /// Every worktree path this fake was asked about, in order, whatever was
     /// asked. A gate that never asked is a gate that decided `diff_nonempty`
     /// without looking.

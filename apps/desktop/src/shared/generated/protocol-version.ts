@@ -9,4 +9,4 @@
 // `src/shared/version.ts` is the only comparison, and there is no bare number
 // here to spell `!==` against.
 
-export const PROTOCOL_VERSION = { major: 4, minor: 14 };
+export const PROTOCOL_VERSION = { major: 4, minor: 15 };

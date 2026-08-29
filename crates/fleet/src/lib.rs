@@ -116,6 +116,7 @@ pub mod process;
 pub mod proposal;
 pub mod proposing;
 pub mod redispatch;
+mod regating;
 pub mod resume;
 mod review;
 pub mod reviewing;

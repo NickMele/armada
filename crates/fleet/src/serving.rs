@@ -432,6 +432,21 @@ where
         self.summarised(&job).await
     }
 
+    /// The gate could not decide, and a person asks it again on the evidence
+    /// already submitted.
+    ///
+    /// **No reason is taken and none is refused**, which is
+    /// `override_verdict`'s rule turned around: that act records why a person
+    /// disagreed with a machine, and nothing here is disagreed with. What the
+    /// second reading came to is written into the Job's own log by
+    /// `crate::regating`, and it says more than a sentence would.
+    async fn rerun_gate(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let job = Fleet::rerun_gate(self, &job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
     /// A verdict on the work, and the Job is over.
     async fn reject_job(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         let job = Fleet::reject(self, &job_id.to_domain())
@@ -854,14 +869,20 @@ where
                         .about_job(ipc::JobId::from(job)),
                 )
             }
-            // The four an act on a stopped step refuses with. `NotTheJudges`
-            // and `CheckDidNotPass` are the two an override adds, and they are
-            // conflicts of the same kind: the Job is somewhere, or its step
-            // stopped for something, that this act does not answer.
+            // What an act on a stopped step refuses with, and they are
+            // conflicts of one kind: the Job is somewhere, or its step stopped
+            // for something, that this act does not answer. `NotTheJudges` and
+            // `CheckDidNotPass` are an override's; `NotUndecided`,
+            // `NotStandingThere` and `NothingToRuleOn` are a gate re-run's, and
+            // the first two of those are the same sentence as `NotTheJudges`
+            // read from the other side.
             Adrift::NotResumable { job, .. }
             | Adrift::NoStepStopped { job }
             | Adrift::NotTheJudges { job, .. }
-            | Adrift::CheckDidNotPass { job, .. } => Refusal::IllegalMove(
+            | Adrift::CheckDidNotPass { job, .. }
+            | Adrift::NotUndecided { job, .. }
+            | Adrift::NotStandingThere { job }
+            | Adrift::NothingToRuleOn { job, .. } => Refusal::IllegalMove(
                 WireError::raised(NOT_RESUMABLE, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
             ),

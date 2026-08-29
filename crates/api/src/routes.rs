@@ -153,6 +153,16 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/override_verdict",
     },
+    // The answer at a gate that could not rule, which is a different place
+    // again: `override_verdict` lifts a decision and this asks for one. Its own
+    // route rather than a flag on that one — the two triggers do not overlap,
+    // and one route taking either would let a step nothing weighed be advanced
+    // by the act built for disagreeing with a machine that did.
+    Route {
+        operation: "rerun_gate",
+        method: "POST",
+        path: "/jobs/:job_id/rerun_gate",
+    },
     Route {
         operation: "kill_drone",
         method: "POST",
@@ -306,6 +316,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
             "/jobs/:job_id/override_verdict",
             post(override_verdict::<D>),
         )
+        .route("/jobs/:job_id/rerun_gate", post(rerun_gate::<D>))
         .route(
             "/jobs/:job_id/approve_dispatch",
             post(approve_dispatch::<D>),
@@ -553,6 +564,25 @@ async fn override_verdict<D: Daemon>(
         .override_verdict(JobId::carried(job_id), overruling)
         .await
     {
+        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// The gate could not decide, and a person asks it again on the evidence the
+/// step already submitted. **The Job comes back wherever the second reading
+/// left it** — running at the next step where it ruled, escalated again where
+/// it could not.
+///
+/// No body, because nothing is being disagreed with. 409 anywhere but an
+/// `escalated` Job stopped on `gate_undecided`, and 409 again on a Job this
+/// Fleet is no longer standing at, where the baseline the first reading used
+/// went with the slot and `restart_step` is what applies.
+async fn rerun_gate<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served.daemon.rerun_gate(JobId::carried(job_id)).await {
         Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
         Err(refusal) => refused(refusal),
     }

@@ -322,6 +322,34 @@ pub trait Daemon: Send + Sync + 'static {
         overruling: ipc::Overruled,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
+    /// `rerun_gate` — the gate could not decide, and a person asks it again on
+    /// the evidence the step already submitted.
+    ///
+    /// **The act [`Daemon::override_verdict`] is deliberately not.** A step
+    /// stopped on `gate_undecided` was never weighed: `Ruling::CouldNotDecide`
+    /// exists so that a machine unable to answer produces no verdict in either
+    /// direction, and advancing on one would pass work nothing ruled on. There
+    /// is no decision to disagree with, so what is owed is the question, asked
+    /// again.
+    ///
+    /// # It re-runs once, takes no body, and spends no retry budget
+    ///
+    /// A transient cause and a permanent one arrive as the same value and are
+    /// not told apart, so nothing loops: where the cause was permanent the gate
+    /// fails again and says so. There is no reason to carry, because nothing is
+    /// being disagreed with. And a gate re-run is not a run of the step, so the
+    /// budget a failed Check hands the step back inside is untouched.
+    ///
+    /// # What it refuses
+    ///
+    /// [`Refusal::IllegalMove`] on a Job that is not `escalated`, on an
+    /// escalation that stopped no step, on a step stopped on any other trigger
+    /// — that one is an override, or nothing — and on a Job the daemon is no
+    /// longer standing at, where the baseline the first reading used is gone
+    /// and [`Daemon::restart_step`] is what applies.
+    fn rerun_gate(&self, job_id: JobId)
+        -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
     /// `reject_job` — the work is not wanted, and the Job is over.
     ///
     /// **Terminal, which is what makes it the hard stop.** `rejected` is a
