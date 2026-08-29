@@ -70,11 +70,12 @@ use core_model::{
     Transitioned,
 };
 use verification::{
-    decide, Accepted, Baseline, CheckFailed, InScope, Observed, OutcomeTurn, OutsideScope, Printed,
-    Ran, Request, Submission, Verdict, Verified,
+    decide, Accepted, Baseline, CheckFailed, InScope, OutcomeTurn, OutsideScope, Printed, Ran,
+    Request, Submission, Verdict, Verified,
 };
 
 use crate::at_step::AtStep;
+use crate::checking;
 use crate::judging::{self, Judging};
 
 /// How long a Check may run before it is a failure.
@@ -107,33 +108,6 @@ pub struct CheckOutput {
 // every other module in this crate reads, and it was the reason a file about
 // deciding was also the file everything imported.
 pub use crate::ruling::Ruling;
-
-/// Whether the gate declines to run this Check, and what it writes down when it
-/// does.
-///
-/// **Pure, and the whole of the skip decision.** It reads the Check's own
-/// frozen `when` against paths already in hand: no adapter call, no clock, no
-/// process. That is what lets the decision be taken before a spawn, and what
-/// lets #201's concurrent loop take it without ordering anything.
-///
-/// **The kind of change is not consulted.** A file deleted from `packages/` is
-/// a change to `packages/`, and a rename arrives as two paths — the old one
-/// deleted, the new one added, because the git adapter runs no rename
-/// detection — so either side of a rename is enough on its own.
-pub(crate) fn not_covered(check: &ResolvedCheck, touched: &[String]) -> Option<Observed> {
-    // `ResolvedCheck::covers` answers `true` for a Check with no `when`, which
-    // is where "absent means always" is spelled. It is asked rather than
-    // re-derived here so there is one place that could ever be wrong about it.
-    match check.covers(touched) {
-        true => None,
-        false => Some(Observed::Skipped {
-            covers: check
-                .when()
-                .map(core_model::Covers::written)
-                .unwrap_or_default(),
-        }),
-    }
-}
 
 /// Run the step's Checks and decide.
 ///
@@ -202,66 +176,67 @@ where
     };
     let touched: Vec<String> = changed.as_ref().map(Changed::paths).unwrap_or_default();
 
+    // **Against the step's own start, never the branch's.** A step that wrote
+    // nothing used to pass this on the files an earlier step committed;
+    // `entered_with` is what the worktree held when this step began, and the
+    // difference is what this step did. "Began" includes the boundary rebase,
+    // which is why a step that resolves none of a conflict fails here.
+    //
+    // A step with no baseline is one Fleet never saw start — a Drone adopted
+    // mid-flight, or a slot that lost its reading. The honest answer there is
+    // that nothing is known to have moved, which fails the check rather than
+    // passing it, for `Changed::nothing`'s reason.
+    //
+    // **Read before the Checks run rather than among them**, which is where
+    // `changed` above is read and for its reason: a Check's own artifacts must
+    // not be part of what the diff sees, and one reading answers both questions.
+    let moved = match step
+        .checks()
+        .iter()
+        .any(|check| matches!(check, ResolvedCheck::DiffNonempty))
+    {
+        false => false,
+        true => match work.footprint(at.worktree()) {
+            Ok(now) => entered_with.is_some_and(|before| now.differs_from(before)),
+            Err(cause) => {
+                return Ruling::CouldNotDecide {
+                    artifact: "the Job's diff",
+                    cause: Box::new(cause),
+                    checks: Vec::new(),
+                    output: Vec::new(),
+                }
+            }
+        },
+    };
+    // **Several at a time, in declaration order, each with its own budget.**
+    // `crate::checking` owns all three properties; what matters here is that
+    // what comes back is one entry per declared Check, skips included, so the
+    // invariant `Ran::of` enforces is carried by the shape of the answer rather
+    // than by this loop being careful.
     let mut observed = Vec::with_capacity(step.checks().len());
     let mut output = Vec::new();
-    for check in step.checks() {
-        // **Before the spawn, and pure.** `not_covered` reads the Check's own
-        // declaration against paths already in hand — no clock, no process, no
-        // adapter call — so #201 can decide it while building the futures and
-        // spawn only for the Checks it answers `None` for. What that change has
-        // to preserve is the invariant `Ran::of` enforces: one observation per
-        // declared Check, in the step's order, skips included. A concurrent loop
-        // that collected only the Checks it ran would produce a short list, and
-        // a short list is the vacuous pass by another name.
-        if let Some(skip) = not_covered(check, &touched) {
-            observed.push(skip);
-            continue;
-        }
-        match check {
-            ResolvedCheck::ManifestCheck { name, run, .. } => {
-                let attempt =
-                    checks_runner::run(run, Path::new(at.worktree().path()), budget.duration())
-                        .await;
-                observed.push(Observed::Command(attempt.exit));
-                output.push(CheckOutput {
-                    check: name.clone(),
-                    output: attempt.output,
-                });
-            }
-            // **Against the step's own start, never the branch's.** A step that
-            // wrote nothing used to pass this on the files an earlier step
-            // committed; `entered_with` is what the worktree held when this
-            // step began, and the difference is what this step did.
-            //
-            // "Began" includes the boundary rebase, which is why a step that
-            // resolves none of a conflict fails here: the markers are in the
-            // baseline, so nothing about them differs.
-            //
-            // A step with no baseline is one Fleet never saw start — a Drone
-            // adopted mid-flight, or a slot that lost its reading. The honest
-            // answer there is that nothing is known to have moved, which fails
-            // the check rather than passing it: an unread baseline must not
-            // advance a step, for `Changed::nothing`'s reason.
-            ResolvedCheck::DiffNonempty => match work.footprint(at.worktree()) {
-                Ok(now) => observed.push(Observed::Diff {
-                    moved: entered_with.is_some_and(|before| now.differs_from(before)),
-                }),
-                Err(cause) => {
-                    return Ruling::CouldNotDecide {
-                        artifact: "the Job's diff",
-                        cause: Box::new(cause),
-                        checks: Vec::new(),
-                        output,
-                    }
-                }
-            },
+    for done in checking::ran(
+        step.checks(),
+        &touched,
+        moved,
+        Path::new(at.worktree().path()),
+        budget.duration(),
+    )
+    .await
+    {
+        observed.push(done.observed);
+        if let Some((check, printed)) = done.printed {
+            output.push(CheckOutput {
+                check,
+                output: printed,
+            });
         }
     }
 
     let ran = match Ran::of(step, &observed) {
         Ok(ran) => ran,
-        // Unreachable while the loop above emits one observation per check, in
-        // order, of the kind that check takes. It is carried rather than
+        // Unreachable while `checking::ran` answers one observation per check,
+        // in order, of the kind that check takes. It is carried rather than
         // unwrapped because an unreachable `expect` in the gate is exactly the
         // place a panic would take Fleet down mid-Job.
         Err(cause) => {

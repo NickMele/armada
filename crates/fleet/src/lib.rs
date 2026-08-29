@@ -95,6 +95,7 @@ pub mod adrift;
 pub mod at_step;
 pub mod briefing;
 mod check_output;
+mod checking;
 pub mod clock;
 pub mod converging;
 pub mod daemon;

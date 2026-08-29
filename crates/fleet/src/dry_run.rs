@@ -31,10 +31,9 @@ use std::time::Duration;
 use adapter_traits::{AgentHarness, Delivery, Footprint, Vcs, WorkProduct, Worktree};
 use core_model::{Component, Envelope, FieldValue, Job, Level, ResolvedCheck, StepId};
 use ipc::mcp::{CheckRan, CheckReport};
-use verification::{Observed, Ran};
+use verification::Ran;
 
 use crate::check_output;
-use crate::converging::elapsed;
 use crate::daemon::Fleet;
 use crate::transcript;
 
@@ -300,33 +299,30 @@ where
                 }
             },
         };
+        // **The same batch the gate runs**, several at a time and in the step's
+        // order, which matters more here than at the gate: this is the call a
+        // Drone is sitting idle inside, and the report it reads back has to name
+        // the same Checks in the same order every time it asks.
         let mut observed = Vec::with_capacity(declared.checks().len());
         let mut printed = Vec::new();
         let mut took = Vec::with_capacity(declared.checks().len());
-        for check in declared.checks() {
-            let began = self.now();
-            if let Some(skip) = crate::gate::not_covered(check, &touched) {
-                observed.push(skip);
-                took.push(elapsed(&began, &self.now()));
-                continue;
+        for done in crate::checking::ran(
+            declared.checks(),
+            &touched,
+            moved,
+            Path::new(plan.worktree.path()),
+            self.budget().duration(),
+        )
+        .await
+        {
+            observed.push(done.observed);
+            took.push(done.took);
+            if let Some(pair) = done.printed {
+                printed.push(pair);
             }
-            match check {
-                ResolvedCheck::ManifestCheck { name, run, .. } => {
-                    let attempt = checks_runner::run(
-                        run,
-                        Path::new(plan.worktree.path()),
-                        self.budget().duration(),
-                    )
-                    .await;
-                    observed.push(Observed::Command(attempt.exit));
-                    printed.push((name.clone(), attempt.output));
-                }
-                ResolvedCheck::DiffNonempty => observed.push(Observed::Diff { moved }),
-            }
-            took.push(elapsed(&began, &self.now()));
         }
-        // Unreachable while the loop above emits one observation per check, in
-        // order, of the kind that check takes. Carried rather than unwrapped
+        // Unreachable while `checking::ran` answers one observation per check,
+        // in order, of the kind that check takes. Carried rather than unwrapped
         // for `gate::rule_on`'s reason: an unreachable `expect` on the Drone's
         // own call path is where a panic takes Fleet down mid-Job.
         let ran = Ran::of(declared, &observed).map_err(|cause| NotRun::CouldNotRead {
