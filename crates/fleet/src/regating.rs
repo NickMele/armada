@@ -27,7 +27,7 @@
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
     Actor, Component, Envelope, EscalationTrigger, FieldValue, Job, JobId, JobStatus, Level,
-    StepId, StepState, StepTarget, StepVerdict, Target,
+    StepId, StepTarget, Target,
 };
 use verification::{Claimed, NotClaimed, Request, ShownBy, Submission};
 
@@ -199,19 +199,13 @@ where
                 status: job.status(),
             });
         }
-        let stopped = job
-            .steps()
-            .iter()
-            .find(|step| step.state() == StepState::Stopped)
-            .ok_or_else(|| Adrift::NoStepStopped {
-                job: job.id().clone(),
-            })?;
-        let step = stopped.step_id().clone();
-        let Some(StepVerdict::Failed(stopped_by)) = stopped.last_verdict() else {
-            return Err(Adrift::NoStepStopped {
-                job: job.id().clone(),
-            });
-        };
+        // The one reading, shared with `crate::overruling` and with the
+        // classification `core_model::Stuck` makes — the state and the
+        // `failed(<trigger>)` verdict together, never one without the other.
+        let (step, stopped_by) = job.stopped_on().ok_or_else(|| Adrift::NoStepStopped {
+            job: job.id().clone(),
+        })?;
+        let step = step.clone();
         if stopped_by.trigger() != EscalationTrigger::GateUndecided {
             return Err(Adrift::NotUndecided {
                 job: job.id().clone(),

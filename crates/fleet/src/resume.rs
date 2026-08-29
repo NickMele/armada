@@ -28,7 +28,7 @@ use std::path::Path;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{
-    Actor, Component, Envelope, Job, JobId, JobStatus, Level, StepId, StepState, StepTarget, Target,
+    Actor, Component, Envelope, Job, JobId, JobStatus, Level, StepId, StepTarget, Target,
 };
 
 use crate::adrift::Adrift;
@@ -300,10 +300,12 @@ where
     /// question and is why this stopped being one predicate.
     fn stopped_step(&self, job: &Job) -> Result<StepId, Adrift> {
         self.held_for_a_person(job)?;
-        job.steps()
-            .iter()
-            .find(|step| step.state() == StepState::Stopped)
-            .map(|step| step.step_id().clone())
+        // `Job::stopped_on` is the reading `crate::overruling`,
+        // `crate::regating` and the classification all make. It answers the
+        // step and the trigger together; only the step is wanted here, because
+        // a restart lands on a stopped step whatever stopped it.
+        job.stopped_on()
+            .map(|(step, _)| step.clone())
             .ok_or_else(|| Adrift::NoStepStopped {
                 job: job.id().clone(),
             })

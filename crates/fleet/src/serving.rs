@@ -177,6 +177,10 @@ where
                 .map_err(|why| self.refusal(Adrift::Reading(why)))?,
         };
         let queued = self.queued_reason(&job).await?;
+        // Before `step_facts`, which consumes the Check runs: the
+        // classification reads them to answer whether an override is available,
+        // and reading them twice would be a second answer to one question.
+        let stuck = self.why_stuck(&job, reason.as_ref(), &ran).await;
         Ok(JobDetail::of(
             &job,
             reason.as_ref(),
@@ -184,6 +188,7 @@ where
             &self.step_facts(&job, ran, judged, flagged),
             recorded.as_ref().map(kept),
             self.redirect_awaited(job.id()).await,
+            stuck.as_ref(),
         ))
     }
 

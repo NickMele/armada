@@ -203,6 +203,34 @@ screen that did not change. It is a fact about the last act and not a status:
 what it says is that Fleet wrote to the session, which is all Fleet knows until
 the Drone turns.
 
+### Which act applies is answered, not discovered
+
+`GET /jobs/:job_id` carries a `stuck` block on a Job that stopped: the trigger
+that stopped it, the step where one did, and **the acts Fleet will take on it
+now**, each named by the key of the operation that performs it. It is absent on
+a Job that has not stopped, and an empty list on one nothing moves — those are
+different sentences.
+
+**It mints no vocabulary.** The trigger is the registry's own spelling and the
+acts are the routes' own keys; what the block adds is the sentence's other half,
+which used to exist only as refusals. Before it, a person read `stalled` and
+worked out which of five acts applied by pressing buttons.
+
+**And Fleet decides it, because four of the facts are Fleet's alone.** Whether
+the slot still holds the Drone, whether the worktree is still on disk, whether
+the stopped step's Checks passed, whether Fleet still holds the workflow. A
+client that derives recoverability from `status`, `current_step_id` and
+`assigned_drone` gets four of the five refusals right and cannot get the
+fifth — a missing worktree is a `path.is_dir()`, so `worktree_on_disk` crosses
+beside the acts and a surface can say *why* a restart is not offered.
+
+**It does not claim the trigger is true.** A Drone whose worktree was deleted
+under it escalated as `stalled`, which is the nearest trigger and the wrong
+condition; no trigger says a worktree is gone. The block reports the escalation
+as recorded beside the worktree fact, so the acts are right even where the
+trigger that produced them is not. Whether that condition earns a trigger of its
+own is open.
+
 **How a Job ends** — every edge into a terminal.
 
 ```mermaid

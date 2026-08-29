@@ -221,6 +221,10 @@ impl Daemon for FakeDaemon {
             // Absent for the same reason, one layer further in: an outstanding
             // redirect is read from a working slot, and this daemon holds none.
             redirecting: None,
+            // Absent for the same reason again: a classification is read from
+            // a slot, a filesystem and a store, and this daemon has none of the
+            // three.
+            stuck: None,
         })
     }
 

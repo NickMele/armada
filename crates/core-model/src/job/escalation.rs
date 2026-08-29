@@ -133,6 +133,50 @@ impl StepLevelTrigger {
     pub fn as_wire(&self) -> &'static str {
         self.0.as_wire()
     }
+
+    /// Whether a person may overrule this decision.
+    ///
+    /// **An exhaustive `match` and not a list.** A trigger minted in the
+    /// registry does not compile until somebody writes its arm here, which is
+    /// the moment the argument gets had — a slice would give that up.
+    ///
+    /// `gate_failure` is the Judge refusing a criterion. `evidence_suspect` is
+    /// the gaming check saying the evidence is not to be trusted, and it was
+    /// refused here until 2026-08-28 on the grounds that it is a claim about
+    /// *how* the step was satisfied rather than about whether it was. That
+    /// distinction is real and is not the one that decides this: the owner's
+    /// rule is that anything a machine decides, a person can overrule.
+    ///
+    /// **`gate_undecided` in particular is not among them.** It is the machine
+    /// saying it could not read the artifact, so there is nothing ruled to
+    /// disagree with; `Recourse::RerunGate` answers that one. The rest are
+    /// refused because nothing weighed the work at all, and the Job-level
+    /// triggers cannot reach here at all — [`StepLevelTrigger::of`] refuses
+    /// them. They are listed rather than caught by a wildcard so that the
+    /// exhaustiveness above is real.
+    ///
+    /// **It lives beside the vocabulary rather than beside the act**, where it
+    /// was the override's private opinion: [`crate::Stuck`] has to answer the
+    /// same question, and two matches over one set is how a button and the
+    /// sentence beside it come to disagree.
+    pub fn overrulable(&self) -> bool {
+        match self.0 {
+            EscalationTrigger::GateFailure | EscalationTrigger::EvidenceSuspect => true,
+            EscalationTrigger::GateUndecided
+            | EscalationTrigger::BlockedByPolicy
+            | EscalationTrigger::CheckTimeout
+            | EscalationTrigger::EvidenceTooLarge
+            | EscalationTrigger::LoopCap
+            | EscalationTrigger::Thrashing => false,
+            EscalationTrigger::DependencyFailed
+            | EscalationTrigger::FanOut
+            | EscalationTrigger::HatchUnbidden
+            | EscalationTrigger::Interrupted
+            | EscalationTrigger::ResourceExhausted
+            | EscalationTrigger::Silent
+            | EscalationTrigger::Stalled => false,
+        }
+    }
 }
 
 impl EscalationTrigger {

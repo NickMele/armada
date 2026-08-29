@@ -27,7 +27,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::checks::{CheckRun, DeclaredCheck, DeclaredJudge};
-use crate::enums::{AdvanceGate, CriterionSource, DependencyDirection, JudgeVerdict, StepState};
+use crate::enums::{
+    AdvanceGate, CriterionSource, DependencyDirection, JudgeVerdict, Recourse, StepState,
+};
 use crate::ids::{CriterionId, Instant, JobId, StepId};
 use crate::job::{JobSummary, Subject};
 use crate::work::JobFootprint;
@@ -135,6 +137,92 @@ pub struct JobDetail {
     /// shape — the Job is still `escalated`, and it is waiting on the Drone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub redirecting: Option<RedirectInFlight>,
+    /// What kind of stuck this Job is, and what moves it.
+    ///
+    /// **Absent is "this Job did not stop"**, and it is the whole of the
+    /// second reading: a queued, running, reviewing, piloted, superseded or
+    /// landed Job carries nothing here, because a classification on one of
+    /// those would offer acts against a Job nothing is wrong with.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stuck: Option<Stuck>,
+}
+
+/// Why a Job stopped, and what moves it.
+///
+/// # The trigger is the classification, and this is its second half
+///
+/// The registry already names why a Job stopped and gives each trigger the
+/// words a person reads. Nothing here mints a word on top of them:
+/// [`stopped_by`](Stuck::stopped_by) is the registry's own spelling. What is
+/// added is the sentence's other half — a person was shown `stalled` and left
+/// to work out which of five acts applies, and that mapping existed only as
+/// refusals, learned by pressing a button and reading the 409.
+///
+/// # Fleet decides once, so the sentence and the buttons cannot disagree
+///
+/// Bridge derived this from `status`, `current_step_id` and `assigned_drone`
+/// and got four of five refusals right. It could not get the fifth: whether the
+/// worktree survives is a `path.is_dir()` and a renderer reads no filesystem,
+/// so a restart was offered on a Job that had none.
+/// [`worktree_on_disk`](Stuck::worktree_on_disk) is that fact, crossing for the
+/// first time.
+///
+/// **It does not claim the trigger is true.** A Drone whose worktree was
+/// deleted escalated as `stalled`, the nearest trigger and the wrong condition.
+/// What crosses is the escalation as recorded beside the worktree fact, so the
+/// acts are right even where the trigger that produced them is not.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Stuck {
+    /// The escalation trigger, spelled as the registry spells it.
+    ///
+    /// A string rather than a mirrored enum, for the reason
+    /// [`Verdict::trigger`] is one: a closed set restated here would be a
+    /// second authority for a list that already has one. **Absent is a Job that
+    /// recorded no trigger** — one killed by hand stops no step and its
+    /// transition carries no reason.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stopped_by: Option<String>,
+    /// The step that stopped, where a step-level trigger named one.
+    ///
+    /// **Absent on every Job-level escalation**, which is what makes a restart
+    /// incoherent there rather than merely refused: `stalled`, `interrupted`
+    /// and `resource_exhausted` name no step to run again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub step_id: Option<StepId>,
+    /// The acts Fleet will take on this Job **now**, ordered by how much each
+    /// takes away.
+    ///
+    /// **Empty is a dead end and says so**: nothing resumes this Job and
+    /// nothing replaces it either. It is not the same as absent, which is a Job
+    /// that has not stopped at all.
+    pub recourse: Vec<Recourse>,
+    /// Whether the Job's worktree is still on disk.
+    ///
+    /// **The fact that decides between a restart and a redispatch**, and the
+    /// one no surface can compute for itself. It rides beside the acts rather
+    /// than only inside them so that a screen can say *why* a restart is not
+    /// offered instead of only that it is missing.
+    pub worktree_on_disk: bool,
+}
+
+impl Stuck {
+    /// The classification, as Fleet made it.
+    ///
+    /// Every field is read off the domain value, so nothing here can decide
+    /// anything the classification did not.
+    pub fn of(stuck: &core_model::Stuck) -> Stuck {
+        Stuck {
+            stopped_by: stuck.stopped_by().map(|why| why.as_wire().to_string()),
+            step_id: stuck.step().map(StepId::from),
+            recourse: stuck
+                .recourse()
+                .iter()
+                .copied()
+                .map(Recourse::from)
+                .collect(),
+            worktree_on_disk: stuck.standing().worktree_on_disk,
+        }
+    }
 }
 
 impl JobDetail {
@@ -154,6 +242,7 @@ impl JobDetail {
         steps: &[StepFacts],
         footprint: Option<JobFootprint>,
         redirecting: Option<RedirectInFlight>,
+        stuck: Option<&core_model::Stuck>,
     ) -> JobDetail {
         JobDetail {
             job: JobSummary::of(job, reason, queued_reason),
@@ -189,6 +278,7 @@ impl JobDetail {
             dependencies: job.dependencies().iter().map(Dependency::from).collect(),
             footprint,
             redirecting,
+            stuck: stuck.map(Stuck::of),
         }
     }
 }

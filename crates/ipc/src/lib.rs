@@ -77,12 +77,12 @@ pub use checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use detail::{
     Criterion, Dependency, Flagged, JobDetail, JudgeInFlight, Judged, RedirectInFlight, StepDetail,
-    StepFacts, Verdict,
+    StepFacts, Stuck, Verdict,
 };
 pub use enums::{
     Actor, AdvanceGate, CheckOutcome, CriterionSource, DependencyDirection, DronePresence,
-    EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, StepState, TopLevelOrigin,
-    Urgency,
+    EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, Recourse, StepState,
+    TopLevelOrigin, Urgency,
 };
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
