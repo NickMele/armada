@@ -113,6 +113,18 @@ checks:
     # because the build info a previous step left behind would let this skip
     # the project the Drone just edited.
     run: pnpm -C apps/desktop typecheck
+    # `crates/core-model/domain/**` and `protocol-version.toml` are here
+    # because `apps/desktop/codegen` reads them and emits TypeScript from
+    # them. A change there is a change to code `tsc` compiles, made in a file
+    # that does not look like it.
+    when:
+      - "apps/**"
+      - "packages/**"
+      - "crates/core-model/domain/**"
+      - "protocol-version.toml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
 
   bridge_build:
     # Named for whose build it is, since `build` beside it is the Rust one.
@@ -120,6 +132,16 @@ checks:
     # fails on a missing module or an import that resolves in the editor and
     # not in the bundle.
     run: pnpm -C apps/desktop build
+    # The same list as `typecheck`: the same sources, bundled rather than
+    # type-checked.
+    when:
+      - "apps/**"
+      - "packages/**"
+      - "crates/core-model/domain/**"
+      - "protocol-version.toml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
 
   storybook:
     # **The only Check that compiles `packages/components`.** It is a Vite
@@ -127,6 +149,14 @@ checks:
     # types — worth having as that package's sole compiler, and worth knowing
     # is not a typecheck.
     run: pnpm -C packages/components build-storybook
+    # Shorter than the two above: this builds `packages/components` and
+    # nothing under `apps/`, so a change to the desktop app alone does not
+    # concern it.
+    when:
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
 
   # **Named `format` and not `fmt`, because `fmt` is a Command below and a name
   # in both registries is refused.** The two are not the same thing wearing one
