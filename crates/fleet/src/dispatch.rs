@@ -216,18 +216,11 @@ where
     ///
     /// **After the rebase, on every path — because every path has one now.**
     /// What a rebase moves is inherited rather than done: a conflicting one
-    /// leaves markers in the files it could not merge, and a clean one replays
-    /// the branch onto a base that itself moved. Both are content, so a
-    /// baseline read before the rebase makes git's output the next step's work
-    /// — and a Drone that resolved nothing passed `diff_nonempty` on the
-    /// markers it was handed.
-    ///
-    /// This used to say "on the one path that has one", and named a Job's first
-    /// step and an approved one as paths where nothing rebased. Both rebase
-    /// now: `#150` closed the approval and the override, and `#180` closed the
-    /// spawn — where `crate::spawning` calls the catch-up before the process
-    /// exists and this immediately after it, so the ordering is the same
-    /// ordering in the same order.
+    /// leaves markers and a clean one replays the branch onto a base that
+    /// itself moved. Both are content, so a baseline read before it makes git's
+    /// output the next step's work, and a Drone that resolved nothing passes
+    /// `diff_nonempty` on the markers it was handed. This used to except a
+    /// Job's first step and an approved one; `#150` and `#180` closed both.
     ///
     /// **A failure leaves the step with no baseline, and that is deliberate.**
     /// A reading that did not happen is not a worktree that did not move, so

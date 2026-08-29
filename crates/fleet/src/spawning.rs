@@ -9,18 +9,13 @@
 //!
 //! # Every spawn catches the branch up, and this is the one place it happens
 //!
-//! **Rebasing is Fleet's, on every path.** `crate::delivery` carries the rule
-//! and `docs/concepts/fleet.md` states it. The three acts that advance a step
-//! under a live Drone call `caught_up` and tell it in the turn; the three that
-//! *start* a Drone have no session to inject a turn into, so the rebase runs
-//! here, before the process exists, and what it came to rides in the opening
-//! brief. That is why the brief is assembled inside this function rather than
-//! handed to it: it is not known until the rebase has answered.
-//!
-//! **A conflict is the Drone's opening work and not a refusal.** The alternative
-//! — refusing the restart until somebody resolves it — puts a person at a
-//! merge conflict in a Drone's worktree, which is the one job the Drone is
-//! already sitting in the right place to do.
+//! `crate::delivery` carries the rule. A spawn has no session to inject a turn
+//! into, so the rebase runs here and what it came to rides the opening brief —
+//! which is why the brief is assembled inside
+//! [`put_a_drone_on`](Fleet::put_a_drone_on) rather than handed to it. **A
+//! conflict is the Drone's opening work and not a refusal**: refusing the
+//! restart instead puts a person at a merge conflict inside a Drone's worktree,
+//! which is the one job the Drone is already in the right place to do.
 //!
 //! # Nothing is inherited from the Drone that went before
 //!

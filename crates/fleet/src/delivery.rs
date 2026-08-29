@@ -2,41 +2,27 @@
 //!
 //! # Rebasing is Fleet's, on every path, and it is one call
 //!
-//! **A Drone never rebases and nobody skips it.** A clean rebase leaves the
-//! worktree the Drone is in updated in place — the same worktree, the same
-//! work, the base moved underneath it — and a conflicted one leaves markers the
-//! Drone is asked to resolve before it goes on. `docs/concepts/fleet.md`,
-//! *Catching a branch up*, is the rule; [`caught_up_onto`] is the only place in
-//! the workspace that calls `bring_up_to_date` at a boundary, and every path
-//! that starts, resumes or advances a step reaches it.
+//! `docs/concepts/fleet.md`, *Catching a branch up*, is the rule.
+//! [`caught_up_onto`](Fleet::caught_up_onto) is the only place a boundary
+//! rebases, and every path that starts, resumes or advances a step reaches it.
 //!
 //! # Three moments, and they are not the same moment
 //!
-//! At a step boundary that is not the last, the branch is brought up to the
-//! base and the Drone is told in the turn it gets for the next step — a Drone
-//! is alive there, and a conflict is work it can do. At the last step the
-//! branch is brought up, pushed and opened for review, and by then there is no
-//! Drone to hand anything to. And at a **spawn** — a first dispatch, a restart,
-//! an override onto a Drone that has gone — the branch is brought up before the
-//! process exists and what moved rides in the opening brief, because there is
-//! no session yet to inject a turn into. See `crate::spawning`.
-//!
-//! [`caught_up_onto`]: Fleet::caught_up_onto
+//! At a boundary that is not the last, the Drone is told in the turn it gets
+//! for the next step — it is alive there, and a conflict is work it can do. At
+//! the last step the branch is pushed and opened for review, and there is no
+//! Drone to hand anything to. At a **spawn** the rebase runs before the process
+//! exists and what moved rides the opening brief: see `crate::spawning`.
 //!
 //! # A boundary is asked, never the Drone
 //!
 //! The Drone has just submitted and nothing is in flight, so git can answer
 //! every question here on its own. Asking the Drone whether its branch is
 //! behind would be asking it to manage its own state, which
-//! `docs/concepts/drone.md` says outright it cannot be trusted to do.
-//!
-//! # Two things are checked before anything moves
-//!
-//! Whether the repository names a base at all, and whether the branch is behind
-//! it. A branch that is not behind is left alone and nothing is announced. What
-//! the worktree is *holding* is not checked here, because it does not have to
-//! be: the rebase carries uncommitted work across and puts it back, and where
-//! it cannot, the branch is put back instead. See `adapters`' delivery module.
+//! `docs/concepts/drone.md` says outright it cannot be trusted to do. What the
+//! worktree is *holding* is not checked either: the rebase carries uncommitted
+//! work across and puts it back, and where it cannot the branch is. See
+//! `adapters`' delivery module.
 
 use adapter_traits::{
     AgentHarness, Base, BroughtUpToDate, Delivery, Opened, Pushed, Standing, Vcs, WorkProduct,

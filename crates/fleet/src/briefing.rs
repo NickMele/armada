@@ -50,19 +50,10 @@
 //! Drone reading a command out of a prompt.
 //!
 //! Five blocks outlive the turn they were written for and are types rather
-//! than paragraphs: [`Declaring`], which a step boundary sends again,
-//! [`Redeclaring`], which the live drift check sends mid-step, [`Checking`],
-//! which offers the dry run, [`Stopped`], which a restart is built from, and
-//! [`Reconciling`], which says what the rebase Fleet ran before this Drone
-//! existed came to. Each says why on itself.
-//!
-//! # An opening turn is asked for as [`Opening`], not assembled by the caller
-//!
-//! Every spawn rebases first — `crate::delivery`'s rule — so what a Drone is
-//! told about its branch is not known until after the caller would have built
-//! the prompt. [`Opening::turn`] is what `crate::spawning` calls once the
-//! rebase has answered, and it is why nothing outside this module composes a
-//! first turn any more.
+//! than paragraphs: [`Declaring`], [`Redeclaring`], [`Checking`], [`Stopped`]
+//! and [`Reconciling`]. An opening turn is asked for as [`Opening`] rather than
+//! assembled by the caller: every spawn rebases first, so what a Drone is told
+//! about its branch is not known when the caller would have built the prompt.
 
 use adapter_traits::{Prompt, SpawnConfigRefused};
 use core_model::{

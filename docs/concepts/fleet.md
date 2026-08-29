@@ -113,6 +113,34 @@ What Fleet takes from it: every Job arrives carrying `write_targets`, which is w
 
 The remedy needs no new state: `depends_on` already sequences Jobs and already parks the waiting one at `blocked_by_dependency`.
 
+### Catching a branch up
+
+**Rebasing a Job's branch is Fleet's, always.** Never the Drone — it has no git and `docs/concepts/drone.md` says outright it cannot be trusted to manage its own state — and never nobody, which is what "the base moved and the step never noticed" is.
+
+| | |
+|---|---|
+| Clean rebase | **the worktree the Drone is in is updated in place** — same path, same branch, same work, the base moved underneath it |
+| Conflicted rebase | **the Drone is asked to resolve the conflicts** before it continues |
+| A rebase that will not replay | the branch is left exactly where it was, and the Drone is told so and told it is not theirs to fix |
+
+**Nothing is created and nothing is discarded.** A rebase is not a new worktree: `Vcs` has no removal at all, a Job's earlier steps' work lives on the worktree it is on, and a restart exists precisely so that work survives. "Bring the branch up to date" and "keep the worktree" are the same sentence, not two competing ones.
+
+**Every moment that starts, resumes or advances a step catches up first.** There are six and they divide by whether a Drone is there to be told:
+
+| | who is told, and how |
+|---|---|
+| A mechanical step boundary | the live Drone, in the turn carrying the verdict |
+| A boundary a person approved | the live Drone, in the turn carrying the acceptance |
+| A boundary a person overruled | the live Drone, in the same turn |
+| A first dispatch | the Drone being spawned, in its opening brief |
+| A restart of a stopped step | the Drone being spawned, in its opening brief |
+| An override where the Drone has gone | the Drone being spawned, in its opening brief |
+| A finished Job | nobody — the branch is caught up, and a conflicted one is not pushed and gets no pull request |
+
+**Where a spawn is what happens, the conflict is the new Drone's opening work.** There is no session to inject a turn into at the moment the rebase runs, so it rides the brief. Refusing the act instead would put a person at a merge conflict inside a Drone's worktree, which is the one job the Drone is already in the right place to do.
+
+**The step's baseline is read after the rebase, never before.** A rebase writes content: a clean one replays the branch onto a base that itself moved, and a conflicted one leaves markers in the files it could not merge. A baseline taken before it credits the step with git's output, and a Drone that resolved nothing then passes `diff_nonempty` on what it was handed.
+
 ### Network loss mid-Job
 
 **The Drone and Job auto-retry on reconnect** and resume where they left off. Process-crash recovery flags `interrupted` instead of resuming — see the daemon lifecycle above.
@@ -210,6 +238,7 @@ Each piece of Fleet's behavior lives where it is specified:
 - Secrets brokering (Drone never holds secrets directly) — [Kit](kit.md), [Manifest](manifest.md), Secrets
 - Live re-evaluation of allowlist, budget caps and dispatch freeze at every gated checkpoint, versus Skills, MCP, Agent files and Commands, which are frozen into a Drone at spawn — [Drone](drone.md), What's Frozen at Spawn vs. Live
 - Auto-merge enforcement, VCS push/PR/merge, the sole actor touching Git credentials — [Manifest](manifest.md), auto_merge and review_gate
+- Rebasing a Job's branch onto its base, and who reads a conflict — Catching a branch up, above
 - Schema migrations applied on startup — `../contracts/system-architecture.md` section 5, [Kit](kit.md), Upgrade
 - Structured JSON logging per Job — `../contracts/system-architecture.md` section 4
 - Own health status — [Doctor](doctor.md), Fleet module
