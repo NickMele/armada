@@ -24,10 +24,17 @@
 //!
 //! # The prompt goes in on stdin, and the write is checked
 //!
-//! Not in argv: `ps` prints a same-uid child's argument list on darwin 27 and
-//! does not print its environment, so argv is public to every process on the
-//! machine. The first turn is written to the child's stdin instead, which is
-//! the same channel a later turn is injected through.
+//! Not in argv: `ps` prints a same-uid child's argument list on darwin 27, so
+//! argv is public to every process on the machine. The first turn is written to
+//! the child's stdin instead, which is the same channel a later turn is
+//! injected through.
+//!
+//! **The environment is not a hiding place either, and this module used to say
+//! it was.** `ps -Eww` prints a same-uid process's environment on darwin 27 —
+//! measured against a live Drone in `docs/spikes/011-what-can-one-drone-reach.md`.
+//! Nothing here depended on the old claim, so nothing moves; it is corrected
+//! because a false statement about what is visible is the kind a later design
+//! rests on.
 //!
 //! That write is the one place this module can be killed by a child. v1 wrote
 //! its own handoff with `let _ = pipe.write_all(…)` while SIGPIPE was at
