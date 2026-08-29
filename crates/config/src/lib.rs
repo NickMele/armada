@@ -11,8 +11,9 @@
 //!
 //! # What is built, and what is refused
 //!
-//! M1 reads **five keys** from an `armada.yml` — `version`, `id`,
-//! `checks.<name>.run`, `commands.<name>.run`, `commands.<name>.destructive` —
+//! M1 reads **six keys** from an `armada.yml` — `version`, `id`,
+//! `checks.<name>.run`, `checks.<name>.when`, `commands.<name>.run`,
+//! `commands.<name>.destructive` —
 //! and **five fields** of a WorkflowDef. Everything else in either schema is an
 //! unknown key and hard-fails.
 //!
@@ -59,6 +60,6 @@ pub use workflow::{MechanicalCheck, Step, Structure, WorkflowDef};
 // four are spelled in `core-model` where the record is — and every caller that
 // already said `config::ResolvedStep` still means the same type.
 pub use core_model::{
-    AdvanceGate, ContextSource, DeclarePlanAt, DeclaredPaths, EvidenceScope, EvidenceType,
-    FrozenWorkflow, JudgeCheck, JudgeCriterion, ResolvedCheck, ResolvedStep,
+    AdvanceGate, ContextSource, Covers, DeclarePlanAt, DeclaredPaths, EvidenceScope, EvidenceType,
+    FrozenWorkflow, JudgeCheck, JudgeCriterion, PathPattern, ResolvedCheck, ResolvedStep,
 };

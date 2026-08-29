@@ -38,6 +38,23 @@ export function commandOf(check: DeclaredCheck): string {
 }
 
 /**
+ * Which paths a Check covers, or nothing where it covers everything.
+ *
+ * **Absent means always, and it draws nothing.** Most Checks declare no `when`,
+ * and a row saying "covers everything" on every one of them would bury the two
+ * that say something. Fleet sends no key rather than an empty list, so there is
+ * no empty case to disambiguate here.
+ *
+ * **This is the half that is only useful before the Check runs.** Once the gate
+ * has skipped one, its `check_runs` row is `not run` and names the paths itself;
+ * before, this is the only thing that tells a reader a Check they expect to see
+ * will not be spent on this Job.
+ */
+export function coversOf(check: DeclaredCheck): string | undefined {
+  return check.when === undefined ? undefined : `when ${check.when.join(", ")}`;
+}
+
+/**
  * One declared `judge_checks[]` entry, in counts.
  *
  * `judge` is the verification source named in text, which the iconography

@@ -51,6 +51,17 @@ export type WorkflowRailGate = {
   /** The accessible name for the glyph. */
   iconLabel?: string;
   /**
+   * Which paths the Check covers, where it covers only some. **A declaration,
+   * not a result** — it is knowable before the Check runs and that is the only
+   * moment it earns the room: once the gate has skipped one, `result` says so
+   * and names the paths itself.
+   *
+   * Mono, and beside `result` rather than inside `command`, because the command
+   * cell is the one that truncates and this is the half a reader is scanning
+   * for. Absent on a Check that covers everything, which is most of them.
+   */
+  covers?: string;
+  /**
    * Where the Check's stdout and stderr were written, relative to the
    * repository root. **The path, never the contents** — Bridge does not read
    * the filesystem, and a Check that failed is unreadable without this.
@@ -312,6 +323,11 @@ export function WorkflowRail({ steps, pulsing = false, onCopied }: WorkflowRailP
                       ) : null}
                     </span>
                     <span className="armada-rail__gate-command">{gate.command}</span>
+                    {gate.covers ? (
+                      <span className="armada-rail__gate-covers" title={gate.covers}>
+                        {gate.covers}
+                      </span>
+                    ) : null}
                     {gate.result ? (
                       <span className="armada-rail__gate-result">{gate.result}</span>
                     ) : null}

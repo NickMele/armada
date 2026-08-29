@@ -358,6 +358,14 @@
   reserved = "Check results only."
   notes = "Reassigned 2026-08-21. Previously circle-minus; moved when circle-* became the Judge family. Completes the check family rather than damaging it — not reached is a Check state and belongs beside shield-check and shield-x, where it should have been."
 
+[icons.shield-off]
+  means = "A pointed-base pentagon with a slash through it"
+  group = "Step and Verdict"
+  size = "12px"
+  status = "Specified"
+  reserved = "A Check the gate deliberately did not run. Never a failed Check (shield-x), never a Check that was reached and produced nothing (shield-minus)."
+  notes = "Added 2026-08-29 for check_outcome.skipped. Within the shield reservation, so the family still reads as gates and checks — and the slash is the only silhouette in it that says a rule was switched off rather than answered. It has to differ from shield-minus: a Check skipped because the step touched none of the paths it covers and a Check whose command is not installed would otherwise draw identically, and one of those is a failure."
+
 [icons.shield-x]
   means = "A pointed-base pentagon with a cross inside"
   group = "Escalation reason"

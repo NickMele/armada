@@ -14,6 +14,11 @@
 //! honours it, and every deferred section stays additive rather than becoming
 //! a migration.
 //!
+//! `checks.<name>.when` is the sixth key: a list of path patterns, in
+//! `core_model::PathPattern`'s dialect, checked at load. A pattern this parser
+//! cannot read is a refusal beside every other refusal in the file rather than
+//! a Check that quietly stops running. **Absent means always.**
+//!
 //! # Two registries, sharing no names
 //!
 //! Checks gate advancement and Commands do not; a Check may name a Command as
@@ -32,7 +37,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use core_model::{ManifestId, Ulid};
+use core_model::{Covers, ManifestId, PathPattern, Ulid};
 use serde_yaml_ng::Value;
 
 use crate::error::{Fault, LoadError, Refusal};
@@ -41,7 +46,7 @@ use crate::yaml::{self, Table};
 /// The keys M1 reads at the top level of an `armada.yml`.
 const TOP_LEVEL: &[&str] = &["version", "id", "base", "checks", "commands"];
 /// The keys M1 reads inside `checks.<name>`.
-const CHECK_KEYS: &[&str] = &["run"];
+const CHECK_KEYS: &[&str] = &["run", "when"];
 /// The keys M1 reads inside `commands.<name>`.
 const COMMAND_KEYS: &[&str] = &["run", "destructive"];
 
@@ -54,12 +59,23 @@ const COMMAND_KEYS: &[&str] = &["run", "destructive"];
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Check {
     run: String,
+    when: Option<Covers>,
 }
 
 impl Check {
     /// The command line, verbatim as the repo wrote it.
     pub fn run(&self) -> &str {
         &self.run
+    }
+
+    /// Which paths this Check covers. **`None` where the file declares no
+    /// `when`, and that means always** — never "covers nothing".
+    ///
+    /// An `Option` rather than an empty [`Covers`] because the two would be one
+    /// value with opposite meanings, and [`Covers::of`] has no way to build an
+    /// empty one for exactly that reason.
+    pub fn when(&self) -> Option<&Covers> {
+        self.when.as_ref()
     }
 }
 
@@ -260,8 +276,59 @@ fn check_entry(
     let run = table
         .required("run", out)
         .and_then(|value| yaml::text(&table.at("run"), value, out));
+    // **A missing `when` and an unreadable `when` are not the same answer.**
+    // The first is a Check that always runs; the second is a file that does not
+    // load. So a fault inside the list refuses the Check rather than falling
+    // back to the always case, which would be the parser deciding on the
+    // author's behalf that a Check they meant to scope is unscoped.
+    let when = match table.optional("when") {
+        None => Ok(None),
+        Some(value) => covers(&table.at("when"), value, out),
+    };
     table.close(known, out);
-    Some(Check { run: run? })
+    Some(Check {
+        run: run?,
+        when: when.ok()?,
+    })
+}
+
+/// `checks.<name>.when`, as a non-empty list of readable patterns.
+///
+/// `Err(())` where something in the list was refused, so the caller can tell it
+/// from a `when` that was simply not written — the two mean opposite things and
+/// an `Option` alone cannot carry both.
+fn covers(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Result<Option<Covers>, ()> {
+    // An empty list is refused by `yaml::list`, which is the answer this key
+    // wants: `when: []` is a Check that can never run, and a Check that can
+    // never run is one to delete rather than one to write.
+    let Some(items) = yaml::list(at, value, out) else {
+        return Err(());
+    };
+    let mut patterns = Vec::with_capacity(items.len());
+    let mut refused = false;
+    for (key, item) in items {
+        let Some(written) = yaml::text(&key, item, out) else {
+            refused = true;
+            continue;
+        };
+        match PathPattern::parse(&written) {
+            Ok(pattern) => patterns.push(pattern),
+            Err(why) => {
+                refused = true;
+                out.push(Refusal::new(
+                    key,
+                    Fault::NotAPathPattern {
+                        value: written,
+                        why,
+                    },
+                ));
+            }
+        }
+    }
+    match refused {
+        true => Err(()),
+        false => Ok(Covers::of(patterns)),
+    }
 }
 
 fn command_entry(

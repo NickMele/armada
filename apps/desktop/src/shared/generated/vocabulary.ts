@@ -2,7 +2,8 @@
 //
 // The verb, the glyph and the status token each variant renders as, from
 // `crates/core-model/domain/enum-verbs.toml`; whether a status is terminal and
-// what it is doing, from `job-statuses.toml`; and the protocol version from
+// what it is doing, from `job-statuses.toml`; whether a Check outcome advances
+// a step, from `check-outcomes.toml`; and the protocol version from
 // `protocol-version.toml`. Nothing here is written by hand, which is the point:
 // a status label typed into a component is a second vocabulary.
 //
@@ -10,7 +11,7 @@
 // one is listed in `GAPS` so a surface can say what it could not render instead
 // of inventing copy for it.
 
-import { Archive, ArrowUpToLine, Ban, Check, CircleCheck, CircleDot, CircleX, Clock, Cpu, Eye, FileQuestionMark, Link, OctagonAlert, Power, RefreshCw, ShieldCheck, ShieldMinus, ShieldX, Split, Stamp, Terminal, Unplug, UserCheck, X } from "lucide-react";
+import { Archive, ArrowUpToLine, Ban, Check, CircleCheck, CircleDot, CircleX, Clock, Cpu, Eye, FileQuestionMark, Link, OctagonAlert, Power, RefreshCw, ShieldCheck, ShieldMinus, ShieldOff, ShieldX, Split, Stamp, Terminal, Unplug, UserCheck, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /** How one variant reads. `null` where the registry carries no answer. */
@@ -70,6 +71,7 @@ export const CHECK_OUTCOME: Readonly<Record<string, Rendering | undefined>> = {
   "signalled": { verb: "ended by a signal", icon: Unplug, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "timed_out": { verb: "outran its budget", icon: Clock, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "never_ran": { verb: "never started", icon: ShieldMinus, badgeStatus: "not-started", statusToken: "--status-not-started" },
+  "skipped": { verb: "not run", icon: ShieldOff, badgeStatus: "not-started", statusToken: "--status-not-started" },
 };
 
 /** `criterion_verdict_check`, keyed by the wire value. */
@@ -113,6 +115,21 @@ export const JOB_LIFECYCLE: Readonly<Record<string, Lifecycle | undefined>> = {
   "rejected": { terminal: true, mode: "N/A" },
   "running": { terminal: false, mode: "Working" },
   "superseded": { terminal: true, mode: "N/A" },
+};
+
+/**
+ * Whether a step may advance past one Check outcome, from
+ * `check-outcomes.toml`. **Not the same question as passed** — `skipped`
+ * advances and measured nothing, and a surface that read the status token
+ * instead would draw it identically to `never_ran`, which is a failure.
+ */
+export const CHECK_ADVANCES: Readonly<Record<string, boolean | undefined>> = {
+  "passed": true,
+  "failed": false,
+  "signalled": false,
+  "timed_out": false,
+  "never_ran": false,
+  "skipped": true,
 };
 
 /** What a Job's urgency may be, from `job-fields.toml`. Not a scale. */

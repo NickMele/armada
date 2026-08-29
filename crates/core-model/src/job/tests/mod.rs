@@ -254,6 +254,7 @@ fn reach(status: JobStatus) -> Job {
     reached
 }
 
+mod covers;
 mod machine;
 mod record;
 mod step_machine;

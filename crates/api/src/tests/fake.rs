@@ -322,6 +322,9 @@ impl Daemon for FakeDaemon {
                         name: Some("build".to_string()),
                         run: Some("cargo build --workspace --locked".to_string()),
                         expect_exit_code: Some(0),
+                        // Covering everything, which is most Checks. The scoped
+                        // case is asserted in `ipc`'s own round-trip.
+                        when: None,
                     }],
                     judge_checks: vec![ipc::DeclaredJudge {
                         criteria: 2,

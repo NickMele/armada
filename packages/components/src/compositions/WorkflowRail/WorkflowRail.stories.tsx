@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { FileCheck, Lock, ShieldCheck, ShieldMinus, ShieldX } from "lucide-react";
+import { FileCheck, Lock, ShieldCheck, ShieldMinus, ShieldOff, ShieldX } from "lucide-react";
 import { WorkflowRail, type WorkflowRailStep } from "./WorkflowRail";
 
 /**
@@ -324,8 +324,9 @@ export const ServedSteps: Story = {
  * and one honest fallback, drawn rather than papered over.
  *
  * `not reached` and its `shield-minus` come from the criterion Check
- * vocabulary: `check_outcome`'s five are what a Check that *ran* did, and it
- * declares no row for one the gate has not reached.
+ * vocabulary: `check_outcome`'s six are what the gate *decided* about a Check,
+ * and it declares no row for one the gate has not reached. `skipped` is not
+ * that row — a skipped Check was reached and deliberately not run.
  */
 export const EveryStepState: Story = {
   args: {
@@ -460,21 +461,27 @@ export const UngatedAndUnanswerable: Story = {
 };
 
 /**
- * The five Check outcomes, rendered apart.
+ * The six Check outcomes, rendered apart.
  *
- * **Only `passed` advances a step, and the other four are four different
- * things.** A hanging Check and a Check whose command is not installed need
- * opposite responses, so collapsing them into "failed" hides the one difference
- * a reader acts on. A pass carries nothing beside it because a pass measured
- * nothing — the outcome is the whole sentence.
+ * **Two advance a step and only one of them is a pass.** Four of the six are
+ * four different failures — a hanging Check and a Check whose command is not
+ * installed need opposite responses, so collapsing them into "failed" hides the
+ * one difference a reader acts on. A pass carries nothing beside it because a
+ * pass measured nothing.
+ *
+ * **`skipped` is the sixth and it is the deliberate one.** The Check declares
+ * which paths it covers in `checks.<name>.when` and this step changed none of
+ * them, so the gate did not run it. It advanced the step and it verified
+ * nothing, which is why it is neither `passed` nor one of the four — a rail
+ * that drew it green would be claiming a Check that never ran.
  *
  * **Every result here is the wire's own spelling.**
- * `crates/core-model/domain/check-outcomes.toml` declares the five and
- * `enum-verbs.toml` carries no `check_outcome` rows, so there is no sanctioned
- * verb, glyph or hue for any of them. The gate rows render a glyph short rather
- * than borrowing one that means something else. Reported.
+ * `crates/core-model/domain/check-outcomes.toml` declares the six and
+ * `enum-verbs.toml` now carries a `check_outcome` row for each, so the verb and
+ * the glyph are the registry's. The results below are the raw wire words, which
+ * is what this story is for: the vocabulary and the value are drawn apart.
  */
-export const TheFiveCheckOutcomes: Story = {
+export const TheSixCheckOutcomes: Story = {
   args: {
     steps: [
       {
@@ -492,6 +499,41 @@ export const TheFiveCheckOutcomes: Story = {
           { command: "test", result: "signalled · SIGKILL" },
           { command: "audit", result: "timed_out · 120s budget" },
           { command: "typecheck", result: "never_ran · tsc is not installed" },
+          { command: "storybook", result: "skipped · no changed file is under packages/**" },
+        ],
+      },
+    ],
+  },
+};
+
+/**
+ * **A Check says which paths it covers before it is asked to run.**
+ *
+ * `checks.<name>.when` in `armada.yml`, and it is the only moment the
+ * declaration says anything a reader cannot get later: a Check with no `when`
+ * draws nothing, so the two that carry one are the two rows saying this Job's
+ * diff will not be measured by them.
+ *
+ * The first step is a preview — no Job exists, so no row carries a glyph or an
+ * outcome. The second has run: `build` passed, and `storybook` reads `not run`
+ * with the same declaration still beside it, which is why the rail draws
+ * `covers` in both states rather than only in one.
+ */
+export const AChecksPathsAreDrawnBeforeItRuns: Story = {
+  args: {
+    steps: [
+      {
+        id: "implement", label: "Implement", labelIsAnIdentifier: true, activity: "not_started", status: "not_started",
+        gates: [
+          { command: "build · cargo build --workspace --locked" },
+          { command: "storybook · pnpm -C packages/components build-storybook", covers: "when packages/**, apps/desktop/**" },
+        ],
+      },
+      {
+        id: "verify", label: "Verify", labelIsAnIdentifier: true, activity: "advanced", status: "advanced", elapsed: "1m 22s", verdict: "passed", verdictNamed: "passed",
+        gates: [
+          { command: "build · cargo build --workspace --locked", result: "passed", icon: ShieldCheck, iconLabel: "passed" },
+          { command: "storybook · pnpm -C packages/components build-storybook", covers: "when packages/**, apps/desktop/**", result: "not run · no changed file is under packages/**, apps/desktop/**", icon: ShieldOff, iconLabel: "not run" },
         ],
       },
     ],

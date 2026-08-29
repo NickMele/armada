@@ -7,6 +7,16 @@
 //! `verification`'s mechanical tier refuses all four into a pass; folding them
 //! into a single `failed` here would record *that* they failed and lose *which*,
 //! which is the only part a person opening the branch needs.
+//!
+//! # Passed, skipped and did not run are three things
+//!
+//! [`CheckOutcome::Skipped`] is a Check that declared which paths it covers and
+//! whose step touched none of them. It did not pass — nothing was measured —
+//! and it did not fail, so [`CheckOutcome::passed`] and
+//! [`CheckOutcome::advances`] stop being the same question and each call site
+//! has to say which it meant. A step that advances because every Check was
+//! skipped is a step that verified nothing, and the record has to be able to
+//! say so.
 
 use alloc::string::String;
 
@@ -25,6 +35,14 @@ pub enum CheckOutcome {
     /// It never started. **Never a vacuous pass** — the failure a fresh
     /// machine actually produces is a Check command that is not installed.
     NeverRan,
+    /// The Check declares which paths it covers and this step changed none of
+    /// them, so it was not run.
+    ///
+    /// **Deliberate, and the only outcome here that is.** The other four
+    /// not-passes are things that went wrong; this one is the gate declining to
+    /// spend a Check on work it does not cover. It does not stop the step and
+    /// it is not a pass — see [`CheckOutcome::advances`].
+    Skipped,
 }
 
 impl CheckOutcome {
@@ -35,6 +53,7 @@ impl CheckOutcome {
         CheckOutcome::Signalled,
         CheckOutcome::TimedOut,
         CheckOutcome::NeverRan,
+        CheckOutcome::Skipped,
     ];
 
     /// The wire value, which is also the registry key.
@@ -45,6 +64,7 @@ impl CheckOutcome {
             CheckOutcome::Signalled => "signalled",
             CheckOutcome::TimedOut => "timed_out",
             CheckOutcome::NeverRan => "never_ran",
+            CheckOutcome::Skipped => "skipped",
         }
     }
 
@@ -56,11 +76,26 @@ impl CheckOutcome {
             .find(|outcome| outcome.as_wire() == value)
     }
 
-    /// Whether the step may advance on this one. **Only `Passed`**, and it is
-    /// a method rather than a `!= Failed` at each call site so that a variant
-    /// added here cannot default to passing.
+    /// Whether the Check ran and answered what the step declared. **Only
+    /// `Passed`**, and it is a method rather than a `!= Failed` at each call
+    /// site so that a variant added here cannot default to passing.
+    ///
+    /// **Not the question a gate asks.** A skipped Check did not pass and does
+    /// not stop the step, so the two questions are two methods — see
+    /// [`CheckOutcome::advances`]. Reading this one as "may the step advance"
+    /// is what would make a step that skipped every Check read as a step that
+    /// passed them.
     pub fn passed(&self) -> bool {
         matches!(self, CheckOutcome::Passed)
+    }
+
+    /// Whether the step may advance past this outcome.
+    ///
+    /// **`Passed` and `Skipped`**, and they are not interchangeable anywhere
+    /// else: one measured something and held, the other measured nothing
+    /// because the step touched nothing it covers.
+    pub fn advances(&self) -> bool {
+        matches!(self, CheckOutcome::Passed | CheckOutcome::Skipped)
     }
 }
 
@@ -76,9 +111,14 @@ pub struct StepCheck {
     pub name: String,
     pub outcome: CheckOutcome,
     /// What the Check was measured against. **Absent on a pass**, where the
-    /// outcome is the whole sentence.
+    /// outcome is the whole sentence, and absent on a skip, which measured
+    /// nothing to be measured against.
     pub expected: Option<String>,
     /// What actually happened. Absent on a pass, for the same reason.
+    ///
+    /// **Present on a skip**, naming the paths the Check covers — a Check that
+    /// did not run is the one outcome where a reader's first question is why,
+    /// and the patterns are the whole answer.
     pub produced: Option<String>,
     /// Where the Check's own stdout and stderr were written, relative to the
     /// repository root.

@@ -4,10 +4,10 @@
 //! round-trip over an empty record exercises almost nothing and passes anyway.
 
 use core_model::{
-    Actor, AdvanceGate, Attachment, CheckOutcome, ContextSource, CriterionId, DeclarePlanAt,
-    DroneId, EvidenceRef, EvidenceType, GamingPattern, Job, JobStatus, JudgeVerdict, Judgment,
-    ModelName, RepoPath, ResolvedCheck, StepCheck, StepEvidence, StepId, Target, Ulid,
-    WriteTargets,
+    Actor, AdvanceGate, Attachment, CheckOutcome, ContextSource, Covers, CriterionId,
+    DeclarePlanAt, DroneId, EvidenceRef, EvidenceType, GamingPattern, Job, JobStatus, JudgeVerdict,
+    Judgment, ModelName, PathPattern, RepoPath, ResolvedCheck, StepCheck, StepEvidence, StepId,
+    Target, Ulid, WriteTargets,
 };
 
 use crate::tests::{created_at, job_id, open, sub_dispatched, top_level, TempDir};
@@ -432,11 +432,18 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
                 name: "build".to_string(),
                 run: "cargo build".to_string(),
                 expect_exit_code: 0,
+                when: Covers::of(vec![PathPattern::parse("crates/**").expect("a pattern")]),
             },
             ResolvedCheck::DiffNonempty,
         ],
         "the command lifted out of the Manifest, not the name it was written as"
     );
+    // **Which paths the Check covers is frozen with the command.** A row that
+    // came back without it would leave the gate deciding against the live
+    // `armada.yml`, which is the moved-gate failure the workflow is frozen to
+    // prevent.
+    assert!(fix.checks()[0].covers(&["crates/store/src/read.rs".to_string()]));
+    assert!(!fix.checks()[0].covers(&["packages/components/src/Badge.tsx".to_string()]));
     // The bar the Judge measures against is frozen with the rest of the step.
     // A criterion edited in `.armada/workflows/` changes the next Job, not this
     // one, which is the whole reason the declaration is on the record.
@@ -602,4 +609,55 @@ fn the_evidence_a_step_submitted_survives_the_process_that_gated_it() {
         .expect("loads")
         .iter()
         .all(|(id, _)| id == &step));
+}
+
+/// A frozen workflow as a store written before `when` existed holds one: one
+/// Manifest Check, and no key saying which paths it covers.
+const WITHOUT_WHEN: &str = r#"{
+  "workflow_id": "01J000000000000000000WF01",
+  "name": "bug",
+  "version": 1,
+  "steps": [{
+    "id": "fix",
+    "label": "Fix",
+    "evidence_type": "diff",
+    "advance_gate": "auto",
+    "retry_limit": 0,
+    "evidence_scope": null,
+    "judge_checks": [],
+    "checks": [{
+      "type": "manifest_check",
+      "check": "build",
+      "run": "cargo build",
+      "expect_exit_code": 0
+    }]
+  }]
+}"#;
+
+#[test]
+fn a_workflow_frozen_before_when_existed_reads_back_as_a_check_that_always_runs() {
+    // **The whole of what makes this additive.** Nothing backfills, because
+    // there is nothing to backfill: an absent key and a Check that declares no
+    // `when` are the same sentence, and it is "always".
+    let workflow = crate::columns::read_workflow(WITHOUT_WHEN).expect("a pre-`when` row");
+    let check = &workflow
+        .step(&StepId::new("fix"))
+        .expect("the step")
+        .checks()[0];
+    assert_eq!(check.when(), None);
+    assert!(!check.needs_changed_paths());
+    assert!(check.covers(&[]), "a Check with no `when` runs on any step");
+}
+
+#[test]
+fn a_stored_pattern_the_dialect_cannot_read_is_malformed_rather_than_dropped() {
+    // Dropping it would widen the Check to everything and dropping the Check
+    // would narrow it to nothing. Neither is recoverable by reading the record,
+    // so the row refuses instead.
+    let stored = WITHOUT_WHEN.replace(
+        r#""expect_exit_code": 0"#,
+        r#""expect_exit_code": 0, "when": ["src/[ab].rs"]"#,
+    );
+    let refused = crate::columns::read_workflow(&stored).expect_err("an unreadable pattern");
+    assert!(refused.contains("src/[ab].rs"), "{refused}");
 }

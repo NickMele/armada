@@ -24,12 +24,12 @@
 //! quietly missing it, which is the failure the version number exists for.
 
 use core_model::{
-    AcceptanceCriterion, Actor, AdvanceGate, ContextSource, CriteriaOwed, CriterionId,
+    AcceptanceCriterion, Actor, AdvanceGate, ContextSource, Covers, CriteriaOwed, CriterionId,
     CriterionSource, DeclarePlanAt, DependencyDirection, DependencyEdge, EscalationTrigger,
     EvidenceRef, EvidenceScope, EvidenceType, FrozenWorkflow, GamingCheck, GamingPattern, JobId,
-    JudgeCheck, JudgeCriterion, ModelName, PilotReason, RepoPath, ResolvedCheck, ResolvedStep,
-    ScopeRevision, ScopeRevisionOutcome, StepId, Timestamp, TransitionReason, Ulid, WorkflowId,
-    DIFF_NONEMPTY, MANIFEST_CHECK,
+    JudgeCheck, JudgeCriterion, ModelName, PathPattern, PilotReason, RepoPath, ResolvedCheck,
+    ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, Timestamp, TransitionReason, Ulid,
+    WorkflowId, DIFF_NONEMPTY, MANIFEST_CHECK,
 };
 use serde_json::{json, Map, Value};
 
@@ -316,11 +316,17 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
                 })),
             })).collect::<Vec<Value>>(),
             "checks": step.checks().iter().map(|check| match check {
-                ResolvedCheck::ManifestCheck { name, run, expect_exit_code } => json!({
+                ResolvedCheck::ManifestCheck { name, run, expect_exit_code, when } => json!({
                     "type": MANIFEST_CHECK,
                     "check": name,
                     "run": run,
                     "expect_exit_code": expect_exit_code,
+                    // Absent rather than an empty list where the Check declares
+                    // no `when`. The two mean opposite things — always, and
+                    // never — and a row written before `when` existed carries
+                    // no key at all, which reads back as the first.
+                    "when": when.as_ref().map(|covers| covers.patterns().iter()
+                        .map(|pattern| pattern.as_str()).collect::<Vec<&str>>()),
                 }),
                 ResolvedCheck::DiffNonempty => json!({ "type": DIFF_NONEMPTY }),
             }).collect::<Vec<Value>>(),
@@ -520,10 +526,47 @@ fn read_check(entry: &Map<String, Value>) -> Result<ResolvedCheck, Malformed> {
             expect_exit_code: field(entry, "expect_exit_code")?
                 .as_i64()
                 .ok_or_else(|| "`expect_exit_code` is not an integer".to_string())?,
+            when: read_when(entry)?,
         }),
         DIFF_NONEMPTY => Ok(ResolvedCheck::DiffNonempty),
         other => Err(format!("`type` holds `{other}`")),
     }
+}
+
+/// Which paths a stored Check covers.
+///
+/// **Absent and null both read as `None`, which means always.** A row written
+/// before `when` existed carries no key, and that is the same sentence as a
+/// Check that declares no `when` — the additive case this whole key is built to
+/// keep working.
+///
+/// A pattern the dialect cannot read is malformed rather than dropped: a Check
+/// whose scope was silently widened to everything, or narrowed to nothing, is
+/// worse than a Job that refuses to load.
+fn read_when(entry: &Map<String, Value>) -> Result<Option<Covers>, Malformed> {
+    let Some(value) = entry.get("when") else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    let mut patterns = Vec::new();
+    for item in array(value)? {
+        let written = item
+            .as_str()
+            .ok_or_else(|| "`when` holds something that is not a pattern".to_string())?;
+        patterns.push(
+            PathPattern::parse(written)
+                .map_err(|why| format!("`when` holds `{written}`, which {why}"))?,
+        );
+    }
+    // `Covers::of` answers `None` on an empty list, which would read back as
+    // "always" — the opposite of what a stored empty list would have meant. It
+    // cannot be written by `write_workflow`, and it is refused rather than
+    // reinterpreted.
+    Covers::of(patterns)
+        .map(Some)
+        .ok_or_else(|| "`when` is an empty list".to_string())
 }
 
 /// A definition's own version number. `u32` on the record, so a stored value

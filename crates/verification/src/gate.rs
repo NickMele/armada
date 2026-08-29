@@ -8,7 +8,7 @@
 //! than a sentence:
 //!
 //! - **Evidence with a failing check** cannot reach [`Verdict::Advance`],
-//!   because `Ran::all_passed` is false and the match has no other arm.
+//!   because `Ran::advances` is false and the match has no other arm.
 //! - **Passing checks with no evidence** cannot reach `decide` at all, because
 //!   there is no `Accepted` to pass and no constructor that makes one without a
 //!   [`Submission`](crate::Submission).
@@ -21,6 +21,11 @@
 //! failures, so the ordinary rule — evidence, and no failing check — is
 //! satisfied. Two of the four sample workflows lean on this and it is the
 //! common shape rather than the edge.
+//!
+//! A step whose every Check was skipped advances by the same rule and is not
+//! the same fact. [`decide`] asks `Ran::advances`, not `Ran::all_passed`; the
+//! verdict matches and the record does not, because `check_runs` carries a
+//! `skipped` row per Check.
 //!
 //! # Why acceptance is a separate step from deciding
 //!
@@ -152,7 +157,10 @@ impl Verdict {
 /// `Option<Accepted>` or a bare list of outcomes, so neither half of the rule
 /// can be dropped at a call site.
 pub fn decide(_evidence: Accepted<'_>, ran: &Ran) -> Verdict {
-    if ran.all_passed() {
+    // **`advances`, not `all_passed`.** The two differ only on a skipped check,
+    // and reading the second here would produce `Verdict::Failed` carrying an
+    // empty list of failures — a step failed by nothing.
+    if ran.advances() {
         Verdict::Advance
     } else {
         Verdict::Failed(ran.failures())

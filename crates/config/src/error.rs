@@ -32,7 +32,7 @@ use std::error::Error;
 use std::fmt;
 use std::path::PathBuf;
 
-use core_model::StepId;
+use core_model::{BadPattern, StepId};
 
 /// One key, and one thing wrong with it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -126,6 +126,11 @@ pub enum Fault {
     /// otherwise. Four such checks shipped in one commit and nobody noticed
     /// until a Job escalated at its first step — see #153.
     JudgedWithNothingToShow,
+    /// **A `checks.<name>.when` entry the glob dialect cannot read.** Refused
+    /// at load rather than matched literally, because a pattern written in some
+    /// other dialect matches nothing and a Check that silently never runs again
+    /// is the failure `when` exists to prevent.
+    NotAPathPattern { value: String, why: BadPattern },
 }
 
 impl fmt::Display for Fault {
@@ -176,6 +181,9 @@ impl fmt::Display for Fault {
                 "asks the Judge a question and declares no `evidence_type`, so \
                  the step produces nothing the Judge could be shown"
             ),
+            Fault::NotAPathPattern { value, why } => {
+                write!(f, "is `{value}`, which is not a path pattern: {why}")
+            }
             Fault::GateAndJudgeDisagree { gate: "auto" } => write!(
                 f,
                 "is `auto`, which is the mechanical tier alone, and the step \

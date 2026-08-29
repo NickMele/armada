@@ -214,3 +214,97 @@ fn one_key_written_twice_is_refused_rather_than_won_by_the_last() {
     assert!(matches!(error, crate::LoadError::NotYaml { .. }), "{error}");
     assert!(error.to_string().contains("duplicate"), "{error}");
 }
+
+/// A Check that says which paths it covers, beside one that says nothing.
+const SCOPED: &str = r#"
+version: 1
+id: armada
+checks:
+  build:
+    run: cargo build --workspace
+  storybook:
+    run: pnpm -C packages/components build-storybook
+    when: ["packages/**", "apps/desktop/**"]
+"#;
+
+#[test]
+fn a_check_may_say_which_paths_it_covers() {
+    let manifest = parse(SCOPED).expect("a `when` this dialect reads");
+    let storybook = manifest.check("storybook").expect("storybook");
+    let covers = storybook.when().expect("two patterns");
+    assert_eq!(covers.written(), "packages/**, apps/desktop/**");
+    assert!(covers.matches_any(&["packages/components/src/Badge.tsx".to_string()]));
+    assert!(!covers.matches_any(&["crates/fleet/src/gate.rs".to_string()]));
+}
+
+#[test]
+fn a_check_with_no_when_says_none_and_never_covers_nothing() {
+    // **Absent means always**, and it is `None` here rather than an empty list
+    // so the two cannot be confused downstream. Every `armada.yml` written
+    // before `when` existed lands on this branch.
+    let manifest = parse(SCOPED).expect("a `when` this dialect reads");
+    assert_eq!(manifest.check("build").expect("build").when(), None);
+}
+
+#[test]
+fn a_when_that_is_not_a_list_is_refused() {
+    let refused = refusals(parse(
+        "version: 1\nid: a\nchecks:\n  build:\n    run: x\n    when: packages/**\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "checks.build.when"),
+        Fault::WrongType {
+            wanted: "a list",
+            ..
+        }
+    ));
+}
+
+#[test]
+fn an_empty_when_is_refused_rather_than_read_as_always() {
+    // `when: []` is a Check that can never run. Reading it as "always" would
+    // be the parser deciding the author meant the opposite of what they wrote;
+    // reading it as "never" would be a Check that silently stops running.
+    let refused = refusals(parse(
+        "version: 1\nid: a\nchecks:\n  build:\n    run: x\n    when: []\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "checks.build.when"),
+        Fault::Empty
+    ));
+}
+
+#[test]
+fn a_pattern_from_another_dialect_is_refused_and_names_itself() {
+    let refused = refusals(parse(
+        "version: 1\nid: a\nchecks:\n  build:\n    run: x\n    when: [\"src/[ab].rs\"]\n",
+    ));
+    let fault = fault_at(&refused, "checks.build.when[0]");
+    assert!(matches!(fault, Fault::NotAPathPattern { value, .. } if value == "src/[ab].rs"));
+    // The message says which character, so the author can see which dialect
+    // they were writing in rather than being told the pattern is wrong.
+    assert!(fault.to_string().contains('['), "{fault}");
+}
+
+#[test]
+fn every_bad_pattern_in_one_file_is_reported_in_one_pass() {
+    let refused = refusals(parse(
+        "version: 1\nid: a\nchecks:\n  build:\n    run: x\n    when: [\"/abs\", \"trailing/\"]\n",
+    ));
+    assert!(super::refused(&refused, "checks.build.when[0]"));
+    assert!(super::refused(&refused, "checks.build.when[1]"));
+}
+
+#[test]
+fn when_is_the_only_key_a_check_gained() {
+    // The header's rule is unchanged: every key but `run` and `when` is refused
+    // by name, so a deferred section still arrives with the code that honours
+    // it.
+    let refused = refusals(parse(
+        "version: 1\nid: a\nchecks:\n  build:\n    run: x\n    timeout: 60\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "checks.build.timeout"),
+        Fault::Unknown { known } if known.contains(&"when")
+    ));
+}

@@ -22,6 +22,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::job::attempt::Attempt;
+use crate::job::covers::Covers;
 use crate::job::gaming::GamingCheck;
 use crate::job::ids::{StepId, WorkflowId};
 use crate::job::judge::JudgeCheck;
@@ -91,6 +92,16 @@ pub enum ResolvedCheck {
         name: String,
         run: String,
         expect_exit_code: i64,
+        /// Which paths the Manifest says this Check covers. **`None` where the
+        /// Manifest declared no `when`, and that means always** — which is
+        /// what keeps every Manifest written before `when` existed behaving
+        /// exactly as it did.
+        ///
+        /// Frozen here beside `run` for the reason `run` is frozen: an edit to
+        /// `armada.yml` mid-Job would otherwise move the gate under work that
+        /// was already approved, and a Check that stopped running would be
+        /// invisible in a way a changed command would not.
+        when: Option<Covers>,
     },
     /// The step produced a non-empty diff.
     DiffNonempty,
@@ -135,6 +146,35 @@ impl ResolvedCheck {
     /// use, so a person reading the two sees the same word.
     pub fn label(&self) -> &str {
         self.name().unwrap_or_else(|| self.kind())
+    }
+
+    /// Which paths this Check covers, where it declares any. **`None` on a
+    /// built-in and on a Check with no `when`.**
+    pub fn when(&self) -> Option<&Covers> {
+        match self {
+            ResolvedCheck::ManifestCheck { when, .. } => when.as_ref(),
+            ResolvedCheck::DiffNonempty => None,
+        }
+    }
+
+    /// Whether this Check covers any of the paths the step changed.
+    ///
+    /// **`true` where the Check declares no `when`.** The one place absent
+    /// means always is spelled, so no call site can re-derive it as "matches
+    /// nothing" — which is the failure that would silently stop a Check from
+    /// ever running again.
+    pub fn covers(&self, changed: &[String]) -> bool {
+        match self.when() {
+            None => true,
+            Some(covers) => covers.matches_any(changed),
+        }
+    }
+
+    /// Whether deciding to run this Check needs the step's changed paths read.
+    /// **False on every Check that declares no `when`**, which is what keeps
+    /// the reading off the gate of a step that would not use it.
+    pub fn needs_changed_paths(&self) -> bool {
+        self.when().is_some()
     }
 
     /// The exit code the step expects. `None` where there is no command.

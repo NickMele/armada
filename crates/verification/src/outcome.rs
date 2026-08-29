@@ -49,6 +49,53 @@ use crate::mechanical::CheckFailed;
 /// here rather than at the call site.
 const KEPT_FOR_THE_TURN: usize = 2_000;
 
+/// What the mechanical tier did on a step that advanced.
+///
+/// **Two counts, because three sentences are true of three different steps**:
+/// every declared check ran and passed, some were not run because they cover
+/// paths this step did not touch, or none was run at all. A turn that said the
+/// first about any of the three would be telling a Drone a check passed that
+/// nobody ran — the same lie [`OutcomeTurn::approved`] exists to avoid at a
+/// human gate.
+///
+/// **No number reaches the Drone.** The counts decide which sentence, and the
+/// sentence carries none of them, for this module's own reason: a Drone given
+/// an arithmetic has an incentive to satisfy it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Verified {
+    declared: usize,
+    skipped: usize,
+}
+
+impl Verified {
+    /// Read off the checks the gate ran. One constructor, taking the set — so
+    /// nothing can assemble a pair of counts that no step produced.
+    pub fn of(ran: &crate::mechanical::Ran) -> Verified {
+        Verified {
+            declared: ran.count(),
+            skipped: ran.skipped(),
+        }
+    }
+
+    fn told(&self, label: &str) -> String {
+        match (self.declared, self.skipped) {
+            // A step that declares nothing, and a step whose every check ran.
+            // The sentence is vacuously true of the first and was already
+            // being told to it.
+            (_, 0) => format!("{label} is verified. It passed every check the step declared."),
+            (declared, skipped) if declared == skipped => format!(
+                "{label} is verified. No check the step declares covers what you \
+                 changed, so none was run."
+            ),
+            _ => format!(
+                "{label} is verified. It passed every check that covers what you \
+                 changed; the rest cover paths this step did not touch and were \
+                 not run."
+            ),
+        }
+    }
+}
+
 /// A turn Fleet injects into a live session.
 ///
 /// **It is not a verdict a Drone can act on selectively.** Three constructors,
@@ -67,16 +114,27 @@ impl OutcomeTurn {
     /// `next` is the step that follows, or `None` where the one that passed was
     /// the last. The two cases read differently on purpose: a Drone told only
     /// "verified" at the end of a workflow keeps working.
-    pub fn advanced(passed: &ResolvedStep, next: Option<&ResolvedStep>) -> OutcomeTurn {
+    ///
+    /// `verified` is what the mechanical tier actually did, and it changes the
+    /// opening sentence for [`approved`](OutcomeTurn::approved)'s reason: a
+    /// Drone told it "passed every check the step declared" when a Check
+    /// covering paths it never touched was not run has been told a check passed
+    /// that nobody ran.
+    pub fn advanced(
+        passed: &ResolvedStep,
+        next: Option<&ResolvedStep>,
+        verified: Verified,
+    ) -> OutcomeTurn {
         let label = passed.label();
+        let opening = verified.told(label);
         let text = match next {
             Some(next) => format!(
-                "{label} is verified. It passed every check the step declared.\n\n\
+                "{opening}\n\n\
                  Go on to {}. Submit when it is done, then wait.",
                 next.label()
             ),
             None => format!(
-                "{label} is verified. It passed every check the step declared.\n\n\
+                "{opening}\n\n\
                  That was the last part of this task. Nothing further is yours. Stop here."
             ),
         };

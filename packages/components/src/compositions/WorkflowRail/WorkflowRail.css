@@ -226,6 +226,22 @@
 /* The exit code. Measured facts speak flatly, so a gate row stays neutral even
    beneath a hued step: the step's state is hued, the Check's exit code is
    measured. */
+/* Which paths a Check covers. Subtle like the result beside it — both are
+   machine-derived and neither is the row's subject — and bounded, because a
+   Manifest may declare several patterns and this must not push the result off
+   the row. The whole list is in the title attribute. */
+.armada-rail__gate-covers {
+  flex: none;
+  max-width: 30%;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .armada-rail__gate-result {
   flex: none;
   font-family: var(--font-mono);

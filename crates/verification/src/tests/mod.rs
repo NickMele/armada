@@ -39,6 +39,7 @@ pub(crate) fn workflow() -> ResolvedWorkflow {
                     name: "build",
                     run: "true",
                     expect_exit_code: 0,
+                    when: &[],
                 },
                 Gate::DiffNonempty,
             ],
@@ -67,4 +68,26 @@ pub(crate) fn gated(workflow: &ResolvedWorkflow) -> &ResolvedStep {
 /// this, which is why it is a fixture and not a special case.
 pub(crate) fn ungated(workflow: &ResolvedWorkflow) -> &ResolvedStep {
     &workflow.steps()[1]
+}
+
+/// A one-step workflow whose only Check declares which paths it covers.
+///
+/// It is a second fixture rather than a third gate on [`workflow`] because the
+/// interesting assertion is about a step where *every* Check is skippable —
+/// which is the step that advances having verified nothing.
+pub(crate) fn scoped() -> ResolvedWorkflow {
+    testkit::resolved(&[Sketch {
+        id: "implement",
+        label: "Implement",
+        evidence_type: Some("diff"),
+        gates: &[Gate::Check {
+            name: "storybook",
+            run: "true",
+            expect_exit_code: 0,
+            when: &["packages/**"],
+        }],
+        judged_on: &[],
+        scope: None,
+        gaming: None,
+    }])
 }

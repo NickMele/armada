@@ -22,7 +22,7 @@
 import type { WorkflowRailStep } from "@armada/components";
 
 import type { WorkflowStep, WorkflowSummary } from "../../shared/setup";
-import { advanceOf, commandOf, judgeOf } from "./declared";
+import { advanceOf, commandOf, coversOf, judgeOf } from "./declared";
 
 /**
  * One workflow's steps, as a rail a proposal can be read against.
@@ -56,7 +56,12 @@ export function previewOf(workflow: WorkflowSummary | undefined): WorkflowRailSt
  */
 function gatesOf(step: WorkflowStep): WorkflowRailStep["gates"] {
   if (step.checks.length === 0) return undefined;
-  return step.checks.map((check) => ({ command: commandOf(check) }));
+  return step.checks.map((check) => ({
+    command: commandOf(check),
+    // The one thing a preview can say that the running rail cannot say
+    // sooner: which of these Checks a Job's diff will be measured by.
+    covers: coversOf(check),
+  }));
 }
 
 /**

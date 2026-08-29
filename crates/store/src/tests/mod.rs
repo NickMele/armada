@@ -27,11 +27,11 @@ mod roundtrip;
 mod tmp;
 
 use core_model::{
-    AcceptanceCriterion, Actor, AdvanceGate, Attachment, ContextSource, CriterionId,
+    AcceptanceCriterion, Actor, AdvanceGate, Attachment, ContextSource, Covers, CriterionId,
     CriterionSource, DeclarePlanAt, DependencyDirection, DependencyEdge, DispatchOrigin,
     EvidenceRef, EvidenceScope, EvidenceType, Facts, FrozenWorkflow, GamingCheck, GamingPattern,
     GateManifest, GateOutcome, Job, JobId, JudgeCheck, JudgeCriterion, ManifestId, ModelName,
-    NewJob, NotRunReason, RepoPath, ResolvedCheck, ResolvedStep, ScopeRevision,
+    NewJob, NotRunReason, PathPattern, RepoPath, ResolvedCheck, ResolvedStep, ScopeRevision,
     ScopeRevisionOutcome, StepId, StepSeed, Subject, Timestamp, Title, TopLevelOrigin, Ulid,
     Urgency, WorkflowId, WriteTargets,
 };
@@ -95,6 +95,10 @@ pub fn workflow() -> FrozenWorkflow {
                         name: "build".to_string(),
                         run: "cargo build".to_string(),
                         expect_exit_code: 0,
+                        // Carried on the shared fixture rather than in a test
+                        // of its own, so every roundtrip in this crate walks a
+                        // Check that declares which paths it covers.
+                        when: Covers::of(vec![PathPattern::parse("crates/**").expect("a pattern")]),
                     },
                     ResolvedCheck::DiffNonempty,
                 ],

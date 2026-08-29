@@ -84,6 +84,7 @@ fn a_workflow() -> core_model::FrozenWorkflow {
                 name: "suite",
                 run: "cargo nextest run --workspace",
                 expect_exit_code: 0,
+                when: &[],
             }],
             judged_on: &[],
             scope: None,

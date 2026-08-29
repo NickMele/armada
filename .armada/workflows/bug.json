@@ -62,7 +62,13 @@
 # `retry_limit` and `advance_gate`. Everything else in the schema is refused by
 # name.
 #
-# **Five mechanical Checks on `implement` now, and three of them are Bridge.**
+# **Six mechanical Checks on `implement` now, three Bridge and one formatting.**
+# `format` is `cargo fmt --all --check`, and it is here for the same reason the
+# three below it are one lint over: PR #199 also merged nine unformatted files,
+# because `cargo fmt --check` was not a Check either. `armada.yml`'s entry for
+# it says why there is no `clippy` beside it.
+#
+# **The three Bridge Checks.**
 # `typecheck`, `bridge_build` and `storybook` arrive with #200, and the defect
 # they exist for is worth stating where an author reading this step will see
 # it: PR #199 merged a branch whose renderer did not compile. It passed
@@ -71,9 +77,9 @@
 # TypeScript, so a Job that changed `apps/` was verified entirely on the half
 # it had not touched.
 #
-# The same three are named on every other step that produces a diff and gates
-# on anything -- `feature`'s `implement` and `tests`, `refactor`'s
-# `implement`, `revert`'s `revert`. They are **not** on `plan` or `handoff`,
+# The same three, and `format` with them, are named on every other step that
+# produces a diff and gates on anything -- `feature`'s `implement` and `tests`,
+# `refactor`'s `implement`, `revert`'s `revert`. They are **not** on `plan` or `handoff`,
 # which produce a `facts_note` and cannot fail a Check at all, and not on
 # `prototype`'s `build`, which carries no mechanical tier by decision rather
 # than by omission.
@@ -220,6 +226,11 @@
         {
           "type": "manifest_check",
           "check": "test",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "format",
           "expect_exit_code": 0
         },
         {

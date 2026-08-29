@@ -34,6 +34,7 @@ fn gated_on(run: &str, budget: u32) -> config::ResolvedWorkflow {
                 name: "suite",
                 run,
                 expect_exit_code: 0,
+                when: &[],
             }],
             judged_on: &[],
             scope: None,

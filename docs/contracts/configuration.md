@@ -68,6 +68,24 @@ The decisive argument is tier moves. If unknown keys were ignored, a `budget:` k
 
 The cost is the collision this project has already paid once: a file written by one module and parsed by another with `deny_unknown_fields`. That is precisely why the answer is namespacing per owner rather than handing the file a single parser.
 
+## One glob dialect, and it is stated here
+
+Added 29 Aug 2026, with `checks.<name>.when`. A path pattern anywhere in Armada's configuration is read by `core_model::PathPattern` and by nothing else, and this is the whole of the dialect:
+
+| Written | Matches |
+| --- | --- |
+| literal text | itself, exactly |
+| `*` | any run of characters inside one path segment, **never** a `/` |
+| `**` | zero or more whole path segments |
+
+`/` separates segments. Patterns are repository-relative — a leading `/` is refused, not stripped. A path is matched **whole**: a bare directory name matches only a file of exactly that name, and no prefix is inferred from it. `**` is legal only as an entire segment, so `packages/**` and `**/*.rs` parse and `packages/**x` does not.
+
+**Every other metacharacter is refused by name at load.** `?`, `[`, `{` and a leading `!` are syntax in the dialects an author is likely to be thinking of, and reading them as literal text gives a pattern that matches nothing and says nothing about why. The refusal names the character.
+
+The rule this exists for: **`packages/**` and `packages/*` differing silently is a Check that stops running and nobody notices.** One dialect, stated once, is what makes that difference readable rather than discovered. A second dialect anywhere in configuration is a change to this section first.
+
+**An absent pattern list is never an empty one.** Where a key is optional — `checks.<name>.when` is the first — absent means *always* and the empty list is refused, because one value with two opposite readings is the failure this whole section is about. In code that is `Option<Covers>` and a `Covers` that cannot be built empty.
+
 ## What else the review changed
 
 - **Lifetime is on every setting.** The live-versus-frozen split was two example lists, so any setting on neither had undefined spawn behaviour. Four values: `Live`, `Frozen at spawn`, `Daemon start`, `Read at render`.

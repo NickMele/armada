@@ -531,11 +531,13 @@ fn a_resolved_workflow_carries_the_command_not_the_name() {
                 name: "build".to_string(),
                 run: "cargo build --workspace".to_string(),
                 expect_exit_code: 0,
+                when: None,
             },
             ResolvedCheck::ManifestCheck {
                 name: "test".to_string(),
                 run: "cargo nextest run --workspace".to_string(),
                 expect_exit_code: 0,
+                when: None,
             },
             ResolvedCheck::DiffNonempty,
         ]
@@ -617,4 +619,55 @@ fn an_empty_steps_list_is_refused() {
 
 fn refused_names_a_step(refusals: &[crate::error::Refusal]) -> bool {
     refused(refusals, "steps[0]")
+}
+
+/// The same workflow's Manifest, with `build` scoped to the Rust tree.
+const SCOPED_MANIFEST: &str = r#"
+version: 1
+id: armada
+checks:
+  build:
+    run: cargo build --workspace
+    when: ["crates/**", "Cargo.toml"]
+  test:
+    run: cargo nextest run --workspace
+commands:
+  fmt:
+    run: cargo fmt --all
+"#;
+
+#[test]
+fn a_checks_when_is_lifted_off_the_manifest_and_frozen_onto_the_step() {
+    // **The pattern is the Manifest's and the step does not restate it.** The
+    // repository declares once what a Check covers and every workflow inherits
+    // it — there is no step-level key to override it with, which is what stops
+    // the same glob drifting across `bug`, `feature`, `refactor` and `revert`.
+    let def = parse(BUG).expect("the worked example");
+    let manifest = Manifest::parse(&named("armada.yml"), SCOPED_MANIFEST).expect("a scoped check");
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest).expect("every name declared");
+
+    let checks = resolved.steps()[1].checks();
+    assert_eq!(
+        checks[0].when().map(core_model::Covers::written),
+        Some("crates/**, Cargo.toml".to_string())
+    );
+    // The one that declares nothing carries nothing, and covers everything.
+    assert_eq!(checks[1].when(), None);
+    assert!(checks[1].covers(&["anything/at/all".to_string()]));
+    // Frozen: the resolved value is a copy, so an edit to `armada.yml` after
+    // this point changes the next Job and not this one.
+    assert!(checks[0].covers(&["crates/store/src/read.rs".to_string()]));
+    assert!(!checks[0].covers(&["packages/components/src/Badge.tsx".to_string()]));
+}
+
+#[test]
+fn a_built_in_check_declares_no_paths_and_always_runs() {
+    let def = parse(BUG).expect("the worked example");
+    let manifest = Manifest::parse(&named("armada.yml"), SCOPED_MANIFEST).expect("a scoped check");
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest).expect("every name declared");
+    let diff = &resolved.steps()[1].checks()[2];
+    assert_eq!(diff, &ResolvedCheck::DiffNonempty);
+    assert_eq!(diff.when(), None);
+    assert!(!diff.needs_changed_paths());
+    assert!(diff.covers(&[]));
 }

@@ -38,6 +38,7 @@
 
 mod attempt;
 mod check;
+mod covers;
 mod drone;
 mod escalation;
 mod event;
@@ -60,6 +61,7 @@ mod tests;
 
 pub use attempt::Attempt;
 pub use check::{CheckOutcome, StepCheck};
+pub use covers::{BadPattern, Covers, PathPattern};
 pub use drone::{DroneAssigned, DroneMoved, DronePresence, IllegalDroneMove};
 pub use escalation::{EscalationTrigger, StepLevelTrigger, TriggerKind, TriggerLevel};
 pub use event::{JobEvent, StepEvent};

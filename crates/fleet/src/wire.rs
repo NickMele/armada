@@ -30,6 +30,17 @@ pub(crate) fn declared_check(check: &core_model::ResolvedCheck) -> DeclaredCheck
         name: check.name().map(str::to_string),
         run: check.run().map(str::to_string),
         expect_exit_code: check.expects(),
+        // **The frozen list, for `run`'s reason.** A Check's paths are lifted
+        // out of the Manifest at Job creation like its command is, so serving
+        // the live `armada.yml` would show a scope that is not the one this
+        // Job's gate will decide against.
+        when: check.when().map(|covers| {
+            covers
+                .patterns()
+                .iter()
+                .map(|pattern| pattern.as_str().to_string())
+                .collect()
+        }),
     }
 }
 
