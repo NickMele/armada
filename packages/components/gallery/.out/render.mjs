@@ -1,6 +1,6 @@
 import { jsx, jsxs, Fragment } from "react/jsx-runtime";
 import { useState, createContext, useCallback, useContext, useRef, useEffect, Children, cloneElement, Fragment as Fragment$1, useId, useMemo, createElement } from "react";
-import { ChevronDown, UserCheck, Cpu, GitBranch, CircleDot, X, Check, Power, Flag, RotateCw, Eye, CircleX, CircleCheck, ShieldCheck, ChevronRight, File, OctagonAlert, Folder, GitCommitHorizontal, GitPullRequest, FileCheck, Clock, MessageSquare, ClipboardList, Activity, Bell, ScrollText, Stethoscope, FileCog, ShieldX, ShieldMinus, Lock, TriangleAlert, Stamp, Terminal, Link, Ban, Archive, RefreshCw, FileQuestionMark, Split, Unplug, ArrowUpToLine, Send, CornerUpRight, Settings } from "lucide-react";
+import { ChevronDown, UserCheck, Cpu, GitBranch, CircleDot, X, Check, Power, Flag, RotateCw, Eye, CircleX, CircleCheck, ShieldCheck, ChevronRight, ExternalLink, File, TriangleAlert, OctagonAlert, Folder, GitCommitHorizontal, GitPullRequest, FileCheck, Clock, MessageSquare, ClipboardList, Activity, Bell, ScrollText, Stethoscope, FileCog, ShieldMinus as ShieldMinus$1, ShieldX, Lock, Stamp, Terminal, Link, Ban, Archive, RefreshCw, FileQuestionMark, Split, Unplug, ArrowUpToLine, Send, CornerUpRight, Settings } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 function Button({
   variant = "secondary",
@@ -361,7 +361,7 @@ function ActiveJobsList({
     )
   ] });
 }
-const meta$Q = {
+const meta$X = {
   title: "Compositions/Active jobs list",
   component: ActiveJobsList
 };
@@ -550,7 +550,7 @@ const __vite_glob_0_0 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   OneOption,
   Selectable,
   SixStates,
-  default: meta$Q
+  default: meta$X
 }, Symbol.toStringTag, { value: "Module" }));
 function BoardEmptyState({
   children,
@@ -579,7 +579,7 @@ function BoardEmptyState({
     action
   ] });
 }
-const meta$P = {
+const meta$W = {
   title: "Compositions/Board empty state",
   component: BoardEmptyState
 };
@@ -601,7 +601,108 @@ const __vite_glob_0_1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   __proto__: null,
   FleetIsNotRunning: FleetIsNotRunning$1,
   FleetRunningNoJobs,
-  default: meta$P
+  default: meta$W
+}, Symbol.toStringTag, { value: "Module" }));
+const OUTSIDE_PLAN$1 = "outside plan";
+function ChangedFiles({ files, emptyNote, note, onCopied }) {
+  const copy = useCallback(
+    (event, value) => {
+      event.stopPropagation();
+      void navigator.clipboard.writeText(value).then(() => onCopied?.(value));
+    },
+    [onCopied]
+  );
+  if (files.length === 0) {
+    return /* @__PURE__ */ jsx("p", { className: "armada-files__empty", role: "note", children: emptyNote });
+  }
+  return /* @__PURE__ */ jsxs("div", { className: "armada-files", children: [
+    /* @__PURE__ */ jsx("ol", { className: "armada-files__list", children: files.map((file) => /* @__PURE__ */ jsxs(
+      "li",
+      {
+        className: "armada-files__file",
+        "data-outside": file.outsidePlan === true || void 0,
+        children: [
+          /* @__PURE__ */ jsx("span", { className: "armada-files__change", children: file.change }),
+          /* @__PURE__ */ jsx(
+            "span",
+            {
+              className: "armada-files__path",
+              title: file.path,
+              onClick: (event) => copy(event, file.path),
+              children: file.path
+            }
+          ),
+          /* @__PURE__ */ jsx("span", { className: "armada-files__mark", children: file.outsidePlan === true ? OUTSIDE_PLAN$1 : null })
+        ]
+      },
+      file.path
+    )) }),
+    note === void 0 ? null : /* @__PURE__ */ jsx("p", { className: "armada-files__note", children: note })
+  ] });
+}
+const meta$V = {
+  title: "Compositions/Changed files",
+  component: ChangedFiles
+};
+const NOTHING_YET$3 = "This drone has not changed anything yet.";
+const WhatADroneHasTouched = {
+  args: {
+    emptyNote: NOTHING_YET$3,
+    note: "Read from the worktree while the drone was working. This step declared no plan, so no row is marked.",
+    files: [
+      { path: "crates/api/src/routes.rs", change: "modified" },
+      { path: "crates/ipc/src/history.rs", change: "added" },
+      { path: "crates/ipc/src/lib.rs", change: "modified" },
+      { path: "crates/ipc/src/legacy_events.rs", change: "deleted" }
+    ]
+  }
+};
+const TwoPathsOutsideThePlan = {
+  args: {
+    emptyNote: NOTHING_YET$3,
+    note: "Read from the worktree while the drone was working. 2 of 5 paths are outside the plan this step declared.",
+    files: [
+      { path: "apps/desktop/src/renderer/src/JobDetail.tsx", change: "modified" },
+      { path: "apps/desktop/src/shared/protocol.ts", change: "modified" },
+      { path: "packages/tokens/src/status.css", change: "modified", outsidePlan: true },
+      { path: "packages/components/src/compositions/ChangedFiles/ChangedFiles.tsx", change: "added" },
+      { path: "scripts/dev", change: "type_changed", outsidePlan: true }
+    ]
+  }
+};
+const NoPlanIsRecordedAgainstIt = {
+  args: {
+    emptyNote: NOTHING_YET$3,
+    note: "Read from this job's worktree when the job stopped, and kept — so it says the same thing whether or not anyone was watching. No plan is recorded against it, so no path is marked. Either no step declared one, or this job stopped before declarations were kept. An unmarked path here is not a path that was inside a plan.",
+    files: [
+      { path: "crates/fleet/src/dispatch.rs", change: "modified" },
+      { path: "crates/fleet/src/footprint.rs", change: "modified" },
+      { path: "crates/ipc/src/work.rs", change: "modified" }
+    ]
+  }
+};
+const TheKindsThatAreNotAnEdit = {
+  args: {
+    emptyNote: NOTHING_YET$3,
+    files: [
+      { path: "docs/scope.md", change: "renamed" },
+      { path: "docs/journeys/watch-a-drone.md", change: "copied" },
+      { path: "crates/fleet/src/serving.rs", change: "conflicted" },
+      { path: "assets/AppIcon.icns", change: "unreadable" }
+    ]
+  }
+};
+const NothingChangedYet = {
+  args: { files: [], emptyNote: NOTHING_YET$3 }
+};
+const __vite_glob_0_2 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  NoPlanIsRecordedAgainstIt,
+  NothingChangedYet,
+  TheKindsThatAreNotAnEdit,
+  TwoPathsOutsideThePlan,
+  WhatADroneHasTouched,
+  default: meta$V
 }, Symbol.toStringTag, { value: "Module" }));
 const VERDICT_ICON = 12;
 const VERDICT_STROKE = 2;
@@ -649,6 +750,120 @@ function CriterionVerdicts({ rows, label: label2 }) {
     }) })
   ] });
 }
+function Prose({ text }) {
+  const blocks = read(text);
+  if (blocks.length === 0) return null;
+  return /* @__PURE__ */ jsx("div", { className: "armada-prose", children: blocks.map((block, at) => /* @__PURE__ */ jsx(Fragment$1, { children: drawn(block, at) }, at)) });
+}
+const FENCE = "```";
+const BULLETS = ["- ", "* "];
+function read(text) {
+  const blocks = [];
+  const lines = text.split("\n");
+  let at = 0;
+  while (at < lines.length) {
+    const line = lines[at] ?? "";
+    const trimmed = line.trim();
+    if (trimmed.startsWith(FENCE)) {
+      const held2 = [];
+      at += 1;
+      while (at < lines.length && !(lines[at] ?? "").trim().startsWith(FENCE)) {
+        held2.push(lines[at] ?? "");
+        at += 1;
+      }
+      at += 1;
+      blocks.push({ kind: "code", lines: held2 });
+      continue;
+    }
+    if (trimmed === "") {
+      at += 1;
+      continue;
+    }
+    if (bulleted(trimmed)) {
+      const items = [];
+      while (at < lines.length && bulleted((lines[at] ?? "").trim())) {
+        items.push((lines[at] ?? "").trim().slice(2));
+        at += 1;
+      }
+      blocks.push({ kind: "list", items });
+      continue;
+    }
+    if (heading$5(trimmed)) {
+      blocks.push({ kind: "said", line: trimmed.replace(/^#+\s+/, "") });
+      at += 1;
+      continue;
+    }
+    const held = [];
+    while (at < lines.length) {
+      const next = (lines[at] ?? "").trim();
+      if (next === "" || next.startsWith(FENCE) || bulleted(next) || heading$5(next)) break;
+      held.push(next);
+      at += 1;
+    }
+    blocks.push({ kind: "paragraph", lines: held });
+  }
+  return blocks;
+}
+function bulleted(line) {
+  return BULLETS.some((mark) => line.startsWith(mark));
+}
+function heading$5(line) {
+  return /^#{1,6}\s+/.test(line);
+}
+function drawn(block, at) {
+  if (block.kind === "code") {
+    return /* @__PURE__ */ jsx("pre", { className: "armada-prose__block", children: /* @__PURE__ */ jsx("code", { children: block.lines.join("\n") }) });
+  }
+  if (block.kind === "list") {
+    return /* @__PURE__ */ jsx("ul", { className: "armada-prose__list", children: block.items.map((item, i) => /* @__PURE__ */ jsx("li", { className: "armada-prose__item", children: inline(item, `${at}-${i}`) }, i)) });
+  }
+  if (block.kind === "said") {
+    return /* @__PURE__ */ jsx("p", { className: "armada-prose__said", children: inline(block.line, `${at}`) });
+  }
+  return /* @__PURE__ */ jsx("p", { className: "armada-prose__paragraph", children: inline(block.lines.join(" "), `${at}`) });
+}
+function inline(text, key) {
+  const out = [];
+  text.split(/(`[^`]+`)/g).forEach((part, i) => {
+    if (part === "") return;
+    if (part.length > 2 && part.startsWith("`") && part.endsWith("`")) {
+      out.push(
+        /* @__PURE__ */ jsx("code", { className: "armada-prose__code", children: part.slice(1, -1) }, `${key}-c${i}`)
+      );
+      return;
+    }
+    out.push(...emphasised(part, `${key}-${i}`));
+  });
+  return out;
+}
+function emphasised(text, key) {
+  return text.split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|_[^_\s][^_]*_)/g).flatMap((part, i) => {
+    if (part === "") return [];
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return [
+        /* @__PURE__ */ jsx("strong", { className: "armada-prose__strong", children: part.slice(2, -2) }, `${key}-b${i}`)
+      ];
+    }
+    if (part.startsWith("*") && part.endsWith("*") || part.startsWith("_") && part.endsWith("_")) {
+      return [/* @__PURE__ */ jsx("em", { children: part.slice(1, -1) }, `${key}-i${i}`)];
+    }
+    return [/* @__PURE__ */ jsx(Fragment$1, { children: part }, `${key}-t${i}`)];
+  });
+}
+function GamingFlags({ flags, said, citation = "clipped" }) {
+  if (flags.length === 0) return null;
+  return /* @__PURE__ */ jsxs("div", { className: "armada-gaming-flags", "data-citation": citation, children: [
+    said === void 0 ? null : /* @__PURE__ */ jsx("span", { className: "armada-gaming-flags__said", children: said }),
+    /* @__PURE__ */ jsx("ul", { className: "armada-gaming-flags__list", children: flags.map((flag, at) => /* @__PURE__ */ jsxs("li", { className: "armada-gaming-flags__flag", children: [
+      /* @__PURE__ */ jsx("span", { className: "armada-gaming-flags__pattern", children: flag.pattern }),
+      flag.cited === void 0 || flag.cited === "" ? null : citation === "whole" ? /* @__PURE__ */ jsx("div", { className: "armada-gaming-flags__cited", children: /* @__PURE__ */ jsx(Prose, { text: flag.cited }) }) : (
+        // The whole citation stays in the title however narrow the row
+        // gets, the way the Check's output path does.
+        /* @__PURE__ */ jsx("span", { className: "armada-gaming-flags__cited", title: flag.cited, children: flag.cited })
+      )
+    ] }, `flag-${at}`)) })
+  ] });
+}
 const GLYPH = {
   not_started: void 0,
   running: CircleDot,
@@ -671,6 +886,7 @@ function StepActivityMark({ activity, label: label2, ordinal, pulsing = false })
 }
 const GATE_ICON = 12;
 const GATE_STROKE = 2;
+const FLAGGED = "the gaming check flagged this evidence";
 function named(step) {
   return (step.evidence?.label ?? "") !== "";
 }
@@ -689,6 +905,8 @@ function WorkflowRail({ steps: steps2, pulsing = false, onCopied }) {
   );
   return /* @__PURE__ */ jsx("ol", { className: "armada-rail", children: steps2.map((step, i) => {
     const gates = step.gates ?? [];
+    const declarations = step.declarations ?? [];
+    const flags = step.flags ?? [];
     return /* @__PURE__ */ jsxs("li", { className: "armada-rail__step", children: [
       /* @__PURE__ */ jsxs(
         "div",
@@ -716,36 +934,50 @@ function WorkflowRail({ steps: steps2, pulsing = false, onCopied }) {
             ),
             step.trailing,
             step.verdict ? /* @__PURE__ */ jsx("span", { className: "armada-rail__verdict", "data-verdict": step.verdictNamed, children: step.verdict }) : null,
+            step.overridden ? /* @__PURE__ */ jsx("span", { className: "armada-rail__overridden", children: step.overridden }) : null,
             step.elapsed ? /* @__PURE__ */ jsx("span", { className: "armada-rail__elapsed", children: step.elapsed }) : null,
             step.status ? /* @__PURE__ */ jsx("span", { className: "armada-rail__status", children: step.status }) : null
           ]
         }
       ),
-      gates.length > 0 ? /* @__PURE__ */ jsx("ul", { className: "armada-rail__gates", children: gates.map((gate, g) => /* @__PURE__ */ jsxs("li", { className: "armada-rail__gate", children: [
-        /* @__PURE__ */ jsxs("span", { className: "armada-rail__gate-mark", children: [
-          gate.icon ? /* @__PURE__ */ jsx(gate.icon, { size: GATE_ICON, strokeWidth: GATE_STROKE, "aria-hidden": true }) : null,
-          gate.iconLabel ? /* @__PURE__ */ jsx("span", { className: "armada-rail__sr", children: gate.iconLabel }) : null
-        ] }),
-        /* @__PURE__ */ jsx("span", { className: "armada-rail__gate-command", children: gate.command }),
-        gate.result ? /* @__PURE__ */ jsx("span", { className: "armada-rail__gate-result", children: gate.result }) : null,
-        gate.outputPath === void 0 ? null : (
-          // The whole path is on the clipboard and in the title
-          // however narrow the row gets: a copy truncated with the
-          // display would be worse than the overflow it fixed.
-          // `data-copies` carries a value rather than standing bare,
-          // the way `Job row (stacked)` writes it.
-          /* @__PURE__ */ jsx(
-            "span",
-            {
-              className: "armada-rail__gate-output",
-              title: gate.outputPath,
-              "data-copies": "true",
-              onClick: (e) => copy(e, gate.outputPath),
-              children: gate.outputPath
-            }
+      gates.length + declarations.length === 0 ? null : /* @__PURE__ */ jsxs("ul", { className: "armada-rail__gates", children: [
+        gates.map((gate, g) => /* @__PURE__ */ jsxs("li", { className: "armada-rail__gate", children: [
+          /* @__PURE__ */ jsxs("span", { className: "armada-rail__gate-mark", children: [
+            gate.icon ? /* @__PURE__ */ jsx(gate.icon, { size: GATE_ICON, strokeWidth: GATE_STROKE, "aria-hidden": true }) : null,
+            gate.iconLabel ? /* @__PURE__ */ jsx("span", { className: "armada-rail__sr", children: gate.iconLabel }) : null
+          ] }),
+          /* @__PURE__ */ jsx("span", { className: "armada-rail__gate-command", children: gate.command }),
+          gate.result ? /* @__PURE__ */ jsx("span", { className: "armada-rail__gate-result", children: gate.result }) : null,
+          gate.outputPath === void 0 ? null : (
+            // The whole path is on the clipboard and in the title
+            // however narrow the row gets: a copy truncated with the
+            // display would be worse than the overflow it fixed.
+            // `data-copies` carries a value rather than standing bare,
+            // the way `Job row (stacked)` writes it.
+            /* @__PURE__ */ jsx(
+              "span",
+              {
+                className: "armada-rail__gate-output",
+                title: gate.outputPath,
+                "data-copies": "true",
+                onClick: (e) => copy(e, gate.outputPath),
+                children: gate.outputPath
+              }
+            )
           )
-        )
-      ] }, g)) }) : (
+        ] }, g)),
+        declarations.map((declared, d) => (
+          // No glyph, and the mark column held open anyway: the row
+          // reads as one of the list it sits in rather than starting a
+          // second one at a different indent.
+          /* @__PURE__ */ jsxs("li", { className: "armada-rail__gate", children: [
+            /* @__PURE__ */ jsx("span", { className: "armada-rail__gate-mark" }),
+            /* @__PURE__ */ jsx("span", { className: "armada-rail__gate-command", children: declared.label }),
+            declared.result ? /* @__PURE__ */ jsx("span", { className: "armada-rail__gate-result", children: declared.result }) : null
+          ] }, `declared-${d}`)
+        ))
+      ] }),
+      gates.length + declarations.length + flags.length > 0 ? null : (
         // An ungated step says so in words. A step carrying no Check is
         // ordinary rather than exceptional, and a blank would read as a
         // gate that failed to render.
@@ -758,11 +990,12 @@ function WorkflowRail({ steps: steps2, pulsing = false, onCopied }) {
           /* @__PURE__ */ jsx("span", { className: "armada-rail__gate-ungated", "data-alone": named(step) ? void 0 : "true", children: step.ungatedLabel ?? "no check on this step" })
         ] }) })
       ),
+      flags.length === 0 ? null : /* @__PURE__ */ jsx("div", { className: "armada-rail__flags", children: /* @__PURE__ */ jsx(GamingFlags, { flags, said: FLAGGED, citation: "clipped" }) }),
       step.verdicts === void 0 || step.verdicts.length === 0 ? null : /* @__PURE__ */ jsx("div", { className: "armada-rail__verdicts", children: /* @__PURE__ */ jsx(CriterionVerdicts, { rows: step.verdicts }) })
     ] }, step.id);
   }) });
 }
-const meta$O = {
+const meta$U = {
   title: "Compositions/Criterion verdicts",
   component: CriterionVerdicts
 };
@@ -859,7 +1092,7 @@ const BeneathTheStepItJudged = {
     }
   )
 };
-const __vite_glob_0_2 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_3 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   ARefusal,
   BeneathTheStepItJudged,
@@ -867,14 +1100,14 @@ const __vite_glob_0_2 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   RefusalsSortFirst,
   TheCriterionIsNotOnScreen,
   TheRegistryHasNoWordForIt,
-  default: meta$O
+  default: meta$U
 }, Symbol.toStringTag, { value: "Module" }));
 function DroneTurns({ turns: turns2, emptyNote, live = false }) {
   const [open2, setOpen] = useState(() => /* @__PURE__ */ new Set());
   const [list, setList] = useState(null);
   const following = useRef(false);
   const seeded = useRef(false);
-  const drawn = useRef(0);
+  const drawn2 = useRef(0);
   const scroller = useRef(null);
   useEffect(() => {
     if (list === null || seeded.current) return;
@@ -886,15 +1119,15 @@ function DroneTurns({ turns: turns2, emptyNote, live = false }) {
     scroller.current = found;
     if (list === null || found === null) return void 0;
     const target = found === document.scrollingElement ? window : found;
-    const read = () => {
+    const read2 = () => {
       following.current = atBottom(found);
     };
-    target.addEventListener("scroll", read, { passive: true });
-    return () => target.removeEventListener("scroll", read);
+    target.addEventListener("scroll", read2, { passive: true });
+    return () => target.removeEventListener("scroll", read2);
   }, [list]);
   useEffect(() => {
-    if (list === null || turns2.length === drawn.current) return;
-    drawn.current = turns2.length;
+    if (list === null || turns2.length === drawn2.current) return;
+    drawn2.current = turns2.length;
     const pane = scroller.current;
     if (!following.current || pane === null) return;
     pane.scrollTop = pane.scrollHeight;
@@ -904,7 +1137,7 @@ function DroneTurns({ turns: turns2, emptyNote, live = false }) {
   }
   const entries2 = runs(turns2);
   return /* @__PURE__ */ jsx("ol", { className: "armada-turns", ref: setList, children: entries2.map(
-    (entry, at) => entry.of === "turn" ? /* @__PURE__ */ jsx(Row$1, { turn: entry.turn }, entry.turn.id) : /* @__PURE__ */ jsx(
+    (entry, at) => entry.of === "step" ? /* @__PURE__ */ jsx(StepBoundary, { step: entry.step }, `step-${entry.above}`) : entry.of === "turn" ? /* @__PURE__ */ jsx(Row$1, { turn: entry.turn }, entry.turn.id) : /* @__PURE__ */ jsx(
       QuietRun,
       {
         turns: entry.turns,
@@ -928,8 +1161,16 @@ function scrollerFor(from) {
   return document.scrollingElement;
 }
 function runs(turns2) {
+  const attributed = turns2.some((turn) => turn.step !== void 0);
   const entries2 = [];
+  let under;
+  let opened = false;
   for (const turn of turns2) {
+    if (attributed && (!opened || turn.step?.id !== under)) {
+      entries2.push({ of: "step", step: turn.step, above: turn.id });
+      under = turn.step?.id;
+      opened = true;
+    }
     const last = entries2[entries2.length - 1];
     if (turn.quiet !== true) {
       entries2.push({ of: "turn", turn });
@@ -980,6 +1221,21 @@ function QuietRun({ turns: turns2, working, open: open2, onToggle }) {
     open2 ? turns2.map((turn) => /* @__PURE__ */ jsx(Row$1, { turn, nested: true }, turn.id)) : null
   ] });
 }
+const UNRECORDED = "Fleet recorded no step for the turns below";
+function StepBoundary({ step }) {
+  return /* @__PURE__ */ jsxs(
+    "li",
+    {
+      className: "armada-turns__step",
+      "data-unrecorded": step === void 0 || void 0,
+      "data-identifier": step?.labelIsAnIdentifier || void 0,
+      children: [
+        /* @__PURE__ */ jsx("span", { className: "armada-turns__kind armada-turns__step-tag", children: "step" }),
+        /* @__PURE__ */ jsx("span", { className: "armada-turns__step-name", children: step?.label ?? UNRECORDED })
+      ]
+    }
+  );
+}
 function Row$1({ turn, nested = false }) {
   return /* @__PURE__ */ jsxs("li", { className: "armada-turns__turn", id: rowId(turn), "data-nested": nested || void 0, children: [
     /* @__PURE__ */ jsx("span", { className: "armada-turns__at", children: turn.at }),
@@ -1009,11 +1265,11 @@ function rowId(turn) {
 function counted(rows) {
   return rows === 1 ? "1 turn" : `${rows} turns`;
 }
-const meta$N = {
+const meta$T = {
   title: "Compositions/Drone turns",
   component: DroneTurns
 };
-const NOTHING_YET$1 = "This job has no turns. It was never dispatched, so no drone has written one.";
+const NOTHING_YET$2 = "This job has no turns. It was never dispatched, so no drone has written one.";
 function thinking$1(from, rows, at) {
   return Array.from({ length: rows }, (_, n) => ({
     id: String(from + n),
@@ -1071,14 +1327,14 @@ const turns$1 = [
   }
 ];
 const ADroneWorking = {
-  args: { turns: turns$1, emptyNote: NOTHING_YET$1 }
+  args: { turns: turns$1, emptyNote: NOTHING_YET$2 }
 };
 const AJobWithNoTranscript$1 = {
-  args: { turns: [], emptyNote: NOTHING_YET$1 }
+  args: { turns: [], emptyNote: NOTHING_YET$2 }
 };
 const RefusedUnrecognisedAndUnreadable = {
   args: {
-    emptyNote: NOTHING_YET$1,
+    emptyNote: NOTHING_YET$2,
     turns: [
       {
         id: "1",
@@ -1100,7 +1356,7 @@ const RefusedUnrecognisedAndUnreadable = {
 };
 const WhatEachCallDid = {
   args: {
-    emptyNote: NOTHING_YET$1,
+    emptyNote: NOTHING_YET$2,
     turns: [
       {
         id: "1",
@@ -1141,7 +1397,7 @@ const WhatEachCallDid = {
 const ADroneThinking$1 = {
   args: {
     live: true,
-    emptyNote: NOTHING_YET$1,
+    emptyNote: NOTHING_YET$2,
     turns: [
       { id: "1", at: "09:14:02", kind: "said", said: "Starting on the settings split." },
       ...thinking$1(10, 9, "09:14:03"),
@@ -1155,21 +1411,34 @@ const ADroneThinking$1 = {
 const AFinishedRun$1 = {
   args: {
     live: false,
-    emptyNote: NOTHING_YET$1,
+    emptyNote: NOTHING_YET$2,
     turns: [
       { id: "1", at: "09:14:02", kind: "said", said: "Starting on the settings split." },
       ...thinking$1(10, 9, "09:14:03"),
       { id: "20", at: "09:14:12", kind: "called", subject: "Read", detail: "src/settings.rs", answer: "Answered." },
       ...thinking$1(30, 14, "09:14:15"),
       { id: "50", at: "09:14:31", kind: "called", subject: "Edit", detail: "src/settings.rs +42 -18", answer: "Answered." },
-      { id: "60", at: "09:14:44", kind: "said", said: "The public signature is unchanged. Submitting." }
+      { id: "60", at: "09:14:44", kind: "said", said: "The public signature is unchanged. Submitting." },
+      { id: "61", at: "09:14:45", kind: "ended", subject: "18 turns · ~$0.42 · no calls refused" }
+    ]
+  }
+};
+const WhatTheRunCost = {
+  args: {
+    live: false,
+    emptyNote: NOTHING_YET$2,
+    turns: [
+      { id: "1", at: "09:14:02", kind: "said", said: "Starting on the settings split." },
+      { id: "2", at: "09:55:10", kind: "ended", subject: "41 turns · ~$1.53 · 6 calls refused" },
+      { id: "3", at: "10:02:11", kind: "said", said: "Retrying the step. Reading the refusal first." },
+      { id: "4", at: "10:03:40", kind: "ended", subject: "4 turns · ~$0.0018 · no calls refused" }
     ]
   }
 };
 const NothingButToolCalls$1 = {
   args: {
     live: true,
-    emptyNote: NOTHING_YET$1,
+    emptyNote: NOTHING_YET$2,
     turns: [
       { id: "1", at: "09:20:01", kind: "called", subject: "Bash", detail: "cargo xtask verify-foundations", answer: "Answered." },
       { id: "2", at: "09:20:31", kind: "called", subject: "Bash", detail: "cargo test -p ipc", answer: "Answered, and the tool itself failed." },
@@ -1178,16 +1447,62 @@ const NothingButToolCalls$1 = {
     ]
   }
 };
-const __vite_glob_0_3 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const REPRO = { id: "repro", label: "Reproduce the bug" };
+const FIX = { id: "fix", label: "Fix the root cause" };
+const TurnsUnderTheirSteps = {
+  args: {
+    live: true,
+    emptyNote: NOTHING_YET$2,
+    turns: [
+      { id: "1", at: "09:14:02", step: REPRO, kind: "started", subject: "sess_01JB4 · the job's model · 2 mcp servers" },
+      { id: "2", at: "09:14:03", step: REPRO, kind: "said", said: "Writing the failing test before I touch the reducer." },
+      ...thinking$1(10, 5, "09:14:04").map((turn) => ({ ...turn, step: REPRO })),
+      { id: "20", at: "09:14:22", step: REPRO, kind: "called", subject: "Write", detail: "tests/settings_split.rs", answer: "Answered." },
+      { id: "21", at: "09:15:01", step: FIX, kind: "said", said: "The test reproduces it. Splitting the reducer now." },
+      { id: "22", at: "09:15:09", step: FIX, kind: "called", subject: "Edit", detail: "src/settings.rs +42 -18", answer: "Answered." },
+      { id: "23", at: "09:15:40", step: FIX, kind: "called", subject: "Bash", detail: "cargo test -p settings --lib", answer: "Answered, and the tool itself failed." },
+      { id: "24", at: "09:18:02", step: REPRO, kind: "said", said: "The gate sent this back. Widening the reproduction first." },
+      { id: "25", at: "09:18:30", step: REPRO, kind: "called", subject: "Edit", detail: "tests/settings_split.rs +11 -0", answer: "Answered." },
+      { id: "26", at: "09:19:04", step: FIX, kind: "called", subject: "Edit", detail: "src/settings.rs +6 -2", answer: "No answer yet." }
+    ]
+  }
+};
+const AStepWithNoNameOfItsOwn = {
+  args: {
+    emptyNote: NOTHING_YET$2,
+    turns: [
+      { id: "1", at: "09:22:01", step: { id: "implement", label: "implement", labelIsAnIdentifier: true }, kind: "called", subject: "Edit", detail: "src/settings.rs +42 -18", answer: "Answered." },
+      { id: "2", at: "09:24:40", step: { id: "regression_verify", label: "regression_verify", labelIsAnIdentifier: true }, kind: "called", subject: "Bash", detail: "cargo nextest run --workspace", answer: "Answered." },
+      { id: "3", at: "09:26:12", step: { id: "write_up", label: "write_up", labelIsAnIdentifier: true }, kind: "said", said: "Submitting the evidence report." }
+    ]
+  }
+};
+const RowsWrittenBeforeTheStepWasRecorded = {
+  args: {
+    emptyNote: NOTHING_YET$2,
+    turns: [
+      { id: "1", at: "08:59:14", kind: "started", subject: "sess_01J9Z · the job's model · 2 mcp servers" },
+      { id: "2", at: "08:59:20", kind: "called", subject: "Read", detail: "src/settings.rs", answer: "Answered." },
+      { id: "3", at: "09:01:02", kind: "said", said: "Reading the reducer before I split it." },
+      { id: "4", at: "09:12:41", step: FIX, kind: "called", subject: "Edit", detail: "src/settings.rs +42 -18", answer: "Answered." },
+      { id: "5", at: "09:13:10", step: FIX, kind: "called", subject: "Bash", detail: "cargo test -p settings --lib", answer: "Answered." }
+    ]
+  }
+};
+const __vite_glob_0_4 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   ADroneThinking: ADroneThinking$1,
   ADroneWorking,
   AFinishedRun: AFinishedRun$1,
   AJobWithNoTranscript: AJobWithNoTranscript$1,
+  AStepWithNoNameOfItsOwn,
   NothingButToolCalls: NothingButToolCalls$1,
   RefusedUnrecognisedAndUnreadable,
+  RowsWrittenBeforeTheStepWasRecorded,
+  TurnsUnderTheirSteps,
   WhatEachCallDid,
-  default: meta$N
+  WhatTheRunCost,
+  default: meta$T
 }, Symbol.toStringTag, { value: "Module" }));
 const CARD_ICON = 12;
 const CARD_STROKE = 2;
@@ -1224,7 +1539,7 @@ function EvidenceCard({
     ] })
   ] });
 }
-const meta$M = {
+const meta$S = {
   title: "Compositions/Evidence card",
   component: EvidenceCard
 };
@@ -1261,12 +1576,12 @@ const NotClaimedEmpty$1 = {
     shownBy: "3 files +214 −96 · branch fix/poke-ceiling"
   }
 };
-const __vite_glob_0_4 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_5 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AnArtifactThatIsACommand,
   NotClaimedEmpty: NotClaimedEmpty$1,
   PlanTheChange,
-  default: meta$M
+  default: meta$S
 }, Symbol.toStringTag, { value: "Module" }));
 const ENTRY_ICON = 12;
 const ENTRY_STROKE = 2;
@@ -1296,7 +1611,7 @@ function EvidenceTrail({ entries: entries2, emptyNotClaimed = "Nothing" }) {
     ] })
   ] }, i)) });
 }
-const meta$L = {
+const meta$R = {
   title: "Compositions/Evidence trail",
   component: EvidenceTrail
 };
@@ -1372,21 +1687,24 @@ const OneEntry = {
     ]
   }
 };
-const __vite_glob_0_5 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_6 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AFinishedJob: AFinishedJob$1,
   NotClaimedEmpty,
   OneEntry,
-  default: meta$L
+  default: meta$R
 }, Symbol.toStringTag, { value: "Module" }));
 const ROW_ICON$1 = 12;
 const ROW_STROKE$1 = 2;
+const ACTION_ICON = 16;
 function halves(value) {
   const end = value.endsWith("/") ? value.length - 1 : value.length;
   const cut = value.lastIndexOf("/", end - 1);
   return cut <= 0 ? [value, ""] : [value.slice(0, cut + 1), value.slice(cut + 1)];
 }
 function JobLogReference({ rows, children, actions, onCopied }) {
+  const [unopened, setUnopened] = useState(null);
+  const [opening, setOpening] = useState(null);
   const copy = useCallback(
     (event, value) => {
       event.stopPropagation();
@@ -1399,28 +1717,52 @@ function JobLogReference({ rows, children, actions, onCopied }) {
     },
     [onCopied]
   );
+  const open2 = useCallback((row, go) => {
+    setOpening(row);
+    setUnopened(null);
+    void go().then((why) => {
+      if (why !== null) setUnopened({ row, because: why.because });
+    }).finally(() => setOpening(null));
+  }, []);
   return /* @__PURE__ */ jsxs("div", { className: "armada-log-ref", children: [
     rows.map((row, i) => {
       const [head, tail2] = halves(row.value);
-      return /* @__PURE__ */ jsxs("div", { className: "armada-log-ref__row", "data-separated": row.separated || void 0, children: [
-        /* @__PURE__ */ jsxs("span", { className: "armada-log-ref__mark", children: [
-          row.icon ? /* @__PURE__ */ jsx(row.icon, { size: ROW_ICON$1, strokeWidth: ROW_STROKE$1, "aria-hidden": true }) : null,
-          row.iconLabel ? /* @__PURE__ */ jsx("span", { className: "armada-log-ref__sr", children: row.iconLabel }) : null
+      const failed2 = unopened !== null && unopened.row === i ? unopened.because : null;
+      const opens = row.open;
+      return /* @__PURE__ */ jsxs(Fragment$1, { children: [
+        /* @__PURE__ */ jsxs("div", { className: "armada-log-ref__row", "data-separated": row.separated || void 0, children: [
+          /* @__PURE__ */ jsxs("span", { className: "armada-log-ref__mark", children: [
+            row.icon ? /* @__PURE__ */ jsx(row.icon, { size: ROW_ICON$1, strokeWidth: ROW_STROKE$1, "aria-hidden": true }) : null,
+            row.iconLabel ? /* @__PURE__ */ jsx("span", { className: "armada-log-ref__sr", children: row.iconLabel }) : null
+          ] }),
+          /* @__PURE__ */ jsxs(
+            "span",
+            {
+              className: "armada-log-ref__value",
+              title: row.value,
+              "data-copies": row.copyValue !== void 0 || void 0,
+              onClick: row.copyValue !== void 0 ? (e) => copy(e, row.copyValue) : void 0,
+              children: [
+                /* @__PURE__ */ jsx("span", { className: "armada-log-ref__head", children: head }),
+                tail2 === "" ? null : /* @__PURE__ */ jsx("span", { className: "armada-log-ref__tail", children: tail2 })
+              ]
+            }
+          ),
+          row.meta ? /* @__PURE__ */ jsx("span", { className: "armada-log-ref__meta", children: row.meta }) : null,
+          opens === void 0 ? null : /* @__PURE__ */ jsx(
+            Button,
+            {
+              size: "sm",
+              variant: "ghost",
+              iconOnly: true,
+              "aria-label": opens.label,
+              disabled: opening !== null,
+              onClick: () => open2(i, opens.go),
+              children: /* @__PURE__ */ jsx(ExternalLink, { size: ACTION_ICON, strokeWidth: ROW_STROKE$1, "aria-hidden": true })
+            }
+          )
         ] }),
-        /* @__PURE__ */ jsxs(
-          "span",
-          {
-            className: "armada-log-ref__value",
-            title: row.value,
-            "data-copies": row.copyValue !== void 0 || void 0,
-            onClick: row.copyValue !== void 0 ? (e) => copy(e, row.copyValue) : void 0,
-            children: [
-              /* @__PURE__ */ jsx("span", { className: "armada-log-ref__head", children: head }),
-              tail2 === "" ? null : /* @__PURE__ */ jsx("span", { className: "armada-log-ref__tail", children: tail2 })
-            ]
-          }
-        ),
-        row.meta ? /* @__PURE__ */ jsx("span", { className: "armada-log-ref__meta", children: row.meta }) : null
+        failed2 === null ? null : /* @__PURE__ */ jsx("p", { className: "armada-log-ref__unopened", role: "status", children: failed2 })
       ] }, i);
     }),
     children || actions ? /* @__PURE__ */ jsxs("div", { className: "armada-log-ref__foot", children: [
@@ -1469,7 +1811,7 @@ function FailureNotice({
     referenced ? /* @__PURE__ */ jsx(JobLogReference, { rows: values ?? [], actions, onCopied, children: note }) : null
   ] });
 }
-const meta$K = {
+const meta$Q = {
   title: "Compositions/Failure notice",
   component: FailureNotice
 };
@@ -1632,7 +1974,7 @@ const NothingButTheSentence = {
     next: "Reload Bridge. If it happens again, quit and reopen."
   }
 };
-const __vite_glob_0_6 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_7 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AJobCannotBeRead,
   FleetIsNotRunningDeadPid,
@@ -1642,7 +1984,210 @@ const __vite_glob_0_6 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   FleetRefusedTheCommand,
   NothingButTheSentence,
   TheRendererThrew,
-  default: meta$K
+  default: meta$Q
+}, Symbol.toStringTag, { value: "Module" }));
+function ScrollArea({
+  className,
+  maxHeight,
+  axis = "vertical",
+  style,
+  ...rest
+}) {
+  return /* @__PURE__ */ jsx(
+    "div",
+    {
+      className: className ? `armada-scroll-area ${className}` : "armada-scroll-area",
+      "data-axis": axis,
+      style: maxHeight ? { ...style, maxHeight } : style,
+      ...rest
+    }
+  );
+}
+function Dialog({
+  open: open2,
+  title,
+  children,
+  field,
+  tone = "destructive",
+  width = "default",
+  confirmLabel,
+  confirmDisabled = false,
+  cancelLabel = "Cancel",
+  onConfirm,
+  onCancel
+}) {
+  const cancelRef = useRef(null);
+  useEffect(() => {
+    if (open2) cancelRef.current?.focus();
+  }, [open2]);
+  useEffect(() => {
+    if (!open2) return;
+    function onKey(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel?.();
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        if (!confirmDisabled) onConfirm?.();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open2, onCancel, onConfirm, confirmDisabled]);
+  if (!open2) return null;
+  const destructive = tone === "destructive";
+  return /* @__PURE__ */ jsx("div", { className: "armada-dialog-scrim", children: /* @__PURE__ */ jsxs(
+    "div",
+    {
+      className: "armada-dialog",
+      "data-width": width,
+      role: "dialog",
+      "aria-modal": "true",
+      "aria-label": title,
+      children: [
+        /* @__PURE__ */ jsxs("div", { className: "armada-dialog__head", children: [
+          destructive ? /* @__PURE__ */ jsx(
+            X,
+            {
+              className: "armada-dialog__glyph armada-dialog__glyph--destructive",
+              size: 16,
+              strokeWidth: 2,
+              "aria-hidden": "true"
+            }
+          ) : /* @__PURE__ */ jsx(
+            TriangleAlert,
+            {
+              className: "armada-dialog__glyph armada-dialog__glyph--escalated",
+              size: 16,
+              strokeWidth: 2,
+              "aria-hidden": "true"
+            }
+          ),
+          /* @__PURE__ */ jsx("h2", { className: "armada-dialog__title", children: title })
+        ] }),
+        /* @__PURE__ */ jsx(ScrollArea, { className: "armada-dialog__body", children }),
+        field === void 0 ? null : /* @__PURE__ */ jsx("div", { className: "armada-dialog__field", children: field }),
+        /* @__PURE__ */ jsxs("div", { className: "armada-dialog__actions", children: [
+          /* @__PURE__ */ jsx(
+            "button",
+            {
+              ref: cancelRef,
+              type: "button",
+              className: "armada-dialog__button armada-dialog__button--secondary",
+              onClick: onCancel,
+              children: cancelLabel
+            }
+          ),
+          /* @__PURE__ */ jsx(
+            "button",
+            {
+              type: "button",
+              className: destructive ? "armada-dialog__button armada-dialog__button--destructive" : "armada-dialog__button armada-dialog__button--primary",
+              disabled: confirmDisabled,
+              onClick: onConfirm,
+              children: confirmLabel
+            }
+          )
+        ] })
+      ]
+    }
+  ) });
+}
+function Textarea({
+  label: label2,
+  invalid = false,
+  message,
+  rows = 3,
+  id,
+  ...rest
+}) {
+  const generated = useId();
+  const textareaId = id ?? generated;
+  const messageId = `${textareaId}-message`;
+  const showMessage = invalid && message !== void 0;
+  return /* @__PURE__ */ jsxs("div", { className: "armada-textarea-field", children: [
+    label2 !== void 0 && /* @__PURE__ */ jsx("label", { className: "armada-textarea-field__label", htmlFor: textareaId, children: label2 }),
+    /* @__PURE__ */ jsx(
+      "textarea",
+      {
+        ...rest,
+        rows,
+        id: textareaId,
+        className: "armada-textarea",
+        "aria-invalid": invalid || void 0,
+        "aria-describedby": showMessage ? messageId : void 0
+      }
+    ),
+    showMessage && /* @__PURE__ */ jsx("span", { className: "armada-textarea-field__message", id: messageId, children: message })
+  ] });
+}
+const meta$P = {
+  title: "Compositions/Gaming flags",
+  component: GamingFlags
+};
+const OnTheRail = {
+  args: {
+    citation: "clipped",
+    said: "the gaming check flagged this evidence",
+    flags: [
+      { pattern: "check_config_edited", cited: "armada.yml — checks.tests.command" },
+      {
+        pattern: "assertion_weakened",
+        cited: "crates/api/src/tests/served.rs:214 — served_every_operation counts the filtered set"
+      }
+    ]
+  }
+};
+const TwoFlagsReadInFull = {
+  args: {
+    citation: "whole",
+    said: "What it flagged",
+    flags: [
+      {
+        pattern: "check_config_edited",
+        cited: "`armada.yml` — the `checks.tests.command` key was changed in the same step whose evidence it gates. The command it was changed **to** exits 0 on an empty test set:\n\n```\ncargo nextest run --workspace -E 'test(served_every_operation)'\n```\n\nThe previous command ran the whole workspace, so the step's evidence is a green run of a narrower set than the one the criterion names."
+      },
+      {
+        pattern: "assertion_weakened",
+        cited: '`crates/api/src/tests/served.rs:214` — `served_every_operation` walks the route table once per operation and the loop skips `forget_job`:\n\n```\nlet routes: Vec<&Route> = ROUTES.iter().filter(|r| r.operation != "forget_job").collect();\nassert_eq!(routes.len(), served.len());\n```\n\nThe count the assertion compares against was lowered by the same edit that made it pass, so the one operation the step was about is the one operation never read.'
+      }
+    ]
+  }
+};
+const FlaggedAndNotCited = {
+  args: {
+    citation: "whole",
+    flags: [{ pattern: "evidence_reused" }]
+  }
+};
+const OverrulingTwoFlags = {
+  args: TwoFlagsReadInFull.args,
+  render: (args) => /* @__PURE__ */ jsxs(
+    Dialog,
+    {
+      open: true,
+      tone: "neutral",
+      width: "wide",
+      title: "Overrule the gaming flag on this step?",
+      confirmLabel: "Overrule the flag",
+      confirmDisabled: true,
+      field: /* @__PURE__ */ jsx(Textarea, { label: "Why the flag is wrong", rows: 3 }),
+      children: [
+        /* @__PURE__ */ jsx("p", { children: "The gaming check flagged the evidence for Regression check. It did not refuse the work — it says the evidence for it is not to be trusted. Overruling says a person has read that evidence and takes responsibility for it; the step advances still recorded as failed against the flag." }),
+        /* @__PURE__ */ jsx(GamingFlags, { ...args }),
+        /* @__PURE__ */ jsx("p", { children: "It is not the last step, so the job carries on at the next one. Your reason is written to this job's log and stays there — the log is append-only, and nothing takes an override back. It is not sent to the drone, which did nothing wrong and is told only that the step was accepted." })
+      ]
+    }
+  )
+};
+const __vite_glob_0_8 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  FlaggedAndNotCited,
+  OnTheRail,
+  OverrulingTwoFlags,
+  TwoFlagsReadInFull,
+  default: meta$P
 }, Symbol.toStringTag, { value: "Module" }));
 function JobBrief({
   criteria: criteria2,
@@ -1668,7 +2213,7 @@ function JobBrief({
     ] })
   ] });
 }
-const meta$J = {
+const meta$O = {
   title: "Compositions/Job brief",
   component: JobBrief
 };
@@ -1700,14 +2245,14 @@ const CriteriaOnly = {
 const FactsOnly = {
   args: { criteria: [], facts, only: "facts" }
 };
-const __vite_glob_0_7 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_9 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Brief,
   CriteriaOnly,
   FactsOnly,
   NoCriteria,
   NoFacts,
-  default: meta$J
+  default: meta$O
 }, Symbol.toStringTag, { value: "Module" }));
 function joined$1(base, extra) {
   return extra ? `${base} ${extra}` : base;
@@ -1775,34 +2320,6 @@ function Select({ label: label2, invalid = false, message, id, children, ...rest
     showMessage && /* @__PURE__ */ jsx("span", { className: "armada-select-field__message", id: messageId, children: message })
   ] });
 }
-function Textarea({
-  label: label2,
-  invalid = false,
-  message,
-  rows = 3,
-  id,
-  ...rest
-}) {
-  const generated = useId();
-  const textareaId = id ?? generated;
-  const messageId = `${textareaId}-message`;
-  const showMessage = invalid && message !== void 0;
-  return /* @__PURE__ */ jsxs("div", { className: "armada-textarea-field", children: [
-    label2 !== void 0 && /* @__PURE__ */ jsx("label", { className: "armada-textarea-field__label", htmlFor: textareaId, children: label2 }),
-    /* @__PURE__ */ jsx(
-      "textarea",
-      {
-        ...rest,
-        rows,
-        id: textareaId,
-        className: "armada-textarea",
-        "aria-invalid": invalid || void 0,
-        "aria-describedby": showMessage ? messageId : void 0
-      }
-    ),
-    showMessage && /* @__PURE__ */ jsx("span", { className: "armada-textarea-field__message", id: messageId, children: message })
-  ] });
-}
 function JobComposer({
   title,
   brief: brief2,
@@ -1836,7 +2353,7 @@ function JobComposer({
     ] })
   ] });
 }
-const meta$I = {
+const meta$N = {
   title: "Compositions/Job composer",
   component: JobComposer
 };
@@ -1866,11 +2383,11 @@ const NoChecksOnTheWorkflow = {
     provenance: "Dispatched by you"
   }
 };
-const __vite_glob_0_8 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_10 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   NoChecksOnTheWorkflow,
   WhatM1Renders,
-  default: meta$I
+  default: meta$N
 }, Symbol.toStringTag, { value: "Module" }));
 function JobDetailHeaderActions({
   status,
@@ -1932,7 +2449,7 @@ function JobDetailHeaderActions({
     actions ? /* @__PURE__ */ jsx("div", { className: "armada-job-head__actions", children: actions }) : null
   ] });
 }
-const meta$H = {
+const meta$M = {
   title: "Compositions/Job detail header actions",
   component: JobDetailHeaderActions
 };
@@ -2084,7 +2601,7 @@ const AtTheApprovalGate = {
     ] })
   }
 };
-const __vite_glob_0_9 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_11 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AFailedJob,
   AFinishedJob,
@@ -2093,13 +2610,14 @@ const __vite_glob_0_9 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   BothKills,
   BothKillsMenuOpen,
   StoppedWithARedispatch,
-  default: meta$H
+  default: meta$M
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$G = {
+const meta$L = {
   title: "Compositions/Job log reference",
   component: JobLogReference
 };
 const LOG = File;
+const OPENS = { label: "Open the log", go: () => Promise.resolve(null) };
 const OnARunningJob = {
   args: {
     rows: [
@@ -2108,11 +2626,11 @@ const OnARunningJob = {
         iconLabel: "Log",
         value: ".armada/logs/job_2d90bb.jsonl",
         copyValue: ".armada/logs/job_2d90bb.jsonl",
-        meta: "142 lines · 0 error"
+        meta: "142 lines · 0 error",
+        open: OPENS
       }
     ],
-    children: "Fleet, the drone and Bridge in one order, keyed on this job. It is being written now.",
-    actions: /* @__PURE__ */ jsx(Button, { ground: "sunken", children: "Open the log" })
+    children: "Fleet, the drone and Bridge in one order, keyed on this job. It is being written now."
   }
 };
 const OnAFailedJob = {
@@ -2125,21 +2643,24 @@ const OnAFailedJob = {
         copyValue: "feat/manifest-cache",
         meta: "2 files +48 −11"
       },
-      { icon: Folder, iconLabel: "Worktree", value: "~/.armada/worktrees/job_91ab" },
+      {
+        icon: Folder,
+        iconLabel: "Worktree",
+        value: "~/.armada/worktrees/job_91ab",
+        copyValue: "~/.armada/worktrees/job_91ab",
+        open: { label: "Open the worktree", go: () => Promise.resolve(null) }
+      },
       {
         icon: LOG,
         iconLabel: "Log",
         value: ".armada/logs/job_91ab.jsonl",
         copyValue: ".armada/logs/job_91ab.jsonl",
         meta: "318 lines · 4 error",
-        separated: true
+        separated: true,
+        open: OPENS
       }
     ],
-    children: "The worktree and the branch are left in place. Armada will not touch either. The log holds Fleet, the drone and Bridge in one order, keyed on this job.",
-    actions: /* @__PURE__ */ jsxs(Fragment, { children: [
-      /* @__PURE__ */ jsx(Button, { ground: "sunken", children: "Open the log" }),
-      /* @__PURE__ */ jsx(Button, { ground: "sunken", children: "Open the worktree" })
-    ] })
+    children: "The worktree and the branch are left in place. Armada will not touch either. The log holds Fleet, the drone and Bridge in one order, keyed on this job."
   }
 };
 const OnAFinishedJob = {
@@ -2206,14 +2727,63 @@ const LongPaths = {
     children: "The worktree, the log and the transcripts directory follow from this job's id and the repository its manifest was read from. The branch is served."
   }
 };
-const __vite_glob_0_10 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const WhatOpensAndWhatOnlyCopies = {
+  args: {
+    rows: [
+      {
+        icon: Folder,
+        iconLabel: "Worktree",
+        value: "/Users/user/Development/armada/.armada/worktrees/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+        copyValue: "/Users/user/Development/armada/.armada/worktrees/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+        open: { label: "Open the worktree", go: () => Promise.resolve(null) }
+      },
+      {
+        icon: GitBranch,
+        iconLabel: "Branch",
+        value: "armada/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+        copyValue: "armada/01JQ8ZK4T7WY3N2VXB6RGM5D9C"
+      },
+      {
+        icon: LOG,
+        iconLabel: "Log",
+        value: "/Users/user/Development/armada/.armada/logs/01JQ8ZK4T7WY3N2VXB6RGM5D9C.jsonl",
+        copyValue: "/Users/user/Development/armada/.armada/logs/01JQ8ZK4T7WY3N2VXB6RGM5D9C.jsonl",
+        separated: true,
+        open: OPENS
+      }
+    ],
+    children: "The worktree and the log open in whatever this machine opens them with. The branch copies."
+  }
+};
+const WhenThePathIsGone = {
+  args: {
+    rows: [
+      {
+        icon: Folder,
+        iconLabel: "Worktree",
+        value: "/Users/user/Development/armada/.armada/worktrees/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+        copyValue: "/Users/user/Development/armada/.armada/worktrees/01JQ8ZK4T7WY3N2VXB6RGM5D9C",
+        open: {
+          label: "Open the worktree",
+          go: () => Promise.resolve({
+            because: "Nothing is at that worktree. It was reclaimed, and the branch survives it."
+          })
+        }
+      }
+    ],
+    children: "The branch is still there. The directory it was checked out into is not."
+  }
+};
+const __vite_glob_0_12 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   LongPaths,
   OnAFailedJob,
   OnAFinishedJob,
   OnARunningJob,
+  WhatOpensAndWhatOnlyCopies,
+  WhenThePathIsGone,
   WithErrors,
-  default: meta$G
+  default: meta$L
 }, Symbol.toStringTag, { value: "Module" }));
 const ROW_ICON = 12;
 const ROW_STROKE = 2;
@@ -2227,30 +2797,24 @@ function JobOutcome({ parts, note, onCopied }) {
   );
   return /* @__PURE__ */ jsxs("div", { className: "armada-outcome", children: [
     /* @__PURE__ */ jsx("ol", { className: "armada-outcome__parts", children: parts.map((part, i) => /* @__PURE__ */ jsxs("li", { className: "armada-outcome__part", children: [
-      /* @__PURE__ */ jsx("span", { className: "armada-outcome__mark", children: part.icon === void 0 ? null : /* @__PURE__ */ jsx(
-        part.icon,
-        {
-          size: ROW_ICON,
-          strokeWidth: ROW_STROKE,
-          "aria-label": part.iconLabel,
-          "aria-hidden": part.iconLabel === void 0
-        }
-      ) }),
+      /* @__PURE__ */ jsxs("span", { className: "armada-outcome__mark", children: [
+        part.icon ? /* @__PURE__ */ jsx(part.icon, { size: ROW_ICON, strokeWidth: ROW_STROKE, "aria-hidden": true }) : null,
+        part.iconLabel ? /* @__PURE__ */ jsx("span", { className: "armada-outcome__sr", children: part.iconLabel }) : null
+      ] }),
       /* @__PURE__ */ jsx("span", { className: "armada-outcome__name", children: part.name }),
-      part.value === void 0 ? /* @__PURE__ */ jsx("span", { className: "armada-outcome__absent", children: part.absent }) : /* @__PURE__ */ jsx(
-        "span",
-        {
-          className: "armada-outcome__value",
-          role: "button",
-          tabIndex: 0,
-          onClick: (event) => copy(event, part.value),
-          onKeyDown: (event) => {
-            if (event.key !== "Enter" && event.key !== " ") return;
-            event.preventDefault();
-            void navigator.clipboard.writeText(part.value).then(() => onCopied?.(part.value));
-          },
-          children: part.value
-        }
+      part.value === void 0 ? /* @__PURE__ */ jsx("span", { className: "armada-outcome__absent", children: part.absent }) : (
+        /* The title carries the whole value however narrow the row gets,
+           and so does the clipboard: a copy that truncated with the
+           display would be worse than the overflow it was fixing. */
+        /* @__PURE__ */ jsx(
+          "span",
+          {
+            className: "armada-outcome__value",
+            title: part.value,
+            onClick: (event) => copy(event, part.value),
+            children: part.value
+          }
+        )
       ),
       /* @__PURE__ */ jsx("span", { className: "armada-outcome__meta", children: part.meta }),
       /* @__PURE__ */ jsx("span", { className: "armada-outcome__action", children: part.action })
@@ -2258,14 +2822,14 @@ function JobOutcome({ parts, note, onCopied }) {
     note === void 0 ? null : /* @__PURE__ */ jsx("p", { className: "armada-outcome__note", children: note })
   ] });
 }
-const meta$F = {
+const meta$K = {
   title: "Compositions/Job outcome",
   component: JobOutcome
 };
-const NOTE$1 = "Armada does not push and does not merge. The branch is yours to take.";
+const NOTE$2 = "Armada does not push and does not merge. The branch is yours to take.";
 const WhatIsServedToday = {
   args: {
-    note: NOTE$1,
+    note: NOTE$2,
     parts: [
       {
         name: "Branch",
@@ -2303,7 +2867,7 @@ const WhatIsServedToday = {
 };
 const EveryPartServed$1 = {
   args: {
-    note: NOTE$1,
+    note: NOTE$2,
     parts: [
       {
         name: "Branch",
@@ -2342,12 +2906,12 @@ const NoBranch = {
     ]
   }
 };
-const __vite_glob_0_11 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_13 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   EveryPartServed: EveryPartServed$1,
   NoBranch,
   WhatIsServedToday,
-  default: meta$F
+  default: meta$K
 }, Symbol.toStringTag, { value: "Module" }));
 function Tabs({ items, value, defaultValue, onChange }) {
   const [internal, setInternal] = useState(defaultValue ?? items[0]?.id);
@@ -2412,7 +2976,7 @@ function JobRecord({
     /* @__PURE__ */ jsx("div", { className: "armada-record__panel", role: "tabpanel", children: open2?.panel })
   ] });
 }
-const meta$E = {
+const meta$J = {
   title: "Compositions/Job record",
   component: JobRecord
 };
@@ -2461,14 +3025,14 @@ const NothingRecorded = {
 function Panel({ children }) {
   return /* @__PURE__ */ jsx("p", { className: "armada-record__note", children });
 }
-const __vite_glob_0_12 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_14 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   ASectionOpened,
   FoldedRecord,
   NothingRecorded,
-  default: meta$E
+  default: meta$J
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$D = {
+const meta$I = {
   title: "Compositions/Job row (stacked)",
   component: JobRowStacked
 };
@@ -2655,7 +3219,7 @@ const Convoy = {
     ...Running$5.args,
     headline: "Retire the poke path across the fleet",
     fields: [
-      { value: "3 workspaces" },
+      { value: "crates/fleet +2", mono: true, icon: Folder },
       { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 2, activity: "running", label: "Step 2 of 4" }) },
       { value: "Implement", emphasis: true },
       { value: "11m 03s", mono: true },
@@ -2663,7 +3227,7 @@ const Convoy = {
     ]
   }
 };
-const __vite_glob_0_13 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheWidthFloor,
   Convoy,
@@ -2679,7 +3243,7 @@ const __vite_glob_0_13 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   RunningFocused,
   Selected,
   SpendAsQuota,
-  default: meta$D
+  default: meta$I
 }, Symbol.toStringTag, { value: "Module" }));
 function Separator({
   className,
@@ -2698,6 +3262,99 @@ function Separator({
     }
   );
 }
+function ReviewDecision({
+  note,
+  onNote,
+  onApprove,
+  onRequestChanges,
+  onReject,
+  disabled = false,
+  disabledNote,
+  noteLabel = "What should change",
+  keptNote = "Approving takes the work. Requesting changes sends this note to the drone as a turn — it keeps the worktree and the step, and comes back running.",
+  rejectNote = "Rejecting is a verdict on the work and the job ends there. The drone is stopped and nothing resumes it. Its branch stays where the drone left it.",
+  approveLabel = "Approve the work",
+  requestChangesLabel = "Request changes",
+  rejectLabel = "Reject the work"
+}) {
+  const blank = note.trim() === "";
+  return /* @__PURE__ */ jsxs("div", { className: "armada-decision", children: [
+    /* @__PURE__ */ jsx(
+      Textarea,
+      {
+        label: noteLabel,
+        rows: 4,
+        value: note,
+        disabled,
+        onChange: (event) => onNote(event.target.value)
+      }
+    ),
+    /* @__PURE__ */ jsxs("div", { className: "armada-decision__kept", children: [
+      /* @__PURE__ */ jsx(Button, { variant: "primary", disabled, onClick: onApprove, children: approveLabel }),
+      /* @__PURE__ */ jsx(
+        Button,
+        {
+          variant: "secondary",
+          disabled: disabled || blank,
+          onClick: onRequestChanges,
+          children: requestChangesLabel
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsx("p", { className: "armada-decision__said", children: keptNote }),
+    /* @__PURE__ */ jsx(Separator, { decorative: false, className: "armada-decision__rule" }),
+    /* @__PURE__ */ jsxs("div", { className: "armada-decision__terminal", children: [
+      /* @__PURE__ */ jsx(Button, { variant: "destructive", disabled, onClick: onReject, children: rejectLabel }),
+      /* @__PURE__ */ jsx("p", { className: "armada-decision__said", "data-terminal": true, children: rejectNote })
+    ] }),
+    disabled && disabledNote !== void 0 ? /* @__PURE__ */ jsx("p", { className: "armada-decision__said", role: "note", children: disabledNote }) : null
+  ] });
+}
+const meta$H = {
+  title: "Compositions/Review decision",
+  component: ReviewDecision,
+  args: {
+    note: "",
+    onNote: () => {
+    },
+    onApprove: () => {
+    },
+    onRequestChanges: () => {
+    },
+    onReject: () => {
+    }
+  }
+};
+const NothingWrittenYet = {
+  args: { note: "" }
+};
+const ANoteWritten = {
+  args: {
+    note: "The gate change is right, but AdvanceGate::HumanAlways is handled in gate.rs and not in config's loader, so a workflow declaring it is still refused at load. Add the arm there and a test that loads one."
+  }
+};
+const ADecisionAlreadySent = {
+  args: {
+    note: "Add the arm in config's loader and a test that loads one.",
+    disabled: true,
+    disabledNote: "A decision on this job is already in flight. It was not sent twice."
+  }
+};
+const NotConnectedToFleet = {
+  args: {
+    note: "",
+    disabled: true,
+    disabledNote: "Fleet is not connected, so nothing here can be sent."
+  }
+};
+const __vite_glob_0_16 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  ADecisionAlreadySent,
+  ANoteWritten,
+  NotConnectedToFleet,
+  NothingWrittenYet,
+  default: meta$H
+}, Symbol.toStringTag, { value: "Module" }));
 const NAV_ICON = 16;
 const NAV_STROKE = 2;
 function Item({
@@ -2770,7 +3427,7 @@ function Sidebar({
     }
   );
 }
-const meta$C = {
+const meta$G = {
   title: "Compositions/Sidebar",
   component: Sidebar
 };
@@ -2810,7 +3467,7 @@ const M1OneSurface = {
 const FlatForContrast = {
   args: { surfaces, activeId: "active", sectionLabel: void 0, appName: "Armada" }
 };
-const __vite_glob_0_14 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_17 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtMaximumWidth,
   AtMinimumWidth,
@@ -2819,7 +3476,7 @@ const __vite_glob_0_14 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   FlatForContrast,
   HelmActive,
   M1OneSurface,
-  default: meta$C
+  default: meta$G
 }, Symbol.toStringTag, { value: "Module" }));
 function count(n, one2, many) {
   return `${n} ${n === 1 ? one2 : many}`;
@@ -2847,7 +3504,7 @@ function StatusBar({
     spend ? /* @__PURE__ */ jsx("span", { className: "armada-status-bar__spend", children: spend }) : null
   ] });
 }
-const meta$B = {
+const meta$F = {
   title: "Compositions/StatusBar",
   component: StatusBar
 };
@@ -2926,7 +3583,7 @@ const AtTheItemCeiling = {
     spend: "~$2.40 of $20"
   }
 };
-const __vite_glob_0_15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_18 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheItemCeiling,
   FleetNotRunning,
@@ -2937,9 +3594,9 @@ const __vite_glob_0_15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   WithBothCounts,
   WithEscalationsOnly,
   WithOneOfEach,
-  default: meta$B
+  default: meta$F
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$A = {
+const meta$E = {
   title: "Compositions/Step activity mark",
   component: StepActivityMark
 };
@@ -2991,7 +3648,7 @@ const EveryValue = {
     ] }, activity)) });
   }
 };
-const __vite_glob_0_16 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_19 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Advanced,
   AwaitingHuman: AwaitingHuman$1,
@@ -3004,9 +3661,9 @@ const __vite_glob_0_16 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Running: Running$4,
   RunningPulsing: RunningPulsing$1,
   Stopped: Stopped$1,
-  default: meta$A
+  default: meta$E
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$z = {
+const meta$D = {
   title: "Compositions/Step bar",
   component: StepBar
 };
@@ -3037,7 +3694,7 @@ const RunningNeverPulses = {
     /* @__PURE__ */ jsx(StepBar, { total: 4, current: 3, activity: "running", label: "Step 3 of 4" })
   ] })
 };
-const __vite_glob_0_17 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_20 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AllAdvanced,
   AwaitingHuman,
@@ -3047,9 +3704,255 @@ const __vite_glob_0_17 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Running: Running$3,
   RunningLongWorkflow,
   RunningNeverPulses,
-  default: meta$z
+  default: meta$D
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$y = {
+function TransitionHistory({ moves, emptyNote, note }) {
+  if (moves.length === 0) {
+    return /* @__PURE__ */ jsx("p", { className: "armada-history__empty", role: "note", children: emptyNote });
+  }
+  return /* @__PURE__ */ jsxs("div", { className: "armada-history", children: [
+    /* @__PURE__ */ jsx("ol", { className: "armada-history__moves", children: moves.map((move) => /* @__PURE__ */ jsxs("li", { className: "armada-history__move", children: [
+      /* @__PURE__ */ jsx("span", { className: "armada-history__seq", children: move.seq }),
+      /* @__PURE__ */ jsx("span", { className: "armada-history__at", children: move.at }),
+      /* @__PURE__ */ jsx("span", { className: "armada-history__kind", children: move.kind }),
+      /* @__PURE__ */ jsxs("span", { className: "armada-history__body", children: [
+        /* @__PURE__ */ jsxs("span", { className: "armada-history__head", children: [
+          move.subject === void 0 ? null : /* @__PURE__ */ jsx("span", { className: "armada-history__subject", children: move.subject }),
+          /* @__PURE__ */ jsx("span", { className: "armada-history__moved", children: move.moved })
+        ] }),
+        move.why === void 0 ? null : /* @__PURE__ */ jsx("span", { className: "armada-history__why", children: move.why })
+      ] }),
+      /* @__PURE__ */ jsx("span", { className: "armada-history__actor", children: move.actor })
+    ] }, move.seq)) }),
+    note === void 0 ? null : /* @__PURE__ */ jsx("p", { className: "armada-history__note", children: note })
+  ] });
+}
+const meta$C = {
+  title: "Compositions/Transition history",
+  component: TransitionHistory
+};
+const NOTE$1 = "What Armada did. What the drone said is in its turns.";
+const NOTHING_YET$1 = "This job has not moved yet. Creation is not a transition, so no row describes it.";
+const AJobThatRanClean = {
+  args: {
+    note: NOTE$1,
+    emptyNote: NOTHING_YET$1,
+    moves: [
+      { seq: 1, at: "09:14:02", kind: "status", moved: "awaiting_approval → queued", actor: "human" },
+      { seq: 2, at: "09:14:02", kind: "status", moved: "queued → running", actor: "fleet" },
+      { seq: 3, at: "09:14:03", kind: "drone", subject: "drn_01M13", moved: "drone_spawned", actor: "fleet" },
+      { seq: 4, at: "09:14:03", kind: "step", subject: "plan", moved: "not_started → running", actor: "fleet" },
+      { seq: 5, at: "09:21:41", kind: "step", subject: "plan", moved: "running → advanced", actor: "fleet" },
+      { seq: 6, at: "09:21:41", kind: "step", subject: "implement", moved: "not_started → running", actor: "fleet" },
+      { seq: 7, at: "10:02:18", kind: "step", subject: "implement", moved: "running → advanced", actor: "fleet" },
+      { seq: 8, at: "10:02:19", kind: "drone", subject: "drn_01M13", moved: "drone_exited", actor: "fleet" },
+      { seq: 9, at: "10:02:19", kind: "status", moved: "running → completed_success", actor: "fleet" }
+    ]
+  }
+};
+const AJobThatEndedSomewhereSurprising = {
+  args: {
+    note: NOTE$1,
+    emptyNote: NOTHING_YET$1,
+    moves: [
+      { seq: 1, at: "13:40:11", kind: "status", moved: "awaiting_approval → queued", actor: "human" },
+      { seq: 2, at: "13:40:11", kind: "status", moved: "queued → running", actor: "fleet" },
+      { seq: 3, at: "13:40:12", kind: "drone", subject: "drn_01M2A", moved: "drone_spawned", actor: "fleet" },
+      { seq: 4, at: "13:40:12", kind: "step", subject: "implement", moved: "not_started → running", actor: "fleet" },
+      {
+        seq: 5,
+        at: "13:58:04",
+        kind: "step",
+        subject: "implement",
+        moved: "running → stopped",
+        why: "refused by the judge",
+        actor: "fleet"
+      },
+      {
+        seq: 6,
+        at: "13:58:04",
+        kind: "status",
+        moved: "running → escalated",
+        why: "refused by the judge · owes c-2, c-4",
+        actor: "fleet"
+      },
+      { seq: 7, at: "14:06:33", kind: "drone", subject: "drn_01M2A", moved: "drone_exited", actor: "human" },
+      { seq: 8, at: "14:11:50", kind: "step", subject: "implement", moved: "stopped → retrying", actor: "human" },
+      { seq: 9, at: "14:11:51", kind: "drone", subject: "drn_01M2F", moved: "drone_spawned", actor: "fleet" },
+      { seq: 10, at: "14:11:51", kind: "status", moved: "escalated → running", actor: "human" },
+      {
+        seq: 11,
+        at: "14:44:09",
+        kind: "status",
+        moved: "running → escalated",
+        why: "hit the iteration cap",
+        actor: "fleet"
+      },
+      { seq: 12, at: "14:52:00", kind: "drone", subject: "drn_01M2F", moved: "drone_exited", actor: "fleet" },
+      { seq: 13, at: "14:52:00", kind: "status", moved: "escalated → killed", actor: "human" }
+    ]
+  }
+};
+const TwoMovesInOneInstant = {
+  args: {
+    note: NOTE$1,
+    emptyNote: NOTHING_YET$1,
+    moves: [
+      { seq: 41, at: "16:02:57", kind: "step", subject: "verify", moved: "running → advanced", actor: "fleet" },
+      { seq: 42, at: "16:02:57", kind: "status", moved: "running → awaiting_review", actor: "fleet" }
+    ]
+  }
+};
+const NothingRecordedYet = {
+  args: { moves: [], emptyNote: NOTHING_YET$1 }
+};
+const __vite_glob_0_21 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  AJobThatEndedSomewhereSurprising,
+  AJobThatRanClean,
+  NothingRecordedYet,
+  TwoMovesInOneInstant,
+  default: meta$C
+}, Symbol.toStringTag, { value: "Module" }));
+const OUTSIDE_PLAN = "outside plan";
+function UnifiedDiff({ files, emptyNote, cut, note, onCopied }) {
+  const copy = useCallback(
+    (event, value) => {
+      event.stopPropagation();
+      void navigator.clipboard.writeText(value).then(() => onCopied?.(value));
+    },
+    [onCopied]
+  );
+  if (files.length === 0) {
+    return /* @__PURE__ */ jsx("p", { className: "armada-diff__empty", role: "note", children: emptyNote });
+  }
+  return /* @__PURE__ */ jsxs("div", { className: "armada-diff", children: [
+    cut === void 0 ? null : /* @__PURE__ */ jsx("p", { className: "armada-diff__cut", role: "note", children: cut }),
+    files.map((file) => /* @__PURE__ */ jsxs("section", { className: "armada-diff__file", children: [
+      /* @__PURE__ */ jsxs("header", { className: "armada-diff__head", "data-outside": file.outsidePlan === true || void 0, children: [
+        /* @__PURE__ */ jsx(
+          "span",
+          {
+            className: "armada-diff__path",
+            title: file.path,
+            onClick: (event) => copy(event, file.path),
+            children: file.path
+          }
+        ),
+        file.meta === void 0 ? null : /* @__PURE__ */ jsx("span", { className: "armada-diff__meta", children: file.meta }),
+        /* @__PURE__ */ jsx("span", { className: "armada-diff__mark", children: file.outsidePlan === true ? OUTSIDE_PLAN : null })
+      ] }),
+      /* @__PURE__ */ jsx("ol", { className: "armada-diff__lines", children: file.lines.map((line, i) => /* @__PURE__ */ jsx("li", { className: "armada-diff__line", "data-kind": line.kind, children: /* @__PURE__ */ jsx("pre", { className: "armada-diff__text", children: line.text }) }, i)) })
+    ] }, file.path)),
+    note === void 0 ? null : /* @__PURE__ */ jsx("p", { className: "armada-diff__note", children: note })
+  ] });
+}
+const meta$B = {
+  title: "Compositions/Unified diff",
+  component: UnifiedDiff
+};
+const READ = "Read from this job's worktree against the branch it was cut from.";
+const APatchToDecideOn = {
+  args: {
+    emptyNote: "",
+    note: `${READ} Every path is inside the plan this step declared.`,
+    files: [
+      {
+        path: "crates/fleet/src/gate.rs",
+        lines: [
+          { kind: "hunk", text: "@@ -41,7 +41,11 @@ impl Gate {" },
+          { kind: "context", text: "     fn decide(&self, step: &Step) -> Advance {" },
+          { kind: "context", text: "         let carried = step.advance_gate();" },
+          { kind: "removed", text: "-        if carried == AdvanceGate::Auto {" },
+          { kind: "removed", text: "-            return Advance::Now;" },
+          { kind: "added", text: "+        match carried {" },
+          { kind: "added", text: "+            AdvanceGate::Auto => Advance::Now," },
+          { kind: "added", text: "+            AdvanceGate::HumanAlways => Advance::Wait," },
+          { kind: "added", text: "+            AdvanceGate::AutoIfJudgePasses => self.ask_the_judge(step)," },
+          { kind: "context", text: "         }" },
+          { kind: "context", text: "     }" }
+        ]
+      },
+      {
+        path: "crates/fleet/src/reviewing.rs",
+        meta: "new file mode 100644",
+        lines: [
+          { kind: "hunk", text: "@@ -0,0 +1,4 @@" },
+          { kind: "added", text: "+//! The three acts a person takes on finished work." },
+          { kind: "added", text: "+//!" },
+          { kind: "added", text: "+//! All three refuse anywhere but `awaiting_review`." },
+          { kind: "added", text: "+" }
+        ]
+      }
+    ]
+  }
+};
+const AFileOutsideTheDeclaredPlan = {
+  args: {
+    emptyNote: "",
+    note: `${READ} 1 of 2 paths are outside the plan this step declared.`,
+    files: [
+      {
+        path: "crates/fleet/src/gate.rs",
+        lines: [
+          { kind: "hunk", text: "@@ -41,3 +41,3 @@" },
+          { kind: "context", text: "     fn decide(&self, step: &Step) -> Advance {" },
+          { kind: "added", text: "+        // The gate the workflow carried, honoured." },
+          { kind: "removed", text: "-        // TODO: read the gate." }
+        ]
+      },
+      {
+        path: "crates/config/settings.toml",
+        outsidePlan: true,
+        lines: [
+          { kind: "hunk", text: "@@ -12,2 +12,3 @@ [judge]" },
+          { kind: "context", text: ' model = "haiku"' },
+          { kind: "added", text: " timeout_seconds = 90" }
+        ]
+      }
+    ]
+  }
+};
+const APatchTooLongToDraw$1 = {
+  args: {
+    emptyNote: "",
+    note: READ,
+    cut: "This is the first 2,000 lines of a 14,318-line patch. The rest is not on screen. Read the whole diff in the worktree named under Where the work is before deciding.",
+    files: [
+      {
+        path: "crates/store/src/schema.rs",
+        lines: [
+          { kind: "hunk", text: "@@ -199,4 +199,5 @@ const MIGRATIONS: &[Migration] = &[" },
+          { kind: "context", text: '    Migration { id: 11, sql: include_str!("sql/011_steps.sql") },' },
+          { kind: "added", text: '+    Migration { id: 12, sql: include_str!("sql/012_review.sql") },' },
+          { kind: "context", text: "];" }
+        ]
+      }
+    ]
+  }
+};
+const ADroneThatChangedNothing = {
+  args: {
+    files: [],
+    emptyNote: "This job's worktree opened and holds no change against the branch it was cut from. That is what a diff_nonempty check refuses."
+  }
+};
+const AJobWithNoWorktree = {
+  args: {
+    files: [],
+    emptyNote: "This job has no worktree, so there is nothing to read. A job at the approval gate has not been given one."
+  }
+};
+const __vite_glob_0_22 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  ADroneThatChangedNothing,
+  AFileOutsideTheDeclaredPlan,
+  AJobWithNoWorktree,
+  APatchToDecideOn,
+  APatchTooLongToDraw: APatchTooLongToDraw$1,
+  default: meta$B
+}, Symbol.toStringTag, { value: "Module" }));
+const meta$A = {
   title: "Compositions/Workflow rail",
   component: WorkflowRail
 };
@@ -3069,25 +3972,25 @@ const running$1 = [
     status: "running · 6m 12s",
     current: true,
     gates: [
-      { command: "build · cargo build --workspace", result: "not reached", icon: ShieldMinus, iconLabel: "Not reached" },
-      { command: "diff_nonempty", result: "not reached", icon: ShieldMinus, iconLabel: "Not reached" }
-    ]
+      { command: "build · cargo build --workspace", result: "not reached", icon: ShieldMinus$1, iconLabel: "Not reached" },
+      { command: "diff_nonempty", result: "not reached", icon: ShieldMinus$1, iconLabel: "Not reached" }
+    ],
+    declarations: [{ label: "judge · 2 criteria", result: "not reached" }, { label: "advance_gate · auto_if_judge_passes" }]
   },
   {
     id: "verify",
     label: "Run tests",
     activity: "not_started",
     status: "not started",
-    gates: [
-      { command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus, iconLabel: "Not reached" }
-    ]
+    gates: [{ command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus$1, iconLabel: "Not reached" }],
+    declarations: [{ label: "judge · 1 criterion · gaming check", result: "not reached" }, { label: "advance_gate · auto_if_judge_passes" }]
   },
   {
     id: "handoff",
     label: "Summarise",
     activity: "not_started",
     status: "not started",
-    evidence: { icon: EVIDENCE, iconLabel: "Evidence", label: "" }
+    declarations: [{ label: "advance_gate · human_always" }]
   }
 ];
 const Running$2 = {
@@ -3095,6 +3998,17 @@ const Running$2 = {
 };
 const RunningPulseElsewhere = {
   args: { steps: running$1, pulsing: false }
+};
+const AWorkflowBeforeItRuns = {
+  args: {
+    steps: running$1.map(({ id, label: label2, gates, declarations }) => ({
+      id,
+      label: label2,
+      activity: "not_started",
+      gates: gates?.map(({ command }) => ({ command })),
+      declarations: declarations?.map(({ label: what }) => ({ label: what }))
+    }))
+  }
 };
 const Failed$1 = {
   args: {
@@ -3133,6 +4047,56 @@ const Stopped = {
         gates: [{ command: "build · cargo build --workspace", result: "exit 101", icon: ShieldX, iconLabel: "Failed" }]
       },
       { id: "verify", label: "Run tests", activity: "not_started", status: "not started" }
+    ]
+  }
+};
+const EvidenceFlaggedByTheGamingCheck = {
+  args: {
+    steps: [
+      {
+        id: "implement",
+        label: "Implement",
+        activity: "advanced",
+        status: "advanced",
+        elapsed: "6m 48s",
+        verdict: "passed",
+        verdictNamed: "passed",
+        gates: [{ command: "build · cargo build --workspace", result: "passed", icon: ShieldCheck, iconLabel: "passed" }]
+      },
+      {
+        id: "verify",
+        label: "Run tests",
+        activity: "stopped",
+        status: "stopped",
+        current: true,
+        elapsed: "3m 07s",
+        verdict: "failed · evidence disputed",
+        verdictNamed: "failed",
+        gates: [{ command: "test · cargo test --workspace", result: "passed", icon: ShieldCheck, iconLabel: "passed" }],
+        declarations: [{ label: "judge · 2 criteria · gaming check" }, { label: "advance_gate · auto_if_judge_passes" }],
+        flags: [
+          { pattern: "check_config_edited", cited: "package.json · scripts.test now runs vitest run src/unit" },
+          { pattern: "assertion_weakened", cited: "src/parse.test.ts:88 · toEqual replaced by toBeDefined" }
+        ]
+      },
+      { id: "handoff", label: "Summarise", activity: "not_started", status: "not started" }
+    ]
+  }
+};
+const AFlaggedStepIsNeverUngated = {
+  args: {
+    steps: [
+      {
+        id: "root_cause",
+        label: "root_cause",
+        labelIsAnIdentifier: true,
+        activity: "stopped",
+        status: "stopped",
+        current: true,
+        elapsed: "8m 22s",
+        evidence: { label: "" },
+        flags: [{ pattern: "findings_generic", cited: "the report names no file and no line" }]
+      }
     ]
   }
 };
@@ -3204,39 +4168,10 @@ const OneStep = {
 const ServedSteps = {
   args: {
     steps: [
-      {
-        id: "plan",
-        label: "plan",
-        labelIsAnIdentifier: true,
-        activity: "advanced",
-        status: "advanced",
-        elapsed: "2m 14s",
-        verdict: "passed",
-        verdictNamed: "passed"
-      },
-      {
-        id: "implement",
-        label: "implement",
-        labelIsAnIdentifier: true,
-        activity: "running",
-        status: "running",
-        current: true,
-        elapsed: "11m 03s"
-      },
-      {
-        id: "verify",
-        label: "verify",
-        labelIsAnIdentifier: true,
-        activity: "not_started",
-        status: "not_started"
-      },
-      {
-        id: "handoff",
-        label: "handoff",
-        labelIsAnIdentifier: true,
-        activity: "not_started",
-        status: "not_started"
-      }
+      { id: "plan", label: "plan", labelIsAnIdentifier: true, activity: "advanced", status: "advanced", elapsed: "2m 14s", verdict: "passed", verdictNamed: "passed" },
+      { id: "implement", label: "implement", labelIsAnIdentifier: true, activity: "running", status: "running", current: true, elapsed: "11m 03s" },
+      { id: "verify", label: "verify", labelIsAnIdentifier: true, activity: "not_started", status: "not_started" },
+      { id: "handoff", label: "handoff", labelIsAnIdentifier: true, activity: "not_started", status: "not_started" }
     ],
     pulsing: true
   }
@@ -3250,7 +4185,7 @@ const EveryStepState = {
         labelIsAnIdentifier: true,
         activity: "not_started",
         status: "not_started",
-        gates: [{ command: "build", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }]
+        gates: [{ command: "build", result: "not reached", icon: ShieldMinus$1, iconLabel: "not reached" }]
       },
       {
         id: "running",
@@ -3260,7 +4195,7 @@ const EveryStepState = {
         status: "running",
         current: true,
         elapsed: "6m 12s",
-        gates: [{ command: "test", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }]
+        gates: [{ command: "test", result: "not reached", icon: ShieldMinus$1, iconLabel: "not reached" }]
       },
       { id: "awaiting_human", label: "awaiting_human", labelIsAnIdentifier: true, activity: "awaiting_human", status: "awaiting_human", elapsed: "1m 04s" },
       { id: "retrying", label: "retrying", labelIsAnIdentifier: true, activity: "retrying", status: "retrying", elapsed: "3m 41s", verdict: "failed · failed a check", verdictNamed: "failed" },
@@ -3312,6 +4247,53 @@ const AVerdictBesideTheState = {
       },
       { id: "handoff", label: "handoff", labelIsAnIdentifier: true, activity: "not_started" }
     ]
+  }
+};
+const OverruledByAPerson = {
+  args: {
+    steps: [
+      {
+        id: "implement",
+        label: "Implement",
+        activity: "advanced",
+        status: "advanced",
+        elapsed: "6m 48s",
+        verdict: "passed",
+        verdictNamed: "passed",
+        gates: [{ command: "build · cargo build --workspace", result: "passed", icon: ShieldCheck, iconLabel: "passed" }]
+      },
+      {
+        id: "verify",
+        label: "Run tests",
+        activity: "advanced",
+        status: "advanced",
+        elapsed: "12m 30s",
+        verdict: "failed · refused by the judge",
+        verdictNamed: "failed",
+        overridden: "overruled by a person",
+        gates: [{ command: "test · cargo test --workspace", result: "passed", icon: ShieldCheck, iconLabel: "passed" }],
+        declarations: [{ label: "judge · 2 criteria" }, { label: "advance_gate · auto_if_judge_passes" }],
+        verdicts: [{
+          ordinal: 2,
+          criterionId: "crit_7f2a",
+          named: "not_met",
+          verdict: "refused",
+          text: "The regression is covered by a test that fails without the fix.",
+          expected: "a test that fails on the parent commit",
+          produced: "a test asserting the new behaviour only",
+          consequence: "a reader cannot tell the fix from the assertion"
+        }]
+      },
+      {
+        id: "handoff",
+        label: "Summarise",
+        activity: "running",
+        status: "running · 0m 04s",
+        current: true,
+        declarations: [{ label: "advance_gate · human_always" }]
+      }
+    ],
+    pulsing: true
   }
 };
 const UngatedAndUnanswerable = {
@@ -3374,7 +4356,7 @@ const AFailedCheckNamesItsOutput = {
         current: true,
         gates: [
           { command: "test · cargo test --workspace", result: "failed · exit 0 → exit 101", icon: ShieldX, iconLabel: "Failed", outputPath: ".armada/jobs/job_2d90bb/checks/test.log" },
-          { command: "diff_nonempty", result: "never started", icon: ShieldMinus, iconLabel: "Never started" }
+          { command: "diff_nonempty", result: "never started", icon: ShieldMinus$1, iconLabel: "Never started" }
         ]
       }
     ]
@@ -3405,7 +4387,7 @@ const FourJobsOverAndOneResumable = {
           status: "killed",
           current: true,
           elapsed: "4m 09s",
-          gates: [{ command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }]
+          gates: [{ command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus$1, iconLabel: "not reached" }]
         }
       ],
       [
@@ -3431,17 +4413,52 @@ const FourJobsOverAndOneResumable = {
     ] }, status)) });
   }
 };
-const __vite_glob_0_18 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const WhatAStepDeclares = {
+  args: {
+    steps: [
+      { id: "scope", label: "scope", labelIsAnIdentifier: true, activity: "advanced", status: "advanced", elapsed: "1m 12s", evidence: { label: "" } },
+      {
+        id: "implement",
+        label: "implement",
+        labelIsAnIdentifier: true,
+        activity: "not_started",
+        status: "not_started",
+        declarations: [{ label: "judge · 2 criteria · panel of 3", result: "not reached" }, { label: "advance_gate · auto_if_judge_passes" }]
+      },
+      {
+        id: "tests",
+        label: "tests",
+        labelIsAnIdentifier: true,
+        activity: "not_started",
+        status: "not_started",
+        declarations: [{ label: "judge · gaming check", result: "not reached" }]
+      },
+      {
+        id: "handoff",
+        label: "handoff",
+        labelIsAnIdentifier: true,
+        activity: "not_started",
+        status: "not_started",
+        declarations: [{ label: "advance_gate · human_always" }]
+      }
+    ]
+  }
+};
+const __vite_glob_0_23 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AFailedCheckNamesItsOutput,
+  AFlaggedStepIsNeverUngated,
   AVerdictBesideTheState,
+  AWorkflowBeforeItRuns,
   EveryStepState,
+  EvidenceFlaggedByTheGamingCheck,
   Failed: Failed$1,
   FourJobsOverAndOneResumable,
   HardPrerequisite,
   Killed: Killed$3,
   LabelsMissing,
   OneStep,
+  OverruledByAPerson,
   Running: Running$2,
   RunningPulseElsewhere,
   ServedSteps,
@@ -3449,7 +4466,8 @@ const __vite_glob_0_18 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   TheFiveCheckOutcomes,
   UngatedAndUnanswerable,
   WaitingAndRetrying,
-  default: meta$y
+  WhatAStepDeclares,
+  default: meta$A
 }, Symbol.toStringTag, { value: "Module" }));
 function Alert({ tone = "escalated", title, children, icon, action }) {
   return /* @__PURE__ */ jsxs(
@@ -3475,7 +4493,7 @@ function Alert({ tone = "escalated", title, children, icon, action }) {
     }
   );
 }
-const meta$x = {
+const meta$z = {
   title: "Primitives/Alert",
   component: Alert
 };
@@ -3499,11 +4517,11 @@ const Neutral = {
     action: /* @__PURE__ */ jsx("button", { type: "button", className: "armada-alert__button", children: "Open Doctor" })
   }
 };
-const __vite_glob_0_19 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_24 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Escalated: Escalated$1,
   Neutral,
-  default: meta$x
+  default: meta$z
 }, Symbol.toStringTag, { value: "Module" }));
 function AttachmentChip({ filename, onRemove }) {
   return /* @__PURE__ */ jsxs("span", { className: "armada-attachment-chip", children: [
@@ -3520,7 +4538,7 @@ function AttachmentChip({ filename, onRemove }) {
     )
   ] });
 }
-const meta$w = {
+const meta$y = {
   title: "Primitives/AttachmentChip",
   component: AttachmentChip
 };
@@ -3538,14 +4556,14 @@ const LongFilename = {
 const ReadOnly = {
   args: { filename: "evidence.log" }
 };
-const __vite_glob_0_20 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_25 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$7,
   LongFilename,
   ReadOnly,
-  default: meta$w
+  default: meta$y
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$v = {
+const meta$x = {
   title: "Primitives/Badge",
   component: Badge
 };
@@ -3609,7 +4627,7 @@ const EscalationReasons = {
     /* @__PURE__ */ jsx(Badge, { status: "escalated", icon: ArrowUpToLine, children: "Reached its ceiling" })
   ] })
 };
-const __vite_glob_0_21 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_26 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AwaitingApproval: AwaitingApproval$1,
   AwaitingAttestation,
@@ -3628,9 +4646,9 @@ const __vite_glob_0_21 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Running: Running$1,
   RunningPulsing,
   Superseded,
-  default: meta$v
+  default: meta$x
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$u = {
+const meta$w = {
   title: "Primitives/Button",
   component: Button
 };
@@ -3727,7 +4745,7 @@ const Light$7 = {
     /* @__PURE__ */ jsx(Button, { variant: "secondary", children: "Cancel" })
   ] }) })
 };
-const __vite_glob_0_22 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_27 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Destructive,
   Disabled: Disabled$7,
@@ -3740,9 +4758,9 @@ const __vite_glob_0_22 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Secondary,
   SecondaryOnASunkenGround,
   Small,
-  default: meta$u
+  default: meta$w
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$t = {
+const meta$v = {
   title: "Primitives/Card",
   component: Card$7,
   decorators: [
@@ -3779,12 +4797,12 @@ const Dimmed$1 = {
     /* @__PURE__ */ jsx(CardDescription, { children: "The work landed outside this job." })
   ] })
 };
-const __vite_glob_0_23 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_28 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$6,
   Dimmed: Dimmed$1,
   WithHeader,
-  default: meta$t
+  default: meta$v
 }, Symbol.toStringTag, { value: "Module" }));
 function Checkbox({ children, ...rest }) {
   return /* @__PURE__ */ jsxs("label", { className: "armada-checkbox", children: [
@@ -3793,7 +4811,7 @@ function Checkbox({ children, ...rest }) {
     /* @__PURE__ */ jsx("span", { children })
   ] });
 }
-const meta$s = {
+const meta$u = {
   title: "Primitives/Checkbox",
   component: Checkbox
 };
@@ -3832,14 +4850,14 @@ const Disabled$6 = {
 const Light$6 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$5, { children: /* @__PURE__ */ jsx(Checkbox, { defaultChecked: true, children: "Run Doctor before dispatch" }) }) })
 };
-const __vite_glob_0_24 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_29 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Checked,
   Disabled: Disabled$6,
   Focused: Focused$6,
   Light: Light$6,
   Unchecked,
-  default: meta$s
+  default: meta$u
 }, Symbol.toStringTag, { value: "Module" }));
 const DEFAULT_SECTIONS = ["Actions", "Navigation", "Jobs", "Settings"];
 function matches(entry, query) {
@@ -3949,87 +4967,7 @@ function CommandPalette({
     ] })
   ] }) });
 }
-function Dialog({
-  open: open2,
-  title,
-  children,
-  tone = "destructive",
-  confirmLabel,
-  confirmDisabled = false,
-  cancelLabel = "Cancel",
-  onConfirm,
-  onCancel
-}) {
-  const cancelRef = useRef(null);
-  useEffect(() => {
-    if (open2) cancelRef.current?.focus();
-  }, [open2]);
-  useEffect(() => {
-    if (!open2) return;
-    function onKey(event) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCancel?.();
-      }
-      if (event.key === "Enter") {
-        event.preventDefault();
-        if (!confirmDisabled) onConfirm?.();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open2, onCancel, onConfirm, confirmDisabled]);
-  if (!open2) return null;
-  const destructive = tone === "destructive";
-  return /* @__PURE__ */ jsx("div", { className: "armada-dialog-scrim", children: /* @__PURE__ */ jsxs("div", { className: "armada-dialog", role: "dialog", "aria-modal": "true", "aria-label": title, children: [
-    /* @__PURE__ */ jsxs("div", { className: "armada-dialog__head", children: [
-      destructive ? /* @__PURE__ */ jsx(
-        X,
-        {
-          className: "armada-dialog__glyph armada-dialog__glyph--destructive",
-          size: 16,
-          strokeWidth: 2,
-          "aria-hidden": "true"
-        }
-      ) : /* @__PURE__ */ jsx(
-        TriangleAlert,
-        {
-          className: "armada-dialog__glyph armada-dialog__glyph--escalated",
-          size: 16,
-          strokeWidth: 2,
-          "aria-hidden": "true"
-        }
-      ),
-      /* @__PURE__ */ jsxs("div", { className: "armada-dialog__copy", children: [
-        /* @__PURE__ */ jsx("h2", { className: "armada-dialog__title", children: title }),
-        /* @__PURE__ */ jsx("div", { className: "armada-dialog__body", children })
-      ] })
-    ] }),
-    /* @__PURE__ */ jsxs("div", { className: "armada-dialog__actions", children: [
-      /* @__PURE__ */ jsx(
-        "button",
-        {
-          ref: cancelRef,
-          type: "button",
-          className: "armada-dialog__button armada-dialog__button--secondary",
-          onClick: onCancel,
-          children: cancelLabel
-        }
-      ),
-      /* @__PURE__ */ jsx(
-        "button",
-        {
-          type: "button",
-          className: destructive ? "armada-dialog__button armada-dialog__button--destructive" : "armada-dialog__button armada-dialog__button--primary",
-          disabled: confirmDisabled,
-          onClick: onConfirm,
-          children: confirmLabel
-        }
-      )
-    ] })
-  ] }) });
-}
-const meta$r = {
+const meta$t = {
   title: "Primitives/CommandPalette",
   component: CommandPalette
 };
@@ -4163,15 +5101,15 @@ const DestructiveEntryConfirms = {
     ] });
   }
 };
-const __vite_glob_0_25 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_30 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AliasFindsTheLexiconTerm,
   DestructiveEntryConfirms,
   NoMatch,
   Resting: Resting$1,
-  default: meta$r
+  default: meta$t
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$q = {
+const meta$s = {
   title: "Primitives/Dialog",
   component: Dialog
 };
@@ -4231,15 +5169,32 @@ const RestartTheStep = {
     children: "A fresh drone takes over on the same worktree, at the step the last one stopped at. The toolset, model and environment are resolved again from scratch, so a widened scope can only narrow — and where the worktree itself is gone, Fleet refuses this and names a redispatch instead."
   }
 };
-const __vite_glob_0_26 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const MoreThanFitsWithAFieldToReach = {
+  args: {
+    open: true,
+    tone: "neutral",
+    width: "wide",
+    title: "Overrule the gaming flag on this step?",
+    confirmLabel: "Overrule the flag",
+    field: /* @__PURE__ */ jsx(Textarea, { label: "Why the flag is wrong", rows: 3 }),
+    children: /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsx("p", { children: "The gaming check flagged the evidence for Regression check. It did not refuse the work — it says the evidence for it is not to be trusted. Overruling says a person has read that evidence and takes responsibility for it; the step advances still recorded as failed against the flag." }),
+      /* @__PURE__ */ jsx("p", { children: "It is not the last step, so the job carries on at the next one. Your reason is written to this job's log and stays there — the log is append-only, and nothing takes an override back. It is not sent to the drone, which did nothing wrong and is told only that the step was accepted." }),
+      /* @__PURE__ */ jsx("p", { children: "The check reads the diff and the evidence together and infers intent, which is why it is its own escalation rather than a gate failure: resubmitting under the same instructions would likely reproduce whatever it found, so the job stops and asks rather than retrying." }),
+      /* @__PURE__ */ jsx("p", { children: "A person overruling it is on the record as having read the finding. That is the whole reason this is a dialog and not a button." })
+    ] })
+  }
+};
+const __vite_glob_0_31 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Confirmation,
   KillTheDrone,
   KillTheJob,
+  MoreThanFitsWithAFieldToReach,
   NeutralConfirm,
   RedispatchAsANewJob,
   RestartTheStep,
-  default: meta$q
+  default: meta$s
 }, Symbol.toStringTag, { value: "Module" }));
 function DropdownMenu({
   triggerLabel,
@@ -4303,7 +5258,7 @@ function DropdownMenu({
     }) }) : null
   ] });
 }
-const meta$p = {
+const meta$r = {
   title: "Primitives/DropdownMenu",
   component: DropdownMenu
 };
@@ -4354,16 +5309,16 @@ const AtTheRightEdge$2 = {
 const WithNoRoomBelow$2 = {
   render: () => /* @__PURE__ */ jsx(Frame$2, { edge: "bottom", children: /* @__PURE__ */ jsx(DropdownMenu, { defaultOpen: true, triggerLabel: "More", entries: rowActions }) })
 };
-const __vite_glob_0_27 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_32 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheLeftEdge: AtTheLeftEdge$2,
   AtTheRightEdge: AtTheRightEdge$2,
   RowMenu,
   WithNoRoomBelow: WithNoRoomBelow$2,
   WithSectionLabels,
-  default: meta$p
+  default: meta$r
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$o = {
+const meta$q = {
   title: "Primitives/Input",
   component: Input
 };
@@ -4417,7 +5372,7 @@ const Disabled$5 = {
 const Light$5 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$4, { children: /* @__PURE__ */ jsx(Input, { label: "Job title", defaultValue: "Refresh the auth token flow" }) }) })
 };
-const __vite_glob_0_28 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_33 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$5,
   Disabled: Disabled$5,
@@ -4426,7 +5381,7 @@ const __vite_glob_0_28 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Light: Light$5,
   Mono,
   Placeholder: Placeholder$1,
-  default: meta$o
+  default: meta$q
 }, Symbol.toStringTag, { value: "Module" }));
 function Kbd({ className, ...rest }) {
   return /* @__PURE__ */ jsx("kbd", { className: className ? `armada-kbd ${className}` : "armada-kbd", ...rest });
@@ -4434,7 +5389,7 @@ function Kbd({ className, ...rest }) {
 function KbdChord({ className, ...rest }) {
   return /* @__PURE__ */ jsx("span", { className: className ? `armada-kbd-chord ${className}` : "armada-kbd-chord", ...rest });
 }
-const meta$n = {
+const meta$p = {
   title: "Primitives/kbd",
   component: Kbd
 };
@@ -4458,12 +5413,12 @@ const ContextualKeys = {
     /* @__PURE__ */ jsx(Kbd, { children: "/" })
   ] })
 };
-const __vite_glob_0_29 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_34 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Chord,
   ContextualKeys,
   Default: Default$4,
-  default: meta$n
+  default: meta$p
 }, Symbol.toStringTag, { value: "Module" }));
 function Popover({ trigger: trigger2, children, align = "start", defaultOpen = false }) {
   const [open2, setOpen] = useState(defaultOpen);
@@ -4495,7 +5450,7 @@ function Popover({ trigger: trigger2, children, align = "start", defaultOpen = f
     ) : null
   ] });
 }
-const meta$m = {
+const meta$o = {
   title: "Primitives/Popover",
   component: Popover
 };
@@ -4540,14 +5495,46 @@ const AtTheRightEdge$1 = {
 const WithNoRoomBelow$1 = {
   render: () => /* @__PURE__ */ jsx(Frame$1, { edge: "bottom", children: /* @__PURE__ */ jsx(Popover, { defaultOpen: true, trigger, children: body }) })
 };
-const __vite_glob_0_30 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_35 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AlignedToTheEnd,
   AtTheLeftEdge: AtTheLeftEdge$1,
   AtTheRightEdge: AtTheRightEdge$1,
   Open: Open$1,
   WithNoRoomBelow: WithNoRoomBelow$1,
-  default: meta$m
+  default: meta$o
+}, Symbol.toStringTag, { value: "Module" }));
+const meta$n = {
+  title: "Primitives/Prose",
+  component: Prose
+};
+const AJudgesConsequence = {
+  args: {
+    text: 'The route table is walked once per operation and the loop skips `forget_job`, so the assertion that every operation is served passes without ever reading the one operation the step was about.\n\nThe skip is in `crates/api/src/tests/served.rs` and reads:\n\n```\nif route.operation == "forget_job" { continue; }\n```\n\nNothing else in the file narrows the set, so the count the assertion compares against was lowered by the same edit that made it pass.'
+  }
+};
+const AFlagsCitation = {
+  args: {
+    text: '`crates/api/src/tests/served.rs:214` — the `served_every_operation` assertion counts `ROUTES.len()` after the filter rather than before it:\n\n```\nlet routes: Vec<&Route> = ROUTES.iter().filter(|r| r.operation != "forget_job").collect();\nassert_eq!(routes.len(), served.len());\n```'
+  }
+};
+const AListAndAHeading = {
+  args: {
+    text: "# What the check read\n\nThree things, and the third is the one that matters:\n\n- the diff touches `armada.yml`\n- the touched key is `checks.tests.command`\n- the command it was changed **to** exits 0 on an empty test set\n\nThe first two alone are ordinary. Together with the third they are the pattern."
+  }
+};
+const WhatItWillNotDraw = {
+  args: {
+    text: "A link is written [like this](https://example.invalid/x) and stays written that way.\n\n> A blockquote is a paragraph that opens with a caret.\n\n| so | is | a table |"
+  }
+};
+const __vite_glob_0_36 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  AFlagsCitation,
+  AJudgesConsequence,
+  AListAndAHeading,
+  WhatItWillNotDraw,
+  default: meta$n
 }, Symbol.toStringTag, { value: "Module" }));
 function Radio({ children, ...rest }) {
   return /* @__PURE__ */ jsxs("label", { className: "armada-radio", children: [
@@ -4562,7 +5549,7 @@ function RadioGroup({ label: label2, children }) {
     children
   ] });
 }
-const meta$l = {
+const meta$m = {
   title: "Primitives/Radio",
   component: Radio
 };
@@ -4607,13 +5594,13 @@ const Light$4 = {
     /* @__PURE__ */ jsx(Radio, { name: "kit-light", children: "Start fresh" })
   ] }) }) })
 };
-const __vite_glob_0_31 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_37 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$3,
   Disabled: Disabled$4,
   Focused: Focused$4,
   Light: Light$4,
-  default: meta$l
+  default: meta$m
 }, Symbol.toStringTag, { value: "Module" }));
 function joined(base, extra) {
   return extra ? `${base} ${extra}` : base;
@@ -4677,24 +5664,7 @@ function TableCell({
     }
   );
 }
-function ScrollArea({
-  className,
-  maxHeight,
-  axis = "vertical",
-  style,
-  ...rest
-}) {
-  return /* @__PURE__ */ jsx(
-    "div",
-    {
-      className: className ? `armada-scroll-area ${className}` : "armada-scroll-area",
-      "data-axis": axis,
-      style: maxHeight ? { ...style, maxHeight } : style,
-      ...rest
-    }
-  );
-}
-const meta$k = {
+const meta$l = {
   title: "Primitives/ScrollArea",
   component: ScrollArea
 };
@@ -4741,13 +5711,13 @@ const WithinBounds = {
     }
   )
 };
-const __vite_glob_0_32 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_38 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Scrolling,
   WithinBounds,
-  default: meta$k
+  default: meta$l
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$j = {
+const meta$k = {
   title: "Primitives/Select",
   component: Select
 };
@@ -4796,16 +5766,16 @@ const Disabled$3 = {
 const Light$3 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$2, { children: /* @__PURE__ */ jsx(Select, { label: "Concurrency ceiling", children: ceilings }) }) })
 };
-const __vite_glob_0_33 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_39 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$2,
   Disabled: Disabled$3,
   Focused: Focused$3,
   Invalid: Invalid$1,
   Light: Light$3,
-  default: meta$j
+  default: meta$k
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$i = {
+const meta$j = {
   title: "Primitives/Separator",
   component: Separator,
   decorators: [
@@ -4869,12 +5839,12 @@ const Vertical = {
 const Announced = {
   args: { decorative: false }
 };
-const __vite_glob_0_34 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_40 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Announced,
   Horizontal,
   Vertical,
-  default: meta$i
+  default: meta$j
 }, Symbol.toStringTag, { value: "Module" }));
 function Sheet({ open: open2, title, children, side = "right", footer, onClose }) {
   const closeRef = useRef(null);
@@ -4921,7 +5891,7 @@ function Sheet({ open: open2, title, children, side = "right", footer, onClose }
     }
   ) });
 }
-const meta$h = {
+const meta$i = {
   title: "Primitives/Sheet",
   component: Sheet
 };
@@ -4941,11 +5911,11 @@ const Left = {
     children: "The command tripped the allowlist 5 times and was approved every time. Adding it here stops the prompt."
   }
 };
-const __vite_glob_0_35 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_41 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Left,
   Right,
-  default: meta$h
+  default: meta$i
 }, Symbol.toStringTag, { value: "Module" }));
 function Skeleton({ className, width, style, ...rest }) {
   return /* @__PURE__ */ jsx(
@@ -4977,7 +5947,7 @@ function SkeletonText({
     }
   );
 }
-const meta$g = {
+const meta$h = {
   title: "Primitives/Skeleton",
   component: Skeleton,
   decorators: [
@@ -4996,14 +5966,14 @@ const InACard = {
     /* @__PURE__ */ jsx(SkeletonText, { label: "Loading evidence" })
   ] })
 };
-const __vite_glob_0_36 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_42 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   InACard,
   Single,
   Text,
-  default: meta$g
+  default: meta$h
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$f = {
+const meta$g = {
   title: "Primitives/Split button",
   component: SplitButton
 };
@@ -5078,7 +6048,7 @@ const FocusedOnPrimary = {
     /* @__PURE__ */ jsx("div", { "data-preview-focus": "caret", children: /* @__PURE__ */ jsx(SplitButton, { items: reviewActions, variant: "primary", children: "Approve" }) })
   ] })
 };
-const __vite_glob_0_37 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_43 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Closed,
   Disabled: Disabled$2,
@@ -5088,7 +6058,7 @@ const __vite_glob_0_37 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Light: Light$2,
   Open,
   PrimaryOnJobDetail,
-  default: meta$f
+  default: meta$g
 }, Symbol.toStringTag, { value: "Module" }));
 function Switch({ children, description, ...rest }) {
   return /* @__PURE__ */ jsxs("label", { className: "armada-switch", "data-described": description !== void 0 || void 0, children: [
@@ -5100,7 +6070,7 @@ function Switch({ children, description, ...rest }) {
     /* @__PURE__ */ jsx("span", { className: "armada-switch__track", "aria-hidden": "true", children: /* @__PURE__ */ jsx("span", { className: "armada-switch__thumb" }) })
   ] });
 }
-const meta$e = {
+const meta$f = {
   title: "Primitives/Switch",
   component: Switch
 };
@@ -5152,7 +6122,7 @@ const WithADescription = {
 const Light$1 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$1, { children: /* @__PURE__ */ jsx(Switch, { defaultChecked: true, children: "Escalate on stall" }) }) })
 };
-const __vite_glob_0_38 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_44 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Disabled: Disabled$1,
   Focused: Focused$1,
@@ -5160,9 +6130,9 @@ const __vite_glob_0_38 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Off,
   On,
   WithADescription,
-  default: meta$e
+  default: meta$f
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$d = {
+const meta$e = {
   title: "Primitives/Table",
   component: Table
 };
@@ -5272,16 +6242,16 @@ const RowsGrowWithContent = {
     ] })
   ] }) })
 };
-const __vite_glob_0_39 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_45 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$1,
   Dimmed,
   FocusedAndSelected,
   MonoValuesCopy,
   RowsGrowWithContent,
-  default: meta$d
+  default: meta$e
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$c = {
+const meta$d = {
   title: "Primitives/Tabs",
   component: Tabs
 };
@@ -5305,11 +6275,11 @@ const LastActive = {
     ]
   }
 };
-const __vite_glob_0_40 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_46 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   LastActive,
   SectionsOfOneObject,
-  default: meta$c
+  default: meta$d
 }, Symbol.toStringTag, { value: "Module" }));
 function TabsWithCounts({ items, value, defaultValue, onChange }) {
   const [internal, setInternal] = useState(defaultValue ?? items[0]?.id);
@@ -5349,7 +6319,7 @@ function TabsWithCounts({ items, value, defaultValue, onChange }) {
     item.id
   )) });
 }
-const meta$b = {
+const meta$c = {
   title: "Primitives/Tabs with counts",
   component: TabsWithCounts
 };
@@ -5373,13 +6343,13 @@ const Zero = {
     ]
   }
 };
-const __vite_glob_0_41 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_47 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Queues,
   Zero,
-  default: meta$b
+  default: meta$c
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$a = {
+const meta$b = {
   title: "Primitives/Textarea",
   component: Textarea
 };
@@ -5433,7 +6403,7 @@ const Overflowing = {
 const Light = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Textarea, { label: "Brief", defaultValue: BRIEF }) }) })
 };
-const __vite_glob_0_42 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_48 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default,
   Disabled,
@@ -5443,7 +6413,7 @@ const __vite_glob_0_42 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Overflowing,
   Placeholder,
   Rows,
-  default: meta$a
+  default: meta$b
 }, Symbol.toStringTag, { value: "Module" }));
 function Toast({ status, children, actionLabel, onAction }) {
   return /* @__PURE__ */ jsxs("div", { className: "armada-toast", role: "status", children: [
@@ -5459,7 +6429,7 @@ function Toast({ status, children, actionLabel, onAction }) {
     actionLabel ? /* @__PURE__ */ jsx("button", { type: "button", className: "armada-toast__action", onClick: onAction, children: actionLabel }) : null
   ] });
 }
-const meta$9 = {
+const meta$a = {
   title: "Primitives/Toast",
   component: Toast
 };
@@ -5481,14 +6451,14 @@ const Landed = {
     actionLabel: "View"
   }
 };
-const __vite_glob_0_43 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_49 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Copied,
   Killed: Killed$1,
   Landed,
-  default: meta$9
+  default: meta$a
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$8 = {
+const meta$9 = {
   title: "Primitives/Tooltip",
   component: Tooltip
 };
@@ -5526,7 +6496,7 @@ const AtTheRightEdge = {
 const WithNoRoomBelow = {
   render: () => /* @__PURE__ */ jsx(Frame, { edge: "bottom", children: /* @__PURE__ */ jsx(Tooltip, { defaultOpen: true, label: longPath, children: /* @__PURE__ */ jsx("span", { className: "armada-tooltip__truncated", children: longPath }) }) })
 };
-const __vite_glob_0_44 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_50 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheLeftEdge,
   AtTheRightEdge,
@@ -5534,7 +6504,7 @@ const __vite_glob_0_44 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   TruncatedValue,
   WithNoRoomBelow,
   WithShortcut,
-  default: meta$8
+  default: meta$9
 }, Symbol.toStringTag, { value: "Module" }));
 function Absent({ name, note }) {
   return /* @__PURE__ */ jsxs("div", { className: "armada-screen-absent", role: "note", children: [
@@ -5546,20 +6516,27 @@ function AFailedJobADeadEndReadAsOne({
   heading: heading2,
   why,
   whyAbsent = "The Job carries no stored reason, and none is written here.",
+  recourse,
   steps: steps2,
   ranLabel = "What ran",
   stepsAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
   output,
   outputAbsent = "Nothing serves a check's output yet.",
-  work,
+  work: work2,
   workAbsent = "Nothing serves this Job's paths, its branch or its brief.",
+  record: record2,
+  recordValue,
+  onRecordChange,
+  recordAbsent,
+  recordLabel = "What it left behind",
   onCopied
 }) {
   return /* @__PURE__ */ jsxs("div", { className: "armada-screen__detail", children: [
     /* @__PURE__ */ jsx(JobDetailHeaderActions, { ...heading2, onCopied }),
     /* @__PURE__ */ jsxs("div", { className: "armada-screen__sunken", children: [
       /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "Why this stopped" }),
-      why === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Why this stopped", note: whyAbsent }) }) : /* @__PURE__ */ jsx("p", { className: "armada-screen__why", children: why })
+      why === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Why this stopped", note: whyAbsent }) }) : /* @__PURE__ */ jsx("p", { className: "armada-screen__why", children: why }),
+      recourse === void 0 ? null : /* @__PURE__ */ jsx("p", { className: "armada-screen__recourse", children: recourse })
     ] }),
     /* @__PURE__ */ jsxs("div", { className: "armada-screen__split", "data-wide": true, children: [
       /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
@@ -5576,20 +6553,28 @@ function AFailedJobADeadEndReadAsOne({
         ] }),
         /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
           /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "Where the work is" }),
-          work === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Where the work is", note: workAbsent }) }) : /* @__PURE__ */ jsxs(Fragment, { children: [
-            work.brief === void 0 ? null : /* @__PURE__ */ jsx(JobBrief, { ...work.brief }),
-            /* @__PURE__ */ jsx(JobLogReference, { rows: work.rows, onCopied, children: work.note }),
-            work.actions ? /* @__PURE__ */ jsx("div", { className: "armada-screen__actions", children: work.actions }) : null
+          work2 === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Where the work is", note: workAbsent }) }) : /* @__PURE__ */ jsxs(Fragment, { children: [
+            work2.brief === void 0 ? null : /* @__PURE__ */ jsx(JobBrief, { ...work2.brief }),
+            /* @__PURE__ */ jsx(JobLogReference, { rows: work2.rows, onCopied, children: work2.note }),
+            work2.actions ? /* @__PURE__ */ jsx("div", { className: "armada-screen__actions", children: work2.actions }) : null
           ] })
         ] })
       ] })
+    ] }),
+    record2 === void 0 ? null : /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
+      /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: recordLabel }),
+      /* @__PURE__ */ jsx(
+        JobRecord,
+        {
+          sections: record2,
+          value: recordValue,
+          onChange: onRecordChange,
+          emptyNote: recordAbsent
+        }
+      )
     ] })
   ] });
 }
-const meta$7 = {
-  title: "Screens/A failed job — a dead end, read as one",
-  component: AFailedJobADeadEndReadAsOne
-};
 const NO_GLYPH_IN_REGISTRY$1 = void 0;
 const steps$1 = [
   {
@@ -5662,7 +6647,134 @@ const tail = [
   "",
   "test result: FAILED. 82 passed; 2 failed"
 ].join("\n");
-const heading$3 = {
+const record$1 = [
+  {
+    id: "moves",
+    label: "Every move it made",
+    panel: /* @__PURE__ */ jsx(
+      TransitionHistory,
+      {
+        emptyNote: "This job has no recorded moves.",
+        note: "Every move Fleet recorded for this job, oldest first.",
+        moves: [
+          { seq: 1, at: "14:02:11", kind: "created", moved: "queued", actor: "you" },
+          { seq: 2, at: "14:02:12", kind: "approved", moved: "queued → running", actor: "you" },
+          {
+            seq: 3,
+            at: "14:19:40",
+            kind: "step_advanced",
+            subject: "implement",
+            moved: "implement → verify",
+            actor: "fleet"
+          },
+          {
+            seq: 4,
+            at: "14:24:52",
+            kind: "escalated",
+            subject: "verify",
+            moved: "running → escalated",
+            why: "gate_failure",
+            actor: "fleet"
+          }
+        ]
+      }
+    )
+  },
+  {
+    id: "turns",
+    label: "The drone's turns",
+    panel: /* @__PURE__ */ jsx(
+      DroneTurns,
+      {
+        emptyNote: "This job has no turns.",
+        turns: [
+          {
+            id: "t1",
+            at: "14:19:44",
+            kind: "tool_use",
+            subject: "Edit",
+            detail: "core/manifest/src/cache.rs"
+          },
+          {
+            id: "t2",
+            at: "14:22:03",
+            kind: "tool_use",
+            subject: "Bash",
+            detail: "cargo test --workspace"
+          },
+          {
+            id: "t3",
+            at: "14:24:48",
+            kind: "assistant",
+            said: "Two cache tests fail against the new key. Submitting anyway to get a verdict."
+          }
+        ]
+      }
+    )
+  },
+  {
+    id: "files",
+    label: "Files changed",
+    panel: /* @__PURE__ */ jsx(
+      ChangedFiles,
+      {
+        emptyNote: "This job's worktree was read when it stopped and held no change against the branch it was cut from.",
+        note: "Read from this job's worktree when the job stopped, and kept — so it says the same thing whether or not anyone was watching. Measured against what plan, implement declared. 2 of 4 paths are outside all of them.",
+        files: [
+          { path: "core/manifest/src/cache.rs", change: "modified" },
+          { path: "core/manifest/src/cache_tests.rs", change: "added" },
+          { path: "core/manifest/src/lib.rs", change: "modified", outsidePlan: true },
+          { path: "scripts/dev", change: "modified", outsidePlan: true }
+        ]
+      }
+    )
+  },
+  {
+    id: "changed",
+    label: "What it changed",
+    panel: /* @__PURE__ */ jsx(
+      UnifiedDiff,
+      {
+        emptyNote: "This job's worktree holds no change against the branch it was cut from.",
+        note: "Read from this job's worktree against the branch it was cut from. The plan this step declared is not readable once its drone has stopped, so no file is marked here. Files changed is the record kept when the job stopped, and it marks every path that fell outside the plans the steps declared.",
+        files: [
+          {
+            path: "core/manifest/src/cache.rs",
+            lines: [
+              { kind: "hunk", text: "@@ -18,7 +18,9 @@ impl Cache {" },
+              { kind: "context", text: "     pub fn read(&self, path: &Path) -> Manifest {" },
+              { kind: "removed", text: "-        self.load(path)" },
+              { kind: "added", text: "+        let key = path.canonicalize().unwrap_or_else(|_| path.into());" },
+              { kind: "added", text: "+        self.entries.entry(key).or_insert_with(|| self.load(path)).clone()" },
+              { kind: "context", text: "     }" }
+            ]
+          }
+        ]
+      }
+    )
+  },
+  {
+    id: "claims",
+    label: "What the drone claimed",
+    panel: /* @__PURE__ */ jsx(
+      EvidenceTrail,
+      {
+        entries: [
+          {
+            step: "Implement",
+            provenance: "self_reported",
+            icon: FileCheck,
+            iconLabel: "Evidence",
+            claimed: "The manifest is read once per dispatch and cached on the absolute path.",
+            shownBy: "core/manifest/src/cache.rs, and the two tests beside it",
+            notClaimed: "Nothing about a manifest that changes while a job is running."
+          }
+        ]
+      }
+    )
+  }
+];
+const heading$4 = {
   status: "completed-failed",
   statusIcon: X,
   statusLabel: "Failed",
@@ -5678,67 +6790,78 @@ const heading$3 = {
     { label: "Dispatched by you" }
   ]
 };
+const meta$8 = {
+  title: "Screens/A failed job — a dead end, read as one",
+  component: AFailedJobADeadEndReadAsOne
+};
 const FailedJob = {
-  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
-    AFailedJobADeadEndReadAsOne,
-    {
-      heading: heading$3,
-      why: /* @__PURE__ */ jsxs(Fragment, { children: [
-        "The test check exited 1 at Run tests, on 2 assertions in",
-        " ",
-        /* @__PURE__ */ jsx("span", { className: "armada-screen__mono", children: "core/manifest" }),
-        ". The job is over. Nothing runs from here without you."
-      ] }),
-      steps: steps$1,
-      output: { tail, meta: "exit 1 · 4.2s · tail 12 lines" },
-      work: {
-        brief: {
-          criteria: [
-            { text: "The manifest is read once per dispatch, not once per step.", source: "check" },
-            { text: "A changed armada.yml is picked up without restarting Fleet.", source: "judge" }
+  render: function FailedJobStory() {
+    const [section, setSection] = useState("moves");
+    return /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+      AFailedJobADeadEndReadAsOne,
+      {
+        heading: heading$4,
+        why: /* @__PURE__ */ jsxs(Fragment, { children: [
+          "The test check exited 1 at Run tests, on 2 assertions in",
+          " ",
+          /* @__PURE__ */ jsx("span", { className: "armada-screen__mono", children: "core/manifest" }),
+          ". The job is over. Nothing runs from here without you."
+        ] }),
+        recourse: "Nothing resumes this job. Redirect and restart both take a job a person is holding, which is an escalated one, and this job is failed. A redispatch mints a new job from the approval gate and carries none of the work over.",
+        record: record$1,
+        recordValue: section,
+        onRecordChange: setSection,
+        steps: steps$1,
+        output: { tail, meta: "exit 1 · 4.2s · tail 12 lines" },
+        work: {
+          brief: {
+            criteria: [
+              { text: "The manifest is read once per dispatch, not once per step.", source: "check" },
+              { text: "A changed armada.yml is picked up without restarting Fleet.", source: "judge" }
+            ],
+            facts: "`config::manifest` is the only reader. The cache key is the absolute path."
+          },
+          rows: [
+            {
+              icon: GitBranch,
+              iconLabel: "Branch",
+              value: "feat/manifest-cache",
+              copyValue: "feat/manifest-cache",
+              meta: "2 files +48 −11"
+            },
+            // `folder` means "workspace" in the registry. A worktree is not a
+            // workspace, and the registry has no row for one. Reported.
+            {
+              icon: Folder,
+              iconLabel: "Worktree",
+              value: "/repos/armada/.armada/worktrees/job_91ab",
+              copyValue: "/repos/armada/.armada/worktrees/job_91ab"
+            },
+            {
+              icon: File,
+              iconLabel: "Log",
+              value: "/repos/armada/.armada/logs/job_91ab.jsonl",
+              copyValue: "/repos/armada/.armada/logs/job_91ab.jsonl",
+              separated: true
+            },
+            // No registered glyph means a transcript, so the mark keeps its
+            // column and renders empty rather than borrowing one. Reported.
+            {
+              iconLabel: "Transcript",
+              value: "/repos/armada/.armada/transcripts/",
+              copyValue: "/repos/armada/.armada/transcripts/",
+              meta: "named by a drone id nothing serves"
+            }
           ],
-          facts: "`config::manifest` is the only reader. The cache key is the absolute path."
-        },
-        rows: [
-          {
-            icon: GitBranch,
-            iconLabel: "Branch",
-            value: "feat/manifest-cache",
-            copyValue: "feat/manifest-cache",
-            meta: "2 files +48 −11"
-          },
-          // `folder` means "workspace" in the registry. A worktree is not a
-          // workspace, and the registry has no row for one. Reported.
-          {
-            icon: Folder,
-            iconLabel: "Worktree",
-            value: "/repos/armada/.armada/worktrees/job_91ab",
-            copyValue: "/repos/armada/.armada/worktrees/job_91ab"
-          },
-          {
-            icon: File,
-            iconLabel: "Log",
-            value: "/repos/armada/.armada/logs/job_91ab.jsonl",
-            copyValue: "/repos/armada/.armada/logs/job_91ab.jsonl",
-            separated: true
-          },
-          // No registered glyph means a transcript, so the mark keeps its
-          // column and renders empty rather than borrowing one. Reported.
-          {
-            iconLabel: "Transcript",
-            value: "/repos/armada/.armada/transcripts/",
-            copyValue: "/repos/armada/.armada/transcripts/",
-            meta: "named by a drone id nothing serves"
-          }
-        ],
-        note: "The worktree and the branch are left in place. Armada will not touch either. The log holds Fleet, the drone and Bridge in one order, keyed on this job.",
-        actions: /* @__PURE__ */ jsxs(Fragment, { children: [
-          /* @__PURE__ */ jsx(Button, { children: "Open the log" }),
-          /* @__PURE__ */ jsx(Button, { children: "Open the worktree" })
-        ] })
+          note: "The worktree and the branch are left in place. Armada will not touch either. The log holds Fleet, the drone and Bridge in one order, keyed on this job.",
+          actions: /* @__PURE__ */ jsxs(Fragment, { children: [
+            /* @__PURE__ */ jsx(Button, { children: "Open the log" }),
+            /* @__PURE__ */ jsx(Button, { children: "Open the worktree" })
+          ] })
+        }
       }
-    }
-  ) })
+    ) });
+  }
 };
 const StoppedAndAsked = {
   render: () => {
@@ -5773,6 +6896,7 @@ const StoppedAndAsked = {
             ] })
           },
           why: "The job stalled. Nothing runs from here without you.",
+          recourse: "Redirect the drone. Its session, its worktree and every step so far are still held, so an instruction reaches it as a new turn at the step above. Fleet refuses a restart while a drone is alive, because a restart throws that session away. A redispatch mints a new job from the approval gate and carries none of the work over.",
           steps: steps$1.map((step) => ({
             id: step.id,
             label: step.id,
@@ -5842,6 +6966,7 @@ const StoppedWithNoDrone = {
             ] })
           },
           why: "The job stalled. Its drone is gone. Nothing runs from here without you.",
+          recourse: "Restart the step. The drone is gone, so a fresh one takes over the worktree at the step above, resolving its toolset, model and environment again. Fleet read the worktree before offering this, so it is there to take over. A redispatch mints a new job from the approval gate and carries none of the work over.",
           steps: steps$1.map((step) => ({
             id: step.id,
             label: step.id,
@@ -5861,7 +6986,7 @@ const StoppedWithNoDrone = {
           confirmLabel: "Restart step",
           onCancel: () => setConfirming(false),
           onConfirm: () => setConfirming(false),
-          children: "A fresh drone takes over on the same worktree, at the step the last one stopped at. The toolset, model and environment are resolved again from scratch, so a widened scope can only narrow — and where the worktree itself is gone, Fleet refuses this and names a redispatch instead."
+          children: "A fresh drone takes over on the same worktree, at the step the last one stopped at. The toolset, model and environment are resolved again from scratch, so a widened scope can only narrow. Fleet read the worktree before offering this, so there is one to take over."
         }
       )
     ] });
@@ -5883,9 +7008,13 @@ const AJudgeRefusedACriterion = {
           { label: "Elapsed", value: "11m 03s", mono: true },
           { label: "Model", value: "sonnet", mono: true }
         ],
-        actions: /* @__PURE__ */ jsx(Button, { children: "Redispatch as a new job" })
+        actions: /* @__PURE__ */ jsxs(Fragment, { children: [
+          /* @__PURE__ */ jsx(Button, { variant: "secondary", children: "Restart step" }),
+          /* @__PURE__ */ jsx(Button, { children: "Redispatch as a new job" })
+        ] })
       },
       why: "failed a check · owes c2",
+      recourse: "Restart the step. The drone is gone, so a fresh one takes over the worktree at the step above, resolving its toolset, model and environment again. Fleet read the worktree before offering this, so it is there to take over. A redispatch mints a new job from the approval gate and carries none of the work over.",
       ranLabel: "What ran",
       steps: [
         { id: "plan", label: "Plan the change", activity: "advanced", status: "advanced" },
@@ -5951,6 +7080,7 @@ const KilledWhileTheStepWasRunning = {
         ]
       },
       why: /* @__PURE__ */ jsx(Fragment, { children: "stopped at Run tests" }),
+      recourse: "Nothing resumes this job. Redirect and restart both take a job a person is holding, which is an escalated one, and this job is killed. A redispatch mints a new job from the approval gate and carries none of the work over.",
       steps: [
         { id: "plan", label: "Plan the change", activity: "advanced", status: "advanced", elapsed: "2m 14s" },
         { id: "implement", label: "Implement", activity: "advanced", status: "advanced", elapsed: "6m 48s" },
@@ -5979,14 +7109,44 @@ const KilledWhileTheStepWasRunning = {
     }
   ) })
 };
-const __vite_glob_0_45 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const EscalatedWithNoStepToResume = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    AFailedJobADeadEndReadAsOne,
+    {
+      heading: {
+        status: "escalated",
+        statusIcon: Unplug,
+        statusLabel: "interrupted",
+        headline: "Cache the manifest read",
+        jobId: "job_91ab",
+        fields: [
+          { label: "Ran", value: "3m 12s", mono: true },
+          { label: "Model", value: "sonnet", mono: true }
+        ],
+        actions: /* @__PURE__ */ jsx(Button, { children: "Redispatch as a new job" })
+      },
+      why: "interrupted",
+      recourse: "Nothing resumes this job. It escalated without stopping a step, so redirect and restart have no step to land on. A redispatch mints a new job from the approval gate and carries none of the work over.",
+      steps: steps$1.map((step) => ({
+        id: step.id,
+        label: step.label,
+        activity: "not_started",
+        status: "not started"
+      })),
+      outputAbsent: "Each check names its output file on its own row. Nothing serves the contents.",
+      workAbsent: "Nothing serves this Job's paths, its branch or its brief."
+    }
+  ) })
+};
+const __vite_glob_0_51 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AJudgeRefusedACriterion,
+  EscalatedWithNoStepToResume,
   FailedJob,
   KilledWhileTheStepWasRunning,
   StoppedAndAsked,
   StoppedWithNoDrone,
-  default: meta$7
+  default: meta$8
 }, Symbol.toStringTag, { value: "Module" }));
 function AFinishedJobWhatItWasAndWhatItProduced({
   heading: heading2,
@@ -6027,11 +7187,11 @@ function AFinishedJobWhatItWasAndWhatItProduced({
     ] })
   ] });
 }
-const meta$6 = {
+const meta$7 = {
   title: "Screens/A finished job — what it was and what it produced",
   component: AFinishedJobWhatItWasAndWhatItProduced
 };
-const heading$2 = {
+const heading$3 = {
   status: "completed-success",
   statusIcon: Check,
   statusLabel: "Done",
@@ -6046,7 +7206,7 @@ const heading$2 = {
     { label: "Dispatched by you" }
   ]
 };
-const brief = {
+const brief$1 = {
   criteria: [
     { text: "The poke loop stops after the configured number of attempts.", source: "check" },
     { text: "A ceiling of zero is refused at load rather than at run.", source: "check" }
@@ -6101,8 +7261,8 @@ const AsBridgeDrawsItToday$1 = {
   render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
     AFinishedJobWhatItWasAndWhatItProduced,
     {
-      heading: heading$2,
-      brief,
+      heading: heading$3,
+      brief: brief$1,
       outcome: {
         note: NOTE,
         parts: [
@@ -6148,8 +7308,8 @@ const EveryPartServed = {
   render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
     AFinishedJobWhatItWasAndWhatItProduced,
     {
-      heading: heading$2,
-      brief,
+      heading: heading$3,
+      brief: brief$1,
       outcome: {
         note: NOTE,
         parts: [
@@ -6210,11 +7370,216 @@ const BeforeTheDetailArrives = {
 function Stub({ children }) {
   return /* @__PURE__ */ jsx("p", { className: "armada-record__note", children });
 }
-const __vite_glob_0_46 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_52 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AsBridgeDrawsItToday: AsBridgeDrawsItToday$1,
   BeforeTheDetailArrives,
   EveryPartServed,
+  default: meta$7
+}, Symbol.toStringTag, { value: "Module" }));
+function AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop({
+  heading: heading2,
+  brief: brief2,
+  briefAbsent = "Nothing serves this job's acceptance criteria.",
+  claims: claims2,
+  claimsAbsent = "Nothing serves this job's work submissions.",
+  diff: diff2,
+  diffAbsent = "Nothing serves this job's diff.",
+  decision: decision2,
+  decisionAbsent = "Fleet did not answer for this job, so there is nothing to decide on.",
+  work: work2,
+  workAbsent = "Nothing serves this job's paths or its branch.",
+  briefLabel = "What done meant",
+  claimsLabel = "What the drone claimed",
+  diffLabel = "What it changed",
+  decisionLabel = "Your decision",
+  workLabel = "Where the work is",
+  onCopied
+}) {
+  return /* @__PURE__ */ jsxs("div", { className: "armada-screen__detail", children: [
+    /* @__PURE__ */ jsx(JobDetailHeaderActions, { ...heading2, onCopied }),
+    /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
+      /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: briefLabel }),
+      brief2 === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "What done meant", note: briefAbsent }) }) : /* @__PURE__ */ jsx(JobBrief, { ...brief2, only: "criteria" })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
+      /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", "data-spaced": true, children: claimsLabel }),
+      claims2 === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "What the drone claimed", note: claimsAbsent }) }) : /* @__PURE__ */ jsx(EvidenceTrail, { ...claims2 })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
+      /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", "data-spaced": true, children: diffLabel }),
+      diff2 === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "What it changed", note: diffAbsent }) }) : /* @__PURE__ */ jsx(UnifiedDiff, { ...diff2, onCopied })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
+      /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", "data-spaced": true, children: decisionLabel }),
+      decision2 === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Your decision", note: decisionAbsent }) }) : /* @__PURE__ */ jsx(ReviewDecision, { ...decision2 })
+    ] }),
+    /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
+      /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", "data-spaced": true, children: workLabel }),
+      work2 === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Where the work is", note: workAbsent }) }) : /* @__PURE__ */ jsx("div", { className: "armada-screen__col", children: /* @__PURE__ */ jsx(JobLogReference, { rows: work2.rows, actions: work2.actions, onCopied, children: work2.note }) })
+    ] })
+  ] });
+}
+const meta$6 = {
+  title: "Screens/A job awaiting review — the diff and the reply are one loop",
+  component: AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop
+};
+const heading$2 = {
+  status: "awaiting-review",
+  statusIcon: Eye,
+  statusLabel: "Awaiting review",
+  headline: "Honour human_always on a workflow's advance gate",
+  jobId: "job_7c22",
+  fields: [
+    { label: "At", value: "4 of 4", mono: true, suffix: "steps, waiting on you" },
+    { label: "Ran", value: "22m 06s", mono: true },
+    { label: "Drone", value: "drn_01M4K", mono: true, suffix: "held" },
+    { label: "Dispatched by you" }
+  ]
+};
+const brief = {
+  criteria: [
+    { text: "A workflow declaring human_always loads rather than being refused.", source: "check" },
+    { text: "A job on such a step stops at awaiting_review.", source: "check" },
+    { text: "All three review acts refuse anywhere else.", source: "judge" }
+  ]
+};
+const claims = {
+  entries: [
+    {
+      step: "Widen the gate",
+      provenance: "09:41:02 · code_change · manifest_check: cargo fmt, cargo clippy",
+      icon: FileCheck,
+      iconLabel: "Evidence",
+      claimed: "AdvanceGate carries a HumanAlways variant and gate.rs returns Wait on it.",
+      shownBy: "crates/core-model/src/workflow/gate.rs, crates/fleet/src/gate.rs",
+      notClaimed: "Nothing loads a workflow declaring it yet — that is the next step."
+    },
+    {
+      step: "Carry it through config",
+      provenance: "10:03:19 · code_change · manifest_check: cargo test",
+      icon: FileCheck,
+      iconLabel: "Evidence",
+      claimed: "A workflow declaring advance_gate: human_always loads instead of raising Fault::OutsideM1.",
+      shownBy: "cargo test -p armada-config gate_ -- 6 passed",
+      notClaimed: ""
+    }
+  ]
+};
+const diff = {
+  emptyNote: "",
+  note: "Read from this job's worktree against the branch it was cut from. Every path is inside the plan this step declared.",
+  files: [
+    {
+      path: "crates/config/src/workflow.rs",
+      lines: [
+        { kind: "hunk", text: "@@ -441,7 +441,7 @@ fn gate_of(named: &str) -> Result<AdvanceGate, Fault> {" },
+        { kind: "context", text: '         "auto" => Ok(AdvanceGate::Auto),' },
+        { kind: "removed", text: '-        "human_always" => Err(Fault::OutsideM1("human_always")),' },
+        { kind: "added", text: '+        "human_always" => Ok(AdvanceGate::HumanAlways),' },
+        { kind: "context", text: "         other => Err(Fault::UnknownGate(other.into()))," }
+      ]
+    },
+    {
+      path: "crates/fleet/src/gate.rs",
+      lines: [
+        { kind: "hunk", text: "@@ -41,4 +41,6 @@ impl Gate {" },
+        { kind: "context", text: "         match step.advance_gate() {" },
+        { kind: "context", text: "             AdvanceGate::Auto => Advance::Now," },
+        { kind: "added", text: "+            AdvanceGate::HumanAlways => Advance::Wait," },
+        { kind: "context", text: "         }" }
+      ]
+    }
+  ]
+};
+const work = {
+  rows: [
+    {
+      icon: Folder,
+      iconLabel: "Worktree",
+      value: "/repos/armada/.armada/worktrees/job_7c22",
+      copyValue: "/repos/armada/.armada/worktrees/job_7c22"
+    },
+    {
+      icon: GitBranch,
+      iconLabel: "Branch",
+      value: "armada/job_7c22",
+      copyValue: "armada/job_7c22"
+    }
+  ],
+  note: "The worktree follows from this job's id and the repository its manifest was read from. The branch is served."
+};
+const decision = {
+  note: "",
+  onNote: () => {
+  },
+  onApprove: () => {
+  },
+  onRequestChanges: () => {
+  },
+  onReject: () => {
+  }
+};
+const WorkWaitingOnADecision = {
+  args: { heading: heading$2, brief, claims, diff, decision, work }
+};
+const ChangesBeingWritten = {
+  args: {
+    heading: heading$2,
+    brief,
+    claims,
+    diff,
+    work,
+    decision: {
+      ...decision,
+      note: "The gate arm is right, but nothing refuses a workflow that declares human_always on a step with no checks. Add that and a test that loads one."
+    }
+  }
+};
+const APatchTooLongToDraw = {
+  args: {
+    heading: heading$2,
+    brief,
+    claims,
+    work,
+    decision,
+    diff: {
+      ...diff,
+      cut: "This is the first 2,000 lines of a 14,318-line patch. The rest is not on screen. Read the whole diff in the worktree named under Where the work is before deciding."
+    }
+  }
+};
+const AClaimWithNothingBehindIt = {
+  args: {
+    heading: heading$2,
+    brief,
+    claims,
+    work,
+    decision,
+    diff: {
+      files: [],
+      emptyNote: "This job's worktree opened and holds no change against the branch it was cut from. That is what a diff_nonempty check refuses."
+    }
+  }
+};
+const TheDiffNotReadYet = {
+  args: {
+    heading: heading$2,
+    brief,
+    claims,
+    work,
+    decision,
+    diff: void 0,
+    diffAbsent: "Reading this job's diff."
+  }
+};
+const __vite_glob_0_53 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  AClaimWithNothingBehindIt,
+  APatchTooLongToDraw,
+  ChangesBeingWritten,
+  TheDiffNotReadYet,
+  WorkWaitingOnADecision,
   default: meta$6
 }, Symbol.toStringTag, { value: "Module" }));
 function ARunningJob({
@@ -6222,6 +7587,9 @@ function ARunningJob({
   steps: steps2,
   ranLabel = "What ran",
   stepsAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
+  footprint,
+  footprintLabel = "Files changed",
+  footprintAbsent = "Nothing has reported this drone's changed files yet.",
   evidence,
   evidenceAbsent = "Nothing serves a work submission yet.",
   log,
@@ -6234,7 +7602,13 @@ function ARunningJob({
     /* @__PURE__ */ jsxs("div", { className: "armada-screen__split", children: [
       /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
         /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: ranLabel }),
-        steps2.length === 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "What ran", note: stepsAbsent }) }) : /* @__PURE__ */ jsx(WorkflowRail, { steps: steps2, pulsing: true, onCopied })
+        steps2.length === 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "What ran", note: stepsAbsent }) }) : /* @__PURE__ */ jsx(WorkflowRail, { steps: steps2, pulsing: true, onCopied }),
+        /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", "data-spaced": true, children: footprintLabel }),
+        footprint === void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Files changed", note: footprintAbsent }) }) : (
+          /* Never pulsing. The rail already carries the one animated mark
+             this screen is allowed, and it is on the more specific thing. */
+          /* @__PURE__ */ jsx(ChangedFiles, { ...footprint, onCopied })
+        )
       ] }),
       /* @__PURE__ */ jsxs("div", { className: "armada-screen__col", children: [
         /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: "Evidence so far" }),
@@ -6271,15 +7645,19 @@ const steps = [
       {
         command: "build · cargo build --workspace",
         result: "not reached",
-        icon: ShieldMinus,
+        icon: ShieldMinus$1,
         iconLabel: "Not reached"
       },
       {
         command: "diff_nonempty",
         result: "not reached",
-        icon: ShieldMinus,
+        icon: ShieldMinus$1,
         iconLabel: "Not reached"
       }
+    ],
+    declarations: [
+      { label: "judge · 2 criteria", result: "not reached" },
+      { label: "advance_gate · auto_if_judge_passes" }
     ]
   },
   {
@@ -6291,9 +7669,13 @@ const steps = [
       {
         command: "test · cargo test --workspace",
         result: "not reached",
-        icon: ShieldMinus,
+        icon: ShieldMinus$1,
         iconLabel: "Not reached"
       }
+    ],
+    declarations: [
+      { label: "judge · 1 criterion · gaming check", result: "not reached" },
+      { label: "advance_gate · auto_if_judge_passes" }
     ]
   },
   {
@@ -6301,9 +7683,10 @@ const steps = [
     label: "Summarise",
     activity: "not_started",
     status: "not started",
-    // The drawing draws no row under Summarise. The rail always draws one,
-    // because a blank would read as a gate that failed to render. Reported.
-    evidence: { icon: NO_GLYPH_IN_REGISTRY, iconLabel: "Evidence", label: "" }
+    // The drawing draws no row under Summarise, and the rail drew "no check on
+    // this step" — on the step the Job halts at. What it declares is a person,
+    // and that is the row it gets.
+    declarations: [{ label: "advance_gate · human_always" }]
   }
 ];
 const WORK_ROWS = [
@@ -6333,6 +7716,16 @@ const WORK_ROWS = [
     meta: "named by a drone id nothing serves"
   }
 ];
+const FOOTPRINT = {
+  emptyNote: "This drone has not changed anything yet.",
+  note: "Read from the worktree while the drone was working. This step declared no plan, so no row is marked.",
+  files: [
+    { path: "src/settings.rs", change: "modified" },
+    { path: "src/settings/reducer.rs", change: "added" },
+    { path: "src/settings/selectors.rs", change: "added" },
+    { path: "src/settings/mod.rs", change: "added" }
+  ]
+};
 const heading$1 = {
   status: "running",
   statusIcon: CircleDot,
@@ -6354,6 +7747,7 @@ const RunningJob = {
     {
       heading: heading$1,
       steps,
+      footprint: FOOTPRINT,
       evidence: {
         icon: NO_GLYPH_IN_REGISTRY,
         iconLabel: "Evidence",
@@ -6446,6 +7840,7 @@ const AsBridgeDrawsItToday = {
           evidence: { label: "" }
         }
       ],
+      footprint: FOOTPRINT,
       log: {
         brief: {
           criteria: [],
@@ -6458,7 +7853,7 @@ const AsBridgeDrawsItToday = {
     }
   ) })
 };
-const __vite_glob_0_47 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_54 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AsBridgeDrawsItToday,
   RunningJob,
@@ -6491,7 +7886,7 @@ const Dispatch = {
     }
   ) })
 };
-const __vite_glob_0_48 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_55 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Dispatch,
   default: meta$4
@@ -6531,7 +7926,7 @@ const FirstLaunch = {
     }
   ) })
 };
-const __vite_glob_0_49 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_56 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   FirstLaunch,
   default: meta$3
@@ -6745,7 +8140,7 @@ const WhatTheWireServes = {
   ) })
 };
 const STILL_RUNNING = { 0: "1h 04m", 1: "38m 12s", 2: "11m 03s" };
-const __vite_glob_0_50 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_57 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AwaitingApproval,
   Done,
@@ -6842,7 +8237,7 @@ const FleetIsNotRunning = {
   },
   render: Shell.render
 };
-const __vite_glob_0_51 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_58 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   CollapsedRail,
   FleetIsNotRunning,
@@ -6900,9 +8295,12 @@ const heading = {
   // Leaves the view. Never an act on the Drone.
   actions: /* @__PURE__ */ jsx(Button, { variant: "ghost", children: "Back to the job" })
 };
+const PLAN = { id: "plan", label: "Plan the change" };
+const IMPLEMENT = { id: "implement", label: "Split the reducer" };
 const turns = [
   {
     id: "1",
+    step: PLAN,
     at: "09:14:02",
     kind: "started",
     // The model is whatever the Job named. A vendor spelling belongs in
@@ -6911,12 +8309,14 @@ const turns = [
   },
   {
     id: "2",
+    step: PLAN,
     at: "09:14:03",
     kind: "said",
     said: "Reading the settings module before I split anything, so the public signature survives."
   },
   {
     id: "3",
+    step: IMPLEMENT,
     at: "09:14:04",
     kind: "called",
     subject: "Read",
@@ -6925,9 +8325,10 @@ const turns = [
   },
   // No detail: the wire had no name for this tool's arguments, so the call id
   // is what tells the row from the next one and the row leads with it.
-  { id: "4", at: "09:14:08", kind: "called", subject: "TodoWrite · call_7f22", answer: "Answered." },
+  { id: "4", step: IMPLEMENT, at: "09:14:08", kind: "called", subject: "TodoWrite · call_7f22", answer: "Answered." },
   {
     id: "5",
+    step: IMPLEMENT,
     at: "09:14:11",
     kind: "called",
     subject: "Edit",
@@ -7036,7 +8437,7 @@ const NothingButToolCalls = {
     }
   ) })
 };
-const __vite_glob_0_52 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_59 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   ADroneThatOutlivedItsFleet,
   ADroneThinking,
@@ -7051,57 +8452,64 @@ const __vite_glob_0_52 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
 const stories = /* @__PURE__ */ Object.assign({
   "../src/compositions/ActiveJobsList/ActiveJobsList.stories.tsx": __vite_glob_0_0,
   "../src/compositions/BoardEmptyState/BoardEmptyState.stories.tsx": __vite_glob_0_1,
-  "../src/compositions/CriterionVerdicts/CriterionVerdicts.stories.tsx": __vite_glob_0_2,
-  "../src/compositions/DroneTurns/DroneTurns.stories.tsx": __vite_glob_0_3,
-  "../src/compositions/EvidenceCard/EvidenceCard.stories.tsx": __vite_glob_0_4,
-  "../src/compositions/EvidenceTrail/EvidenceTrail.stories.tsx": __vite_glob_0_5,
-  "../src/compositions/FailureNotice/FailureNotice.stories.tsx": __vite_glob_0_6,
-  "../src/compositions/JobBrief/JobBrief.stories.tsx": __vite_glob_0_7,
-  "../src/compositions/JobComposer/JobComposer.stories.tsx": __vite_glob_0_8,
-  "../src/compositions/JobDetailHeaderActions/JobDetailHeaderActions.stories.tsx": __vite_glob_0_9,
-  "../src/compositions/JobLogReference/JobLogReference.stories.tsx": __vite_glob_0_10,
-  "../src/compositions/JobOutcome/JobOutcome.stories.tsx": __vite_glob_0_11,
-  "../src/compositions/JobRecord/JobRecord.stories.tsx": __vite_glob_0_12,
-  "../src/compositions/JobRowStacked/JobRowStacked.stories.tsx": __vite_glob_0_13,
-  "../src/compositions/Sidebar/Sidebar.stories.tsx": __vite_glob_0_14,
-  "../src/compositions/StatusBar/StatusBar.stories.tsx": __vite_glob_0_15,
-  "../src/compositions/StepActivityMark/StepActivityMark.stories.tsx": __vite_glob_0_16,
-  "../src/compositions/StepBar/StepBar.stories.tsx": __vite_glob_0_17,
-  "../src/compositions/WorkflowRail/WorkflowRail.stories.tsx": __vite_glob_0_18,
-  "../src/primitives/Alert/Alert.stories.tsx": __vite_glob_0_19,
-  "../src/primitives/AttachmentChip/AttachmentChip.stories.tsx": __vite_glob_0_20,
-  "../src/primitives/Badge/Badge.stories.tsx": __vite_glob_0_21,
-  "../src/primitives/Button/Button.stories.tsx": __vite_glob_0_22,
-  "../src/primitives/Card/Card.stories.tsx": __vite_glob_0_23,
-  "../src/primitives/Checkbox/Checkbox.stories.tsx": __vite_glob_0_24,
-  "../src/primitives/CommandPalette/CommandPalette.stories.tsx": __vite_glob_0_25,
-  "../src/primitives/Dialog/Dialog.stories.tsx": __vite_glob_0_26,
-  "../src/primitives/DropdownMenu/DropdownMenu.stories.tsx": __vite_glob_0_27,
-  "../src/primitives/Input/Input.stories.tsx": __vite_glob_0_28,
-  "../src/primitives/Kbd/Kbd.stories.tsx": __vite_glob_0_29,
-  "../src/primitives/Popover/Popover.stories.tsx": __vite_glob_0_30,
-  "../src/primitives/Radio/Radio.stories.tsx": __vite_glob_0_31,
-  "../src/primitives/ScrollArea/ScrollArea.stories.tsx": __vite_glob_0_32,
-  "../src/primitives/Select/Select.stories.tsx": __vite_glob_0_33,
-  "../src/primitives/Separator/Separator.stories.tsx": __vite_glob_0_34,
-  "../src/primitives/Sheet/Sheet.stories.tsx": __vite_glob_0_35,
-  "../src/primitives/Skeleton/Skeleton.stories.tsx": __vite_glob_0_36,
-  "../src/primitives/SplitButton/SplitButton.stories.tsx": __vite_glob_0_37,
-  "../src/primitives/Switch/Switch.stories.tsx": __vite_glob_0_38,
-  "../src/primitives/Table/Table.stories.tsx": __vite_glob_0_39,
-  "../src/primitives/Tabs/Tabs.stories.tsx": __vite_glob_0_40,
-  "../src/primitives/TabsWithCounts/TabsWithCounts.stories.tsx": __vite_glob_0_41,
-  "../src/primitives/Textarea/Textarea.stories.tsx": __vite_glob_0_42,
-  "../src/primitives/Toast/Toast.stories.tsx": __vite_glob_0_43,
-  "../src/primitives/Tooltip/Tooltip.stories.tsx": __vite_glob_0_44,
-  "../src/screens/AFailedJobADeadEndReadAsOne/AFailedJobADeadEndReadAsOne.stories.tsx": __vite_glob_0_45,
-  "../src/screens/AFinishedJobWhatItWasAndWhatItProduced/AFinishedJobWhatItWasAndWhatItProduced.stories.tsx": __vite_glob_0_46,
-  "../src/screens/ARunningJob/ARunningJob.stories.tsx": __vite_glob_0_47,
-  "../src/screens/DispatchAJobFullWithTheM1SubsetMarked/DispatchAJobFullWithTheM1SubsetMarked.stories.tsx": __vite_glob_0_48,
-  "../src/screens/FirstLaunch/FirstLaunch.stories.tsx": __vite_glob_0_49,
-  "../src/screens/TheListSixStatesOneRowShape/TheListSixStatesOneRowShape.stories.tsx": __vite_glob_0_50,
-  "../src/screens/TheShell/TheShell.stories.tsx": __vite_glob_0_51,
-  "../src/screens/WatchingADroneWork/WatchingADroneWork.stories.tsx": __vite_glob_0_52
+  "../src/compositions/ChangedFiles/ChangedFiles.stories.tsx": __vite_glob_0_2,
+  "../src/compositions/CriterionVerdicts/CriterionVerdicts.stories.tsx": __vite_glob_0_3,
+  "../src/compositions/DroneTurns/DroneTurns.stories.tsx": __vite_glob_0_4,
+  "../src/compositions/EvidenceCard/EvidenceCard.stories.tsx": __vite_glob_0_5,
+  "../src/compositions/EvidenceTrail/EvidenceTrail.stories.tsx": __vite_glob_0_6,
+  "../src/compositions/FailureNotice/FailureNotice.stories.tsx": __vite_glob_0_7,
+  "../src/compositions/GamingFlags/GamingFlags.stories.tsx": __vite_glob_0_8,
+  "../src/compositions/JobBrief/JobBrief.stories.tsx": __vite_glob_0_9,
+  "../src/compositions/JobComposer/JobComposer.stories.tsx": __vite_glob_0_10,
+  "../src/compositions/JobDetailHeaderActions/JobDetailHeaderActions.stories.tsx": __vite_glob_0_11,
+  "../src/compositions/JobLogReference/JobLogReference.stories.tsx": __vite_glob_0_12,
+  "../src/compositions/JobOutcome/JobOutcome.stories.tsx": __vite_glob_0_13,
+  "../src/compositions/JobRecord/JobRecord.stories.tsx": __vite_glob_0_14,
+  "../src/compositions/JobRowStacked/JobRowStacked.stories.tsx": __vite_glob_0_15,
+  "../src/compositions/ReviewDecision/ReviewDecision.stories.tsx": __vite_glob_0_16,
+  "../src/compositions/Sidebar/Sidebar.stories.tsx": __vite_glob_0_17,
+  "../src/compositions/StatusBar/StatusBar.stories.tsx": __vite_glob_0_18,
+  "../src/compositions/StepActivityMark/StepActivityMark.stories.tsx": __vite_glob_0_19,
+  "../src/compositions/StepBar/StepBar.stories.tsx": __vite_glob_0_20,
+  "../src/compositions/TransitionHistory/TransitionHistory.stories.tsx": __vite_glob_0_21,
+  "../src/compositions/UnifiedDiff/UnifiedDiff.stories.tsx": __vite_glob_0_22,
+  "../src/compositions/WorkflowRail/WorkflowRail.stories.tsx": __vite_glob_0_23,
+  "../src/primitives/Alert/Alert.stories.tsx": __vite_glob_0_24,
+  "../src/primitives/AttachmentChip/AttachmentChip.stories.tsx": __vite_glob_0_25,
+  "../src/primitives/Badge/Badge.stories.tsx": __vite_glob_0_26,
+  "../src/primitives/Button/Button.stories.tsx": __vite_glob_0_27,
+  "../src/primitives/Card/Card.stories.tsx": __vite_glob_0_28,
+  "../src/primitives/Checkbox/Checkbox.stories.tsx": __vite_glob_0_29,
+  "../src/primitives/CommandPalette/CommandPalette.stories.tsx": __vite_glob_0_30,
+  "../src/primitives/Dialog/Dialog.stories.tsx": __vite_glob_0_31,
+  "../src/primitives/DropdownMenu/DropdownMenu.stories.tsx": __vite_glob_0_32,
+  "../src/primitives/Input/Input.stories.tsx": __vite_glob_0_33,
+  "../src/primitives/Kbd/Kbd.stories.tsx": __vite_glob_0_34,
+  "../src/primitives/Popover/Popover.stories.tsx": __vite_glob_0_35,
+  "../src/primitives/Prose/Prose.stories.tsx": __vite_glob_0_36,
+  "../src/primitives/Radio/Radio.stories.tsx": __vite_glob_0_37,
+  "../src/primitives/ScrollArea/ScrollArea.stories.tsx": __vite_glob_0_38,
+  "../src/primitives/Select/Select.stories.tsx": __vite_glob_0_39,
+  "../src/primitives/Separator/Separator.stories.tsx": __vite_glob_0_40,
+  "../src/primitives/Sheet/Sheet.stories.tsx": __vite_glob_0_41,
+  "../src/primitives/Skeleton/Skeleton.stories.tsx": __vite_glob_0_42,
+  "../src/primitives/SplitButton/SplitButton.stories.tsx": __vite_glob_0_43,
+  "../src/primitives/Switch/Switch.stories.tsx": __vite_glob_0_44,
+  "../src/primitives/Table/Table.stories.tsx": __vite_glob_0_45,
+  "../src/primitives/Tabs/Tabs.stories.tsx": __vite_glob_0_46,
+  "../src/primitives/TabsWithCounts/TabsWithCounts.stories.tsx": __vite_glob_0_47,
+  "../src/primitives/Textarea/Textarea.stories.tsx": __vite_glob_0_48,
+  "../src/primitives/Toast/Toast.stories.tsx": __vite_glob_0_49,
+  "../src/primitives/Tooltip/Tooltip.stories.tsx": __vite_glob_0_50,
+  "../src/screens/AFailedJobADeadEndReadAsOne/AFailedJobADeadEndReadAsOne.stories.tsx": __vite_glob_0_51,
+  "../src/screens/AFinishedJobWhatItWasAndWhatItProduced/AFinishedJobWhatItWasAndWhatItProduced.stories.tsx": __vite_glob_0_52,
+  "../src/screens/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop.stories.tsx": __vite_glob_0_53,
+  "../src/screens/ARunningJob/ARunningJob.stories.tsx": __vite_glob_0_54,
+  "../src/screens/DispatchAJobFullWithTheM1SubsetMarked/DispatchAJobFullWithTheM1SubsetMarked.stories.tsx": __vite_glob_0_55,
+  "../src/screens/FirstLaunch/FirstLaunch.stories.tsx": __vite_glob_0_56,
+  "../src/screens/TheListSixStatesOneRowShape/TheListSixStatesOneRowShape.stories.tsx": __vite_glob_0_57,
+  "../src/screens/TheShell/TheShell.stories.tsx": __vite_glob_0_58,
+  "../src/screens/WatchingADroneWork/WatchingADroneWork.stories.tsx": __vite_glob_0_59
 });
 function label(key) {
   return key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim();

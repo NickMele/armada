@@ -305,6 +305,15 @@
      changed once. */
   --w-dialog: 440px;
   --w-sheet: 480px;
+  /* The second dialog width, and the one value in this block the sheet does
+     not draw. 440px is the measure of a confirmation that is two sentences;
+     the override dialog carries findings — a pattern and the file, line or
+     assertion it was found in — and at 440px a citation wraps mid-expression,
+     which is the defect #197 was raised for. 640px is ~85 characters at
+     --text-sm, the top of the comfortable measure, and holds a crate-relative
+     path and a short expression on one line. Reported: a decision taken here,
+     not a value read off a drawing. */
+  --w-dialog-wide: 640px;
   --w-menu: 240px;
   --w-tooltip: 340px;
   --w-toast: 420px;
