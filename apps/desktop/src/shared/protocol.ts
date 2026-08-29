@@ -104,6 +104,64 @@ export type JobDetail = {
    * second window, which is why the fact is here and not in Bridge.
    */
   redirecting?: RedirectInFlight;
+  /**
+   * What kind of stuck this job is, and what moves it. Since protocol 4.16.
+   *
+   * **Absent is "this job did not stop"**, and it is the whole of the second
+   * reading: a queued, running, reviewing, piloted, superseded or landed job
+   * carries nothing here, because a classification on one of those would offer
+   * acts against a job nothing is wrong with. It is never an older fleet — one
+   * behind this bridge is refused at the socket.
+   */
+  stuck?: Stuck;
+};
+
+/**
+ * Why a job stopped, and what moves it. `crates/ipc/src/detail.rs`.
+ *
+ * **Fleet decides the acts and Bridge draws them.** Bridge used to derive them
+ * from `status`, `current_step_id` and `assigned_drone` and reached four of the
+ * five refusals `adrift.rs` carries; the fifth is whether the worktree is on
+ * disk, which is a `path.is_dir()` no renderer can make. So a restart was
+ * offered on a job that had none and the refusal arrived on the press.
+ *
+ * **It does not claim the trigger is true.** A drone whose worktree was deleted
+ * escalates as `stalled`, the nearest trigger and the wrong condition; what
+ * crosses is the escalation as recorded, beside the worktree fact.
+ */
+export type Stuck = {
+  /**
+   * The escalation trigger, in the registry's spelling. **Absent is a job that
+   * recorded none** — one killed by hand stops no step and its transition
+   * carries no reason.
+   */
+  stopped_by?: string;
+  /**
+   * The step that stopped, where a step-level trigger named one. **Absent on
+   * every job-level escalation**, which is what makes a restart incoherent
+   * there rather than merely refused.
+   */
+  step_id?: string;
+  /**
+   * The acts fleet will take on this job **now**, each spelled as the operation
+   * that performs it, ordered by how much each takes away.
+   *
+   * **Empty is a dead end and says so**: nothing resumes this job and nothing
+   * replaces it either, which is not the same as the field being absent. Left
+   * as `string[]` like every other closed set, and here the rule earns itself
+   * twice — the set is declared by the acts fleet implements rather than by a
+   * registry, and `rerun_gate` was added to it after the concept doc had
+   * written a table of five.
+   */
+  recourse: string[];
+  /**
+   * Whether the job's worktree is still on disk.
+   *
+   * **The fact that decides between a restart and a redispatch**, and the one
+   * no surface can compute for itself. It rides beside the acts so a screen can
+   * say *why* a restart is not offered rather than only that it is missing.
+   */
+  worktree_on_disk: boolean;
 };
 
 /**
