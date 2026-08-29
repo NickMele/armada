@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { FileCheck, Lock, ShieldCheck, ShieldMinus, ShieldX } from "lucide-react";
+import { FileCheck, Lock, ShieldCheck, ShieldMinus, ShieldOff, ShieldX } from "lucide-react";
 import { WorkflowRail, type WorkflowRailStep } from "./WorkflowRail";
 
 /**
@@ -500,6 +500,40 @@ export const TheSixCheckOutcomes: Story = {
           { command: "audit", result: "timed_out · 120s budget" },
           { command: "typecheck", result: "never_ran · tsc is not installed" },
           { command: "storybook", result: "skipped · no changed file is under packages/**" },
+        ],
+      },
+    ],
+  },
+};
+
+/**
+ * **A Check says which paths it covers before it is asked to run.**
+ *
+ * `checks.<name>.when` in `armada.yml`, and it is the only moment the
+ * declaration says anything a reader cannot get later: a Check with no `when`
+ * draws nothing, so the two that carry one are the two rows saying this Job's
+ * diff will not be measured by them.
+ *
+ * The first step is a preview — no Job exists, so no row carries a glyph or an
+ * outcome. The second has run: `build` passed, and `storybook` reads `not run`
+ * with the same declaration still beside it, which is why the rail draws
+ * `covers` in both states rather than only in one.
+ */
+export const AChecksPathsAreDrawnBeforeItRuns: Story = {
+  args: {
+    steps: [
+      {
+        id: "implement", label: "Implement", labelIsAnIdentifier: true, activity: "not_started", status: "not_started",
+        gates: [
+          { command: "build · cargo build --workspace --locked" },
+          { command: "storybook · pnpm -C packages/components build-storybook", covers: "when packages/**, apps/desktop/**" },
+        ],
+      },
+      {
+        id: "verify", label: "Verify", labelIsAnIdentifier: true, activity: "advanced", status: "advanced", elapsed: "1m 22s", verdict: "passed", verdictNamed: "passed",
+        gates: [
+          { command: "build · cargo build --workspace --locked", result: "passed", icon: ShieldCheck, iconLabel: "passed" },
+          { command: "storybook · pnpm -C packages/components build-storybook", covers: "when packages/**, apps/desktop/**", result: "not run · no changed file is under packages/**, apps/desktop/**", icon: ShieldOff, iconLabel: "not run" },
         ],
       },
     ],

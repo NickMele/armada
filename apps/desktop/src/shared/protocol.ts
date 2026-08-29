@@ -411,6 +411,16 @@ export type DeclaredCheck = {
   run?: string;
   /** The exit code the step expects, where there is a command to return one. */
   expect_exit_code?: number;
+  /**
+   * Which paths this Check covers, as the Job's frozen workflow holds them.
+   * A step that changes none of them does not run it.
+   *
+   * **Absent means always, and it is never `[]`.** Always and never are
+   * opposite answers and Fleet sends no key at all for the first, so a client
+   * has nothing to disambiguate. Draw it *before* the Check runs — that is the
+   * only moment it says anything the `skipped` row will not say later.
+   */
+  when?: string[];
 };
 
 /**

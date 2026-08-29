@@ -29,7 +29,7 @@ import type {
   Judged,
   StepDetail,
 } from "../../shared/protocol";
-import { advanceOf, commandOf, judgeOf, nameOf } from "./declared";
+import { advanceOf, commandOf, coversOf, judgeOf, nameOf } from "./declared";
 import { span } from "./duration";
 import { ordered } from "./facts";
 import { frozenBeneath } from "./frozen";
@@ -183,6 +183,11 @@ function gatesOf(step: StepDetail): WorkflowRailGate[] | undefined {
       // Name first, then the command the Job's frozen workflow resolved it to.
       // The same spelling the proposal-time preview uses, from `declared.ts`.
       command: commandOf(check),
+      // **Drawn whether or not the gate has reached it.** Before, it says
+      // which Checks this Job's diff will be measured by; after a skip, it is
+      // the declaration the `not run` result beside it is explained by. A row
+      // that showed it in only one of the two would teach it twice.
+      covers: coversOf(check),
       result: run === undefined ? (reading?.verb ?? undefined) : resultOf(run),
       icon: reading?.icon ?? undefined,
       iconLabel: reading?.verb ?? undefined,

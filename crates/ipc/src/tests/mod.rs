@@ -222,6 +222,7 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
                 name: Some("suite".to_string()),
                 run: Some("cargo nextest run --workspace".to_string()),
                 expect_exit_code: Some(0),
+                when: Some(vec!["crates/**".to_string()]),
             }]),
             ran: vec![CheckRun {
                 name: "suite".to_string(),
@@ -244,6 +245,10 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
     assert!(
         json.contains("\"run\":\"cargo nextest run --workspace\""),
         "the command the workflow froze crosses whole: {json}"
+    );
+    assert!(
+        json.contains("\"when\":[\"crates/**\"]"),
+        "and so do the paths it covers, which are only useful before it runs: {json}"
     );
     assert_eq!(
         decode::<JobDetail>("a Job in full", json.as_bytes()).expect("it round-trips"),
@@ -763,4 +768,27 @@ fn a_blank_review_note_decodes_and_is_refused_further_in() {
     let note = decode::<ChangesRequested>("a review note", br#"{"note":"   "}"#)
         .expect("the bytes became a request");
     assert_eq!(note.note, "   ");
+}
+
+/// **A Check that declares no `when` sends no key at all.**
+///
+/// Absent and empty would be one value with opposite meanings — always, and
+/// never — which is the collision `core_model::Covers` refuses at the other end
+/// of the wire. A client that received `[]` would have to know which one this
+/// build meant.
+#[test]
+fn a_check_covering_everything_carries_no_when() {
+    let declared = DeclaredCheck {
+        kind: "manifest_check".to_string(),
+        name: Some("build".to_string()),
+        run: Some("cargo build --workspace --locked".to_string()),
+        expect_exit_code: Some(0),
+        when: None,
+    };
+    let json = encode(&declared).expect("a declaration is plain data");
+    assert!(!json.contains("when"), "{json}");
+    assert_eq!(
+        decode::<DeclaredCheck>("a declared check", json.as_bytes()).expect("it round-trips"),
+        declared
+    );
 }

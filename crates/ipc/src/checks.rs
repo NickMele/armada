@@ -4,25 +4,25 @@
 //!
 //! A step that declares two Checks with no results yet, a step that declares
 //! none, and a step whose Checks have run are three states a reader has to tell
-//! apart. [`DeclaredCheck`] answers the first question and [`CheckRun`] the
-//! second, and neither can be inferred from the other.
+//! apart. [`DeclaredCheck`] answers the first and [`CheckRun`] the second,
+//! neither inferable from the other — which is why [`DeclaredCheck::when`] is
+//! on the first: the paths a Check covers are only useful before it runs.
 //!
 //! # The command crosses, and it comes off the workflow
 //!
 //! `build` tells a reader nothing; `cargo build --workspace --locked` tells
 //! them what gated the step and what to run to reproduce it. Both travel, name
-//! first, because an escalation cites the name and a bare command line says
-//! nothing about which gate it was.
+//! first: an escalation cites the name, and a bare command line says nothing
+//! about which gate it was.
 //!
-//! **The `run` served is always the resolved workflow's, never the live
-//! Manifest's.** A Job froze its workflow at creation and the gate runs what it
-//! froze; reading the Manifest again would show a command that is not what ran
-//! the moment somebody edits `armada.yml` mid-Job. `ManifestSummary::checks`
-//! stays names only for that reason — the Manifest declares Checks, and the
-//! workflow is what resolved one.
+//! **`run` and `when` are always the resolved workflow's, never the live
+//! Manifest's.** A Job froze both at creation and the gate uses what it froze;
+//! reading the Manifest again would show a command, or a scope, that is not the
+//! one this Job runs under the moment somebody edits `armada.yml`.
+//! `ManifestSummary::checks` stays names only for that reason.
 //!
-//! The semantic tier crosses as counts instead: [`DeclaredJudge`] carries no
-//! question, because a question is a prompt in a screenshot.
+//! The semantic tier crosses as counts: [`DeclaredJudge`] carries no question,
+//! because a question is a prompt in a screenshot.
 
 use serde::{Deserialize, Serialize};
 
@@ -48,6 +48,17 @@ pub struct DeclaredCheck {
     /// return one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expect_exit_code: Option<i64>,
+    /// Which paths the Manifest says this Check covers, as the workflow froze
+    /// them. **Absent means always**, and it is absent rather than empty for
+    /// the reason the domain's `Option<Covers>` is: always and never are
+    /// opposite answers and one value cannot carry both.
+    ///
+    /// **It crosses because it is only useful before the Check runs.** After
+    /// the gate has skipped one, [`CheckRun::produced`] names the paths on the
+    /// row that says so; before, this is the only thing that can tell a reader
+    /// why a Check they expect to see will not be spent on this Job.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<Vec<String>>,
 }
 
 /// One `judge_checks[]` entry a step declares, counted rather than quoted.
