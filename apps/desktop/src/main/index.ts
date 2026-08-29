@@ -170,6 +170,13 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.overrideVerdict, (_event, jobId: string, reason: string) =>
     connection?.commands.overrideVerdict(jobId, reason),
   );
+  // The answer at a gate that could not rule, which is a different place again:
+  // the override lifts a decision and this asks for one. Its own channel for
+  // the reason the two routes are two — the triggers partition, and neither act
+  // is legal where the other one is.
+  ipcMain.handle(CHANNELS.rerunGate, (_event, jobId: string) =>
+    connection?.commands.rerunGate(jobId),
+  );
   // Saying a job failed in error. Its own channel beside the override rather
   // than a flag on it: the override moves the job past a verdict and this moves
   // nothing, and the two would otherwise be one press meaning either.

@@ -329,6 +329,7 @@ export type Outcome =
   | { ok: false; why: "already_redirecting" }
   | { ok: false; why: "already_restarting" }
   | { ok: false; why: "already_overruling" }
+  | { ok: false; why: "already_rereading" }
   | { ok: false; why: "already_reporting" }
   | { ok: false; why: "empty_instruction" }
   | { ok: false; why: "empty_reason" }
@@ -428,6 +429,24 @@ export type BridgeApi = {
    * The renderer says which Job is open; main does the reading and republishes
    * it whenever an event names that Job. One call per open, not one per event.
    */
+  /**
+   * Ask the gate again, on the evidence the step already submitted.
+   *
+   * **Not an override and not a widening of one.** `overrideVerdict` lifts a
+   * decision a machine made; `gate_undecided` is a gate that made none — it
+   * could not derive what it needed to read — so there is nothing to disagree
+   * with and nothing to lift. This asks the question that failed to be asked,
+   * which is why it carries no reason: nothing is being disputed, so there is
+   * no sentence to record that the second reading will not say for itself.
+   *
+   * Legal on an escalated Job whose stopped step carries `gate_undecided`.
+   * Fleet refuses 409 on any other trigger — that one is an override or
+   * nothing — and on a Job it is no longer standing at, because the baseline
+   * the gate reads against lives in the working slot and a Fleet restarted
+   * since the escalation has none. Where the cause has not gone away the gate
+   * is undecided again and **nothing moves**, which is not a failure.
+   */
+  rerunGate: (jobId: string) => Promise<Outcome>;
   /**
    * Say that this Job failed in error, in your own words, and file the Job's
    * own record with it.
@@ -550,6 +569,7 @@ export const CHANNELS = {
   redirectDrone: "bridge:redirect-drone",
   restartStep: "bridge:restart-step",
   overrideVerdict: "bridge:override-verdict",
+  rerunGate: "bridge:rerun-gate",
   fileReport: "bridge:file-report",
   watchJob: "bridge:watch-job",
   observeJob: "bridge:observe-job",
