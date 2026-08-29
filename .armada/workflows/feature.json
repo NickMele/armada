@@ -63,6 +63,23 @@
 # too vague to scope anything, and the two failures look nothing alike to
 # whoever reads the refusal.
 #
+# **`implements_the_scope` tolerates an unscoped restructure, and its sibling is
+# why it can.** It refused a Job whose Drone built the scoped feature and also
+# split a module that had reached the 900-line hard refusal: the Judge was right
+# about the facts and wrong about the consequence, because
+# `no_behaviour_beyond_scope` had already answered the question that mattered,
+# and answered it `met`. So this criterion keeps the half only it can answer --
+# was the described thing built, or was something else built in its place -- and
+# the clause that also refused work outside the note is gone. #190.
+#
+# **The two must not converge.** Narrowing this one to behaviour would make it a
+# second spelling of the criterion beside it, and the two disagreeing is what
+# made that refusal legible at all: *the behaviour is exactly what you scoped;
+# the diff contains work you did not scope*. Widening its sibling is the same
+# mistake from the other end -- `no_behaviour_beyond_scope` is what caught a
+# Drone doing three steps' work in one PR, which is `docs/scope.md`'s fourth
+# pain and the reason that row reads "partly solved".
+#
 # **What is still not joined.** `acceptance_criteria[]` belongs to the Job and
 # no criterion here names which of them it tests; `config/src/judge.rs` refuses
 # `source_ref` for that reason. The brief labels them as the whole Job's bar
@@ -143,7 +160,7 @@
           "criteria": [
             {
               "criterion_id": "implements_the_scope",
-              "question": "Does this diff implement what the scope note described, and nothing outside it?"
+              "question": "Does this diff implement what the scope note described, rather than something else in its place? Unscoped work that only restructures -- a move, a rename, a file split that leaves behaviour where it was -- is not a refusal on this criterion."
             },
             {
               "criterion_id": "no_behaviour_beyond_scope",
