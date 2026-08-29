@@ -56,10 +56,21 @@ fn this_repositorys_own_setup_loads_and_resolves() {
         Err(refused) => panic!("{} and {WORKFLOWS} must load:\n{refused}", MANIFEST),
     };
 
+    // Sorted, because `check_names` walks a `BTreeMap` — so `bridge_build`
+    // leads and the reading order of the file is not the reading order here.
     assert_eq!(
         setup.manifest().check_names(),
-        vec!["build".to_string(), "test".to_string()],
-        "the two Checks this workspace is built and tested with"
+        vec![
+            "bridge_build".to_string(),
+            "build".to_string(),
+            "storybook".to_string(),
+            "test".to_string(),
+            "typecheck".to_string(),
+        ],
+        "the five Checks this workspace is built and tested with — two for the \
+         Rust half and three for the Bridge, which is #200: every Check used to \
+         compile Rust, so a Job that changed only `apps/` was verified entirely \
+         on the code it had not touched"
     );
     assert_eq!(bug(&setup).name(), "bug");
     let steps: Vec<&str> = bug(&setup)
@@ -95,11 +106,17 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
         })
         .collect();
 
+    // **Declaration order, and it is the order they run in.** `WorkflowDef` has
+    // no field for sequencing — see `config`'s own test saying so — so this list
+    // is `bug.json`'s `implement` step read top to bottom.
     assert_eq!(
         resolved,
         vec![
             ("build", "cargo build --workspace --locked"),
             ("test", "cargo nextest run --workspace --exclude acceptance"),
+            ("typecheck", "pnpm -C apps/desktop typecheck"),
+            ("bridge_build", "pnpm -C apps/desktop build"),
+            ("storybook", "pnpm -C packages/components build-storybook"),
         ]
     );
 }

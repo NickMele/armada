@@ -89,6 +89,18 @@
 #
 # Each criterion is its own call, so the entry below is one more Judge call per
 # Job on Feature's cheapest step.
+#
+# **`typecheck`, `bridge_build` and `storybook` are on both diff steps.** See
+# `bug.json` for the defect they were added for. Feature is the workflow where
+# they matter most, because new behaviour is the case where a Bridge half gets
+# written at all -- and they are on `tests` as well as `implement` because
+# `tests` produces a diff too, and a diff produced in the step after the
+# compilers ran is a diff nothing compiled.
+#
+# The split above them stays what it was: `implement` gates on `build` and
+# `tests` on `test`. The three Bridge Checks do not split that way, because all
+# three are compilers and this workspace has no Bridge test runner to be the
+# other half of the pair.
 {
   "version": 1,
   "workflow_id": "feature",
@@ -137,6 +149,21 @@
           "expect_exit_code": 0
         },
         {
+          "type": "manifest_check",
+          "check": "typecheck",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "bridge_build",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "storybook",
+          "expect_exit_code": 0
+        },
+        {
           "type": "diff_nonempty"
         }
       ],
@@ -180,6 +207,21 @@
         {
           "type": "manifest_check",
           "check": "test",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "typecheck",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "bridge_build",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "storybook",
           "expect_exit_code": 0
         },
         {

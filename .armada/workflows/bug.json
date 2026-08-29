@@ -62,6 +62,27 @@
 # `retry_limit` and `advance_gate`. Everything else in the schema is refused by
 # name.
 #
+# **Five mechanical Checks on `implement` now, and three of them are Bridge.**
+# `typecheck`, `bridge_build` and `storybook` arrive with #200, and the defect
+# they exist for is worth stating where an author reading this step will see
+# it: PR #199 merged a branch whose renderer did not compile. It passed
+# `build`, it passed `test`, and two Judges read its diff -- because every
+# Check this repository declared compiled Rust and none of them compiled
+# TypeScript, so a Job that changed `apps/` was verified entirely on the half
+# it had not touched.
+#
+# The same three are named on every other step that produces a diff and gates
+# on anything -- `feature`'s `implement` and `tests`, `refactor`'s
+# `implement`, `revert`'s `revert`. They are **not** on `plan` or `handoff`,
+# which produce a `facts_note` and cannot fail a Check at all, and not on
+# `prototype`'s `build`, which carries no mechanical tier by decision rather
+# than by omission.
+#
+# **A Drone still runs none of them.** The allowlist denies `pnpm` as it denies
+# `cargo`; Fleet runs Checks. What a Drone can do is ask, and `run_checks`
+# runs whatever the step declares, so it reached these without being told
+# about them.
+#
 # **`retry_limit` is on the steps that can fail mechanically, and nowhere else.**
 # Two hand-backs, so `implement` is worked three times before the failure stands
 # -- which is the "3 attempts per step" `settings.toml` names as the Kit-level
@@ -199,6 +220,21 @@
         {
           "type": "manifest_check",
           "check": "test",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "typecheck",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "bridge_build",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "storybook",
           "expect_exit_code": 0
         },
         {

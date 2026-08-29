@@ -2,7 +2,7 @@
 #
 # This is the file `armada serve` loads when it is pointed at this repository,
 # and the file `armada check` and `armada run` read to resolve a name. It
-# is not a sample and not a fixture: the two Checks below are the commands this
+# is not a sample and not a fixture: the five Checks below are the commands this
 # workspace is actually built and tested with, and a Job dispatched here runs
 # them verbatim.
 #
@@ -41,6 +41,26 @@ base: main
 # Checks gate advancement. A step's `mechanical_checks` names one of these by
 # name; a name a step asks for and this file does not declare is refused before
 # anything is dispatched.
+#
+# **This repository has two halves and every Check used to compile one of
+# them.** `build` and `test` say nothing at all about `apps/` or `packages/`,
+# so a Job that changed only the Bridge was verified entirely on the code it
+# had not touched. #200 is what that cost: PR #199 merged a branch whose
+# renderer would not compile, having passed every gate and been read by two
+# Judges, because the switch it broke was in TypeScript and nothing here
+# compiled TypeScript. The three below are the other half.
+#
+# **Three commands rather than one, because none of them subsumes another.**
+# `tsc -b` checks types and emits nothing anyone runs; `electron-vite build`
+# bundles through esbuild, which strips types without reading them; and the
+# Storybook build is the only thing that compiles `packages/components` at all,
+# since that package has no `typecheck` script and `apps/desktop`'s tsconfig
+# does not reference it. Folding them into one name would report one exit code
+# for three different questions, which is `test`'s `--exclude acceptance`
+# argument pointed the other way.
+#
+# There is no `lint` in this workspace. The designed `revert.json` names one
+# and this file has never declared it — see that file's header.
 checks:
   build:
     # `--locked`, because a Check that quietly updates the lockfile is a Check
@@ -59,6 +79,49 @@ checks:
     # against 27 for the same 2,034 tests, because `cargo test` runs each test
     # binary to completion before starting the next.
     run: cargo nextest run --workspace --exclude acceptance
+
+  # **A Job's worktree has no `node_modules`, and these pass there anyway.**
+  # Nothing in Fleet installs anything: `adapters::worktree` creates a branch
+  # and a checkout and stops, and `.armada/worktrees/` was measured empty of
+  # `node_modules` at every level. pnpm 11 installs what a script needs before
+  # running it, so the first of these to run in a fresh worktree pays about two
+  # seconds against the global store and the rest are warm. `packageManager:
+  # pnpm@11.6.0` in the root `package.json` is what pins that behaviour, so it
+  # is a fact about this repository rather than about whoever's machine.
+  #
+  # It leaves the worktree clean — `node_modules/`, `out/` and
+  # `storybook-static/` are all ignored, and the lockfile is untouched — so a
+  # Check here does not appear in the diff a Judge reads.
+  #
+  # **`checks-runner` has no shell**, so none of these can chain an install of
+  # its own with `&&`. That is what makes the paragraph above load-bearing
+  # rather than a convenience: if pnpm stopped installing on demand, the fix is
+  # a script in the repository that this file names, not a longer `run` string.
+  #
+  # Measured on a cold worktree with a warm store: 4.3s, 2.2s, 10.8s. Warm:
+  # 2.8s, 3.1s, 11.8s. Eighteen seconds for all three, against `build`'s
+  # seventeen for one.
+  typecheck:
+    # `tsc -b`, because `apps/desktop/tsconfig.json` owns no files: it is two
+    # referenced projects, one with Node and no DOM and one with the DOM and no
+    # Node, and a plain `tsc --noEmit` here checks neither of them. `--force`
+    # because the build info a previous step left behind would let this skip
+    # the project the Drone just edited.
+    run: pnpm -C apps/desktop typecheck
+
+  bridge_build:
+    # Named for whose build it is, since `build` beside it is the Rust one.
+    # Distinct from `typecheck` and not covered by it: this is the Check that
+    # fails on a missing module or an import that resolves in the editor and
+    # not in the bundle.
+    run: pnpm -C apps/desktop build
+
+  storybook:
+    # **The only Check that compiles `packages/components`.** It is a Vite
+    # build, so it reports broken imports and broken syntax rather than broken
+    # types — worth having as that package's sole compiler, and worth knowing
+    # is not a typecheck.
+    run: pnpm -C packages/components build-storybook
 
 # Commands gate nothing. They are what a Drone is given to run, distinct from
 # the Checks that decide whether it advances — which is why they are a second
