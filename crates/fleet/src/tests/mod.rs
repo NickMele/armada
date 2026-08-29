@@ -129,6 +129,7 @@ mod redirect;
 mod redispatch;
 mod regating;
 mod reporting;
+mod restarting;
 mod retrying;
 mod reviewing;
 mod runtime;

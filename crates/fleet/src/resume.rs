@@ -283,8 +283,14 @@ where
         let stopped = self.what_stopped(&job, &step).await?;
 
         let job = self.resumed(&job, &step, Actor::Human).await?;
-        self.put_a_drone_on(&job, &step, worktree, Opening::Resuming(stopped), &mut working)
-            .await?;
+        self.put_a_drone_on(
+            &job,
+            &step,
+            worktree,
+            Opening::Resuming(stopped),
+            &mut working,
+        )
+        .await?;
         self.load(job_id).await
     }
 

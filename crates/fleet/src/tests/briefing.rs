@@ -23,9 +23,9 @@ use core_model::{
 };
 use ipc::mcp::DeclareScope;
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Gate, Scoped, Sketch};
-use verification::{Claimed, NotClaimed, ShownBy};
+use verification::{Claimed, NotClaimed, ShownBy, TheBaseMoved};
 
-use crate::briefing::{first_turn, resuming_turn, Redeclaring, Stopped, BASELINE};
+use crate::briefing::{first_turn, resuming_turn, Opening, Redeclaring, Stopped, BASELINE};
 use crate::daemon::Fleet;
 use crate::evidence::Call;
 use crate::gate::Ruling;
@@ -651,4 +651,83 @@ fn a_stop_with_no_verdict_recorded_claims_none() {
 
     assert!(said.contains("holds no verdict against its work"), "{said}");
     assert!(!said.contains("did not pass"), "{said}");
+}
+
+// ------------------------------ what an opening turn says about the branch
+
+fn opened(opening: &Opening, moved: Option<&TheBaseMoved>) -> String {
+    opening
+        .turn(&a_job(), &a_workflow(), &StepId::new("implement"), moved)
+        .expect("a prompt")
+        .as_str()
+        .to_string()
+}
+
+/// **The no-op stays silent**, which is the same argument `caught_up` makes at
+/// a boundary: a paragraph saying nothing happened costs the Drone a read and
+/// tells it nothing.
+#[test]
+fn a_branch_that_did_not_move_is_not_mentioned_in_the_opening_turn() {
+    assert!(!opened(&Opening::Fresh, None).contains("THE BRANCH YOU ARE ON"));
+}
+
+/// **The tense is the whole reason this block is not
+/// `TheBaseMoved::told`.** That one opens "while you worked", which is true of
+/// a Drone standing at a boundary and false of one that has not started — and a
+/// first turn describing work the reader has no memory of is a first turn it
+/// has to reconcile before it can begin.
+#[test]
+fn a_clean_catch_up_before_a_spawn_does_not_claim_the_drone_was_working() {
+    let said = opened(
+        &Opening::Fresh,
+        Some(&TheBaseMoved::BroughtUpToDate {
+            base: String::from("main"),
+            commits: 4,
+        }),
+    );
+
+    assert!(said.contains("THE BRANCH YOU ARE ON"), "{said}");
+    assert!(!said.contains("While you worked"), "{said}");
+    assert!(said.contains("since this branch was cut"), "{said}");
+    assert!(said.contains("4 commit(s)"), "{said}");
+}
+
+/// **The reader `#180` had to find.** A restart has no session at the moment
+/// the rebase runs, so a conflict is carried by the opening brief and named as
+/// the Drone's first piece of work — beside the reason the step is being run
+/// again rather than instead of it.
+#[test]
+fn a_conflicted_catch_up_before_a_spawn_is_named_as_the_first_piece_of_work() {
+    let said = opened(
+        &Opening::Resuming(stopped_by(EscalationTrigger::GateFailure)),
+        Some(&TheBaseMoved::Conflicted {
+            base: String::from("main"),
+            files: vec![String::from("src/log.rs"), String::from("src/parse.rs")],
+        }),
+    );
+
+    assert!(said.contains("conflict markers in them"), "{said}");
+    assert!(said.contains("the first piece of your work"), "{said}");
+    assert!(said.contains("- src/log.rs"), "{said}");
+    assert!(said.contains("- src/parse.rs"), "{said}");
+    assert!(
+        said.contains("WHY THIS PART IS BEING DONE AGAIN"),
+        "the branch block sits beside the reason, not in place of it: {said}"
+    );
+}
+
+/// A rebase that would not replay is **not the Drone's to fix**, and the block
+/// says so rather than handing it work it has no git to do.
+#[test]
+fn a_catch_up_that_would_not_replay_tells_the_drone_to_carry_on() {
+    let said = opened(
+        &Opening::Fresh,
+        Some(&TheBaseMoved::CouldNotFollow {
+            base: String::from("main"),
+        }),
+    );
+
+    assert!(said.contains("exactly where it was"), "{said}");
+    assert!(said.contains("Nothing here is yours to fix"), "{said}");
+    assert!(!said.contains("conflict markers"), "{said}");
 }

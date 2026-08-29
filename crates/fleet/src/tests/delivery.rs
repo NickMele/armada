@@ -430,15 +430,11 @@ async fn the_declared_base_overrides_what_would_have_been_inferred() {
         Some(Base::Declared(String::from("release")))
     );
     assert!(
-        fleet
-            .vcs()
-            .delivered()
-            .iter()
-            .all(|did| did
-                == &Delivered::BroughtUpToDate {
-                    branch: format!("armada/{}", job.id().as_str()),
-                    base: String::from("release")
-                }),
+        fleet.vcs().delivered().iter().all(|did| did
+            == &Delivered::BroughtUpToDate {
+                branch: format!("armada/{}", job.id().as_str()),
+                base: String::from("release")
+            }),
         "every rebase named the declared branch, not the inferred one: {:?}",
         fleet.vcs().delivered()
     );
