@@ -37,6 +37,10 @@ export function said(outcome: Outcome): string {
       return "That restart is already in flight. It was not sent twice.";
     case "already_overruling":
       return "That override is already in flight. It was not sent twice.";
+    case "empty_report":
+      return "A report needs what you know went wrong. The record on its own says nothing that was not already on the job.";
+    case "already_reporting":
+      return "That report is already being filed. It was not sent twice.";
     case "empty_instruction":
       return "A redirect needs an instruction. Nothing was sent.";
     case "empty_reason":

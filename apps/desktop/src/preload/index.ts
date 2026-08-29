@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import { CHANNELS } from "../shared/bridge";
 import type { BridgeApi, BridgeState, Draft, Outcome } from "../shared/bridge";
+import type { FileReport } from "../shared/protocol";
 import type { Artifact, Opened } from "../shared/artifacts";
 import type { ProtocolVersion } from "../shared/version";
 import { PROTOCOL_VERSION } from "../shared/generated/protocol-version";
@@ -67,6 +68,14 @@ const api: BridgeApi = {
   // refused for.
   overrideVerdict: (jobId: string, reason: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.overrideVerdict, jobId, reason),
+
+  // Say a job failed in error, and file its record with the reason. **Its own
+  // entry and not a mode on `overrideVerdict`**: that one moves the job past a
+  // verdict, and this one moves nothing at all — one capability doing both
+  // would make "I think this was wrong" and "let it through anyway" the same
+  // press. Nothing here reaches the issue tracker; what comes back is a record.
+  fileReport: (jobId: string, filing: FileReport): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.fileReport, jobId, filing),
 
   watchJob: (jobId: string | null): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.watchJob, jobId),

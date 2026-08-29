@@ -1,54 +1,32 @@
 //! What a person says went wrong, kept after the Job it is about is gone.
 //!
-//! # `failures` is what Armada thinks went wrong; a report is what you know
+//! **Every other record in this crate answers *did this fail*.** None answers
+//! *did this fail correctly*, and neither set contains the other: a Job the
+//! Judge refused on a sentence that existed nowhere is `escalated` with a real
+//! `gate_failure` on it, and nothing anywhere says the refusal was wrong. This
+//! table is where that goes.
 //!
-//! Every other record in this file answers *did this fail* — a status, a
-//! trigger, a verdict, a Check run. None of them answers *did this fail
-//! correctly*, and neither set contains the other: a Job that failed perfectly
-//! by its own lights, because the Judge quoted a sentence that existed nowhere,
-//! is `escalated` with a `gate_failure` on it and nothing anywhere saying the
-//! refusal was wrong. This table is where that sentence goes.
-//!
-//! # It outlives the Job on purpose, and that is why there is no foreign key
-//!
-//! Every other table under a Job points at `jobs(job_id)`, which is what
+//! **It outlives the Job, which is why there is no foreign key.** Every other
+//! table under a Job points at `jobs(job_id)`, which is what
 //! [`tables_pointing_at_a_job`](crate::schema::tables_pointing_at_a_job) reads
-//! and what [`forget_job`](Store::forget_job) empties. **This one does not
-//! point at anything.** `armada clean` removes the Job a report is about and
-//! the report stays, whole and readable, because a report about a Job you have
-//! since cleaned up is exactly the report you still need — and a record that
-//! evaporates with its subject is a record nobody can triage on a Monday.
+//! and [`forget_job`](Store::forget_job) empties. This one points at nothing,
+//! so `armada clean` cannot reach it — and a report about a Job you have since
+//! cleaned up is exactly the report still worth having. `job_id` is therefore a
+//! dangling id by design, and `record` is the copy that does not depend on it.
 //!
-//! So `job_id` here is a dangling id by design. It is the id the Job had, kept
-//! because it is how a person joins the report back to a history that may or
-//! may not still be there, and `record` is the copy that does not depend on it.
+//! **One store, origin as a column**, which v1 settled: a person triaging on a
+//! Monday morning does not care which half of the machine noticed. Only `human`
+//! is written today; the column is here so the day something else files one,
+//! that is a value rather than a migration.
 //!
-//! # One store, origin as a column
-//!
-//! v1 settled this and the reason still holds: *a person triaging on a Monday
-//! morning does not care which half of the machine noticed.* A second table for
-//! whatever Fleet files about itself would be a second id space, a second
-//! listing and a second promotion path. `origin` is `human` today and only
-//! `human` — nothing in this build files one on Armada's behalf — and the
-//! column is here so that the day something does, it is a value and not a
-//! migration.
-//!
-//! # This module interprets neither `origin` nor `claim`
-//!
-//! Both are wire spellings, stored as the text they arrived as. Nothing in the
-//! store or in the Job machine branches on either, and the count that reads
-//! them groups on the column, which needs no parse. `ipc` is their sole
-//! authority; a second `from_wire` here would be the second vocabulary this
-//! crate has already removed once.
-//!
-//! # The migration is here rather than in `schema.rs`
-//!
-//! That file is at the 900 lines the gate refuses at, and says so in [`V16`]'s
-//! own comment. A table's shape and the only code that reads it are one
-//! subject; [`MIGRATIONS`](crate::schema::MIGRATIONS) still names this one in
-//! its order, which is the part that must stay in one place.
-//!
-//! [`V16`]: crate::schema::MIGRATIONS
+//! **Neither `origin` nor `claim` is interpreted here.** Both are wire
+//! spellings kept as the text they arrived as: nothing in this crate or in the
+//! Job machine branches on either, and the count groups on the column. `ipc` is
+//! their sole authority, and a `from_wire` here would be a second vocabulary.
+
+// The migration is in this file rather than `schema.rs`, which is at the 900
+// lines the gate refuses at and says so in V16's own comment. The order still
+// lives there, which is the part that may not be in two places.
 
 use core_model::{CriterionId, JobId, StepId, Timestamp};
 

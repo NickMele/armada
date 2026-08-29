@@ -1,40 +1,25 @@
 //! What a person says went wrong, and the Job's own record attached to it.
 //!
-//! # The record is the evidence; the sentence is the finding
+//! **The record is the evidence and the sentence is the finding.** Everything
+//! else this crate carries answers *did this fail* — a status, a trigger, a
+//! verdict, a Check run — and all of it is silent on the question that decides
+//! whether the verification tier earns its place: *did it fail correctly*. A
+//! Job that failed perfectly by its own lights and was wrong looks, on every
+//! field of [`JobDetail`](crate::JobDetail), exactly like one that failed
+//! rightly. [`FileReport::said`] is what closes that, and it is the only part
+//! of a report that does not already exist somewhere.
 //!
-//! Everything else this crate carries answers *did this fail*. A status, a
-//! trigger, a verdict, a Check run: all of them are Armada's account of itself,
-//! and all of them are silent about the one question that decides whether the
-//! verification tier earns its place — *did it fail correctly*. A Job that
-//! failed perfectly by its own lights and was wrong looks, on every field of
-//! [`JobDetail`](crate::JobDetail), exactly like one that failed rightly.
+//! **A closed set sits beside the sentence because a count may not read
+//! prose.** The first override in this repository carries the reason `probe`,
+//! sent to find out whether the route was served, and `job_events` is
+//! append-only so it says that for ever. A required non-blank field accepts
+//! that as happily as a considered one. [`Claim`] is what a count reads; the
+//! sentence stays what a person reads, weak and visible where it is weak.
 //!
-//! [`FileReport::said`] is the field that closes that. Everything Fleet
-//! attaches around it already existed and is collected rather than captured —
-//! **the only thing that does not exist anywhere until a person types it is
-//! why they think the machine was wrong.** A report that bundles the record and
-//! says nothing is the terminal-paste this operation exists to remove,
-//! automated, which is why the sentence is required and why nothing here files
-//! on somebody's behalf.
-//!
-//! # And why a closed set sits beside the sentence
-//!
-//! The first override in this repository's history carries the reason `probe`,
-//! sent to find out whether the route was served. `job_events` is append-only,
-//! so it says that for ever. **An override with a useless reason is
-//! indistinguishable from a considered one**, and a required non-blank field
-//! does not make a reason meaningful — so nothing that counts may read the
-//! prose. [`Claim`] is what a count reads: three values a person picks from,
-//! stored as a column and grouped on. The sentence is what a person reads, and
-//! a weak one is visibly weak rather than hidden behind a bundle.
-//!
-//! # Two of the three claims are not symmetric
-//!
-//! A wrong refusal stops work that was right, loudly, and somebody notices. A
-//! wrong pass lets wrong work through silently and nothing in the system
-//! surfaces it at all. They are separate values for that reason and not one
-//! `judge_was_wrong`: the counts they produce mean different things and a
-//! single value would average them.
+//! **Two of the three claims are not symmetric.** A wrong refusal stops work
+//! that was right, loudly, and somebody notices. A wrong pass lets wrong work
+//! through and nothing surfaces it at all. One `judge_was_wrong` would average
+//! two counts that mean different things.
 
 use serde::{Deserialize, Serialize};
 
@@ -219,7 +204,7 @@ pub struct Report {
     pub said: String,
     /// The Job's record as it stood when the report was filed, rendered as the
     /// body of an issue. The evidence, and what a Drone would be given as facts
-    /// — **a Drone cannot reach GitHub**, so the bundle has to travel either
+    /// — **a Drone cannot reach the issue tracker**, so the bundle travels either
     /// way and this is it, solved once.
     pub record: String,
 }

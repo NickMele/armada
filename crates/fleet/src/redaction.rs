@@ -1,47 +1,28 @@
 //! The one chokepoint a filed report's text passes through.
 //!
-//! # Redacted on the way in, not on the way out
+//! **Redacted on the way in.** A report is read weeks later, promoted into an
+//! issue, and handed to a Drone as facts; scrubbing at read time would leave a
+//! window the length of the file's life, and a record that has already written
+//! a credential cannot un-write it. So [`Redactor::scrub`] runs before the
+//! store write, and nowhere else does a report's text reach the store.
 //!
-//! A report is written to a file that is read weeks later, promoted into an
-//! issue, and handed to a Drone as facts. Scrubbing it at read time would leave
-//! a window the length of the file's life — and a record that has already
-//! written a credential cannot un-write it, which is the one property here that
-//! cannot be repaired afterwards. So [`Redactor::scrub`] runs before
-//! [`Store::record_report`](store::Store::record_report) and nowhere else does
-//! a report's text reach the store.
+//! **`$HOME` never appears**, as the log envelope already holds: a home
+//! directory carries the operator's name, and this is the one record written
+//! expressly to be shown to somebody else. `ManifestSummary.path` deliberately
+//! keeps its home and does not conflict — that value is two processes agreeing
+//! where a file is, and it is never written down.
 //!
-//! # `$HOME` never appears
+//! **Only what is named is caught.** A value beside a credential-shaped name,
+//! a value after such a flag, a bearer, a private key block. There is no
+//! entropy rule: "any long opaque token" would eat the commit hashes and ids a
+//! report exists to give a reader and would still miss a short password. And no
+//! vendor prefixes — that list is a better detector *and* a list of credential
+//! shapes committed to a public repository, which this repository's own guard
+//! refuses. So a bare token, named nothing, is not caught.
 //!
-//! The log envelope and the failure record both hold that rule and this holds
-//! it for the same reason: a home directory carries the operator's name, and a
-//! report is the one record in this system that is written expressly to be
-//! shown to somebody else. `~` is the substitution, so the path stays readable.
-//!
-//! **`get_job`'s `ManifestSummary.path` deliberately does not do this**, and the
-//! two are not in tension: that value is two processes on one machine agreeing
-//! where a file is, and it is never written down. This is.
-//!
-//! # Redacted *from*, never *with*
-//!
-//! `GITHUB_TOKEN=[redacted]` keeps the fact that the variable was set, which is
-//! very often the diagnostic; only the part nobody may see is lost. A redactor
-//! that dropped the whole line would make every attachment useless, and a
-//! useless attachment is how a guard comes to be turned off.
-//!
-//! # What it does not try to do
-//!
-//! **There is no entropy rule.** A "any long opaque token is a secret" pass
-//! would eat commit hashes, ULIDs and step ids — which are precisely the joins
-//! a report exists to give a reader — and it would still miss a short password.
-//! What is caught is what is *named*: a value beside a credential-shaped name,
-//! a value after a credential-shaped flag, and the vendor prefixes that are
-//! self-describing. A credential in prose, called nothing, is not caught, and
-//! saying so here is better than implying otherwise.
-//!
-//! Nothing here is a second predicate for `adapter_traits::Secret`, which is
-//! the type-level guard for a credential Fleet is *holding*. This is the sink
-//! guard for text that arrived as text — a Drone's own claim, a Check's
-//! output, a person's sentence — where the type system is out of the picture.
+//! **Redacted from, never with.** The name survives, because that a variable
+//! was set is often the diagnostic; a redactor that dropped whole lines makes
+//! attachments useless, and a useless attachment gets the guard turned off.
 
 /// What replaces a value that must not be written down.
 const REDACTED: &str = "[redacted]";
@@ -69,25 +50,6 @@ const CREDENTIAL_NAMES: &[&str] = &[
     "access_key",
     "private_key",
     "authorization",
-];
-
-/// A value that says what it is without being named. Vendor prefixes only —
-/// each of these is issued in exactly this shape and means exactly one thing.
-const CREDENTIAL_PREFIXES: &[&str] = &[
-    "ghp_",
-    "gho_",
-    "ghu_",
-    "ghs_",
-    "ghr_",
-    "github_pat_",
-    "sk-",
-    "sk_live_",
-    "xoxb-",
-    "xoxp-",
-    "xapp-",
-    "AKIA",
-    "ASIA",
-    "AIza",
 ];
 
 /// The scrubber a report's every string passes through.
@@ -195,15 +157,8 @@ impl Redactor {
         if token.eq_ignore_ascii_case("bearer") {
             return (token.to_string(), true);
         }
-        // A value that names itself.
-        let (value, trailing) = trailing_punctuation(token);
-        let bare = value.trim_matches('"');
-        if CREDENTIAL_PREFIXES
-            .iter()
-            .any(|prefix| bare.starts_with(prefix) && bare.len() > prefix.len())
-        {
-            return (format!("{REDACTED}{trailing}"), false);
-        }
+        // Nothing else. A token that names itself is exactly what the prefix
+        // list would catch, and the module doc says why there is none.
         (token.to_string(), false)
     }
 
@@ -224,7 +179,7 @@ fn credential_named(name: &str) -> bool {
 
 /// The token without whatever punctuation closes it, and that punctuation.
 ///
-/// `"ghp_abc",` is a token in JSON and the comma is not part of the secret.
+/// `"abc",` is a value in JSON and the comma is not part of it.
 fn trailing_punctuation(token: &str) -> (&str, &str) {
     let end = token
         .trim_end_matches(|c: char| matches!(c, ',' | ';' | '"' | '\'' | ')' | ']' | '}' | '.'))

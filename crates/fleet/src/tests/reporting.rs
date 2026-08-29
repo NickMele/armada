@@ -101,14 +101,14 @@ async fn refused(fleet: &Fixture, home: &TempDir, brief: &str) -> core_model::Jo
 fn a_filing(said: &str) -> String {
     format!(
         r#"{{"claim":"wrongly_refused","said":{said},"step_id":"implement","criterion_id":"c1"}}"#,
-        said = serde_json_string(said)
+        said = quoted(said)
     )
 }
 
 /// A JSON string, without reaching for a serialiser this crate is not allowed
-/// to have: `serde_json::from_*` is `store`'s and `ipc`'s, and a fixture that
-/// needed one would be the test earning the crate a dependency.
-fn serde_json_string(text: &str) -> String {
+/// to have: reading and writing JSON is `store`'s and `ipc`'s, and a fixture
+/// that needed one would be a test earning the crate a dependency.
+fn quoted(text: &str) -> String {
     format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
@@ -329,7 +329,7 @@ async fn no_credential_and_no_home_directory_reaches_the_filed_record() {
         a_judge_that_refuses(),
     );
     let brief = format!(
-        "run it with GITHUB_TOKEN=ghp_0123456789abcdefghij against {root}/worktrees, \
+        "run it with AGENT_API_TOKEN=not-a-real-one against {root}/worktrees, \
          and the reader is off by one"
     );
     let job_id = refused(&fleet, &home, &brief).await;
@@ -347,7 +347,7 @@ async fn no_credential_and_no_home_directory_reaches_the_filed_record() {
     assert_eq!(status, StatusCode::CREATED);
     let filed: Report = ipc::decode("a report", &body).expect("a Report");
     assert!(
-        !filed.record.contains("ghp_0123456789abcdefghij"),
+        !filed.record.contains("not-a-real-one"),
         "a credential reached the file: {}",
         filed.record
     );
@@ -364,7 +364,7 @@ async fn no_credential_and_no_home_directory_reaches_the_filed_record() {
     // Redacted *from*, never *with*: that the variable was set is often the
     // diagnostic, and the sentence around it is the report.
     assert!(
-        filed.record.contains("GITHUB_TOKEN=[redacted]"),
+        filed.record.contains("AGENT_API_TOKEN=[redacted]"),
         "the fact that the variable was set was thrown away too: {}",
         filed.record
     );

@@ -1,47 +1,28 @@
 //! Filing what a person knows went wrong, with the Job's own record attached.
 //!
-//! # The record is collected, not captured
+//! **Collected, not captured.** v1 built a ring buffer of CLI output because it
+//! had nothing else to attach — a command had run, printed, and the scrollback
+//! was gone. Every line of the record below is already written down, and this
+//! reads it: the transitions, the verdicts with what each cited, the flags, the
+//! Checks, what each step claimed, what the worktree held. A Job persists, so
+//! the question the ring buffer answered does not arise. What does not exist
+//! until somebody types it is [`Filed::said`].
 //!
-//! v1 built a ring buffer of CLI output because it had nothing else to attach:
-//! a command had run, printed, and the scrollback was gone. **Nothing here
-//! captures anything.** Every line of the record below is already written down
-//! — the transitions, the verdicts with what each cited, the gaming flags, the
-//! Checks and their output paths, what each step claimed, what the worktree
-//! held — and this reads them and renders them. A Job is a record that
-//! persists, so the question the ring buffer answered does not arise.
+//! **Rendered once and stored, not joined.** Every row read here belongs to the
+//! Job, and `armada clean` takes the Job and all of them away, so a report
+//! pointing at them would go blank exactly when it was most needed. The same
+//! rendering is what a Drone would be handed as facts — a Drone cannot reach
+//! the issue tracker either way — so the bundling is solved once.
 //!
-//! What does not exist until somebody types it is [`Filed::said`]. That is the
-//! finding; the rest is the evidence it is a finding about.
+//! **Every string goes through the redactor by construction.** [`Rendering`] is
+//! the only thing that appends, and each of its methods scrubs, so a section
+//! added later is scrubbed because there is no way to write one that is not.
 //!
-//! # It renders once and stores the text
-//!
-//! **Not a join.** Every row this reads belongs to the Job, and `armada clean`
-//! takes the Job and every row beneath it away — so a report that pointed at
-//! them would go blank exactly when it was most needed. The rendered record is
-//! stored beside the sentence, and `store::report` is where the absence of a
-//! foreign key holds the same rule from underneath.
-//!
-//! It is also the shape that has to travel anyway: **a Drone cannot reach
-//! GitHub**, so whatever is dispatched against a report carries the context in
-//! its facts. One rendering serves the issue body and the facts, which is the
-//! bundling problem solved once rather than twice.
-//!
-//! # Every string goes through the redactor, by construction
-//!
-//! [`Rendering`] is the only thing that appends to the record and each of its
-//! methods scrubs. A section added tomorrow is scrubbed because there is no way
-//! to write one that is not — which is what makes `$HOME` never appearing a
-//! property of the code rather than a rule somebody has to remember.
-//!
-//! # Choosing the fields is the same act the wire's `From` impls are
-//!
-//! This renders from domain records rather than from the DTOs, and that is a
-//! decision with a cost: a field added to `core_model::Job` does not appear
-//! here, and a field that *should* appear has to be written in. That is the
-//! trade `crates/ipc` makes in the other direction and for the same reason —
-//! **a record put on a page nobody redacted is a redaction decision nobody
-//! made** — with the scrubber underneath as a second floor rather than the
-//! first.
+//! **Choosing the fields is the act the wire's `From` impls are.** This renders
+//! from domain records, so a field added to `core_model::Job` has to be written
+//! in here to appear — the cost `crates/ipc` pays in the other direction, and
+//! for the same reason: a record put on a page nobody redacted is a redaction
+//! decision nobody made.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{Job, JobId};

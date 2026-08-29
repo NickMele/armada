@@ -32,8 +32,16 @@
 
 import { ARunningJob, type JobDetailHeading } from "@armada/components";
 
-import type { Diff, Evidence, Footprint, History, Observed, Watched } from "../../shared/bridge";
-import type { JobSummary } from "../../shared/protocol";
+import type {
+  Diff,
+  Evidence,
+  Footprint,
+  History,
+  Observed,
+  Outcome,
+  Watched,
+} from "../../shared/bridge";
+import type { FileReport, JobSummary } from "../../shared/protocol";
 import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
 import { Acts, type ConfirmableAct } from "./Acts";
 import { factsOf } from "./facts";
@@ -86,6 +94,12 @@ export type JobDetailProps = {
    */
   onOverrule: (jobId: string, reason: string) => void;
   /**
+   * Say this job failed in error, with the record attached. Passed through to
+   * the header's acts like the rest, and unlike the rest it changes nothing
+   * about the job — which is why it answers with what was filed.
+   */
+  onReport: (jobId: string, filing: FileReport) => Promise<Outcome>;
+  /**
    * Let this Job run. **Sent on the press, with no confirmation** — approving
    * is the ordinary path, it is reversible by killing, and a gate that costs
    * two clicks for the common case is a gate in the wrong place.
@@ -137,6 +151,7 @@ export function JobDetail({
   onAct,
   onRedirect,
   onOverrule,
+  onReport,
   onApprove,
   onApproveReview,
   onRequestChanges,
@@ -178,6 +193,8 @@ export function JobDetail({
         onAct={onAct}
         onRedirect={onRedirect}
         onOverrule={onOverrule}
+        onReport={onReport}
+        onCopied={onCopied}
         onApprove={onApprove}
         onObserve={RECORDS_ITS_OWN_TURNS.has(render) ? undefined : () => onObserve(true)}
       />

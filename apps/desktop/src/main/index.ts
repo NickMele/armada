@@ -6,6 +6,7 @@ import { join } from "node:path";
 import tokens from "@armada/tokens/tokens.json";
 import { CHANNELS, NOTHING_YET } from "../shared/bridge";
 import type { BridgeState, Draft } from "../shared/bridge";
+import type { FileReport } from "../shared/protocol";
 import type { Artifact } from "../shared/artifacts";
 import { FleetConnection } from "./connection";
 import { openArtifact } from "./open";
@@ -168,6 +169,12 @@ void app.whenReady().then(() => {
   // answers a gate nothing objected to, and this answers one that refused.
   ipcMain.handle(CHANNELS.overrideVerdict, (_event, jobId: string, reason: string) =>
     connection?.commands.overrideVerdict(jobId, reason),
+  );
+  // Saying a job failed in error. Its own channel beside the override rather
+  // than a flag on it: the override moves the job past a verdict and this moves
+  // nothing, and the two would otherwise be one press meaning either.
+  ipcMain.handle(CHANNELS.fileReport, (_event, jobId: string, filing: FileReport) =>
+    connection?.commands.fileReport(jobId, filing),
   );
   // Which Job is open. Main does the reading and republishes it as events
   // arrive, so the detail moves without the renderer asking again.

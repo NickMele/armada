@@ -295,7 +295,7 @@ notes = """
 
 Redaction happens on the way in. The record is rendered and scrubbed before it is stored, never at read time — scrubbing on the way out leaves a window the length of the file's life, and a store that has already written a credential cannot un-write it.
 
-It creates no Job and dispatches nothing. Filing comes first; dispatching is the existing flow pointed at what this produced, and a Drone cannot reach GitHub, so the record has to travel in a Job's facts either way.
+It creates no Job and dispatches nothing. Filing comes first; dispatching is the existing flow pointed at what this produced, and a Drone cannot reach the issue tracker, so the record has to travel in a Job's facts either way.
 """
 
 [operations.kill_drone]
