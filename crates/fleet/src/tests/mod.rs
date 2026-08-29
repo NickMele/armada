@@ -99,6 +99,12 @@
 //! at creation, refused where the staged path cannot be read, and copied again
 //! into the worktree dispatch makes — proving the same path `briefing` writes
 //! into a Drone's first turn is one the worktree actually holds.
+//!
+//! `forget` is the twentieth: deleting a terminal Job's whole record. It is
+//! not a transition, so most of its cases prove an absence — the row is gone
+//! from a reload and from `get_job`, a Job still in flight is refused rather
+//! than moved — plus the one positive case, the event that tells a watching
+//! client which id to drop.
 
 mod attachments;
 mod attribution;
@@ -113,6 +119,7 @@ mod drone;
 mod dry_run;
 mod evidence;
 mod footprint;
+mod forget;
 mod frozen;
 mod gaming;
 mod gate;

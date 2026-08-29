@@ -94,7 +94,7 @@
 // nothing else, and the row shape carries one secondary control which a queued
 // replacement already spends on `Approve dispatch`.
 
-import { ActiveJobsList, BoardEmptyState, Button, JobRowStacked, StepBar } from "@armada/components";
+import { ActiveJobsList, BoardEmptyState, Button, Dialog, JobRowStacked, StepBar } from "@armada/components";
 import type { JobRowField } from "@armada/components";
 import { GitBranch, Layers } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -152,6 +152,12 @@ export type JobsProps = {
   /** Open a Job. Every row is a control, so every row calls this. */
   onOpen: (jobId: string) => void;
   onApprove: (jobId: string) => void;
+  /**
+   * Clear every terminal Job at once. Confirmed here, before it is called —
+   * there is no undo on the other side of this, and unlike a kill there is no
+   * record left afterward to check the confirmation against.
+   */
+  onClearTerminal: (jobIds: readonly string[]) => void;
   /** A clipboard write is silent, so the surface confirms every one with a toast. */
   onCopied: (value: string) => void;
 };
@@ -166,6 +172,7 @@ export function Jobs({
   selected,
   onOpen,
   onApprove,
+  onClearTerminal,
   onCopied,
 }: JobsProps) {
   // Folded once for the whole board rather than per row. The dependency is the
@@ -180,10 +187,20 @@ export function Jobs({
   const bounded = newestFirst(showing).slice(0, DRAWN);
   const drawn = bounded.filter((job) => readingOf(job).as === "badge");
   const undrawable = bounded.filter((job) => readingOf(job).as !== "badge");
-
+  // Every Job Bridge holds, not just the bounded window drawn below — a Job
+  // scrolled past `DRAWN` is still cleared, since the point is clearing the
+  // board Fleet holds rather than the rows currently on screen.
+  const terminalIds = jobs
+    .filter((job) => JOB_LIFECYCLE[job.status]?.terminal === true)
+    .map((job) => job.id);
 
   return (
     <div className="flex flex-col gap-2">
+      {terminalIds.length === 0 ? null : (
+        <div className="flex justify-end">
+          <ClearTerminalControl count={terminalIds.length} stale={stale} onConfirm={() => onClearTerminal(terminalIds)} />
+        </div>
+      )}
       <ActiveJobsList
         // No heading and no summary: the panel head above the list carries
         // both, and the same sentence in two places is two chances to disagree.
@@ -253,6 +270,55 @@ export function Jobs({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * The bulk clear. **Its own dialog is the confirmation**, the pattern
+ * `Acts.tsx`'s redirect and override controls use — there is nothing to
+ * confirm a second time after it, only to send. Unlike a kill this leaves no
+ * record afterward, which is why it confirms at all where the row-level acts
+ * mostly do too but for a milder reason.
+ *
+ * Not rendered by the caller unless `count > 0`, so this never has to draw its
+ * own empty state.
+ */
+function ClearTerminalControl({
+  count,
+  stale,
+  onConfirm,
+}: {
+  count: number;
+  stale: boolean;
+  onConfirm: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const noun = count === 1 ? "job" : "jobs";
+
+  return (
+    <>
+      <Button variant="secondary" size="sm" disabled={stale} onClick={() => setOpen(true)}>
+        {`Clear ${count} finished ${noun}`}
+      </Button>
+      <Dialog
+        open={open}
+        tone="destructive"
+        title={`Clear ${count} finished ${noun}?`}
+        confirmLabel="Clear"
+        onCancel={() => setOpen(false)}
+        onConfirm={() => {
+          setOpen(false);
+          onConfirm();
+        }}
+      >
+        <p>
+          {`Every job that is done, failed, killed, rejected or superseded — ${count} right now — is `}
+          removed from the board along with its whole record. There is no undo, and a cleared job
+          cannot be opened again.
+        </p>
+        <p>Its worktree and branch are left as its drone left them — armada clean owns those, on its own schedule.</p>
+      </Dialog>
+    </>
   );
 }
 

@@ -110,6 +110,7 @@ export class FleetConnection {
     this.commands = new JobCommands({
       port: () => this.connected()?.port ?? null,
       fold: (job) => this.fold(job),
+      forget: (jobId) => this.forget(jobId),
       reread: (port) => this.reread(port),
       refresh: (port, jobId) => this.refresh(port, jobId),
       publish: (change) => this.publish(change),
@@ -345,6 +346,16 @@ export class FleetConnection {
       return;
     }
 
+    if (event.kind === "job.forgotten") {
+      // The opposite of `job.created`: the id, and nothing to fold — the row
+      // is gone at Fleet by the time this arrives, so it is dropped here
+      // rather than replaced. Covers a forget made from another window, or a
+      // window that raced the event past its own call's answer.
+      this.publish({ connection });
+      this.forget(event.job_id);
+      return;
+    }
+
     const held = this.current.jobs.find((job) => job.id === event.job_id);
     if (held === undefined) {
       // `job.created` covers the ordinary case, so a move about a Job this
@@ -461,6 +472,16 @@ export class FleetConnection {
         : [job, ...this.current.jobs],
       readAt: this.wiring.now(),
     });
+  }
+
+  /**
+   * A Job's whole record is gone — `forget_job` answered for it, or
+   * `job.forgotten` named it on the stream. **Removed, not folded**: unlike
+   * every other event here there is no row left to replace it with, so a
+   * client drops it from whatever it is holding.
+   */
+  private forget(jobId: string): void {
+    this.publish({ jobs: this.current.jobs.filter((job) => job.id !== jobId) });
   }
 
   private settle(connection: Connection): void {

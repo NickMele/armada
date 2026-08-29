@@ -14,7 +14,7 @@
 // **Bridge never talks to a Drone.** Every act below names Fleet — which is
 // what makes "kill the Drone" a request to the daemon that spawned it.
 
-import type { BridgeState, Draft, Outcome } from "../shared/bridge";
+import type { BridgeState, ClearOutcome, Draft, Outcome } from "../shared/bridge";
 import type {
   FileReport,
   JobSummary,
@@ -40,6 +40,11 @@ export type Board = {
   port: () => number | null;
   /** A Job a command answered with, onto the board. */
   fold: (job: JobSummary) => void;
+  /**
+   * A Job `forget_job` answered for. **Removed, not folded** — there is no
+   * row left to replace it with, unlike every other act here.
+   */
+  forget: (jobId: string) => void;
   /** The whole board again, where what came back was not a row to fold. */
   reread: (port: number) => Promise<void>;
   /** The open Job and its history again, where the act was about that Job. */
@@ -57,6 +62,7 @@ export type Board = {
  */
 type Busy =
   | "already_killing"
+  | "already_forgetting"
   | "already_redirecting"
   | "already_restarting"
   | "already_overruling"
@@ -81,6 +87,7 @@ export class JobCommands {
   private readonly approving = new Set<string>();
   private readonly redispatching = new Set<string>();
   private readonly killing = new Set<string>();
+  private readonly forgetting = new Set<string>();
   private readonly redirecting = new Set<string>();
   private readonly restarting = new Set<string>();
   /** Jobs with an override in flight. Its own set: it is its own act. */
@@ -263,6 +270,50 @@ export class JobCommands {
     return this.act(jobId, this.killing, "already_killing", (port) =>
       ask(port, "POST", route(jobId, operation)),
     );
+  }
+
+  // ---------------------------------------------------------------- forgetting
+  /**
+   * Delete one terminal Job's whole record. **Not through `act`** — that
+   * helper folds a `JobSummary` and re-reads the open Job, and there is no
+   * row left to fold and nothing left to re-read once this answers. `board.forget`
+   * is what actually removes the row; `job.forgotten` on the stream does the
+   * same thing for a window that did not make the call itself.
+   */
+  private async forgetJob(jobId: string): Promise<Outcome> {
+    if (this.forgetting.has(jobId)) return { ok: false, why: "already_forgetting" };
+    const port = this.board.port();
+    if (port === null) return { ok: false, why: "not_connected" };
+
+    this.forgetting.add(jobId);
+    try {
+      const answer = await ask(port, "POST", route(jobId, "forget_job"));
+      if (answer.ok !== true) return answer.outcome;
+      this.board.forget(jobId);
+      return { ok: true };
+    } finally {
+      this.forgetting.delete(jobId);
+    }
+  }
+
+  /**
+   * Clear every terminal Job at once. **One `forget_job` per id, sent in
+   * turn** — there is no bulk route on the wire, and each Job is forgotten
+   * independently, so a status that moved between the press and this call
+   * (or an id already gone) does not stop the rest.
+   *
+   * **The caller decides which ids are terminal.** This sends exactly what it
+   * is given; Fleet's 409 is the safety net, not the gate.
+   */
+  async clearTerminalJobs(jobIds: readonly string[]): Promise<ClearOutcome> {
+    const cleared: string[] = [];
+    const failed: { jobId: string; outcome: Outcome }[] = [];
+    for (const jobId of jobIds) {
+      const outcome = await this.forgetJob(jobId);
+      if (outcome.ok) cleared.push(jobId);
+      else failed.push({ jobId, outcome });
+    }
+    return { cleared, failed };
   }
 
   // --------------------------------------------------------------- resuming

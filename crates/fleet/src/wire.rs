@@ -1,0 +1,193 @@
+//! The redactions `serving`'s `Daemon` impl calls by hand, split out of that
+//! file so the trait impl itself stays the thing that grows.
+//!
+//! Every function here does the same job [`ipc::JobSummary::of`] does for a
+//! Job: it is the visible line somebody had to write to put a domain value on
+//! the wire. None of them is a `From` — the orphan rule puts one at this
+//! boundary in `ipc`, and `ipc` has no `store` or `config` to convert from —
+//! so the field-by-field decision is written here, where every type involved
+//! is in scope.
+
+use ipc::mcp::NotRecorded;
+use ipc::{DeclaredCheck, DeclaredJudge, StepId, Submitted, WorkflowStep};
+use store::{LoadJobError, Moved, RecordedEvent};
+
+use crate::adrift::{Adrift, NotSubmitted};
+
+/// The wire shape of one declared Check.
+///
+/// A free function rather than a `From` impl: `ipc` already depends on
+/// `core-model` and could hold this, but a `DeclaredCheck` is assembled from a
+/// step rather than converted from one, and the assembly is Fleet's.
+///
+/// **The command crosses, and it comes off the resolved workflow.** A
+/// `ResolvedCheck` holds the `run` this workflow froze, which is what the gate
+/// runs; serving it from the live Manifest instead would show a command that is
+/// not what ran the moment somebody edits `armada.yml` under a Job.
+pub(crate) fn declared_check(check: &core_model::ResolvedCheck) -> DeclaredCheck {
+    DeclaredCheck {
+        kind: check.kind().to_string(),
+        name: check.name().map(str::to_string),
+        run: check.run().map(str::to_string),
+        expect_exit_code: check.expects(),
+    }
+}
+
+/// The word a step is drawn as, with its id standing in where there is none.
+///
+/// A blank label is a definition that declared the key and left it empty, and a
+/// blank on the rail reads as a Fleet that lost the value.
+fn reads_as(label: &str, step_id: &str) -> String {
+    match label.trim().is_empty() {
+        true => step_id.to_string(),
+        false => label.to_string(),
+    }
+}
+
+/// A workflow's steps with what each one declares, in the workflow's order.
+///
+/// **This is what the next Job would freeze**, and `get_job` answers from what
+/// its Job already froze. The two can now differ, which is the point: a
+/// workflow edited under a running Job shows the new declaration here and the
+/// approved one there.
+///
+/// Both tiers and the gate, because this is read *before* a dispatch: after the
+/// fact the rail says what happened, and here a person is agreeing to it.
+pub(crate) fn declared(workflow: &config::ResolvedWorkflow) -> Vec<WorkflowStep> {
+    workflow
+        .steps()
+        .iter()
+        .map(|step| WorkflowStep {
+            step_id: StepId::from(step.id()),
+            label: reads_as(step.label(), step.id().as_str()),
+            checks: step.checks().iter().map(declared_check).collect(),
+            // The rail's own narrowing, called rather than restated: an entry
+            // that asks nothing and looks for nothing is not a Judge call, and
+            // a preview that counted one would promise a call nothing makes.
+            judge_checks: DeclaredJudge::firing(step.judge_checks()),
+            advance_gate: step.advance_gate().into(),
+        })
+        .collect()
+}
+
+/// One log row, as the wire carries it. **The redaction, for a history.**
+///
+/// It replays nothing. Every value below is copied across; none is put back
+/// through `Job::transition`, which `crates/store/src/fold.rs` has already done
+/// by the time this runs.
+pub(crate) fn recorded(event: &RecordedEvent) -> ipc::Recorded {
+    ipc::Recorded {
+        seq: event.seq(),
+        status: event.under().into(),
+        moved: match event.moved() {
+            Moved::Job { to, reason } => ipc::Movement::Status(ipc::StatusMoved {
+                to: (*to).into(),
+                reason: ipc::Reason::of(reason),
+            }),
+            Moved::Step {
+                step_id,
+                from,
+                to,
+                why,
+            } => ipc::Movement::Step(ipc::StepMoved {
+                step_id: step_id.into(),
+                from: (*from).into(),
+                to: (*to).into(),
+                // The registry's own spelling, through the narrowing newtype —
+                // a step is stopped only by a step-level trigger, and nothing
+                // here restates the list.
+                why: why.map(|trigger| trigger.as_wire().to_string()),
+            }),
+            Moved::Drone { drone_id, presence } => ipc::Movement::Drone(ipc::DroneMoved {
+                drone_id: drone_id.into(),
+                presence: (*presence).into(),
+            }),
+        },
+        actor: event.actor().into(),
+        at: event.at().into(),
+    }
+}
+
+/// One step's evidence, as the wire carries it. **The redaction, for a claim.**
+///
+/// A plain function rather than a `From` for [`recorded`]'s reason: the orphan
+/// rule would put the impl in `ipc`, and the pair is `(StepId, StepEvidence)`
+/// rather than one type. Every field crosses — the three sentences are the
+/// whole of what a submission is — and the one that does not is `source`, which
+/// the record does not have either.
+pub(crate) fn submitted(recorded: &(core_model::StepId, core_model::StepEvidence)) -> Submitted {
+    let (step_id, evidence) = recorded;
+    Submitted {
+        step_id: step_id.into(),
+        evidence_type: evidence.evidence_type.into(),
+        claimed: evidence.claimed.clone(),
+        shown_by: evidence.shown_by.clone(),
+        // Absent rather than blank. `not_claimed` is legitimately empty on the
+        // record, and an empty string on the wire reads as a boundary somebody
+        // lost.
+        not_claimed: Some(evidence.not_claimed.clone()).filter(|text| !text.is_empty()),
+    }
+}
+
+/// A refusal, as the Drone reads it.
+///
+/// The name is the typed variant and stays on this side; what crosses is the
+/// sentence it renders to, because that is the only part a Drone can act on.
+pub(crate) fn told(why: NotSubmitted) -> NotRecorded {
+    NotRecorded {
+        because: why.to_string(),
+    }
+}
+
+/// A path as the filesystem knows it, or as it was given where it cannot be
+/// resolved.
+///
+/// A Manifest that has just been read exists, so the fallback covers the case
+/// where it stopped existing between the read and the ask — and a path saying
+/// where Fleet looked beats an empty string saying nothing.
+pub(crate) fn canonical(path: &std::path::Path) -> String {
+    std::fs::canonicalize(path)
+        .unwrap_or_else(|_| path.to_path_buf())
+        .to_string_lossy()
+        .to_string()
+}
+
+/// One filed report, as the wire carries it. **The redaction, for a report.**
+///
+/// A plain function for [`recorded`]'s reason. Every field crosses, which is
+/// what a report is for — and the scrubbing that makes that safe happened on
+/// the way *in*, in `crate::reporting`, rather than here: a record already
+/// written is a record already at rest, and this is a read.
+///
+/// A `claim` or an `origin` the wire has no spelling for refuses the read
+/// rather than being served under a value nobody chose. Such a row is one
+/// nothing but a hand-edited database can produce — the wire's own decode
+/// refuses an unknown claim on the way in — and a report shown under the wrong
+/// claim would be counted under it too.
+pub(crate) fn reported(filed: &store::Report) -> Result<ipc::Report, Adrift> {
+    Ok(ipc::Report {
+        id: ipc::ReportId::carried(filed.report_id.clone()),
+        filed_at: (&filed.filed_at).into(),
+        origin: ipc::ReportOrigin::from_wire(&filed.origin)
+            .ok_or_else(|| unreadable("origin", &filed.origin))?,
+        claim: ipc::Claim::from_wire(&filed.claim)
+            .ok_or_else(|| unreadable("claim", &filed.claim))?,
+        job_id: ipc::JobId::from(&filed.job_id),
+        job_title: filed.job_title.clone(),
+        step_id: filed.step_id.as_ref().map(ipc::StepId::from),
+        criterion_id: filed.criterion_id.as_ref().map(ipc::CriterionId::from),
+        said: filed.said.clone(),
+        record: filed.record.clone(),
+    })
+}
+
+/// A stored spelling this build has no value for.
+fn unreadable(column: &'static str, value: &str) -> Adrift {
+    Adrift::Reading(LoadJobError::Unreadable(
+        store::RowError::UnknownEnumValue {
+            table: "reports",
+            column,
+            value: value.to_string(),
+        },
+    ))
+}

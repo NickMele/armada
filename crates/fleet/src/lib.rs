@@ -133,6 +133,9 @@ mod stuck;
 pub mod transcript;
 pub mod turning;
 pub mod watch;
+/// The redactions `serving`'s `Daemon` impl calls by hand. Split out to keep
+/// `serving.rs` itself, rather than its helpers, the thing that grows.
+mod wire;
 pub mod working;
 
 #[cfg(test)]

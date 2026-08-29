@@ -126,6 +126,13 @@ pub enum Adrift {
     /// **Not the same as "it is gone"** — folding a failed reading into absence
     /// is how a live Drone gets declared interrupted.
     NotReaped { job: JobId, cause: io::Error },
+    /// A forget was asked for on a Job that has not reached a terminal
+    /// status.
+    ///
+    /// **Not an illegal transition.** `forget_job` does not move the machine
+    /// at all — it deletes the row — so there is no edge for a refusal to
+    /// point at, only the status the Job is still standing in.
+    NotForgettable { job: JobId, status: JobStatus },
     /// A redispatch was asked for on a Job that has not stopped.
     ///
     /// **Not an illegal transition**, which is why it is its own variant: the
@@ -436,6 +443,13 @@ impl fmt::Display for Adrift {
                 "whether {}'s Drone had exited could not be established: {cause}",
                 job.as_str()
             ),
+            Adrift::NotForgettable { job, status } => write!(
+                out,
+                "{} is {} and cannot be forgotten. Forgetting is a real deletion and only \
+                 applies to a terminal Job — `kill_job` is how one still in flight is ended",
+                job.as_str(),
+                status.as_wire()
+            ),
             Adrift::NotRedispatchable { job, status } => write!(
                 out,
                 "{} is {} and cannot be redispatched. Redispatch replaces a Job that ran and \
@@ -658,6 +672,7 @@ impl Adrift {
             | Adrift::NotDelivered { job, .. }
             | Adrift::NoSuchStep { job, .. }
             | Adrift::NotReaped { job, .. }
+            | Adrift::NotForgettable { job, .. }
             | Adrift::NotRedispatchable { job, .. }
             | Adrift::NeverRan { job }
             | Adrift::NotReplaceable { job }
@@ -718,6 +733,7 @@ impl Error for Adrift {
             | Adrift::Unworkable { .. }
             | Adrift::NotConfigurable { .. }
             | Adrift::NoSuchStep { .. }
+            | Adrift::NotForgettable { .. }
             | Adrift::NotRedispatchable { .. }
             | Adrift::NeverRan { .. }
             | Adrift::NotReplaceable { .. }
