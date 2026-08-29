@@ -36,14 +36,15 @@ use alloc::vec::Vec;
 
 use crate::envelope::{Actor, Timestamp};
 use crate::job::drone::{DroneAssigned, DroneMoved, DronePresence, IllegalDroneMove};
+use crate::job::escalation::StepLevelTrigger;
 use crate::job::event::{JobEvent, StepEvent};
 use crate::job::fields::{
     AcceptanceCriterion, Attachment, Branch, DependencyEdge, DispatchOrigin, Facts, GateManifest,
     Origin, ScopeRevision, Subject, TopLevelOrigin, Urgency, WriteTargets,
 };
 use crate::job::ids::{DroneId, JobId, ManifestId, ModelName, StepId, Title, WorkflowId};
-use crate::job::status::JobStatus;
-use crate::job::step::{rows_at_creation, JobStep, StepSeed};
+use crate::job::status::{JobStatus, StepState};
+use crate::job::step::{rows_at_creation, JobStep, StepSeed, StepVerdict};
 use crate::job::step_machine::{admits_step, IllegalStepTransition, StepTarget};
 use crate::job::transition::{admits, IllegalTransition, Target};
 use crate::job::workflow::FrozenWorkflow;
@@ -472,5 +473,27 @@ impl Job {
     /// Derived, never stored — storing it would risk the two disagreeing.
     pub fn current_step(&self) -> Option<&JobStep> {
         self.current_step_id.as_ref().and_then(|id| self.step(id))
+    }
+
+    /// The step that stopped, and the trigger that stopped it.
+    ///
+    /// **The one reading, because four acts and one classification make it.**
+    /// A restart lands on this step, an override lifts this trigger, a gate
+    /// re-run answers it, and [`Stuck`](crate::Stuck) reports it; each walked
+    /// the rows itself, and a fifth spelling of the search is how a screen
+    /// comes to name a step no act would move.
+    ///
+    /// **Both or neither.** A `stopped` row with no `failed(<trigger>)` on it
+    /// is a row nothing could say why about — the machine does not admit one,
+    /// and returning the step alone would offer acts with nothing to act on. It
+    /// asks nothing about the Job's status, which is each act's own guard.
+    pub fn stopped_on(&self) -> Option<(&StepId, StepLevelTrigger)> {
+        self.steps
+            .iter()
+            .find(|step| step.state() == StepState::Stopped)
+            .and_then(|step| match step.last_verdict() {
+                Some(StepVerdict::Failed(trigger)) => Some((step.step_id(), trigger)),
+                _ => None,
+            })
     }
 }

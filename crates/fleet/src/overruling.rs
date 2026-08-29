@@ -7,6 +7,12 @@
 //! worse than no verdict at all. `crates/ipc/operations.toml` keys it
 //! `override_verdict`.
 //!
+//! Which triggers this lifts is [`StepLevelTrigger::overrulable`], which sits
+//! beside the vocabulary rather than here: the classification in
+//! `core_model::Stuck` has to answer the same question, and two exhaustive
+//! matches over one set is how a button and the sentence beside it come to
+//! disagree.
+//!
 //! Two things here are not in either document because they are about this code.
 //! [`overridable`](Fleet::overridable) reads the recorded Check runs rather than
 //! resting on the tier ordering that makes a failed Check unreachable — a guard
@@ -16,8 +22,8 @@
 //! `crate::resume`.
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
-    Actor, Component, Envelope, EscalationTrigger, FieldValue, Job, JobId, JobStatus, Level,
-    ResolvedStep, StepId, StepLevelTrigger, StepState, StepTarget, StepVerdict, Target,
+    Actor, Component, Envelope, FieldValue, Job, JobId, JobStatus, Level, ResolvedStep, StepId,
+    StepLevelTrigger, StepTarget, Target,
 };
 use verification::OutcomeTurn;
 
@@ -25,54 +31,6 @@ use crate::adrift::Adrift;
 use crate::briefing::{self, Declaring};
 use crate::daemon::Fleet;
 use crate::transcript;
-
-/// Whether a person may overrule this verdict.
-///
-/// **An exhaustive `match` and not a list.** The constant this replaced was a
-/// constant so that a second entry could not be added quietly; a slice would
-/// give that up, and a match keeps it the other way round — a trigger minted in
-/// the registry does not compile until somebody writes its arm here, which is
-/// the moment the argument gets had.
-///
-/// `gate_failure` is the Judge refusing a criterion, and was the only one until
-/// 2026-08-28. `evidence_suspect` is the gaming check saying the evidence is
-/// not to be trusted, and it was refused here on the grounds that it is a claim
-/// about *how* the step was satisfied rather than about whether it was. That
-/// distinction is real and it is not the one that decides this: the owner's
-/// rule is that anything a machine decides, a person can overrule, and a gaming
-/// flag is a machine reading a diff and inferring intent — which is the kind of
-/// call a person is most likely to be right about and the machine least. It
-/// moved for that, and nothing moved with it.
-///
-/// **`gate_undecided` in particular did not.** It is not a verdict a person is
-/// disagreeing with; it is the machine saying it could not read the artifact,
-/// so there is nothing ruled to overrule. Whether it should be answerable some
-/// other way is open and is not this.
-///
-/// The rest are refused because nothing weighed the work at all: a Check that
-/// hit its bound, evidence too large to read, a loop that did not converge, a
-/// Drone denied a tool, a Drone going in circles. The Job-level triggers cannot
-/// reach here — [`StepLevelTrigger::of`] refuses them, so no `last_verdict`
-/// carries one — and they are listed rather than caught by a wildcard so that
-/// the exhaustiveness above is real.
-fn overrulable(overruled: StepLevelTrigger) -> bool {
-    match overruled.trigger() {
-        EscalationTrigger::GateFailure | EscalationTrigger::EvidenceSuspect => true,
-        EscalationTrigger::GateUndecided
-        | EscalationTrigger::BlockedByPolicy
-        | EscalationTrigger::CheckTimeout
-        | EscalationTrigger::EvidenceTooLarge
-        | EscalationTrigger::LoopCap
-        | EscalationTrigger::Thrashing => false,
-        EscalationTrigger::DependencyFailed
-        | EscalationTrigger::FanOut
-        | EscalationTrigger::HatchUnbidden
-        | EscalationTrigger::Interrupted
-        | EscalationTrigger::ResourceExhausted
-        | EscalationTrigger::Silent
-        | EscalationTrigger::Stalled => false,
-    }
-}
 
 /// Why a person says the verdict is wrong. **Never empty.**
 ///
@@ -211,8 +169,9 @@ where
     ///
     /// Four things have to hold, and each refusal names a different act as the
     /// one that applies. The Job is escalated; a step of it stopped; the
-    /// trigger that stopped it is one [`overrulable`] admits, which is a
-    /// machine having ruled rather than a machine having been unable to; and no
+    /// trigger that stopped it is one [`StepLevelTrigger::overrulable`] admits,
+    /// which is a machine having ruled rather than a machine having been unable
+    /// to; and no
     /// Check the gate ran on that step failed.
     ///
     /// **The last is read out of the store and not inferred.** A refusal
@@ -226,24 +185,15 @@ where
                 status: job.status(),
             });
         }
-        let stopped = job
-            .steps()
-            .iter()
-            .find(|step| step.state() == StepState::Stopped)
-            .ok_or_else(|| Adrift::NoStepStopped {
-                job: job.id().clone(),
-            })?;
-        let step = stopped.step_id().clone();
-        // `stopped` is the state and `failed(<trigger>)` is the verdict, and it
-        // is the verdict that says what to disagree with. A stopped step with
-        // no verdict on it is a row nothing could ever say why about, which the
-        // machine does not admit.
-        let Some(StepVerdict::Failed(overruled)) = stopped.last_verdict() else {
-            return Err(Adrift::NoStepStopped {
-                job: job.id().clone(),
-            });
-        };
-        if !overrulable(overruled) {
+        // `Job::stopped_on` is the one reading, shared with `crate::regating`
+        // and with the classification: the state and the `failed(<trigger>)`
+        // verdict together, because a stopped row with no verdict is a row
+        // nothing could ever say why about.
+        let (step, overruled) = job.stopped_on().ok_or_else(|| Adrift::NoStepStopped {
+            job: job.id().clone(),
+        })?;
+        let step = step.clone();
+        if !overruled.overrulable() {
             return Err(Adrift::NotTheJudges {
                 job: job.id().clone(),
                 step,

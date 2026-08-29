@@ -137,6 +137,21 @@ wire_enum! {
     EvidenceType, core_model::EvidenceType, "an evidence type"
 }
 wire_enum! {
+    /// An act a person may take on a Job that stopped, spelled as
+    /// `operations.toml` keys the operation that performs it.
+    ///
+    /// **The set is declared by the acts Fleet implements** and by no registry,
+    /// so the spelling is the route's rather than a word chosen here — a screen
+    /// that names an act and a header that offers it cannot end up describing
+    /// different things. Pilot, the fifth act in `docs/concepts/job.md`, is
+    /// absent because Fleet serves no route for it.
+    ///
+    /// **A sixth act is a major bump**, by this seam's own table: the other
+    /// side matches on these, and an exhaustive match has no arm for a variant
+    /// it was built before.
+    Recourse, core_model::Recourse, "a recourse"
+}
+wire_enum! {
     /// Whether a Drone arrived on a Job or left it. **Presence, not state** —
     /// `assigned_drone` is a pointer that is set or null, so the log carries
     /// the two moments that change it and nothing else about a Drone's life.

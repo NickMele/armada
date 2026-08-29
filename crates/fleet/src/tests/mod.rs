@@ -137,5 +137,6 @@ mod serving;
 mod session;
 mod settling;
 mod silence;
+mod stuck;
 mod tmp;
 mod transcript;

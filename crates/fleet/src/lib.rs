@@ -129,6 +129,7 @@ pub mod session;
 mod settling;
 pub mod silence;
 pub mod spawning;
+mod stuck;
 pub mod transcript;
 pub mod turning;
 pub mod watch;
