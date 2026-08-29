@@ -117,8 +117,53 @@ where
         {
             return Err(NotDeclared::Outside(outside));
         }
-        at_work.declares(paths);
+        at_work.declares(paths.clone());
+        drop(working);
+        self.kept_plan(&job, &step, &paths).await;
         Ok(Declared)
+    }
+
+    /// Write the declaration down, because the slot it was just put on will not
+    /// survive the step.
+    ///
+    /// **The record is what a finished Job is read against.** `Working::now_on`
+    /// clears the plan at every step boundary and a Fleet that restarts loses
+    /// it outright, so the footprint kept at the terminal transition had no
+    /// promise left to be measured against. `store::plan` is the other half of
+    /// that comparison, keyed by the run for `#63`'s reason: a step worked
+    /// twice declares twice.
+    ///
+    /// # A store that will not take it does not refuse the declaration
+    ///
+    /// The Drone has already declared, the live drift check already has it, and
+    /// nothing the Drone could do would fix a database fault. Refusing here
+    /// would make it declare again into the same fault and then fail its step
+    /// for a plan it did state. So this is a line in the Job's log and no
+    /// record — [`Fleet::kept_footprint`](crate::daemon::Fleet) breaks its
+    /// silence the same way and for the same reason: a record nobody could
+    /// write has to say so, or a Job read later cannot tell a step that
+    /// declared nothing from a step whose declaration was dropped.
+    async fn kept_plan(&self, job: &JobId, step: &StepId, paths: &DeclaredPaths) {
+        let at = self.now();
+        let written = self
+            .store()
+            .lock()
+            .await
+            .record_step_plan(job, step, paths, &at);
+        let Err(why) = written else {
+            return;
+        };
+        let envelope = Envelope::new(
+            self.now(),
+            Level::Warn,
+            Component::Fleet,
+            self.run().clone(),
+            "a step declared its plan and the declaration was not kept",
+        )
+        .in_job(job.as_ulid().clone())
+        .at_step(step.as_str())
+        .with_field("cause", FieldValue::Str(why.to_string()));
+        let _ = transcript::note(&self.host().repo_root, job, &envelope);
     }
 
     /// Compare live edits against the plan, once, for the step being worked.

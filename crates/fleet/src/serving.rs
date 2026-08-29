@@ -167,14 +167,25 @@ where
                 .map_err(|why| self.refusal(Adrift::Reading(why)))?;
             (ran, judged, flagged)
         };
+        // The plans are read with the footprint and only with it: they are what
+        // it is measured against, and a running Job has neither — its live
+        // reading is marked from the slot, where the step being watched is the
+        // step that declared.
         let recorded = match job.status().is_terminal() {
             false => None,
-            true => self
-                .store()
-                .lock()
-                .await
-                .footprint(job.id())
-                .map_err(|why| self.refusal(Adrift::Reading(why)))?,
+            true => {
+                let store = self.store().lock().await;
+                let kept = store
+                    .footprint(job.id())
+                    .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+                let plans = match kept.is_some() {
+                    false => Vec::new(),
+                    true => store
+                        .step_plans(job.id())
+                        .map_err(|why| self.refusal(Adrift::Reading(why)))?,
+                };
+                kept.map(|footprint| (footprint, plans))
+            }
         };
         let queued = self.queued_reason(&job).await?;
         // Before `step_facts`, which consumes the Check runs: the
@@ -186,7 +197,9 @@ where
             reason.as_ref(),
             queued,
             &self.step_facts(&job, ran, judged, flagged),
-            recorded.as_ref().map(kept),
+            recorded
+                .as_ref()
+                .map(|(footprint, plans)| kept(footprint, plans)),
             self.redirect_awaited(job.id()).await,
             stuck.as_ref(),
         ))

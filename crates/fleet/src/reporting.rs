@@ -192,6 +192,7 @@ where
         let flagged = store.step_gaming_flags(job.id()).map_err(Adrift::Reading)?;
         let claimed = store.step_evidence(job.id()).map_err(Adrift::Reading)?;
         let footprint = store.footprint(job.id()).map_err(Adrift::Reading)?;
+        let plans = store.step_plans(job.id()).map_err(Adrift::Reading)?;
         drop(store);
 
         let redactor = self.redactor();
@@ -317,12 +318,42 @@ where
             Some(recorded) => {
                 out.field("Read at", recorded.recorded_at.as_str());
                 for file in &recorded.files {
-                    out.bullet(&format!("{} — {}", file.change().as_wire(), file.path()));
+                    // Marked only where a plan exists to be outside of.
+                    let covered =
+                        plans.is_empty() || plans.iter().any(|plan| plan.paths.covers(file.path()));
+                    let outside = match covered {
+                        true => "",
+                        false => " — outside every declared plan",
+                    };
+                    out.bullet(&format!(
+                        "{} — {}{outside}",
+                        file.change().as_wire(),
+                        file.path()
+                    ));
                 }
                 if recorded.files.is_empty() {
                     out.body("The worktree was read and held no change.");
                 }
             }
+        }
+        out.blank();
+
+        // A step that never declared is absent here rather than empty.
+        out.heading("What each step said it would change");
+        for plan in &plans {
+            out.bullet(&format!("{} — run {}", plan.step_id.as_str(), plan.attempt));
+            for path in plan.paths.paths() {
+                out.detail("path", Some(path.as_str()));
+            }
+            if plan.paths.is_empty() {
+                out.detail("path", Some("none — it promised to touch nothing"));
+            }
+        }
+        if plans.is_empty() {
+            out.body(
+                "No step declared a plan, so nothing above is marked. That is not the same \
+                 as every path being inside one.",
+            );
         }
         out.blank();
 

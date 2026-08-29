@@ -101,6 +101,7 @@
 //! into a Drone's first turn is one the worktree actually holds.
 
 mod attachments;
+mod attribution;
 mod briefing;
 mod checks;
 mod converging;

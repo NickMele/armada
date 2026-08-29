@@ -53,7 +53,8 @@
 //! back, so a reading taken when somebody opens the Job is a guess about a
 //! directory that may not exist. This one is a record of one that did.
 //!
-//! It carries no drift mark, and `store`'s own module note carries why.
+//! Its drift mark names steps rather than asserting one — [`kept`], over what
+//! `store::plan` wrote as each step declared, silent where none did.
 
 use std::time::Duration;
 
@@ -263,14 +264,25 @@ pub(crate) fn seen(changed: &Changed, plan: Option<&DeclaredPaths>) -> Vec<ipc::
         .collect()
 }
 
-/// The record, as the wire carries it.
+/// The record, as the wire carries it, with each file attributed to the plans
+/// that promised it.
 ///
-/// **The redaction step for a footprint that was kept**, and it is [`seen`]'s
-/// answer with the mark taken off rather than a second one: a stored reading
-/// carries no plan to be outside of, so the wire type it becomes has no field
-/// for one. Nothing else is dropped — a repository-relative path and what
-/// happened to it is the whole of a footprint either way.
-pub(crate) fn kept(recorded: &store::Footprinted) -> ipc::JobFootprint {
+/// **The redaction step for a footprint that was kept.** A repository-relative
+/// path, what happened to it, and the step ids that scoped it — no absolute
+/// path, no worktree location, no bytes, and the declared paths are the Drone's
+/// own repository-relative words, which is what [`seen`] already puts on the
+/// wire while the step runs.
+///
+/// **The attribution is derived here rather than stored beside the footprint**,
+/// because it is a pure function of two records and a stored derivation is a
+/// second copy that can come to disagree with them — `store::attempt`'s rule,
+/// applied to the same kind of value. The hazard `#127` was avoiding is a
+/// reading that opens a worktree, and `armada clean` gives worktrees back; this
+/// compares two rows and opens nothing.
+pub(crate) fn kept(
+    recorded: &store::Footprinted,
+    plans: &[store::DeclaredPlan],
+) -> ipc::JobFootprint {
     ipc::JobFootprint {
         files: recorded
             .files
@@ -278,9 +290,54 @@ pub(crate) fn kept(recorded: &store::Footprinted) -> ipc::JobFootprint {
             .map(|file| ipc::TouchedFile {
                 path: file.path().to_string(),
                 change: kind(file.change()),
+                planned_by: promised(plans, file.path()),
             })
             .collect(),
         recorded_at: (&recorded.recorded_at).into(),
+        plans: plans.iter().map(declared).collect(),
+    }
+}
+
+/// The steps whose declared plan covers this path, or **nothing at all where no
+/// step declared one.**
+///
+/// `None` and `Some(vec![])` are the two answers this exists to keep apart. No
+/// plans is not a measurement returning zero drift; it is no measurement, and a
+/// client must not be able to read one as the other. Empty is the real drift
+/// answer: a path outside everything anybody promised.
+///
+/// A step is named once however many of its runs cover the path — the same
+/// promise kept on a second attempt is not a second promise.
+fn promised(plans: &[store::DeclaredPlan], path: &str) -> Option<Vec<ipc::StepId>> {
+    if plans.is_empty() {
+        return None;
+    }
+    let mut named: Vec<ipc::StepId> = Vec::new();
+    for plan in plans.iter().filter(|plan| plan.paths.covers(path)) {
+        let step: ipc::StepId = (&plan.step_id).into();
+        if !named.contains(&step) {
+            named.push(step);
+        }
+    }
+    Some(named)
+}
+
+/// One kept declaration, as the wire carries it.
+///
+/// The attempt goes across as its number: two entries naming one step are two
+/// runs of it, and without the ordinal they would read as one step promising
+/// two different things at once.
+fn declared(plan: &store::DeclaredPlan) -> ipc::DeclaredPlan {
+    ipc::DeclaredPlan {
+        step_id: (&plan.step_id).into(),
+        attempt: plan.attempt.number(),
+        declared_at: (&plan.declared_at).into(),
+        paths: plan
+            .paths
+            .paths()
+            .iter()
+            .map(|path| path.as_str().to_string())
+            .collect(),
     }
 }
 
