@@ -135,6 +135,10 @@ approximations.
   — what a step's wall clock and tool-call count actually are, against the Jobs
   this repository has run, and why elapsed time does not separate a stuck step
   from a slow one.
+- [`spikes/010-can-a-drone-be-identified.md`](spikes/010-can-a-drone-be-identified.md)
+  — which MCP transports the agent CLI accepts, and whether any of them carries
+  an identity Fleet does not have to trust the Drone about. A negative on unix
+  sockets and a positive on the peer process.
 - [`spikes/011-what-can-one-drone-reach.md`](spikes/011-what-can-one-drone-reach.md)
   — if every Drone gets its own endpoint, what an adversarial Drone can reach of
   another's: what the allowlist stops, what it does not, and why no per-Drone
