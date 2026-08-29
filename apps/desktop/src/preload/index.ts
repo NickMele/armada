@@ -115,6 +115,15 @@ const api: BridgeApi = {
   readDiff: (jobId: string | null): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.readDiff, jobId),
 
+  // Every report filed, with the counts. Read-only, and **the one read here
+  // that carries no Job id**: a report survives the Job being forgotten, so
+  // scoping the listing to a Job would lose the ones most worth reading. A
+  // boolean, because there is nothing to scope it to — only whether a surface
+  // is open. Nothing here files or withdraws a report; `fileReport` does the
+  // first and nothing does the second.
+  readReports: (want: boolean): Promise<void> =>
+    ipcRenderer.invoke(CHANNELS.readReports, want),
+
   // The three decisions on the work, and they are three entries for the reason
   // the two kills are two: one capability taking "which decision" as an
   // argument would read as one act and perform three, and these three differ by

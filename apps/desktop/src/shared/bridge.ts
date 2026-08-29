@@ -11,6 +11,7 @@ import type {
   JobFilesChanged,
   JobSummary,
   Report,
+  ReportList,
   UnreadableJob,
   WireError,
 } from "./protocol";
@@ -193,7 +194,34 @@ export type BridgeState = {
    * re-read every time an event names the open Job.
    */
   diff: Diff;
+  /**
+   * Every report filed, and the calibration counts, where a surface asked.
+   *
+   * **Not per Job, and that is the point of it.** A report outlives the Job it
+   * is about — `armada clean` forgets the Job and the report stays whole — so
+   * this is the one read here that no Job id scopes, and the one that would be
+   * lost if it were reachable only through a Job.
+   *
+   * Read when the surface that draws it opens, like the folded reads under a
+   * Job and for the same reason: the bodies travel with the list, so nothing
+   * pays for them until somebody is reading them.
+   */
+  reports: Reports;
 };
+
+/**
+ * `GET /reports`, where a surface asked for it.
+ *
+ * **Its own shape rather than a `JobRead`**, because it is not a read of a Job:
+ * there is no id to check an answer against, which is the whole of what that
+ * type exists to do. The four states are the same four, for the same reason —
+ * "nobody asked" and "the read failed" are different things to draw.
+ */
+export type Reports =
+  | { state: "none" }
+  | { state: "reading" }
+  | { state: "read"; list: ReportList }
+  | { state: "failed"; outcome: Outcome };
 
 /**
  * The last `job.files_changed` reading for the open Job.
@@ -497,6 +525,19 @@ export type BridgeApi = {
    */
   readDiff: (jobId: string | null) => Promise<void>;
   /**
+   * Read every filed report and the counts beside them, or `false` to drop it.
+   *
+   * **Read-only, and the only read here that names no Job.** A report is about
+   * a Job but does not belong to one — it survives the Job being forgotten — so
+   * a listing reached through a Job would lose exactly the reports that most
+   * need reading. Nothing about this files, edits or withdraws one; filing is
+   * `fileReport`, on the Job it is about.
+   *
+   * A boolean rather than an id for that reason: there is nothing to scope it
+   * to, only whether somebody is looking.
+   */
+  readReports: (want: boolean) => Promise<void>;
+  /**
    * Take the work. **The counterpart to `approveDispatch`, at the other end of
    * the Job.** On the workflow's last step Fleet commits and delivers before
    * recording the Job done. Legal only at `awaiting_review`, like the two below.
@@ -554,6 +595,7 @@ export const NOTHING_YET: BridgeState = {
   history: { state: "none" },
   evidence: { state: "none" },
   diff: { state: "none" },
+  reports: { state: "none" },
 };
 
 /** The channels the preload is allowed to name. There is no general `invoke`. */
@@ -576,6 +618,7 @@ export const CHANNELS = {
   readHistory: "bridge:read-history",
   readEvidence: "bridge:read-evidence",
   readDiff: "bridge:read-diff",
+  readReports: "bridge:read-reports",
   approveReview: "bridge:approve-review",
   requestChanges: "bridge:request-changes",
   rejectWork: "bridge:reject-work",

@@ -208,6 +208,13 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.readDiff, (_event, jobId: string | null) =>
     connection?.readDiff(jobId),
   );
+  // Every report a person has filed, and the counts they are read beside. The
+  // one read here that names no Job: a report outlives the Job it is about, so
+  // a listing reached through one would lose the reports that most need
+  // reading. Read-only, and nothing on this channel can file or withdraw one.
+  ipcMain.handle(CHANNELS.readReports, (_event, want: boolean) =>
+    connection?.readReports(want),
+  );
   // The three decisions on the work, and they stay three channels. Approving
   // takes it, requesting changes sends the drone back to the same step, and
   // rejecting is terminal and ends the drone — a single channel taking which

@@ -31,6 +31,7 @@ import { fleetFailure, jobFailure, refusalFailure, uncaughtFailure } from "./fai
 import { headOf } from "./Head";
 import { statementOf } from "./fleet";
 import { Composer } from "./Composer";
+import { Reports } from "./Reports";
 import { JobDetail, type ConfirmableAct } from "./JobDetail";
 import { RECORDS_ITS_OWN_TURNS, renderFor } from "./render";
 import { ACT_LABEL, CONFIRM, said } from "./copy";
@@ -72,6 +73,10 @@ export function App() {
   // `New job` is what opens it now, so the surface is the list until somebody
   // asks for the form.
   const [composing, setComposing] = useState(false);
+  // What has been reported against the Judge. Its own view for the reason the
+  // head gives: a report is filed about one Job and the rate is read across all
+  // of them.
+  const [auditing, setAuditing] = useState(false);
   // The Manifest the rail names, and what a new Job is proposed against.
   // Bridge dispatches into the workspace it is pointed at, so this is one
   // value rather than a field on the form.
@@ -323,6 +328,7 @@ export function App() {
     watching,
     reading: reading !== null,
     composing,
+    auditing,
     summary,
     live,
     refreshing,
@@ -330,6 +336,8 @@ export function App() {
     onCloseJob: close,
     onCloseComposer: () => setComposing(false),
     onCompose: () => setComposing(true),
+    onCloseReports: () => setAuditing(false),
+    onReadReports: () => setAuditing(true),
     onRefresh: () => void refresh(),
   });
 
@@ -459,6 +467,13 @@ export function App() {
                 onObserve={setObserving}
                 onCopied={setCopied}
               />
+            </Boundary>
+          ) : auditing ? (
+            /* Read across every Job rather than through one. The rate is the
+               point, and a listing reached from a Job would show only the
+               reports somebody already had reason to open. */
+            <Boundary region="the filed reports" {...guarded}>
+              <Reports reports={state.reports} onCopied={setCopied} />
             </Boundary>
           ) : composing ? (
             /* What Fleet holds, read over the one connection. Not scraped off

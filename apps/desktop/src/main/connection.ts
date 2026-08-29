@@ -24,6 +24,7 @@ import type { JobDetail, JobSummary, StreamMessage } from "../shared/protocol";
 import { JobCommands } from "./command";
 import { ObserveSocket } from "./observe";
 import { JobReader } from "./reader";
+import { ReportsReader } from "./reports";
 import { ask, holdingsOf } from "./request";
 import { ReviewMaterial } from "./review";
 import { auditPath, HOST, machinePath, read } from "./runtime-file";
@@ -66,6 +67,11 @@ export class FleetConnection {
   private readonly turns: ObserveSocket;
   /** The claims and the patch, each read when a surface asks — see `review.ts`. */
   private readonly material: ReviewMaterial;
+  /**
+   * Every filed report, where a surface asked — see `reports.ts`. **The one
+   * read here no Job scopes**, because a report outlives the Job it is about.
+   */
+  private readonly reports = new ReportsReader((reports) => this.publish({ reports }));
   /**
    * Every act on a Job — see `command.ts`. Reached through this rather than
    * re-exported one method at a time: a delegator carries no reasoning, and
@@ -125,6 +131,10 @@ export class FleetConnection {
       await this.watched.again(fleet.port);
       await this.history.again(fleet.port);
       await this.material.reread(fleet.port);
+      // A no-op where nothing has them open. Nothing but Bridge files a
+      // report, so the list moves when somebody presses a button in a window —
+      // and a second window is a second somebody, which is what Refresh is for.
+      await this.reports.again(fleet.port);
     }
     return this.current;
   }
@@ -147,6 +157,7 @@ export class FleetConnection {
     this.history.close();
     this.turns.close();
     this.material.close();
+    this.reports.close();
   }
 
   // -------------------------------------------------------------- connecting
@@ -422,6 +433,17 @@ export class FleetConnection {
    */
   async readDiff(jobId: string | null): Promise<void> {
     await this.material.diff(this.connected()?.port ?? null, jobId);
+  }
+
+  // ----------------------------------------------- every report, and the counts
+  /**
+   * Read every filed report, or drop what was read. **The one read here that no
+   * Job scopes** — a report is about a Job and does not belong to one, so a
+   * listing reached through a Job would lose the ones that outlived theirs.
+   * `reports.ts` holds the read; this holds the port it is made over.
+   */
+  async readReports(want: boolean): Promise<void> {
+    await this.reports.want(this.connected()?.port ?? null, want);
   }
 
   private connected(): BridgeStateFleet | null {
