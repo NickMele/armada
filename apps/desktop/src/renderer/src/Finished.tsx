@@ -44,7 +44,7 @@ import type {
 import type { ManifestSummary } from "../../shared/setup";
 import {
   NOT_SERVED_WHEN_FINISHED,
-  RECORD_NOTE,
+  recordNote,
   recordSummary,
   touchedOf,
   TOUCHED_NOTHING,
@@ -238,7 +238,9 @@ function producedOf(job: JobSummary, touched: JobFootprint | undefined): JobOutc
     // **The count is the record, and it does not depend on who was watching.**
     // A Job with none finished before Fleet kept one or had a worktree that
     // would not open, and the row says so rather than showing a zero that would
-    // read as a Drone that changed nothing.
+    // read as a Drone that changed nothing. The drift beside the count is the
+    // record measured against the plans its steps declared, and it is absent
+    // rather than zero on a Job whose steps declared none.
     { name: "Files changed", ...counted(touched) },
     {
       name: "Evidence",
@@ -332,7 +334,7 @@ function recordOf({
           <ChangedFiles
             files={touchedOf(touched)}
             emptyNote={TOUCHED_NOTHING}
-            note={RECORD_NOTE}
+            note={recordNote(touched)}
             onCopied={onCopied}
           />
         ),

@@ -42,6 +42,8 @@ Reaching `completed_success` creates that Job at `awaiting_approval`, wired back
 
 A live mismatch does not auto-fail, because legitimate investigation sometimes reveals the real work is in a file outside the original plan. It tags the step for a mandatory Judge look instead. This makes the mid-step Judge pass conditional on a cheap mechanical signal rather than run on a fixed schedule — see Thrashing / off-rails below.
 
+**The declaration is kept, per step and per run of it.** It outlives the slot that held it, so a finished Job's footprint says which of the files it touched were inside what a step promised and which were outside every promise anybody made — and a Job whose steps declared nothing says that, rather than reading as a Job that went exactly where it said it would.
+
 ## The workflows
 
 ### How a Job gets one

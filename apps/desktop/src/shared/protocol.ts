@@ -142,23 +142,70 @@ export type JobFootprint = {
    * surface say so.
    */
   recorded_at: string;
+  /**
+   * What each run of each step said its work would be, in declaration order.
+   * Since protocol 4.17, and absent from a fleet older than that.
+   *
+   * **Empty is the whole of "there is nothing to be outside of."** Every
+   * `TouchedFile.planned_by` is then absent rather than empty, so a surface
+   * that never reads this list still cannot draw an unmeasured path as one
+   * that stayed in scope.
+   */
+  plans?: DeclaredPlan[];
+};
+
+/**
+ * What one run of one step promised its work would be. Since protocol 4.17.
+ *
+ * **The promise, beside the record of what was done.** A footprint is the job's
+ * whole work and a plan belongs to one step, so the two arrive side by side
+ * rather than folded into one mark. A step that never declared has no entry: it
+ * is silent, not counted.
+ */
+export type DeclaredPlan = {
+  step_id: string;
+  /**
+   * Which run of that step declared it, one-based. **A step may be worked twice
+   * and then declares twice**, and without this the two entries would read as
+   * one step contradicting itself.
+   */
+  attempt: number;
+  /** When the declaration was taken, by fleet's clock. */
+  declared_at: string;
+  /**
+   * The paths the drone named, each covering everything beneath it at a segment
+   * boundary. **Empty is a declaration of nothing**, which every changed path is
+   * outside of — not a step that never declared.
+   */
+  paths: string[];
 };
 
 /**
  * One file a finished job touched.
  *
- * **Not `ChangedFile`, and the missing field is the reason.** A live reading
- * carries `outside_plan`, because the step being watched is the step that
- * declared the plan it is measured against. A record is the job's whole work
- * since the branch was cut, and the step holding the pen when a job stops is
- * usually not the step that scoped it. There is no mark here to read, and
- * nothing may infer one.
+ * **Not `ChangedFile`, and the drift mark is the reason.** A live reading
+ * carries `outside_plan` as a boolean, because the step being watched declared
+ * the plan it is measured against. A record is the job's whole work, and the
+ * step holding the pen when a job stops is usually not the step that scoped it
+ * — so one boolean here could only be right by accident. `planned_by` names
+ * steps rather than asserting a verdict.
  */
 export type TouchedFile = {
   /** Repository-relative, exactly as git spells it. */
   path: string;
   /** The same closed set `ChangedFile.change` carries, left as `string`. */
   change: string;
+  /**
+   * The steps whose declared plan covers this path, in `JobFootprint.plans`
+   * order. Since protocol 4.17.
+   *
+   * **Three readings, and the absent one is why this is not a boolean.** Absent
+   * is a job where no step declared anything, so nothing was measured. Present
+   * and empty is a path outside every plan that was declared — the drift a
+   * finished job could not state before. Present with steps in it is a path one
+   * of those steps promised.
+   */
+  planned_by?: string[];
 };
 
 /** One step: which, where in the order, and where it got to. */

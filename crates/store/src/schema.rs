@@ -70,6 +70,7 @@ pub const MIGRATIONS: &[&str] = &[
     // lines the gate refuses at — [`V16`] said the next one would not fit. The
     // order still lives here, which is the part that may not be anywhere else.
     crate::report::V17,
+    crate::plan::V18,
 ];
 
 /// Every table whose rows belong to one Job, asked of the file rather than
@@ -855,6 +856,10 @@ END;
 /// mark taken here would measure every step's work against the last step's
 /// promise. `outside_plan` stays on the live reading, where the step that
 /// declared is the step being watched.
+///
+/// [`crate::plan::V18`] is what made the record answerable without a column
+/// here: every step's promise is kept beside this, named by the step and the
+/// run that made it, and the two are compared where they are served.
 ///
 /// **Nothing to backfill.** No footprint was written down before this table
 /// existed, which is what zero rows says.

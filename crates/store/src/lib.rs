@@ -60,6 +60,9 @@ mod footprint;
 mod forget;
 mod gaming;
 mod open;
+/// What a step said its work would be, kept after the slot that held it is
+/// gone.
+mod plan;
 mod read;
 /// What a person says went wrong, kept after the Job it is about is gone.
 mod report;
@@ -78,6 +81,7 @@ pub use fold::{Moved, RecordedEvent};
 pub use footprint::Footprinted;
 pub use forget::Forgotten;
 pub use open::Store;
+pub use plan::DeclaredPlan;
 pub use read::{Loaded, RowIdentity, StatusRepair, UnreadableRow};
 pub use report::Report;
 pub use schema::KNOWN_SCHEMA_VERSION;

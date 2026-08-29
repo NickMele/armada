@@ -60,6 +60,11 @@ pub struct Forgotten {
     pub footprint: usize,
     /// The files that footprint held, one row each.
     pub footprint_files: usize,
+    /// The header saying one run of one step declared a plan. One row per run
+    /// that declared.
+    pub step_plans: usize,
+    /// The paths those plans named, one row each.
+    pub step_plan_paths: usize,
     /// Rows removed from a table this build has no field for.
     ///
     /// Always zero today, and a test says so. It exists because the delete is
@@ -91,6 +96,8 @@ impl Forgotten {
             "job_step_evidence" => &mut self.step_evidence,
             "job_footprint" => &mut self.footprint,
             "job_footprint_files" => &mut self.footprint_files,
+            "job_step_plans" => &mut self.step_plans,
+            "job_step_plan_paths" => &mut self.step_plan_paths,
             _ => return None,
         })
     }

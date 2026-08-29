@@ -88,18 +88,62 @@ pub struct JobFootprint {
     /// instant anybody asked — which is what makes this a record rather than a
     /// reading, and what lets a surface say so.
     pub recorded_at: Instant,
+    /// What each run of each step said its work would be, in the order the
+    /// declarations were made.
+    ///
+    /// **Empty is the whole of "there is nothing to be outside of."** A Job
+    /// whose steps never declared, and one that finished before Fleet kept
+    /// declarations, both come back with none — and every
+    /// [`TouchedFile::planned_by`] is then absent rather than empty, so a
+    /// client that never reads this list still cannot mistake an unmeasured
+    /// path for one that stayed inside a plan.
+    #[serde(default)]
+    pub plans: Vec<DeclaredPlan>,
+}
+
+/// What one run of one step promised its work would be.
+///
+/// **The promise, beside the record of what was done.** A footprint is the
+/// Job's whole work since the branch was cut and a plan belongs to one step, so
+/// the two are carried side by side rather than folded into one mark: naming
+/// the steps is what lets a reader say *`implement` promised these paths and
+/// the work went outside them* rather than *something drifted*.
+///
+/// A step that never declared has no entry here. It is silent rather than
+/// counted, because a step with no plan promised nothing to be outside of.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeclaredPlan {
+    pub step_id: StepId,
+    /// Which run of that step declared it, one-based. **A step may be worked
+    /// twice and then declares twice**, and without this the two entries would
+    /// read as one step contradicting itself.
+    pub attempt: u32,
+    /// When the declaration was taken, by Fleet's clock.
+    pub declared_at: Instant,
+    /// The paths the Drone named, in the order it named them. Each covers
+    /// itself and everything beneath it, at a segment boundary.
+    ///
+    /// **Empty is a declaration of nothing**, which every changed path is
+    /// outside of — not the same as a step that never declared, which is absent
+    /// from the list above.
+    pub paths: Vec<String>,
 }
 
 /// One file a finished Job touched.
 ///
-/// **Not [`ChangedFile`], and the missing field is the reason.** A live reading
-/// carries `outside_plan`, because the step being watched is the step that
-/// declared the plan it is measured against. A record is the Job's whole work
-/// since the branch was cut, and the step holding the pen when a Job stops is
-/// usually not the step that scoped it — `handoff` finishes what `implement`
-/// planned. A mark here would attribute one step's promise to every step's
-/// work, and a `false` a client could read as "inside the plan" is worse than
-/// no field: this type cannot carry one, so nothing can infer one from it.
+/// **Not [`ChangedFile`], and the drift mark is the reason.** A live reading
+/// carries `outside_plan` as a `bool`, because the step being watched is the
+/// step that declared the plan it is measured against. A record is the Job's
+/// whole work since the branch was cut, and the step holding the pen when a Job
+/// stops is usually not the step that scoped it — `handoff` finishes what
+/// `implement` planned. So one `bool` here would attribute one step's promise
+/// to every step's work, and a `false` a client could read as "inside the plan"
+/// is worse than no field at all.
+///
+/// [`planned_by`](TouchedFile::planned_by) is what that field became once the
+/// declarations themselves were kept: it names the steps rather than asserting
+/// a verdict, and it is absent — not `false`, not empty — where nothing
+/// declared anything for it to be measured against.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TouchedFile {
     /// Repository-relative, exactly as git spells it.
@@ -107,6 +151,20 @@ pub struct TouchedFile {
     /// The same vocabulary [`ChangedFile::change`] carries. One set of words
     /// for what happened to a file, whether it is being watched or remembered.
     pub change: ChangeKind,
+    /// The steps whose declared plan covers this path, in
+    /// [`JobFootprint::plans`]'s order.
+    ///
+    /// **Three readings, and the absent one is why this is not a `bool`.**
+    /// Absent is a Job where no step declared anything: there is no plan for
+    /// this path to be inside or outside of, and no measurement was made.
+    /// Present and empty is a path outside every plan that was declared — the
+    /// drift a finished Job could not state before. Present with steps in it is
+    /// a path one of those steps promised.
+    ///
+    /// A step is named once however many of its runs cover the path: two
+    /// attempts of one step both promising a file is one promise kept twice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub planned_by: Option<Vec<StepId>>,
 }
 
 /// Every claim a Job's Drones have submitted, step by step.

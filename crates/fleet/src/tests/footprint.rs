@@ -29,17 +29,17 @@ use crate::daemon::Fleet;
 use crate::tests::daemon::{a_proposal, fittings, one, worktree_directory};
 use crate::tests::tmp::TempDir;
 
-type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
+pub(super) type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
 /// A clock that answers the same instant until a test moves it.
-struct Held(AtomicU64);
+pub(super) struct Held(AtomicU64);
 
 impl Held {
-    fn at_nine() -> Arc<Held> {
+    pub(super) fn at_nine() -> Arc<Held> {
         Arc::new(Held(AtomicU64::new(0)))
     }
 
-    fn advance(&self, seconds: u64) {
+    pub(super) fn advance(&self, seconds: u64) {
         self.0.fetch_add(seconds, Ordering::SeqCst);
     }
 }
@@ -69,7 +69,7 @@ fn one_step(scope: Option<Scoped<'static>>) -> ResolvedWorkflow {
 }
 
 /// A Fleet over that worktree reading and that clock, with one step on it.
-fn a_fleet_reading(
+pub(super) fn a_fleet_reading(
     home: &TempDir,
     work: FakeWorkProduct,
     clock: Arc<Held>,
@@ -82,7 +82,7 @@ fn a_fleet_reading(
 }
 
 /// Approve the Job, with a worktree on disk, so a Drone holds the slot.
-async fn started(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
+pub(super) async fn started(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
     let job = fleet
         .propose(a_proposal("make the parser take it"))
         .await
@@ -110,7 +110,7 @@ async fn drained(watching: &mut Subscription) -> Vec<ipc::JobFilesChanged> {
 }
 
 /// A worktree in which one file was written, one edited and one removed.
-fn three_kinds() -> FakeWorkProduct {
+pub(super) fn three_kinds() -> FakeWorkProduct {
     FakeWorkProduct::changing(&[
         ("src/parse.rs", Change::Modified),
         ("src/tokens.rs", Change::Added),

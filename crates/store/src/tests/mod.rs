@@ -20,6 +20,7 @@ mod footprint;
 mod forget;
 mod gaming;
 mod migrate;
+mod plan;
 mod reconstruct;
 mod report;
 mod roundtrip;

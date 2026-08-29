@@ -13,12 +13,12 @@
 //! is a guess about a directory that may not exist; a row written at the
 //! terminal transition is a record of one that did.
 //!
-//! # No drift mark
+//! # No drift mark on the row, and none derived here
 //!
-//! `outside_plan` is not here, and [`crate::schema`]'s `V15` carries why: a
-//! plan belongs to the step that declared it and this is the Job's whole work
-//! since the branch was cut. The live reading keeps the mark, where the step
-//! that declared is the step being watched.
+//! `outside_plan` is not a column, and [`crate::schema`]'s `V15` carries why.
+//! What the record is measured against is [`crate::plan`]; the comparison is
+//! made where the two are served and is stored in neither, for
+//! [`crate::attempt`]'s reason.
 
 use adapter_traits::{Change, Changed, ChangedFile};
 use core_model::{JobId, Timestamp};

@@ -2,11 +2,18 @@
 // `job.files_changed`, and the record Fleet wrote down when the Job stopped.
 //
 // **They are two answers and this module keeps them apart.** A live reading is
-// what a working Drone has touched so far and carries a drift mark; a record is
-// what the Job finally touched and carries none. The pair below each other's
-// names — `filesOf`/`footprintNote` for the first, `touchedOf`/`RECORD_NOTE`
-// for the second — rather than one function taking a flag, because the sentences
-// they produce have nothing in common.
+// what a working Drone has touched so far and is marked against the plan the
+// step being watched declared; a record is the Job's whole work since the
+// branch was cut, and it is marked against every plan any step declared, which
+// Fleet keeps beside it. The pair below each other's names —
+// `filesOf`/`footprintNote` for the first, `touchedOf`/`recordNote` for the
+// second — rather than one function taking a flag, because the sentences they
+// produce have nothing in common.
+//
+// **The record's mark is absent, not false, where nothing was declared.** A
+// path on a Job whose steps never scoped anything was not measured and found
+// clean; it was not measured. `planned_by` carries that as three readings and
+// this module never collapses them to two.
 //
 // **Nothing here reads a worktree.** The paths arrive as a named event like
 // everything else, and Bridge does not open a directory to check them. Nor is
@@ -114,33 +121,81 @@ export function touchedOf(footprint: JobFootprint): ChangedFile[] {
   return footprint.files.map((file: TouchedFile) => ({
     path: file.path,
     change: file.change,
-    // No `outsidePlan`, and it is absent rather than false: the wire type
-    // carries no mark, because a plan belongs to the step that declared it and
-    // this is the job's whole work. Nothing here may invent one.
+    // Marked only where a measurement was made and came back with nothing:
+    // `planned_by` present and empty is a path outside every plan any step
+    // declared. Absent is a path nothing was declared for, and it stays
+    // `undefined` rather than becoming `false`, which the row would draw the
+    // same way but a later reader would take for "inside the plan".
+    outsidePlan: outside(file) || undefined,
   }));
 }
 
-/**
- * What the record says about itself: that it is a record, and why nothing on it
- * is marked.
- *
- * **The second sentence is the point.** A reader deciding whether work stayed in
- * scope has to be told the marks are not here, rather than left to read their
- * absence as every path being inside a plan.
- */
-export const RECORD_NOTE =
-  "Read from this job's worktree when the job stopped, and kept — so it says the same thing " +
-  "whether or not anyone was watching. No path is marked: a declared plan belongs to one step, " +
-  "and this is the job's whole work since the branch was cut.";
+/** Whether this path was measured against a plan and fell outside every one. */
+function outside(file: TouchedFile): boolean {
+  return file.planned_by !== undefined && file.planned_by.length === 0;
+}
 
 /**
- * The one-line answer for the outcome row: how many files. **No drift count**,
- * for `recordNote`'s reason — the record carries no mark, and a `0 outside
- * plan` here would be a measurement nobody made.
+ * Every step that declared a plan on this job, in the order they declared, each
+ * named once however many runs of it declared.
+ *
+ * **A step worked twice declares twice and is still one step to a reader.** The
+ * run ordinal is on the wire and is what keeps the two promises apart in the
+ * record; it is not what a sentence naming who promised is about.
+ */
+export function declaringSteps(footprint: JobFootprint): string[] {
+  const named: string[] = [];
+  for (const plan of footprint.plans ?? []) {
+    if (!named.includes(plan.step_id)) named.push(plan.step_id);
+  }
+  return named;
+}
+
+/** How many paths were measured against a plan and fell outside every one. */
+export function outsideCount(footprint: JobFootprint): number {
+  return footprint.files.filter(outside).length;
+}
+
+/**
+ * What the record says about itself: that it is a record, and what its marks do
+ * or do not mean.
+ *
+ * **The second sentence is the point, and it is a different sentence now.** A
+ * reader deciding whether to take the work is owed either the drift or the fact
+ * that nobody measured it — and the one thing they must never be left to infer
+ * is that unmarked means in scope. A job whose steps declared nothing says so
+ * in words rather than by drawing no marks.
+ */
+export function recordNote(footprint: JobFootprint): string {
+  const read =
+    "Read from this job's worktree when the job stopped, and kept — so it says the same thing " +
+    "whether or not anyone was watching.";
+  const steps = declaringSteps(footprint);
+  if (steps.length === 0) {
+    return `${read} No path is marked, because no step declared a plan for this job — nothing here was measured against one.`;
+  }
+  const promised = `Measured against what ${steps.join(", ")} declared.`;
+  const drifted = outsideCount(footprint);
+  const total = footprint.files.length;
+  return drifted === 0
+    ? `${read} ${promised} Every path is inside one of those plans.`
+    : `${read} ${promised} ${drifted} of ${total} paths are outside all of them.`;
+}
+
+/**
+ * The one-line answer for the outcome row: how many files, and how many of them
+ * went outside every declared plan.
+ *
+ * **No drift count where no plan was declared**, which is the whole of why the
+ * meta is conditional: a `0 outside plan` on a job nobody scoped would be a
+ * measurement nobody made.
  */
 export function recordSummary(footprint: JobFootprint): { value: string; meta?: string } {
   const total = footprint.files.length;
-  return { value: total === 1 ? "1 file" : `${total} files` };
+  const value = total === 1 ? "1 file" : `${total} files`;
+  if (declaringSteps(footprint).length === 0) return { value };
+  const drifted = outsideCount(footprint);
+  return drifted === 0 ? { value } : { value, meta: `${drifted} outside plan` };
 }
 
 /** What a record with no rows in it says. Ordinary, and never an error. */
