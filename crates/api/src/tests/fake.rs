@@ -13,8 +13,9 @@ use ipc::mcp::{CheckRan, CheckReport, DeclareScope, NotRecorded, Receipt, Submit
 use ipc::{
     Actor, ChangesRequested, Event, EvidenceType, Instant, JobCreated, JobDetail, JobDiff,
     JobEvidence, JobForgotten, JobHistory, JobId, JobList, JobStateChanged, JobStatus, JobSummary,
-    ManifestId, ManifestSummary, ModelChoices, Movement, Origin, ProposeJob, Recorded, Redispatched,
-    RunId, StatusMoved, StepId, Submitted, UnreadableJob, Urgency, Work, WorkflowId, WorkflowSummary,
+    ManifestId, ManifestSummary, ModelChoices, Movement, Origin, ProposeJob, Recorded,
+    Redispatched, RunId, StatusMoved, StepId, Submitted, UnreadableJob, Urgency, Work, WorkflowId,
+    WorkflowSummary,
 };
 
 use crate::{Broadcaster, Daemon, Feed, Observed, Refusal, Turns};

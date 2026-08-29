@@ -83,7 +83,11 @@ async fn forgetting_a_job_that_is_not_yet_terminal_is_refused_with_its_status() 
     );
 
     assert_eq!(
-        fleet.load(job.id()).await.expect("nothing was deleted").status(),
+        fleet
+            .load(job.id())
+            .await
+            .expect("nothing was deleted")
+            .status(),
         JobStatus::AwaitingApproval,
         "a refused forget leaves the row exactly where it was"
     );
@@ -103,8 +107,13 @@ async fn a_job_that_is_not_yet_terminal_cannot_be_forgotten_over_http() {
     let events = fleet.events();
     let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
 
-    let (status, body) =
-        call(&app, "POST", &format!("/jobs/{}/forget_job", job_id.as_str()), "").await;
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/jobs/{}/forget_job", job_id.as_str()),
+        "",
+    )
+    .await;
     assert_eq!(
         status,
         StatusCode::CONFLICT,
@@ -135,8 +144,13 @@ async fn forgetting_a_terminal_job_over_http_answers_with_its_id_and_the_job_is_
     let events = fleet.events();
     let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
 
-    let (status, body) =
-        call(&app, "POST", &format!("/jobs/{}/forget_job", job_id.as_str()), "").await;
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/jobs/{}/forget_job", job_id.as_str()),
+        "",
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     let forgotten: ipc::JobForgotten = ipc::decode("a forgotten Job", &body).expect("the id");
     assert_eq!(forgotten.job_id.as_str(), job_id.as_str());
@@ -173,7 +187,10 @@ async fn clearing_every_terminal_job_in_one_pass_leaves_non_terminal_jobs_alone(
 
     let mut terminal = Vec::new();
     for title in ["clear me, first", "clear me, second"] {
-        let job = fleet.propose(a_proposal(title)).await.expect("a Job at the gate");
+        let job = fleet
+            .propose(a_proposal(title))
+            .await
+            .expect("a Job at the gate");
         Fleet::kill_job(&fleet, job.id())
             .await
             .expect("killable with no Drone");
@@ -181,7 +198,10 @@ async fn clearing_every_terminal_job_in_one_pass_leaves_non_terminal_jobs_alone(
     }
     let mut alive = Vec::new();
     for title in ["leave me, first", "leave me, second"] {
-        let job = fleet.propose(a_proposal(title)).await.expect("a Job at the gate");
+        let job = fleet
+            .propose(a_proposal(title))
+            .await
+            .expect("a Job at the gate");
         alive.push(job.id().clone());
     }
 
@@ -201,7 +221,10 @@ async fn clearing_every_terminal_job_in_one_pass_leaves_non_terminal_jobs_alone(
         }
     }
 
-    assert_eq!(cleared, terminal, "every terminal Job, and only those, cleared");
+    assert_eq!(
+        cleared, terminal,
+        "every terminal Job, and only those, cleared"
+    );
     assert_eq!(
         refused.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(),
         alive,

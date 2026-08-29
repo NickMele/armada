@@ -27,9 +27,9 @@ use std::future::Future;
 use crate::observing::Observed;
 use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    ChangesRequested, FileReport, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory,
-    JobId, JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redirection,
-    Redispatched, Report, ReportList, WireError, WorkflowSummary,
+    ChangesRequested, FileReport, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory, JobId,
+    JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redirection, Redispatched,
+    Report, ReportList, WireError, WorkflowSummary,
 };
 
 /// The request-response operations M1 serves.
