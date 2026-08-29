@@ -238,6 +238,74 @@ async fn a_drone_asking_for_the_checks_is_told_what_each_one_did() {
     );
 }
 
+/// **Adding a Check to a step is the whole of adding it.** #200 named three
+/// more Manifest Checks on every step that produces a diff, and the worry was
+/// that `run_checks` reached the two it already knew — a Drone that cannot see
+/// what failed cannot fix it, and the allowlist denies it `pnpm` as it denies
+/// it `cargo`.
+///
+/// Nothing in `dry_run` names a Check. It walks whatever the frozen step
+/// declares, so a step declaring five is answered with five rows, and the
+/// failing one among them is named whichever position it sits in.
+#[tokio::test]
+async fn every_check_the_step_declares_gets_a_row_however_many_there_are() {
+    let home = TempDir::new();
+    let workflow = testkit::resolved(&[Sketch {
+        id: "implement",
+        label: "Implement",
+        evidence_type: Some("diff"),
+        gates: &[
+            Gate::Check {
+                name: "build",
+                run: "/usr/bin/true",
+                expect_exit_code: 0,
+            },
+            Gate::Check {
+                name: "typecheck",
+                run: "/usr/bin/false",
+                expect_exit_code: 0,
+            },
+            Gate::Check {
+                name: "bridge_build",
+                run: "/usr/bin/true",
+                expect_exit_code: 0,
+            },
+            Gate::Check {
+                name: "storybook",
+                run: "/usr/bin/true",
+                expect_exit_code: 0,
+            },
+            Gate::DiffNonempty,
+        ],
+        judged_on: &[],
+        scope: None,
+        gaming: None,
+    }]);
+    let fleet = Arc::new(a_fleet_checking(
+        &home,
+        workflow,
+        Arc::new(Held::started()),
+        3,
+    ));
+    let app = router(&fleet);
+    started(&fleet, &home).await;
+
+    let said = ask(&app).await;
+    assert!(!said.is_error, "{}", said.text);
+    for named in ["build", "typecheck", "bridge_build", "storybook"] {
+        assert!(
+            said.text.contains(named),
+            "`{named}` was declared and is not in the report: {}",
+            said.text
+        );
+    }
+    assert!(
+        said.text.contains("typecheck") && said.text.contains("it exited 1"),
+        "the one that failed is the one reported failing: {}",
+        said.text
+    );
+}
+
 // ------------------------------------------------------- and nothing moves
 
 /// **The case the whole design turns on.** Every Check passes in the dry run,

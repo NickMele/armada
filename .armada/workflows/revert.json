@@ -31,6 +31,12 @@
 # `handoff` carries no Judge. A step with no criterion asks the Judge nothing,
 # and the designed `review`'s summary check declares `gates_advancement:
 # false`, which M1's parser does not read -- see `feature.json`.
+#
+# **`typecheck`, `bridge_build` and `storybook` are on `revert`.** See
+# `bug.json` for the defect they were added for. Undoing a commit that touched
+# both halves is the case: a revert that restores the Rust and leaves the
+# Bridge calling what it removed passes `build` and `test` and does not
+# compile.
 {
   "version": 1,
   "workflow_id": "revert",
@@ -51,6 +57,21 @@
         {
           "type": "manifest_check",
           "check": "test",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "typecheck",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "bridge_build",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "storybook",
           "expect_exit_code": 0
         },
         {
