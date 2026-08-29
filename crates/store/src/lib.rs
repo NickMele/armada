@@ -61,6 +61,8 @@ mod forget;
 mod gaming;
 mod open;
 mod read;
+/// What a person says went wrong, kept after the Job it is about is gone.
+mod report;
 mod row;
 mod schema;
 #[cfg(feature = "wreckage")]
@@ -77,4 +79,5 @@ pub use footprint::Footprinted;
 pub use forget::Forgotten;
 pub use open::Store;
 pub use read::{Loaded, RowIdentity, StatusRepair, UnreadableRow};
+pub use report::Report;
 pub use schema::KNOWN_SCHEMA_VERSION;

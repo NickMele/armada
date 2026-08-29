@@ -27,9 +27,9 @@ use std::future::Future;
 use crate::observing::Observed;
 use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    ChangesRequested, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList, JobSummary,
-    ManifestSummary, ModelChoices, ProposeJob, Redirection, Redispatched, WireError,
-    WorkflowSummary,
+    ChangesRequested, FileReport, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList,
+    JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redirection, Redispatched, Report,
+    ReportList, WireError, WorkflowSummary,
 };
 
 /// The request-response operations M1 serves.
@@ -362,6 +362,43 @@ pub trait Daemon: Send + Sync + 'static {
     /// act on a Job that has never run.
     fn reject_job(&self, job_id: JobId)
         -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `file_report` — a person says this Job failed in error, and the Job's
+    /// own record is filed with what they said.
+    ///
+    /// **The one operation here that records a person disagreeing with the
+    /// machine at all.** Every other signature on this trait answers *did this
+    /// fail*; none of them answers *did this fail correctly*, and a Job that
+    /// failed perfectly by its own lights and was wrong is indistinguishable
+    /// through any of them from one that failed rightly.
+    ///
+    /// # It creates nothing and dispatches nothing
+    ///
+    /// What comes back is the report. No Job is proposed, no Drone is spawned,
+    /// and nothing about the Job it names changes — filing is its own act, and
+    /// dispatching against what was filed is the existing flow pointed at it.
+    ///
+    /// # A blank sentence is [`Refusal::Unacceptable`]
+    ///
+    /// The record was already there before anybody pressed anything, so a
+    /// report with the bundle and no sentence has added exactly nothing. This
+    /// is `override_verdict`'s refusal for the same reason and it is not
+    /// enough on its own: a required non-blank field does not make a reason
+    /// meaningful, which is why [`ipc::FileReport::claim`] is a closed set and
+    /// is the field anything counting reads.
+    fn file_report(
+        &self,
+        job_id: JobId,
+        filing: FileReport,
+    ) -> impl Future<Output = Result<Report, Refusal>> + Send;
+
+    /// `list_reports` — every report filed, newest first, with what is known
+    /// about whether the Judge has been right.
+    ///
+    /// **Not scoped to a Job, because a report outlives one.** `armada clean`
+    /// forgets a Job and its report stays; a listing reachable only through a
+    /// Job would lose exactly the reports that most need reading.
+    fn list_reports(&self) -> impl Future<Output = Result<ReportList, Refusal>> + Send;
 
     /// `observe_job` — one Job's turns, the history and then the live ones.
     ///

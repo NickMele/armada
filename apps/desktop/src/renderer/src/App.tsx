@@ -23,7 +23,7 @@ import { Alert, Button, Dialog } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
 import type { BridgeState, Draft, Outcome, Watched } from "../../shared/bridge";
-import type { JobDetail as JobWhole } from "../../shared/protocol";
+import type { FileReport, JobDetail as JobWhole } from "../../shared/protocol";
 import { Boundary } from "./Boundary";
 import { CopiedToast, useCopied } from "./CopiedToast";
 import { FailureBlock } from "./FailureSurface";
@@ -240,6 +240,23 @@ export function App() {
   }
 
   /**
+   * File a report on a job that failed in error.
+   *
+   * **Not through `act`, and not like the others at all**: nothing about the
+   * job changes, so there is nothing to fold and nothing to re-read. It returns
+   * the outcome rather than only publishing one, because the record that comes
+   * back is what the dialog shows next — held there rather than in app state,
+   * where it would outlive the dialog that produced it.
+   */
+  async function report(jobId: string, filing: FileReport): Promise<Outcome> {
+    const answer = await window.armada.fileReport(jobId, filing);
+    // Published as well as returned: a refusal belongs in the one place this
+    // app says what a command answered, and a success is worth the same line.
+    setOutcome(answer);
+    return answer;
+  }
+
+  /**
    * Answer the review gate. **Three preload calls, not one with a
    * discriminator** — approving takes the work, requesting changes sends the
    * drone back to the same step with the note, and rejecting is terminal and
@@ -417,6 +434,7 @@ export function App() {
                 onAct={(what, jobId) => setConfirming({ act: what, jobId })}
                 onRedirect={(jobId, instruction) => void redirect(jobId, instruction)}
                 onOverrule={(jobId, reason) => void overrule(jobId, reason)}
+                onReport={report}
                 onApprove={(jobId) => void approve(jobId)}
                 onApproveReview={(jobId) => void decide(jobId, "approve")}
                 onRequestChanges={(jobId, note) => void decide(jobId, "changes", note)}

@@ -48,6 +48,7 @@ use crate::footprint::kept;
 // newtype that cannot hold an empty instruction. Both names are in scope here,
 // which is the one place they meet.
 use crate::overruling::Overruling;
+use crate::reporting::Filed;
 use crate::resume::Redirection as Instruction;
 
 /// The codes this boundary raises, declared beside the thing that raises them.
@@ -519,6 +520,53 @@ where
         self.summarised(&job).await
     }
 
+    /// A person says this Job failed in error, and the record is filed with
+    /// what they said.
+    ///
+    /// **Everything here is in `crate::reporting`**, including the emptiness:
+    /// `Filed::saying` refuses a blank sentence and a half-named criterion, and
+    /// this only carries the refusal out as the 422 a blank override reason
+    /// gets — a report carrying the record and no sentence has added nothing
+    /// that was not already served by three other routes.
+    async fn file_report(
+        &self,
+        job_id: JobId,
+        filing: ipc::FileReport,
+    ) -> Result<ipc::Report, Refusal> {
+        let id = job_id.to_domain();
+        let filed = Filed::saying(
+            filing.claim,
+            &filing.said,
+            filing.step_id,
+            filing.criterion_id,
+        )
+        .ok_or_else(|| self.refusal(Adrift::Unreasoned { job: id.clone() }))?;
+        let filed = Fleet::file_report(self, &id, &filed)
+            .await
+            .map_err(|why| self.refusal(why))?;
+        reported(&filed).map_err(|why| self.refusal(why))
+    }
+
+    /// Every report filed, newest first, with the counts they are read beside.
+    async fn list_reports(&self) -> Result<ipc::ReportList, Refusal> {
+        let (filed, counted) = Fleet::reports(self)
+            .await
+            .map_err(|why| self.refusal(why))?;
+        let mut reports = Vec::with_capacity(filed.len());
+        for report in &filed {
+            reports.push(reported(report).map_err(|why| self.refusal(why))?);
+        }
+        Ok(ipc::ReportList {
+            reports,
+            calibration: ipc::Calibration {
+                refusals_recorded: counted.refusals_recorded,
+                refusals_disputed: counted.refusals_disputed,
+                passes_disputed: counted.passes_disputed,
+                reports_filed: counted.reports_filed,
+            },
+        })
+    }
+
     /// One Job's turns. **Subscribe, then read the history** — the one order,
     /// in the one place that can take both halves.
     ///
@@ -716,6 +764,46 @@ fn submitted(recorded: &(core_model::StepId, core_model::StepEvidence)) -> Submi
         // lost.
         not_claimed: Some(evidence.not_claimed.clone()).filter(|text| !text.is_empty()),
     }
+}
+
+/// One filed report, as the wire carries it. **The redaction, for a report.**
+///
+/// A plain function for [`recorded`]'s reason. Every field crosses, which is
+/// what a report is for — and the scrubbing that makes that safe happened on
+/// the way *in*, in `crate::reporting`, rather than here: a record already
+/// written is a record already at rest, and this is a read.
+///
+/// A `claim` or an `origin` the wire has no spelling for refuses the read
+/// rather than being served under a value nobody chose. Such a row is one
+/// nothing but a hand-edited database can produce — the wire's own decode
+/// refuses an unknown claim on the way in — and a report shown under the wrong
+/// claim would be counted under it too.
+fn reported(filed: &store::Report) -> Result<ipc::Report, Adrift> {
+    Ok(ipc::Report {
+        id: ipc::ReportId::carried(filed.report_id.clone()),
+        filed_at: (&filed.filed_at).into(),
+        origin: ipc::ReportOrigin::from_wire(&filed.origin)
+            .ok_or_else(|| unreadable("origin", &filed.origin))?,
+        claim: ipc::Claim::from_wire(&filed.claim)
+            .ok_or_else(|| unreadable("claim", &filed.claim))?,
+        job_id: ipc::JobId::from(&filed.job_id),
+        job_title: filed.job_title.clone(),
+        step_id: filed.step_id.as_ref().map(ipc::StepId::from),
+        criterion_id: filed.criterion_id.as_ref().map(ipc::CriterionId::from),
+        said: filed.said.clone(),
+        record: filed.record.clone(),
+    })
+}
+
+/// A stored spelling this build has no value for.
+fn unreadable(column: &'static str, value: &str) -> Adrift {
+    Adrift::Reading(LoadJobError::Unreadable(
+        store::RowError::UnknownEnumValue {
+            table: "reports",
+            column,
+            value: value.to_string(),
+        },
+    ))
 }
 
 /// A refusal, as the Drone reads it.

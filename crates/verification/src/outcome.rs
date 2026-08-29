@@ -150,7 +150,13 @@ impl OutcomeTurn {
         let label = failed.label();
         let said = failures
             .iter()
-            .map(|failure| format!("- expected {}, and {}", failure.expected(), failure.produced()))
+            .map(|failure| {
+                format!(
+                    "- expected {}, and {}",
+                    failure.expected(),
+                    failure.produced()
+                )
+            })
             .collect::<Vec<String>>()
             .join("\n");
         let mut text =

@@ -16,11 +16,13 @@
 
 import type { BridgeState, Draft, Outcome } from "../shared/bridge";
 import type {
+  FileReport,
   JobSummary,
   Overruled,
   ProposeJob,
   Redirection,
   Redispatched,
+  Report,
 } from "../shared/protocol";
 import { ask, isJobSummary, type Answer } from "./request";
 import { decide, type Decision } from "./review";
@@ -58,6 +60,7 @@ type Busy =
   | "already_redirecting"
   | "already_restarting"
   | "already_overruling"
+  | "already_reporting"
   | "already_deciding";
 
 /** A route under one Job. The id is a path segment, so it is encoded. */
@@ -83,6 +86,8 @@ export class JobCommands {
   private readonly overruling = new Set<string>();
   /** Jobs with a decision on the work in flight. One press sends one decision. */
   private readonly deciding = new Set<string>();
+  /** Jobs with a report being filed. Its own set: filing is not an act on the job. */
+  private readonly reporting = new Set<string>();
 
   constructor(board: Board) {
     this.board = board;
@@ -298,6 +303,41 @@ export class JobCommands {
     return this.act(jobId, this.overruling, "already_overruling", (port) =>
       ask(port, "POST", route(jobId, "override_verdict"), body),
     );
+  }
+
+  // ---------------------------------------------------------- reporting
+  /**
+   * Say this job failed in error, and file its record with the reason.
+   *
+   * **Not the shape `act` holds, and deliberately.** Every act in that shape
+   * folds a job onto the board and re-reads the open one, because every act in
+   * that shape changes a job. This one changes nothing — no status, no step, no
+   * drone — so folding or re-reading would be Bridge redrawing a board on the
+   * strength of somebody having written a sentence.
+   *
+   * Blank is refused before the request is sent, matching the 422 Fleet would
+   * give it. What comes back is the report, which the caller shows: Armada
+   * files nothing in the issue tracker, so the rendered record is what a person
+   * there themselves.
+   */
+  async fileReport(jobId: string, filing: FileReport): Promise<Outcome> {
+    if (filing.said.trim() === "") return { ok: false, why: "empty_report" };
+    if (this.reporting.has(jobId)) return { ok: false, why: "already_reporting" };
+    const port = this.board.port();
+    if (port === null) return { ok: false, why: "not_connected" };
+
+    this.reporting.add(jobId);
+    try {
+      const answer = await ask(port, "POST", route(jobId, "report"), filing);
+      if (answer.ok !== true) return answer.outcome;
+      const report = answer.body as Report;
+      // A body that is not a report is still a filing that happened — Fleet
+      // answered 201 — so the outcome is a success carrying nothing rather
+      // than a refusal that would send somebody to file it a second time.
+      return typeof report?.record === "string" ? { ok: true, report } : { ok: true };
+    } finally {
+      this.reporting.delete(jobId);
+    }
   }
 
   // ------------------------------------------------------ deciding on work

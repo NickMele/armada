@@ -187,6 +187,23 @@ Added with the model picker. `crates/config/settings.toml` carries two rows that
 Helm may reach it for the same reason it may reach the other queries: knowing what a model may be named is not choosing one.
 """
 
+[operations.list_reports]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "Every report a person has filed, newest first, with the Job record each carries and the counts they are read beside"
+notes = """
+The other half of `file_report`, and the half that makes a report worth filing: a record nobody can list is a record nobody triages.
+
+**The bodies travel with the list.** A report is the rare artifact — one per verdict somebody disagreed with — and the rendered record is the payload the sentence is the finding about, so a second route per report would defer exactly the part every reader wants. The cost is that a store with hundreds of reports answers this with hundreds of bodies, which is stated rather than designed around: nothing has hundreds.
+
+It is not scoped to a Job, and that is deliberate. A report outlives the Job it is about — `armada clean` forgets the Job and the report stays — so a listing reachable only through a Job would lose exactly the reports that most need reading.
+
+`calibration` is four counts and not a rate. Dividing disputes by refusals would put every Job nobody read into the denominator, and an unread Job is not a pass; the gap stays unmeasured rather than divided away.
+
+`helm_access` is `Yes` because reading what a person has already said is not saying it for them — which is exactly why `file_report` beside it is `No`.
+"""
+
 [operations.list_reviews]
 kind = "query"
 transport = "HTTP"
@@ -261,6 +278,25 @@ kind = "command"
 transport = "HTTP"
 helm_access = "No"
 description = "Rejects a dispatch, feeds pattern learning"
+
+[operations.file_report]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Files a report on a Job that failed, carrying the person's reason and the Job's own record"
+notes = """
+**`failures` is what Armada thinks went wrong; a report is what you know went wrong.** Every other operation here answers *did this fail*. None answers *did this fail correctly*, and the two sets do not contain each other: a Job that failed perfectly by its own lights and was wrong is `escalated` with a real trigger on it, and nothing anywhere records that the refusal was wrong. Twice now the owner disagreeing out loud has been the entire detection mechanism.
+
+**The bundle is collection, not capture.** `get_job`, `get_job_events` and `get_evidence` already carry the record, so Fleet assembles this from operations that exist rather than capturing anything new. The one thing that does not exist until a person types it is `said` — why they think the machine was wrong — and it is required. A report that bundles the record and says nothing is the terminal-paste this exists to remove, automated.
+
+**`claim` is a closed set because a count may not read prose.** The first override in this repository carries the reason `probe`, sent to find out whether the route was served, and `job_events` is append-only so it says that for ever. An override with a useless reason is indistinguishable from a considered one, and a required non-blank field does not make a reason meaningful — so what the count reads is the value a person picked, and the sentence is what a person reads.
+
+**`helm_access` is `No`, and it is the strongest `No` in this file.** Filing on the owner's behalf without his sentence is the exact failure mode: the record is evidence and his reason is the finding, and an agent that could file one would be producing the bundle without the finding, at machine speed, into a tracker where a wrong claim survives as a fact.
+
+Redaction happens on the way in. The record is rendered and scrubbed before it is stored, never at read time — scrubbing on the way out leaves a window the length of the file's life, and a store that has already written a credential cannot un-write it.
+
+It creates no Job and dispatches nothing. Filing comes first; dispatching is the existing flow pointed at what this produced, and a Drone cannot reach the issue tracker, so the record has to travel in a Job's facts either way.
+"""
 
 [operations.kill_drone]
 kind = "command"

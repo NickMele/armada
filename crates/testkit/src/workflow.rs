@@ -120,7 +120,7 @@ pub fn retried(steps: &[Sketch<'_>], retry_limit: u32) -> ResolvedWorkflow {
         Path::new("fixture-workflow.yml"),
         &workflow_text(steps, retry_limit),
     )
-        .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
+    .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
     let manifest = Manifest::parse(Path::new("fixture-armada.yml"), &manifest_text(steps))
         .unwrap_or_else(|refused| panic!("the fixture manifest did not parse: {refused}"));
     ResolvedWorkflow::resolve(&def, &manifest)

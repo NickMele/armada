@@ -455,8 +455,9 @@ fn a_step_key_m1_does_not_read_hard_fails() {
 /// against. It is read now, and this is what it is read as.
 #[test]
 fn a_step_carries_the_retry_budget_it_declares() {
-    let def = bug_with("  - id: review\n    label: Review\n    advance_gate: auto\n    retry_limit: 3\n")
-        .expect("a step declaring a retry budget loads");
+    let def =
+        bug_with("  - id: review\n    label: Review\n    advance_gate: auto\n    retry_limit: 3\n")
+            .expect("a step declaring a retry budget loads");
     assert_eq!(def.steps()[3].retry_limit(), 3);
 }
 
@@ -472,8 +473,9 @@ fn a_step_that_declares_no_retry_budget_has_none() {
 /// Zero is a sentence, not an absence: it says the first failure is the last.
 #[test]
 fn a_retry_budget_of_zero_loads_where_a_version_of_zero_would_not() {
-    let def = bug_with("  - id: review\n    label: Review\n    advance_gate: auto\n    retry_limit: 0\n")
-        .expect("zero is a legal budget");
+    let def =
+        bug_with("  - id: review\n    label: Review\n    advance_gate: auto\n    retry_limit: 0\n")
+            .expect("zero is a legal budget");
     assert_eq!(def.steps()[3].retry_limit(), 0);
 }
 

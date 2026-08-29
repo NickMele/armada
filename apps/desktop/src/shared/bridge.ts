@@ -6,9 +6,11 @@
 // import path, and this file is the shape of what crosses it.
 
 import type {
+  FileReport,
   JobDetail,
   JobFilesChanged,
   JobSummary,
+  Report,
   UnreadableJob,
   WireError,
 } from "./protocol";
@@ -309,8 +311,13 @@ export type Outcome =
    * `jobId` is the Job the caller should open next, where the act produced one
    * that is not the Job it was called on. Redispatch is the only one: it mints
    * a replacement, so the id that came back is not the id that went in.
+   *
+   * `report` rides along on the same terms: filing produces a record the caller
+   * needs next, and it is not app state — nothing on the board changes and the
+   * surface that asked is the only one that shows it, so keeping it here would
+   * leave a filed report on screen after the dialog that filed it closed.
    */
-  | { ok: true; jobId?: string }
+  | { ok: true; jobId?: string; report?: Report }
   | { ok: false; why: "not_connected" }
   | { ok: false; why: "empty_brief" }
   | { ok: false; why: "empty_title" }
@@ -322,8 +329,10 @@ export type Outcome =
   | { ok: false; why: "already_redirecting" }
   | { ok: false; why: "already_restarting" }
   | { ok: false; why: "already_overruling" }
+  | { ok: false; why: "already_reporting" }
   | { ok: false; why: "empty_instruction" }
   | { ok: false; why: "empty_reason" }
+  | { ok: false; why: "empty_report" }
   | { ok: false; why: "already_deciding" }
   | { ok: false; why: "empty_note" }
   | { ok: false; why: "refused"; error: WireError }
@@ -419,6 +428,22 @@ export type BridgeApi = {
    * The renderer says which Job is open; main does the reading and republishes
    * it whenever an event names that Job. One call per open, not one per event.
    */
+  /**
+   * Say that this Job failed in error, in your own words, and file the Job's
+   * own record with it.
+   *
+   * **Not an act on the Job.** Nothing moves, nothing is spawned and nothing is
+   * dispatched: a report is a record of what a person concluded, and an entry
+   * that also moved the Job would make disagreeing with a verdict a way of
+   * getting past one — which is `overrideVerdict`, a different act with a
+   * different refusal.
+   *
+   * The sentence is required and blank is refused before the request is sent,
+   * matching the 422 Fleet would give it. What comes back on the outcome is the
+   * report, because the rendered record is what a person does the next thing
+   * with — Armada does not file it anywhere, and says so.
+   */
+  fileReport: (jobId: string, filing: FileReport) => Promise<Outcome>;
   watchJob: (jobId: string | null) => Promise<void>;
   /**
    * Watch one Job's turns, or `null` to stop.
@@ -525,6 +550,7 @@ export const CHANNELS = {
   redirectDrone: "bridge:redirect-drone",
   restartStep: "bridge:restart-step",
   overrideVerdict: "bridge:override-verdict",
+  fileReport: "bridge:file-report",
   watchJob: "bridge:watch-job",
   observeJob: "bridge:observe-job",
   readHistory: "bridge:read-history",

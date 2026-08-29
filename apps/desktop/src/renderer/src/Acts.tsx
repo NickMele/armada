@@ -9,9 +9,11 @@ import { useState } from "react";
 import { Button, Dialog, SplitButton, Textarea, type SplitButtonItem } from "@armada/components";
 
 import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
-import type { JobDetail as JobWhole, JobSummary } from "../../shared/protocol";
+import type { Outcome } from "../../shared/bridge";
+import type { FileReport, JobDetail as JobWhole, JobSummary } from "../../shared/protocol";
 import { onwards, OVERRULING, recourseOf, REDISPATCHABLE, type Overrule } from "./recovery";
 import type { Render } from "./render";
+import { ReportControl } from "./Report";
 
 /**
  * What the two kills, the redispatch, the two step-resuming acts and the answer
@@ -95,6 +97,8 @@ export function Acts({
   onOverrule,
   onApprove,
   onObserve,
+  onReport,
+  onCopied,
 }: {
   job: JobSummary;
   /**
@@ -121,6 +125,14 @@ export function Acts({
    * than a screen reached from the header — one route to a thing, not two.
    */
   onObserve?: () => void;
+  /**
+   * Say this job failed in error. **Not one of the acts** — it moves nothing,
+   * which is why it is not in `JobAct` and does not reach the split button. It
+   * answers with the outcome because the record that comes back is what the
+   * dialog shows next.
+   */
+  onReport: (jobId: string, filing: FileReport) => Promise<Outcome>;
+  onCopied: (value: string) => void;
 }) {
   const life = JOB_LIFECYCLE[job.status];
   const over = life?.terminal ?? true;
@@ -170,6 +182,20 @@ export function Acts({
           Watch the turns
         </Button>
       )}
+      {/* Ghost like watching, and beside it, because neither is an act on the
+          job: this records what a person concluded and leaves the job exactly
+          where it was. Offered on every stopped job rather than only the ones
+          something can still be done to — a job nothing can be done to is the
+          one most likely to have failed wrongly and been left. */}
+      {render === "stopped" ? (
+        <ReportControl
+          jobId={job.id}
+          whole={whole}
+          disabled={stale}
+          onReport={onReport}
+          onCopied={onCopied}
+        />
+      ) : null}
       {/* First of the acts that resume, because it is the one that takes
           nothing away — the refused step's own work is kept. Secondary and not
           primary: the one accent fill this header carries belongs to approving

@@ -59,7 +59,10 @@ async fn a_failed_check_inside_the_budget_goes_back_to_the_drone() {
         1,
     );
 
-    let job = fleet.propose(a_proposal("register the route")).await.unwrap();
+    let job = fleet
+        .propose(a_proposal("register the route"))
+        .await
+        .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
     fleet.submit_evidence(diff_evidence()).await.unwrap();
@@ -108,7 +111,10 @@ async fn a_spent_budget_stops() {
         1,
     );
 
-    let job = fleet.propose(a_proposal("register the route")).await.unwrap();
+    let job = fleet
+        .propose(a_proposal("register the route"))
+        .await
+        .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
@@ -148,7 +154,10 @@ async fn a_step_with_no_budget_fails_on_its_first_failed_check() {
         1,
     );
 
-    let job = fleet.propose(a_proposal("register the route")).await.unwrap();
+    let job = fleet
+        .propose(a_proposal("register the route"))
+        .await
+        .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
     fleet.submit_evidence(diff_evidence()).await.unwrap();
@@ -184,7 +193,10 @@ async fn a_failed_check_stops_the_step_and_writes_its_verdict() {
         1,
     );
 
-    let job = fleet.propose(a_proposal("register the route")).await.unwrap();
+    let job = fleet
+        .propose(a_proposal("register the route"))
+        .await
+        .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
     fleet.submit_evidence(diff_evidence()).await.unwrap();
@@ -227,7 +239,10 @@ async fn a_spent_budget_stops_the_step_the_same_way() {
         1,
     );
 
-    let job = fleet.propose(a_proposal("register the route")).await.unwrap();
+    let job = fleet
+        .propose(a_proposal("register the route"))
+        .await
+        .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
@@ -261,7 +276,10 @@ async fn the_drone_is_told_what_the_check_printed() {
         1,
     );
 
-    let job = fleet.propose(a_proposal("register the route")).await.unwrap();
+    let job = fleet
+        .propose(a_proposal("register the route"))
+        .await
+        .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
     fleet.submit_evidence(diff_evidence()).await.unwrap();
@@ -273,10 +291,7 @@ async fn the_drone_is_told_what_the_check_printed() {
         told.contains("redispatch_job is not in the router"),
         "the output is the point: {told}"
     );
-    assert!(
-        told.contains("`suite`"),
-        "and which check said it: {told}"
-    );
+    assert!(told.contains("`suite`"), "and which check said it: {told}");
     assert!(
         told.contains("it exited 101"),
         "with what it produced against what was expected: {told}"
@@ -300,7 +315,10 @@ async fn the_turn_says_nothing_about_how_much_budget_is_left() {
         1,
     );
 
-    let job = fleet.propose(a_proposal("register the route")).await.unwrap();
+    let job = fleet
+        .propose(a_proposal("register the route"))
+        .await
+        .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
     fleet.submit_evidence(diff_evidence()).await.unwrap();
@@ -325,7 +343,10 @@ async fn a_check_that_never_ran_is_not_handed_back_however_much_budget_there_is(
         1,
     );
 
-    let job = fleet.propose(a_proposal("register the route")).await.unwrap();
+    let job = fleet
+        .propose(a_proposal("register the route"))
+        .await
+        .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
     fleet.submit_evidence(diff_evidence()).await.unwrap();
@@ -352,7 +373,10 @@ async fn both_runs_of_a_retried_step_are_on_the_record() {
         1,
     );
 
-    let job = fleet.propose(a_proposal("register the route")).await.unwrap();
+    let job = fleet
+        .propose(a_proposal("register the route"))
+        .await
+        .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
     fleet.submit_evidence(diff_evidence()).await.unwrap();
@@ -393,7 +417,10 @@ async fn the_log_says_the_step_was_handed_back() {
         1,
     );
 
-    let job = fleet.propose(a_proposal("register the route")).await.unwrap();
+    let job = fleet
+        .propose(a_proposal("register the route"))
+        .await
+        .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
     fleet.submit_evidence(diff_evidence()).await.unwrap();

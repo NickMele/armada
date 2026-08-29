@@ -13,6 +13,7 @@
 
 mod gates;
 mod mcp;
+mod reports;
 mod turns;
 mod version;
 

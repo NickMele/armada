@@ -80,6 +80,9 @@ pub struct FakeDaemon {
     /// How many dry runs were asked for, so a test can assert that a refused
     /// call ran nothing.
     pub checked: AtomicU64,
+    /// Every report filed, in filing order, so a test can assert that a
+    /// refused filing left none behind.
+    pub reports: Mutex<Vec<ipc::Report>>,
     /// When set, every call answers with a fault. The stream closing on a
     /// daemon that cannot answer is a behaviour worth a test.
     pub mute: Mutex<bool>,
@@ -98,6 +101,7 @@ impl FakeDaemon {
             submitted: Mutex::new(Vec::new()),
             declared: Mutex::new(Vec::new()),
             checked: AtomicU64::new(0),
+            reports: Mutex::new(Vec::new()),
             mute: Mutex::new(false),
         }
     }
@@ -595,6 +599,71 @@ impl Daemon for FakeDaemon {
             )));
         }
         Ok(job.clone())
+    }
+
+    /// Filing, faked on the two things the transport can see: the Job has to
+    /// exist, and **a report with no sentence is not a report.** What Fleet
+    /// attaches around the sentence is Fleet's — three reads and a render —
+    /// and a fake that produced a record would be asserting about a bundle it
+    /// invented.
+    async fn file_report(
+        &self,
+        job_id: JobId,
+        filing: ipc::FileReport,
+    ) -> Result<ipc::Report, Refusal> {
+        let job = {
+            let jobs = self.jobs.lock().expect("not poisoned");
+            let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+                return Err(self.no_such_job(&job_id));
+            };
+            job.clone()
+        };
+        if filing.said.trim().is_empty() {
+            return Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fake.unsaid_report",
+                "a report needs the sentence the record is context for".to_string(),
+                run_id(),
+            )));
+        }
+        let report = ipc::Report {
+            id: ipc::ReportId::carried("01REPORT"),
+            filed_at: Instant::carried("2026-08-28T21:00:00.000Z"),
+            origin: ipc::ReportOrigin::Human,
+            claim: filing.claim,
+            job_id,
+            job_title: job.title.clone(),
+            step_id: filing.step_id,
+            criterion_id: filing.criterion_id,
+            said: filing.said,
+            record: "## Every move it made".to_string(),
+        };
+        self.reports
+            .lock()
+            .expect("not poisoned")
+            .push(report.clone());
+        Ok(report)
+    }
+
+    /// Newest first, and the two counts a fake can honestly answer. It knows
+    /// nothing about recorded refusals, which are rows in a store this has
+    /// none of, so that count is zero rather than invented.
+    async fn list_reports(&self) -> Result<ipc::ReportList, Refusal> {
+        let reports = self.reports.lock().expect("not poisoned");
+        let disputed = |claim: ipc::Claim| {
+            reports
+                .iter()
+                .filter(|report| report.claim == claim)
+                .count() as u32
+        };
+        Ok(ipc::ReportList {
+            calibration: ipc::Calibration {
+                refusals_recorded: 0,
+                refusals_disputed: disputed(ipc::Claim::WronglyRefused),
+                passes_disputed: disputed(ipc::Claim::WronglyPassed),
+                reports_filed: reports.len() as u32,
+            },
+            reports: reports.iter().rev().cloned().collect(),
+        })
     }
 
     async fn redispatch_job(&self, job_id: JobId) -> Result<Redispatched, Refusal> {
