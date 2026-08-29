@@ -1,0 +1,177 @@
+{
+  "http": {
+    "config": {
+      "type": "http",
+      "url": "http://127.0.0.1:8941/mcp"
+    },
+    "mcp_servers": [
+      {
+        "name": "armada",
+        "status": "connected"
+      }
+    ],
+    "mcp_tools": [
+      "mcp__armada__whoami"
+    ],
+    "stderr": "",
+    "server_log_lines": 16
+  },
+  "streamable-http": {
+    "config": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:8941/mcp"
+    },
+    "mcp_servers": [
+      {
+        "name": "armada",
+        "status": "connected"
+      }
+    ],
+    "mcp_tools": [
+      "mcp__armada__whoami"
+    ],
+    "stderr": "",
+    "server_log_lines": 17
+  },
+  "sse": {
+    "config": {
+      "type": "sse",
+      "url": "http://127.0.0.1:8941/sse"
+    },
+    "mcp_servers": [
+      {
+        "name": "armada",
+        "status": "connected"
+      }
+    ],
+    "mcp_tools": [
+      "mcp__armada__whoami"
+    ],
+    "stderr": "",
+    "server_log_lines": 10
+  },
+  "ws": {
+    "config": {
+      "type": "ws",
+      "url": "ws://127.0.0.1:8941/mcp"
+    },
+    "mcp_servers": [
+      {
+        "name": "armada",
+        "status": "connected"
+      }
+    ],
+    "mcp_tools": [
+      "mcp__armada__whoami"
+    ],
+    "stderr": "",
+    "server_log_lines": 6
+  },
+  "stdio": {
+    "config": {
+      "type": "stdio",
+      "command": "/opt/homebrew/bin/python3",
+      "args": [
+        "<spike>/010-identity-server.py",
+        "stdio"
+      ]
+    },
+    "mcp_servers": [
+      {
+        "name": "armada",
+        "status": "connected"
+      }
+    ],
+    "mcp_tools": [
+      "mcp__armada__whoami"
+    ],
+    "stderr": "",
+    "server_log_lines": 5
+  },
+  "stdio-implicit": {
+    "config": {
+      "command": "/opt/homebrew/bin/python3",
+      "args": [
+        "<spike>/010-identity-server.py",
+        "stdio"
+      ]
+    },
+    "mcp_servers": [
+      {
+        "name": "armada",
+        "status": "connected"
+      }
+    ],
+    "mcp_tools": [
+      "mcp__armada__whoami"
+    ],
+    "stderr": "",
+    "server_log_lines": 5
+  },
+  "sdk": {
+    "config": {
+      "type": "sdk",
+      "name": "armada"
+    },
+    "mcp_servers": null,
+    "mcp_tools": [],
+    "stderr": "",
+    "server_log_lines": 0
+  },
+  "unix-type": {
+    "config": {
+      "type": "unix",
+      "url": "<spike>/armada.sock"
+    },
+    "mcp_servers": [],
+    "mcp_tools": [],
+    "stderr": "",
+    "server_log_lines": 0
+  },
+  "unix-url": {
+    "config": {
+      "type": "http",
+      "url": "unix://<spike>/armada.sock"
+    },
+    "mcp_servers": [
+      {
+        "name": "armada",
+        "status": "failed"
+      }
+    ],
+    "mcp_tools": [],
+    "stderr": "",
+    "server_log_lines": 0
+  },
+  "http+unix-url": {
+    "config": {
+      "type": "http",
+      "url": "http+unix://%2Fprivate%2Ftmp%2Fclaude-501%2F-Users-operator-Development-armada%2F9e12a4c8-adcf-40d1-b5e9-a454c1aea9f7%2Fscratchpad%2Fmcp%2Farmada.sock"
+    },
+    "mcp_servers": [
+      {
+        "name": "armada",
+        "status": "failed"
+      }
+    ],
+    "mcp_tools": [],
+    "stderr": "",
+    "server_log_lines": 0
+  },
+  "unix-path-url": {
+    "config": {
+      "type": "http",
+      "url": "http://localhost/mcp",
+      "socketPath": "<spike>/armada.sock"
+    },
+    "mcp_servers": [
+      {
+        "name": "armada",
+        "status": "failed"
+      }
+    ],
+    "mcp_tools": [],
+    "stderr": "",
+    "server_log_lines": 0
+  }
+}
