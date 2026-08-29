@@ -368,6 +368,55 @@ fn every_gaming_pattern_survives_the_wire() {
     assert!(GamingPattern::from_wire("looks_dodgy").is_none());
 }
 
+/// **The defect the first production flag had.** A test split into a loop and a
+/// special case needing different setup asserts less in the loop — truthfully —
+/// and asserts the same thing twenty lines below, in the same patch. A question
+/// stopping at "does it assert less" is answered `yes` and is still wrong about
+/// the change, so it has to reach the rest of the patch.
+///
+/// The teeth are asserted beside it: an assertion made nowhere else is what
+/// this pattern is for, and softening that away would pass this test only by
+/// deleting a line of it.
+#[test]
+fn the_weakened_assertion_question_asks_where_the_assertion_went() {
+    let asked = GamingPattern::AssertionWeakened
+        .question()
+        .expect("a judged pattern has a question");
+    assert!(
+        asked.contains("made nowhere else in this change"),
+        "the question has to reach the rest of the patch: {asked}"
+    );
+    assert!(
+        asked.contains("asserts less"),
+        "and still be the question it was: {asked}"
+    );
+}
+
+/// **The second defect in the same flag.** It cited two assertions the change
+/// had copied verbatim out of the test it was splitting — a fair criticism of
+/// that test's standard, and no claim at all about the change. So the question
+/// separates an assertion this change wrote from one it carried, and keeps both
+/// arms it had: a vacuous test written here, and an existing one this change
+/// hollowed out.
+#[test]
+fn the_tautological_test_question_tells_a_written_assertion_from_a_carried_one() {
+    let asked = GamingPattern::TautologicalTest
+        .question()
+        .expect("a judged pattern has a question");
+    assert!(
+        asked.contains("moved or copied unchanged"),
+        "a standard that was already here is not this change's doing: {asked}"
+    );
+    assert!(
+        asked.contains("write a test that would pass whatever the code"),
+        "a vacuous test written here is still flagged: {asked}"
+    );
+    assert!(
+        asked.contains("leave an existing one passing"),
+        "and so is one this change hollowed out: {asked}"
+    );
+}
+
 /// A gaming check with no pattern is a check that does not fire, which is the
 /// same representation an absent one has — one way to be off, as everywhere
 /// else in this file.
