@@ -161,6 +161,7 @@ export function Changed({
   job,
   diff,
   planReadable = true,
+  markedInRecord = false,
   onCopied,
 }: {
   job: JobSummary;
@@ -176,6 +177,15 @@ export function Changed({
    * knows which of the two it is drawing and the wire does not.
    */
   planReadable?: boolean;
+  /**
+   * Whether the footprint on this Job's `JobDetail` carries a declaration, and
+   * so whether the record beside this tab already marks the drift.
+   *
+   * **What keeps two tabs of one record from answering one question two ways.**
+   * The declaration is unreadable here either way; where it is readable in the
+   * record, the note says where rather than stopping at the silence.
+   */
+  markedInRecord?: boolean;
   onCopied: (value: string) => void;
 }) {
   const mine = diff.state !== "none" && diff.jobId === job.id;
@@ -199,7 +209,7 @@ export function Changed({
       files={files}
       emptyNote={CHANGED_NOTHING}
       cut={cut}
-      note={diffNote(work, planReadable)}
+      note={diffNote(work, planReadable, markedInRecord)}
       onCopied={onCopied}
     />
   );

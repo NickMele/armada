@@ -52,6 +52,26 @@ export const TwoPathsOutsideThePlan: Story = {
 };
 
 /**
+ * The record a job left behind, with no plan recorded against it. **No row is
+ * marked and the note says why**, because the wire cannot tell a job whose
+ * steps declared nothing from a job that stopped before declarations were kept
+ * — the two arrive as one empty list. A sentence that picked the first would
+ * tell every older job its steps scoped nothing, so the note offers both and
+ * closes off the reading the blank marks would otherwise invite.
+ */
+export const NoPlanIsRecordedAgainstIt: Story = {
+  args: {
+    emptyNote: NOTHING_YET,
+    note: "Read from this job's worktree when the job stopped, and kept — so it says the same thing whether or not anyone was watching. No plan is recorded against it, so no path is marked. Either no step declared one, or this job stopped before declarations were kept. An unmarked path here is not a path that was inside a plan.",
+    files: [
+      { path: "crates/fleet/src/dispatch.rs", change: "modified" },
+      { path: "crates/fleet/src/footprint.rs", change: "modified" },
+      { path: "crates/ipc/src/work.rs", change: "modified" },
+    ],
+  },
+};
+
+/**
  * The kinds that are not an edit. Each renders the wire's own word — nothing
  * folds `conflicted` or `unreadable` into "modified", because those are the two
  * a person has to act on.

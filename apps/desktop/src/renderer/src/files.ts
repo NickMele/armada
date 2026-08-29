@@ -10,10 +10,16 @@
 // second — rather than one function taking a flag, because the sentences they
 // produce have nothing in common.
 //
-// **The record's mark is absent, not false, where nothing was declared.** A
-// path on a Job whose steps never scoped anything was not measured and found
+// **The record's mark is absent, not false, where no plan is recorded.** A path
+// on a Job whose record carries no declaration was not measured and found
 // clean; it was not measured. `planned_by` carries that as three readings and
 // this module never collapses them to two.
+//
+// **An empty `plans` is a gap in the record and never a claim about the
+// steps.** `crates/ipc/src/work.rs` says it plainly: a Job whose steps never
+// declared, and a Job that stopped before Fleet kept declarations, both come
+// back with none. So no sentence here reports the second as the first — the
+// conflation `#157` fixed for the diff's note, one file over.
 //
 // **Nothing here reads a worktree.** The paths arrive as a named event like
 // everything else, and Bridge does not open a directory to check them. Nor is
@@ -94,7 +100,7 @@ export function readingFor(footprint: Footprint, jobId: string): JobFilesChanged
  * different facts.** `job.files_changed` is published by a working Drone, so
  * the first says wait and the second says nothing is coming — and one sentence
  * for both would leave a Job at the approval gate looking like it had stalled.
- * The third case, a Job that is over, is `NOT_SERVED_WHEN_FINISHED`.
+ * The third case, a Job that is over, is `NO_FOOTPRINT_RECORDED`.
  */
 export function whyNoFootprint(hasDrone: boolean): string {
   return hasDrone
@@ -103,14 +109,17 @@ export function whyNoFootprint(hasDrone: boolean): string {
 }
 
 /**
- * Named once, because the outcome row and the record section both say it.
+ * Named once, because the outcome row and both record sections say it.
  *
  * **It is the older-job sentence now, not the shape of the seam.** Fleet writes
- * a footprint down at the terminal transition and serves it on `JobDetail`, so
- * a job with none either stopped before that existed or had a worktree that
- * would not open when it did — and the job's own log says which.
+ * a footprint down at *every* terminal transition — `crates/fleet/src/dispatch.rs`,
+ * a killed Job included — and serves it on `JobDetail`, so a Job with none
+ * either stopped before that existed or had a worktree that would not open when
+ * it did, and the Job's own log says which. Not `WHEN_FINISHED`, because the
+ * stopped record says it too and a name that claimed otherwise is how the
+ * failed side went unread.
  */
-export const NOT_SERVED_WHEN_FINISHED =
+export const NO_FOOTPRINT_RECORDED =
   "No footprint was recorded when this job stopped. It ended before fleet kept one, or its " +
   "worktree could not be read at the time — the job's log says which.";
 
@@ -157,14 +166,35 @@ export function outsideCount(footprint: JobFootprint): number {
 }
 
 /**
+ * Whether this record carries a declaration to measure against at all.
+ *
+ * **The one question every sentence and every count here turns on**, named once
+ * so no caller re-derives it from `plans.length` and phrases the answer as a
+ * claim about the steps. It is not one: an empty list is a Job whose steps
+ * declared nothing *or* a Job that stopped before Fleet kept declarations, and
+ * the wire cannot tell them apart. What it does settle is that nothing in this
+ * record was measured.
+ */
+export function planRecorded(footprint: JobFootprint): boolean {
+  return declaringSteps(footprint).length > 0;
+}
+
+/**
  * What the record says about itself: that it is a record, and what its marks do
  * or do not mean.
  *
  * **The second sentence is the point, and it is a different sentence now.** A
  * reader deciding whether to take the work is owed either the drift or the fact
- * that nobody measured it — and the one thing they must never be left to infer
- * is that unmarked means in scope. A job whose steps declared nothing says so
- * in words rather than by drawing no marks.
+ * that nothing measured it — and the one thing they must never be left to infer
+ * is that unmarked means in scope.
+ *
+ * **The silent case reports the record and not the Drone.** It said "no step
+ * declared a plan for this job", which is a claim about what the steps did, and
+ * every Job that ran before declarations were kept was told its steps scoped
+ * nothing. The two are one empty list on the wire, so the sentence names the
+ * gap, offers both readings of it, and closes off the inference that unmarked
+ * means inside a plan — `PLAN_NOT_READABLE` in `review.ts` is the same shape,
+ * for the same reason.
  */
 export function recordNote(footprint: JobFootprint): string {
   const read =
@@ -172,7 +202,11 @@ export function recordNote(footprint: JobFootprint): string {
     "whether or not anyone was watching.";
   const steps = declaringSteps(footprint);
   if (steps.length === 0) {
-    return `${read} No path is marked, because no step declared a plan for this job — nothing here was measured against one.`;
+    return (
+      `${read} No plan is recorded against it, so no path is marked. Either no step declared ` +
+      "one, or this job stopped before declarations were kept. An unmarked path here is not a " +
+      "path that was inside a plan."
+    );
   }
   const promised = `Measured against what ${steps.join(", ")} declared.`;
   const drifted = outsideCount(footprint);
@@ -186,14 +220,14 @@ export function recordNote(footprint: JobFootprint): string {
  * The one-line answer for the outcome row: how many files, and how many of them
  * went outside every declared plan.
  *
- * **No drift count where no plan was declared**, which is the whole of why the
- * meta is conditional: a `0 outside plan` on a job nobody scoped would be a
- * measurement nobody made.
+ * **No drift count where no plan is recorded**, which is the whole of why the
+ * meta is conditional: a `0 outside plan` on a job with no declaration in its
+ * record would be a measurement nobody made.
  */
 export function recordSummary(footprint: JobFootprint): { value: string; meta?: string } {
   const total = footprint.files.length;
   const value = total === 1 ? "1 file" : `${total} files`;
-  if (declaringSteps(footprint).length === 0) return { value };
+  if (!planRecorded(footprint)) return { value };
   const drifted = outsideCount(footprint);
   return drifted === 0 ? { value } : { value, meta: `${drifted} outside plan` };
 }

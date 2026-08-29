@@ -15,8 +15,8 @@ import { heading, record, steps, tail } from "./fixtures";
  *
  * **A job that landed is the one nobody investigates.** This is the screen with
  * every question on it, so the record beneath it holds the moves, the turns,
- * the diff and the claims — the four things a person used to open a database, a
- * transcript on disk and the source for.
+ * the footprint, the diff and the claims — the five things a person used to
+ * open a database, a transcript on disk and the source for.
  *
  * The header is `Job detail header actions`, the same component the running job
  * renders: a badge, a title, a job id and a run of facts. What changes with the
@@ -38,9 +38,10 @@ type Story = StoryObj<typeof AFailedJobADeadEndReadAsOne>;
  * refuses anything else as `NotResumable` — so the recourse line says that
  * rather than leaving a person to press a button and find out.
  *
- * The record beneath holds the four reads: the moves, the turns, the diff and
- * the claims. Only the open one is drawn, so a record nobody unfolded costs
- * nothing.
+ * The record beneath holds five sections: the moves, the turns, the footprint,
+ * the diff and the claims. Only the open one is drawn, so a record nobody
+ * unfolded costs nothing — and the footprint is the one that costs nothing
+ * either way, because it arrives with the job rather than from a read.
  */
 export const FailedJob: Story = {
   render: function FailedJobStory() {

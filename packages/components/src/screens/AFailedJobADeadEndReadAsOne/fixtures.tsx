@@ -12,6 +12,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import { FileCheck, ShieldCheck, ShieldMinus, ShieldX, X } from "lucide-react";
+import { ChangedFiles } from "../../compositions/ChangedFiles/ChangedFiles";
 import { DroneTurns } from "../../compositions/DroneTurns/DroneTurns";
 import { EvidenceTrail } from "../../compositions/EvidenceTrail/EvidenceTrail";
 import type { JobRecordSection } from "../../compositions/JobRecord/JobRecord";
@@ -96,10 +97,15 @@ export const tail = [
   "test result: FAILED. 82 passed; 2 failed",
 ].join("\n");
 
-/* What the record folds away. Four sections and not the finished record's
-   eight: the rail is the region above rather than a tab, the brief and the
-   paths are the region beside it, and a footprint section would be empty on
-   every stopped job — nothing serves one once the drone has gone. */
+/* What the record folds away. Five sections and not the finished record's
+   eight: the rail is the region above rather than a tab, and the brief and the
+   paths are the region beside it.
+
+   The footprint is the fifth, and it is here because fleet writes one at every
+   terminal transition and serves it on the job — not from a live reading, which
+   does stop once the drone has gone. It draws the same list the finished record
+   draws, marked against what the steps declared, because the job that went out
+   of scope is usually the one that stopped. */
 export const record: JobRecordSection[] = [
   {
     id: "moves",
@@ -164,12 +170,28 @@ export const record: JobRecordSection[] = [
     ),
   },
   {
+    id: "files",
+    label: "Files changed",
+    panel: (
+      <ChangedFiles
+        emptyNote="This job's worktree was read when it stopped and held no change against the branch it was cut from."
+        note="Read from this job's worktree when the job stopped, and kept — so it says the same thing whether or not anyone was watching. Measured against what plan, implement declared. 2 of 4 paths are outside all of them."
+        files={[
+          { path: "core/manifest/src/cache.rs", change: "modified" },
+          { path: "core/manifest/src/cache_tests.rs", change: "added" },
+          { path: "core/manifest/src/lib.rs", change: "modified", outsidePlan: true },
+          { path: "scripts/dev", change: "modified", outsidePlan: true },
+        ]}
+      />
+    ),
+  },
+  {
     id: "changed",
     label: "What it changed",
     panel: (
       <UnifiedDiff
         emptyNote="This job's worktree holds no change against the branch it was cut from."
-        note="Read from this job's worktree against the branch it was cut from."
+        note="Read from this job's worktree against the branch it was cut from. The plan this step declared is not readable once its drone has stopped, so no file is marked here. Files changed is the record kept when the job stopped, and it marks every path that fell outside the plans the steps declared."
         files={[
           {
             path: "core/manifest/src/cache.rs",
