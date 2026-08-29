@@ -17,7 +17,7 @@ import type { Outcome } from "../../shared/bridge";
 import type { FileReport, JobDetail as JobWhole, JobSummary } from "../../shared/protocol";
 import { ACT_LABEL, MENU_LABEL } from "./copy";
 import { OverruleControl } from "./Overrule";
-import { recourseOf, REDISPATCHABLE } from "./recovery";
+import { recourseOf } from "./recovery";
 import { RedirectControl } from "./Redirect";
 import type { Render } from "./render";
 import { ReportControl } from "./Report";
@@ -64,26 +64,26 @@ export type ConfirmableAct = Exclude<
  * Job ends the Job at `killed`, terminal; redispatch does the second and mints
  * a replacement; approving lets a Job at the gate run. Redirect and restart are
  * the two acts that put a person back on a Job rather than ending or replacing
- * it — `crates/api/src/routes.rs` decides which applies by whether the Job still
- * holds a Drone, and the two are never offered together for that reason.
+ * it, and they are never offered together — a redirect wants a live session and
+ * a restart wants the Drone gone.
  *
- * **Redirect no longer asks whether a step stopped.** `#181` split the two acts'
- * one predicate: a redirect wants a live session, a restart wants a stopped step
- * and no Drone, and the case that needed the split is `stalled` — a Job-level
- * escalation over a Drone that is still there. Where no step stopped the Job
- * stays `escalated` until the Drone turns, and `whole.redirecting` is what says
- * a redirect is out; `recovery.ts` carries the sentence.
+ * **Five of the eight are drawn on Fleet's answer and not on the row.**
+ * `stuck.recourse` on `GET /jobs/:job_id` is the acts Fleet will take now, and
+ * `#193` moved them here from a derivation that could not read the filesystem
+ * and so offered a restart onto a worktree that had been reclaimed. The two
+ * kills are the exception and stay derived: neither is recourse, and a Drone to
+ * kill is presence on the row.
  *
  * | Act | Drawn on | Confirms |
  * |---|---|---|
  * | `approve` | `awaiting_approval` | no — see `onApprove` |
- * | `redispatch` | `escalated`, `completed_failed`, `killed` | yes |
+ * | `redispatch` | `recourse` names `redispatch_job` | yes |
  * | `kill_drone` | a Job holding an `assigned_drone` | yes |
  * | `kill_job` | every non-terminal status | yes |
- * | `redirect` | escalated, holding an `assigned_drone` | its own dialog |
- * | `restart_step` | escalated, a step stopped, no `assigned_drone` | yes |
- * | `override_verdict` | escalated, the stopped step refused by the judge | its own dialog |
- * | `rerun_gate` | escalated, the stopped step's gate undecided | no — nothing is at stake |
+ * | `redirect` | `recourse` names `redirect_drone` | its own dialog |
+ * | `restart_step` | `recourse` names `restart_step` | yes |
+ * | `override_verdict` | `recourse` names `override_verdict` | its own dialog |
+ * | `rerun_gate` | `recourse` names `rerun_gate` | no — nothing is at stake |
  *
  * **The override is not a seventh variant of the six; it is the only one that
  * keeps the work the gate refused.** It sits with redirect and restart because
@@ -102,11 +102,11 @@ export type ConfirmableAct = Exclude<
  * of them ends anything, so none belongs beside a control whose whole point is
  * announcing what does.
  *
- * **Which of the four is offered is `recourseOf`'s answer and not this
+ * **Which of the four is offered is `recourseOf`'s reading and not this
  * file's.** The stopped screen states in words what resumes this Job, and a
  * header that decided it a second time here could disagree with the sentence a
- * person just read — so the predicate lives in `recovery.ts` and both sides
- * read it, down to whether overruling this step commits the Job.
+ * person just read — so the one reading lives in `recovery.ts` and both sides
+ * take it, down to whether overruling this step commits the Job.
  */
 export function Acts({
   job,
@@ -126,10 +126,10 @@ export function Acts({
 }: {
   job: JobSummary;
   /**
-   * `GET /jobs/:job_id`, or `null` while it has not arrived. **Only the two
-   * trigger-decided acts read it** — which trigger stopped the step, and
-   * whether that step is the workflow's last, are on the detail and on no Board
-   * row.
+   * `GET /jobs/:job_id`, or `null` while it has not arrived. **Every act on a
+   * Job that stopped reads it**, because `stuck` is there and on no Board row —
+   * so the header offers none of them until the detail lands, rather than
+   * offering one the row cannot decide.
    */
   whole: JobWhole | null;
   render: Render;
@@ -167,23 +167,25 @@ export function Acts({
 }) {
   const life = JOB_LIFECYCLE[job.status];
   const over = life?.terminal ?? true;
+  // What Fleet says it will do to this Job now — the acts, the words for them,
+  // and the step each is about. **Only on the stopped render**, which is the
+  // only one that reads a classification: nothing else on this header is an act
+  // on a Job that stopped.
+  const recourse = render === "stopped" ? recourseOf(job, whole) : undefined;
   // Menu order, mildest first — the split button puts destructive last.
   const acts: ConfirmableAct[] = [
-    // Only where Fleet accepts one; anything else is its 409, and this does not
-    // offer a button that is refused on press.
-    ...(render === "stopped" && REDISPATCHABLE.has(job.status)
-      ? (["redispatch"] as ConfirmableAct[])
-      : []),
+    // Fleet's answer and not the status: a replacement also needs the workflow
+    // this Job named to be one Fleet still holds, which no row carries.
+    ...(recourse?.redispatch === true ? (["redispatch"] as ConfirmableAct[]) : []),
     // `assigned_drone` is presence rather than state: there is nothing to kill
     // without one.
     ...(job.assigned_drone === undefined ? [] : (["kill_drone"] as ConfirmableAct[])),
     ...(over ? [] : (["kill_job"] as ConfirmableAct[])),
   ];
-  // Which of redirect and restart applies, or neither. Four of Fleet's five
-  // refusals are decidable from what the wire serves, and this is the surface
-  // that has to decide them: a `completed_failed` Job with no Drone on it used
-  // to be offered a restart, which is `NotResumable` on press every time.
-  const recourse = render === "stopped" ? recourseOf(job, whole) : undefined;
+  // Which of redirect and restart applies, or neither. **Fleet's reading, drawn
+  // rather than repeated**: it is the side that can see the worktree, and a
+  // restart offered without that answer was refused on the press every time the
+  // worktree had been reclaimed.
   const canRedirect = recourse?.act === "redirect";
   const canRestart = recourse?.act === "restart_step";
   // Beside the two rather than instead of one: which trigger stopped the step

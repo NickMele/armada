@@ -5,55 +5,45 @@
 // The stopped screen states which act applies and the header offers it, and
 // those two must not be able to disagree — a screen that says "restart the
 // step" beside a header with no restart button is worse than either alone. So
-// the predicate is here, `Acts.tsx` reads it for which control to draw, and
+// the reading is here, `Acts.tsx` reads it for which control to draw, and
 // `Stopped.tsx` reads it for the words.
 //
-// # Read off `adrift.rs`, which is the authority
+// # Fleet decides which acts apply, and this draws them
 //
-// `crates/fleet/src/adrift.rs` carries five refusals for the two resume acts,
-// and four of them are decidable from what the wire already serves:
+// This file used to derive them from `status`, `current_step_id` and
+// `assigned_drone`, reaching four of the five refusals
+// `crates/fleet/src/adrift.rs` carries. The fifth is whether the worktree is
+// still on disk: a renderer reads no filesystem, so a restart was offered on a
+// Job whose worktree had been reclaimed and the refusal arrived on the press.
+// `stuck` on `GET /jobs/:job_id` is Fleet's own answer — read off the disk, the
+// store and its own working slot — and `stuck.recourse` names each act as the
+// operation that performs it.
 //
-// | Refusal | What Fleet is refusing | What Bridge reads |
-// |---|---|---|
-// | `NotResumable` | a Job that is not `escalated` | `job.status` |
-// | `NoStepStopped` | an escalation that named no step | `job.current_step_id` |
-// | `NoDroneToRedirect` | a redirect with the Drone gone | `job.assigned_drone` |
-// | `DroneStillThere` | a restart with the Drone alive | `job.assigned_drone` |
-// | `WorktreeGone` | a restart onto a worktree that is not there | nothing |
+// **There is no second path to it.** Nothing re-derives an act where `stuck` is
+// absent: absent is Fleet classifying nothing, and a fallback would resurrect
+// the bug for exactly the Jobs it was written for. **And the set is not
+// closed** — `rerun_gate` arrived after `docs/concepts/job.md` wrote its table
+// of five, so an act this Bridge has no control for is named to the person
+// rather than dropped.
 //
-// **The fifth is named rather than predicted.** Bridge does not read the
-// filesystem, so whether the worktree survived is an answer that only comes on
-// the press — and the copy says that instead of implying a restart is certain.
+// What is still decided here is words, not acts: which sentence an act is
+// offered in, which step it names, and whether overruling that step commits the
+// Job. The first two are `OVERRULING` keyed by `stuck.stopped_by`; the third is
+// the frozen step list's own shape, and Fleet serves no field for it.
 //
-// # A third act, and it is not one of the two
+// # The two acts beside `act`, and why they are beside it
 //
-// Overruling a verdict is decided here too, and for the same reason: the screen
-// says what a person may do and the header offers it, and those two must agree.
-// It is not a third value of `act`, because it is not exclusive with either —
-// `crates/fleet/src/overruling.rs` says a Drone being there decides only how the
-// Job carries on, never whether the act applies. What decides that is the
-// trigger on the stopped step, and it is read off `last_verdict` because that is
-// where Fleet reads it.
+// Overruling a verdict is not exclusive with either resume act —
+// `crates/fleet/src/overruling.rs` says a Drone being there decides only how
+// the Job carries on. **Two triggers reach it and the words change with
+// which**: a Judge's refusal overruled and a gaming flag overruled are
+// different things a person is doing, so the sentences are one record and
+// admitting a trigger costs the words to describe it.
 //
-// **Two triggers reach it and the words change with which.** A Judge's refusal
-// overruled and a gaming flag overruled are different things a person is doing,
-// so the scope and the sentences are one record — `OVERRULING` — and admitting
-// a trigger costs the words to describe it.
-//
-// # A fourth act, for the trigger the override refuses
-//
-// `gate_undecided` is the gate declining to produce a verdict in either
-// direction — a worktree it could not read, a Judge it could not hand a patch
-// to. There is nothing ruled, so there is nothing to overrule, and
-// `overrulable()` refuses the trigger for exactly that reason. What is left is
-// to ask the question again, which is `crates/fleet/src/regating.rs`.
-//
-// **It is beside `act` and not one of its values, like the override.** Fleet
-// re-runs the gate out of the working slot, and a Job whose slot is still held
-// is a Job that may still hold a Drone — so a re-run co-occurs with a redirect
-// rather than replacing it. The two triggers partition: a step is overrulable
-// or re-runnable, never both, which is why one slot in the sentence carries
-// whichever applies.
+// `gate_undecided` is the gate declining to rule in either direction. There is
+// nothing to overrule, so what is left is to ask again —
+// `crates/fleet/src/regating.rs` — and that runs out of the working slot, so it
+// co-occurs with a redirect rather than replacing it.
 
 import { JOB_STATUS } from "../../shared/generated/vocabulary";
 import type {
@@ -61,57 +51,52 @@ import type {
   JobSummary,
   RedirectInFlight,
   StepDetail,
+  Stuck,
 } from "../../shared/protocol";
 import { clock } from "./duration";
 import { ordered } from "./facts";
 
 /**
- * The one status the two resume acts are legal on. Written here rather than
- * read from the generated vocabulary because no registry file carries the
- * answer: `job-statuses.toml` says which statuses are terminal, and
- * `escalated` is not terminal for reasons that have nothing to do with this.
- * Fleet's route is the authority and refuses anything else.
+ * The one status the two resume acts are legal on. **Kept for the words and no
+ * longer for the acts**: `stuck.recourse` says which apply, and this only
+ * chooses which sentence explains an absence.
  */
 const ESCALATED = "escalated";
 
 /**
- * The statuses a redispatch is offered on. Three, and **`rejected` is not one**:
- * a rejected Job never ran, so it has no Facts and no Evidence to carry
- * forward, and redispatching it would only be proposing a new Job — which the
- * composer already does.
- *
- * Written here rather than read from the generated vocabulary because no
- * registry file carries the set: `job-fields.toml` still asks it as an open
- * question on `redispatched_from`. Fleet's route is the authority and refuses
- * anything else; this only keeps a button off the screen that would be.
+ * The acts, spelled as `crates/ipc/operations.toml` keys the operation that
+ * performs each — which is how `stuck.recourse` names them. **Five names and
+ * not the set**: Fleet declares the set by the acts it implements, so it may
+ * name one this Bridge was built before, which `unreachable` says out loud.
  */
-export const REDISPATCHABLE: ReadonlySet<string> = new Set([
-  "escalated",
-  "completed_failed",
-  "killed",
-]);
+const OVERRIDE_VERDICT = "override_verdict";
+const RERUN_GATE = "rerun_gate";
+const REDIRECT_DRONE = "redirect_drone";
+const RESTART_STEP = "restart_step";
+const REDISPATCH_JOB = "redispatch_job";
 
 /**
  * Which of the two resume acts applies to this Job, and what a person reads
  * about it. `act` absent is a Job neither one reaches.
  *
  * **`overrule` and `reread` are beside `act` and not values of it.** Redirect
- * and restart are mutually exclusive because the Drone decides which one Fleet
- * will take; overruling a verdict is the same act whether or not a process is
- * still holding the session, and a re-run needs the working slot rather than an
- * absent Drone — so each is offered alongside whichever of the two applies
- * rather than instead of it. `docs/concepts/job.md` says so in the table of
- * five.
+ * and restart are exclusive because the Drone decides which one Fleet will
+ * take; the other two turn on the trigger instead, so each is offered alongside
+ * whichever of the two applies. `docs/concepts/job.md` says so in its table.
  *
- * **`overrule` and `reread` are never both present.** The trigger on the
- * stopped step decides them and the two triggers partition, which is Fleet's
- * arrangement read from this side: `overrulable()` refuses what
- * `undecided_step()` admits.
+ * **`overrule` and `reread` are never both present**, because the two triggers
+ * partition: `overrulable()` refuses what `undecided_step()` admits.
  */
 export type Recourse = {
   act?: "redirect" | "restart_step";
   overrule?: Overrule;
   reread?: Reread;
+  /**
+   * Whether Fleet will mint a replacement. **A field rather than a status test
+   * here**: two of the three things it turns on are on no row — whether Fleet
+   * still holds the workflow, and whether a person raised the Job.
+   */
+  redispatch: boolean;
   note: string;
 };
 
@@ -119,10 +104,8 @@ export type Recourse = {
  * The step whose gate could not decide, and so the step a re-run reads again.
  *
  * **A record and not a boolean**, for `Overrule`'s reason: the act is about one
- * step, and a shape that said only "yes" would leave the screen unable to name
- * which. Nothing beyond the step is carried, because nothing beyond the step is
- * decided here — a re-run takes no reason, spends no retry and commits nothing,
- * so there is no second outcome for a caller to tell apart.
+ * step and "yes" would leave the screen unable to name which. Nothing beyond it
+ * is carried, because a re-run takes no reason and has no second outcome.
  */
 export type Reread = {
   /** The step that stopped, undecided. What the sentence is about. */
@@ -134,11 +117,9 @@ export type Reread = {
  * **A decision and not a verdict**: a Judge's refusal is one, and a gaming
  * check calling the evidence suspect is the other, which is never a verdict.
  *
- * `commits` is the difference between the two outcomes `overruling.rs` produces
- * and is not a nicety: overruling a middle step advances it and the Job carries
- * on at the next one, and overruling the last step makes Fleet commit and
- * deliver. A control that said only "overrule" would be the same button for
- * both.
+ * `commits` is the difference between the two outcomes `overruling.rs`
+ * produces: a middle step advances and the Job runs on, and the last one makes
+ * Fleet commit and deliver. "Overrule" alone is one button for both.
  */
 export type Overrule = {
   /** The step that stopped. What the confirmation names. */
@@ -154,10 +135,7 @@ export type Overrule = {
   commits: boolean;
 };
 
-/**
- * The triggers a person may overrule. `crates/fleet/src/overruling.rs` is the
- * authority and admits exactly these two.
- */
+/** The triggers this file has words for. Fleet decides which are overrulable. */
 export type Overruled = "gate_failure" | "evidence_suspect";
 
 /**
@@ -167,54 +145,53 @@ export type Overruled = "gate_failure" | "evidence_suspect";
  * only the act on offer would leave a person wondering whether the other one
  * was hidden or refused, which is the question this exists to close.
  *
- * The detail is a second argument because the two trigger-decided acts need it
- * and the two resume acts do not: which trigger stopped the step, and whether
- * that step is the last one, are on `GET /jobs/:job_id` and on no Board row. It
- * is `null` while the read is in flight, and neither the override nor the
- * re-run is offered then — a button that could not yet say whether it commits
- * the Job is the one thing the override must not be, and a re-run offered
- * before the trigger is known would be offered on a step it is refused for.
+ * The detail is a second argument because the answer is on it and on no Board
+ * row. It is `null` while the read is in flight, and nothing is offered then —
+ * naming a Job's acts off the row is the derivation this stopped doing.
  */
 export function recourseOf(job: JobSummary, whole: JobWhole | null): Recourse {
-  // First and outside what follows: every act here is legal on `escalated`
-  // alone, so a Job that is not there reaches none of the four.
-  if (job.status !== ESCALATED) {
-    return { note: `${notResumable(job)} ${replacement(job)}` };
-  }
-  const overrule = overruleOf(whole);
-  const reread = rereadOf(whole);
+  if (whole === null) return { redispatch: false, note: READING };
+  const stuck = whole.stuck;
+  if (stuck === undefined) return { redispatch: false, note: UNCLASSIFIED };
+  const offered = new Set(stuck.recourse);
+  const overrule = offered.has(OVERRIDE_VERDICT) ? overruleOf(whole, stuck) : undefined;
+  const reread = offered.has(RERUN_GATE) ? rereadOf(whole, stuck) : undefined;
+  // Exclusive, and Fleet is what made them exclusive: a redirect wants a live
+  // session and a restart wants the Drone gone, so no classification carries
+  // both. Read in that order anyway, because a Job holding a Drone is a Job a
+  // restart would throw a session away on.
+  const act: Recourse["act"] = offered.has(REDIRECT_DRONE)
+    ? "redirect"
+    : offered.has(RESTART_STEP)
+      ? "restart_step"
+      : undefined;
+  const redispatch = offered.has(REDISPATCH_JOB);
   // Overruling and asking again both lead wherever they apply, because both
   // take nothing away and the other two do — `docs/concepts/job.md` orders the
   // acts on an escalated Job that way. **Never both**: the two triggers
   // partition, so at most one of these two sentences is here.
   const said = overrule === undefined ? "" : `${overruling(overrule)} `;
   const asked = reread === undefined ? "" : `${REREAD} `;
-  const leads = `${said}${asked}`;
-  if (job.current_step_id === undefined) {
-    return { note: `${leads}${NO_STEP_STOPPED} ${replacement(job)}` };
-  }
-  if (job.assigned_drone !== undefined) {
-    // **The answer to the last press leads.** A redirect that is waiting and one
-    // that never arrived are the same escalated Job, and the person reading this
-    // sentence is usually the person who just sent one — so what happened to it
-    // comes before what may be done next.
-    const sent = whole?.redirecting === undefined ? "" : `${waiting(whole.redirecting)} `;
-    return {
-      act: "redirect",
-      overrule,
-      reread,
-      note: `${sent}${leads}${REDIRECT} ${replacement(job)}`,
-    };
-  }
-  return { act: "restart_step", overrule, reread, note: `${leads}${RESTART} ${replacement(job)}` };
+  // **The answer to the last press leads.** A redirect that is waiting and one
+  // that never arrived are the same escalated Job, and the person reading this
+  // sentence is usually the person who just sent one — so what happened to it
+  // comes before what may be done next.
+  const sent =
+    act === "redirect" && whole.redirecting !== undefined ? `${waiting(whole.redirecting)} ` : "";
+  const applies =
+    act === "redirect" ? REDIRECT : act === "restart_step" ? RESTART : stalled(job, stuck);
+  const drew: Recourse = { act, overrule, reread, redispatch, note: "" };
+  return {
+    ...drew,
+    note: `${sent}${said}${asked}${applies} ${replacement(redispatch)}${unreachable(stuck, drew)}`,
+  };
 }
 
 /**
  * The words one trigger's override is offered in. **Five, because five places
  * say it** — the button, the confirmation's question, its reason field, the
- * stopped screen's sentence and the confirmation's first paragraph — and they
- * are held together so that no two of them can end up describing different
- * acts.
+ * screen's sentence and the confirmation's first paragraph — held together so
+ * no two of them describe different acts.
  */
 export type Overruling = {
   /** The button, and the confirmation's confirm control. **Never "approve"** —
@@ -236,13 +213,10 @@ export type Overruling = {
  * What one trigger's override is called and what it says, for the two triggers
  * an override reaches.
  *
- * **The scope and the words are one record, so a trigger cannot be admitted
- * without saying what overruling it means.** `overrulable()` in
- * `crates/fleet/src/overruling.rs` is an exhaustive `match` rather than a list
- * for the matching reason: there, a new trigger does not compile until somebody
- * writes its arm; here, it does not compile until somebody writes its sentence.
- * A `Set` beside one sentence is what this replaced, and it is how
- * `evidence_suspect` would have arrived wearing the Judge's words.
+ * **The scope is Fleet's now and the words are still here.** A trigger Fleet
+ * admits and this record has no sentence for draws no button and is named in
+ * words, rather than a screen offering a Judge's words for a check that is not
+ * the Judge — which is how `evidence_suspect` would have arrived.
  *
  * **Two, since Fleet admitted the second.** `gate_failure` is the Judge
  * refusing a criterion — a judgement about the work. `evidence_suspect` is the
@@ -281,29 +255,18 @@ export const OVERRULING: Record<Overruled, Overruling> = {
   },
 };
 
-/** The step state Fleet reads the overrulable verdict off. */
-const STOPPED = "stopped";
-
 /**
- * Whether this Job's stopped step is one a person may overrule. The status is
- * the caller's guard, so this only asks about the step.
+ * The override Fleet offered, in the words this build has for it. Fleet's
+ * answer is the caller's guard, so this reads only what the sentence needs.
  *
- * **Read off the step's own `last_verdict`, which is what Fleet reads.** The
- * Job's escalation reason carries the same spelling, and taking it from there
- * would be a second path to one answer — `overridable()` in `overruling.rs`
- * finds the stopped step and looks at the verdict on it, and so does this.
- *
- * The Check guard that function also makes is not restated: a failed mechanical
- * Check ends the Job at `completed_failed`, which stops no step and never
- * reaches this screen. Fleet keeps the guard because it must hold the day the
- * tier ordering moves; Bridge only keeps a button off a screen, and a button
- * Fleet refuses is a 409 a person reads.
+ * **The trigger is `stuck.stopped_by` and not the step's own verdict.** They
+ * carry the same spelling, because Fleet reads one off the other; taking the
+ * published one is one answer where reading both would be two.
  */
-function overruleOf(whole: JobWhole | null): Overrule | undefined {
-  const held = stoppedIn(whole);
-  if (held === undefined) return undefined;
-  const trigger = held.stopped.last_verdict?.trigger;
-  if (!overrulable(trigger)) return undefined;
+function overruleOf(whole: JobWhole, stuck: Stuck): Overrule | undefined {
+  const held = stoppedIn(whole, stuck);
+  const trigger = stuck.stopped_by;
+  if (held === undefined || !worded(trigger)) return undefined;
   return {
     step: held.stopped,
     trigger,
@@ -312,70 +275,71 @@ function overruleOf(whole: JobWhole | null): Overrule | undefined {
 }
 
 /**
- * The step Fleet reads an undecided gate off, where this Job's stopped step is
- * one. **The same `last_verdict` the override reads**, and the same reason:
- * `undecided_step()` in `crates/fleet/src/regating.rs` finds the stopped step
- * and looks at the verdict on it, so this looks in the one place Fleet does.
- *
- * **It admits exactly what `overrulable` refuses.** A trigger belonging to
- * neither — a Check that hit its bound, a loop that did not converge — is
- * offered neither act, which is what Fleet answers too.
- *
- * Two of Fleet's four refusals are not decidable from the wire and are not
- * predicted here: whether Fleet is still standing at this step, which lives in
- * a working slot Bridge cannot see, and whether the cause has gone away. Both
- * answers come on the press, and `REREAD` says so.
+ * The re-run Fleet offered, against the step it is about. **Only the step**,
+ * because a re-run takes no reason and has no second outcome; `REREAD` says
+ * what is left for the press to answer.
  */
-function rereadOf(whole: JobWhole | null): Reread | undefined {
-  const held = stoppedIn(whole);
-  if (held === undefined) return undefined;
-  return held.stopped.last_verdict?.trigger === GATE_UNDECIDED
-    ? { step: held.stopped }
-    : undefined;
+function rereadOf(whole: JobWhole, stuck: Stuck): Reread | undefined {
+  const held = stoppedIn(whole, stuck);
+  return held === undefined ? undefined : { step: held.stopped };
 }
 
 /**
- * The step that stopped, and the steps it stopped among. **One lookup for the
- * two acts that read a trigger**, because "which step stopped" is one fact:
- * two searches would be two answers the day a Job carried two stopped steps,
- * and the acts they feed are meant to partition rather than disagree.
+ * The step that stopped, and the steps it stopped among.
+ *
+ * **`stuck.step_id` rather than a search for a stopped state**: which step
+ * stopped is one fact and Fleet published it. Absent is every Job-level
+ * escalation, which names no step at all.
  */
 function stoppedIn(
-  whole: JobWhole | null,
+  whole: JobWhole,
+  stuck: Stuck,
 ): { steps: StepDetail[]; stopped: StepDetail } | undefined {
-  if (whole === null) return undefined;
+  if (stuck.step_id === undefined) return undefined;
   const steps = ordered(whole);
-  const stopped = steps.find((step) => step.state === STOPPED);
+  const stopped = steps.find((step) => step.step_id === stuck.step_id);
   return stopped === undefined ? undefined : { steps, stopped };
 }
 
 /**
- * The trigger no override reaches, and the only one a re-run does.
- * `crates/fleet/src/regating.rs` is the authority; this keeps a button off a
- * screen Fleet would answer 409 for.
+ * Whether this build has words for the trigger Fleet named. **The record above
+ * is what admits it**, rather than a second list here that could disagree with
+ * it.
  */
-const GATE_UNDECIDED = "gate_undecided";
-
-/**
- * Whether the trigger on the wire is one of the two. **The record above is what
- * admits it**, rather than a second list written here — the scope and the words
- * are the same fact, and asking the words whether they exist is how they cannot
- * disagree.
- */
-function overrulable(trigger: string | undefined): trigger is Overruled {
+function worded(trigger: string | undefined): trigger is Overruled {
   return trigger !== undefined && Object.hasOwn(OVERRULING, trigger);
 }
 
 /**
- * What overruling this decision does, in the shapes it has — **two triggers by
- * two outcomes, and the sentence carries both.**
+ * The acts Fleet named that nothing here drew, in the wire's own spelling.
  *
- * What is being overruled is the trigger's, because a refusal and a flag are
- * different acts to take. What happens next is `onwards`, and it changes too:
- * overruling a middle step continues the Job and overruling the last one
- * commits and delivers, so a sentence that stopped at "the job carries on"
- * would be wrong on exactly the case where being wrong costs the most. The cost
- * is the same either way and is said once, here.
+ * **Named rather than dropped.** `recourse` is declared by the acts Fleet
+ * implements and by no registry, so a Bridge older than its Fleet meets one it
+ * has no control for — `rerun_gate` was that act on the day it landed — and an
+ * override whose trigger `OVERRULING` cannot word is the same hole from the
+ * other side. The spelling arrives as it is, because a label invented for an
+ * act this build does not know would be inventing what it does.
+ */
+function unreachable(stuck: Stuck, made: Recourse): string {
+  const drawn = new Set<string>();
+  if (made.overrule !== undefined) drawn.add(OVERRIDE_VERDICT);
+  if (made.reread !== undefined) drawn.add(RERUN_GATE);
+  if (made.act === "redirect") drawn.add(REDIRECT_DRONE);
+  if (made.act === "restart_step") drawn.add(RESTART_STEP);
+  if (made.redispatch) drawn.add(REDISPATCH_JOB);
+  const undrawn = stuck.recourse.filter((named) => !drawn.has(named));
+  return undrawn.length === 0
+    ? ""
+    : ` This fleet also offers ${undrawn.join(", ")}, which this bridge has no control for. ` +
+        "The act is fleet's and it stands; a bridge built from the same commit draws it.";
+}
+
+/**
+ * What overruling this decision does — **two triggers by two outcomes, and the
+ * sentence carries both.** What is overruled is the trigger's words, because a
+ * refusal and a flag are different acts; what happens next is `onwards`, which
+ * would be wrong on the last step if it stopped at "the job carries on". The
+ * cost is the same either way and is said once, here.
  */
 function overruling(overrule: Overrule): string {
   return (
@@ -386,14 +350,28 @@ function overruling(overrule: Overrule): string {
 
 /**
  * What the Job does after the stopped step advances. **The one fact the two
- * outcomes differ by**, written once: the screen's sentence carries it and the
- * confirmation carries it, and a person must not read one of them and press the
- * other.
+ * outcomes differ by**, written once: a person must not read it on the screen
+ * and press the other one in the confirmation.
  */
 export function onwards(overrule: Overrule): string {
   return overrule.commits
     ? "It is the last step of this workflow, so overruling it commits the work and delivers it."
     : "It is not the last step, so the job carries on at the next one.";
+}
+
+/**
+ * Why neither resume act is on offer, in the words that fit the reason. **Four
+ * and not one**, because a person reading an absence asks which absence it is —
+ * and the third is the one Bridge could not see before, which is what
+ * `stuck.worktree_on_disk` rides beside the acts to say. The fourth is reached
+ * by no classification Fleet makes today, and is here because the alternative
+ * is one of the other three said where it is false.
+ */
+function stalled(job: SummaryStatus, stuck: Stuck): string {
+  if (job.status !== ESCALATED) return notResumable(job);
+  if (stuck.step_id === undefined) return NO_STEP_STOPPED;
+  if (!stuck.worktree_on_disk) return WORKTREE_GONE;
+  return NOTHING_STANDS;
 }
 
 /**
@@ -413,18 +391,44 @@ const NO_STEP_STOPPED =
   "Nothing resumes this job. It escalated without stopping a step, so redirect and restart " +
   "have no step to land on.";
 
+/** `WorktreeGone`, stated as a fact and not a risk: Fleet read the disk. */
+const WORKTREE_GONE =
+  "Nothing resumes this job. Its drone is gone and so is the worktree it was working in — " +
+  "fleet read the disk, and there is nothing left for a fresh drone to take over.";
+
+/** Escalated, a step stopped, a worktree on disk, and Fleet offers neither. */
+const NOTHING_STANDS =
+  "Nothing resumes this job. Its step stopped and its worktree is still there, and fleet " +
+  "offers neither a redirect nor a restart on it.";
+
+/** What the screen says while the Job's own read is still in flight. */
+const READING =
+  "Fleet has not answered yet. What can be done to a job that stopped is fleet's reading of " +
+  "the job, and nothing is offered here until it arrives.";
+
+/**
+ * What the screen says where Fleet served no classification at all.
+ *
+ * **Never a Fleet that predates the field**: one behind this Bridge is refused
+ * at the socket, since `connects()` in `src/shared/version.ts` admits `same`
+ * and `fleet_ahead` and nothing else. What is left is a Job Fleet classifies
+ * none of — `superseded` is the one it serves, where the work landed elsewhere.
+ */
+const UNCLASSIFIED =
+  "Nothing resumes this job and nothing replaces it. Fleet classifies a job that stopped and " +
+  "asked, and a job that ended without landing; it says nothing about one whose work landed " +
+  "somewhere other than in it. Proposing a new job is what is left.";
+
 /**
  * The redirect that is out, in the owner's words: *sent, waiting for the drone*.
  *
- * **It is not a status and it does not claim delivery.** The job is escalated
- * and staying there is the design — it comes back to `running` when the drone
- * takes a turn, which is evidence it resumed rather than evidence somebody
- * pressed send. What Fleet knows is that it wrote to the session, and this says
- * that and no more.
+ * **It is not a status and it does not claim delivery.** The job stays
+ * escalated by design and comes back to `running` on the drone's next turn,
+ * which is evidence it resumed where sending is not. Fleet knows it wrote to
+ * the session, and this says that and no more.
  *
  * **The time is a clock, not an age.** Nothing ticks on the wire and nothing
- * counts up here; a wait that is genuinely long is read off the time it started,
- * which is the same bargain the transcript and the history make.
+ * counts up here — the same bargain the transcript and the history make.
  */
 function waiting(sent: RedirectInFlight): string {
   return (
@@ -442,6 +446,10 @@ function waiting(sent: RedirectInFlight): string {
  * nothing is being disagreed with and nothing is being let through — the gate
  * is being asked the question it could not answer, on evidence that has not
  * changed.
+ *
+ * **The press still answers one thing.** The classification says Fleet's slot
+ * holds this job, not which step it is standing at, and `regating.rs` refuses a
+ * re-run of any other one.
  */
 const REREAD =
   "Ask the gate again. It could not decide: something it needed to read was not readable, so " +
@@ -449,8 +457,7 @@ const REREAD =
   "runs the same gate over the evidence the drone already submitted — no drone works, nothing " +
   "it did is redone, and this spends none of the step's retries. Where the cause has not gone " +
   "away the gate is undecided again and the job does not move. Fleet refuses this where it is " +
-  "no longer standing at this step, and Bridge cannot see that, so that answer comes on the " +
-  "press.";
+  "no longer standing at this step, and that answer comes on the press.";
 
 /** `DroneStillThere` stated as the act it points at rather than as a refusal. */
 const REDIRECT =
@@ -459,21 +466,24 @@ const REDIRECT =
   "drone is alive, because a restart throws that session away.";
 
 /**
- * `NoDroneToRedirect` stated the same way, and `WorktreeGone` named as the one
- * answer that only arrives on the press.
+ * `NoDroneToRedirect` stated the same way, and the worktree stated as the
+ * settled fact it now is. **The old sentence was true when it was written** —
+ * Bridge read no filesystem, so it offered a restart and let the refusal arrive
+ * on the press. Fleet reads the disk before naming this act, so the offer is
+ * the answer.
  */
 const RESTART =
   "Restart the step. The drone is gone, so a fresh one takes over the worktree at the step " +
-  "above, resolving its toolset, model and environment again. Fleet refuses this where the " +
-  "worktree is no longer on disk, and Bridge does not read the filesystem, so that answer " +
-  "comes on the press.";
+  "above, resolving its toolset, model and environment again. Fleet read the worktree before " +
+  "offering this, so it is there to take over.";
 
 /** What replaces a Job that nothing resumes, or that nothing replaces either. */
-function replacement(job: SummaryStatus): string {
-  return REDISPATCHABLE.has(job.status)
+function replacement(redispatch: boolean): string {
+  return redispatch
     ? "A redispatch mints a new job from the approval gate and carries none of the work over."
-    : "Nothing replaces it either: a redispatch takes an escalated, failed or killed job. " +
-        "Proposing a new job is what is left.";
+    : "Nothing replaces it either: a redispatch takes an escalated, failed or killed job whose " +
+        "workflow and request fleet still holds, and this is not one. Proposing a new job is " +
+        "what is left.";
 }
 
 /** Only the status is read, so only the status is asked for. */

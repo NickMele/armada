@@ -107,8 +107,8 @@ export const CONFIRM: Record<ConfirmableAct, { title: string; body: string; tone
     body:
       "A fresh drone takes over on the same worktree, at the step the last one stopped at. " +
       "The toolset, model and environment are resolved again from scratch, so a widened scope " +
-      "can only narrow — and where the worktree itself is gone, Fleet refuses this and names a " +
-      "redispatch instead.",
+      "can only narrow. Fleet read the worktree before offering this, so there is one to take " +
+      "over.",
   },
 };
 

@@ -242,7 +242,7 @@ export const StoppedWithNoDrone: Story = {
             ),
           }}
           why="The job stalled. Its drone is gone. Nothing runs from here without you."
-          recourse="Restart the step. The drone is gone, so a fresh one takes over the worktree at the step above, resolving its toolset, model and environment again. Fleet refuses this where the worktree is no longer on disk, and Bridge does not read the filesystem, so that answer comes on the press. A redispatch mints a new job from the approval gate and carries none of the work over."
+          recourse="Restart the step. The drone is gone, so a fresh one takes over the worktree at the step above, resolving its toolset, model and environment again. Fleet read the worktree before offering this, so it is there to take over. A redispatch mints a new job from the approval gate and carries none of the work over."
           steps={steps.map((step) => ({
             id: step.id,
             label: step.id,
@@ -262,8 +262,7 @@ export const StoppedWithNoDrone: Story = {
         >
           A fresh drone takes over on the same worktree, at the step the last one stopped at. The
           toolset, model and environment are resolved again from scratch, so a widened scope can
-          only narrow — and where the worktree itself is gone, Fleet refuses this and names a
-          redispatch instead.
+          only narrow. Fleet read the worktree before offering this, so there is one to take over.
         </Dialog>
       </div>
     );
@@ -308,7 +307,7 @@ export const AJudgeRefusedACriterion: Story = {
           ),
         }}
         why="failed a check · owes c2"
-        recourse="Restart the step. The drone is gone, so a fresh one takes over the worktree at the step above, resolving its toolset, model and environment again. Fleet refuses this where the worktree is no longer on disk, and Bridge does not read the filesystem, so that answer comes on the press. A redispatch mints a new job from the approval gate and carries none of the work over."
+        recourse="Restart the step. The drone is gone, so a fresh one takes over the worktree at the step above, resolving its toolset, model and environment again. Fleet read the worktree before offering this, so it is there to take over. A redispatch mints a new job from the approval gate and carries none of the work over."
         ranLabel="What ran"
         steps={[
           { id: "plan", label: "Plan the change", activity: "advanced", status: "advanced" },
@@ -435,9 +434,11 @@ export const KilledWhileTheStepWasRunning: Story = {
  * recourse line says why rather than leaving the absence to read as an
  * oversight.
  *
- * This is the fourth of the four answers the recourse line gives. The other
- * three are on the stories above: redirect, restart, and a job whose status is
- * not `escalated` at all.
+ * This is one of the answers the recourse line gives where nothing resumes the
+ * job; the stories above carry redirect, restart, and a job whose status is not
+ * `escalated` at all. **The set grew past four when fleet started classifying
+ * the job itself** — `#193` — and two of them have no story here yet: a
+ * worktree fleet read and did not find, and a job fleet classifies nothing for.
  */
 export const EscalatedWithNoStepToResume: Story = {
   render: () => (
