@@ -100,6 +100,11 @@
 //! into the worktree dispatch makes — proving the same path `briefing` writes
 //! into a Drone's first turn is one the worktree actually holds.
 //!
+//! `checking` is the twenty-first, and it is what concurrency was allowed to
+//! change: how long a step's Checks take, and nothing else. Three of its four
+//! cases assert that something stayed as it was — the order of the report, the
+//! row a skip occupies, and the budget a queued Check has not begun spending.
+//!
 //! `forget` is the twentieth: deleting a terminal Job's whole record. It is
 //! not a transition, so most of its cases prove an absence — the row is gone
 //! from a reload and from `get_job`, a Job still in flight is refused rather
@@ -109,6 +114,7 @@
 mod attachments;
 mod attribution;
 mod briefing;
+mod checking;
 mod checks;
 mod converging;
 mod daemon;

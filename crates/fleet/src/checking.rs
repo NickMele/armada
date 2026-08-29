@@ -1,0 +1,198 @@
+//! Running one step's Checks, several at a time, bounded.
+//!
+//! # One observation per declared Check, in the step's order
+//!
+//! `Ran::of` refuses a list shorter than the step's declaration, which is how a
+//! vacuous pass is made unconstructible. Appending each result as it finished
+//! would satisfy the count and lose the order, and a Job that reads differently
+//! on two runs is that defect wearing a better disguise.
+//!
+//! So nothing here appends. The vector is sized from the declaration before
+//! anything is spawned and each Check is written into its own slot, skips
+//! included, which makes the order of the report a property of the type rather
+//! than of the scheduler.
+//!
+//! # Each Check keeps its own budget, and nothing stops early
+//!
+//! `checks_runner::run` holds the timeout and is given the whole budget per
+//! call. A batch-wide deadline would let the slowest Check fail the others by
+//! spending their time — a false failure, and the worst kind, because it moves
+//! when the machine is busy. The clock starts when a Check starts: one waiting
+//! for a slot spends nothing, since its future is not polled until spawned.
+//!
+//! A failing Check cancels none of the others. Someone reading a failed step
+//! wants every result, and the second failure often explains the first.
+
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use checks_runner::{Attempt, Output};
+use core_model::ResolvedCheck;
+use tokio::task::JoinSet;
+use tokio::time::Instant;
+use verification::{Exit, NeverRan, Observed};
+
+/// How many of a step's Checks may run at once.
+///
+/// **Four, and the number is about the machine rather than about the step.**
+/// Fleet works one Job at a time, so this is the whole of Armada's concurrency
+/// rather than a per-Job share of it, and what it shares the machine with is a
+/// live Drone.
+///
+/// Measured on this repository's own six Checks, ten cores, warm target
+/// directory: 28.5s one at a time against 16.5s at four. Bounds of two, three,
+/// four and six were within noise of each other, because the floor is set by
+/// the slowest single Check and by `build` and `test` contending for one Cargo
+/// target lock however many slots exist. Four rather than two because that
+/// floor is this repository's and not every step's, and four rather than six
+/// because six leaves nothing for the Drone the step belongs to.
+///
+/// **A constant rather than a dial.** `CheckBudget` and `DryRuns` have no
+/// default because what they bound is policy a person owns; this bounds how
+/// many processes one machine should host, which nobody has asked to set. It
+/// becomes a `Fittings` field the first time a machine disagrees with it.
+const AT_ONCE: usize = 4;
+
+/// Whether the gate declines to run this Check, and what it writes down when it
+/// does.
+///
+/// **Pure, and the whole of the skip decision.** It reads the Check's own
+/// frozen `when` against paths already in hand: no adapter call, no clock, no
+/// process. That is what lets the decision be taken while the batch is being
+/// built, before anything is spawned and without ordering anything.
+///
+/// **The kind of change is not consulted.** A file deleted from `packages/` is
+/// a change to `packages/`, and a rename arrives as two paths — the old one
+/// deleted, the new one added, because the git adapter runs no rename
+/// detection — so either side of a rename is enough on its own.
+fn not_covered(check: &ResolvedCheck, touched: &[String]) -> Option<Observed> {
+    // `ResolvedCheck::covers` answers `true` for a Check with no `when`, which
+    // is where "absent means always" is spelled. It is asked rather than
+    // re-derived here so there is one place that could ever be wrong about it.
+    match check.covers(touched) {
+        true => None,
+        false => Some(Observed::Skipped {
+            covers: check
+                .when()
+                .map(core_model::Covers::written)
+                .unwrap_or_default(),
+        }),
+    }
+}
+
+/// What was observed of one declared Check, and what it printed.
+pub(crate) struct Completed {
+    pub observed: Observed,
+    /// The Check's name and its output, for a Check that ran a command. `None`
+    /// for a skip and for `diff_nonempty`, neither of which prints anything.
+    pub printed: Option<(String, Output)>,
+    /// How long this Check took on its own — not its share of the batch.
+    pub took: Duration,
+}
+
+/// What is known about one Check before anything is spawned.
+///
+/// The two variants are the whole reason the skip decision is pure: everything
+/// that does not need a process is settled while the list is being built, and
+/// the futures are made only for what is left.
+enum Planned {
+    /// Already answered — a Check the step's changes do not cover, or the diff
+    /// reading the caller took before this was called.
+    Already(Observed),
+    /// A command, and the slot it belongs in.
+    Command { name: String, run: String },
+}
+
+/// Run the step's Checks in `worktree` and say what each one did.
+///
+/// `moved` is `diff_nonempty`'s answer, decided by the caller: it is a read of
+/// the work product, which is fallible and belongs where the caller's error
+/// path already is. Reading it before rather than during also means no Check's
+/// output can be part of what the diff sees.
+pub(crate) async fn ran(
+    checks: &[ResolvedCheck],
+    touched: &[String],
+    moved: bool,
+    worktree: &Path,
+    budget: Duration,
+) -> Vec<Completed> {
+    let planned: Vec<Planned> = checks
+        .iter()
+        .map(|check| match not_covered(check, touched) {
+            Some(skipped) => Planned::Already(skipped),
+            None => match check {
+                ResolvedCheck::ManifestCheck { name, run, .. } => Planned::Command {
+                    name: name.clone(),
+                    run: run.clone(),
+                },
+                ResolvedCheck::DiffNonempty => Planned::Already(Observed::Diff { moved }),
+            },
+        })
+        .collect();
+
+    let mut done: Vec<Option<(Attempt, Duration)>> = planned.iter().map(|_| None).collect();
+    let mut queued = planned
+        .iter()
+        .enumerate()
+        .filter_map(|(at, plan)| match plan {
+            Planned::Command { run, .. } => Some((at, run.clone())),
+            Planned::Already(_) => None,
+        });
+    let worktree = worktree.to_path_buf();
+    // Refilled as each one finishes rather than run in batches of four: a batch
+    // costs the slowest member of it, and a step whose Checks are 17s and 1s
+    // would spend the fast slot idle for sixteen of them.
+    let mut running: JoinSet<(usize, Attempt, Duration)> = JoinSet::new();
+    loop {
+        while running.len() < AT_ONCE {
+            let Some((at, run)) = queued.next() else {
+                break;
+            };
+            let worktree: PathBuf = worktree.clone();
+            running.spawn(async move {
+                let began = Instant::now();
+                let attempt = checks_runner::run(&run, &worktree, budget).await;
+                (at, attempt, began.elapsed())
+            });
+        }
+        let Some(joined) = running.join_next().await else {
+            break;
+        };
+        if let Ok((at, attempt, took)) = joined {
+            done[at] = Some((attempt, took));
+        }
+    }
+
+    let mut completed = Vec::with_capacity(planned.len());
+    for (at, plan) in planned.into_iter().enumerate() {
+        completed.push(match plan {
+            Planned::Already(observed) => Completed {
+                observed,
+                printed: None,
+                took: Duration::ZERO,
+            },
+            Planned::Command { name, run } => match done[at].take() {
+                Some((attempt, took)) => Completed {
+                    observed: Observed::Command(attempt.exit),
+                    printed: Some((name, attempt.output)),
+                    took,
+                },
+                // The task was cancelled or it panicked, and neither is a
+                // reachable state for a runner that returns an `Exit` for every
+                // way a process can fail. It is filled in rather than dropped
+                // because dropping it is the short list `Ran::of` refuses, and
+                // a Check nobody can account for must not read as one that
+                // passed.
+                None => Completed {
+                    observed: Observed::Command(Exit::NeverRan(NeverRan::NotSpawned {
+                        program: run,
+                        kind: std::io::ErrorKind::Interrupted,
+                    })),
+                    printed: Some((name, Output::default())),
+                    took: Duration::ZERO,
+                },
+            },
+        });
+    }
+    completed
+}
