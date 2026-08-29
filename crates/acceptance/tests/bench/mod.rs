@@ -34,6 +34,7 @@ use core_model::{
     ModelName, NewJob, StepEvent, StepEvidence, StepId, StepSeed, StepState, StepTarget, Target,
     Timestamp, Title, TopLevelOrigin, TransitionReason, Ulid, Urgency,
 };
+use fleet::dispatch::stopping;
 use fleet::{
     apply, rule_on, AtStep, CheckBudget, Clock, JudgeBudget, Judging, Marking, Mint, Ruling,
 };
@@ -427,6 +428,14 @@ impl Bench {
     /// `fleet::dispatch` does it inside a method that also speaks to a live
     /// session and reaps a child, so there is no way to reach it without a
     /// process. The Job move itself is `fleet::apply` and is not restated.
+    /// **The step moves first, and the order is not a preference.** The inner
+    /// machine is frozen beneath every status but `running` and
+    /// `awaiting_review`, so a step stopped after the Job ended would be
+    /// refused and its verdict never written — which is #179, observed on a
+    /// real Job whose `tests` step read `running` beneath `completed_failed`.
+    /// Why it stops is [`fleet::dispatch::stopping`]'s and is not restated
+    /// here: a second spelling of the trigger is how the bench and Fleet would
+    /// come to disagree about the same failure.
     pub fn settled(&self, run: &mut Run, step: &StepId, ruling: &Ruling) {
         if ruling.advanced() {
             self.step_moved(run, step, StepTarget::Advanced);
@@ -434,6 +443,9 @@ impl Bench {
         if let Ruling::Advanced { .. } = ruling {
             let next = self.step_after(step).expect("a step follows an advance");
             self.step_moved(run, &next, StepTarget::Running);
+        }
+        if let Some(why) = stopping(ruling) {
+            self.step_moved(run, step, StepTarget::Stopped(why));
         }
         if let Some(moved) = apply(&run.job, ruling, self.clock.now()) {
             let moved = moved.expect("the move a ruling implies is a legal one");

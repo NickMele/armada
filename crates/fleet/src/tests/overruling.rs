@@ -476,8 +476,9 @@ async fn a_failed_mechanical_check_cannot_be_overruled() {
             .expect("the Job reads")
             .step(&implement())
             .map(|step| step.state()),
-        Some(StepState::Running),
-        "and nothing moved: the step is frozen where `completed_failed` left it"
+        Some(StepState::Stopped),
+        "and the refusal moved nothing: the step is frozen where the failure left \
+         it, stopped and carrying the verdict that stopped it — #179"
     );
 }
 

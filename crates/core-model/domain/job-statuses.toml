@@ -108,7 +108,7 @@ reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["running -> completed_failed", "escalated -> completed_failed", "awaiting_attestation -> completed_failed"]
 in_code = "Not yet"
-notes = "Retries exhausted, a failed Check at M1, or a person accepting the failure as the outcome from `escalated`. Redispatch creates a new Job — see `redispatched_from`."
+notes = "Retries exhausted, a failed Check at M1, or a person accepting the failure as the outcome from `escalated`. Redispatch creates a new Job — see `redispatched_from`. **`running` stays in `step_states` and is not a row waiting to be narrowed**: `running -> completed_failed` is guarded on `no_step_running`, and the edge from `escalated` is not — a Job escalated on `stalled` holds a `running` step, and a person accepting its failure carries that step across. #179."
 
 [statuses.completed_success]
 terminal = true
