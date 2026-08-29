@@ -32,7 +32,7 @@ use core_model::{
 };
 
 use crate::adrift::Adrift;
-use crate::briefing::{self, Stopped};
+use crate::briefing::{Opening, Stopped};
 use crate::daemon::Fleet;
 use crate::session::LiveSession;
 use crate::transcript;
@@ -243,6 +243,19 @@ where
     /// steps that advanced did so on real verdicts and their evidence is
     /// recorded; re-running them is a redispatch, and an expensive one.
     ///
+    /// **The branch is caught up, and that is not in tension with the line
+    /// above.** A rebase updates the worktree that is there — same path, same
+    /// branch, same work, the base moved underneath it. Nothing is created and
+    /// nothing is discarded, so `#62`'s worktree survives *and* is current. The
+    /// catch-up is inside [`put_a_drone_on`](Fleet::put_a_drone_on), the one
+    /// funnel every spawn goes through; this does not call it, which is #180's
+    /// point.
+    ///
+    /// **A restart is the case a rebase most often conflicts on**: it re-runs
+    /// the *same* step on a worktree already holding an attempt at it. The
+    /// markers then ride the opening brief and are the new Drone's first piece
+    /// of work — there is no session to inject a turn into yet.
+    ///
     /// **Nothing is inherited from the Drone that went before.** The toolset,
     /// the model and the environment are resolved again from what the Manifest
     /// and the Job hold now — see `crate::spawning`.
@@ -259,15 +272,14 @@ where
         let stopped = self.what_stopped(&job, &step).await?;
 
         let job = self.resumed(&job, &step, Actor::Human).await?;
-        let brief =
-            briefing::resuming_turn(&job, job.workflow(), &step, &stopped).map_err(|cause| {
-                Adrift::NotConfigurable {
-                    job: job_id.clone(),
-                    cause,
-                }
-            })?;
-        self.put_a_drone_on(&job, &step, worktree, brief, &mut working)
-            .await?;
+        self.put_a_drone_on(
+            &job,
+            &step,
+            worktree,
+            Opening::Resuming(stopped),
+            &mut working,
+        )
+        .await?;
         self.load(job_id).await
     }
 

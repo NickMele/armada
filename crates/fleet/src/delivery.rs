@@ -1,27 +1,28 @@
 //! Getting a Job's work back to the branch it merges into.
 //!
-//! # Two moments, and they are not the same moment
+//! # Rebasing is Fleet's, on every path, and it is one call
 //!
-//! At a step boundary that is not the last, the branch is brought up to the
-//! base and the Drone is told in the turn it gets for the next step — a Drone
-//! is alive there, and a conflict is work it can do. At the last step the
-//! branch is brought up, pushed and opened for review, and by then there is no
-//! Drone to hand anything to.
+//! `docs/concepts/fleet.md`, *Catching a branch up*, is the rule.
+//! [`caught_up_onto`](Fleet::caught_up_onto) is the only place a boundary
+//! rebases, and every path that starts, resumes or advances a step reaches it.
+//!
+//! # Three moments, and they are not the same moment
+//!
+//! At a boundary that is not the last, the Drone is told in the turn it gets
+//! for the next step — it is alive there, and a conflict is work it can do. At
+//! the last step the branch is pushed and opened for review, and there is no
+//! Drone to hand anything to. At a **spawn** the rebase runs before the process
+//! exists and what moved rides the opening brief: see `crate::spawning`.
 //!
 //! # A boundary is asked, never the Drone
 //!
 //! The Drone has just submitted and nothing is in flight, so git can answer
 //! every question here on its own. Asking the Drone whether its branch is
 //! behind would be asking it to manage its own state, which
-//! `docs/concepts/drone.md` says outright it cannot be trusted to do.
-//!
-//! # Two things are checked before anything moves
-//!
-//! Whether the repository names a base at all, and whether the branch is behind
-//! it. A branch that is not behind is left alone and nothing is announced. What
-//! the worktree is *holding* is not checked here, because it does not have to
-//! be: the rebase carries uncommitted work across and puts it back, and where
-//! it cannot, the branch is put back instead. See `adapters`' delivery module.
+//! `docs/concepts/drone.md` says outright it cannot be trusted to do. What the
+//! worktree is *holding* is not checked either: the rebase carries uncommitted
+//! work across and puts it back, and where it cannot the branch is. See
+//! `adapters`' delivery module.
 
 use adapter_traits::{
     AgentHarness, Base, BroughtUpToDate, Delivery, Opened, Pushed, Standing, Vcs, WorkProduct,
@@ -69,6 +70,13 @@ where
     /// `None` is a branch that had nothing to catch up to, and it is the
     /// ordinary answer. A caller turns it straight into the turn it was already
     /// going to send, so nothing is announced when nothing happened.
+    ///
+    /// **The worktree comes from the slot, which is what makes this the
+    /// live-Drone half.** An empty slot rebases nothing: the three acts that
+    /// call it are advancing a step under a Drone that is standing there, and
+    /// a Drone that has gone is [`put_a_drone_on`](Fleet::put_a_drone_on)'s
+    /// case, where the same rebase runs against a worktree that was found
+    /// rather than held.
     pub(crate) async fn caught_up(
         &self,
         working: &Option<Working>,
@@ -77,16 +85,39 @@ where
             return Ok(None);
         };
         let (job_id, _, worktree) = at_work.standing();
-        let Some(base) = self.the_base(&job_id, &worktree)? else {
+        self.caught_up_onto(&job_id, &worktree).await
+    }
+
+    /// Bring this branch up to its base, in the worktree it is checked out in.
+    ///
+    /// **The one call.** `#150` found two paths that advanced a step without
+    /// it and `#180` found a third, which is the shape of a missing seam rather
+    /// than three oversights — so this is where the decision lives and every
+    /// caller reaches it rather than repeating it.
+    ///
+    /// **Nothing is created and nothing is discarded.** The worktree named here
+    /// is the one that already exists, holding whatever a previous Drone left
+    /// in it; a clean rebase updates it in place and a conflicted one writes
+    /// markers into it. That is what makes this compatible with `#62`, where a
+    /// restart exists precisely so the earlier attempt's work survives.
+    ///
+    /// `None` is a repository that names no base, or a branch that is not
+    /// behind one. Both are silence rather than an event.
+    pub(crate) async fn caught_up_onto(
+        &self,
+        job_id: &core_model::JobId,
+        worktree: &Worktree,
+    ) -> Result<Option<TheBaseMoved>, Adrift> {
+        let Some(base) = self.the_base(job_id, worktree)? else {
             return Ok(None);
         };
-        if self.behind(&job_id, &worktree, &base)? == 0 {
+        if self.behind(job_id, worktree, &base)? == 0 {
             return Ok(None);
         }
         let moved = self
             .vcs()
-            .bring_up_to_date(&worktree, &base)
-            .map_err(|why| Adrift::from_delivery(&job_id, why))?;
+            .bring_up_to_date(worktree, &base)
+            .map_err(|why| Adrift::from_delivery(job_id, why))?;
         // Left where the turn that reports it will find it. A boundary and a
         // finish are two moments and one question — what happened to this Job's
         // branch — so they answer through one field rather than two.

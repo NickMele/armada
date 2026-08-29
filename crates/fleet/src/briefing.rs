@@ -49,17 +49,18 @@
 //! and reads what they printed, which is Fleet running them rather than a
 //! Drone reading a command out of a prompt.
 //!
-//! Four blocks outlive the turn they were written for and are types rather
-//! than paragraphs: [`Declaring`], which a step boundary sends again,
-//! [`Redeclaring`], which the live drift check sends mid-step, [`Checking`],
-//! which offers the dry run, and [`Stopped`], which a restart is built from.
-//! Each says why on itself.
+//! Five blocks outlive the turn they were written for and are types rather
+//! than paragraphs: [`Declaring`], [`Redeclaring`], [`Checking`], [`Stopped`]
+//! and [`Reconciling`]. An opening turn is asked for as [`Opening`] rather than
+//! assembled by the caller: every spawn rebases first, so what a Drone is told
+//! about its branch is not known when the caller would have built the prompt.
 
 use adapter_traits::{Prompt, SpawnConfigRefused};
 use core_model::{
     EscalationTrigger, FrozenWorkflow, GamingFlag, Job, JobId, Judgment, RepoPath, ResolvedStep,
     StepId, StepVerdict,
 };
+use verification::TheBaseMoved;
 
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering.
 ///
@@ -76,6 +77,108 @@ Work you do not submit is work no one sees, and the task will not move on.
 Submitting returns \"recorded\". That is a receipt, not a verdict — your work \
 is checked after you submit. If it does not pass you will be told in a later \
 turn, with the reason. Wait for that turn.";
+
+/// What a Drone being put on a worktree is opening with.
+///
+/// **The two first turns as a value rather than as two calls**, so that the one
+/// funnel every spawn goes through — [`put_a_drone_on`] — can decide the brief
+/// *after* the rebase it runs has answered. A caller that assembled the prompt
+/// itself would have had to be handed the catch-up back, which is the fourth
+/// call site `#180` exists to avoid.
+///
+/// [`put_a_drone_on`]: crate::daemon::Fleet::put_a_drone_on
+#[derive(Clone, Debug)]
+pub enum Opening {
+    /// A step no Drone has attempted yet — a Job's first, or the one an
+    /// override advanced to.
+    Fresh,
+    /// A step that stopped, and what the record says stopped it.
+    Resuming(Stopped),
+}
+
+impl Opening {
+    /// The whole opening turn: the four blocks, what stopped the last attempt
+    /// where there was one, and what the rebase came to where it came to
+    /// anything.
+    ///
+    /// **The branch block is last.** It is the only block describing something
+    /// that happened after the work was described, and a Drone that stops
+    /// reading has read the task rather than the git.
+    pub fn turn(
+        &self,
+        job: &Job,
+        workflow: &FrozenWorkflow,
+        at: &StepId,
+        moved: Option<&TheBaseMoved>,
+    ) -> Result<Prompt, SpawnConfigRefused> {
+        let brief = match self {
+            Opening::Fresh => first_turn(job, workflow, at)?,
+            Opening::Resuming(stopped) => resuming_turn(job, workflow, at, stopped)?,
+        };
+        let Some(moved) = moved else {
+            return Ok(brief);
+        };
+        Prompt::assembled(&format!(
+            "{}\n\n{}",
+            brief.as_str(),
+            Reconciling::of(moved).text()
+        ))
+    }
+}
+
+/// What Fleet did to this branch before the Drone reading it existed.
+///
+/// **A different block from the one a live Drone gets**, and the difference is
+/// the tense. `verification::TheBaseMoved` renders "while you worked", which is
+/// true at a step boundary and false in an opening turn: this Drone did not
+/// work, and a first turn that opens by describing work it has no memory of is
+/// a first turn it has to reconcile before it can start.
+///
+/// **The conflicted variant is the reader `#180` had to find.** A rebase runs
+/// where there is no session to inject a turn into, so the conflict rides the
+/// brief and is the Drone's opening piece of work — which is the whole of what
+/// "the Drone is asked to resolve them before continuing" means on a path with
+/// no Drone yet.
+///
+/// **Drafted wording**, like [`Redeclaring`] and the gaming half of [`Stopped`].
+/// `docs/contracts/agent-prompt.md` has no sanctioned copy for it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Reconciling(String);
+
+impl Reconciling {
+    /// The block, from what the catch-up came to.
+    pub fn of(moved: &TheBaseMoved) -> Reconciling {
+        let said = match moved {
+            TheBaseMoved::BroughtUpToDate { base, commits } => format!(
+                "`{base}` moved on by {commits} commit(s) since this branch was cut, and the \
+                 branch has been brought up to it before you started. The worktree is current. \
+                 Work already on the branch may now sit on top of code that changed underneath \
+                 it — read a file before you edit it."
+            ),
+            TheBaseMoved::Conflicted { base, files } => format!(
+                "`{base}` moved on since this branch was cut, and the branch has been brought \
+                 up to it before you started. These files were left with conflict markers in \
+                 them, and resolving them is the first piece of your work:\n\n{}\n\nOpen each \
+                 one, keep what belongs, and remove every marker before you submit.",
+                files
+                    .iter()
+                    .map(|file| format!("- {file}"))
+                    .collect::<Vec<String>>()
+                    .join("\n")
+            ),
+            TheBaseMoved::CouldNotFollow { base } => format!(
+                "`{base}` moved on since this branch was cut, and the branch could not be put \
+                 on top of it. It is exactly where it was. Nothing here is yours to fix — do \
+                 the work described above, and somebody will reconcile the two."
+            ),
+        };
+        Reconciling(format!("THE BRANCH YOU ARE ON\n\n{said}"))
+    }
+
+    pub fn text(&self) -> &str {
+        &self.0
+    }
+}
 
 /// Assemble the first turn for a Job standing at one step of its workflow.
 ///

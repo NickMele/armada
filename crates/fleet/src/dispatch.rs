@@ -35,7 +35,7 @@ use store::Moved;
 use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
-use crate::briefing::{self, Declaring};
+use crate::briefing::{Declaring, Opening};
 use crate::daemon::Fleet;
 use crate::drone::{aftermath, Aftermath, Ending, Left};
 use crate::gate::{apply, Ruling};
@@ -196,14 +196,13 @@ where
 
         let job = self.move_step(&job, &step, StepTarget::Running).await?;
 
-        let brief = match briefing::first_turn(&job, job.workflow(), &step) {
-            Ok(brief) => brief,
-            Err(cause) => {
-                self.interrupt(&job).await?;
-                return Err(Adrift::NotConfigurable { job: job_id, cause });
-            }
-        };
-        self.put_a_drone_on(&job, &step, worktree, brief, working)
+        // The brief is `put_a_drone_on`'s to assemble, because the catch-up it
+        // runs first is part of what a Drone is told. A worktree cut a moment
+        // ago is ordinarily not behind anything, so this path is where the
+        // funnel costs one `standing` call and announces nothing — and where
+        // the repository's HEAD is not the base, a Drone that would otherwise
+        // have started two commits back is told so on its first turn.
+        self.put_a_drone_on(&job, &step, worktree, Opening::Fresh, working)
             .await
     }
 
@@ -215,14 +214,13 @@ where
     /// branch was cut from, which credits every step with everything its
     /// predecessors wrote.
     ///
-    /// **After the boundary rebase, on the one path that has one.** What a
-    /// rebase moves is inherited rather than done: a conflicting one leaves
-    /// markers in the files it could not merge, and a clean one replays the
-    /// branch onto a base that itself moved. Both are content, so a baseline
-    /// read before the rebase makes git's output the next step's work — and a
-    /// Drone that resolved nothing passed `diff_nonempty` on the markers it was
-    /// handed. Where nothing rebases — a Job's first step, and a step a person
-    /// approved — this is the same moment it has always been.
+    /// **After the rebase, on every path — because every path has one now.**
+    /// What a rebase moves is inherited rather than done: a conflicting one
+    /// leaves markers and a clean one replays the branch onto a base that
+    /// itself moved. Both are content, so a baseline read before it makes git's
+    /// output the next step's work, and a Drone that resolved nothing passes
+    /// `diff_nonempty` on the markers it was handed. This used to except a
+    /// Job's first step and an approved one; `#150` and `#180` closed both.
     ///
     /// **A failure leaves the step with no baseline, and that is deliberate.**
     /// A reading that did not happen is not a worktree that did not move, so

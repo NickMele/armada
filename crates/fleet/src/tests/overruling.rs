@@ -235,10 +235,11 @@ async fn an_overruled_step_catches_the_branch_up_like_any_other_boundary() {
     });
     let fleet = Fleet::assembled(fittings);
     let job_id = refused(&fleet, &home).await;
-    assert!(
-        fleet.vcs().delivered().is_empty(),
-        "an escalated Job is standing still — nothing has rebased under the person reading it"
-    );
+    // One, and it is the spawn's: every spawn catches its branch up (#180), and
+    // a fake scripted `Behind` is behind on that call too. What matters here is
+    // that nothing rebased *between* the spawn and the person's decision — an
+    // escalated Job is standing still under whoever is reading it.
+    let before = fleet.vcs().delivered().len();
 
     fleet
         .override_verdict(&job_id, &a_reason())
@@ -246,7 +247,7 @@ async fn an_overruled_step_catches_the_branch_up_like_any_other_boundary() {
         .expect("the person overrules the verdict");
 
     assert_eq!(
-        fleet.vcs().delivered(),
+        fleet.vcs().delivered().split_off(before),
         vec![Delivered::BroughtUpToDate {
             branch: format!("armada/{}", job_id.as_str()),
             base: String::from("main"),
