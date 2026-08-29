@@ -43,7 +43,8 @@ import type {
 } from "../../shared/protocol";
 import type { ManifestSummary } from "../../shared/setup";
 import {
-  NOT_SERVED_WHEN_FINISHED,
+  NO_FOOTPRINT_RECORDED,
+  planRecorded,
   recordNote,
   recordSummary,
   touchedOf,
@@ -240,7 +241,8 @@ function producedOf(job: JobSummary, touched: JobFootprint | undefined): JobOutc
     // would not open, and the row says so rather than showing a zero that would
     // read as a Drone that changed nothing. The drift beside the count is the
     // record measured against the plans its steps declared, and it is absent
-    // rather than zero on a Job whose steps declared none.
+    // rather than zero on a Job whose record carries no declaration — which is
+    // a gap in the record and not a report that the steps scoped nothing.
     { name: "Files changed", ...counted(touched) },
     {
       name: "Evidence",
@@ -329,7 +331,7 @@ function recordOf({
       label: "Files changed",
       panel:
         touched === undefined ? (
-          <ChangedFiles files={[]} emptyNote={NOT_SERVED_WHEN_FINISHED} />
+          <ChangedFiles files={[]} emptyNote={NO_FOOTPRINT_RECORDED} />
         ) : (
           <ChangedFiles
             files={touchedOf(touched)}
@@ -345,9 +347,18 @@ function recordOf({
       id: CHANGED,
       label: "What it changed",
       // The declaration went with the Drone, for the reason the stopped render
-      // gives. The record above this section is what a reader asking whether
-      // the work stayed in scope has, and it says what it does not carry.
-      panel: <Changed job={job} diff={diff} planReadable={false} onCopied={onCopied} />,
+      // gives. Files changed is what a reader asking whether the work stayed in
+      // scope has, so where that section carries a declaration this note names
+      // it rather than reporting the silence a tab away from the measurement.
+      panel: (
+        <Changed
+          job={job}
+          diff={diff}
+          planReadable={false}
+          markedInRecord={touched !== undefined && planRecorded(touched)}
+          onCopied={onCopied}
+        />
+      ),
     },
     {
       id: CLAIMS,
@@ -380,7 +391,7 @@ const NOT_SERVED = {
   branch: "This job has no worktree, so it has no branch.",
   commit: "Fleet does not commit at the last step yet, so there is nothing to name.",
   pullRequest: "Fleet does not open one yet, so there is nothing to open.",
-  filesChanged: NOT_SERVED_WHEN_FINISHED,
+  filesChanged: NO_FOOTPRINT_RECORDED,
   // Served since protocol 4.6, and read when the record's own section is
   // opened rather than here: the row would otherwise make every finished Job
   // opened pay for a read most of them are not opened to see.

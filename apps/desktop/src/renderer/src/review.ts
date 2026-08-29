@@ -297,6 +297,25 @@ export const PLAN_NOT_READABLE =
   "marked — an unmarked file here is not a file that was inside the plan.";
 
 /**
+ * The same silence, where the record beside it is not silent.
+ *
+ * **Two tabs of one record must not answer one question two ways.** `Files
+ * changed` draws the footprint Fleet kept, marked against every plan the steps
+ * declared; this tab is the same paths one level deeper and cannot read a
+ * declaration at all. Saying only that the plan is unreadable, a tab away from
+ * a list that names the drift, is not false and is not coherent either — so
+ * where the record carries a declaration, the sentence sends the reader to it
+ * rather than leaving two answers side by side.
+ *
+ * It names the tab and not a direction: the record is a strip, so `above` would
+ * point at nothing.
+ */
+export const PLAN_IS_IN_THE_RECORD =
+  "The plan this step declared is not readable once its drone has stopped, so no file is " +
+  "marked here. Files changed is the record kept when the job stopped, and it marks every path " +
+  "that fell outside the plans the steps declared.";
+
+/**
  * Where the reading came from, and what the drift mark does or does not mean
  * on it.
  *
@@ -304,11 +323,15 @@ export const PLAN_NOT_READABLE =
  * on this job. **It is not derivable here**: `work` carries `plan_declared`,
  * and false on it is "no plan was declared" and "no plan can be read" at once —
  * which is exactly the conflation #157 was.
+ *
+ * `markedInRecord` is the caller saying whether the footprint on this Job's
+ * `JobDetail` carries a declaration. Also not derivable here: `work` is the
+ * live read of a worktree and knows nothing about the record served beside it.
  */
-export function diffNote(work: Work, planReadable: boolean): string {
+export function diffNote(work: Work, planReadable: boolean, markedInRecord = false): string {
   const read = DIFF_READ_FROM;
   if (!planReadable) {
-    return `${read} ${PLAN_NOT_READABLE}`;
+    return `${read} ${markedInRecord ? PLAN_IS_IN_THE_RECORD : PLAN_NOT_READABLE}`;
   }
   if (!work.plan_declared) {
     return `${read} This step declared no plan, so no file is marked.`;

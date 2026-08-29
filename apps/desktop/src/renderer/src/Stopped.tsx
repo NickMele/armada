@@ -15,9 +15,19 @@
 // The rail is what a person triages on, so it keeps its region rather than
 // becoming a tab. What folds beneath it is everything that was reachable only
 // from a database, a transcript on disk or the source: the moves the Job made,
-// its Drone's turns, what it changed, and what it claimed. Each is a read, each
-// is made when its own section opens, and none of them is made for a Job nobody
-// unfolded.
+// its Drone's turns, what it touched, what it changed, and what it claimed.
+// Every one but the footprint is a read made when its own section opens, and
+// none of them is made for a Job nobody unfolded.
+//
+// # The footprint is a record section and not part of "why this stopped"
+//
+// On a Job that went out of scope the drift is often what a person is chasing,
+// which is the argument for lifting it beside "stopped at". Refused twice over.
+// **Drift decides nothing** — a path outside a plan does not fail a step, so a
+// count in the region that states the cause would assert one Fleet never
+// recorded. And that region answers what stopped it and what resumes it,
+// `#158`'s arrangement: a third fact there is a third question in a well built
+// to hold two.
 //
 // # What it was told is drawn once
 //
@@ -29,6 +39,7 @@
 import { useEffect, useState } from "react";
 import {
   AFailedJobADeadEndReadAsOne,
+  ChangedFiles,
   type JobDetailHeading,
   type JobRecordSection,
   type WorkflowRailStep,
@@ -37,9 +48,17 @@ import {
 import type { Diff, Evidence, History, Observed } from "../../shared/bridge";
 import type {
   JobDetail as JobWhole,
+  JobFootprint,
   JobSummary,
 } from "../../shared/protocol";
 import type { ManifestSummary } from "../../shared/setup";
+import {
+  NO_FOOTPRINT_RECORDED,
+  planRecorded,
+  recordNote,
+  touchedOf,
+  TOUCHED_NOTHING,
+} from "./files";
 import { Changed, Claims, Moves, Turns } from "./Panels";
 import { stoppedAt } from "./rail";
 import { recourseOf } from "./recovery";
@@ -59,6 +78,15 @@ const TURNS = "turns";
 
 /** The section that holds the submissions, and so the one that asks for them. */
 const CLAIMS = "claims";
+
+/**
+ * The section that holds the footprint.
+ *
+ * **It asks for nothing.** The record arrives on `JobDetail` with the Job, so
+ * this section is the one place on the page where opening a tab costs a render
+ * and no read at all.
+ */
+const FILES = "files";
 
 /**
  * The section that holds the diff.
@@ -172,7 +200,20 @@ export function Stopped({
       work={workOf(job, whole, manifest, true)}
       workAbsent={workAbsent}
       outputAbsent={NOT_SERVED_OUTPUT}
-      record={recordOf({ job, whole, observed, history, evidence, diff, onCopied })}
+      // The record Fleet wrote at the terminal transition, and never a live
+      // reading: `job.files_changed` stops arriving when the Drone goes, so
+      // what main holds is whatever landed while this window happened to be
+      // open. The finished render dropped that prop for the same reason.
+      record={recordOf({
+        job,
+        whole,
+        observed,
+        touched: whole?.footprint,
+        history,
+        evidence,
+        diff,
+        onCopied,
+      })}
       recordValue={section}
       onRecordChange={setSection}
       onCopied={onCopied}
@@ -193,13 +234,18 @@ const NOT_SERVED_OUTPUT =
 /**
  * Everything the Job left behind, folded.
  *
- * **Four sections and not the finished record's eight.** "Steps and checks" is
- * the region above rather than a tab, "What it was told" and "Where the work
- * is" are both in the region beside it, and a footprint section would say
- * `#127`'s sentence on every stopped Job Bridge did not happen to be open for —
- * a tab that is empty every time is the hole this record exists to close,
- * pointed the other way. The diff names the files, and it names them from a
- * read that a stopped Job can still make.
+ * **Five sections and not the finished record's eight.** "Steps and checks" is
+ * the region above rather than a tab, and "What it was told" and "Where the
+ * work is" are both in the region beside it.
+ *
+ * **The fifth is the footprint, and the reason it was not here was true when it
+ * was written.** It read that a footprint section would say `#127`'s sentence
+ * on every stopped Job Bridge did not happen to be open for — an empty tab
+ * every time. Nothing serves a live reading once the Drone has gone, and that
+ * has not changed. What changed is that nothing has to: Fleet writes a
+ * footprint at every terminal transition, a killed Job included, and serves it
+ * on `JobDetail` beside the plans its steps declared. The Job most likely to
+ * have gone out of scope is the one this record was leaving unable to say so.
  *
  * **A section is a node and not a component reference**, so a module that lands
  * later takes a row in this list and nothing else moves. Only the open one is
@@ -209,6 +255,7 @@ function recordOf({
   job,
   whole,
   observed,
+  touched,
   history,
   evidence,
   diff,
@@ -217,6 +264,7 @@ function recordOf({
   job: JobSummary;
   whole: JobWhole | null;
   observed: Observed;
+  touched: JobFootprint | undefined;
   history: History;
   evidence: Evidence;
   diff: Diff;
@@ -236,13 +284,40 @@ function recordOf({
       panel: <Turns job={job} whole={whole} observed={observed} />,
     },
     {
+      // Before the diff, because the file list is the same question one level
+      // up and it is the cheap half — this one is served on `JobDetail` and is
+      // already in hand, and the diff is a read of a worktree.
+      id: FILES,
+      label: "Files changed",
+      panel:
+        touched === undefined ? (
+          <ChangedFiles files={[]} emptyNote={NO_FOOTPRINT_RECORDED} />
+        ) : (
+          <ChangedFiles
+            files={touchedOf(touched)}
+            emptyNote={TOUCHED_NOTHING}
+            note={recordNote(touched)}
+            onCopied={onCopied}
+          />
+        ),
+    },
+    {
       id: CHANGED,
       // The declaration is not readable here: `get_diff` takes it from the live
       // working slot and a stopped Job's Drone has let go of it. The note says
       // so, rather than reporting a step that declared a plan as one that
-      // declared none.
+      // declared none — and where the section beside it marks the drift, it
+      // names that tab instead of stopping at the silence.
       label: "What it changed",
-      panel: <Changed job={job} diff={diff} planReadable={false} onCopied={onCopied} />,
+      panel: (
+        <Changed
+          job={job}
+          diff={diff}
+          planReadable={false}
+          markedInRecord={touched !== undefined && planRecorded(touched)}
+          onCopied={onCopied}
+        />
+      ),
     },
     {
       id: CLAIMS,
