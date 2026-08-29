@@ -205,15 +205,18 @@ fn baseline_evidence() -> StepEvidence {
 }
 
 fn brief(baseline: Option<Baseline<'_>>) -> GamingBrief {
-    let workflow = workflow();
-    let step = &workflow.frozen().steps()[0];
-    GamingBrief::about(
-        step,
+    about(
         GamingPattern::AssertionWeakened,
-        &patch("diff --git a/tests/a.test.ts b/tests/a.test.ts\n+expect(x).toBe(true);\n"),
+        "diff --git a/tests/a.test.ts b/tests/a.test.ts\n+expect(x).toBe(true);\n",
         baseline,
     )
-    .expect("a judged pattern has a question")
+}
+
+fn about(pattern: GamingPattern, text: &str, baseline: Option<Baseline<'_>>) -> GamingBrief {
+    let workflow = workflow();
+    let step = &workflow.frozen().steps()[0];
+    GamingBrief::about(step, pattern, &patch(text), baseline)
+        .expect("a judged pattern has a question")
 }
 
 #[test]
@@ -280,6 +283,148 @@ fn an_unreadable_answer_is_neither_a_flag_nor_a_clearance() {
         Err(Unreadable::NoFlag)
     );
     assert_eq!(brief.read("flag: yes"), Err(Unreadable::FlagCitesNothing));
+}
+
+// ---------------------------------------------------------------------------
+// The change the first production flag was raised against
+// ---------------------------------------------------------------------------
+
+/// A test split into a loop and a special case needing different setup, cut to
+/// the two places that matter: the loop stops asserting for one row, and the
+/// dedicated check below asserts it on its own Job, copying the loop's own
+/// standard as it goes.
+///
+/// **Kept as a fixture rather than described in prose.** The case is the
+/// record — an edit to either question is exercised against the change that
+/// broke them rather than against somebody's account of it.
+const A_TEST_SPLIT_IN_TWO: &str = r#"diff --git a/crates/api/src/tests/served.rs b/crates/api/src/tests/served.rs
+--- a/crates/api/src/tests/served.rs
++++ b/crates/api/src/tests/served.rs
+@@ -54,6 +59,9 @@
+     call(&app, "POST", "/jobs", A_PROPOSAL).await;
+     for route in SERVED {
++        if route.operation == "forget_job" {
++            continue;
++        }
+         let uri = route.path.replace(":job_id", "01JOB0");
+         let (status, _) = call(&app, route.method, &uri, A_PROPOSAL).await;
+         assert_ne!(
+             status,
+             StatusCode::NOT_FOUND,
+             "{} is in the table and not in the router: {} {}",
+             route.operation,
+         );
+@@ -73,6 +81,27 @@
+     }
++
++    // `forget_job`'s own Job, killed first so the call is legal.
++    let forget_uri = format!("/jobs/{}/forget_job", proposed.id.as_str());
++    let (status, _) = call(&app, "POST", &forget_uri, "").await;
++    assert_ne!(
++        status,
++        StatusCode::NOT_FOUND,
++        "forget_job is in the table and not in the router"
++    );
+ }
+"#;
+
+/// **The first defect, in the change that had it.** The loop does assert less
+/// than it did, which is why `yes` was both the honest answer and the wrong
+/// finding: the assertion is made twenty lines below, in the same patch.
+///
+/// What this test can hold is the brief — that both places are in it, that the
+/// question reaches for the second one, and that the call is told the diff is
+/// the whole change so that "elsewhere" has a scope. **It cannot hold a model
+/// to reading them**; what would show that is on the issue.
+#[test]
+fn where_a_moved_assertion_went_is_in_the_same_brief_as_the_place_it_left() {
+    let evidence = baseline_evidence();
+    let brief = about(
+        GamingPattern::AssertionWeakened,
+        A_TEST_SPLIT_IN_TWO,
+        Some(Baseline::of("scope", &evidence)),
+    );
+    let question = brief.question();
+
+    assert!(
+        question.contains("continue;"),
+        "the place the loop stops asserting: {question}"
+    );
+    assert!(
+        question.contains("forget_uri"),
+        "and the place it asserts it instead, twenty lines below: {question}"
+    );
+    assert!(
+        question.contains("made nowhere else in this change"),
+        "the question asks for the second place: {question}"
+    );
+    assert!(
+        question.contains("anywhere in this diff is still inside this change"),
+        "and `elsewhere` is given a scope: {question}"
+    );
+}
+
+/// **The second defect, in the same change.** Both cited assertions are
+/// verbatim what the loop already asserts — the standard was decided before
+/// this change, and criticising it says nothing about the change.
+///
+/// The diff carries the before: the loop's assertion is still there, unmarked,
+/// beside this change's copy of it. So the brief spells out what an unmarked
+/// line is, and the question says a carried assertion is not a written one.
+#[test]
+fn an_assertion_this_change_only_copied_is_readable_as_one_it_did_not_write() {
+    let evidence = baseline_evidence();
+    let brief = about(
+        GamingPattern::TautologicalTest,
+        A_TEST_SPLIT_IN_TWO,
+        Some(Baseline::of("scope", &evidence)),
+    );
+    let question = brief.question();
+
+    let cited: Vec<&str> = question
+        .lines()
+        .filter(|line| line.contains("StatusCode::NOT_FOUND"))
+        .collect();
+    assert!(
+        cited.iter().any(|line| line.starts_with(' ')),
+        "the loop asserts it still, unchanged: {cited:?}"
+    );
+    assert!(
+        cited.iter().any(|line| line.starts_with('+')),
+        "and this change copies that same standard: {cited:?}"
+    );
+    assert!(
+        question.contains("A line with neither marker is a header or unchanged context"),
+        "the brief says which of the two is which: {question}"
+    );
+    assert!(
+        question.contains("moved or copied unchanged"),
+        "and the question says a carried assertion is not a written one: {question}"
+    );
+}
+
+/// **Neither exemption reaches a Drone that gutted something.** An assertion
+/// removed and made nowhere else, and a test written here that passes whatever
+/// the code does, are still exactly what these two questions ask about — which
+/// is the whole reason they cost a call.
+#[test]
+fn both_questions_still_ask_what_they_were_bought_to_ask() {
+    let weakened = GamingPattern::AssertionWeakened
+        .question()
+        .expect("a judged pattern has a question");
+    assert!(weakened.contains("asserts less than it did"), "{weakened}");
+
+    let tautological = GamingPattern::TautologicalTest
+        .question()
+        .expect("a judged pattern has a question");
+    assert!(
+        tautological.contains("write a test that would pass whatever the code under it did"),
+        "{tautological}"
+    );
+    assert!(
+        tautological.contains("leave an existing one passing whatever the code did"),
+        "{tautological}"
+    );
 }
 
 #[test]

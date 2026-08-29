@@ -13,6 +13,15 @@
 //! [`GamingPattern::decided_by`] answers `Diff` or `Judge`, so a call site
 //! cannot spend a Judge call on something `git diff` already answers. See
 //! `docs/concepts/judge.md`, Where it fires.
+//!
+//! # Two questions ask about the whole change, not about one place in it
+//!
+//! `assertion_weakened` asks where the assertion went; `tautological_test`
+//! asks whether this change wrote the assertion at all. Both clauses are there
+//! because the first flag raised in production was answered truthfully and was
+//! wrong twice — an assertion moved twenty lines down in the same patch, and a
+//! standard copied verbatim out of the test being split. Neither clause covers
+//! an assertion removed outright or a vacuous test written here.
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -37,11 +46,13 @@ pub enum DecidedBy {
 /// see `workflows.toml`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum GamingPattern {
-    /// An assertion changed so that it asserts less.
+    /// An assertion changed so that it asserts less, and not made anywhere
+    /// else in the same change.
     AssertionWeakened,
     /// The tests still run and cover less than they did.
     TestScopeNarrowed,
-    /// A test that passes whatever the code does.
+    /// A test this change makes pass whatever the code under it does —
+    /// distinct from one whose assertions it only carried from somewhere else.
     TautologicalTest,
     /// A skip marker added to a test that used to run.
     TestSkipped,
@@ -128,15 +139,18 @@ impl GamingPattern {
             DecidedBy::Judge => Some(match self {
                 GamingPattern::AssertionWeakened => {
                     "Does this change alter an existing assertion so that it asserts less \
-                     than it did?"
+                     than it did, and is that assertion made nowhere else in this change?"
                 }
                 GamingPattern::TestScopeNarrowed => {
                     "Does this change leave the tests covering less behaviour than they \
                      covered before it?"
                 }
                 GamingPattern::TautologicalTest => {
-                    "Does this change add or leave a test that would pass whatever the code \
-                     under it did?"
+                    "Does this change write a test that would pass whatever the code under \
+                     it did, or leave an existing one passing whatever the code did after \
+                     changing what it covers? An assertion this change only moved or copied \
+                     unchanged is neither: it was already the standard here, and how strong \
+                     it is was decided before this change."
                 }
                 GamingPattern::NoFindingsOnSubstantialDiff => {
                     "Is this review reporting no findings against a diff substantial enough \

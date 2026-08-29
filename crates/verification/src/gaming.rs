@@ -43,6 +43,23 @@ If it does:
 `cited` names something in the diff above. A flag that could be written about \
 any other change is not a flag.";
 
+/// What the diff is and what its markers mean.
+///
+/// **Both halves are load-bearing.** A question asking whether something is
+/// done "elsewhere in this change" is unanswerable against an excerpt, and a
+/// question asking whether this change *wrote* an assertion is unanswerable
+/// unless a written line can be told from one that was already there.
+const HOW_TO_READ_THE_DIFF: &str = "\
+The whole change is below as one diff, with nothing of it left out — so \
+anywhere in this diff is still inside this change, and something removed in \
+one place may be done again in another.
+
+A line marked `+` is what this change writes. A line marked `-` is what it \
+removes. A line with neither marker is a header or unchanged context: code \
+that was already there and that this change leaves exactly as it found it.
+
+";
+
 /// Files that configure how a command runs.
 ///
 /// **A name match, and deliberately not an expansion of the step's `run:`
@@ -260,6 +277,7 @@ impl GamingBrief {
                  own.\n\n",
             ),
         }
+        question.push_str(HOW_TO_READ_THE_DIFF);
         question.push_str("The change, as a diff:\n\n");
         question.push_str(patch.as_str());
         question.push_str("\n\nThe question, which is yes or no:\n\n");
