@@ -11,9 +11,18 @@
 // partitioned.
 
 import { useState } from "react";
-import { Button, Dialog, Textarea } from "@armada/components";
+import { Button, Dialog, GamingFlags, Textarea } from "@armada/components";
 
 import { onwards, OVERRULING, type Overrule } from "./recovery";
+
+/**
+ * What the rows under it are, said once over them rather than once on each.
+ *
+ * A panel heading, which is where the Wh- rule lets a Wh- word stand. It names
+ * no machine, because the paragraph above it already did — this says only that
+ * what follows is the finding rather than more explanation.
+ */
+const WHAT_IT_FLAGGED = "What it flagged";
 
 /**
  * The button that opens the override dialog, and the dialog itself.
@@ -77,9 +86,27 @@ export function OverruleControl({
       <Dialog
         open={open}
         tone="neutral"
+        // Wide because this one carries findings rather than two sentences: a
+        // citation is a path and an expression, and at the confirmation width
+        // it wrapped mid-token.
+        width="wide"
         title={words.asks}
         confirmLabel={words.label}
         confirmDisabled={reason.trim() === ""}
+        // Pinned, outside the region that scrolls. The reason is what the
+        // confirm control is waiting on, so it is reachable at any window
+        // height — reading the explanation is optional and reaching the field
+        // is not.
+        field={
+          // No `autoFocus`, for `RedirectControl`'s reason: the dialog's own
+          // contract puts initial focus on Cancel.
+          <Textarea
+            label={words.field}
+            rows={3}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+        }
         onCancel={close}
         onConfirm={() => {
           const said = reason;
@@ -91,24 +118,18 @@ export function OverruleControl({
             beside it. The step is named because the person reading this came
             from a rail with several rows on it. */}
         <p>{words.dialog(overrule.step.label)}</p>
-        {/* What the check actually found, on the flag's case only. The pattern
-            is a name a workflow chose and the citation is a place in the work,
-            so both are mono — machine-derived, and neither is a sentence. A
-            flagged step that carries none is a Fleet that flagged without
+        {/* What the check actually found, on the flag's case only.
+            **Drawn and not written into a sentence.** `Flagged` is two fields
+            on the wire and this assembled them — "It flagged X in Y, Z in W."
+            — so two flags arrived as one paragraph and the reader had to parse
+            back out the two things that matter. `GamingFlags` draws the same
+            rows the rail draws, reading the citations in full because this is
+            the surface where a person signs for them.
+
+            A flagged step that carries none is a Fleet that flagged without
             citing, and drawing nothing is the honest render of that. */}
         {flagged.length === 0 ? null : (
-          <p>
-            {"It flagged "}
-            {flagged.map((flag, at) => (
-              <span key={`${flag.pattern}-${flag.cited}`}>
-                {at === 0 ? null : ", "}
-                <span className="mono">{flag.pattern}</span>
-                {" in "}
-                <span className="mono">{flag.cited}</span>
-              </span>
-            ))}
-            {"."}
-          </p>
+          <GamingFlags flags={flagged} said={WHAT_IT_FLAGGED} citation="whole" />
         )}
         {/* What happens next, and what it costs. `onwards` is the same sentence
             the screen behind this one already said, so the two cannot differ
@@ -118,14 +139,6 @@ export function OverruleControl({
             "log is append-only, and nothing takes an override back. It is not sent to the drone, " +
             "which did nothing wrong and is told only that the step was accepted."}
         </p>
-        {/* No `autoFocus`, for `RedirectControl`'s reason: the dialog's own
-            contract puts initial focus on Cancel. */}
-        <Textarea
-          label={words.field}
-          rows={4}
-          value={reason}
-          onChange={(event) => setReason(event.target.value)}
-        />
       </Dialog>
     </>
   );

@@ -1,0 +1,130 @@
+/* Gaming flags — what the check found on a step's evidence, as rows.
+
+   Lifted out of WorkflowRail unchanged in its clipped form, because the
+   override dialog needed the same rows and assembling them into a sentence
+   there was how two flags became one paragraph. The values below are the
+   rail's; `whole` is the second citation treatment and the only new one. */
+.armada-gaming-flags {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+/* The sentence the surface was withholding, in sans: a statement about what
+   happened rather than a value the system reported.
+
+   Weight, not hue. A flag is not a verdict and not a failed Check —
+   evidence_suspect routes as its own escalation because the work may be sound
+   and the evidence is what is doubted — so --step-failed here would draw a
+   refused criterion. */
+.armada-gaming-flags__said {
+  padding: calc(var(--space-1) / 2) var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+}
+
+.armada-gaming-flags__list {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+/* One pattern and where it points. No mark column: circle-* is the Judge's
+   family, shield-* the Checks', and flag is spent on the stopped step's own
+   mark, where a second one would say the same thing twice. */
+.armada-gaming-flags__flag {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: calc(var(--space-1) / 2) var(--space-2);
+  min-width: 0;
+}
+
+/* The pattern a workflow's flag_if named. Machine-derived, so mono. */
+.armada-gaming-flags__pattern {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+}
+
+/* Where the flag points — a file, a line, an assertion. Mono and flat, like the
+   exit code beside a Check: the step's state is hued, what was found is
+   measured. */
+.armada-gaming-flags__cited {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- The citation read in full -------------------------------------------- */
+
+/* A finding rather than a pointer, so the pattern gets its own line and the
+   citation gets the width. Stacked and not two columns: a citation is a
+   sentence with paths in it, and a second column would set the measure by
+   whichever pattern name happened to be longest.
+
+   No fill on the row. --bg-sunken is what the contract names for a code block,
+   and a citation carries them — a well inside a well is two recesses that mean
+   nothing. Two flags are separated by the rule the menu already uses, which is
+   also what says there are two. */
+.armada-gaming-flags[data-citation="whole"] .armada-gaming-flags__flag {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+}
+
+.armada-gaming-flags[data-citation="whole"]
+  .armada-gaming-flags__flag
+  + .armada-gaming-flags__flag {
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-gaming-flags[data-citation="whole"] .armada-gaming-flags__pattern {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+}
+
+/* Sans, and this is the split the whole change turns on. A pattern is a value
+   the wire carries and stays mono; a citation is a sentence a model wrote,
+   with paths and expressions in it, and setting all of it mono renders prose as
+   though it were a value. Prose puts the mono back on the parts that are one.
+
+   Nothing is clipped and nothing is behind a hover: this is the evidence a
+   person is signing for. --fg-muted and not --fg-subtle for the same reason —
+   a citation read at metadata contrast is one the surface is telling you not
+   to read. The size is set here because Prose declares none and inherits. */
+.armada-gaming-flags[data-citation="whole"] .armada-gaming-flags__cited {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+/* The caption over a finding is a heading over a block, not a label over a
+   row, so it takes the body step the rows around it read at. */
+.armada-gaming-flags[data-citation="whole"] .armada-gaming-flags__said {
+  padding-left: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}

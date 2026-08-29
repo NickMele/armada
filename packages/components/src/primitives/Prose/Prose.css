@@ -1,0 +1,84 @@
+/* Prose — model-written text, drawn as its structure.
+
+   NOTHING HERE DECLARES A FONT SIZE, and that is the rule the file exists for.
+   The type scale belongs to docs/contracts/design-system.md; a renderer that
+   ships its own is a second design system inside the first. Every block
+   inherits the size of the surface it is drawn on, so the same component reads
+   at --text-sm in a dialog body and at --text-2xs in a rail row without either
+   value being restated here.
+
+   What it does declare is spacing, family and weight — the three things a wall
+   of text is missing and none of which is a scale. */
+.armada-prose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-prose__paragraph {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+/* What a `#` line becomes. Weight and full contrast against the muted body
+   around it — the structure the writer meant, without borrowing --text-lg from
+   the panel headings that own it. */
+.armada-prose__said {
+  margin: 0;
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+}
+
+.armada-prose__strong {
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+}
+
+/* A list is rows, not bullets. A marker glyph would be decorative iconography
+   on an instrument panel, and the indent already says what the marker would. */
+.armada-prose__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0 0 0 var(--space-4);
+  list-style: none;
+}
+
+.armada-prose__item {
+  text-wrap: pretty;
+}
+
+/* Machine-derived, so mono. A well rather than a tint, because --bg-sunken is
+   what the contract names for code. */
+.armada-prose__code {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  font-family: var(--font-mono);
+  color: var(--fg-default);
+  /* An expression is one token to a reader and several to a line-breaker.
+     Breaking anywhere beats running off the edge; breaking mid-token only
+     happens where the whole run does not fit. */
+  overflow-wrap: anywhere;
+}
+
+/* The fenced block. `pre-wrap` and not `pre`: this sits inside a dialog and a
+   rail, and a horizontal scrollbar inside a floating layer hides content
+   behind a gesture. The line breaks the writer put in are kept; the ones the
+   width forces are added. */
+.armada-prose__block {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  font-family: var(--font-mono);
+  color: var(--fg-default);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.armada-prose__block code {
+  font-family: inherit;
+}

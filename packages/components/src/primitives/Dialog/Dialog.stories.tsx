@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { Textarea } from "../Textarea/Textarea";
 import { Dialog } from "./Dialog";
 
 const meta: Meta<typeof Dialog> = {
@@ -126,5 +127,56 @@ export const RestartTheStep: Story = {
       "The toolset, model and environment are resolved again from scratch, so a widened scope " +
       "can only narrow — and where the worktree itself is gone, Fleet refuses this and names a " +
       "redispatch instead.",
+  },
+};
+
+/**
+ * **More than fits, and the controls still reachable.** The body is the one
+ * region that gives: the title is fixed above it, the field and the two
+ * buttons are fixed below it, and only the prose in between scrolls.
+ *
+ * This is the state #197 was raised for. The dialog was a single column that
+ * grew with its content, so an explanation this long ran off the top and the
+ * bottom of the window with no way to reach either end — and the field the
+ * confirm control is waiting on, plus the confirm control itself, were the
+ * first things off the bottom. Resize the preview to a short window: Cancel,
+ * the field and Overrule stay where they are.
+ *
+ * `wide`, because the body carries findings rather than sentences. Read it at
+ * `default` to see why the second measure exists.
+ */
+export const MoreThanFitsWithAFieldToReach: Story = {
+  args: {
+    open: true,
+    tone: "neutral",
+    width: "wide",
+    title: "Overrule the gaming flag on this step?",
+    confirmLabel: "Overrule the flag",
+    field: <Textarea label="Why the flag is wrong" rows={3} />,
+    children: (
+      <>
+        <p>
+          The gaming check flagged the evidence for Regression check. It did not refuse the work —
+          it says the evidence for it is not to be trusted. Overruling says a person has read that
+          evidence and takes responsibility for it; the step advances still recorded as failed
+          against the flag.
+        </p>
+        <p>
+          It is not the last step, so the job carries on at the next one. Your reason is written to
+          this job&apos;s log and stays there — the log is append-only, and nothing takes an
+          override back. It is not sent to the drone, which did nothing wrong and is told only that
+          the step was accepted.
+        </p>
+        <p>
+          The check reads the diff and the evidence together and infers intent, which is why it is
+          its own escalation rather than a gate failure: resubmitting under the same instructions
+          would likely reproduce whatever it found, so the job stops and asks rather than retrying.
+        </p>
+        <p>
+          A person overruling it is on the record as having read the finding. That is the whole
+          reason this is a dialog and not a button.
+        </p>
+      </>
+    ),
   },
 };

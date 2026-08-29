@@ -2,17 +2,25 @@
  * shadow. Elevation is surface plus shadow and nothing else — no blur, and
  * never a second floating layer stacked inside this one.
  *
- * MISSING TOKENS, both named on the line below and reported.
+ * MISSING TOKEN, named on the line below and reported.
  * --armada-hairline: packages/tokens declares no border-width. --focus-ring
  *   proves the pattern the token set uses (the shorthand is the token) and has
  *   no hairline counterpart, so the contract's edge on a floating layer cannot
  *   be spelled from a token today.
- * --armada-dialog-width: the component sheet draws the confirmation at a fixed
- *   width and no width token exists for it. --palette-width is the palette's.
+ *
+ * --armada-dialog-width is an alias and not a value: the widths are --w-dialog
+ * and --w-dialog-wide, and this is the one place a dialog chooses between them.
  */
 .armada-dialog {
   --armada-hairline: var(--border-width);
   --armada-dialog-width: var(--w-dialog);
+}
+
+/* The second measure. Not a bigger dialog — a different one: a confirmation
+   that is two sentences reads at 440px, and one carrying a pattern and the
+   file, line or assertion it was found in wraps mid-expression there. */
+.armada-dialog[data-width="wide"] {
+  --armada-dialog-width: var(--w-dialog-wide);
 }
 
 /* No --scrim token either. Mixed from --bg-sunken rather than written as a
@@ -28,17 +36,30 @@
   background: color-mix(in srgb, var(--bg-sunken) 62%, transparent);
 }
 
+/* max-height is the scrim's content box, which is the window less its inset —
+   so the layer is bounded by the window rather than by its own content, and
+   the body below is what gives when there is more than fits. Overflow is
+   measured against the window, never against a parent. */
 .armada-dialog {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   width: 100%;
   max-width: var(--armada-dialog-width);
+  max-height: 100%;
   padding: var(--pad-card);
   border-radius: var(--radius-lg);
   background: var(--bg-overlay);
   border: var(--armada-hairline) solid var(--border-default);
   box-shadow: var(--shadow-overlay);
+}
+
+/* Head, field and actions are fixed. Only the body scrolls, which is what
+   makes Cancel and the field reachable at any window height. */
+.armada-dialog__head,
+.armada-dialog__field,
+.armada-dialog__actions {
+  flex: none;
 }
 
 .armada-dialog__head {
@@ -62,26 +83,38 @@
   color: var(--status-escalated);
 }
 
-.armada-dialog__copy {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
 .armada-dialog__title {
   margin: 0;
+  min-width: 0;
   font-size: var(--text-lg);
   line-height: var(--leading-lg);
   font-weight: var(--weight-heading);
   text-wrap: pretty;
 }
 
+/* Indented to the title's edge — the glyph's 16px plus the head's gap — so
+   splitting the body out of the title's column costs no alignment.
+
+   `flex: 0 1 auto` and not `1 1 auto`: the dialog is the height of its content
+   until that content exceeds the window, and only then does this shrink.
+   Vertical padding rather than a gap above the field, so the last line of prose
+   does not sit flush against the rule when the region is scrolled to its end. */
 .armada-dialog__body {
+  flex: 0 1 auto;
+  padding-left: calc(var(--space-4) + var(--space-2));
   color: var(--fg-muted);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
   text-wrap: pretty;
+}
+
+/* What the dialog collects, pinned. The rule is the separator treatment the
+   menu already uses, and it is here for one reason: a region that scrolls and
+   a region that does not, meeting with nothing between them, clips a sentence
+   mid-line and gives no sign it did. */
+.armada-dialog__field {
+  padding-top: var(--space-4);
+  border-top: var(--armada-hairline) solid var(--border-subtle);
 }
 
 .armada-dialog__actions {

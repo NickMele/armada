@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
 import { useCallback } from "react";
 import { CriterionVerdicts, type CriterionVerdict } from "../CriterionVerdicts/CriterionVerdicts";
+import { GamingFlags, type GamingFlag } from "../GamingFlags/GamingFlags";
 import { StepActivityMark, type StepActivity } from "../StepActivityMark/StepActivityMark";
 
 /**
@@ -89,34 +90,13 @@ export type WorkflowRailDeclaration = {
 /**
  * One pattern the gaming check flagged on a step's evidence, and where.
  *
- * **A flag is not a verdict and never borrows one's treatment.** `circle-*` is
- * reserved to the Judge's criterion verdicts and `shield-*` to Checks; a flag
- * is neither, so these rows are label-only for the reason a declaration row is,
- * and `flag` itself is spent one row above on the stopped step's mark.
- *
- * **Nor is it a failure.** `evidence_suspect` routes as its own escalation
- * rather than a gate failure, precisely because resubmission under the same
- * instructions would likely reproduce the gaming — so the block carries weight
- * rather than `--step-failed`, and a reader is not told a criterion was
- * refused when what happened is that the evidence is not trusted.
+ * **The type and the rows moved to `GamingFlags`**, because the override
+ * dialog needed the same two fields and was assembling them into a sentence
+ * instead — which is how two flags became one paragraph. The name stays here
+ * as an alias so a rail's caller keeps reading in the rail's vocabulary; the
+ * treatment is one, and one place.
  */
-export type WorkflowRailFlag = {
-  /**
-   * The pattern, spelled as the workflow's `flag_if` spells it —
-   * `check_config_edited`, `assertion_weakened`. Mono, because no vocabulary
-   * in the repository carries a verb per gaming pattern and the wire spelling
-   * is what renders. Reported.
-   */
-  pattern: string;
-  /**
-   * The file, line or assertion the flag is about. **The whole value of the
-   * finding** — an uncited flag is unactionable exactly as an uncited refusal
-   * is — which is why it is on the rail rather than a press away in the
-   * override dialog. Absent where Fleet flagged and cited nothing, which draws
-   * no slot rather than an empty one.
-   */
-  cited?: string;
-};
+export type WorkflowRailFlag = GamingFlag;
 
 export type WorkflowRailStep = {
   id: string;
@@ -400,21 +380,10 @@ export function WorkflowRail({ steps, pulsing = false, onCopied }: WorkflowRailP
                 source is the same machine every time. */}
             {flags.length === 0 ? null : (
               <div className="armada-rail__flags">
-                <span className="armada-rail__flags-said">{FLAGGED}</span>
-                <ul className="armada-rail__flag-list">
-                  {flags.map((flag, f) => (
-                    <li className="armada-rail__flag" key={`flag-${f}`}>
-                      <span className="armada-rail__flag-pattern">{flag.pattern}</span>
-                      {flag.cited === undefined ? null : (
-                        // The whole citation stays in the title however narrow
-                        // the row gets, the way the Check's output path does.
-                        <span className="armada-rail__flag-cited" title={flag.cited}>
-                          {flag.cited}
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                {/* Clipped, because a rail is a column of pointers: the whole
+                    citation stays in the title, and the surface that is for
+                    reading it in full is the override dialog. */}
+                <GamingFlags flags={flags} said={FLAGGED} citation="clipped" />
               </div>
             )}
             {step.verdicts === undefined || step.verdicts.length === 0 ? null : (
