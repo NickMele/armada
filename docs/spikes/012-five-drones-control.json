@@ -1,0 +1,110 @@
+{
+  "fleet": 5,
+  "drones": {
+    "3669": "JOB-A",
+    "3670": "JOB-B",
+    "3671": "JOB-C",
+    "3672": "JOB-D",
+    "3673": "JOB-E"
+  },
+  "connections": [
+    {
+      "at": 0.0,
+      "peer": [
+        "127.0.0.1",
+        58256
+      ],
+      "pid": null,
+      "root": null,
+      "id": 1,
+      "job": null,
+      "verdict": "unattributable"
+    },
+    {
+      "at": 0.020639896392822266,
+      "peer": [
+        "127.0.0.1",
+        58257
+      ],
+      "pid": null,
+      "root": null,
+      "id": 2,
+      "job": null,
+      "verdict": "unattributable"
+    },
+    {
+      "at": 0.021990060806274414,
+      "peer": [
+        "127.0.0.1",
+        58258
+      ],
+      "pid": null,
+      "root": null,
+      "id": 3,
+      "job": null,
+      "verdict": "unattributable"
+    },
+    {
+      "at": 0.04054117202758789,
+      "peer": [
+        "127.0.0.1",
+        58261
+      ],
+      "pid": null,
+      "root": null,
+      "id": 4,
+      "job": null,
+      "verdict": "unattributable"
+    },
+    {
+      "at": 0.0668940544128418,
+      "peer": [
+        "127.0.0.1",
+        58271
+      ],
+      "pid": null,
+      "root": null,
+      "id": 5,
+      "job": null,
+      "verdict": "unattributable"
+    }
+  ],
+  "calls": [
+    {
+      "claimed": "JOB-A",
+      "transport_says": null,
+      "pid": null,
+      "agree": false
+    },
+    {
+      "claimed": "JOB-B",
+      "transport_says": null,
+      "pid": null,
+      "agree": false
+    },
+    {
+      "claimed": "JOB-E",
+      "transport_says": null,
+      "pid": null,
+      "agree": false
+    },
+    {
+      "claimed": "JOB-D",
+      "transport_says": null,
+      "pid": null,
+      "agree": false
+    },
+    {
+      "claimed": "JOB-C",
+      "transport_says": null,
+      "pid": null,
+      "agree": false
+    }
+  ],
+  "gaps_ms": [
+    20.639896392822266,
+    1.3501644134521484,
+    18.551111221313477,
+    26.352882385253906
+  ]
+}

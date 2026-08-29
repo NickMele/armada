@@ -1,0 +1,78 @@
+{
+  "drone_pid": 5752,
+  "fan": 4,
+  "rows": [
+    {
+      "kind": "connection",
+      "id": 1,
+      "at_ms": 0.0,
+      "pid": 5752,
+      "ancestry": "5752 ~/.local/bin/claude <- 5738 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python <- 5736 /bin/zsh <- 65221 ~/.local/bin/claude <- 64711 -/bin/zsh <- 64710 /usr/bin/login",
+      "traces_to_drone": true
+    },
+    {
+      "kind": "connection",
+      "id": 2,
+      "at_ms": 7292.707681655884,
+      "pid": 6340,
+      "ancestry": "6340 curl <- 6338 /bin/zsh <- 5752 ~/.local/bin/claude <- 5738 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python <- 5736 /bin/zsh <- 65221 ~/.local/bin/claude",
+      "traces_to_drone": true
+    },
+    {
+      "kind": "tool_call",
+      "connection": 2,
+      "pid": 6340,
+      "arguments": {
+        "job": "JOB-P1"
+      }
+    },
+    {
+      "kind": "connection",
+      "id": 3,
+      "at_ms": 7388.4007930755615,
+      "pid": 6341,
+      "ancestry": "6341 curl <- 6338 /bin/zsh <- 5752 ~/.local/bin/claude <- 5738 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python <- 5736 /bin/zsh <- 65221 ~/.local/bin/claude",
+      "traces_to_drone": true
+    },
+    {
+      "kind": "tool_call",
+      "connection": 3,
+      "pid": 6341,
+      "arguments": {
+        "job": "JOB-P2"
+      }
+    },
+    {
+      "kind": "connection",
+      "id": 4,
+      "at_ms": 7478.609800338745,
+      "pid": 6343,
+      "ancestry": "6343 curl <- 6338 /bin/zsh <- 5752 ~/.local/bin/claude <- 5738 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python <- 5736 /bin/zsh <- 65221 ~/.local/bin/claude",
+      "traces_to_drone": true
+    },
+    {
+      "kind": "tool_call",
+      "connection": 4,
+      "pid": 6343,
+      "arguments": {
+        "job": "JOB-P4"
+      }
+    },
+    {
+      "kind": "connection",
+      "id": 5,
+      "at_ms": 7567.568778991699,
+      "pid": 6342,
+      "ancestry": "6342 curl <- 6338 /bin/zsh <- 5752 ~/.local/bin/claude <- 5738 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python <- 5736 /bin/zsh <- 65221 ~/.local/bin/claude",
+      "traces_to_drone": true
+    },
+    {
+      "kind": "tool_call",
+      "connection": 5,
+      "pid": 6342,
+      "arguments": {
+        "job": "JOB-P3"
+      }
+    }
+  ]
+}

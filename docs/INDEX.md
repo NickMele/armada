@@ -143,6 +143,10 @@ approximations.
   — if every Drone gets its own endpoint, what an adversarial Drone can reach of
   another's: what the allowlist stops, what it does not, and why no per-Drone
   secret placement survives a Drone with the Write grant.
+- [`spikes/012-peer-identity-under-concurrency.md`](spikes/012-peer-identity-under-concurrency.md)
+  — whether the peer-process identity of spike 10 holds at five Drones and under
+  concurrent connections, how wide the lookup's window is and which way it fails
+  when it closes, and what the same answer costs without `lsof`.
 
 Raw transcripts sit beside each record. A negative result is a result and stays.
 

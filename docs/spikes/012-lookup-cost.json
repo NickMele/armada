@@ -1,0 +1,40 @@
+{
+  "fleet": 5,
+  "samples": 20,
+  "offsets": {
+    "local": 268,
+    "peer": 264
+  },
+  "routes": {
+    "lsof_port": {
+      "median_us": 63978.66696352139,
+      "right": 20,
+      "wrong": 0,
+      "missed": 0
+    },
+    "lsof_pids": {
+      "median_us": 41762.54104822874,
+      "right": 20,
+      "wrong": 0,
+      "missed": 0
+    },
+    "netstat": {
+      "median_us": 3105.9589819051325,
+      "right": 0,
+      "wrong": 0,
+      "missed": 20
+    },
+    "libproc": {
+      "median_us": 22.124964743852615,
+      "right": 20,
+      "wrong": 0,
+      "missed": 0
+    },
+    "unix_peerpid": {
+      "median_us": 0.5830079317092896,
+      "right": 20,
+      "wrong": 0,
+      "missed": 0
+    }
+  }
+}

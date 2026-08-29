@@ -1,0 +1,10 @@
+{"t": 1787978487.286855, "kind": "connection", "payload": {"observed": {"id": 1, "peer": ["127.0.0.1", 58256], "pid": null}}}
+{"t": 1787978487.3074949, "kind": "connection", "payload": {"observed": {"id": 2, "peer": ["127.0.0.1", 58257], "pid": null}}}
+{"t": 1787978487.308845, "kind": "connection", "payload": {"observed": {"id": 3, "peer": ["127.0.0.1", 58258], "pid": null}}}
+{"t": 1787978487.3273962, "kind": "connection", "payload": {"observed": {"id": 4, "peer": ["127.0.0.1", 58261], "pid": null}}}
+{"t": 1787978487.353749, "kind": "connection", "payload": {"observed": {"id": 5, "peer": ["127.0.0.1", 58271], "pid": null}}}
+{"t": 1787978491.738233, "kind": "tool_call", "payload": {"connection": 3, "arguments": {"job": "JOB-A"}, "observed": {}}}
+{"t": 1787978491.776673, "kind": "tool_call", "payload": {"connection": 1, "arguments": {"job": "JOB-B"}, "observed": {}}}
+{"t": 1787978491.7903402, "kind": "tool_call", "payload": {"connection": 2, "arguments": {"job": "JOB-E"}, "observed": {}}}
+{"t": 1787978491.853678, "kind": "tool_call", "payload": {"connection": 4, "arguments": {"job": "JOB-D"}, "observed": {}}}
+{"t": 1787978491.898289, "kind": "tool_call", "payload": {"connection": 5, "arguments": {"job": "JOB-C"}, "observed": {}}}

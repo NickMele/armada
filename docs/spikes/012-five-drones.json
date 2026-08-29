@@ -1,0 +1,147 @@
+{
+  "fleet": 5,
+  "drones": {
+    "7729": "JOB-A",
+    "7730": "JOB-B",
+    "7731": "JOB-C",
+    "7732": "JOB-D",
+    "7733": "JOB-E"
+  },
+  "connections": [
+    {
+      "at": 0.0,
+      "peer": [
+        "127.0.0.1",
+        58367
+      ],
+      "pid": 7731,
+      "root": 64710,
+      "id": 1,
+      "job": "JOB-C",
+      "verdict": "attributed"
+    },
+    {
+      "at": 0.12310194969177246,
+      "peer": [
+        "127.0.0.1",
+        58368
+      ],
+      "pid": 7732,
+      "root": 64710,
+      "id": 2,
+      "job": "JOB-D",
+      "verdict": "attributed"
+    },
+    {
+      "at": 0.27927613258361816,
+      "peer": [
+        "127.0.0.1",
+        58370
+      ],
+      "pid": 7729,
+      "root": 64710,
+      "id": 3,
+      "job": "JOB-A",
+      "verdict": "attributed"
+    },
+    {
+      "at": 0.3770599365234375,
+      "peer": [
+        "127.0.0.1",
+        58372
+      ],
+      "pid": 7733,
+      "root": 64710,
+      "id": 4,
+      "job": "JOB-E",
+      "verdict": "attributed"
+    },
+    {
+      "at": 0.4715900421142578,
+      "peer": [
+        "127.0.0.1",
+        58376
+      ],
+      "pid": 7730,
+      "root": 64710,
+      "id": 5,
+      "job": "JOB-B",
+      "verdict": "attributed"
+    }
+  ],
+  "calls": [
+    {
+      "claimed": "JOB-E",
+      "transport_says": "JOB-E",
+      "pid": 7733,
+      "agree": true
+    },
+    {
+      "claimed": "JOB-C",
+      "transport_says": "JOB-C",
+      "pid": 7731,
+      "agree": true
+    },
+    {
+      "claimed": "JOB-B",
+      "transport_says": "JOB-B",
+      "pid": 7730,
+      "agree": true
+    },
+    {
+      "claimed": "JOB-A",
+      "transport_says": "JOB-A",
+      "pid": 7729,
+      "agree": true
+    },
+    {
+      "claimed": "JOB-D",
+      "transport_says": "JOB-D",
+      "pid": 7732,
+      "agree": true
+    }
+  ],
+  "cheap_lookup": [
+    {
+      "connection": 1,
+      "peer": 58367,
+      "lsof_pid": 7731,
+      "libproc_pid": 7731,
+      "us": 269.83401039615273
+    },
+    {
+      "connection": 2,
+      "peer": 58368,
+      "lsof_pid": 7732,
+      "libproc_pid": 7732,
+      "us": 233.08396339416504
+    },
+    {
+      "connection": 3,
+      "peer": 58370,
+      "lsof_pid": 7729,
+      "libproc_pid": 7729,
+      "us": 95.20800085738301
+    },
+    {
+      "connection": 4,
+      "peer": 58372,
+      "lsof_pid": 7733,
+      "libproc_pid": 7733,
+      "us": 253.41700529679656
+    },
+    {
+      "connection": 5,
+      "peer": 58376,
+      "lsof_pid": 7730,
+      "libproc_pid": 7730,
+      "us": 130.50000416114926
+    }
+  ],
+  "gaps_ms": [
+    123.10194969177246,
+    156.1741828918457,
+    97.78380393981934,
+    94.53010559082031
+  ]
+}

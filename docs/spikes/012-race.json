@@ -1,0 +1,377 @@
+{
+  "offsets": {
+    "local": 268,
+    "peer": 264
+  },
+  "reuse": {
+    "first_pid": 97079,
+    "second_pid": 97117,
+    "second_returncode": 1,
+    "second_stderr": "Traceback (most recent call last):\n  File \"~/Development/armada/.claude/worktrees/agent-a5e96f42bc10b2981/docs/spikes/012-race-client.py\", line 29, in <module>\n    s.connect((\"127.0.0.1\", server_port))\n    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nOSError: [Errno 48] Address already in use",
+    "connections_accepted": 1
+  },
+  "ambiguity": [
+    {
+      "order": "impostor second",
+      "route": "libproc",
+      "recovered": 97129,
+      "truth": 97129,
+      "impostor": 97141,
+      "verdict": "right",
+      "us": 1175.332989078015
+    },
+    {
+      "order": "impostor second",
+      "route": "libproc_4tuple",
+      "recovered": 97129,
+      "truth": 97129,
+      "impostor": 97141,
+      "verdict": "right",
+      "us": 48.95799793303013
+    },
+    {
+      "order": "impostor second",
+      "route": "lsof_pids",
+      "recovered": 97129,
+      "truth": 97129,
+      "impostor": 97141,
+      "verdict": "right",
+      "us": 71120.91698218137
+    },
+    {
+      "order": "impostor second",
+      "route": "lsof_port",
+      "recovered": 97129,
+      "truth": 97129,
+      "impostor": 97141,
+      "verdict": "right",
+      "us": 64779.667009133846
+    },
+    {
+      "order": "impostor first",
+      "route": "libproc",
+      "recovered": 97159,
+      "truth": 97160,
+      "impostor": 97159,
+      "verdict": "wrong",
+      "us": 262.87499349564314
+    },
+    {
+      "order": "impostor first",
+      "route": "libproc_4tuple",
+      "recovered": 97160,
+      "truth": 97160,
+      "impostor": 97159,
+      "verdict": "right",
+      "us": 59.62501745671034
+    },
+    {
+      "order": "impostor first",
+      "route": "lsof_pids",
+      "recovered": 97159,
+      "truth": 97160,
+      "impostor": 97159,
+      "verdict": "wrong",
+      "us": 68886.0000227578
+    },
+    {
+      "order": "impostor first",
+      "route": "lsof_port",
+      "recovered": 97159,
+      "truth": 97160,
+      "impostor": 97159,
+      "verdict": "wrong",
+      "us": 63527.08401391283
+    }
+  ],
+  "lifetime": [
+    {
+      "hold_ms": 0,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 0,
+          "none": 24,
+          "wrong": 0,
+          "median_us": 19.249971956014633
+        },
+        "lsof_port": {
+          "right": 0,
+          "none": 24,
+          "wrong": 0,
+          "median_us": 62120.79100077972
+        }
+      }
+    },
+    {
+      "hold_ms": 1,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 23,
+          "none": 1,
+          "wrong": 0,
+          "median_us": 52.41704639047384
+        },
+        "lsof_port": {
+          "right": 0,
+          "none": 24,
+          "wrong": 0,
+          "median_us": 62749.16703114286
+        }
+      }
+    },
+    {
+      "hold_ms": 2,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 50.16697105020285
+        },
+        "lsof_port": {
+          "right": 0,
+          "none": 24,
+          "wrong": 0,
+          "median_us": 62590.70901433006
+        }
+      }
+    },
+    {
+      "hold_ms": 5,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 47.37498238682747
+        },
+        "lsof_port": {
+          "right": 0,
+          "none": 24,
+          "wrong": 0,
+          "median_us": 62021.58302767202
+        }
+      }
+    },
+    {
+      "hold_ms": 10,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 46.290981117635965
+        },
+        "lsof_port": {
+          "right": 0,
+          "none": 24,
+          "wrong": 0,
+          "median_us": 60828.749963548034
+        }
+      }
+    },
+    {
+      "hold_ms": 20,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 47.49995423480868
+        },
+        "lsof_port": {
+          "right": 0,
+          "none": 24,
+          "wrong": 0,
+          "median_us": 62246.54195830226
+        }
+      }
+    },
+    {
+      "hold_ms": 25,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 49.20799983665347
+        },
+        "lsof_port": {
+          "right": 0,
+          "none": 24,
+          "wrong": 0,
+          "median_us": 61978.25004346669
+        }
+      }
+    },
+    {
+      "hold_ms": 30,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 47.20798460766673
+        },
+        "lsof_port": {
+          "right": 6,
+          "none": 18,
+          "wrong": 0,
+          "median_us": 61181.00002640858
+        }
+      }
+    },
+    {
+      "hold_ms": 35,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 49.875001423060894
+        },
+        "lsof_port": {
+          "right": 17,
+          "none": 7,
+          "wrong": 0,
+          "median_us": 62926.04096233845
+        }
+      }
+    },
+    {
+      "hold_ms": 40,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 47.749956138432026
+        },
+        "lsof_port": {
+          "right": 23,
+          "none": 1,
+          "wrong": 0,
+          "median_us": 61626.91704230383
+        }
+      }
+    },
+    {
+      "hold_ms": 45,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 46.50000482797623
+        },
+        "lsof_port": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 60377.62499181554
+        }
+      }
+    },
+    {
+      "hold_ms": 50,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 43.91703987494111
+        },
+        "lsof_port": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 59967.75004314259
+        }
+      }
+    },
+    {
+      "hold_ms": 80,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 46.20797699317336
+        },
+        "lsof_port": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 62154.83299456537
+        }
+      }
+    },
+    {
+      "hold_ms": 100,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 45.20796937867999
+        },
+        "lsof_port": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 61908.99998182431
+        }
+      }
+    },
+    {
+      "hold_ms": 150,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 45.95896461978555
+        },
+        "lsof_port": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 60985.12501921505
+        }
+      }
+    },
+    {
+      "hold_ms": 200,
+      "n": 24,
+      "routes": {
+        "libproc": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 46.75000673159957
+        },
+        "lsof_port": {
+          "right": 24,
+          "none": 0,
+          "wrong": 0,
+          "median_us": 61424.16701186448
+        }
+      }
+    }
+  ]
+}
