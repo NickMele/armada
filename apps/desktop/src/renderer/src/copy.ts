@@ -5,11 +5,15 @@
 // here is read by a person and none of it is wiring. **No status label is
 // among them** — those come from the generated vocabulary, which is what stops
 // a second one being typed into a component.
+//
+// The act labels moved here from `Acts.tsx` when the controls that own a
+// dialog were split out of it. They are the words on a button, which is this
+// file's subject; which control draws them is that file's.
 
 import type { DialogTone } from "@armada/components";
 
 import type { Outcome } from "../../shared/bridge";
-import type { ConfirmableAct } from "./JobDetail";
+import type { ConfirmableAct, JobAct } from "./JobDetail";
 
 /** What a refusal says. Every one names what happened and what to do. */
 export function said(outcome: Outcome): string {
@@ -37,6 +41,8 @@ export function said(outcome: Outcome): string {
       return "That restart is already in flight. It was not sent twice.";
     case "already_overruling":
       return "That override is already in flight. It was not sent twice.";
+    case "already_rereading":
+      return "That gate is already being re-run. It was not asked twice.";
     case "empty_report":
       return "A report needs what you know went wrong. The record on its own says nothing that was not already on the job.";
     case "already_reporting":
@@ -104,4 +110,56 @@ export const CONFIRM: Record<ConfirmableAct, { title: string; body: string; tone
       "can only narrow — and where the worktree itself is gone, Fleet refuses this and names a " +
       "redispatch instead.",
   },
+};
+
+/**
+ * What each act is called on its button. **Redispatch does not say "retry" or
+ * "run again"** — nothing resumes, and a label implying the same Job continues
+ * would describe an act Fleet does not perform. The confirmation states the
+ * rest; the button names the act.
+ *
+ * **The override says "overrule", never "approve" or "accept".** Approving is a
+ * different act on a different status and means the work was right; this one
+ * means a machine was wrong and a person is taking responsibility for going
+ * past it.
+ *
+ * **The override's own control does not read this row.** Its wording changes
+ * with what is being overruled — a Judge's verdict or a gaming flag — so it
+ * comes from `OVERRULING` in `recovery.ts`, where the trigger is known. This
+ * row is the act's name where no trigger is in hand, which is the shared
+ * confirmation and the menu, and it keeps the record total over `JobAct`.
+ *
+ * **The re-run says "ask", not "approve", "accept", "retry" or "override".**
+ * Nothing ruled on that step, so there is no verdict to accept and none to
+ * overrule; and nothing the drone did is redone, so it is not a retry. What
+ * happens is that a gate which could not answer is asked again, and the label
+ * is that sentence with the words taken out.
+ */
+export const ACT_LABEL: Record<JobAct, string> = {
+  kill_drone: "Kill drone",
+  kill_job: "Kill job",
+  redispatch: "Redispatch as a new job",
+  redirect: "Redirect drone",
+  restart_step: "Restart step",
+  override_verdict: "Overrule the verdict",
+  rerun_gate: "Ask the gate again",
+};
+
+/**
+ * The same acts inside the menu, where each says what survives it. A caret hides
+ * the consequence that a button's own position states, so the label has to carry
+ * it — `Kill drone` and `Kill job` differ by everything and by three characters.
+ *
+ * **Redirect, restart, the override and the re-run never reach a menu** — none
+ * of them joins the split button, so those four entries exist only to keep the
+ * record total over `JobAct` rather than for anything that reads them today.
+ */
+export const MENU_LABEL: Record<JobAct, string> = {
+  kill_drone: "Kill drone, the job stays open",
+  kill_job: "Kill job, it ends here",
+  redispatch: "Redispatch as a new job",
+  redirect: "Redirect drone, the job stays open",
+  restart_step: "Restart the step, on the same worktree",
+  override_verdict: "Overrule the verdict, the refused work stands",
+  rerun_gate: "Ask the gate again, on the evidence already submitted",
 };

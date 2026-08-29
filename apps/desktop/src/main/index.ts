@@ -170,6 +170,13 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.overrideVerdict, (_event, jobId: string, reason: string) =>
     connection?.commands.overrideVerdict(jobId, reason),
   );
+  // The answer at a gate that could not rule, which is a different place again:
+  // the override lifts a decision and this asks for one. Its own channel for
+  // the reason the two routes are two — the triggers partition, and neither act
+  // is legal where the other one is.
+  ipcMain.handle(CHANNELS.rerunGate, (_event, jobId: string) =>
+    connection?.commands.rerunGate(jobId),
+  );
   // Saying a job failed in error. Its own channel beside the override rather
   // than a flag on it: the override moves the job past a verdict and this moves
   // nothing, and the two would otherwise be one press meaning either.
@@ -200,6 +207,13 @@ void app.whenReady().then(() => {
   );
   ipcMain.handle(CHANNELS.readDiff, (_event, jobId: string | null) =>
     connection?.readDiff(jobId),
+  );
+  // Every report a person has filed, and the counts they are read beside. The
+  // one read here that names no Job: a report outlives the Job it is about, so
+  // a listing reached through one would lose the reports that most need
+  // reading. Read-only, and nothing on this channel can file or withdraw one.
+  ipcMain.handle(CHANNELS.readReports, (_event, want: boolean) =>
+    connection?.readReports(want),
   );
   // The three decisions on the work, and they stay three channels. Approving
   // takes it, requesting changes sends the drone back to the same step, and

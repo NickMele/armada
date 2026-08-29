@@ -54,7 +54,6 @@ import { RECORDS_ITS_OWN_TURNS, renderFor } from "./render";
 import { Stopped } from "./Stopped";
 import { whyNoWork, workOf } from "./work";
 
-export { ACT_LABEL } from "./Acts";
 export type { ConfirmableAct, JobAct } from "./Acts";
 export { renderFor } from "./render";
 export type { Render } from "./render";
@@ -93,6 +92,14 @@ export type JobDetailProps = {
    * and it is the only one that keeps work a gate refused.
    */
   onOverrule: (jobId: string, reason: string) => void;
+  /**
+   * Ask the gate again on a step it could not decide. **Its own prop and not a
+   * value of `onAct`**, like the override, and for the opposite reason: that
+   * one is confirmed by the dialog that collects its reason, and this one is
+   * confirmed by nothing because nothing is at stake — no work is destroyed, no
+   * verdict is lifted and no step is advanced by pressing it.
+   */
+  onRerun: (jobId: string) => void;
   /**
    * Say this job failed in error, with the record attached. Passed through to
    * the header's acts like the rest, and unlike the rest it changes nothing
@@ -151,6 +158,7 @@ export function JobDetail({
   onAct,
   onRedirect,
   onOverrule,
+  onRerun,
   onReport,
   onApprove,
   onApproveReview,
@@ -193,6 +201,7 @@ export function JobDetail({
         onAct={onAct}
         onRedirect={onRedirect}
         onOverrule={onOverrule}
+        onRerun={onRerun}
         onReport={onReport}
         onCopied={onCopied}
         onApprove={onApprove}

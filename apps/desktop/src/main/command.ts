@@ -60,6 +60,7 @@ type Busy =
   | "already_redirecting"
   | "already_restarting"
   | "already_overruling"
+  | "already_rereading"
   | "already_reporting"
   | "already_deciding";
 
@@ -84,6 +85,12 @@ export class JobCommands {
   private readonly restarting = new Set<string>();
   /** Jobs with an override in flight. Its own set: it is its own act. */
   private readonly overruling = new Set<string>();
+  /**
+   * Jobs with a gate re-run in flight. Its own set beside the override's: the
+   * two acts answer triggers that do not overlap, so one set would refuse a
+   * press that names a different Job's different act.
+   */
+  private readonly rereading = new Set<string>();
   /** Jobs with a decision on the work in flight. One press sends one decision. */
   private readonly deciding = new Set<string>();
   /** Jobs with a report being filed. Its own set: filing is not an act on the job. */
@@ -302,6 +309,26 @@ export class JobCommands {
     const body: Overruled = { reason };
     return this.act(jobId, this.overruling, "already_overruling", (port) =>
       ask(port, "POST", route(jobId, "override_verdict"), body),
+    );
+  }
+
+  /**
+   * Ask the gate again, over the evidence the step already submitted.
+   *
+   * **It re-runs; it does not retry.** No Drone works, nothing the Drone did is
+   * redone, and the step's retry budget is untouched — the run the gate is told
+   * it is reading is the one the Drone worked. What comes back is the Job, and
+   * a second undecided reading answers with a Job that did not move, which is
+   * the honest outcome rather than a refusal.
+   *
+   * **No body, and that is the act rather than an omission.** An override
+   * carries a required reason because a person is disagreeing with a machine.
+   * Nothing ruled here, so there is nothing to disagree with and no sentence
+   * the second reading will not say for itself.
+   */
+  async rerunGate(jobId: string): Promise<Outcome> {
+    return this.act(jobId, this.rereading, "already_rereading", (port) =>
+      ask(port, "POST", route(jobId, "rerun_gate")),
     );
   }
 

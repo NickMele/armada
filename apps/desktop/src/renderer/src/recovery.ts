@@ -39,6 +39,21 @@
 // overruled and a gaming flag overruled are different things a person is doing,
 // so the scope and the sentences are one record — `OVERRULING` — and admitting
 // a trigger costs the words to describe it.
+//
+// # A fourth act, for the trigger the override refuses
+//
+// `gate_undecided` is the gate declining to produce a verdict in either
+// direction — a worktree it could not read, a Judge it could not hand a patch
+// to. There is nothing ruled, so there is nothing to overrule, and
+// `overrulable()` refuses the trigger for exactly that reason. What is left is
+// to ask the question again, which is `crates/fleet/src/regating.rs`.
+//
+// **It is beside `act` and not one of its values, like the override.** Fleet
+// re-runs the gate out of the working slot, and a Job whose slot is still held
+// is a Job that may still hold a Drone — so a re-run co-occurs with a redirect
+// rather than replacing it. The two triggers partition: a step is overrulable
+// or re-runnable, never both, which is why one slot in the sentence carries
+// whichever applies.
 
 import { JOB_STATUS } from "../../shared/generated/vocabulary";
 import type {
@@ -80,17 +95,38 @@ export const REDISPATCHABLE: ReadonlySet<string> = new Set([
  * Which of the two resume acts applies to this Job, and what a person reads
  * about it. `act` absent is a Job neither one reaches.
  *
- * **`overrule` is beside `act` and not one of its values.** Redirect and
- * restart are mutually exclusive because the Drone decides which one Fleet will
- * take; overruling a verdict is the same act whether or not a process is still
- * holding the session, so it is offered alongside whichever of the two applies
+ * **`overrule` and `reread` are beside `act` and not values of it.** Redirect
+ * and restart are mutually exclusive because the Drone decides which one Fleet
+ * will take; overruling a verdict is the same act whether or not a process is
+ * still holding the session, and a re-run needs the working slot rather than an
+ * absent Drone — so each is offered alongside whichever of the two applies
  * rather than instead of it. `docs/concepts/job.md` says so in the table of
  * five.
+ *
+ * **`overrule` and `reread` are never both present.** The trigger on the
+ * stopped step decides them and the two triggers partition, which is Fleet's
+ * arrangement read from this side: `overrulable()` refuses what
+ * `undecided_step()` admits.
  */
 export type Recourse = {
   act?: "redirect" | "restart_step";
   overrule?: Overrule;
+  reread?: Reread;
   note: string;
+};
+
+/**
+ * The step whose gate could not decide, and so the step a re-run reads again.
+ *
+ * **A record and not a boolean**, for `Overrule`'s reason: the act is about one
+ * step, and a shape that said only "yes" would leave the screen unable to name
+ * which. Nothing beyond the step is carried, because nothing beyond the step is
+ * decided here — a re-run takes no reason, spends no retry and commits nothing,
+ * so there is no second outcome for a caller to tell apart.
+ */
+export type Reread = {
+  /** The step that stopped, undecided. What the sentence is about. */
+  step: StepDetail;
 };
 
 /**
@@ -131,25 +167,31 @@ export type Overruled = "gate_failure" | "evidence_suspect";
  * only the act on offer would leave a person wondering whether the other one
  * was hidden or refused, which is the question this exists to close.
  *
- * The detail is a second argument because the override needs it and the two
- * resume acts do not: which trigger stopped the step, and whether that step is
- * the last one, are on `GET /jobs/:job_id` and on no Board row. It is `null`
- * while the read is in flight, and the override is not offered then — a button
- * that could not yet say whether it commits the Job is the one thing this act
- * must not be.
+ * The detail is a second argument because the two trigger-decided acts need it
+ * and the two resume acts do not: which trigger stopped the step, and whether
+ * that step is the last one, are on `GET /jobs/:job_id` and on no Board row. It
+ * is `null` while the read is in flight, and neither the override nor the
+ * re-run is offered then — a button that could not yet say whether it commits
+ * the Job is the one thing the override must not be, and a re-run offered
+ * before the trigger is known would be offered on a step it is refused for.
  */
 export function recourseOf(job: JobSummary, whole: JobWhole | null): Recourse {
-  // First and outside what follows: the override is legal on `escalated` alone,
-  // so a Job that is not there reaches none of the three.
+  // First and outside what follows: every act here is legal on `escalated`
+  // alone, so a Job that is not there reaches none of the four.
   if (job.status !== ESCALATED) {
     return { note: `${notResumable(job)} ${replacement(job)}` };
   }
   const overrule = overruleOf(whole);
-  // Overruling leads wherever it applies, because it takes nothing away and the
-  // other two do — `docs/concepts/job.md` orders the five acts that way.
+  const reread = rereadOf(whole);
+  // Overruling and asking again both lead wherever they apply, because both
+  // take nothing away and the other two do — `docs/concepts/job.md` orders the
+  // acts on an escalated Job that way. **Never both**: the two triggers
+  // partition, so at most one of these two sentences is here.
   const said = overrule === undefined ? "" : `${overruling(overrule)} `;
+  const asked = reread === undefined ? "" : `${REREAD} `;
+  const leads = `${said}${asked}`;
   if (job.current_step_id === undefined) {
-    return { note: `${said}${NO_STEP_STOPPED} ${replacement(job)}` };
+    return { note: `${leads}${NO_STEP_STOPPED} ${replacement(job)}` };
   }
   if (job.assigned_drone !== undefined) {
     // **The answer to the last press leads.** A redirect that is waiting and one
@@ -157,9 +199,14 @@ export function recourseOf(job: JobSummary, whole: JobWhole | null): Recourse {
     // sentence is usually the person who just sent one — so what happened to it
     // comes before what may be done next.
     const sent = whole?.redirecting === undefined ? "" : `${waiting(whole.redirecting)} `;
-    return { act: "redirect", overrule, note: `${sent}${said}${REDIRECT} ${replacement(job)}` };
+    return {
+      act: "redirect",
+      overrule,
+      reread,
+      note: `${sent}${leads}${REDIRECT} ${replacement(job)}`,
+    };
   }
-  return { act: "restart_step", overrule, note: `${said}${RESTART} ${replacement(job)}` };
+  return { act: "restart_step", overrule, reread, note: `${leads}${RESTART} ${replacement(job)}` };
 }
 
 /**
@@ -253,18 +300,61 @@ const STOPPED = "stopped";
  * Fleet refuses is a 409 a person reads.
  */
 function overruleOf(whole: JobWhole | null): Overrule | undefined {
+  const held = stoppedIn(whole);
+  if (held === undefined) return undefined;
+  const trigger = held.stopped.last_verdict?.trigger;
+  if (!overrulable(trigger)) return undefined;
+  return {
+    step: held.stopped,
+    trigger,
+    commits: held.steps[held.steps.length - 1]?.step_id === held.stopped.step_id,
+  };
+}
+
+/**
+ * The step Fleet reads an undecided gate off, where this Job's stopped step is
+ * one. **The same `last_verdict` the override reads**, and the same reason:
+ * `undecided_step()` in `crates/fleet/src/regating.rs` finds the stopped step
+ * and looks at the verdict on it, so this looks in the one place Fleet does.
+ *
+ * **It admits exactly what `overrulable` refuses.** A trigger belonging to
+ * neither — a Check that hit its bound, a loop that did not converge — is
+ * offered neither act, which is what Fleet answers too.
+ *
+ * Two of Fleet's four refusals are not decidable from the wire and are not
+ * predicted here: whether Fleet is still standing at this step, which lives in
+ * a working slot Bridge cannot see, and whether the cause has gone away. Both
+ * answers come on the press, and `REREAD` says so.
+ */
+function rereadOf(whole: JobWhole | null): Reread | undefined {
+  const held = stoppedIn(whole);
+  if (held === undefined) return undefined;
+  return held.stopped.last_verdict?.trigger === GATE_UNDECIDED
+    ? { step: held.stopped }
+    : undefined;
+}
+
+/**
+ * The step that stopped, and the steps it stopped among. **One lookup for the
+ * two acts that read a trigger**, because "which step stopped" is one fact:
+ * two searches would be two answers the day a Job carried two stopped steps,
+ * and the acts they feed are meant to partition rather than disagree.
+ */
+function stoppedIn(
+  whole: JobWhole | null,
+): { steps: StepDetail[]; stopped: StepDetail } | undefined {
   if (whole === null) return undefined;
   const steps = ordered(whole);
   const stopped = steps.find((step) => step.state === STOPPED);
-  if (stopped === undefined) return undefined;
-  const trigger = stopped.last_verdict?.trigger;
-  if (!overrulable(trigger)) return undefined;
-  return {
-    step: stopped,
-    trigger,
-    commits: steps[steps.length - 1]?.step_id === stopped.step_id,
-  };
+  return stopped === undefined ? undefined : { steps, stopped };
 }
+
+/**
+ * The trigger no override reaches, and the only one a re-run does.
+ * `crates/fleet/src/regating.rs` is the authority; this keeps a button off a
+ * screen Fleet would answer 409 for.
+ */
+const GATE_UNDECIDED = "gate_undecided";
 
 /**
  * Whether the trigger on the wire is one of the two. **The record above is what
@@ -343,6 +433,24 @@ function waiting(sent: RedirectInFlight): string {
     "resumed, and sending is not. Redirecting again replaces what is outstanding."
   );
 }
+
+/**
+ * What asking again is, in the same shape the other acts are stated in: what it
+ * does, what it costs, and the answer that only comes on the press.
+ *
+ * **Never "approve" and never "overrule".** Nothing ruled on this step, so
+ * nothing is being disagreed with and nothing is being let through — the gate
+ * is being asked the question it could not answer, on evidence that has not
+ * changed.
+ */
+const REREAD =
+  "Ask the gate again. It could not decide: something it needed to read was not readable, so " +
+  "no verdict was reached in either direction and there is nothing to overrule. Asking again " +
+  "runs the same gate over the evidence the drone already submitted — no drone works, nothing " +
+  "it did is redone, and this spends none of the step's retries. Where the cause has not gone " +
+  "away the gate is undecided again and the job does not move. Fleet refuses this where it is " +
+  "no longer standing at this step, and Bridge cannot see that, so that answer comes on the " +
+  "press.";
 
 /** `DroneStillThere` stated as the act it points at rather than as a refusal. */
 const REDIRECT =
