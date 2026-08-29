@@ -188,6 +188,17 @@ export function App() {
   }
 
   /**
+   * Clear every terminal Job at once. **One outcome shown, not a tally** — a
+   * failed forget is surfaced through the same refusal pipeline every other
+   * command failure uses, naming the first one that refused; the rest that
+   * succeeded are already gone from the board by the time this returns.
+   */
+  async function clearTerminal(jobIds: readonly string[]): Promise<void> {
+    const result = await window.armada.clearTerminalJobs(jobIds);
+    if (result.failed.length > 0) setOutcome(result.failed[0]!.outcome);
+  }
+
+  /**
    * Do the confirmed act. **Four preload calls, not one with a discriminator**
    * — killing a Drone leaves the Job, killing the Job ends it, a redispatch
    * mints a replacement, and a restart puts a fresh Drone on the same worktree
@@ -507,6 +518,7 @@ export function App() {
                   selected={openJob}
                   onOpen={setOpenJob}
                   onApprove={(jobId) => void approve(jobId)}
+                  onClearTerminal={(jobIds) => void clearTerminal(jobIds)}
                   onCopied={setCopied}
                 />
               </Boundary>

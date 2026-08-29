@@ -27,9 +27,9 @@ use std::future::Future;
 use crate::observing::Observed;
 use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    ChangesRequested, FileReport, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList,
-    JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redirection, Redispatched, Report,
-    ReportList, WireError, WorkflowSummary,
+    ChangesRequested, FileReport, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory,
+    JobId, JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redirection,
+    Redispatched, Report, ReportList, WireError, WorkflowSummary,
 };
 
 /// The request-response operations M1 serves.
@@ -197,6 +197,26 @@ pub trait Daemon: Send + Sync + 'static {
     /// Legal from every non-terminal status, including those with no Drone
     /// under them, which is why it cannot be spelled as [`Daemon::kill_drone`].
     fn kill_job(&self, job_id: JobId) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `forget_job` — deletes the Job's whole record. **Real deletion, not a
+    /// further status**: the row and everything beneath it are gone, through
+    /// `Store::forget_job`, and there is no undo.
+    ///
+    /// **Terminal only.** Refused with a 409 on a Job still in flight — there
+    /// is no record to erase while a Drone might still write to it, only a
+    /// status to move, and [`Daemon::kill_job`] is the act that ends one that
+    /// is not there yet.
+    ///
+    /// **It does not reclaim the worktree or the branch.** `armada clean`
+    /// already owns that, on its own retention schedule; a person clearing a
+    /// finished Job off the Board is not also being asked to think about disk.
+    ///
+    /// What comes back is the id and nothing else — there is no Job left for a
+    /// summary to describe.
+    fn forget_job(
+        &self,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobForgotten, Refusal>> + Send;
 
     /// `redispatch_job` — mints a replacement for a Job that ran and stopped,
     /// and kills the original where it is still killable. Intervention Ladder

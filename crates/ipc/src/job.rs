@@ -168,6 +168,19 @@ pub struct Redispatched {
     pub dispatched: JobSummary,
 }
 
+/// What forgetting a Job leaves to say. **The id, and nothing else** — there
+/// is no row left for a summary to describe.
+///
+/// **Command response and event payload, deliberately the same type.**
+/// `forget_job` answers with this and `job.forgotten` carries it: the two
+/// have exactly one fact between them, so a second name for it would be a
+/// synonym rather than a distinction. `Event::JobForgotten(JobForgotten)`
+/// wraps it the same way `Event::JobCreated(JobCreated)` wraps its own type.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobForgotten {
+    pub job_id: JobId,
+}
+
 /// A person's instruction to a Drone that is there. The request half of
 /// `redirect_drone`.
 ///

@@ -35,6 +35,8 @@ export function said(outcome: Outcome): string {
       return "That redispatch is already in flight. It was not sent twice.";
     case "already_killing":
       return "That kill is already in flight. It was not sent twice.";
+    case "already_forgetting":
+      return "That job is already being forgotten. It was not sent twice.";
     case "already_redirecting":
       return "That redirect is already in flight. It was not sent twice.";
     case "already_restarting":

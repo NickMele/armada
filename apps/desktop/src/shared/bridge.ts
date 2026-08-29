@@ -354,6 +354,7 @@ export type Outcome =
   | { ok: false; why: "already_approving" }
   | { ok: false; why: "already_redispatching" }
   | { ok: false; why: "already_killing" }
+  | { ok: false; why: "already_forgetting" }
   | { ok: false; why: "already_redirecting" }
   | { ok: false; why: "already_restarting" }
   | { ok: false; why: "already_overruling" }
@@ -366,6 +367,18 @@ export type Outcome =
   | { ok: false; why: "empty_note" }
   | { ok: false; why: "refused"; error: WireError }
   | { ok: false; why: "transport"; detail: string };
+
+/**
+ * What `clearTerminalJobs` answered. **Not `Outcome`**: there is no bulk
+ * `forget_job`, so this is one call per id and some can refuse while others
+ * land — a status that moved between the press and the call, or an id Fleet
+ * no longer holds. `cleared` is folded into the board as each call answers;
+ * `failed` is what the caller has to say something about.
+ */
+export type ClearOutcome = {
+  cleared: string[];
+  failed: { jobId: string; outcome: Outcome }[];
+};
 
 /** What the create form collects, before it becomes a `ProposeJob`. */
 export type Draft = {
@@ -420,6 +433,13 @@ export type BridgeApi = {
   killDrone: (jobId: string) => Promise<Outcome>;
   /** End the Job at `killed`. Terminal, and nothing resumes it. */
   killJob: (jobId: string) => Promise<Outcome>;
+  /**
+   * Delete every terminal Job's whole record, one `forget_job` per id. **Real
+   * deletion, not a status** — there is no undo, and a cleared Job cannot be
+   * opened again. The caller decides which ids are terminal; this sends
+   * exactly the ids it is given and refuses none of them itself.
+   */
+  clearTerminalJobs: (jobIds: readonly string[]) => Promise<ClearOutcome>;
   /**
    * Inject an instruction into the Drone that is there. **Legal only on an
    * escalated Job that still holds one** — Fleet refuses 409 where the Drone
@@ -608,6 +628,7 @@ export const CHANNELS = {
   redispatchJob: "bridge:redispatch-job",
   killDrone: "bridge:kill-drone",
   killJob: "bridge:kill-job",
+  clearTerminalJobs: "bridge:clear-terminal-jobs",
   redirectDrone: "bridge:redirect-drone",
   restartStep: "bridge:restart-step",
   overrideVerdict: "bridge:override-verdict",

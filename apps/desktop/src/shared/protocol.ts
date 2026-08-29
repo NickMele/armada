@@ -628,7 +628,8 @@ export type Event =
   | ({ kind: "job.state_changed" } & JobStateChanged)
   | ({ kind: "job.step_advanced" } & JobStepAdvanced)
   | ({ kind: "job.files_changed" } & JobFilesChanged)
-  | ({ kind: "job.judging" } & JobJudging);
+  | ({ kind: "job.judging" } & JobJudging)
+  | ({ kind: "job.forgotten" } & JobForgotten);
 
 /**
  * A Job exists that did not before, carrying the row whole.
@@ -812,6 +813,16 @@ export type Calibration = {
   passes_disputed: number;
   reports_filed: number;
 };
+
+/**
+ * What forgetting a Job leaves to say. `crates/ipc/src/job.rs`.
+ *
+ * **The id, and nothing else** — there is no row left for a summary to
+ * describe. `forget_job`'s command response and `job.forgotten`'s event
+ * payload are the same type on the Rust side, so this is used both ways here
+ * too rather than declared twice for one fact.
+ */
+export type JobForgotten = { job_id: string };
 
 /** A failure, flattened for the wire. `docs/contracts/error-contract.md`. */
 export type WireError = {

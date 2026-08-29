@@ -173,6 +173,13 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/kill_job",
     },
+    // Real deletion, and the only route on this table that is: every other
+    // command moves a Job further, and this removes the row.
+    Route {
+        operation: "forget_job",
+        method: "POST",
+        path: "/jobs/:job_id/forget_job",
+    },
     Route {
         operation: "redispatch_job",
         method: "POST",
@@ -337,6 +344,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         )
         .route("/jobs/:job_id/kill_drone", post(kill_drone::<D>))
         .route("/jobs/:job_id/kill_job", post(kill_job::<D>))
+        .route("/jobs/:job_id/forget_job", post(forget_job::<D>))
         .route("/jobs/:job_id/redispatch", post(redispatch_job::<D>))
         .route("/jobs/:job_id/redirect", post(redirect_drone::<D>))
         .route("/jobs/:job_id/restart_step", post(restart_step::<D>))
@@ -626,6 +634,23 @@ async fn kill_job<D: Daemon>(
 ) -> Response {
     match served.daemon.kill_job(JobId::carried(job_id)).await {
         Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Delete the Job's whole record. **Real deletion, not a status** — the row
+/// and everything beneath it are gone, and there is no undo.
+///
+/// 409 where the Job is not yet terminal: `kill_job` is the act that ends one
+/// still in flight, and this only clears a Board of work that has already
+/// finished. It does not touch the worktree or the branch — `armada clean`
+/// keeps that concern.
+async fn forget_job<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served.daemon.forget_job(JobId::carried(job_id)).await {
+        Ok(forgotten) => answer(StatusCode::OK, &forgotten, &served.run_id),
         Err(refusal) => refused(refusal),
     }
 }

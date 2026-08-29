@@ -67,13 +67,21 @@
 //!
 //! It carries the whole [`JobSummary`] for the same reason: a kind that only
 //! named an id would make every client fetch the row it was just told about.
+//!
+//! # `job.forgotten` is the opposite message, and carries the opposite payload
+//!
+//! Where `job.created` carries the row whole because there is nothing yet for
+//! a client to have, `job.forgotten` carries only the id — a `forget_job` is a
+//! real deletion, through `Store::forget_job`, and by the time the event is
+//! published there is no row left to carry. A client drops it from whatever
+//! it is holding rather than replacing it.
 
 use serde::{Deserialize, Serialize};
 
 use crate::detail::JudgeInFlight;
 use crate::enums::{Actor, JobStatus, StepState};
 use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
-use crate::job::{JobList, JobSummary};
+use crate::job::{JobForgotten, JobList, JobSummary};
 use crate::version::ProtocolVersion;
 
 /// A position in the stream. Monotonic, assigned by Fleet, never reused.
@@ -152,6 +160,8 @@ pub enum Event {
     JobFilesChanged(JobFilesChanged),
     #[serde(rename = "job.judging")]
     JobJudging(JobJudging),
+    #[serde(rename = "job.forgotten")]
+    JobForgotten(JobForgotten),
 }
 
 /// A Job exists that did not before, whole enough to draw.

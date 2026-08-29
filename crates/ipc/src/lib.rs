@@ -37,12 +37,15 @@
 //! acts a person takes on finished work — `approve_review`, `request_changes`,
 //! `reject_job` — with `get_evidence` and `get_diff`, which are the material
 //! those acts are taken on, and `override_verdict`, which is the act on work a
-//! gate refused rather than work a gate held, and the event
+//! gate refused rather than work a gate held, `forget_job`, which is a real
+//! deletion rather than a further status, and the event
 //! stream. Neither
 //! kill adds a type: both name a Job and answer with one. `redispatch_job`
 //! adds [`Redispatched`] because it is the one command that leaves two Jobs
-//! behind, and `propose_from_request` adds [`JobRequest`] because it is the one
-//! that carries no Job at all. The `/v0` lifeboat is
+//! behind, `propose_from_request` adds [`JobRequest`] because it is the one
+//! that carries no Job at all, and `forget_job` adds [`JobForgotten`] because
+//! it is the one command that leaves no Job at all to answer with — the same
+//! type doubles as `job.forgotten`'s payload. The `/v0` lifeboat is
 //! the Ship milestone's and is deliberately absent rather than stubbed: a
 //! lifeboat that shares a type with the protocol it is the lifeboat for is not
 //! one. [`Skew`] decides when Bridge needs it.
@@ -93,8 +96,8 @@ pub use event::{
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use ids::{CriterionId, DroneId, Instant, JobId, ManifestId, StepId, WorkflowId};
 pub use job::{
-    AttachmentRef, DependencyEdge, JobList, JobRequest, JobSummary, ProposeJob, ProposedCriterion,
-    ProposedPlan, Redirection, Redispatched, Subject, UnreadableJob,
+    AttachmentRef, DependencyEdge, JobForgotten, JobList, JobRequest, JobSummary, ProposeJob,
+    ProposedCriterion, ProposedPlan, Redirection, Redispatched, Subject, UnreadableJob,
 };
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};

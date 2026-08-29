@@ -155,6 +155,12 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.killJob, (_event, jobId: string) =>
     connection?.commands.killJob(jobId),
   );
+  // Real deletion, and the only channel here where that is true. One call per
+  // id, in main, because main is what holds the board these ids came off of —
+  // the renderer decides which ids are terminal and sends the set once.
+  ipcMain.handle(CHANNELS.clearTerminalJobs, (_event, jobIds: string[]) =>
+    connection?.commands.clearTerminalJobs(jobIds),
+  );
   // The two acts that resume a step without redispatching. Which applies is
   // decided by whether the Job still holds a Drone; Fleet is the authority
   // and refuses the wrong one rather than Bridge picking silently.

@@ -12,9 +12,9 @@ use std::sync::Mutex;
 use ipc::mcp::{CheckRan, CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
     Actor, ChangesRequested, Event, EvidenceType, Instant, JobCreated, JobDetail, JobDiff,
-    JobEvidence, JobHistory, JobId, JobList, JobStateChanged, JobStatus, JobSummary, ManifestId,
-    ManifestSummary, ModelChoices, Movement, Origin, ProposeJob, Recorded, Redispatched, RunId,
-    StatusMoved, StepId, Submitted, UnreadableJob, Urgency, Work, WorkflowId, WorkflowSummary,
+    JobEvidence, JobForgotten, JobHistory, JobId, JobList, JobStateChanged, JobStatus, JobSummary,
+    ManifestId, ManifestSummary, ModelChoices, Movement, Origin, ProposeJob, Recorded, Redispatched,
+    RunId, StatusMoved, StepId, Submitted, UnreadableJob, Urgency, Work, WorkflowId, WorkflowSummary,
 };
 
 use crate::{Broadcaster, Daemon, Feed, Observed, Refusal, Turns};
@@ -516,6 +516,28 @@ impl Daemon for FakeDaemon {
             job.status.as_wire()
         };
         self.move_to(&job_id, from, "killed", "human")
+    }
+
+    /// The record, gone. **The fake actually removes it**, the same as
+    /// `Store::forget_job` does on the real one, so a caller that forgets a
+    /// Job and then asks for it again sees exactly what asking for an id that
+    /// never existed sees.
+    async fn forget_job(&self, job_id: JobId) -> Result<JobForgotten, Refusal> {
+        let mut jobs = self.jobs.lock().expect("not poisoned");
+        let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+            return Err(self.no_such_job(&job_id));
+        };
+        // Terminality is the domain's, read through the DTO rather than
+        // restated, for `kill_job`'s reason.
+        if !job.status.domain().is_terminal() {
+            return Err(Refusal::IllegalMove(ipc::WireError::raised(
+                "fake.not_forgettable",
+                format!("a Job at {} cannot be forgotten", job.status.as_wire()),
+                run_id(),
+            )));
+        }
+        jobs.retain(|job| job.id != job_id);
+        Ok(JobForgotten { job_id })
     }
 
     /// Mint a replacement for a stopped Job. **The fake asserts one thing about

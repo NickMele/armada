@@ -331,6 +331,30 @@ Helm does not reach it directly, because Helm access on a command is the ladder
 rung and this has none.
 """
 
+[operations.forget_job]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Deletes a terminal Job's whole record"
+notes = """
+Real deletion, and the only operation on this seam that is: every other act
+moves a Job to a further status, and this removes the row and everything
+beneath it through `Store::forget_job`. Refused on a Job that is not yet
+terminal — there is no record to erase while a Drone might still write to it,
+only a status to move, and `kill_job` is the act that ends one still in
+flight.
+
+Not on the Intervention Ladder, for `kill_job`'s reason: it is destructive
+rather than an act on a Drone, and `helm_access` on a command is the ladder
+rung.
+
+**It does not reclaim the worktree or the branch.** `armada clean` already
+owns that, on its own retention schedule and driven by disk rather than by a
+person clearing a Board — folding it in here would give one call two
+unrelated things to fail at, and a person deleting a finished Job's record
+should not also have to think about a directory.
+"""
+
 [operations.propose_job]
 kind = "command"
 transport = "HTTP"
@@ -632,6 +656,18 @@ Fleet already took this reading and threw it away. The live scope check read the
 It is not read on every turn. A reading happens only while a Drone holds the working slot, only while some client is subscribed to the stream, and at most once in a fixed interval — so an idle Fleet, a Fleet nobody is watching, and the seven turns out of eight between readings all open no repository. The event is published only when the list has moved since the last one, except on the first reading after a client connects, which republishes so a Bridge that joined mid-Job is not left with an empty list until the Drone next writes.
 
 The footprint is the whole list rather than a delta, so a reverted file leaves the view by being absent from the next reading. There is no message that removes one.
+"""
+
+[operations."job.forgotten"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A Job's whole record is gone"
+notes = """
+It carries only the id. `job.created` carries the row whole because a client
+has nothing to insert without it; a forgotten Job is the opposite problem —
+there is no row left to carry, so the id is the whole of what a client needs
+to drop it from whatever it is holding.
 """
 
 [operations."job.judging"]

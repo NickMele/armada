@@ -507,6 +507,37 @@ where
         Ok(killed)
     }
 
+    /// Delete the Job's whole record. **Real deletion**, through
+    /// `Store::forget_job`, and only from a terminal status — a Job still in
+    /// flight has no record to erase, only a status to move, and `kill_job` is
+    /// the act that ends one that is not there yet.
+    ///
+    /// **It does not reclaim the worktree or the branch.** `armada clean`
+    /// already owns that, on its own retention schedule; folding it in here
+    /// would give one call two unrelated things to fail at.
+    ///
+    /// `Store::forget_job` runs through the same lock every other write
+    /// takes — there is no second connection opened for it, which is what
+    /// makes this safe to call from inside a live Fleet in the first place.
+    pub async fn forget_job(&self, job_id: &JobId) -> Result<(), Adrift> {
+        let job = self.load(job_id).await?;
+        if !job.status().is_terminal() {
+            return Err(Adrift::NotForgettable {
+                job: job_id.clone(),
+                status: job.status(),
+            });
+        }
+        self.store
+            .lock()
+            .await
+            .forget_job(job_id)
+            .map_err(Adrift::Writing)?;
+        self.publish(ipc::Event::JobForgotten(ipc::JobForgotten {
+            job_id: job_id.into(),
+        }));
+        Ok(())
+    }
+
     /// Every Job, **and every row that would not load**.
     ///
     /// The store refuses to hand back a short list; this refuses to complete

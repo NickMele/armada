@@ -45,6 +45,11 @@ async fn call(app: &Router, method: &str, uri: &str, body: &str) -> (StatusCode,
 /// The route table is hand-written, so nothing but a call proves a path is
 /// really there. This walks [`SERVED`] and refuses a row the router does not
 /// answer — the runtime-500 class of mistake the accepted cost buys.
+///
+/// `forget_job` is skipped here and proven on its own Job below it: it is the
+/// one row on this table that really deletes what it is given, and calling it
+/// in place with every other row would erase `01JOB0` out from under whichever
+/// rows the table still has left to check.
 #[tokio::test]
 async fn every_operation_the_table_names_is_routed() {
     let events = Broadcaster::new();
@@ -54,6 +59,9 @@ async fn every_operation_the_table_names_is_routed() {
     // that apart from a route that is not there.
     call(&app, "POST", "/jobs", A_PROPOSAL).await;
     for route in SERVED {
+        if route.operation == "forget_job" {
+            continue;
+        }
         let uri = route.path.replace(":job_id", "01JOB0");
         let (status, _) = call(&app, route.method, &uri, A_PROPOSAL).await;
         assert_ne!(
@@ -73,6 +81,27 @@ async fn every_operation_the_table_names_is_routed() {
             route.method
         );
     }
+
+    // `forget_job`'s own Job, terminal before the route is asked to delete it —
+    // sharing `01JOB0` would leave nothing for a route later in the table to
+    // answer about.
+    let (_, body) = call(&app, "POST", "/jobs", A_PROPOSAL).await;
+    let proposed: JobSummary = ipc::decode("a proposed Job", &body).expect("a summary");
+    let kill_uri = format!("/jobs/{}/kill_job", proposed.id.as_str());
+    let (status, _) = call(&app, "POST", &kill_uri, "").await;
+    assert_eq!(status, StatusCode::OK, "terminal before it is forgettable");
+    let forget_uri = format!("/jobs/{}/forget_job", proposed.id.as_str());
+    let (status, _) = call(&app, "POST", &forget_uri, "").await;
+    assert_ne!(
+        status,
+        StatusCode::NOT_FOUND,
+        "forget_job is in the table and not in the router: POST /jobs/:job_id/forget_job"
+    );
+    assert_ne!(
+        status,
+        StatusCode::METHOD_NOT_ALLOWED,
+        "forget_job is routed but not for POST"
+    );
 }
 
 /// One Job, through every operation M1 serves, watched on the stream — and not
@@ -291,6 +320,38 @@ async fn a_job_that_is_already_over_cannot_be_killed_again() {
     let app = wired(daemon, events);
     let (status, _) = call(&app, "POST", "/jobs/01DONE/kill_job", "").await;
     assert_eq!(status, StatusCode::CONFLICT);
+}
+
+/// A Job still running has a record `kill_job` could still end, not one
+/// `forget_job` may erase — the 409 says which act was wanted.
+#[tokio::test]
+async fn a_job_that_is_not_yet_over_cannot_be_forgotten() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    running(&daemon, "01RUNNING");
+    let app = wired(daemon, events);
+    let (status, body) = call(&app, "POST", "/jobs/01RUNNING/forget_job", "").await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let refused: WireError = ipc::decode("wire error", &body).expect("an error body");
+    assert_eq!(refused.code, "fake.not_forgettable");
+}
+
+/// The record, gone. **`get_job` is a 404 from then on** — this is the case
+/// `forget_job` exists for: a Board that no longer shows a Job it cleared.
+#[tokio::test]
+async fn a_terminal_job_can_be_forgotten_and_then_is_really_gone() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    at(&daemon, "01DONE", "completed_success");
+    let app = wired(daemon, events);
+
+    let (status, body) = call(&app, "POST", "/jobs/01DONE/forget_job", "").await;
+    assert_eq!(status, StatusCode::OK);
+    let forgotten: ipc::JobForgotten = ipc::decode("a forgotten Job", &body).expect("the id");
+    assert_eq!(forgotten.job_id.as_str(), "01DONE");
+
+    let (status, _) = call(&app, "GET", "/jobs/01DONE", "").await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "the row is really gone");
 }
 
 #[tokio::test]

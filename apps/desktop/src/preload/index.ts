@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 import { CHANNELS } from "../shared/bridge";
-import type { BridgeApi, BridgeState, Draft, Outcome } from "../shared/bridge";
+import type { BridgeApi, BridgeState, ClearOutcome, Draft, Outcome } from "../shared/bridge";
 import type { FileReport } from "../shared/protocol";
 import type { Artifact, Opened } from "../shared/artifacts";
 import type { ProtocolVersion } from "../shared/version";
@@ -52,6 +52,14 @@ const api: BridgeApi = {
     ipcRenderer.invoke(CHANNELS.killDrone, jobId),
 
   killJob: (jobId: string): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.killJob, jobId),
+
+  // Real deletion, and the only entry here where that is true — every other
+  // act moves a Job further, and this removes the row. One entry taking every
+  // id rather than a loop of `killJob`-shaped calls at the call site, because
+  // the loop belongs to main: it is the process holding the board these ids
+  // came off of.
+  clearTerminalJobs: (jobIds: readonly string[]): Promise<ClearOutcome> =>
+    ipcRenderer.invoke(CHANNELS.clearTerminalJobs, jobIds),
 
   redirectDrone: (jobId: string, instruction: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.redirectDrone, jobId, instruction),
