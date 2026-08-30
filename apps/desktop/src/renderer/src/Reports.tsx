@@ -261,15 +261,29 @@ function Filed({ report, onCopied }: { report: Report; onCopied: (value: string)
 }
 
 /**
- * What the report is about: one criterion of one step, or the whole job.
+ * What the report is about: one criterion of one step, one step, or the whole
+ * job.
  *
- * **The pair or neither.** A criterion id is unique inside a step, so one
- * without its step would name every attempt of every step at once — which is
- * the reason Fleet takes them together and the reason this draws them together.
+ * **A criterion is drawn with its step and never alone.** A criterion id is
+ * unique inside a step, so one without its step would name every attempt of
+ * every step at once — which is the reason Fleet refuses that pairing and the
+ * reason this draws them together.
+ *
+ * **A step without a criterion is not the whole job.** It is a report about a
+ * step the gate judged nothing on, which is what an undecided gate leaves
+ * behind, and rendering it as the job would lose the only scope there was.
  */
 function Scope({ report }: { report: Report }) {
-  if (report.step_id === undefined || report.criterion_id === undefined) {
+  if (report.step_id === undefined) {
     return <>the job as a whole</>;
+  }
+  if (report.criterion_id === undefined) {
+    return (
+      <>
+        <span className="mono">{report.step_id}</span>
+        {", the step itself"}
+      </>
+    );
   }
   return (
     <>

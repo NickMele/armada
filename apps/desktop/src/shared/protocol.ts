@@ -781,8 +781,13 @@ export type ChangedFile = {
 export type FileReport = {
   claim: string;
   said: string;
-  /** The step whose verdict is disputed. Sent with `criterion_id` or not at all. */
+  /**
+   * The step the report is about. **Sendable without `criterion_id`**, which is
+   * what a report about a step the gate judged nothing on looks like — an
+   * undecided gate records no verdict, so there is none to name.
+   */
   step_id?: string;
+  /** Sent with `step_id` and never without it: a criterion id is unique inside a step. */
   criterion_id?: string;
 };
 
