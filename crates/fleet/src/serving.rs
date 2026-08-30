@@ -813,15 +813,16 @@ where
                 WireError::raised(NOT_FORGETTABLE, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
             ),
-            // What an act on a stopped step refuses with, and they are
-            // conflicts of one kind: the Job is somewhere, or its step stopped
-            // for something, that this act does not answer. `NotTheJudges` and
-            // `CheckDidNotPass` are an override's; `NotUndecided`,
-            // `NotStandingThere` and `NothingToRuleOn` are a gate re-run's, and
-            // the first two of those are the same sentence as `NotTheJudges`
-            // read from the other side.
+            // What an act on a stopped step refuses with — plus a redirect
+            // asked for with no Drone, or a restart asked for with one still
+            // there or its worktree gone, the same two acts refusing the
+            // other's precondition. `NotTheJudges` and `CheckDidNotPass` are
+            // an override's; the rest are a gate re-run's.
             Adrift::NotResumable { job, .. }
             | Adrift::NoStepStopped { job }
+            | Adrift::NoDroneToRedirect { job }
+            | Adrift::DroneStillThere { job }
+            | Adrift::WorktreeGone { job, .. }
             | Adrift::NotTheJudges { job, .. }
             | Adrift::CheckDidNotPass { job, .. }
             | Adrift::NotUndecided { job, .. }
