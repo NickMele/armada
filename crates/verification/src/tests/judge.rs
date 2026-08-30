@@ -298,6 +298,37 @@ fn a_refusal_quoting_what_it_was_actually_shown_still_refuses() {
     assert_eq!(judged.verdict, JudgeVerdict::NotMet);
 }
 
+/// **The two honest refusals this check stopped**, at the level where the cost
+/// was paid: both were demoted to [`Unreadable`] and neither Job reached a
+/// Check. Each quotes the Judge's own wording — a standard it wanted met, and a
+/// paraphrase of the facts it had been shown — and neither attributes it to
+/// anything, so there is no claim under the quotation marks for containment to
+/// test. The spans are the ones the two Jobs actually produced.
+#[test]
+fn a_refusal_quoting_its_own_wording_rather_than_a_source_still_refuses() {
+    let workflow = workflow();
+    let note = scope_note();
+    for answer in [
+        "verdict: not_met\n\
+         expected: \"A plan addressing all five variants as stated: NotResumable, \
+         NoDroneToRedirect, DroneStillThere, WorktreeGone and NoStepStopped, each \
+         currently answering 500 and requiring 409, with clear evidence they all \
+         reach the catch-all\"\n\
+         produced: the plan addresses three of them\n\
+         consequence: two variants keep answering 500",
+        "verdict: not_met\n\
+         expected: every variant that falls through is mapped\n\
+         produced: \"these three variants are unmapped in the match statement at \
+         serving.rs and fall through to the catch-all 500 handler\"\n\
+         consequence: a client is told Armada broke when it declined",
+    ] {
+        let judged = brief_measured_against(&workflow, &[Reference::to("scope", &note)])
+            .read(answer)
+            .expect("a refusal in the Judge's own words");
+        assert_eq!(judged.verdict, JudgeVerdict::NotMet, "{answer}");
+    }
+}
+
 /// A quotation short enough to be a term rather than a claim about wording is
 /// left alone. Failing an honest refusal for the shape of its prose costs more
 /// than the fabrications that would catch, and the invented one was fourteen
