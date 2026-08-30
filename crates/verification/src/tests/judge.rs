@@ -185,6 +185,35 @@ fn the_answer_format_says_what_putting_words_in_quotation_marks_commits_to() {
     );
 }
 
+/// The half the first version of that instruction left out, and what two Jobs
+/// stopped on. Both refusals were honest: one quoted its own expectation, the
+/// other quoted a faithful restatement of what it had been shown. Neither
+/// invented anything, and a call told only that a quotation must be verbatim —
+/// while also being told to name something in the work above — reads the two
+/// together as an instruction to quote.
+///
+/// So the escape is stated, and stated as sufficient: a line in the Judge's own
+/// words, unquoted, is a whole answer. What is asserted here is the wording of
+/// the instruction and nothing about the verdict, because the containment check
+/// under it is unchanged.
+#[test]
+fn the_answer_format_says_a_line_in_its_own_words_needs_no_quotation_marks() {
+    let workflow = workflow();
+    let question = brief(&workflow).question().to_string();
+    assert!(
+        question.contains("write the line with no quotation marks at all"),
+        "{question}"
+    );
+    assert!(
+        question.contains("a complete answer and not a lesser one"),
+        "a call that reads an unquoted line as the weaker answer will quote: {question}"
+    );
+    assert!(
+        question.contains("words you assembled or reworded"),
+        "a restatement inside quotation marks is the case both Jobs hit: {question}"
+    );
+}
+
 // ------------------------------------------------------ what it may answer
 
 #[test]

@@ -15,6 +15,14 @@
 //! above*, and [`Brief::question`](crate::Brief::question) is the whole of the
 //! material above. So the check is containment — no second call, and no
 //! opinion about whether the reading was right.
+//!
+//! # It cannot be narrowed to `produced`
+//!
+//! The obvious cut — only `produced` claims the material contains something, so
+//! check only that — reopens #171, where the invented sentence was in
+//! `expected`. `expected` is where a call reaches for the yardstick it was shown
+//! and so where it fabricates one. What is honestly quoted and what is
+//! fabricated are not sorted by field.
 
 /// The shortest run of words a quotation mark makes a claim about. Under four
 /// it is a term or an emphasis — `"met"`, `"the queue"` — and not a claim about
