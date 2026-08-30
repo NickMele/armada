@@ -542,11 +542,9 @@ where
     /// A person says this Job failed in error, and the record is filed with
     /// what they said.
     ///
-    /// **Everything here is in `crate::reporting`**, including the emptiness:
-    /// `Filed::saying` refuses a blank sentence and a half-named criterion, and
-    /// this only carries the refusal out as the 422 a blank override reason
-    /// gets — a report carrying the record and no sentence has added nothing
-    /// that was not already served by three other routes.
+    /// **Everything here is in `crate::reporting`**, including the emptiness and
+    /// the two refusals it has: `crate::reporting::NotFiled` names each cause
+    /// and says it, and this only carries one out as the 422 it is.
     async fn file_report(
         &self,
         job_id: JobId,
@@ -559,7 +557,7 @@ where
             filing.step_id,
             filing.criterion_id,
         )
-        .ok_or_else(|| self.refusal(Adrift::Unreasoned { job: id.clone() }))?;
+        .map_err(|cause| self.refusal(cause.about(&id)))?;
         let filed = Fleet::file_report(self, &id, &filed)
             .await
             .map_err(|why| self.refusal(why))?;
@@ -844,6 +842,7 @@ where
             // names what to send instead.
             Adrift::Unnameable
             | Adrift::Unreasoned { .. }
+            | Adrift::NotFileable { .. }
             | Adrift::NoSuchWorkflow { .. }
             | Adrift::NoSuchManifest { .. }
             | Adrift::Modelless

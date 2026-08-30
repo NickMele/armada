@@ -36,6 +36,7 @@ use core_model::{
 use store::{LoadAllError, LoadJobError, WriteError};
 
 use crate::proposing::{NotProposed, Unresolved};
+use crate::reporting::NotFiled;
 
 /// A Job that could not be carried forward, and what stopped it.
 #[derive(Debug)]
@@ -285,6 +286,12 @@ pub enum Adrift {
     /// string loses is the only account there will ever be of why a verdict was
     /// overruled — which is the half a rate cannot supply.
     Unreasoned { job: JobId },
+    /// A report could not be made from what was sent, in [`NotFiled`]'s words.
+    ///
+    /// **Not [`Adrift::Unreasoned`]**, which it shared until a filing with a
+    /// long reason and an orphan `step_id` was told its reason was missing: one
+    /// refusal for two acts could describe only one of them.
+    NotFileable { job: JobId, cause: NotFiled },
     /// A proposal named a workflow this Fleet does not hold.
     ///
     /// **Nothing checked this until now.** `ResolvedWorkflow` carried no id, so
@@ -573,6 +580,11 @@ impl fmt::Display for Adrift {
                  no reasons beside it says the rate and never the cause",
                 job.as_str()
             ),
+            // The Job is named and then the cause speaks, so the sentence reads
+            // as one and the field it is about is in it.
+            Adrift::NotFileable { job, cause } => {
+                write!(out, "nothing was filed about {}: {cause}", job.as_str())
+            }
             Adrift::NothingToPropose => {
                 out.write_str("a request needs something in it to read before it can be a Job")
             }
@@ -689,6 +701,7 @@ impl Adrift {
             | Adrift::NotStandingThere { job }
             | Adrift::NothingToRuleOn { job, .. }
             | Adrift::Unreasoned { job }
+            | Adrift::NotFileable { job, .. }
             | Adrift::DroneStillThere { job }
             | Adrift::WorktreeGone { job, .. }
             | Adrift::AttachmentUnreadable { job, .. } => Some(job),
@@ -761,6 +774,9 @@ impl Error for Adrift {
             | Adrift::NotStandingThere { .. }
             | Adrift::NothingToRuleOn { .. }
             | Adrift::Unreasoned { .. }
+            // `NotFiled` joins them: it says what a filing could not be, not
+            // what failed underneath it.
+            | Adrift::NotFileable { .. }
             | Adrift::DroneStillThere { .. }
             | Adrift::WorktreeGone { .. }
             | Adrift::NothingToPropose

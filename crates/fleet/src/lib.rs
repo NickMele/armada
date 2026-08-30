@@ -164,7 +164,7 @@ pub use proposal::{proposed, Proposing};
 pub use proposing::{NotProposed, Proposal, ProposedJob, Unresolved};
 pub use redaction::Redactor;
 pub use redispatch::Replacement;
-pub use reporting::{Counted, Filed};
+pub use reporting::{Counted, Filed, NotFiled};
 pub use resume::Roused;
 pub use runtime::{
     machine_path, provisional_address, Presence, PublishError, Published, ReadError, RuntimeFile,

@@ -58,8 +58,9 @@ CREATE TABLE reports (
     -- The id the Job had. Deliberately not a foreign key: the Job may be gone.
     job_id     TEXT NOT NULL,
     job_title  TEXT NOT NULL,
-    -- The criterion scope, where the claim is about one verdict rather than the
-    -- whole Job. Both null or both set.
+    -- How narrowly the claim is aimed: both null for the whole Job, `step_id`
+    -- alone for a step no criterion was judged on, both set for one verdict.
+    -- A criterion with no step is the one combination that is malformed.
     step_id    TEXT,
     criterion  TEXT,
     -- The person's own sentence. The finding.
@@ -87,10 +88,12 @@ pub struct Report {
     pub job_id: JobId,
     /// What the Job was called, copied so the report reads without it.
     pub job_title: String,
-    /// The step whose verdict is disputed, where one is.
+    /// The step the report is about, where it is about one.
     pub step_id: Option<StepId>,
     /// The criterion whose verdict is disputed, where one is. Set with
     /// `step_id` and never without it — a criterion id is unique inside a step.
+    /// **`step_id` without this is a report about a step no criterion was
+    /// judged on**, which is what an undecided gate leaves behind.
     pub criterion_id: Option<CriterionId>,
     /// The person's own words.
     pub said: String,
@@ -215,23 +218,23 @@ impl Store {
 
 /// One row, or the column that would not read.
 ///
-/// A half-set criterion scope is [`RowError::MalformedColumn`] rather than a
-/// scope silently dropped: a report that claimed a criterion was wrong and came
-/// back naming none would be the disputed verdict quietly widening to the Job.
+/// A criterion with no step is [`RowError::MalformedColumn`] rather than a scope
+/// silently dropped: a report that claimed a criterion was wrong and came back
+/// naming none would be the disputed verdict quietly widening to the Job.
+///
+/// **A step with no criterion is a row and not a fault.** It is what a report
+/// about a step the gate judged nothing on looks like — `gate_undecided` records
+/// no verdict, so there is no criterion to name and the step is the whole scope.
 fn read(row: &rusqlite::Row<'_>) -> Result<Report, RowError> {
     let step_id = maybe(row, "step_id")?;
     let criterion = maybe(row, "criterion")?;
-    let scope = match (step_id, criterion) {
-        (Some(step), Some(criterion)) => Some((StepId::new(step), CriterionId::new(criterion))),
-        (None, None) => None,
-        _ => {
-            return Err(RowError::MalformedColumn {
-                table: "reports",
-                column: "criterion",
-                detail: "half of a criterion scope is present".to_string(),
-            })
-        }
-    };
+    if step_id.is_none() && criterion.is_some() {
+        return Err(RowError::MalformedColumn {
+            table: "reports",
+            column: "criterion",
+            detail: "a criterion with no step".to_string(),
+        });
+    }
     Ok(Report {
         report_id: string(row, "report_id")?,
         filed_at: Timestamp::from_rfc3339(string(row, "filed_at")?),
@@ -239,8 +242,8 @@ fn read(row: &rusqlite::Row<'_>) -> Result<Report, RowError> {
         claim: string(row, "claim")?,
         job_id: JobId::carried(core_model::Ulid::carried(string(row, "job_id")?)),
         job_title: string(row, "job_title")?,
-        step_id: scope.as_ref().map(|(step, _)| step.clone()),
-        criterion_id: scope.map(|(_, criterion)| criterion),
+        step_id: step_id.map(StepId::new),
+        criterion_id: criterion.map(CriterionId::new),
         said: string(row, "said")?,
         record: string(row, "record")?,
     })
