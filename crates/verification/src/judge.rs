@@ -52,9 +52,16 @@ Each of the three is one line and names something in the work above. A refusal \
 that could be written about any other piece of work is not a refusal.
 
 Quotation marks mean the words inside them appear, exactly as written, in the \
-material above. Nothing else goes in quotation marks: say in your own words \
-what should have been there instead. An answer that quotes words which are not \
-above is discarded, and the work is neither passed nor refused.";
+material above. Where the words you are pointing at are up there, copy them \
+between double quotes rather than describing them; how the material happens to \
+wrap or indent makes no difference.
+
+Everywhere else — an expectation, a standard, a summary, a restatement of the \
+material in your own words — write the line with no quotation marks at all. \
+That is a complete answer and not a lesser one. Never put quotation marks \
+around words you assembled or reworded to stand in for words above. An answer \
+that quotes words which are not above is discarded, and the work is neither \
+passed nor refused.";
 
 /// What one call is asked, assembled.
 ///
