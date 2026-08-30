@@ -115,8 +115,8 @@ fn two_reports_about_one_job_are_two_records_newest_first() {
     );
 }
 
-/// A report about the whole Job carries no criterion, and comes back carrying
-/// none — the scope is a pair or it is absent.
+/// A report about the whole Job carries neither half of the scope, and comes
+/// back carrying neither.
 #[test]
 fn a_report_with_no_criterion_scope_round_trips_as_none() {
     let dir = TempDir::new();
@@ -130,6 +130,27 @@ fn a_report_with_no_criterion_scope_round_trips_as_none() {
     let filed = store.reports().expect("the reports read");
 
     assert_eq!(filed, vec![whole]);
+}
+
+/// **A step with no criterion survives the round trip**, which the pair-or-
+/// nothing read refused as a malformed row.
+///
+/// It is what a report about a step the gate judged nothing on looks like:
+/// `gate_undecided` records no verdict, so the step is the whole scope. The
+/// column is left readable rather than the report widening to the Job on the way
+/// back out.
+#[test]
+fn a_report_scoped_to_a_step_with_no_criterion_round_trips() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job_with_a_history(&mut store, "01UNDECIDED");
+    let mut stepwise = about("01UNDECIDED");
+    stepwise.criterion_id = None;
+    store.record_report(&stepwise).expect("the report is filed");
+
+    let filed = store.reports().expect("the reports read");
+
+    assert_eq!(filed, vec![stepwise]);
 }
 
 /// The count the calibration reads. Every refusal, over every Job — and it is

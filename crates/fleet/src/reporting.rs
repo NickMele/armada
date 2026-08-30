@@ -24,6 +24,8 @@
 //! for the same reason: a record put on a page nobody redacted is a redaction
 //! decision nobody made.
 
+use std::fmt;
+
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{Job, JobId};
 use ipc::{Claim, CriterionId, StepId};
@@ -33,6 +35,91 @@ use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::mint::Mint;
 use crate::redaction::Redactor;
+
+/// How narrowly the report is aimed.
+///
+/// **Three widths and not two**, and the middle one is the case the pair-or-
+/// nothing rule did not anticipate. A step escalates on `gate_undecided` having
+/// judged no criterion at all — the Judge's answer would not read, so there is
+/// no verdict to name — and the step is then the only scope that exists. Under
+/// the pair rule such a report had to be filed against the whole Job, which
+/// threw away the one thing the person did know.
+///
+/// [`Scope::Criterion`] still carries its step, because that half of the rule is
+/// sound and unchanged: a criterion id is unique *inside* a step, so one
+/// arriving alone names every attempt of every step at once. A step id is
+/// unique inside the Job's frozen WorkflowDef, so it needs nothing beside it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Scope {
+    /// One criterion of one step — one verdict the Judge gave.
+    Criterion(StepId, CriterionId),
+    /// One step, where no criterion names what went wrong.
+    Step(StepId),
+}
+
+impl Scope {
+    /// The step, which every scope has.
+    pub fn step(&self) -> &StepId {
+        match self {
+            Scope::Criterion(step, _) | Scope::Step(step) => step,
+        }
+    }
+
+    /// The criterion, where the report is about one verdict rather than a step.
+    pub fn criterion(&self) -> Option<&CriterionId> {
+        match self {
+            Scope::Criterion(_, criterion) => Some(criterion),
+            Scope::Step(_) => None,
+        }
+    }
+}
+
+/// Why nothing was filed. **Two causes and two sentences.**
+///
+/// They were one `None` and one message, and the message described
+/// `override_verdict` — a different act — so a report refused for its scope was
+/// told its reason was missing while the reason sat in the request, eighteen
+/// hundred characters long. A caller cannot act on a refusal that names the
+/// wrong field, so each cause says its own.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NotFiled {
+    /// The sentence was blank or was only whitespace.
+    Unsaid,
+    /// A criterion id arrived with no step to read it inside.
+    CriterionWithoutStep { criterion: String },
+}
+
+impl NotFiled {
+    /// This cause, as the refusal a caller gets, about the Job it names.
+    ///
+    /// Beside the cause rather than at the boundary, so the wrapping is one line
+    /// wherever it happens and the Job is the only thing the caller supplies.
+    pub fn about(self, job: &JobId) -> Adrift {
+        Adrift::NotFileable {
+            job: job.clone(),
+            cause: self,
+        }
+    }
+}
+
+impl fmt::Display for NotFiled {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            NotFiled::Unsaid => out.write_str(
+                "a report needs a sentence saying what was wrong. Everything else it carries — \
+                 the transitions, the verdicts, the checks — was already written down before \
+                 anybody pressed anything; the sentence is the only part that does not exist \
+                 until somebody types it",
+            ),
+            NotFiled::CriterionWithoutStep { criterion } => write!(
+                out,
+                "the report named criterion `{criterion}` and no step. A criterion id is unique \
+                 inside a step, so one on its own names every attempt of every step at once — \
+                 send the step it belongs to, or send neither and file about the whole job"
+            ),
+        }
+    }
+}
 
 /// What a person filed, with the emptiness already refused.
 ///
@@ -46,29 +133,36 @@ use crate::redaction::Redactor;
 pub struct Filed {
     claim: Claim,
     said: String,
-    scope: Option<(StepId, CriterionId)>,
+    scope: Option<Scope>,
 }
 
 impl Filed {
-    /// `None` where the sentence is blank, or where half a criterion scope was
-    /// sent: a criterion id is unique inside a step, and one arriving without
-    /// its step names every attempt at once.
+    /// The two ways a filing is refused, each named. See [`NotFiled`].
+    ///
+    /// A step with no criterion is admitted, which is the widening: it names one
+    /// step of one Job unambiguously, and it is all a person has when the gate
+    /// judged nothing.
     pub fn saying(
         claim: Claim,
         said: &str,
         step_id: Option<StepId>,
         criterion_id: Option<CriterionId>,
-    ) -> Option<Filed> {
+    ) -> Result<Filed, NotFiled> {
         let said = said.trim();
         if said.is_empty() {
-            return None;
+            return Err(NotFiled::Unsaid);
         }
         let scope = match (step_id, criterion_id) {
-            (Some(step), Some(criterion)) => Some((step, criterion)),
+            (Some(step), Some(criterion)) => Some(Scope::Criterion(step, criterion)),
+            (Some(step), None) => Some(Scope::Step(step)),
             (None, None) => None,
-            _ => return None,
+            (None, Some(criterion)) => {
+                return Err(NotFiled::CriterionWithoutStep {
+                    criterion: criterion.as_str().to_string(),
+                })
+            }
         };
-        Some(Filed {
+        Ok(Filed {
             claim,
             said: said.to_string(),
             scope,
@@ -83,11 +177,9 @@ impl Filed {
         &self.said
     }
 
-    /// The verdict being disputed, where the report is about one.
-    pub fn scope(&self) -> Option<(&StepId, &CriterionId)> {
-        self.scope
-            .as_ref()
-            .map(|(step, criterion)| (step, criterion))
+    /// What the report is about, where it is about less than the whole Job.
+    pub fn scope(&self) -> Option<&Scope> {
+        self.scope.as_ref()
     }
 }
 
@@ -135,8 +227,11 @@ where
             claim: filed.claim().as_wire().to_string(),
             job_id: job.id().clone(),
             job_title: self.redactor().scrub(job.title().as_str()),
-            step_id: filed.scope().map(|(step, _)| step.to_domain()),
-            criterion_id: filed.scope().map(|(_, id)| id.to_domain()),
+            step_id: filed.scope().map(|scope| scope.step().to_domain()),
+            criterion_id: filed
+                .scope()
+                .and_then(Scope::criterion)
+                .map(ipc::CriterionId::to_domain),
             // The person's own words, scrubbed like everything else: a sentence
             // is the likeliest place a pasted token arrives.
             said: self.redactor().scrub(filed.said()),

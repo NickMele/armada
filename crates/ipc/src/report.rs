@@ -162,8 +162,14 @@ pub struct FileReport {
     /// without the finding, and the record was already there before anybody
     /// pressed anything.
     pub said: String,
-    /// The step whose verdict is disputed. Absent where the report is about the
-    /// Job rather than about one criterion.
+    /// The step the report is about. Absent where the report is about the whole
+    /// Job.
+    ///
+    /// **Sendable without `criterion_id`.** A step that escalated on
+    /// `gate_undecided` has judged no criterion at all — the Judge's answer
+    /// would not read — so there is no verdict to name, and refusing a step on
+    /// its own would make the person file against the whole Job and lose the
+    /// only scope they had.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub step_id: Option<StepId>,
     /// The criterion whose verdict is disputed — **the scope #117 asks for**,
@@ -172,7 +178,9 @@ pub struct FileReport {
     ///
     /// Sent with `step_id` and never without it: a criterion id is unique
     /// inside a step, and a criterion naming no step names two verdicts on a
-    /// retried Job.
+    /// retried Job. That half of the rule is unchanged; the half it was paired
+    /// with was not symmetric, because a step id needs nothing beside it to be
+    /// unambiguous.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub criterion_id: Option<CriterionId>,
 }

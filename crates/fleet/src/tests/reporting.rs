@@ -12,6 +12,11 @@
 //! shaped and no home directory reaches the file, and **the count reads the
 //! claim rather than the sentence** — which is what makes it survive a reason
 //! that says `probe`.
+//!
+//! And three about the scope, which the first pass of this got wrong in both
+//! directions: a step with no criterion is a scope rather than a refusal, a
+//! criterion with no step is still a refusal, and each refusal names the field
+//! it is about rather than sharing one sentence written for a different act.
 
 use std::sync::Arc;
 
@@ -101,6 +106,23 @@ async fn refused(fleet: &Fixture, home: &TempDir, brief: &str) -> core_model::Jo
 fn a_filing(said: &str) -> String {
     format!(
         r#"{{"claim":"wrongly_refused","said":{said},"step_id":"implement","criterion_id":"c1"}}"#,
+        said = quoted(said)
+    )
+}
+
+/// A filing scoped to a step and to no criterion — what a person can send about
+/// a step the gate judged nothing on.
+fn a_filing_about_a_step(said: &str) -> String {
+    format!(
+        r#"{{"claim":"wrongly_refused","said":{said},"step_id":"implement"}}"#,
+        said = quoted(said)
+    )
+}
+
+/// A filing that names a criterion and no step. The half that is still refused.
+fn a_filing_about_an_orphan_criterion(said: &str) -> String {
+    format!(
+        r#"{{"claim":"wrongly_refused","said":{said},"criterion_id":"c1"}}"#,
         said = quoted(said)
     )
 }
@@ -209,6 +231,111 @@ async fn a_report_with_no_sentence_is_refused_and_files_nothing() {
         "a refused filing left a report behind: {:?}",
         listed.reports
     );
+}
+
+/// **The refusal names the field.** A blank sentence and an orphan criterion
+/// were one 422 with one message, and the message was `override_verdict`'s —
+/// so a filing refused for its scope read as a filing with no reason, and the
+/// reason was in the request all along.
+#[tokio::test]
+async fn each_cause_of_a_refused_filing_says_which_one_it_is() {
+    let home = TempDir::new();
+    let fleet = a_fleet_judged_by(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        judged(),
+        a_judge_that_refuses(),
+    );
+    let job_id = refused(&fleet, &home, "fix the off-by-one").await;
+    let events = fleet.events();
+    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+    let route = format!("/jobs/{}/report", job_id.as_str());
+
+    let (status, body) = call(&app, "POST", &route, &a_filing("   ")).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let blank: ipc::WireError = ipc::decode("a refusal", &body).expect("a WireError");
+    assert!(
+        blank.message.contains("sentence"),
+        "the blank sentence is not named: {}",
+        blank.message
+    );
+
+    let (status, body) = call(
+        &app,
+        "POST",
+        &route,
+        &a_filing_about_an_orphan_criterion(
+            "the judge marked this met and the diff does not do what the criterion asks",
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let orphan: ipc::WireError = ipc::decode("a refusal", &body).expect("a WireError");
+    assert!(
+        orphan.message.contains("c1") && orphan.message.contains("step"),
+        "the orphan criterion is not named: {}",
+        orphan.message
+    );
+    assert!(
+        !orphan.message.contains("reason"),
+        "the scope refusal is still describing an override's missing reason: {}",
+        orphan.message
+    );
+    assert_ne!(
+        blank.message, orphan.message,
+        "two causes are still one sentence"
+    );
+}
+
+/// **A step with no criterion is a scope, not a half of one.**
+///
+/// The case that produced this: a step escalates on `gate_undecided`, the
+/// Judge's answer could not be read at all, so `judged` is empty and there is no
+/// criterion to name. Refusing the step on its own would push the report onto
+/// the whole Job and throw away the only scope the person had.
+#[tokio::test]
+async fn a_report_can_name_a_step_the_gate_judged_no_criterion_on() {
+    let home = TempDir::new();
+    let fleet = a_fleet_judged_by(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        judged(),
+        a_judge_that_refuses(),
+    );
+    let job_id = refused(&fleet, &home, "fix the off-by-one").await;
+    let events = fleet.events();
+    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/jobs/{}/report", job_id.as_str()),
+        &a_filing_about_a_step("the gate could not read the judge's answer and no criterion was ever marked, so this is about the step"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CREATED, "a report now exists");
+    let filed: Report = ipc::decode("a report", &body).expect("a Report");
+    assert_eq!(
+        filed.step_id.as_ref().map(ipc::StepId::as_str),
+        Some("implement"),
+        "the one piece of scope that existed was thrown away"
+    );
+    assert_eq!(
+        filed.criterion_id, None,
+        "a criterion was invented for a step that had none"
+    );
+
+    // And it reads back the same way, rather than the row being refused as a
+    // half-set scope on the way out.
+    let (_, body) = call(&app, "GET", "/reports", "").await;
+    let listed: ReportList = ipc::decode("the reports", &body).expect("a ReportList");
+    assert_eq!(listed.reports.len(), 1);
+    assert_eq!(
+        listed.reports[0].step_id.as_ref().map(ipc::StepId::as_str),
+        Some("implement")
+    );
+    assert_eq!(listed.reports[0].criterion_id, None);
 }
 
 /// **The claim is what counts, and the sentence is what a person reads.**
