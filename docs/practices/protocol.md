@@ -195,6 +195,15 @@ applies instead and widening the set is a major bump. Every other closed set on
 this seam is the strict kind and refuses a spelling the registry does not have,
 which is right for `JobStatus` — Bridge picks a screen from it.
 
+**And the test is where the set's growth comes from, not how it is read.**
+`JobSummary.resumption` — which act a person took to put a `queued` Job back —
+is rendered exactly as opaquely as `held_by` and is still a strict
+`wire_enum!`, because its three values are the shapes the inner step machine
+can be in. A fourth would mean that machine grew a state, which is a change
+every reader has to be told about. `held_by`'s set grows every time Fleet
+learns to read another resource, which is a change no reader needs to be told
+about at all. Ask which of those two a new set is before making it open.
+
 ## What Bridge does with the version it reads
 
 Bridge is the side that decides. It reads Fleet's version out of the runtime

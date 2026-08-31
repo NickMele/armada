@@ -46,7 +46,7 @@
 // in the number of Jobs. The walk here memoises every id it passes, so each
 // chain is climbed once however many members it has.
 
-import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
+import { JOB_LIFECYCLE, RESUMPTION } from "../../shared/generated/vocabulary";
 import type { JobSummary } from "../../shared/protocol";
 import { instant } from "./duration";
 
@@ -118,17 +118,46 @@ export function foldLineages(jobs: readonly JobSummary[]): Board {
 }
 
 /**
- * The headline the row carries. **The ordinal is a suffix on the title**, which
+ * The headline the row carries. **A qualifier is a suffix on the title**, which
  * is where `Job row (stacked)`'s own `Escalated, second time` story puts a
  * recurrence count — not a sixth field, which would land in the track the
  * drawing reserves for spend.
+ *
+ * Two qualifiers can apply at once and both are carried, in the order they
+ * happened: which dispatch of the work this is, then what a person just did to
+ * it. "Fix the parser, 2nd dispatch, restarted" is three facts and all three
+ * are the row's.
  */
 export function headlineOf(job: JobSummary, dispatch: Dispatch | undefined): string {
-  if (dispatch === undefined) return job.title;
+  return [job.title, ...dispatched(dispatch), ...resumed(job)].join(", ");
+}
+
+/** Which dispatch of the work this is, where the lineage has more than one. */
+function dispatched(dispatch: Dispatch | undefined): string[] {
+  if (dispatch === undefined) return [];
   // No number where the chain is incomplete. "3rd dispatch" on a lineage
   // missing its first two is a lie the board would have no way to correct.
-  if (dispatch.partial) return `${job.title}, redispatched`;
-  return `${job.title}, ${ordinal(dispatch.nth)} dispatch`;
+  if (dispatch.partial) return ["redispatched"];
+  return [`${ordinal(dispatch.nth)} dispatch`];
+}
+
+/**
+ * What a person just did to put this Job back in the queue.
+ *
+ * **The row this exists for.** A restart and an override go back through
+ * admission now, so pressing either while the bound is spent leaves the Job
+ * `queued` with the badge it would have had anyway — the press moves nothing
+ * on screen and reads as dropped. The badge still says what the Job is waiting
+ * for; this says who put it there, and the two do not compete for one slot.
+ *
+ * **The word is the registry's**, from `resumption` in `enum-verbs.toml`. An
+ * unknown key is a newer Fleet naming an act this build has never heard of, and
+ * it renders as its own wire spelling — the fallback every other surface takes
+ * rather than inventing a second vocabulary.
+ */
+function resumed(job: JobSummary): string[] {
+  if (job.resumption === undefined) return [];
+  return [RESUMPTION[job.resumption]?.verb ?? job.resumption];
 }
 
 /** What the list says beneath itself about the rows the fold took out. */

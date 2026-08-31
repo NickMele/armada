@@ -54,6 +54,13 @@ export const ADMISSION_HOLD: Readonly<Record<string, Rendering | undefined>> = {
   "disk": { verb: "waiting on disk", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
 };
 
+/** `resumption`, keyed by the wire value. */
+export const RESUMPTION: Readonly<Record<string, Rendering | undefined>> = {
+  "reviewed": { verb: "reviewed", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
+  "restarted": { verb: "restarted", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
+  "overruled": { verb: "overruled", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
+};
+
 /** `escalation_reason`, keyed by the wire value. */
 export const ESCALATION_REASON: Readonly<Record<string, Rendering | undefined>> = {
   "blocked_by_policy": { verb: "blocked by policy", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
@@ -170,6 +177,9 @@ export const GAPS: readonly Gap[] = [
   { vocabulary: "admission_hold", variant: "cpu", missing: ["icon"] },
   { vocabulary: "admission_hold", variant: "memory", missing: ["icon"] },
   { vocabulary: "admission_hold", variant: "disk", missing: ["icon"] },
+  { vocabulary: "resumption", variant: "reviewed", missing: ["icon"] },
+  { vocabulary: "resumption", variant: "restarted", missing: ["icon"] },
+  { vocabulary: "resumption", variant: "overruled", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "blocked_by_policy", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "check_timeout", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "dependency_failed", missing: ["icon"] },

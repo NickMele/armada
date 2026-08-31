@@ -121,6 +121,45 @@ export const Queued: Story = {
 };
 
 /**
+ * **A queued Job a person put back, which the row above cannot be told from.**
+ * Press restart while every place is taken and the Job lands here: `queued`,
+ * `waiting_on_resources`, and — until the headline said so — identical to a Job
+ * approved an hour ago and never started. The press moved nothing on screen,
+ * which is the worst reading of a correct system.
+ *
+ * It is new. A restart and an override spawned a drone on the spot until
+ * re-admission put them behind the concurrency cap.
+ *
+ * **The word is a suffix on the title, not a sixth field**, which is where the
+ * `Escalated, second time` story already puts a qualifier — the field run's
+ * tracks are shared down the list and a conditional sixth would land in the
+ * track reserved for spend. It comes from `resumption` in `enum-verbs.toml` and
+ * carries no glyph, because a headline carries none.
+ *
+ * **The badge is unchanged and says what the Job is waiting for.** Two facts,
+ * two channels: the badge answers "why has nothing started" and the headline
+ * answers "did my press land". Folding either into the other loses one of them.
+ */
+export const QueuedAfterARestart: Story = {
+  args: {
+    status: "not-started",
+    statusIcon: Cpu,
+    statusLabel: "Waiting on resources",
+    headline: "Retire the legacy poke path, restarted",
+    jobId: "job_8b42",
+    tracks: GATE_TRACKS,
+    fields: [
+      { label: "Workflow", value: "bug, 4 steps", quiet: true },
+      { value: <StepBar total={4} current={2} label="Step 2 of 4" /> },
+      { value: "Run tests", mono: true, emphasis: true },
+      { value: "queued 09:41", quiet: true },
+      { value: "Dispatched by you" },
+    ],
+    action: open,
+  },
+};
+
+/**
  * The running row standing alone, outside any list: the badge pulses and the
  * step bar beside it stays still.
  *

@@ -91,7 +91,7 @@ pub use detail::{
 };
 pub use enums::{
     Actor, AdvanceGate, CheckOutcome, CriterionSource, DependencyDirection, DronePresence,
-    EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, Recourse, StepState,
+    EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, Recourse, Resumption, StepState,
     TopLevelOrigin, Urgency,
 };
 pub use error::{RunId, WireError, WireValue};

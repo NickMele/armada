@@ -241,6 +241,66 @@ impl AdmissionHold {
     }
 }
 
+/// Which act a person took to put a `queued` Job back in the queue.
+///
+/// **A second axis over `queued`, exactly as [`QueuedReason`] is.** That one
+/// says what the Job is waiting for; this says who put it there. Both are
+/// absent on a Job approved and never run: a Job *arrives* at `queued` from
+/// `awaiting_approval` and *returns* to it from `awaiting_review` and
+/// `escalated`, and only a return has somebody waiting on it.
+///
+/// # Derived, never stored, and from the inner machine
+///
+/// `fleet::readmitting::Owed` is the partition, read off the current step's
+/// state rather than off a column remembering which button was pressed, and
+/// this is that value with the step ids taken out. Fleet answers by calling the
+/// function re-admission calls, not by reading the same record twice.
+///
+/// | The current step reads | The act was |
+/// |---|---|
+/// | `running` | the review was answered, either way |
+/// | `stopped` | the step was restarted |
+/// | `advanced` | the verdict was overruled |
+///
+/// **Three and not four.** Approving and asking for changes share `running` and
+/// share this value: both are a person answering at the gate and the Job goes
+/// again either way. Which it was is carried by the note that waits on the
+/// record.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Resumption {
+    /// A person answered at a human advance gate. `approve_review`, or
+    /// `request_changes`.
+    Reviewed,
+    /// A person restarted a step that stopped. `restart_step`.
+    Restarted,
+    /// A person overruled the verdict that stopped a step. `override_verdict`.
+    Overruled,
+}
+
+impl Resumption {
+    /// All three, in the order the step states are reached in.
+    pub const ALL: &'static [Resumption] = &[
+        Resumption::Reviewed,
+        Resumption::Restarted,
+        Resumption::Overruled,
+    ];
+
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            Resumption::Reviewed => "reviewed",
+            Resumption::Restarted => "restarted",
+            Resumption::Overruled => "overruled",
+        }
+    }
+
+    pub fn from_wire(value: &str) -> Option<Resumption> {
+        Resumption::ALL
+            .iter()
+            .copied()
+            .find(|act| act.as_wire() == value)
+    }
+}
+
 /// Which verification source answers a criterion.
 ///
 /// **The registry underspecifies `source`.** `acceptance_criteria[]` is typed

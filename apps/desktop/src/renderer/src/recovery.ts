@@ -1,5 +1,15 @@
 // What still resumes a Job that stopped, and the sentence that says so.
 //
+// # Over 500 lines, and left whole
+//
+// Almost all of it is the sentences, and they are the reason to keep them here.
+// Each one states an act and its precondition in the same breath — "the drone
+// is gone, so the job goes back in the queue" — and the classification above
+// them is what decides which act applies. Split the copy out and the two halves
+// can disagree silently, which is the exact failure the section below says this
+// file exists to prevent, one level up: a screen offering a restart beside a
+// header with no restart button. The reading and the words go together.
+//
 // # One answer, two consumers
 //
 // The stopped screen states which act applies and the header offers it, and

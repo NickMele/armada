@@ -26,8 +26,8 @@
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
-    Actor, FrozenWorkflow, IllegalStepTransition, Job, ResolvedStep, StepEvidence, StepId,
-    StepState, StepTarget, Target,
+    Actor, FrozenWorkflow, IllegalStepTransition, Job, ResolvedStep, Resumption, StepEvidence,
+    StepId, StepState, StepTarget, Target,
 };
 
 use crate::adrift::Adrift;
@@ -50,7 +50,7 @@ use crate::working::Working;
 ///
 /// The two `running` cases are told apart by the waiting note, which is
 /// `request_changes`'s alone — that test predates this file and is unchanged.
-enum Owed {
+pub(crate) enum Owed {
     /// The step is `running` — a person answered at a human advance gate, and
     /// the step moves the act already made are made.
     ///
@@ -65,6 +65,21 @@ enum Owed {
     /// The step is `advanced` — a person overruled the verdict that stopped it.
     /// The step after it is entered at the spawn.
     Overruled { advanced: StepId, next: StepId },
+}
+
+impl Owed {
+    /// This shape as the registry spells it, with the step ids taken out.
+    ///
+    /// **The wire's half of the same partition**, so a Board row and the Drone
+    /// re-admission actually puts on cannot come from two readings. `Room::hold`
+    /// is the same arrangement one file over.
+    pub(crate) fn resumption(&self) -> Resumption {
+        match self {
+            Owed::Standing { .. } => Resumption::Reviewed,
+            Owed::Restarted { .. } => Resumption::Restarted,
+            Owed::Overruled { .. } => Resumption::Overruled,
+        }
+    }
 }
 
 impl<H, V, W> Fleet<H, V, W>
@@ -167,7 +182,13 @@ where
     /// `not_started` or `retrying` was left there by nothing this file knows
     /// about, and putting a Drone on a guess is how a Job comes to be worked at
     /// the wrong step.
-    fn owed(&self, job: &Job) -> Result<Owed, Adrift> {
+    ///
+    /// **`serving` reads it too, and reads the refusal as "nobody put this Job
+    /// back".** That is what the error means on a Job at `queued`: it arrived
+    /// from `awaiting_approval` and has never run, so there is no act to name.
+    /// The refusal is still re-admission's — a read renders nothing where a
+    /// spawn would refuse, and never the other way round.
+    pub(crate) fn owed(&self, job: &Job) -> Result<Owed, Adrift> {
         let job_id = job.id().clone();
         let Some(step) = job.current_step_id().cloned() else {
             return Err(Adrift::NoSuchStep {

@@ -53,7 +53,7 @@ pub use job::{
     IllegalStepTransition, IllegalTransition, Job, JobEvent, JobId, JobStatus, JobStep, JudgeCheck,
     JudgeCriterion, JudgeVerdict, Judgment, ManifestId, ModelName, NewJob, NotRunDisposition,
     NotRunReason, Origin, PathPattern, PilotReason, QueuedReason, Recourse, RedirectAlreadyWaiting,
-    RedirectWaiting, RepoPath, ResolvedCheck, ResolvedStep, ScopeClaim, ScopeRevision,
+    RedirectWaiting, RepoPath, ResolvedCheck, ResolvedStep, Resumption, ScopeClaim, ScopeRevision,
     ScopeRevisionOutcome, Standing, StepCheck, StepEdge, StepEvent, StepEvidence, StepId,
     StepLevelTrigger, StepSeed, StepState, StepTarget, StepTransitioned, StepVerdict, Stuck,
     Subject, Target, Title, TopLevelOrigin, TransitionReason, Transitioned, TriggerKind,

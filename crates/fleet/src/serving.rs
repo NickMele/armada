@@ -201,6 +201,7 @@ where
             &job,
             reason.as_ref(),
             queued,
+            self.resumption(&job),
             &step_facts(self.aloft(), &job, ran, judged, flagged),
             recorded
                 .as_ref()
@@ -725,7 +726,35 @@ where
             .await
             .map_err(|why| self.refusal(why))?;
         let queued = self.queued_reason(job).await?;
-        Ok(JobSummary::of(job, reason.as_ref(), queued))
+        Ok(JobSummary::of(
+            job,
+            reason.as_ref(),
+            queued,
+            self.resumption(job),
+        ))
+    }
+
+    /// Which act a person took to put this Job back in the queue, where one
+    /// did.
+    ///
+    /// **`readmitting::Fleet::owed` and nothing beside it.** That is the
+    /// function re-admission itself calls to decide which step a Drone goes
+    /// back on, so a row saying "restarted" and the Drone that arrives cannot
+    /// disagree — the same rule `queued_reason` follows against `admit_next`.
+    ///
+    /// **Nothing is read for a Job that is not `queued`**, and the record is
+    /// already in hand for one that is, so this costs no store call at all.
+    ///
+    /// **A refusal reads as "nobody put this Job back".** On a `queued` Job it
+    /// means the current step is `not_started` or missing, which is a Job that
+    /// arrived from `awaiting_approval` and has never run. The refusal that
+    /// matters is still re-admission's, made at the spawn: this renders nothing
+    /// where that would refuse, and never offers a word where it would not.
+    fn resumption(&self, job: &Job) -> Option<core_model::Resumption> {
+        if job.status() != CoreJobStatus::Queued {
+            return None;
+        }
+        self.owed(job).ok().map(|owed| owed.resumption())
     }
 
     /// Why an approved Job has not started, worked out from the board as it

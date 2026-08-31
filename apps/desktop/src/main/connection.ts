@@ -12,6 +12,16 @@
 // `command.ts` acts on a Job, `reader.ts` holds one Job's read and the rule
 // that drops a stale one, `review.ts` reads the work, `observe.ts` holds the
 // second socket.
+//
+// # Over 500 lines, and left whole
+//
+// Six files have already been taken out of it, and what is left is one thing:
+// a state machine, plus the arrival handler that folds each message into it.
+// Every remaining split runs along a message kind rather than a subject — the
+// resync here, the state changes there — and each half would still have to
+// reach `this.current` and `this.publish`. That is a state machine with its
+// transitions in two files, which is worse than a long one. The next real seam
+// is the socket lifecycle itself, and it is not one this change opened.
 
 import WebSocket from "ws";
 

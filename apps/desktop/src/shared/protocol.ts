@@ -28,6 +28,19 @@ export type JobSummary = {
    * a queued Job that nothing is holding.
    */
   queued_reason?: string;
+  /**
+   * Which act a person took to put this Job back in the queue — a key into
+   * `RESUMPTION` in the generated vocabulary.
+   *
+   * **The other axis over `queued`, and the one that says somebody is
+   * waiting.** `queued_reason` says what the Job is waiting for. Absent on a
+   * Job approved and never run, which is how a Job *arrives* at `queued`
+   * rather than *returns* to it, and absent on every other status.
+   *
+   * Without it, pressing restart while the bound is spent moves nothing on
+   * screen and a correct system reads as a dropped press.
+   */
+  resumption?: string;
   workflow_id: string;
   owner_manifest_id: string;
   origin: string;

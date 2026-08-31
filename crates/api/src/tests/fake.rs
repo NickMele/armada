@@ -442,6 +442,7 @@ impl Daemon for FakeDaemon {
             branch: None,
             reason: None,
             queued_reason: None,
+            resumption: None,
             workflow_id: proposal.workflow_id,
             owner_manifest_id: proposal.owner_manifest_id,
             origin: Origin::from_wire(proposal.origin.as_wire()).expect("a top-level origin"),
@@ -747,6 +748,7 @@ impl Daemon for FakeDaemon {
             branch: None,
             reason: None,
             queued_reason: None,
+            resumption: None,
             redispatched_from: Some(failed.id.clone()),
             ..failed.clone()
         };
@@ -910,6 +912,7 @@ pub fn at(daemon: &FakeDaemon, id: &str, spelling: &str) {
         branch: Some(format!("armada/{id}")),
         reason: None,
         queued_reason: None,
+        resumption: None,
         workflow_id: WorkflowId::carried("01WF"),
         owner_manifest_id: ManifestId::carried("01MF"),
         origin: Origin::from_wire("manual").expect("an origin"),

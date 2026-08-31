@@ -67,3 +67,29 @@ fn a_capacity_from_a_newer_fleet_still_parses() {
     let capacity = decode::<FleetCapacity>("capacity", body).expect("unknown fields are ignored");
     assert_eq!(capacity.held_by, None);
 }
+
+/// **The other axis over `queued`, and it is closed where `held_by` is open.**
+/// A spelling the registry does not have is refused rather than defaulted here,
+/// because a fourth value would mean the inner step machine grew a state — not
+/// that Fleet learned to read another resource.
+#[test]
+fn a_resumption_the_registry_does_not_have_is_refused() {
+    let body = br#"{"id":"01JOB","title":"fix the parser","status":"queued","workflow_id":"01WF",
+        "owner_manifest_id":"01MF","origin":"manual","urgency":"normal","atomic":false,
+        "model":"a-model","created_at":"2026-08-31T09:00:00.000Z","resumption":"redirected"}"#;
+    let refused = decode::<crate::JobSummary>("a summary", body)
+        .expect_err("only the registry may widen a closed set");
+    assert!(refused.to_string().contains("redirected"), "{refused}");
+}
+
+/// Absent is the ordinary row, and it is skipped rather than written `null`.
+#[test]
+fn a_summary_of_a_job_nobody_put_back_carries_no_resumption() {
+    let body = br#"{"id":"01JOB","title":"fix the parser","status":"queued","workflow_id":"01WF",
+        "owner_manifest_id":"01MF","origin":"manual","urgency":"normal","atomic":false,
+        "model":"a-model","created_at":"2026-08-31T09:00:00.000Z"}"#;
+    let summary = decode::<crate::JobSummary>("a summary", body).expect("the field is optional");
+    assert_eq!(summary.resumption, None);
+    let json = encode(&summary).expect("a summary is plain data");
+    assert!(!json.contains("resumption"), "{json}");
+}

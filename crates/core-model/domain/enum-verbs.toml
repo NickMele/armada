@@ -20,6 +20,9 @@
 #                                back. The finer half of
 #                                `queued_reason.waiting_on_resources`, read
 #                                fleet-wide rather than per Job
+#   resumption                 - which act a person took to put a `queued` Job
+#                                back in the queue. Absent on a Job that was
+#                                approved and has never run
 #   escalation_reason          - why a Job stopped and asked. Keys match
 #                                escalation-triggers.toml
 #   step_verdict               - the outcome of one workflow step
@@ -188,6 +191,30 @@ status_token = "--status-not-started"
 vocabulary = "Admission hold"
 in_code = ""
 notes = "The one of the three that has actually run out: 31 Aug 2026, a volume filled during a parallel agent run and three agents died at zero bytes free holding uncommitted work. Named first by short_of for that reason."
+
+[verbs.resumption.reviewed]
+verb = "reviewed"
+icon = ""
+status_token = "--status-not-started"
+vocabulary = "Resumption"
+in_code = ""
+notes = "One word for both acts at a human advance gate, because both are a person answering and the job goes again either way. Approved would be false of request_changes, and the row's own control already says Review — an action keeps its name through the flow. No glyph: this renders as a suffix on the row's headline, which is where a recurrence count already goes, and a headline carries no glyphs."
+
+[verbs.resumption.restarted]
+verb = "restarted"
+icon = ""
+status_token = "--status-not-started"
+vocabulary = "Resumption"
+in_code = ""
+notes = "Restart the step produces restarted, which is the verb table's rule applied literally."
+
+[verbs.resumption.overruled]
+verb = "overruled"
+icon = ""
+status_token = "--status-not-started"
+vocabulary = "Resumption"
+in_code = ""
+notes = "The word the repository already uses for this act — Overrule on the surface, `Overruled` on the wire, `overruling` in Fleet. Overridden would be a fourth spelling of one thing."
 
 [verbs.escalation_reason.blocked_by_policy]
 verb = "blocked by policy"
