@@ -264,6 +264,25 @@ async fn a_job_whose_worktree_is_gone_is_told_only_a_redispatch_moves_it() {
     );
 }
 
+/// **The wire, not just the enum.** `#126`: `WorktreeGone` fell through the
+/// daemon's match to the 500 catch-all — an excellent message on a status
+/// code that told the caller Fleet broke, when it had correctly refused.
+#[tokio::test]
+async fn a_restart_onto_a_gone_worktree_answers_409_over_the_wire() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_leaves());
+    let job = refused(&fleet, &home).await;
+    until_reaped(&fleet).await;
+    delete_the_worktree(&home, &job);
+
+    let refusal = api::Daemon::restart_step(&fleet, ipc::JobId::from(&job))
+        .await
+        .expect_err("the worktree was just deleted");
+
+    assert!(matches!(refusal, api::Refusal::IllegalMove(_)));
+    assert_eq!(refusal.status(), 409);
+}
+
 /// A refused step keeps its Drone, so the override and the redirect are both
 /// there — and the override leads, because it takes nothing away.
 #[tokio::test]

@@ -445,6 +445,47 @@ async fn a_stalled_job_whose_drone_is_gone_refuses_a_redirect() {
     );
 }
 
+/// **The wire, not just the enum.** `#126`: `NoDroneToRedirect` fell through
+/// the daemon's match to the 500 catch-all — an excellent message on a status
+/// code that told the caller Fleet broke, when it had correctly refused.
+#[tokio::test]
+async fn a_redirect_with_no_drone_answers_409_over_the_wire() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_leaves());
+    let job = stalled(&fleet, &home).await;
+    until_reaped(&fleet).await;
+
+    let refusal = api::Daemon::redirect_drone(
+        &fleet,
+        ipc::JobId::from(&job),
+        ipc::Redirection {
+            instruction: String::from("read tests/parse.rs first"),
+        },
+    )
+    .await
+    .expect_err("no Drone is there to redirect");
+
+    assert!(matches!(refusal, api::Refusal::IllegalMove(_)));
+    assert_eq!(refusal.status(), 409);
+}
+
+/// The same wire proof for `DroneStillThere`: no existing scenario reaches it,
+/// so this is `refused` with a Drone that never leaves the slot, restarted
+/// before anything reaps it.
+#[tokio::test]
+async fn a_restart_with_the_drone_still_there_answers_409_over_the_wire() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_answers());
+    let job = refused(&fleet, &home).await;
+
+    let refusal = api::Daemon::restart_step(&fleet, ipc::JobId::from(&job))
+        .await
+        .expect_err("the Drone `refused` left in the slot is still there");
+
+    assert!(matches!(refusal, api::Refusal::IllegalMove(_)));
+    assert_eq!(refusal.status(), 409);
+}
+
 /// **The refusal that had to survive the split.** `interrupted` and
 /// `resource_exhausted` have no stopped step *and* no live Drone; loosening the
 /// predicate for the act that needed it must not have loosened it for them.
