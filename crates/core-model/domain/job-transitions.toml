@@ -98,6 +98,13 @@ in_code = "Not yet"
 
 [[transitions]]
 from = "awaiting_review"
+to = "queued"
+on = "approve, with a step still to run"
+in_code = "Not yet"
+notes = "Approving does not resume in place. The gate holds no Drone and freed the working slot when it opened, so the slot may be another Job's by the time a person answers — the approved Job goes back in the queue and waits its turn. `queued`'s own row already allows for it: the step machine is frozen where it stood, not initialised. The step at the gate is advanced and the next one entered before this move, because the inner machine freezes the moment the Job leaves the gate."
+
+[[transitions]]
+from = "awaiting_review"
 to = "rejected"
 on = "reject"
 in_code = "Not yet"

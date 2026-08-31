@@ -88,12 +88,14 @@ step_states = ["advanced", "awaiting_human", "not_started", "running", "stopped"
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["running -> awaiting_review"]
-transitions_out = ["awaiting_review -> running", "awaiting_review -> completed_success", "awaiting_review -> awaiting_attestation", "awaiting_review -> rejected", "awaiting_review -> escalated", "awaiting_review -> piloted", "awaiting_review -> killed"]
+transitions_out = ["awaiting_review -> running", "awaiting_review -> queued", "awaiting_review -> completed_success", "awaiting_review -> awaiting_attestation", "awaiting_review -> rejected", "awaiting_review -> escalated", "awaiting_review -> piloted", "awaiting_review -> killed"]
 in_code = "Not yet"
 notes = """
 A human advance gate is open. The step at the gate has submitted and cleared its machine gates; it has not advanced, and does not have to for its Drone to be over — a Drone ends when its step's work passes the machine gates, which Drone owns.
 
-**The gate holds no session.** This row read "Alive, idle. Clock suspended", and the sentence beneath it read "the gate costs no session context", which held only because one Drone spanned a whole Job. A Drone belongs to a workflow step now, and a session kept for a wait a person may take a day over is a working slot held against every other Job with nothing left to do on this one. A person sending the step back across the gate briefs the next Drone rather than speaking to the one that did the work.
+**The gate holds no session, and it holds no working slot.** This row read "Alive, idle. Clock suspended", and the sentence beneath it read "the gate costs no session context", which held only because one Drone spanned a whole Job. A Drone belongs to a workflow step now, and a session kept for a wait a person may take a day over is a working slot held against every other Job with nothing left to do on this one — measured on 30 Aug 2026, when one Job held the only slot from 13:42 to 18:38 doing nothing while a person read it. **A person's review costs no fleet time**, which is what ending the Drone here is for. The slot is freed, the next queued Job may take it, and approving therefore re-queues rather than resuming: `awaiting_review -> queued`.
+
+**Sending work back across this gate does not work yet, and that is a chosen interval rather than a defect.** `request_changes` needs a Drone to give the note to and there is none, so it refuses. The note has nowhere to wait until #207 gives a boundary something to carry it, at which point it opens the next Drone's brief. Approve or reject in the meantime; do not read the refusal as the gate being broken.
 
 The liveness clock suspends here and in `escalated`. What bounds an indefinitely-open gate is Drone/Job timeout and worktree cleanup policy, owned by Drone — not the liveness timer.
 """
@@ -182,7 +184,7 @@ step_machine = "Initialised at creation. Frozen where it stood on a re-approval"
 step_states = ["advanced", "not_started", "running", "stopped"]
 reason_storage = "Derived"
 reason_vocabulary = "blocked_by_dependency / waiting_on_resources / none"
-transitions_in = ["awaiting_approval -> queued"]
+transitions_in = ["awaiting_approval -> queued", "awaiting_review -> queued"]
 transitions_out = ["queued -> running", "queued -> awaiting_approval", "queued -> escalated", "queued -> killed"]
 in_code = "Not yet"
 notes = "Approved, waiting for a Drone — on headroom, or on a dependency. The reason is computed from `dependencies` and live headroom at read time rather than stored: a held port span never self-clears, so a stored value would go stale the moment headroom frees. This is the one status where the recomputed-label rule is applied literally."

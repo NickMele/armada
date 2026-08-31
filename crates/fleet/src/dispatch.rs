@@ -138,10 +138,25 @@ where
 
     /// Take one approved Job all the way to a running Drone.
     ///
+    /// **Two Jobs are queued and only one of them is new.** A Job whose branch
+    /// is already written has run before: it reached a human advance gate, its
+    /// Drone was stood down, the slot went to somebody else, and a person has
+    /// since approved it back into the queue. Its worktree, its branch and
+    /// every earlier step's work are on disk, and starting it from the first
+    /// step would re-run work that was already accepted.
+    ///
+    /// The branch is the discriminator and it is exact, not a heuristic: it is
+    /// written once, here, and `queued` is reachable only from
+    /// `awaiting_approval` — where no Job has one — and from `awaiting_review`,
+    /// where every Job does.
+    ///
     /// Every failure below leaves the Job `escalated` rather than `running`,
     /// and returns the cause. A person decides; Fleet does not retry, and does
     /// not put the Job back in the queue for itself to fail on again.
     async fn dispatch(&self, job: Job, working: &mut Option<Working>) -> Result<(), Adrift> {
+        if job.branch().is_some() {
+            return self.readmitted(job, working).await;
+        }
         let job_id = job.id().clone();
         // The Job's own copy, never the file. A workflow edited while this Job
         // sat at the approval gate declares what it declared then.
@@ -205,6 +220,66 @@ where
         // have started two commits back is told so on its first turn.
         self.put_a_drone_on(&job, &step, worktree, Opening::fresh(), working)
             .await
+    }
+
+    /// Put a Drone back on a Job a person approved across a human gate.
+    ///
+    /// **The slot is the whole reason this exists.** The gate stands its Drone
+    /// down and frees the slot, because a person's review must cost no fleet
+    /// time — so by the time they answer, the slot is very often another Job's.
+    /// The approved Job goes back in the queue and arrives here when one is
+    /// free, which is why approving is not a resume.
+    ///
+    /// **Both step moves already happened**, under `awaiting_review` where the
+    /// inner machine is still live: `crate::reviewing` advances the gate's step
+    /// and enters the next one before it re-queues, because the machine freezes
+    /// the moment the Job leaves the gate. So what is left is the Job's own
+    /// move and a Drone.
+    ///
+    /// **`Cleared::reviewed` and not `checked`**, and it is not inferred from
+    /// anything fragile: the only edge into `queued` that carries a branch is
+    /// the one `approve_review` takes, so a Job arriving here was cleared by a
+    /// person by construction.
+    async fn readmitted(&self, job: Job, working: &mut Option<Working>) -> Result<(), Adrift> {
+        let job_id = job.id().clone();
+        let Some(step) = job.current_step_id().cloned() else {
+            return Err(Adrift::NoSuchStep {
+                job: job_id,
+                step: None,
+            });
+        };
+        // Before the Job moves. A worktree that has been reclaimed is a Job
+        // whose earlier steps' work is not on disk, and there is nothing to put
+        // a Drone back onto — the same refusal `restart_step` makes, made
+        // before the status has moved rather than after.
+        let worktree = match self.surviving_worktree(&job) {
+            Ok(worktree) => worktree,
+            Err(cause) => {
+                self.interrupt(&job).await?;
+                return Err(cause);
+            }
+        };
+        let recorded = self
+            .store()
+            .lock()
+            .await
+            .step_evidence(&job_id)
+            .map_err(Adrift::Reading)?;
+        let passed = the_part_before(job.workflow(), &step).cloned();
+        let job = self.move_job(&job, Target::Running, Actor::Fleet).await?;
+        let mut crossed =
+            Crossed::nothing().and_produced(Produced::before(job.workflow(), &step, &recorded));
+        if let Some(passed) = &passed {
+            crossed = crossed.and_cleared(Cleared::reviewed(passed));
+        }
+        self.put_a_drone_on(
+            &job,
+            &step,
+            worktree,
+            Opening::fresh().carrying(crossed),
+            working,
+        )
+        .await
     }
 
     /// Read what the worktree holds now, and hold it as this step's baseline.
@@ -296,15 +371,32 @@ where
             // The whole of what finishing a Job is, including the commit that
             // makes its branch mergeable, is `landing`'s.
             Ruling::Finished { tell, .. } => self.finish(ruling, tell, job_id, step, working).await,
-            // The Job moves and **nothing else does**. The step stays `running`
-            // — it is what the person is standing at, and `approve_review`
-            // advances it from there while the Job is still at the gate. The
-            // Drone is neither told nor ended: it holds its context so that a
-            // `request_changes` costs a turn rather than a respawn, and the
-            // person's answer is the next thing its session hears.
+            // The Job moves to the gate and its Drone ends there. The step
+            // stays `running` — it is what the person is standing at, and
+            // `approve_review` advances it from there while the Job is still at
+            // the gate.
+            //
+            // **A person's review costs no fleet time**, and that is what the
+            // ending is for. The work passed the machine gates, which is what
+            // ends a Drone; keeping the session so that a `request_changes`
+            // could cost a turn rather than a respawn also kept the working
+            // slot, and one Job held the only slot for four hours and fifty-six
+            // minutes doing nothing while a person read it. The slot is freed
+            // in this turn and `admit_next` may give it to the next Job.
+            //
+            // **The cost is that `request_changes` refuses until `#207`.**
+            // There is no Drone to give the note to and nowhere for it to wait.
+            // That is a chosen interval, written down on the ruling and on
+            // `job-statuses.toml`'s `awaiting_review` row; nothing here softens
+            // it, because a fallback that kept one Drone alive for that path
+            // would keep the slot for it too.
+            //
+            // The Job moves first, so the departure is published over a record
+            // that already says where the Job stands.
             Ruling::HeldForReview { .. } => {
                 let job = self.load(job_id).await?;
                 self.applied(&job, ruling).await?;
+                self.stood_down(job_id, working).await?;
                 Ok(())
             }
             // The gate failed and there is budget left. **Nothing about the
@@ -698,6 +790,22 @@ pub fn stopping(ruling: &Ruling) -> Option<StepLevelTrigger> {
         Ruling::Failed { .. } => StepLevelTrigger::of(EscalationTrigger::GateFailure),
         other => other.stops_the_step(),
     }
+}
+
+/// The step immediately before this one in the Job's frozen workflow.
+///
+/// `None` on the first step, which has no part before it. A free function
+/// rather than a method for `copy_attachments`'s reason: it touches no Fleet
+/// state, and it answers the same question `Produced::before` answers about
+/// evidence — asked here about the declaration, which is what `Cleared` is
+/// worded from.
+fn the_part_before<'a>(
+    workflow: &'a core_model::FrozenWorkflow,
+    at: &StepId,
+) -> Option<&'a core_model::ResolvedStep> {
+    let steps = workflow.steps();
+    let here = steps.iter().position(|step| step.id() == at)?;
+    steps.get(here.checked_sub(1)?)
 }
 
 /// Whether every Job this one waits on has finished, and finished well.

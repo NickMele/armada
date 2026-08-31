@@ -80,6 +80,7 @@ pub static EDGES: &[Edge] = &[
     triggered(AwaitingReview, Escalated, EscalationTrigger::Interrupted),
     edge(AwaitingReview, Killed),
     edge(AwaitingReview, Piloted),
+    edge(AwaitingReview, Queued),
     edge(AwaitingReview, Rejected),
     edge(AwaitingReview, Running),
     edge(Escalated, CompletedFailed),

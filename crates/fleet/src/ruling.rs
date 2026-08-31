@@ -61,12 +61,16 @@ pub enum Ruling {
     /// because they are the material a person opens rather than a record of a
     /// verdict.
     ///
-    /// **No turn, and the ending is still not wired.** A turn here would spend
-    /// the Drone's remaining tool call to say "someone is looking at this".
-    /// `#140` ended a Drone at every advance and not here: an empty slot at a
-    /// gate a person may hold for a day is a slot `admit_next` gives away, and
-    /// there would then be none to approve back into. So the process stands,
-    /// which is why `request_changes` can find one to tell.
+    /// **No turn, and no Drone.** A turn here would spend the Drone's remaining
+    /// tool call to say "someone is looking at this", and there is nobody to
+    /// spend it: the work passed the machine gates, which is what ends a Drone,
+    /// so `crate::dispatch` stands it down and the slot goes to the next Job. A
+    /// person's review costs no fleet time.
+    ///
+    /// **`request_changes` therefore refuses until `#207`**, which is a chosen
+    /// interval and is written down on that method and on `job-statuses.toml`'s
+    /// `awaiting_review` row. Approving re-queues rather than resuming, because
+    /// the slot this gave up is very often somebody else's by then.
     ///
     /// The step stays `running` while the Job stands at the gate.
     /// `ADVANCING_STATUSES` admits `awaiting_review`, so the inner machine is
