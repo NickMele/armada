@@ -314,16 +314,15 @@ where
         at_work.waiting(now.clone());
         drop(working);
         self.noted_asked(&job, &step, &asked);
-        self.events()
-            .publish(ipc::Event::JobAsking(ipc::JobAsking {
-                job_id: ipc::JobId::from(&job),
-                step_id: ipc::StepId::from(&step),
-                asking: Some(asked.in_flight(&step)),
-                // **The Drone, not Fleet.** Fleet caused nothing here; it took
-                // a question a Drone chose to ask.
-                actor: Actor::Drone.into(),
-                at: (&now).into(),
-            }));
+        self.events().publish(ipc::Event::JobAsking(ipc::JobAsking {
+            job_id: ipc::JobId::from(&job),
+            step_id: ipc::StepId::from(&step),
+            asking: Some(asked.in_flight(&step)),
+            // **The Drone, not Fleet.** Fleet caused nothing here; it took
+            // a question a Drone chose to ask.
+            actor: Actor::Drone.into(),
+            at: (&now).into(),
+        }));
         Ok(asked)
     }
 
@@ -396,17 +395,16 @@ where
         }
         drop(working);
         self.noted_answered(job_id, &step, question_id, &label);
-        self.events()
-            .publish(ipc::Event::JobAsking(ipc::JobAsking {
-                job_id: ipc::JobId::from(job_id),
-                step_id: ipc::StepId::from(&step),
-                // **Absent because it was answered.** What was chosen is in the
-                // Job's own log; a field for it here would be a second place a
-                // decision is recorded.
-                asking: None,
-                actor: Actor::Human.into(),
-                at: (&now).into(),
-            }));
+        self.events().publish(ipc::Event::JobAsking(ipc::JobAsking {
+            job_id: ipc::JobId::from(job_id),
+            step_id: ipc::StepId::from(&step),
+            // **Absent because it was answered.** What was chosen is in the
+            // Job's own log; a field for it here would be a second place a
+            // decision is recorded.
+            asking: None,
+            actor: Actor::Human.into(),
+            at: (&now).into(),
+        }));
         Ok(Told {
             job: job_id.clone(),
             step,
@@ -445,12 +443,12 @@ where
         )
         .in_job(job.as_ulid().clone())
         .at_step(step.as_str())
-        .with_field("question_id", FieldValue::Str(asked.id().as_str().to_string()))
-        .with_field("question", FieldValue::Str(asked.question().to_string()))
         .with_field(
-            "offered",
-            FieldValue::Str(asked.labels().join(" | ")),
-        );
+            "question_id",
+            FieldValue::Str(asked.id().as_str().to_string()),
+        )
+        .with_field("question", FieldValue::Str(asked.question().to_string()))
+        .with_field("offered", FieldValue::Str(asked.labels().join(" | ")));
         // A log line that will not write does not fail the ask, for
         // `crate::silence::noted_quiet`'s reason: what happened is on the slot,
         // and the event is published either way.

@@ -16,6 +16,7 @@ import type {
   JudgeInFlight,
   Reason,
 } from "./protocol";
+import type { QuestionInFlight } from "./question";
 import type { ProtocolVersion } from "./version";
 
 /** One message from Fleet to a connected client. `crates/ipc/src/event.rs`. */
@@ -44,6 +45,7 @@ export type Event =
   | ({ kind: "job.step_advanced" } & JobStepAdvanced)
   | ({ kind: "job.files_changed" } & JobFilesChanged)
   | ({ kind: "job.judging" } & JobJudging)
+  | ({ kind: "job.asking" } & JobAsking)
   | ({ kind: "job.forgotten" } & JobForgotten);
 
 /**
@@ -139,6 +141,30 @@ export type JobJudging = {
   step_id: string;
   /** The call that went out, or absent because it came back. */
   judging?: JudgeInFlight;
+  actor: string;
+  at: string;
+};
+
+/**
+ * A drone asked a person a question, or the one that was out was answered.
+ * `crates/ipc/src/event.rs`.
+ *
+ * **Two messages per question and never a third.** The one going out carries
+ * `asking`; the one coming back carries nothing, and that absence is the
+ * message rather than the stream going quiet. `job.judging`'s shape exactly.
+ *
+ * **The actor differs between the two, which no other kind does.** Going out it
+ * is `drone` and coming back it is `human` — the two ends of the act. Fleet
+ * caused neither.
+ *
+ * It names no `JobSummary`: nothing on the board's row changes when a question
+ * goes out, and this is read by a detail view somebody has open on one job.
+ */
+export type JobAsking = {
+  job_id: string;
+  step_id: string;
+  /** The question that went out, or absent because it was answered. */
+  asking?: QuestionInFlight;
   actor: string;
   at: string;
 };

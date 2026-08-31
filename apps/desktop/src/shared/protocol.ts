@@ -12,6 +12,7 @@
 // copy of a roster that already has two, and an unknown status renders as
 // itself rather than as a guess.
 
+import type { QuestionInFlight } from "./question";
 import type { ProtocolVersion } from "./version";
 
 /** A Job, as a list row. `crates/ipc/src/job.rs`. */
@@ -141,6 +142,21 @@ export type JobDetail = {
    * event this window already re-reads the open job on.
    */
   redirect_waiting?: RedirectWaiting;
+  /**
+   * The question this job's drone asked and nobody has answered yet. Since
+   * protocol 5.4.
+   *
+   * **Absent is the ordinary case**, and it covers three things the job's own
+   * status tells apart: a drone that never asked, a drone whose question has
+   * been answered, and a job with no drone on it. A job that is not `running`
+   * has nothing waiting on an answer.
+   *
+   * **It is not a status and there is no seventh step state.** The job is
+   * `running` and its step is `running` while it waits, exactly as they are
+   * while a judge call is out, and the question stops being outstanding without
+   * either moving.
+   */
+  asking?: QuestionInFlight;
   /**
    * What kind of stuck this job is, and what moves it. Since protocol 4.16.
    *
@@ -817,6 +833,7 @@ export type {
   ChangedFile,
   Delivered,
   Event,
+  JobAsking,
   JobCreated,
   JobFilesChanged,
   JobJudging,
@@ -826,6 +843,10 @@ export type {
   Resync,
   StreamMessage,
 } from "./events";
+
+// The question a drone asks and the answer a person picks, re-exported on the
+// same terms and cut out for the same reason. See `question.ts`.
+export type { AskedOption, ChosenAnswer, QuestionInFlight } from "./question";
 
 /** A failure, flattened for the wire. `docs/contracts/error-contract.md`. */
 export type WireError = {

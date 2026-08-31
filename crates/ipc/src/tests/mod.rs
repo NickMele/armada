@@ -354,7 +354,18 @@ fn a_note_waiting_for_the_next_drone_crosses_until_it_is_delivered() {
         )
         .expect("nothing was waiting");
 
-    let held = JobDetail::of(&waiting, None, None, &[], None, None, None, None, None, None);
+    let held = JobDetail::of(
+        &waiting,
+        None,
+        None,
+        &[],
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
     let json = encode(&held).expect("a detail is plain data");
     assert_eq!(
         held.redirect_waiting

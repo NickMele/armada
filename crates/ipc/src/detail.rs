@@ -498,7 +498,7 @@ pub struct AskedOption {
 /// becoming the conversation `docs/scope.md` rejected. Words go to a Drone
 /// through [`Redirection`](crate::Redirection) and through nothing else.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Answer {
+pub struct ChosenAnswer {
     /// Which question is being answered. A window that has been open across an
     /// answered question names an id Fleet no longer holds, and is told so.
     pub question_id: QuestionId,

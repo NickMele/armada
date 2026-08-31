@@ -30,7 +30,11 @@
 // and present-and-empty is determined to write nothing. Collapsing them would
 // tell somebody a Job has no scope when what is true is that nobody set one.
 
-import { ARunningJob, type JobDetailHeading } from "@armada/components";
+import {
+  ARunningJob,
+  type DroneQuestionProps,
+  type JobDetailHeading,
+} from "@armada/components";
 
 import type {
   Diff,
@@ -41,12 +45,13 @@ import type {
   Outcome,
   Watched,
 } from "../../shared/bridge";
-import type { FileReport, JobSummary } from "../../shared/protocol";
+import type { FileReport, JobDetail as JobDetailRead, JobSummary } from "../../shared/protocol";
 import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
 import { Acts, type ConfirmableAct } from "./Acts";
 import { factsOf } from "./facts";
 import { filesOf, footprintNote, readingFor, whyNoFootprint } from "./files";
 import { Finished } from "./Finished";
+import { span } from "./duration";
 import { railOf } from "./rail";
 import { readingOf } from "./reading";
 import { Reviewing } from "./Reviewing";
@@ -82,6 +87,18 @@ export type JobDetailProps = {
    * ask about.
    */
   onRedirect: (jobId: string, instruction: string) => void;
+  /**
+   * Answer the question this job's drone asked, by the label picked.
+   *
+   * **Straight through, with no confirmation.** Picking an option and pressing
+   * send is already two deliberate acts on a closed set the drone chose, and a
+   * dialog on top of that would be a third press for the ordinary path — which
+   * is the argument that keeps `onApprove` unconfirmed too.
+   *
+   * Its own prop and not a value of `onAct` for `onRedirect`'s reason: the
+   * others end or resume something, and this one hands a waiting drone a fact.
+   */
+  onAnswer: (jobId: string, questionId: string, chose: string) => void;
   /**
    * Overrule a Judge that refused the work, with the reason. **Straight through
    * like a redirect** — the dialog that collects the reason is the
@@ -157,6 +174,7 @@ export function JobDetail({
   recorded,
   onAct,
   onRedirect,
+  onAnswer,
   onOverrule,
   onRerun,
   onReport,
@@ -276,6 +294,12 @@ export function JobDetail({
     );
   }
 
+  // The question the Drone is waiting on, where there is one. **Only on the
+  // running render**, which is the only one that can have a live Drone with an
+  // unanswered question on it: `asking` is read from a working slot, and every
+  // other render is a Job that has stopped.
+  const question = askingOf(whole, job.id, now, stale, acting, onAnswer);
+
   // What the Drone has touched so far. **Live only, and named where it is
   // not there yet** — `job.files_changed` arrives while a Drone works, so a
   // Job with no Drone on it will never carry one and says so in its own words.
@@ -284,6 +308,7 @@ export function JobDetail({
   return (
     <ARunningJob
       heading={heading}
+      question={question}
       steps={rail}
       stepsAbsent={stepsAbsent}
       footprint={
@@ -302,6 +327,48 @@ export function JobDetail({
       onCopied={onCopied}
     />
   );
+}
+
+/**
+ * The question this job's drone is waiting on, as the surface draws it.
+ *
+ * `undefined` where nothing is outstanding, which is every running job whose
+ * drone knows what it is doing.
+ *
+ * **The elapsed is computed here and nowhere else.** `asked_at` crosses once and
+ * nothing on the wire ticks, so the surface subtracts for itself — the same
+ * arrangement `JudgeInFlight.since` has. It re-renders on the clock `now`
+ * already drives.
+ *
+ * **Stale and in-flight both disable, and each says which.** A window showing a
+ * reading it knows is not live must not send an answer against it, and an answer
+ * already going is not a second press.
+ */
+function askingOf(
+  whole: JobDetailRead | null,
+  jobId: string,
+  now: number,
+  stale: boolean,
+  acting: boolean,
+  onAnswer: (jobId: string, questionId: string, chose: string) => void,
+): DroneQuestionProps | undefined {
+  const asking = whole?.asking;
+  if (asking === undefined) return undefined;
+  return {
+    question: asking.question,
+    options: asking.options.map((option) => ({
+      label: option.label,
+      consequence: option.consequence,
+    })),
+    waiting: span(asking.asked_at, now) ?? undefined,
+    disabled: stale || acting,
+    disabledNote: stale
+      ? "This job is not live, so nothing can be sent. The drone is still waiting."
+      : acting
+        ? "That answer is already on its way to the drone."
+        : undefined,
+    onAnswer: (label) => onAnswer(jobId, asking.question_id, label),
+  };
 }
 
 /**

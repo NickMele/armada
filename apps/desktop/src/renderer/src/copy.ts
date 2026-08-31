@@ -55,6 +55,8 @@ export function said(outcome: Outcome): string {
       return "An override needs a reason. Nothing was sent, and the judge's verdict stands.";
     case "already_deciding":
       return "A decision on that job's work is already in flight. It was not sent twice.";
+    case "already_answering":
+      return "That answer is already in flight. It was not sent twice.";
     case "empty_note":
       return "Requesting changes needs a note. Nothing was sent, and the job is still waiting.";
     case "refused":

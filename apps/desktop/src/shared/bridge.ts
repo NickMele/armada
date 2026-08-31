@@ -364,6 +364,7 @@ export type Outcome =
   | { ok: false; why: "empty_reason" }
   | { ok: false; why: "empty_report" }
   | { ok: false; why: "already_deciding" }
+  | { ok: false; why: "already_answering" }
   | { ok: false; why: "empty_note" }
   | { ok: false; why: "refused"; error: WireError }
   | { ok: false; why: "transport"; detail: string };
@@ -447,6 +448,24 @@ export type BridgeApi = {
    * spawned; the Job comes back `running` with the same session.
    */
   redirectDrone: (jobId: string, instruction: string) => Promise<Outcome>;
+  /**
+   * Answer the question the job's drone asked, by picking one of the labels it
+   * offered.
+   *
+   * **The answer is a choice, never prose.** There is no free-text parameter
+   * and fleet refuses a label it did not offer — a person who needs to say
+   * something the options do not cover uses `redirectDrone`, which is the one
+   * route their own words reach a drone by.
+   *
+   * The job comes back unchanged: it was `running` while it waited and is
+   * `running` now. Fleet refuses 409 where nothing is waiting, where the id
+   * names a question already answered, and where the label was not offered.
+   */
+  answerQuestion: (
+    jobId: string,
+    questionId: string,
+    chose: string,
+  ) => Promise<Outcome>;
   /**
    * Put a fresh Drone on the surviving worktree, at the step that stopped.
    * **Legal only where the Drone is gone** — Fleet refuses 409 where one is
@@ -632,6 +651,7 @@ export const CHANNELS = {
   killJob: "bridge:kill-job",
   clearTerminalJobs: "bridge:clear-terminal-jobs",
   redirectDrone: "bridge:redirect-drone",
+  answerQuestion: "bridge:answer-question",
   restartStep: "bridge:restart-step",
   overrideVerdict: "bridge:override-verdict",
   rerunGate: "bridge:rerun-gate",

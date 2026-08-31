@@ -225,7 +225,10 @@ async fn a_question_is_held_and_nothing_moves() {
         .await
         .expect("a working Drone may ask");
 
-    assert_eq!(asked.question(), "Should the store schema change be its own Job?");
+    assert_eq!(
+        asked.question(),
+        "Should the store schema change be its own Job?"
+    );
     let record = fleet.load(&job).await.unwrap();
     assert_eq!(
         record.status(),

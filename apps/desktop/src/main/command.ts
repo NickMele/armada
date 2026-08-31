@@ -16,6 +16,7 @@
 
 import type { BridgeState, ClearOutcome, Draft, Outcome } from "../shared/bridge";
 import type {
+  ChosenAnswer,
   FileReport,
   JobSummary,
   Overruled,
@@ -68,7 +69,8 @@ type Busy =
   | "already_overruling"
   | "already_rereading"
   | "already_reporting"
-  | "already_deciding";
+  | "already_deciding"
+  | "already_answering";
 
 /** A route under one Job. The id is a path segment, so it is encoded. */
 function route(jobId: string, operation: string): string {
@@ -102,6 +104,13 @@ export class JobCommands {
   private readonly deciding = new Set<string>();
   /** Jobs with a report being filed. Its own set: filing is not an act on the job. */
   private readonly reporting = new Set<string>();
+  /**
+   * Jobs with an answer in flight. Its own set beside the redirect's: both put
+   * a turn into the same session, and one set would refuse a redirect sent
+   * while an answer was still going — which is exactly the moment a person
+   * realises none of the options was right.
+   */
+  private readonly answering = new Set<string>();
 
   constructor(board: Board) {
     this.board = board;
@@ -328,6 +337,27 @@ export class JobCommands {
     const body: Redirection = { instruction };
     return this.act(jobId, this.redirecting, "already_redirecting", (port) =>
       ask(port, "POST", route(jobId, "redirect"), body),
+    );
+  }
+
+  /**
+   * Answer the question the job's drone asked. **The job comes back
+   * unchanged** — it was `running` while it waited and is `running` now; what
+   * moved is the drone, handed the answer as a turn.
+   *
+   * Nothing is validated here beyond emptiness. Which labels were offered is
+   * fleet's, read off a working slot no window holds, so a label this window
+   * believes in and fleet does not is a 409 rather than a guess.
+   */
+  async answerQuestion(
+    jobId: string,
+    questionId: string,
+    chose: string,
+  ): Promise<Outcome> {
+    if (chose.trim() === "") return { ok: false, why: "empty_instruction" };
+    const body: ChosenAnswer = { question_id: questionId, chose };
+    return this.act(jobId, this.answering, "already_answering", (port) =>
+      ask(port, "POST", route(jobId, "answer_question"), body),
     );
   }
 

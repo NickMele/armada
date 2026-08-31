@@ -82,9 +82,9 @@ mod tests;
 pub use checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use detail::{
-    Answer, AskedOption, Criterion, Dependency, Flagged, JobDelivery, JobDetail, JudgeInFlight,
-    Judged, QuestionInFlight, RedirectInFlight, RedirectWaiting, StepDetail, StepFacts, Stuck,
-    Verdict,
+    AskedOption, ChosenAnswer, Criterion, Dependency, Flagged, JobDelivery, JobDetail,
+    JudgeInFlight, Judged, QuestionInFlight, RedirectInFlight, RedirectWaiting, StepDetail,
+    StepFacts, Stuck, Verdict,
 };
 pub use enums::{
     Actor, AdvanceGate, CheckOutcome, CriterionSource, DependencyDirection, DronePresence,

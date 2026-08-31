@@ -170,7 +170,11 @@ async fn a_question_with_one_answer_is_refused_and_takes_nothing() {
     )
     .await;
     assert_eq!(answered.status, StatusCode::OK);
-    assert!(answered.is_error(), "a refusal the Drone reads: {}", answered.text());
+    assert!(
+        answered.is_error(),
+        "a refusal the Drone reads: {}",
+        answered.text()
+    );
     assert!(
         answered.text().contains("Offer between"),
         "and it names the bound: {}",
@@ -195,7 +199,11 @@ async fn two_answers_with_one_label_are_refused() {
     )
     .await;
     assert!(answered.is_error());
-    assert!(answered.text().contains("labelled `Yes`"), "{}", answered.text());
+    assert!(
+        answered.text().contains("labelled `Yes`"),
+        "{}",
+        answered.text()
+    );
 }
 
 /// One well-formed question, reused by the tests above.

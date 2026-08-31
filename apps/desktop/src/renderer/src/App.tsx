@@ -241,6 +241,23 @@ export function App() {
   }
 
   /**
+   * Answer the question a drone asked, with the label a person picked.
+   *
+   * **Not through `act`** for `redirect`'s reason and one of its own: there was
+   * never a dialog, because there was never anything to confirm — the answer is
+   * one of a closed set the drone itself offered, and it stops the drone
+   * waiting rather than ending anything.
+   */
+  async function answer(jobId: string, questionId: string, chose: string): Promise<void> {
+    setActing(jobId);
+    try {
+      setOutcome(await window.armada.answerQuestion(jobId, questionId, chose));
+    } finally {
+      setActing(null);
+    }
+  }
+
+  /**
    * Overrule a Judge that refused the work. **Not through `act`**, for
    * `redirect`'s reason: the dialog that collected the reason was the
    * confirmation. **And not through `decide`**, which answers a gate nothing
@@ -466,6 +483,7 @@ export function App() {
                 }}
                 onAct={(what, jobId) => setConfirming({ act: what, jobId })}
                 onRedirect={(jobId, instruction) => void redirect(jobId, instruction)}
+                onAnswer={(jobId, questionId, chose) => void answer(jobId, questionId, chose)}
                 onOverrule={(jobId, reason) => void overrule(jobId, reason)}
                 onRerun={(jobId) => void rerun(jobId)}
                 onReport={report}

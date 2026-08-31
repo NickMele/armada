@@ -1,0 +1,79 @@
+/* Drone question — the waiting hue, drawn flat.
+ *
+ * `--status-awaiting-review` is "needs you, not urgent", which is this
+ * condition exactly: nothing is wrong and nothing moves until a person acts.
+ * Not the escalated hue, which would say the job had stopped, and not no hue at
+ * all, which would leave the one region on a running job's screen that is
+ * waiting on somebody looking like the three that are not. The job's own badge
+ * still says running, and it is right to. */
+.armada-question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--status-awaiting-review-bg);
+  border: var(--border-width) solid var(--status-awaiting-review);
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.armada-question__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-question__label {
+  flex: 1;
+  min-width: 0;
+  font-weight: var(--weight-medium);
+}
+
+/* How long it has been waiting. Mono and set back: a machine reading, and the
+   caller has already formatted it — nothing here ages anything. */
+.armada-question__waiting {
+  flex: none;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+/* The drone's own sentence. `pretty` because it is prose somebody reads once
+   and it must not end on an orphan. */
+.armada-question__asked {
+  min-width: 0;
+  text-wrap: pretty;
+}
+
+/* One answer: the radio on its own line, what it commits to under it. */
+.armada-question__option {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* Indented to the radio's label edge, so the consequence reads as belonging to
+   the choice above it rather than as a second choice. --space-4 is the ring and
+   --space-2 the gap beside it, which is the same arithmetic Radio does. */
+.armada-question__means {
+  margin-inline-start: calc(var(--space-4) + var(--space-2));
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* What is true about the surface rather than about a choice on it. */
+.armada-question__said {
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}

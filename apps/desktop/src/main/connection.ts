@@ -346,6 +346,16 @@ export class FleetConnection {
       return;
     }
 
+    if (event.kind === "job.asking") {
+      // **Re-read rather than fold**, for `job.judging`'s reason exactly: the
+      // question is served on the open job's own `asking`, so folding this into
+      // a second copy would give one fact two homes. Two reads per question,
+      // against a question that waits as long as a person takes.
+      this.publish({ connection });
+      this.refresh(fleet.port, event.job_id);
+      return;
+    }
+
     if (event.kind === "job.forgotten") {
       // The opposite of `job.created`: the id, and nothing to fold — the row
       // is gone at Fleet by the time this arrives, so it is dropped here

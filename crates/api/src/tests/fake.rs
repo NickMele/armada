@@ -591,7 +591,7 @@ impl Daemon for FakeDaemon {
     async fn answer_question(
         &self,
         job_id: JobId,
-        _answer: ipc::Answer,
+        _answer: ipc::ChosenAnswer,
     ) -> Result<JobSummary, Refusal> {
         let jobs = self.jobs.lock().expect("not poisoned");
         let Some(job) = jobs.iter().find(|job| job.id == job_id) else {

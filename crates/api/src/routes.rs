@@ -25,7 +25,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
 use ipc::{
-    Answer, ChangesRequested, FileReport, JobId, JobRequest, Missed, Overruled, ProposeJob,
+    ChangesRequested, ChosenAnswer, FileReport, JobId, JobRequest, Missed, Overruled, ProposeJob,
     Redirection, Resync, RunId, StreamMessage, WireError, PROTOCOL_VERSION,
 };
 use serde::Serialize;
@@ -691,7 +691,7 @@ async fn answer_question<D: Daemon>(
     Path(job_id): Path<String>,
     body: Bytes,
 ) -> Response {
-    let chosen: Answer = match ipc::decode("an answer", &body) {
+    let chosen: ChosenAnswer = match ipc::decode("an answer", &body) {
         Ok(chosen) => chosen,
         Err(why) => return undecodable(&why.to_string(), &served.run_id),
     };

@@ -36,6 +36,7 @@ export * from "./compositions/BoardControls/BoardControls";
 export * from "./compositions/BoardEmptyState/BoardEmptyState";
 export * from "./compositions/ChangedFiles/ChangedFiles";
 export * from "./compositions/CriterionVerdicts/CriterionVerdicts";
+export * from "./compositions/DroneQuestion/DroneQuestion";
 export * from "./compositions/EvidenceCard/EvidenceCard";
 export * from "./compositions/DroneTurns/DroneTurns";
 export * from "./compositions/EvidenceTrail/EvidenceTrail";

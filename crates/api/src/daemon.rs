@@ -28,8 +28,8 @@ use crate::mcp::Caller;
 use crate::observing::Observed;
 use ipc::mcp::{AskQuestion, CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    Answer, ChangesRequested, FileReport, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory,
-    JobId, JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redirection,
+    ChangesRequested, ChosenAnswer, FileReport, JobDetail, JobDiff, JobEvidence, JobForgotten,
+    JobHistory, JobId, JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redirection,
     Redispatched, Report, ReportList, WireError, WorkflowSummary,
 };
 
@@ -453,7 +453,7 @@ pub trait Daemon: Send + Sync + 'static {
     /// back for the reason every other command answers with one — a caller folds
     /// the row rather than re-reading the board.
     ///
-    /// **There is no field for prose.** [`Answer::chose`] is one of the labels
+    /// **There is no field for prose.** [`ChosenAnswer::chose`] is one of the labels
     /// the Drone offered and a label matching none is refused rather than passed
     /// through; words reach a Drone through [`Daemon::redirect_drone`] and
     /// nothing else, which is what keeps this from becoming the conversation
@@ -464,7 +464,7 @@ pub trait Daemon: Send + Sync + 'static {
     fn answer_question(
         &self,
         job_id: JobId,
-        answer: Answer,
+        answer: ChosenAnswer,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `ask_question` — the working Drone asks the person who approved the Job

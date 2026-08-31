@@ -627,7 +627,7 @@ where
     async fn answer_question(
         &self,
         job_id: JobId,
-        answer: ipc::Answer,
+        answer: ipc::ChosenAnswer,
     ) -> Result<JobSummary, Refusal> {
         let id = job_id.to_domain();
         Fleet::answer_question(self, &id, answer.question_id.as_str(), &answer.chose)

@@ -164,6 +164,9 @@ void app.whenReady().then(() => {
   // The two acts that resume a step without redispatching. Which applies is
   // decided by whether the Job still holds a Drone; Fleet is the authority
   // and refuses the wrong one rather than Bridge picking silently.
+  ipcMain.handle(CHANNELS.answerQuestion, (_event, jobId: string, questionId: string, chose: string) =>
+    connection?.commands.answerQuestion(jobId, questionId, chose),
+  );
   ipcMain.handle(CHANNELS.redirectDrone, (_event, jobId: string, instruction: string) =>
     connection?.commands.redirectDrone(jobId, instruction),
   );

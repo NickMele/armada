@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
 import { ChangedFiles, type ChangedFilesProps } from "../../compositions/ChangedFiles/ChangedFiles";
+import {
+  DroneQuestion,
+  type DroneQuestionProps,
+} from "../../compositions/DroneQuestion/DroneQuestion";
 import { EvidenceCard, type EvidenceCardProps } from "../../compositions/EvidenceCard/EvidenceCard";
 import { JobBrief } from "../../compositions/JobBrief/JobBrief";
 import { JobDetailHeaderActions } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
@@ -19,6 +23,11 @@ import type { JobDetailHeading, JobDetailLog } from "../detail";
  * absent one is named rather than dropped — a region that closes up reads as a
  * screen that is finished.
  *
+ * **A question sits above the split, full width.** Everything in the two
+ * columns is what the drone has done; a question is the reason it has stopped
+ * doing any of it, and a person who opened this job needs to see that before
+ * they read a rail rather than after.
+ *
  * **The footprint sits under the rail, in the wide column.** A drone that is
  * working and a drone that is thrashing look identical from the outside, and
  * the files it has touched are the cheapest thing that tells them apart — so it
@@ -28,6 +37,21 @@ import type { JobDetailHeading, JobDetailLog } from "../detail";
  */
 export type ARunningJobProps = {
   heading: JobDetailHeading;
+  /**
+   * The question this job's drone asked and nobody has answered yet.
+   *
+   * **Full width and above the split**, which is the one place on this screen a
+   * region has ever been put: everything below it is what the drone has done,
+   * and this is the reason it has stopped doing any of it. A person opening a
+   * running job that is waiting on them must not have to find that out by
+   * reading a rail.
+   *
+   * Absent is the ordinary case and there is no `absent` sentence beside it,
+   * unlike every other region here. Those name what the wire does not carry;
+   * this one is genuinely nothing, and a permanent "no question was asked" line
+   * on every running job would be a region that never says anything.
+   */
+  question?: DroneQuestionProps;
   /** The steps, in order. `GET /workflows` is what fills this. */
   steps: WorkflowRailStep[];
   /** The label over the rail. */
@@ -55,6 +79,7 @@ export type ARunningJobProps = {
 
 export function ARunningJob({
   heading,
+  question,
   steps,
   ranLabel = "What ran",
   stepsAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
@@ -71,6 +96,8 @@ export function ARunningJob({
   return (
     <div className="armada-screen__detail">
       <JobDetailHeaderActions {...heading} onCopied={onCopied} />
+
+      {question === undefined ? null : <DroneQuestion {...question} />}
 
       <div className="armada-screen__split">
         <div className="armada-screen__col">

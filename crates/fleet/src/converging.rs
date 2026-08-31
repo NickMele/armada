@@ -232,17 +232,16 @@ where
         job: &JobId,
         step: &StepId,
     ) -> Result<Option<Wandering>, Adrift> {
-        // A Drone that has submitted is at the gate, not thrashing. Cheaper
-        // than the tripwires and true regardless of them.
+        // A Drone that has submitted is at the gate, not thrashing; one that
+        // has asked a person a question is not working at all, and the wall
+        // clock runs while they think — without that second reading the
+        // tripwire fires the instant an answer lands, buying a Judge call on a
+        // step just unblocked. Both are cheaper than the tripwires and true
+        // regardless of them.
         if self.evidence_waiting_for(&job) > 0 {
             return Ok(None);
         }
         let at_work = working.as_ref().expect("the slot was read as full");
-        // **A Drone waiting on an answer is not working badly; it is not
-        // working at all.** The wall clock runs while a person thinks, so
-        // without this the tripwire fires the instant an answer lands, buying a
-        // Judge call on a step that has just been unblocked. Free, and true
-        // regardless of the tripwires — the evidence reading's terms exactly.
         if crate::asking::waiting_on_an_answer(at_work) {
             return Ok(None);
         }
