@@ -193,3 +193,56 @@
   min-height: 100%;
   padding: var(--space-8);
 }
+
+/* The debug info, shown rather than offered.
+
+   A well, because that is what --bg-sunken is for and what a code block is:
+   the payload is not part of the sentence above it, it is the machine's own
+   record quoted inside the notice. Mono at the metadata scale, which is what
+   every machine-derived value in this component already takes.
+
+   **It scrolls sideways rather than wrapping.** The whole format is aligned
+   columns, and a wrapped line puts a value under a label and reads as a row
+   that is not there. Horizontal overflow is the one place in this app where
+   a scrollbar is the right answer — the alternative is a payload that lies
+   about its own shape.
+
+   No height cap: nothing in the token set names one, and inventing a value
+   here would be a second spelling of a decision nobody has taken. Reported
+   rather than guessed. */
+.armada-error__payload {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-error__debug {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--fg-default);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* Why it is safe to copy. Subtle, because it is a standing property of the
+   artifact rather than something that happened — and it sits under the block
+   it describes, where a person who has decided to send this reads it last. */
+.armada-error__safety {
+  margin: 0;
+  color: var(--fg-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  text-wrap: pretty;
+}
+
+/* Inline has no expanded view, so its one control sits on the row's own
+   surface and takes no extra block above it. */
+.armada-error--inline .armada-error__actions {
+  margin-block-start: var(--space-1);
+}
