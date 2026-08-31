@@ -14,7 +14,9 @@
 //! reads is a wrong size all the same.
 //!
 //! Every call here answers `false` on any error, which is the only direction
-//! `crate::peer` may fail in. Each `unsafe` block carries its own `SAFETY:`.
+//! `crate::peer` may fail in. Each `unsafe` block carries its own note, and the
+//! gate's check for one is a file-wide substring — so the header does not spell
+//! the token, or a file that lost every note would still satisfy it.
 
 use std::mem::size_of;
 
