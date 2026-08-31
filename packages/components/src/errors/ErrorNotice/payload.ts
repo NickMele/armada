@@ -84,7 +84,14 @@ export type DebugPayload = {
   bridgeProtocol: string;
   /** The protocol Fleet speaks. Absent where Bridge never read a runtime file. */
   fleetProtocol?: string;
-  /** When the payload was taken. ISO 8601, and the caller's clock. */
+  /**
+   * When the payload was taken, ISO 8601, on the caller's clock.
+   *
+   * **Taken, not raised**, and the tail says so. Nothing on the wire carries
+   * when a failure happened — `WireError` has no timestamp — and a bare
+   * instant appended to an error reads as the moment it broke. A banner is a
+   * standing condition and can be copied hours after the thing it reports.
+   */
   at: string;
 };
 
@@ -166,7 +173,7 @@ export function debugInfo(payload: DebugPayload): string {
   // sentence and three as a table, and this is neither.
   const tail = [`bridge protocol ${payload.bridgeProtocol}`];
   if (payload.fleetProtocol !== undefined) tail.push(`fleet protocol ${payload.fleetProtocol}`);
-  tail.push(payload.at);
+  tail.push(`taken ${payload.at}`);
   blocks.push([tail.join("  ")]);
 
   return blocks.map((block) => block.join("\n")).join("\n\n");

@@ -11,14 +11,31 @@
 // and mean nothing to the lookup Bridge does.
 
 import { File } from "lucide-react";
-import type { FailureDetail, FailureMachineValue } from "@armada/components";
+import { debugInfo } from "@armada/components";
+import type { DebugField, DebugPayload, FailureDetail, FailureMachineValue } from "@armada/components";
 
 import type { BridgeIdentity, Connection } from "../../shared/bridge";
+import { PROTOCOL_VERSION } from "../../shared/generated/protocol-version";
 import type { UnreadableJob, WireError } from "../../shared/protocol";
 import { spoken } from "../../shared/version";
 import { elapsed } from "./fleet";
 import type { Statement } from "./fleet";
 import type { Uncaught } from "./uncaught";
+
+/**
+ * The machine record of a failure, minus the instant it is taken.
+ *
+ * **Built here, beside the sentence, and not derived from the fold.** The two
+ * lists look alike and are not the same artifact: `details` carries prose
+ * labels a person reads on screen, and this carries wire spellings a person
+ * greps a log for. Deriving one from the other would put `Runtime file` into
+ * an issue body as a key, and lowercasing a `WireError`'s own `fields` keys
+ * would corrupt the only ones that were already right.
+ *
+ * `at` is added at the moment of copying rather than here — the payload is
+ * built on every render and the timestamp is a fact about the press.
+ */
+export type FailureFacts = Omit<DebugPayload, "at">;
 
 export type Failure = {
   /** What broke, one sentence, in the app's voice. */
@@ -31,7 +48,57 @@ export type Failure = {
   values: FailureMachineValue[];
   /** What the machine values do not say. */
   note: string;
+  /** What leaves the machine when somebody quotes this failure. */
+  payload: FailureFacts;
 };
+
+/**
+ * What Bridge knows about versions, which is protocol versions and nothing
+ * else. **Bridge holds no application version anywhere** — nothing publishes
+ * one to the renderer — so the payload says "bridge protocol 5.2" rather than
+ * inventing a number a reader would take for a release.
+ *
+ * Fleet's is reachable only where the caller already holds a `Connection`, and
+ * of the five builders below exactly one does. The other four omit it, which
+ * is wrong for a refusal in particular: a command Fleet refused came from a
+ * Fleet whose version Bridge read out of the runtime file before connecting.
+ * Closing it means threading the connection through four call sites in
+ * `App.tsx`, or one field on `BridgeIdentity`, and neither file is this
+ * branch's. Left absent and named rather than guessed.
+ */
+const BRIDGE_PROTOCOL = spoken(PROTOCOL_VERSION);
+
+/**
+ * Bridge's own machine log, as a payload field.
+ *
+ * It is not a wire field and never will be — it is a path on the filesystem of
+ * the machine the window is on — but it is the one place the rest of what
+ * happened is written down, and a report that names the failure without naming
+ * the file is a report somebody has to answer with "where is your log".
+ * Absent, not blank, where no path resolves.
+ */
+function logField(bridge: BridgeIdentity): DebugField[] {
+  return bridge.auditPath === null ? [] : [{ key: "bridge_log", value: bridge.auditPath }];
+}
+
+/**
+ * A thrown exception's frames, as the ordered list a chain is.
+ *
+ * **A stack is a cause chain.** It is the same artifact a `WireError` carries
+ * flattened to strings, ordered innermost first, and putting it here rather
+ * than into a `fields` value is what keeps the payload's aligned columns from
+ * being blown apart by a forty-line value. The first line of a JS stack repeats
+ * the message, which is already its own row, so it is dropped.
+ */
+function frames(stack: string | null, message: string): string[] {
+  if (stack === null) return [];
+  const lines = stack
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  const [first] = lines;
+  return first !== undefined && first.includes(message) ? lines.slice(1) : lines;
+}
 
 /**
  * Where Bridge's own line goes. Named, not written — nothing appends to this
@@ -80,6 +147,12 @@ export function fleetFailure(
 ): Failure | null {
   if (statement.next === null) return null;
 
+  // Fleet's version is only known where a runtime file was read and believed.
+  // Three of the five states below hold a `FleetIdentity`; the other two never
+  // got a version to read, so their payload carries none.
+  const fleetProtocol =
+    "fleet" in connection ? spoken(connection.fleet.protocolVersion) : undefined;
+
   const base = {
     headline: statement.headline,
     next: statement.next,
@@ -87,6 +160,28 @@ export function fleetFailure(
     // identifies these is in the fold: the runtime file, the pid and the port.
     values: machineLog(bridge),
   };
+
+  /**
+   * The connection state is the machine's own name for what happened, and it
+   * leads the fields for that reason: `not_running` and `unreachable` are two
+   * different things to do about it, and the sentence above renders both as
+   * Fleet being unavailable.
+   *
+   * No code and no run id. Bridge never reached Fleet in any of these, and
+   * nothing here mints either.
+   */
+  function facts(fields: DebugField[]): FailureFacts {
+    return {
+      message: statement.headline,
+      fields: [
+        { key: "connection", value: connection.state },
+        ...fields,
+        ...logField(bridge),
+      ],
+      bridgeProtocol: BRIDGE_PROTOCOL,
+      fleetProtocol,
+    };
+  }
 
   switch (connection.state) {
     case "not_running": {
@@ -102,8 +197,20 @@ export function fleetFailure(
         details.push({ label: "File wrote", value: absence.wrote });
         details.push({ label: "Holder started", value: absence.holder });
       }
+      const absent: DebugField[] = [
+        { key: "why", value: absence.why },
+        { key: "runtime_file", value: absence.path },
+      ];
+      if (absence.why === "pid_dead" || absence.why === "pid_held_by_another") {
+        absent.push({ key: "pid", value: String(absence.pid) });
+      }
+      if (absence.why === "pid_held_by_another") {
+        absent.push({ key: "file_wrote", value: absence.wrote });
+        absent.push({ key: "holder_started", value: absence.holder });
+      }
       return {
         ...base,
+        payload: facts(absent),
         detailsLabel: "What the runtime file answered",
         details,
         note:
@@ -116,6 +223,14 @@ export function fleetFailure(
     case "runtime_file_refused":
       return {
         ...base,
+        payload: facts([
+          { key: "why", value: connection.fault.why },
+          { key: "runtime_file", value: connection.fault.path },
+          { key: "detail", value: connection.fault.detail },
+          ...(connection.fault.why === "probe_failed"
+            ? [{ key: "pid", value: String(connection.fault.pid) }]
+            : []),
+        ]),
         detailsLabel: "What the read answered",
         details: [
           { label: "Answer", value: connection.fault.why },
@@ -133,6 +248,12 @@ export function fleetFailure(
     case "unreachable":
       return {
         ...base,
+        payload: facts([
+          { key: "pid", value: String(connection.fleet.pid) },
+          { key: "port", value: String(connection.fleet.port) },
+          { key: "silent_for", value: elapsed(now - connection.sinceMs) },
+          { key: "detail", value: connection.detail },
+        ]),
         detailsLabel: "What the connection answered",
         details: [
           { label: "Pid", value: String(connection.fleet.pid) },
@@ -146,6 +267,17 @@ export function fleetFailure(
     case "version_skew":
       return {
         ...base,
+        payload: facts([
+          { key: "why", value: connection.why },
+          // Not the tail's `fleet protocol`, and not always equal to it: the
+          // tail carries what the runtime file said, and this is what the
+          // socket said. A Fleet restarted under a live connection is not the
+          // one the file described, and the two disagreeing is the whole
+          // finding.
+          { key: "fleet_speaks", value: spoken(connection.speaks) },
+          { key: "pid", value: String(connection.fleet.pid) },
+          { key: "port", value: String(connection.fleet.port) },
+        ]),
         detailsLabel: "What each side speaks",
         details: [
           { label: "Fleet", value: spoken(connection.speaks) },
@@ -208,6 +340,30 @@ export function rendererFailure(
 
   return {
     headline: `Bridge could not draw ${region}`,
+    // The exception's own words, not the headline: the headline names the
+    // region in the app's voice, and a person reading this in an issue needs
+    // what threw. No code and no run id — this never reached Fleet, so there
+    // is neither to quote and neither is minted here.
+    payload: {
+      message: caught.message,
+      fields: [
+        { key: "region", value: region },
+        ...(caught.component === null
+          ? []
+          : [{ key: "component", value: caught.component }]),
+        { key: "window_usable", value: String(usable) },
+        ...logField(bridge),
+      ],
+      // The thrown stack where React gave one, and the component stack where
+      // it did not: both are ordered lists of what was doing what, which is
+      // what a chain is. The thrown stack is preferred because it carries file
+      // and line, and the component stack carries neither.
+      chain:
+        caught.stack === null
+          ? frames(caught.where, caught.message)
+          : frames(caught.stack, caught.message),
+      bridgeProtocol: BRIDGE_PROTOCOL,
+    },
     // Safe to state flatly: Bridge and Fleet have independent lifetimes, so a
     // reload reconnects to the running daemon rather than restarting anything.
     next: "Reload Bridge. Fleet keeps running and jobs keep progressing.",
@@ -234,6 +390,23 @@ export function jobFailure(row: UnreadableJob, bridge: BridgeIdentity): Failure 
   const named = row.job_id !== undefined;
   return {
     headline: named ? `Job ${row.job_id} did not load` : "A job did not load",
+    // **The one wire failure that is not a `WireError`.** `UnreadableJob`
+    // carries a job id and a sentence, and no code, no run id and no chain, so
+    // the payload of a refused row is thinner than the payload of a refused
+    // command by everything the store could have said and did not.
+    payload: {
+      message: row.fault,
+      ...(named ? { job_id: row.job_id } : {}),
+      fields: [
+        { key: "source", value: "job_list.unreadable" },
+        // Relative to the Job's repository, which Fleet does not send. Named
+        // as it is written on screen rather than resolved to something Bridge
+        // cannot know.
+        ...(named ? [{ key: "job_log", value: `.armada/logs/${row.job_id}.jsonl` }] : []),
+        ...logField(bridge),
+      ],
+      bridgeProtocol: BRIDGE_PROTOCOL,
+    },
     next: named
       ? "Every other job on the board is unaffected. Read the fault, or read the job's log."
       : "Every other job on the board is unaffected. The row carries no job id, so there is no log to open.",
@@ -291,6 +464,27 @@ export function refusalFailure(error: WireError, bridge: BridgeIdentity): Failur
   }
 
   return {
+    // The only one of the five with everything the contract guarantees. The
+    // wire's `fields` keys pass through with their own spelling: they are what
+    // somebody greps a log for, and rewriting them into prose would break the
+    // one join this payload exists to make.
+    payload: {
+      code: error.code,
+      message: error.message,
+      run_id: error.run_id,
+      ...(error.job_id === undefined ? {} : { job_id: error.job_id }),
+      ...(error.drone_id === undefined ? {} : { drone_id: error.drone_id }),
+      ...(error.step_id === undefined ? {} : { step_id: error.step_id }),
+      fields: [
+        ...Object.entries(error.fields ?? {}).map(([key, value]) => ({
+          key,
+          value: String(value),
+        })),
+        ...logField(bridge),
+      ],
+      chain: error.chain ?? [],
+      bridgeProtocol: BRIDGE_PROTOCOL,
+    },
     headline: error.message,
     next: "Nothing was sent. Change what the command names, or read the log.",
     detailsLabel: "What Fleet refused",
@@ -312,6 +506,15 @@ export function uncaughtFailure(uncaught: Uncaught, bridge: BridgeIdentity): Fai
   if (uncaught.stack !== null) details.push({ label: "Stack", value: uncaught.stack.trim() });
 
   return {
+    // `from` leads the fields because it is the difference that matters: a
+    // rejection is a command that never answered, and a throw is a handler
+    // that stopped halfway.
+    payload: {
+      message: uncaught.message,
+      fields: [{ key: "from", value: uncaught.from }, ...logField(bridge)],
+      chain: frames(uncaught.stack, uncaught.message),
+      bridgeProtocol: BRIDGE_PROTOCOL,
+    },
     headline:
       uncaught.from === "rejection"
         ? "Something Bridge asked for never answered"
@@ -325,22 +528,24 @@ export function uncaughtFailure(uncaught: Uncaught, bridge: BridgeIdentity): Fai
 }
 
 /**
- * The whole failure as one block of text.
+ * The whole failure as the one artifact anybody quotes.
  *
- * **This is what the report action carries.** A person reporting a failure
- * should not be retyping a stack, a path or a run id off a screen, and a report
- * that arrives without the run id joins to no line in any log.
+ * **This is what the copy action carries**, and it is the same format an
+ * `ErrorNotice` shows in its expanded view, from the same producer — so what a
+ * person read on one surface is what arrives in the issue body from another.
+ * Nobody retypes a stack, a path or a run id off a screen.
+ *
+ * What it dropped when it stopped being a hand-rolled report: the app's voice.
+ * The headline and the `next` sentence are not in it. They are what the screen
+ * said, not what the machine had, and a reader who was not there needs the
+ * second — the machine's own message is `payload.message` and the fields under
+ * it say more than a sentence could.
+ *
+ * The log paths survive as fields rather than as their own rows. They are not
+ * wire fields and never will be, but a report that names a failure without
+ * naming the file the rest of it is written in is one somebody has to answer
+ * with a question.
  */
 export function reportOf(failure: Failure, at: string): string {
-  const lines = [
-    failure.headline,
-    failure.next,
-    "",
-    ...failure.details.map((detail) => `${detail.label}: ${detail.value}`),
-    ...failure.values.map((value) =>
-      value.meta === undefined ? value.value : `${String(value.meta)}: ${value.value}`,
-    ),
-    `Reported at: ${at}`,
-  ];
-  return lines.join("\n");
+  return debugInfo({ ...failure.payload, at });
 }
