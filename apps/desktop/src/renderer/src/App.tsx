@@ -359,6 +359,7 @@ export function App() {
         scope={scope}
         onScope={setScope}
         jobs={state.jobs}
+        capacity={state.capacity}
         title={head.title}
         summary={head.summary}
         actions={head.actions}

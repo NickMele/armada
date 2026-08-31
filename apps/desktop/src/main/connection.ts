@@ -25,7 +25,7 @@ import { JobCommands } from "./command";
 import { ObserveSocket } from "./observe";
 import { JobReader } from "./reader";
 import { ReportsReader } from "./reports";
-import { ask, holdingsOf } from "./request";
+import { ask, capacityOf, holdingsOf } from "./request";
 import { ReviewMaterial } from "./review";
 import { HOST, machinePath, read, startingIdentity } from "./runtime-file";
 
@@ -277,6 +277,9 @@ export class FleetConnection {
       // What a proposal may name: read once per connection, because it changes
       // when Fleet restarts rather than when a Job moves.
       void this.readHoldings(fleet.port);
+      // And how full the fleet is, which changes when a Job moves and is
+      // therefore read again below on every status move.
+      void this.readCapacity(fleet.port);
       // A resync says nothing about the open Job's steps, so it is re-read.
       void this.watched.again(fleet.port);
       // A pane left open across a Fleet restart reopens its own socket. Only
@@ -371,6 +374,12 @@ export class FleetConnection {
       readAt: this.wiring.now(),
     });
     this.refresh(fleet.port, moved.id);
+    // **A status move is the only thing that changes the occupancy**, so this
+    // is where the reading is taken rather than on a timer. The machine half
+    // rides along on the same call, which means a disk that fills while nothing
+    // moves is not noticed until something does — and something moving is the
+    // moment it starts mattering, because that is when admission next asks.
+    void this.readCapacity(fleet.port);
   }
 
   private async reread(port: number): Promise<void> {
@@ -387,6 +396,15 @@ export class FleetConnection {
   /** What a proposal may name. The reads are `request.ts`'s; the state is here. */
   private async readHoldings(port: number): Promise<void> {
     this.publish({ holds: await holdingsOf(port, this.current.holds) });
+  }
+
+  /**
+   * How full the fleet is. **A failed read publishes `null`**, which draws as
+   * nothing rather than as the last count — the bar must not keep saying
+   * "2 of 2" off an answer it could not get.
+   */
+  private async readCapacity(port: number): Promise<void> {
+    this.publish({ capacity: await capacityOf(port) });
   }
 
   // -------------------------------------------- one Job, whole and recounted

@@ -8,11 +8,15 @@
 // none of them is built — six disabled rows would be a promise Armada does not
 // keep, so the roster is what exists.
 //
-// # Two regions of the drawing have no source, and are left out
+// # One region of the drawing has no source, and is left out
 //
-// `today ~$4.80`: nothing measures spend. `1 drone`: `assigned_drone` has no
-// event that sets it, so no count can be taken. Neither is drawn as a labelled
+// `today ~$4.80`: nothing measures spend, and it is not drawn as a labelled
 // blank — a label with nothing under it reads as a value that failed to load.
+//
+// `1 drone` used to be here for the same reason: `assigned_drone` has no event
+// that sets it, so no count could be taken from the board. `get_capacity`
+// answers it now, from the roster admission itself counts against, so the
+// contract's `pid, port, drone count` is finally all three.
 //
 // # The bar names Fleet's state; the panel head carries the controls
 //
@@ -26,9 +30,10 @@ import { Activity } from "lucide-react";
 import { Select, TheShell, type FleetState, type StatusBarProps } from "@armada/components";
 
 import type { Connection } from "../../shared/bridge";
-import type { JobSummary } from "../../shared/protocol";
+import type { FleetCapacity, JobSummary } from "../../shared/protocol";
 import type { ManifestSummary } from "../../shared/setup";
 import type { Statement } from "./fleet";
+import { ADMISSION_HOLD } from "../../shared/generated/vocabulary";
 import { plural } from "./board";
 
 /** The one surface in the rail. Its glyph is the registry's for Active jobs. */
@@ -45,6 +50,8 @@ export type ShellProps = {
   onScope: (manifestId: string) => void;
   /** Every Job, for the rail's count and the bar's two. */
   jobs: readonly JobSummary[];
+  /** How full the fleet is. `null` is a Fleet that has not answered yet. */
+  capacity: FleetCapacity | null;
   title: string;
   summary?: string;
   /** The head's trailing controls. `New job` is the one primary. */
@@ -63,6 +70,7 @@ export function Shell({
   scope,
   onScope,
   jobs,
+  capacity,
   title,
   summary,
   actions,
@@ -101,7 +109,7 @@ export function Shell({
       title={title}
       summary={summary}
       actions={actions}
-      status={statusOf(connection, statement, jobs)}
+      status={statusOf(connection, statement, jobs, capacity)}
     >
       {children}
     </TheShell>
@@ -111,24 +119,59 @@ export function Shell({
 /**
  * The bar, from what Bridge holds.
  *
- * **No spend and no drone count**, for the reason at the top of this file. The
- * job count is the contract's own middle segment — "Fleet running · 3 jobs" —
- * and the two waiting counts appear only when non-zero.
+ * **No spend**, for the reason at the top of this file. The job count is the
+ * contract's own middle segment — "Fleet running · 3 jobs" — and the two
+ * waiting counts appear only when non-zero.
  */
 function statusOf(
   connection: Connection,
   statement: Statement,
   jobs: readonly JobSummary[],
+  capacity: FleetCapacity | null,
 ): StatusBarProps {
+  const detail = [statement.detail, drones(capacity)].filter((part) => part !== "").join(" · ");
   return {
     fleet: fleetOf(connection),
     fleetLabel: statement.headline,
-    detail: statement.detail === "" ? undefined : statement.detail,
+    detail: detail === "" ? undefined : detail,
     advice: statement.next ?? undefined,
-    items: [plural(jobs.length)],
+    items: [plural(jobs.length), ...held(jobs, capacity)],
     escalations: jobs.filter((job) => job.status === "escalated").length,
     approvals: jobs.filter((job) => job.status === "awaiting_approval").length,
   };
+}
+
+/**
+ * "2 of 2 drones", the contract's third mono value, and empty where Fleet has
+ * not answered.
+ *
+ * **Empty rather than "0 of 0"**, because a Fleet that has not been asked and a
+ * Fleet with nothing running are different facts and one of them is not known.
+ */
+function drones(capacity: FleetCapacity | null): string {
+  if (capacity === null) return "";
+  return `${capacity.occupied} of ${capacity.bound} ${capacity.bound === 1 ? "drone" : "drones"}`;
+}
+
+/**
+ * Which of the four things is holding the next drone back, **and only while
+ * something is waiting on it**.
+ *
+ * Fleet answers this whenever admission would refuse, which includes a fleet
+ * with nothing queued at all. Drawn then it is a warning about a situation
+ * nobody is in, and the contract is explicit that the bar must not become a
+ * second alert surface. So it appears when there is a Job it is an answer for.
+ *
+ * **The word is the registry's.** An unknown key is a newer Fleet naming a
+ * reason this build has never heard of — additive by design — and it renders as
+ * its own wire spelling, which is the fallback every other surface takes rather
+ * than inventing a second vocabulary.
+ */
+function held(jobs: readonly JobSummary[], capacity: FleetCapacity | null): string[] {
+  const hold = capacity?.held_by;
+  if (hold === undefined) return [];
+  if (!jobs.some((job) => job.status === "queued")) return [];
+  return [ADMISSION_HOLD[hold]?.verb ?? hold];
 }
 
 /**

@@ -667,6 +667,37 @@ export type JobList = {
   unreadable?: UnreadableJob[];
 };
 
+/**
+ * How full the fleet is, and the one thing holding the next Drone back.
+ * `crates/ipc/src/capacity.rs`.
+ *
+ * **Fleet-wide, and the answer no per-Job field could give.** A `queued` row's
+ * `queued_reason` folds the concurrency bound, CPU, memory and disk into
+ * `waiting_on_resources`, because that is the only label the registry grants
+ * it. This says which of them it was.
+ */
+export type FleetCapacity = {
+  /** How many Jobs Fleet may work at once. */
+  bound: number;
+  /**
+   * How many it is working, from the roster admission counts against — never a
+   * count of `running` rows. An escalated Job keeps its Drone alive and idle so
+   * a redirect costs no respawn, and it keeps its place while it does.
+   */
+  occupied: number;
+  /**
+   * A key into `ADMISSION_HOLD` in the generated vocabulary. **Absent means
+   * nothing is holding it** — not unknown, and not that Fleet failed to look,
+   * because an unreadable machine admits rather than refuses.
+   *
+   * `string` and not a union, for the reason at the top of this file and one
+   * more: this is the one set on the seam a newer Fleet may widen without a
+   * protocol bump, so a union here would be a build that refuses a message it
+   * is meant to survive.
+   */
+  held_by?: string;
+};
+
 /** A Job drafted onto the approval gate. The request half of `propose_job`. */
 export type ProposeJob = {
   /** Required. A proposal without one does not decode on the Rust side. */

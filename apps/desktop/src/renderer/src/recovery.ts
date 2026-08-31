@@ -467,15 +467,19 @@ const REDIRECT =
 
 /**
  * `NoDroneToRedirect` stated the same way, and the worktree stated as the
- * settled fact it now is. **The old sentence was true when it was written** —
- * Bridge read no filesystem, so it offered a restart and let the refusal arrive
- * on the press. Fleet reads the disk before naming this act, so the offer is
- * the answer.
+ * settled fact it now is: Bridge read no filesystem and let the refusal arrive
+ * on the press, and Fleet reads the disk before naming the act.
+ *
+ * **It no longer promises a drone immediately either.** A restart takes
+ * `escalated -> queued` and admission starts it, bounded by the concurrency cap
+ * and the machine as an approval is — `crates/fleet/src/readmitting.rs`. The
+ * act is never refused for that; it stopped claiming the drone is already there.
  */
 const RESTART =
-  "Restart the step. The drone is gone, so a fresh one takes over the worktree at the step " +
-  "above, resolving its toolset, model and environment again. Fleet read the worktree before " +
-  "offering this, so it is there to take over.";
+  "Restart the step. The drone is gone, so the job goes back in the queue and a fresh one " +
+  "takes over the worktree at the step above when there is room, resolving its toolset, " +
+  "model and environment again. Fleet read the worktree before offering this, so it is " +
+  "there to take over.";
 
 /** What replaces a Job that nothing resumes, or that nothing replaces either. */
 function replacement(redispatch: boolean): string {

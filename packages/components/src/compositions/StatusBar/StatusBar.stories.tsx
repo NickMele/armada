@@ -3,7 +3,8 @@ import { StatusBar } from "./StatusBar";
 
 /**
  * One story per state the contract names: Fleet's three readings, the two
- * counts, and the bar in both billing modes.
+ * counts, the bar in both billing modes, and the fleet with nothing left to
+ * start another drone on.
  *
  * The three Fleet sentences are fixed copy from `docs/contracts/
  * design-system.md`. Fleet's own strings are identical every time, because
@@ -27,7 +28,7 @@ export const FleetRunningPersonalMachine: Story = {
   args: {
     fleet: "running",
     fleetLabel: "Fleet running",
-    detail: "pid 4417 · port 7411 · 1 drone",
+    detail: "pid 4417 · port 7411 · 1 of 2 drones",
     items: ["3 jobs"],
     spend: "68% quota left",
   },
@@ -41,7 +42,7 @@ export const FleetRunningWorkMachine: Story = {
   args: {
     fleet: "running",
     fleetLabel: "Fleet running",
-    detail: "pid 4417 · port 7411 · 1 drone",
+    detail: "pid 4417 · port 7411 · 1 of 2 drones",
     items: ["3 jobs"],
     spend: "~$2.40 of $20",
   },
@@ -118,12 +119,48 @@ export const WithEscalationsOnly: Story = {
   },
 };
 
+/**
+ * Every place is taken, so a queued job is not starting and the bar says which
+ * of the four things is in the way.
+ *
+ * **The word is `enum-verbs.toml`'s**, from the `admission_hold` vocabulary —
+ * the finer half of `queued_reason.waiting_on_resources`, which is the one
+ * label a Board row carries. The segment is `--fg-muted` like every other item:
+ * a full fleet is a fleet working, not a fault, and the two counts are the only
+ * status colour the contract grants the bar.
+ */
+export const FleetRunningAtItsBound: Story = {
+  args: {
+    fleet: "running",
+    fleetLabel: "Fleet running",
+    detail: "pid 4417 · port 7411 · 2 of 2 drones",
+    items: ["4 jobs", "waiting on a free drone"],
+  },
+};
+
+/**
+ * The reason no drone count could have told a person on its own: the bound has
+ * room and the machine does not.
+ *
+ * This is the case the payload was built for. On 31 Aug 2026 a volume filled
+ * during a parallel run and three agents died at zero bytes free; nothing on
+ * screen said anything before or after.
+ */
+export const FleetRunningShortOfDisk: Story = {
+  args: {
+    fleet: "running",
+    fleetLabel: "Fleet running",
+    detail: "pid 4417 · port 7411 · 0 of 2 drones",
+    items: ["4 jobs", "waiting on disk"],
+  },
+};
+
 /** Five items is the ceiling, and this is it. */
 export const AtTheItemCeiling: Story = {
   args: {
     fleet: "running",
     fleetLabel: "Fleet running",
-    detail: "pid 4417 · port 7411 · 1 drone",
+    detail: "pid 4417 · port 7411 · 1 of 2 drones",
     items: ["3 jobs"],
     escalations: 2,
     spend: "~$2.40 of $20",

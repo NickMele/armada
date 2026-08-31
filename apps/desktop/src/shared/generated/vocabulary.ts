@@ -46,6 +46,14 @@ export const QUEUED_REASON: Readonly<Record<string, Rendering | undefined>> = {
   "waiting_on_resources": { verb: "waiting on resources", icon: Cpu, badgeStatus: "not-started", statusToken: "--status-not-started" },
 };
 
+/** `admission_hold`, keyed by the wire value. */
+export const ADMISSION_HOLD: Readonly<Record<string, Rendering | undefined>> = {
+  "concurrency_bound": { verb: "waiting on a free drone", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
+  "cpu": { verb: "waiting on CPU", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
+  "memory": { verb: "waiting on memory", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
+  "disk": { verb: "waiting on disk", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
+};
+
 /** `escalation_reason`, keyed by the wire value. */
 export const ESCALATION_REASON: Readonly<Record<string, Rendering | undefined>> = {
   "blocked_by_policy": { verb: "blocked by policy", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
@@ -158,6 +166,10 @@ export type Gap = {
 
 export const GAPS: readonly Gap[] = [
   { vocabulary: "job_status", variant: "escalated", missing: ["verb", "icon"] },
+  { vocabulary: "admission_hold", variant: "concurrency_bound", missing: ["icon"] },
+  { vocabulary: "admission_hold", variant: "cpu", missing: ["icon"] },
+  { vocabulary: "admission_hold", variant: "memory", missing: ["icon"] },
+  { vocabulary: "admission_hold", variant: "disk", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "blocked_by_policy", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "check_timeout", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "dependency_failed", missing: ["icon"] },
