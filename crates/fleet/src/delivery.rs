@@ -15,16 +15,6 @@
 //! what moved in the turn it got for the next step; a Drone belongs to a step
 //! now, so every boundary that is not the last is a spawn.
 //!
-//! # One Job at a time at the merge end
-//!
-//! Dispatch and the work run N-wide; **the rebase-and-push tail does not.**
-//! Every worktree is cut from one `.git`, and whether two of them can rebase
-//! and push into it concurrently was not measured — so `#50` took the
-//! serialisation rather than discovering git's ref lockfiles by way of a Job
-//! dying at its push, unattended. `Fleet::merge_end` is the lock, it is taken
-//! here and in `crate::landing`, and the cost is real: a Job can wait at the
-//! very end behind another Job's push.
-//!
 //! # A boundary is asked, never the Drone
 //!
 //! Asking the Drone whether its branch is behind would be asking it to manage
@@ -88,6 +78,11 @@ where
     ///
     /// `None` is a repository that names no base, or a branch that is not
     /// behind one. Both are silence rather than an event.
+    ///
+    /// **One Job at a time from the rebase onward.** Dispatch and the work run
+    /// N-wide; this does not, because every worktree is cut from one `.git` and
+    /// `Fleet::merge_end` — taken here and in `crate::landing` — lets one Job
+    /// touch it at a time. That field carries the argument and the cost.
     pub(crate) async fn caught_up_onto(
         &self,
         job_id: &core_model::JobId,
