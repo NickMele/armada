@@ -1,6 +1,6 @@
 # User journeys
 
-Thirteen journeys, carried out of the Armada User Journeys database in Notion. Each names a trigger — the moment a person reaches for Armada — and the surfaces that answer it. **These describe intent, not build order.** Notion's own phased plan is explicit that design order is not build order: journeys are designed in the order their conventions get reused, not in the order the milestones build them.
+The journeys carried out of the Armada User Journeys database in Notion, and the ones designed since. Each names a trigger — the moment a person reaches for Armada — and the surfaces that answer it. **These describe intent, not build order.** Notion's own phased plan is explicit that design order is not build order: journeys are designed in the order their conventions get reused, not in the order the milestones build them.
 
 Every journey names a **Milestone** — Notion decides what Armada v2 builds, and the milestone is where this journey's answer is currently expected to land, not a promise of when.
 
@@ -21,12 +21,15 @@ Read the journey that covers what you are about to design or build, before you b
 | [14 — Take Over a Job](take-over-a-job.md) | Design or build Pilot's confirmation modal, or the flow for taking a stuck Job away from its Drone |
 | [15 — Read a failed Job](read-a-failed-job.md) | Design or build what M1 shows when a Job reaches a terminal failed state |
 | [16 — Read the work and merge by hand](read-the-work-and-merge-by-hand.md) | Design or build what M1 shows when a Job reaches `completed_success` and there is still no auto-merge, no PR, and no push |
+| [Dispatch a milestone](dispatch-a-milestone.md) | Design or build approving one Job that names a milestone, and what a person sees while it decomposes into Jobs |
 
 ## On the numbering
 
 Six journeys carry a number the design project has itself assigned, stated inside each journey's own page as the name of its drawing file in the Armada Mockups project: `Journey 1 - Dispatch a job.dc.html`, `Journey 2 - Check system health.dc.html`, `Journey 3 - Triage queue.dc.html`, `Journey 3.5 - Respond to a push alert.dc.html`, `Journey 4 - Monitor active work.dc.html`, and `Journey 9 - Run and edit a manifest.dc.html`. Those six numbers are load-bearing here and line up exactly.
 
-The other seven — Guild Setup & Configuration, Consult Helm, Set Up a Project (Manifest), First-Run Onboarding, Take Over a Job, Read a failed Job, and Read the work and merge by hand — have not yet been drawn (`UI/UX Design` reads `Not started` on five of them, and the other two exist only as blocks inside the M1 milestone drawing rather than as their own `Journey N - ...` file). They are numbered 10 through 16 here only so the file set has a stable order; if the design project later assigns one of them a different number, this index and that file's name should both move to match. Each of those seven files carries the same note at its own top.
+The journeys carried out of Notion that have not been drawn — Guild Setup & Configuration, Consult Helm, Set Up a Project (Manifest), First-Run Onboarding, Take Over a Job, Read a failed Job, and Read the work and merge by hand — have no drawing (`UI/UX Design` reads `Not started` on five of them, and the other two exist only as blocks inside the M1 milestone drawing rather than as their own `Journey N - ...` file). They are numbered 10 through 16 here only so the file set has a stable order; if the design project later assigns one of them a different number, this index and that file's name should both move to match. Each of those files carries the same note at its own top.
+
+**An entry with no number at all is a journey designed after that sequence was assigned, and no drawing exists for it.** It takes a number when it is drawn, and not before.
 
 ## Both ways
 
