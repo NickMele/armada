@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 
 /**
- * Job brief — what the Job was told, and what done means for it.
+ * Job brief — what the Job was told, what done means for it, and whatever is
+ * still waiting to be told to it.
  *
  * **Both halves sit beside where the work is**, rather than in a region of
  * their own: a person chasing a stopped Job asks what it was asked to do in
@@ -40,8 +41,26 @@ export type JobBriefProps = {
   facts?: ReactNode;
   /** Why there are none, where there are none. */
   factsAbsent?: ReactNode;
+  /**
+   * An instruction written for this Job that nothing has taken yet — a person's
+   * reply at a gate, held until the next drone opens with it.
+   *
+   * **There is no `waitingAbsent`, and that is the point.** Every other half of
+   * this block names its own absence, because a Job with no criteria and a Job
+   * whose criteria failed to load look alike. Here absent is the ordinary
+   * state of nearly every Job ever drawn, so a sentence explaining it would put
+   * a permanent paragraph on every screen to report that nothing is happening.
+   * The block is here while there is something to say and gone the rest of the
+   * time.
+   *
+   * **It leads, and the two standing halves follow.** It is the newest thing
+   * about the Job and the only one that will not be here later, so it reads
+   * before the brief it is about to become part of.
+   */
+  waiting?: ReactNode;
   criteriaLabel?: ReactNode;
   factsLabel?: ReactNode;
+  waitingLabel?: ReactNode;
   /**
    * Draw one half rather than both.
    *
@@ -61,12 +80,25 @@ export function JobBrief({
   criteriaAbsent,
   facts,
   factsAbsent,
+  waiting,
   criteriaLabel = "Done means",
   factsLabel = "What it was told",
+  waitingLabel = "Waiting to be told",
   only,
 }: JobBriefProps) {
   return (
     <div className="armada-job-brief">
+      {/* Outside `only`, because `only` chooses between the two standing
+          halves and this is neither of them. A caller drawing one half of a
+          Job's brief in a panel of its own still wants to know an instruction
+          is sitting unread. */}
+      {waiting === undefined ? null : (
+        <div className="armada-job-brief__block" data-waiting>
+          <span className="armada-job-brief__label">{waitingLabel}</span>
+          <p className="armada-job-brief__facts">{waiting}</p>
+        </div>
+      )}
+
       {only === "facts" ? null : (
         <div className="armada-job-brief__block">
           <span className="armada-job-brief__label">{criteriaLabel}</span>

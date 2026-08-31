@@ -39,7 +39,18 @@ import type { ManifestSummary } from "../../shared/setup";
 
 export { repoOf };
 
-/** What the Job was told, and what done means for it. Both are served. */
+/**
+ * What the Job was told, what done means for it, and what is still waiting to
+ * be told to it. All three are served.
+ *
+ * **The waiting note is passed through and never remembered.** Fleet clears it
+ * off the record the instant a drone's opening brief is built from it, so
+ * `redirect_waiting` absent is both "nobody wrote one" and "the one somebody
+ * wrote has gone in" — and neither of those is a thing to draw. The move that
+ * delivers it puts the job at `running`, which is a `job.state_changed` that
+ * `connection.ts` re-reads the open job on, so the block leaves the screen on
+ * the same transition that empties the field.
+ */
 export function briefOf(whole: JobWhole): JobBriefProps {
   return {
     criteria: whole.acceptance_criteria.map((criterion) => ({
@@ -53,6 +64,10 @@ export function briefOf(whole: JobWhole): JobBriefProps {
       "means for it. Bridge's composer does not offer them yet.",
     facts: whole.facts,
     factsAbsent: "This job was given no context beyond its title.",
+    // No `waitingAbsent` beside it. Absent here is the ordinary state of every
+    // job on the board, and a sentence saying so would be a permanent
+    // paragraph reporting that nothing has happened.
+    waiting: whole.redirect_waiting?.note,
   };
 }
 

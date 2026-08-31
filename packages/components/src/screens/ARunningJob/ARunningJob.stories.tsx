@@ -312,3 +312,69 @@ export const AsBridgeDrawsItToday: Story = {
     </div>
   ),
 };
+
+/**
+ * A Job sent back at a gate, holding an instruction nothing has taken yet.
+ *
+ * **The window this draws is the only one worth drawing.** A person replies at
+ * a human gate, the Job re-queues, and where the fleet is busy it sits behind
+ * whoever holds the slot — minutes, sometimes longer. For that whole stretch a
+ * Job somebody typed into and a Job nobody typed into are the same row and the
+ * same screen, and this block is the difference.
+ *
+ * **It leads the brief and it carries no hue.** Nothing is wrong: the note is
+ * going where it was sent, and a warning colour would say otherwise on every
+ * screen it appeared on. It is separated by a rule and by being first, and it
+ * is gone from the next reading — the drone that opens with it clears it.
+ *
+ * There is no rail pulse and no elapsed on the current step, because no drone
+ * is working. The rail's step is where the Job will resume, not where it is.
+ */
+export const AGateReplyWaitingForTheNextDrone: Story = {
+  render: () => (
+    <div className="armada-screen">
+      <ARunningJob
+        heading={{
+          ...heading,
+          status: "queued",
+          statusIcon: CircleDot,
+          statusLabel: "Queued",
+          fields: [
+            { label: "Step", value: "2 of 4", mono: true },
+            {
+              label: "Branch",
+              value: "fix/settings-split",
+              mono: true,
+              copyValue: "fix/settings-split",
+            },
+            { label: "Elapsed", value: "24m 11s", mono: true },
+            { label: "Dispatched by you" },
+          ],
+          actions: <Button variant="destructive">Kill</Button>,
+        }}
+        steps={steps}
+        footprintAbsent="No drone is working this job, so nothing is reporting changed files."
+        evidenceAbsent="Submissions are read at the review gate, beside the diff they are claims about."
+        log={{
+          brief: {
+            criteria: [
+              {
+                text: "settings.rs is split into a reducer and a selector module.",
+                source: "check",
+              },
+              {
+                text: "No change in behaviour, and the existing suite still passes.",
+                source: "judge",
+              },
+            ],
+            facts: "The reducer is the only caller of `apply_defaults`. Keep the public signature.",
+            waiting:
+              "The selectors module still reaches into the reducer's private state. Name the cause, not the symptom — say why the boundary is where it is before you move anything.",
+          },
+          rows: WORK_ROWS,
+          note: "The worktree and the log are derived from the job id and the repository the manifest was read from. The branch is served.",
+        }}
+      />
+    </div>
+  ),
+};

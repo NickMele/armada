@@ -2,8 +2,7 @@
 //!
 //! [`JobDetail::job`] nests the same [`JobSummary`] the Board row is built
 //! from, so the two cannot disagree and a field added to the summary reaches
-//! the detail with no second line of code. What is added here is what a list
-//! leaves behind.
+//! the detail for free. What is added here is what a list leaves behind.
 //!
 //! # `facts` crosses here and not on the summary, and that is a decision
 //!
@@ -11,7 +10,8 @@
 //! argument about a Board drawn for every Job at once. A detail view is one Job
 //! somebody opened, and the brief is most of what the screen is for —
 //! `get_job` is named in the summary's own redaction table as where the Job is
-//! returned in full.
+//! returned in full. [`RedirectWaiting`] is the only other free text here, on
+//! that same argument and its own.
 //!
 //! # Absent, never present-and-null
 //!
@@ -137,6 +137,16 @@ pub struct JobDetail {
     /// shape — the Job is still `escalated`, and it is waiting on the Drone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub redirecting: Option<RedirectInFlight>,
+    /// The note a person wrote at a human gate that no Drone has opened with
+    /// yet. **The other half of `redirecting`** — that one is a redirect with a
+    /// process to go into, this one is a redirect with none.
+    ///
+    /// **Absent is the ordinary case, and absent is also delivered.** The
+    /// record clears the note the moment a Drone's brief is built from it, so
+    /// this field stops being present at the same instant the note stops
+    /// waiting. Nothing here can go stale, because nothing here is remembered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub redirect_waiting: Option<RedirectWaiting>,
     /// What kind of stuck this Job is, and what moves it.
     ///
     /// **Absent is "this Job did not stop"**, and it is the whole of the
@@ -278,6 +288,11 @@ impl JobDetail {
             dependencies: job.dependencies().iter().map(Dependency::from).collect(),
             footprint,
             redirecting,
+            // Read straight off the record, and deliberately not an argument
+            // like the six above it: every one of those is a fact the Job does
+            // not carry, and this one is a column on `jobs`. A caller asked to
+            // hand it in could hand in a note the record had already cleared.
+            redirect_waiting: job.redirect_waiting().map(RedirectWaiting::of),
             stuck: stuck.map(Stuck::of),
         }
     }
@@ -314,6 +329,46 @@ pub struct RedirectInFlight {
     /// was about is [`JobSummary::current_step_id`](crate::JobSummary) — a Job
     /// that is `escalated` over a live Drone advances no step while it waits.
     pub sent_at: Instant,
+}
+
+/// A person's note written where no Drone was there to take it, still waiting
+/// for the one that comes next.
+///
+/// # It is the note or it is nothing
+///
+/// The record holds the words and clears them the moment a Drone's opening
+/// brief is built from them, so the presence of this value **is** the fact that
+/// a note is waiting. There is no delivered flag and no instant, because there
+/// is no state between the two: `jobs.redirect_waiting` is set or it is not,
+/// and a surface drawn from it cannot show a note that has already gone.
+///
+/// # The words cross here and not on [`RedirectInFlight`]
+///
+/// That one deliberately serves no text, because the instruction went into a
+/// live session and the Job's move back to `running` is the answer a person is
+/// waiting for. This one has gone nowhere. The Job sits at `queued` looking
+/// exactly like a Job nobody typed anything into, and a field saying only that
+/// *some* note is waiting would leave a person who wrote two of them no better
+/// off than the log they cannot read from here.
+///
+/// It is not a new exposure either: `Adrift::NoteAlreadyWaiting` already quotes
+/// the held note back at whoever wrote the second one. What this does is make
+/// that an explicit redaction decision on the detail — beside `facts`, which is
+/// the requester's own free text and crosses here on the same grounds — rather
+/// than an accident of a `Display` impl.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RedirectWaiting {
+    /// What the person typed, verbatim. **Never blank** — the record refuses a
+    /// note with nothing in it, so a present value always has words in it.
+    pub note: String,
+}
+
+impl RedirectWaiting {
+    pub fn of(waiting: &core_model::RedirectWaiting) -> RedirectWaiting {
+        RedirectWaiting {
+            note: waiting.text().to_string(),
+        }
+    }
 }
 
 /// One `job_steps` row: which step, where in the order, and where it got to.

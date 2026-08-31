@@ -99,3 +99,14 @@
   color: var(--fg-muted);
   text-wrap: pretty;
 }
+
+/* The instruction nothing has taken yet. Separated from the two standing
+   halves by a rule beneath rather than by a hue: it is not a warning and not a
+   status, it is a fact that will be gone by the next reading, and giving it a
+   colour would make every screen it appears on look like something is wrong.
+   The prose itself reuses `__facts` — a person wrote both, so both are sans at
+   full contrast with their line breaks kept. */
+.armada-job-brief__block[data-waiting] {
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}

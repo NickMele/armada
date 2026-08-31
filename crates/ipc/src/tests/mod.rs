@@ -322,6 +322,63 @@ fn a_step_the_judge_was_never_asked_about_carries_an_empty_list() {
     assert!(json.contains("\"judged\":[]"), "{json}");
 }
 
+/// **A note with nowhere to go crosses, and stops crossing when it goes.**
+///
+/// The whole of `#212`: between a person asking for changes at a gate and the
+/// next Drone opening with their words, the Job is `queued` and the wire said
+/// nothing that a Job nobody typed anything into does not also say. The field is
+/// read off the record rather than handed in, so the two readings below are the
+/// record's own two states and cannot drift from them.
+#[test]
+fn a_note_waiting_for_the_next_drone_crosses_until_it_is_delivered() {
+    let waiting = job()
+        .redirect_waits(
+            core_model::RedirectWaiting::saying("name the cause, not the symptom")
+                .expect("a note with something in it"),
+        )
+        .expect("nothing was waiting");
+
+    let held = JobDetail::of(&waiting, None, None, &[], None, None, None);
+    let json = encode(&held).expect("a detail is plain data");
+    assert_eq!(
+        held.redirect_waiting
+            .as_ref()
+            .map(|note| note.note.as_str()),
+        Some("name the cause, not the symptom"),
+        "the person's own words, quoted rather than counted"
+    );
+    assert!(
+        json.contains("name the cause, not the symptom"),
+        "and they reach the wire: {json}"
+    );
+    assert_eq!(
+        decode::<JobDetail>("a Job in full", json.as_bytes()).expect("it round-trips"),
+        held
+    );
+
+    // Delivery is what clears it, so the field cannot be a badge that goes
+    // stale: there is no third state for a surface to keep drawing.
+    let delivered = JobDetail::of(
+        &waiting.redirect_delivered(),
+        None,
+        None,
+        &[],
+        None,
+        None,
+        None,
+    );
+    assert!(
+        delivered.redirect_waiting.is_none(),
+        "a delivered note stops saying it is waiting"
+    );
+    assert!(
+        !encode(&delivered)
+            .expect("a detail is plain data")
+            .contains("redirect_waiting"),
+        "and absent is absent, never present-and-null"
+    );
+}
+
 #[test]
 fn a_transition_becomes_an_event_with_its_reason() {
     let owed = CriteriaOwed::one(CriterionId::new("c1"));
