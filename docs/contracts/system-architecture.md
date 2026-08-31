@@ -110,7 +110,7 @@ independent lifetimes**, and what happens to Drones underneath.
 
 | Transition | State |
 | --- | --- |
-| Drone spawn | Fleet spawns after human approval, always with `libc::setsid()` — launchd signals a job's whole process tree, so an undetached Drone dies at every Fleet restart. Resource headroom gating arrives with the Throughput milestone, since nothing contends while one Drone runs at a time. Config is frozen at spawn for Skills, MCP, agent files, commands and Voice; allowlist, budget and freeze stay live at gated checkpoints |
+| Drone spawn | Fleet spawns after human approval, always with `libc::setsid()` — launchd signals a job's whole process tree, so an undetached Drone dies at every Fleet restart. Resource headroom gating arrives with the Throughput milestone, since nothing contends while one Drone runs at a time. Config is frozen **for the Job** for Skills, MCP, agent files, commands and Voice — snapshotted at Job creation, not at spawn, because a Drone belongs to a workflow step and a Job spawns one per step; allowlist, budget and freeze stay live at gated checkpoints |
 | Drone teardown | **The worktree belongs to the Job, not the Drone.** "Drone exited" is never grounds to remove one, since rescope-and-respawn reuses it and Pilot hands a human a terminal inside it. Removal is driven by Job retention. See the decision in Armada Decisions |
 
 **Fleet auto-kills only at a cap.** Anything escalated is paused with its worktree

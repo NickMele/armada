@@ -82,7 +82,7 @@ why = "Every status variant owes a generated UI verb and icon, and `criterion_id
 terminal = false
 mode = "Waited on"
 who_is_acting = "Person"
-drone_process = "Alive, idle. Clock suspended"
+drone_process = "Open — see `[drone-at-a-human-advance-gate]`. Clock suspended either way"
 step_machine = "Live, current step awaiting_human"
 step_states = ["advanced", "awaiting_human", "not_started", "running", "stopped"]
 reason_storage = "None"
@@ -91,7 +91,9 @@ transitions_in = ["running -> awaiting_review"]
 transitions_out = ["awaiting_review -> running", "awaiting_review -> completed_success", "awaiting_review -> awaiting_attestation", "awaiting_review -> rejected", "awaiting_review -> escalated", "awaiting_review -> piloted", "awaiting_review -> killed"]
 in_code = "Not yet"
 notes = """
-A human advance gate is open. The Drone keeps its PID, worktree and session across it, so the gate costs no session context.
+A human advance gate is open. The step at the gate has submitted and cleared its machine gates; it has not advanced, so no step boundary has ended its Drone.
+
+**Whether the Drone is there is open** — `[drone-at-a-human-advance-gate]` in `docs/concepts/drone.md`. This row read "Alive, idle. Clock suspended", and the sentence beneath it read "the gate costs no session context", which held only because one Drone spanned a whole Job. A Drone belongs to a workflow step now, so the gate costs the session at the next boundary whatever the answer; what the answer decides is whether it costs it here instead.
 
 The liveness clock suspends here and in `escalated`; a Drone that dies during the gate is still caught, as `interrupted`, by Fleet's restart reconciliation. What bounds an indefinitely-open gate is Drone/Job timeout and worktree cleanup policy, owned by Drone — not the liveness timer.
 """
@@ -132,7 +134,7 @@ why = "The record only needs to make raising a problem possible; detecting one a
 terminal = false
 mode = "Waited on"
 who_is_acting = "Person"
-drone_process = "Alive, idle. Gone only on interrupted"
+drone_process = "Alive and idle where the step stopped mid-work, which is where escalation usually happens. None at a boundary, or where no step is running"
 step_machine = "Frozen where the step stood — stopped where retries were spent, running where the Job escalated on liveness"
 step_states = ["advanced", "not_started", "running", "stopped"]
 reason_storage = "Stored"
@@ -202,7 +204,7 @@ notes = "A verdict on the work — approval denied, or `reject` at a human gate.
 terminal = false
 mode = "Working"
 who_is_acting = "Drone"
-drone_process = "Alive, working"
+drone_process = "Alive, working — except between one step's Drone ending and the next one's starting"
 step_machine = "Live, advancing"
 step_states = ["advanced", "not_started", "retrying", "running", "stopped"]
 reason_storage = "None"

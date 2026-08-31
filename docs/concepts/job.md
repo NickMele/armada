@@ -68,6 +68,8 @@ flowchart LR
 
 **The Drone is not a third machine.** It has no independent state of its own, only presence: `assigned_drone` is a nullable pointer, set when a Drone arrives and null again when it leaves, and `drone_runs` records spawns with an exit state. Which is why `escalated` holding a live, idle Drone is not a contradiction — the pointer says a process exists, not what it is doing.
 
+**The pointer goes null at every step boundary**, because a Drone belongs to a step ([Drone](drone.md)) and a Job has one per step. So it names at most the Drone on the step being worked, and never the Drones that worked the earlier ones — reading it as "the Job's Drone" is reading a Job's whole history off a slot that holds one entry.
+
 **Watching a Drone work writes nothing here.** [Observe](observe.md) is a read: no status, no transition, no field — unlike [Pilot](pilot.md), which changes who is driving and is therefore a status.
 
 How `status` itself is stored — a column cached over an authoritative log — is part of the Job schema in `crates/core-model/domain/job-fields.toml`.
@@ -130,13 +132,13 @@ flowchart LR
 Five acts reach an escalated Job and **none of them is another one wearing a
 different name.** They are ordered here by how much they take away.
 
-| Act | What the Drone is | What survives | Where it lands |
+| Act | Where the Job stands | What survives | Where it lands |
 |---|---|---|---|
-| **Override the verdict** | Either | Everything, including the refused step's own work | `running`, the **next** step |
-| **Redirect** | Alive and idle | The session, the worktree, every step so far | `running` the same step where a step stopped; where none did, the Job stays `escalated` until the Drone turns |
-| **Restart a step** | Gone | The worktree and the branch; earlier steps' work | `running`, the same step, a new Drone |
-| **Redispatch** | Irrelevant | Nothing. A new Job carries a reference back | A replacement at the approval gate |
-| **Pilot** | Terminated | The worktree, handed to a person | `piloted` |
+| **Override the verdict** | Anywhere | Everything, including the refused step's own work | `running`, the **next** step |
+| **Redirect** | Mid-step, or at a boundary | The worktree and every step so far. Mid-step the session too; at a boundary there is none, and the words go into the next Drone's opening brief | `running` the same step where a step stopped; where none did, the Job stays `escalated` until the work turns |
+| **Restart a step** | A step stopped, and is to be worked again | The worktree and the branch; earlier steps' work | `running`, the same step, a new Drone |
+| **Redispatch** | Anywhere | Nothing. A new Job carries a reference back | A replacement at the approval gate |
+| **Pilot** | Anywhere | The worktree, handed to a person | `piloted` |
 
 **The first one takes nothing away, and that is what it is for.** A Judge that
 refuses correct work leaves the other four offering only to discard that work or
@@ -160,12 +162,20 @@ stopped carrying `failed(gate_failure)` before the Job gets there, which is what
 matter of opinion, and a step left `running` beneath a terminal Job was one
 nothing could read a verdict off (#179).
 
-**An escalated Job keeps its Drone.** `job-statuses.toml` says so —
-`drone_process = "Alive, idle. Gone only on interrupted"` — and the liveness
-clock suspends with it, because a Drone waiting on a person has no activity by
-construction and an unsuspended clock would escalate every open gate as
-`stalled`. That is what makes a redirect cost no respawn: the process is there,
-holding its session, and an instruction is a turn injected into it.
+**An escalated Job usually keeps its Drone, and a redirect does not depend on
+it.** `job-statuses.toml` records `drone_process = "Alive, idle. Gone only on
+interrupted"`, and the liveness clock suspends with it, because a Drone waiting
+on a person has no activity by construction and an unsuspended clock would
+escalate every open gate as `stalled`. Escalation mostly happens mid-step, where
+that holds.
+
+It does not hold everywhere. A Drone belongs to a workflow step
+([Drone](drone.md)), so between one step ending and the next starting there is
+no process, and a Job escalated at a boundary — or with no step running at all —
+has none to speak to. **The redirect is unchanged by that**, which is the whole
+of the second rule below: where there is a session an instruction is a turn into
+it, and where there is not the instruction waits and opens the next Drone's
+brief. Either way it costs no respawn and discards no work.
 
 **Each act must not silently become the next one down.** A redirect that
 respawns is a restart that threw away the session. A restart that re-runs the
@@ -173,13 +183,29 @@ earlier steps is a redispatch that lied about its cost. The distinctions are the
 reason there are four rather than one, and each one down loses something the one
 above it kept.
 
-**Which act applies is decided by the Drone, not by the person.** Redirect needs
-one alive; restart is what exists when it is gone. A surface that offers both
-regardless is offering one that will fail. The override is the exception and
-says so: the person is disagreeing with a verdict, which is the same act whether
-or not a process is still holding the session, so the Drone decides only how the
-Job carries on — a turn into the session that is there, or a fresh Drone on the
-next step.
+**Which act applies is decided by where the Job stands, not by whether a
+process exists.** This is the second of Focus's two rules and it replaces a
+sentence that read *"decided by the Drone, not by the person"* — redirect needed
+one alive, restart was what existed when it was gone.
+
+That test worked while a Drone spanned a Job, because a missing Drone then meant
+something had gone wrong. It stops working the moment a Drone belongs to a step:
+absence becomes the ordinary state between steps, and a surface keying on it
+would offer Restart Step at every boundary and silently turn a person's redirect
+into a restart. **A redirect that respawns is a restart that threw away the
+session** is the sentence above, and liveness as the test is how it would happen
+by accident.
+
+So the question a surface asks is where the Job stands:
+
+| Where the Job stands | Redirect | Restart Step |
+|---|---|---|
+| Mid-step, a Drone working | Yes — a turn into the session | No. The step has not stopped |
+| Mid-step, the step stopped | Yes — a turn into the session | Yes |
+| At a boundary, between steps | Yes — it waits, and opens the next Drone's brief | No. There is no stopped step to restart |
+
+The override is the exception and says so: the person is disagreeing with a
+verdict, which is the same act wherever the Job stands.
 
 **Where a step-level escalation pays off.** Only a step-level trigger reaches a
 step's `last_verdict`, so only a step-level escalation names the step that
@@ -187,9 +213,8 @@ stopped — and naming it is what makes restarting or *that step* coherent. A
 Job-level escalation has no step to resume, which is why `interrupted` and
 `resource_exhausted` leave redispatch and Pilot as the only moves.
 
-**Redirect is the exception, and `stalled` is why.** A redirect operates on a
-live Drone rather than on a step, so it asks whether there is a session to
-speak to rather than whether a step stopped. `stalled` is the one trigger that
+**Redirect is the exception, and `stalled` is why.** A redirect operates on the
+Job rather than on a step, so it does not need a stopped step to act on. `stalled` is the one trigger that
 escalates a Job whose Drone is still up and holding its session, and killing it
 to say something to it would be absurd. Where no step stopped there is nothing
 to unfreeze, so the Job stays `escalated` and returns to `running` on the

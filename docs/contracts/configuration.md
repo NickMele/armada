@@ -88,7 +88,16 @@ The rule this exists for: **`packages/**` and `packages/*` differing silently is
 
 ## What else the review changed
 
-- **Lifetime is on every setting.** The live-versus-frozen split was two example lists, so any setting on neither had undefined spawn behaviour. Four values: `Live`, `Frozen at spawn`, `Daemon start`, `Read at render`.
+- **Lifetime is on every setting.** The live-versus-frozen split was two example lists, so any setting on neither had undefined spawn behaviour. Four values: `Live`, `Frozen for the Job`, `Daemon start`, `Read at render`.
+
+  **`Frozen for the Job` was `Frozen at spawn` until Focus**, and the rename is
+  the whole of the change — the same fourteen settings, resolved at the same
+  moment, said correctly. A Drone belongs to a workflow step, so a Job spawns
+  one per step; "frozen at spawn" would have meant re-resolved at every step
+  boundary, which is exactly what the snapshot rule forbids. Fleet snapshots
+  what a Drone works under when the **Job** is created and hands the same
+  snapshot to every step's Drone. `../concepts/drone.md` carries the rule and
+  why it is one.
 - **`read_by` names the crate that will read a setting at runtime**, which nothing recorded before. The name is deliberate: no v2 code exists yet, so every value is a **design decision, not an observation**, and the column must not be mistaken for a record of fact. It stops being a design decision the day each owning crate declares the keys it reads and this list is generated from them.
 
 That day also closes the one gap it cannot close now. A setting nothing reads is visible — `Helm action authority` and `Helm budget soft-warning threshold` carry `unassigned (no crate)`, because Helm has no crate at all, and six Bridge settings carry `bridge (TS)`, for which no dependency path in the crate graph delivers config. **A crate listed here that reads nothing is not visible**, and cannot be: it is a claim about code that does not exist. Once each owning crate's exhaustive match declares the keys it reads, both directions collapse into one diff.
@@ -162,6 +171,19 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
   leaves the app permanently once written. A parallel question — whether a
   Voice setting can widen or narrow the same lint — is tracked separately in
   Notion.
+
+- **[budget-cap-per-job-or-per-drone]** Does **Budget: $ cost cap per
+  Job/Drone** cap a Job or cap a Drone?
+  The slash joined two spellings of one span: a Drone belonged to a Job, so
+  the two readings named the same number. A Drone belongs to a workflow step
+  now, so a four-step Job has four Drones and the readings differ by the step
+  count — a per-Drone cap on a long workflow bounds nothing about the Job, and
+  a per-Job cap has to be spent down across Drones that do not know about each
+  other. The same slash is in `Manifest budget cap ($ / quota)` beside it, and
+  whichever answer is given has to be given for both. Separate from
+  `[budget-exhaustion-gate-or-transition]` below, which asks *what happens*
+  when the cap is hit rather than *what it counts*, and neither answers the
+  other.
 
 - **[budget-exhaustion-gate-or-transition]** Is budget exhaustion a gate
   verdict, or a Job state transition?

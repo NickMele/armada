@@ -14,21 +14,33 @@ Companion to the main Armada brief, [Job](job.md), and [Workflow](workflow.md).
 
 ## Lifecycle
 
-**1:1 with a Job.** A Drone is spawned fresh when a Job dispatches (post-approval), and terminates when that Job reaches any terminal status (completed_success / completed_failed / rejected / killed / superseded). No reuse across Jobs — a new Job always gets a fresh Drone.
+**1:1 with a workflow step.** A Drone is spawned fresh when a step starts, and terminates when that step ends. A Job's first Drone is spawned at dispatch (post-approval); its last one goes when the Job reaches a terminal status (completed_success / completed_failed / rejected / killed / superseded). No reuse across steps, and none across Jobs.
 
-**1:1 at any moment, 1:N over time.** A Job may have successive Drones over its life: redispatch and Debug's Kill & Redispatch both end a Drone *without* the Job reaching a terminal status.
+**1:1 at any moment, 1:N over time.** A Job has at least as many Drones as its workflow has steps. Five causes end one, and **only the first is ordinary**:
+
+| What ends a Drone | Who does it | The Job stopped |
+| --- | --- | --- |
+| Its step advanced past its gate | Fleet, at every step boundary | No |
+| Redispatch | A person | Yes |
+| Debug's Kill & Redispatch | A person | Yes |
+| [Pilot](pilot.md)'s Restart Step | A person | Yes |
+| A scope revision | A person, at the approval gate | Yes |
+
+The bottom four are recovery from a Job that stopped. The first is what a Job does when nothing is wrong, and adding it is what makes the other four stop being diagnostic: **a Drone's absence is no longer evidence that something went wrong.** [Job](job.md)'s intervention ladder is where that consequence is paid for.
+
+**What crosses a step boundary is the record, not the session.** The worktree, the branch and the uncommitted work in it survive; the transcript, the accumulated context and the turn count do not. So whatever the next step needs is something that was written down and checked — which is the point of the change rather than a cost of it.
 
 **No independent state machine.** A Drone is a pure shadow of [Job.status](job.md). Fleet drives every transition on both; the Drone never transitions anything itself.
 
 | Job status | Drone | Liveness clock | Worktree |
 | --- | --- | --- | --- |
-| `running` | Alive | **Runs** | Held |
-| `awaiting_review` | Alive — same PID, worktree and session | Suspended | Held |
-| `escalated` | Alive | Suspended | Held |
+| `running` | Alive — except in the moment between one step's Drone ending and the next one's starting | **Runs** | Held |
+| `awaiting_review` | Open — see Open questions. The step at the gate has not advanced, so its Drone has not yet been ended by a boundary | Suspended | Held |
+| `escalated` | Alive where the step stopped mid-work, which is where escalation usually happens. Gone where the Job escalated at a boundary or with no step running | Suspended | Held |
 | `interrupted` | Gone. The process died; the Job did not | — | Held, and **never swept** |
 | Terminal | Gone | — | Held until past retention, then swept at Fleet start |
 
-A human gate costs no session context, because the PID, the worktree and the session all survive it.
+**A human gate no longer costs nothing.** It used to be free — the PID, the worktree and the session all survived it — and that argument only ever held because one process spanned the whole Job. A gate that a step advances through costs the session like any other boundary. What it does not cost is work: the worktree is held and the record is the carrier.
 
 **Removal is driven by Job retention, never by process exit.** Deleting on merge would strand a retained Job, because Evidence references paths. A killed Job's worktree is held because it is the record of why the Job stopped: a redispatch mints a new Job, and the replacement works in a worktree of its own.
 
@@ -40,7 +52,7 @@ While suspended, Fleet stops expecting heartbeats and `poke_limit` does not adva
 
 **A healthy Drone accepts Redirect, Kill and Pause.** All three are available on a non-escalated Drone rather than reserved for escalated ones.
 
-- **Redirect** is mid-step context injection, and it is recorded on the Job. It must never silently become a step restart: the Drone continues with more information, and the record says a person intervened.
+- **Redirect** is context injection, and it is recorded on the Job. It must never silently become a step restart: the work already done is kept, and the record says a person intervened. Where the Job is mid-step it is a turn into the Drone that is there; where the Job is at a boundary it waits, and goes into the next Drone's opening brief. **The act is chosen by where the Job stands, not by whether a process happens to exist** — see [Job](job.md).
 - **Kill** is unambiguous on a healthy Drone and already safe. Nothing about the escalated state makes killing safer.
 - **Pause** only means anything while a Drone is healthy, since anything escalated is already paused.
 
@@ -68,11 +80,11 @@ Discovery needs nothing from Armada for the MCP half: tools are self-describing,
 
 Where a worktree and its log live on disk is in `../contracts/system-architecture.md` section 7. It is not configurable, and is derived rather than stored.
 
-**A worktree outlives the Drone using it.** On a scope revision Fleet terminates the Drone, re-resolves configuration against the new Manifest set, and spawns a fresh Drone **on the same worktree and branch** — the same path [Pilot](pilot.md)'s Restart Step already uses. Consistent with a Drone being 1:1 with a Job at any moment and 1:N over time.
+**A worktree outlives every Drone that uses it.** It is made once, when the Job dispatches, and held until retention sweeps it — so it outlives each step's Drone by construction, as well as the two acts that end one early. On a scope revision Fleet terminates the Drone, re-resolves configuration against the new Manifest set, and spawns a fresh Drone **on the same worktree and branch** — the same path [Pilot](pilot.md)'s Restart Step and every ordinary step boundary use.
 
 **A narrowing proceeds unchallenged; a widening returns to the dispatch approval gate first**, so a respawn against a widened scope happens only after a person has approved that scope. What is lost is session context, not work: Facts and Evidence live on the [Job](job.md).
 
-**The resolution below runs again on every respawn.** Since permissions intersect, a widened scope can only produce a narrower toolset than the Drone that asked for it — Commands excepted, since they union.
+**The resolution below runs again on a scope revision, and on nothing else.** A step boundary does not re-resolve it; that is the snapshot rule below, and a scope revision is the one re-snapshot because a person approved it. Since permissions intersect, a widened scope can only produce a narrower toolset than the Drone that asked for it — Commands excepted, since they union.
 
 **What Armada injects is not what the process ends up holding.** Measured against the live CLI: `--allowedTools` is a permission allowlist rather than a toolset — it removed none of the thirty built-in tools, and a spawned Drone inherited the operator's own MCP servers, plugins, subagents, skills and SessionStart hook. **Isolation is opt-out, and the opt-out is not** `--allowedTools`**.**
 
@@ -114,27 +126,31 @@ This is the peer axis, Manifest against Manifest. The Kit → Manifest direction
 
 **The resolution rule is what makes a Convoy Drone spawnable.** Without it, Skills, Sub agents, MCP and Commands are undefined for a Convoy, so there is no boot configuration to spawn against.
 
-### What's frozen at spawn vs. live
+### What's frozen for the Job vs. live
 
-Two different reasons, not one. Some items are frozen because a process cannot change them mid-session; others are frozen deliberately, because letting them move would let a Drone move its own yardstick.
+**The snapshot is taken once, at Job creation.** Fleet snapshots the rules a Drone works under — its Commands and its Checks — when the Job is created, and hands *that same snapshot* to every step's Drone. A step boundary never re-resolves it. Only a human-approved scope change re-snapshots.
 
-| Item | Frozen or live | Why |
-| --- | --- | --- |
-| Skills, MCP, Agent file, Sub agents, Voice/tone | Frozen at spawn | Boot-time constraint |
-| Commands | Frozen at spawn | A Drone that could write itself a Command could grant itself one |
-| Checks that existed at spawn | Frozen for the life of the Job | A yardstick cannot move while the work is judged against it |
-| Checks added mid-Job | **Live** | **Additive-only.** Adding a gate is not weakening one |
-| Allowlist, budget caps, dispatch freeze | Live | Re-evaluated at every gated checkpoint |
+This is the first of Focus's two rules and it is a constraint on the change rather than a consequence of it. The protection it replaces was free while one Drone spanned a Job: a Drone could not be measured against a Check it had edited, because nothing re-read the Check. Once each step spawns its own Drone, a boundary is a re-resolution point unless something says it is not — and **a step boundary has no person in it.** Without the rule a Drone could weaken a Check in one step and be measured against the weakened one in the next.
 
-The boot-time constraint: injected MCP servers cannot be swapped, nor the system prompt rewritten, without a kill and respawn. Commands and Checks are frozen by choice rather than by that constraint.
+Two different reasons for freezing, not one. Some items are frozen because a process cannot change them mid-session; others are frozen deliberately, because letting them move would let a Drone move its own yardstick. **Only the first reason has anything to do with a process**, so only the first was ever about spawn.
 
-Fleet resolves Checks from the spawn snapshot rather than live — the rule `acceptance_criteria` already follows. A Job may write a new Manifest or a new named Check and have it gate.
+| Item | Frozen or live | Frozen when | Why |
+| --- | --- | --- | --- |
+| Skills, MCP, Agent file, Sub agents, Voice/tone | Frozen for the Job | Job creation | Boot-time constraint, but taken once so every step's Drone boots the same |
+| Commands | Frozen for the Job | Job creation | A Drone that could write itself a Command could grant itself one |
+| Checks that existed at Job creation | Frozen for the Job | Job creation | A yardstick cannot move while the work is judged against it |
+| Checks added mid-Job | **Live** | — | **Additive-only.** Adding a gate is not weakening one |
+| Allowlist, budget caps, dispatch freeze | Live | — | Re-evaluated at every gated checkpoint |
 
-A change to a frozen item during a running Job takes effect on that Job's *next* Drone (redispatch or a future Job), not the current one.
+The boot-time constraint: injected MCP servers cannot be swapped, nor the system prompt rewritten, without a kill and respawn. It says a value cannot change *within* a process; it does not say when the value is chosen. Commands and Checks are frozen by choice rather than by that constraint, and now every row is — **the snapshot is taken earlier than any process that reads it.**
+
+Fleet resolves Checks from the Job's snapshot rather than live — the rule `acceptance_criteria` already follows. A Job may write a new Manifest or a new named Check and have it gate.
+
+A change to a frozen item during a running Job takes effect on the *next Job*, not on any Drone of this one — including the ones this Job has not spawned yet.
 
 **A gate-definition change is detected and routed to a mandatory Judge look**, reusing the pattern used for declared-plan drift. Freezing prevents the narrowing; it does not make the attempt visible, and a Drone that tries is worth knowing about.
 
-**A rescope-and-respawn re-snapshots.** So narrowing a Check and then triggering a scope revision would freeze the narrowed version in. That is caught at the scope-revision approval gate rather than here.
+**A scope revision is the one re-snapshot.** So narrowing a Check and then triggering a scope revision would freeze the narrowed version in. That is caught at the scope-revision approval gate rather than here — which is what makes it the exception: a person looked.
 
 ## What a Drone is told
 
@@ -142,9 +158,9 @@ The toolset above is what a Drone can **do**. What it is **told** — the framin
 
 What it settles that bears directly here:
 
-- **Six layers, assembled in order.** Baseline → Kit → Manifest → WorkflowDef → task → step. **Freeze time orders them** — the boot-time constraint in the table above is the derivation, not a preference. A block that cannot be rewritten mid-session must precede the block rewritten at every step boundary.
+- **Six layers, assembled in order.** Baseline → Kit → Manifest → WorkflowDef → task → step. **The ordering stands and its derivation has changed.** It used to be forced: a block that could not be rewritten mid-session had to precede the block rewritten at every step boundary. A Drone per step re-emits all six, so nothing is forced any more and the order is a convention held on its own merits — earliest-frozen first, so that reading down the prompt is reading outward from what nothing can change. It is not reordered.
 - **Layer 1 is not configurable.** A Kit or Manifest able to edit the baseline could delete the sentence making Evidence the only completion path.
-- **A running Drone's system prompt never mutates — but Fleet injects turns into a live session.** Each turn is a row in the prompt library under `Kind = Injected turn`, carrying its trigger and its wording. The mechanism is settled; a row with an empty Wording column is a turn with no sanctioned copy.
+- **A running Drone's system prompt never mutates — but Fleet injects turns into a live session.** Each turn is a row in the prompt library under `Kind = Injected turn`, carrying its trigger and its wording. The mechanism is settled; a row with an empty Wording column is a turn with no sanctioned copy. **What changed is how much of the traffic it carries**: a turn Fleet used to inject at a step boundary is now an opening brief instead, and the injected turns that remain are the ones that fire while a step is being worked.
 
 **The baseline's wording and how a Drone discovers its Commands and MCP tools are one surface seen from opposite ends**, and are settled together.
 
@@ -362,5 +378,6 @@ The surfaces a Drone writes to are rows in the Copy registry under `Written by =
 
 ## Open questions
 
+- **[drone-at-a-human-advance-gate]** Does a Drone end when its step clears its machine gates, or when the human advance gate closes behind it? A step at `awaiting_review` has submitted and passed its mechanical and Judge checks; it has not advanced. Ending the Drone there makes `awaiting_review` cost nothing to hold open, which is the point of a gate a person may leave open for a day. Keeping it alive holds a session for the length of that wait to no purpose, since the step's work is done and the next step gets a fresh Drone either way. The answer decides `drone_process` on `awaiting_review` in `crates/core-model/domain/job-statuses.toml`, and whether a person sending the step back across that gate is talking to a Drone or briefing a new one.
 - **[drone-builtin-tools-confinement]** How is a Drone's toolset actually confined, given that `--allowedTools` removes none of the built-in tools? `--strict-mcp-config` bounds MCP servers only, not the thirty built-in tools the CLI ships with.
 - **[drone-evidence-clarification-cap-scope]** What is the evidence clarification-round cap's field name, and what does it count against — per Job, per workflow step, or per loop iteration? Unlike its sibling `poke_limit`, it currently has neither a name nor a counting scope, and on a loop workflow a per-Job cap would exhaust inside the first iteration.

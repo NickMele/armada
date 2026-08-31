@@ -85,7 +85,7 @@ The narrative carries three named fields: `trying_to`, what the step was meant t
 
 Fleet then adds what it knows and the Drone does not: sibling workspaces, Manifest, Kit and Machine config in force, and Convoy membership if the Job is atomic.
 
-**Piloting a [Convoy](convoy.md) pilots all of it.** A Convoy is one Job, one Drone, one worktree spanning its Workspaces, so there is no per-workspace unit to take over — one Drone calls `escape_hatch`, one worktree changes hands. The blast radius is wider than a single-workspace pilot: an unrestricted terminal on a worktree spanning several Workspaces at once.
+**Piloting a [Convoy](convoy.md) pilots all of it.** A Convoy is one Job and one worktree spanning its Workspaces, worked by one Drone at a time, so there is no per-workspace unit to take over — the Drone on the step calls `escape_hatch`, and the one worktree changes hands. The blast radius is wider than a single-workspace pilot: an unrestricted terminal on a worktree spanning several Workspaces at once.
 
 ## The piloted session
 
@@ -136,7 +136,9 @@ Assist parks the Drone with its context intact, then resumes it after the engine
 
 The moment the engineer touches the worktree, the parked Drone's context goes stale. Its declared file plan is wrong. Its transcript describes a tree that no longer exists.
 
-Resuming it as-is produces a Drone that fights the engineer's changes or redoes them. The fix is a re-brief on resume: Fleet injects a diff summary of what changed plus a fresh file plan declaration before the Drone continues. That mechanism is real work and does not block the other two outcomes, so it sits out of v2.0.
+Resuming it as-is produces a Drone that fights the engineer's changes or redoes them. The fix is a re-brief on resume: a diff summary of what changed plus a fresh file plan declaration before the work continues. That mechanism was real work when this was written and does not block the other two outcomes, so it sits out of v2.0.
+
+**It is no longer work with no other reason to exist.** A Drone belongs to a workflow step ([Drone](drone.md)), so every step boundary already hands a fresh Drone a worktree it did not make and tells it what it inherited. Assist is the same brief with a person's edits in it rather than a previous step's. What it still needs beyond that is a decision about whether the parked Drone resumes at all or is replaced, which is the third outcome wearing Assist's name.
 
 **Assist renders disabled in the modal with a coming-soon state**, rather than hidden, so the outcome set does not change shape when it ships.
 

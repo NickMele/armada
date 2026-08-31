@@ -483,9 +483,9 @@ honest output and reads as one.
 
 | | |
 | --- | --- |
-| Expected | The Manifest re-read at each step boundary |
-| Produced | Read once per repo, held for the Job |
-| Consequence | A Manifest edited mid-Job lands one Job late |
+| Expected | The Manifest read once, when the Job is created |
+| Produced | Read once per repo, held for the daemon's life |
+| Consequence | A Manifest edited between two Jobs lands one Job late |
 
 ---
 

@@ -15,7 +15,7 @@ assuming it is restated here.
 | Concept | What it is |
 |---|---|
 | [bridge.md](bridge.md) | The Electron command-center shell — Armada's only engineer-facing surface |
-| [convoy.md](convoy.md) | The atomic multi-workspace Job shape — one Job, one Drone, one PR |
+| [convoy.md](convoy.md) | The atomic multi-workspace Job shape — one Job, one worktree, one PR |
 | [doctor.md](doctor.md) | The health-check surface — a passive per-module grid and the first-run hard gate |
 | [drone.md](drone.md) | The execution runtime for a single Job — a confined Claude Code process with its own worktree |
 | [fleet.md](fleet.md) | The Rust daemon — the only actor that writes a state transition on a Job or a Drone |
