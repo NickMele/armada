@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
-import { Fragment } from "react";
+import type { MouseEvent, ReactNode } from "react";
+import { Fragment, useCallback } from "react";
 
 /**
  * Criterion verdicts — what the Judge answered, beneath the step it judged.
@@ -25,6 +25,12 @@ import { Fragment } from "react";
  *
  * A `met` row is one line. Nothing more is owed — a step that passed its Judge
  * is an ordinary advanced step, and the design is spent on the refusal.
+ *
+ * **`briefPath` is on every row, including the met ones.** A Judge that refuses
+ * something it should have passed gets argued with the same day; a Judge that
+ * *passes* something it should have refused is the quiet failure, and that one
+ * is only visible against what it was shown. It sits in the head line so a met
+ * row is still one line.
  */
 export type CriterionVerdict = {
   /**
@@ -50,10 +56,23 @@ export type CriterionVerdict = {
   produced?: ReactNode;
   /** What that difference does to whoever consumes it. The triage line. */
   consequence?: ReactNode;
+  /**
+   * Where the whole brief this verdict answers was written, relative to the
+   * repository root. **The path, never the question** — Bridge does not read
+   * the filesystem, and a brief is the request, the deliverable and the whole
+   * branch diff.
+   *
+   * Machine-derived, so it is mono and copies on click with no `copy` glyph,
+   * exactly as a Check's `outputPath` does one row up. Absent where Fleet kept
+   * no brief, which is a verdict nobody can re-read against its input.
+   */
+  briefPath?: string;
 };
 
 export type CriterionVerdictsProps = {
   rows: CriterionVerdict[];
+  /** A clipboard write is silent, so the surface confirms every one with a toast. */
+  onCopied?: (value: string) => void;
   /**
    * The label over the block, where it stands on its own. Absent inside a rail,
    * where the step row above already says what these are about.
@@ -83,7 +102,21 @@ function refusalsFirst(rows: CriterionVerdict[]): CriterionVerdict[] {
   return [...rows].sort((a, b) => Number(b.named === "not_met") - Number(a.named === "not_met"));
 }
 
-export function CriterionVerdicts({ rows, label }: CriterionVerdictsProps) {
+export function CriterionVerdicts({ rows, label, onCopied }: CriterionVerdictsProps) {
+  // The rail's own copy handler, spelled the same way: a clipboard write that
+  // failed is otherwise indistinguishable from a dead element, so the surface
+  // is told either way.
+  const copy = useCallback(
+    (event: MouseEvent<HTMLSpanElement>, value: string) => {
+      event.stopPropagation();
+      void navigator.clipboard.writeText(value).then(
+        () => onCopied?.(value),
+        () => onCopied?.(value),
+      );
+    },
+    [onCopied],
+  );
+
   return (
     <div className="armada-verdicts">
       {label ? <span className="armada-verdicts__label">{label}</span> : null}
@@ -111,6 +144,20 @@ export function CriterionVerdicts({ rows, label }: CriterionVerdictsProps) {
                 {row.verdict ? (
                   <span className="armada-verdicts__verb">{row.verdict}</span>
                 ) : null}
+                {row.briefPath === undefined ? null : (
+                  // The whole path is on the clipboard and in the title however
+                  // narrow the row gets, the way the rail's output path is: a
+                  // copy truncated with the display would be worse than the
+                  // overflow it fixed.
+                  <span
+                    className="armada-verdicts__brief"
+                    title={row.briefPath}
+                    data-copies="true"
+                    onClick={(e) => copy(e, row.briefPath as string)}
+                  >
+                    {row.briefPath}
+                  </span>
+                )}
               </div>
               {cited.length === 0 ? null : (
                 // A refusal's citation, in the Judge record's own field names.

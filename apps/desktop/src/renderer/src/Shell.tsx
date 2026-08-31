@@ -29,7 +29,7 @@ import type { Connection } from "../../shared/bridge";
 import type { JobSummary } from "../../shared/protocol";
 import type { ManifestSummary } from "../../shared/setup";
 import type { Statement } from "./fleet";
-import { jobCount } from "./Jobs";
+import { plural } from "./board";
 
 /** The one surface in the rail. Its glyph is the registry's for Active jobs. */
 const ACTIVE_JOBS = "active";
@@ -125,7 +125,7 @@ function statusOf(
     fleetLabel: statement.headline,
     detail: statement.detail === "" ? undefined : statement.detail,
     advice: statement.next ?? undefined,
-    items: [jobCount(jobs.length)],
+    items: [plural(jobs.length)],
     escalations: jobs.filter((job) => job.status === "escalated").length,
     approvals: jobs.filter((job) => job.status === "awaiting_approval").length,
   };

@@ -18,12 +18,14 @@ use ipc::{JobDetail, RunId};
 use testkit::{FakeJudge, FakeWorkProduct, Gaming, Sketch};
 use verification::Request;
 
+use crate::asked::Asked;
 use crate::at_step::AtStep;
 use crate::gate::{apply, rule_on, Ruling};
 use crate::judging::{JudgeBudget, Judging, Marking};
 use crate::tests::daemon::{a_fleet_judged_by, a_proposal, worktree_directory};
 use crate::tests::detail::get;
 use crate::tests::gate::{budget, diff_evidence, running_job, worktree};
+use crate::tests::keeping::keeping_nowhere;
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 
@@ -76,6 +78,7 @@ fn judging() -> Judging {
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: Marking::detached(),
+        asked: Asked::nowhere(),
     }
 }
 
@@ -111,6 +114,7 @@ async fn ruled(patch: &str, flag_if: &[&str], recorded: &[(StepId, StepEvidence)
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await
 }
@@ -215,6 +219,7 @@ async fn a_step_that_asks_nothing_about_gaming_is_never_looked_at() {
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
     assert!(ruling.advanced(), "{ruling:?}");
@@ -277,6 +282,7 @@ async fn a_flagged_step_keeps_what_the_judge_said_about_its_criteria() {
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: Marking::detached(),
+        asked: Asked::nowhere(),
     };
     let ruling = rule_on(
         at,
@@ -288,6 +294,7 @@ async fn a_flagged_step_keeps_what_the_judge_said_about_its_criteria() {
         &work,
         budget(),
         &judging,
+        &keeping_nowhere(),
     )
     .await;
 

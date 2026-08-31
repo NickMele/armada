@@ -35,7 +35,7 @@ import { Reports } from "./Reports";
 import { JobDetail, type ConfirmableAct } from "./JobDetail";
 import { RECORDS_ITS_OWN_TURNS, renderFor } from "./render";
 import { ACT_LABEL, CONFIRM, said } from "./copy";
-import { atTheGate, Jobs, summaryOf } from "./Jobs";
+import { Jobs } from "./Jobs";
 import { Observe } from "./Observe";
 import { Shell } from "./Shell";
 import { watchUncaught } from "./uncaught";
@@ -333,14 +333,12 @@ export function App() {
     setOpenJob(null);
   }
 
-  const summary = summaryOf(state.jobs.length, atTheGate(state.jobs));
   const scoped = state.holds.manifests.find((held) => held.id === scope);
   const head = headOf({
     watching,
     reading: reading !== null,
     composing,
     auditing,
-    summary,
     live,
     refreshing,
     onCloseTurns: () => setObserving(false),
@@ -510,14 +508,17 @@ export function App() {
               <Boundary region="the job list" {...guarded}>
                 <Jobs
                   jobs={state.jobs}
-                  approving={state.approving}
                   stale={!live}
                   now={now}
                   workflows={state.holds.workflows}
                   disconnected={live ? null : statement.headline}
                   selected={openJob}
                   onOpen={setOpenJob}
-                  onApprove={(jobId) => void approve(jobId)}
+                  // The Board asks; this confirms. It is the same dialog the
+                  // detail's own kill goes through, which is what keeps "Cancel
+                  // holds initial focus" a rule with one implementation.
+                  onKill={(jobId) => setConfirming({ act: "kill_job", jobId })}
+                  onCompose={() => setComposing(true)}
                   onClearTerminal={(jobIds) => void clearTerminal(jobIds)}
                   onCopied={setCopied}
                 />

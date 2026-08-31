@@ -2,9 +2,11 @@ import type { ReactNode } from "react";
 import { useCallback, useState } from "react";
 
 import { Button } from "../../primitives/Button/Button";
+import { FileAnIssue } from "../FileAnIssue/FileAnIssue";
+import { envelopeOf, NOT_OFFERED } from "../FileAnIssue/issue";
 import type { ErrorClass } from "../ErrorCode/ErrorCode";
 import { ErrorCode } from "../ErrorCode/ErrorCode";
-import { COPY_DEBUG_INFO, copyDebugInfo, debugInfo } from "./payload";
+import { COPY_DEBUG_INFO, copyDebugInfo, debugInfo, SAFETY } from "./payload";
 import type { DebugPayload } from "./payload";
 
 // The payload module is re-exported through the notice it belongs to. It is
@@ -12,7 +14,7 @@ import type { DebugPayload } from "./payload";
 // payload, and the placement decides only whether it is shown, offered or
 // expandable.
 export type { DebugField, DebugPayload } from "./payload";
-export { COPIED, COPY_DEBUG_INFO, copyDebugInfo, debugInfo } from "./payload";
+export { COPIED, COPY_DEBUG_INFO, copyDebugInfo, debugInfo, SAFETY } from "./payload";
 
 /**
  * An error, in one of the four places an error may appear.
@@ -50,6 +52,12 @@ export { COPIED, COPY_DEBUG_INFO, copyDebugInfo, debugInfo } from "./payload";
  * full-surface error shows it, because nothing else is on the screen. The
  * expanded view renders the exact string the control copies — see `payload.ts`
  * for why there is one producer and not two.
+ *
+ * **Filing is offered where the payload is expanded, and nowhere else.**
+ * Copying stays on the machine; filing leaves it, so it gets a review step —
+ * and a review needs the payload legible in full, which an inline error has no
+ * room for and a toast is gone before. `FileAnIssue` is the control, and it
+ * sends nothing: there is no transport, and `issue.ts` says why.
  *
  * Where the thing sits is the caller's, and two classes are supplied for it:
  * `armada-error-toast-region` pins the bottom trailing corner inset
@@ -106,32 +114,6 @@ type Common = {
    */
   onCopied?: (what: string) => void;
 };
-
-/**
- * Why the payload is safe to copy, in the expanded view only.
- *
- * **Two sentences, because one cannot be written that is true.** The issue
- * this came from put a single sentence on screen — *structured fields cannot
- * hold a credential, the type has no variant that carries one* — and the first
- * half of it is exactly right about `fields`: `ipc::WireValue` is five
- * primitive variants, `Secret<T>` implements no `Display` and no `Serialize`,
- * so formatting a credential into a field does not compile. Getting one in
- * needs an explicit `expose()`, which is a deliberate act and greppable in one
- * search.
- *
- * It says nothing about the rest of the payload, and the payload is not only
- * `fields`. `message` and `chain` are prose written by whatever error `Display`
- * impl raised them, and no type bounds what an author put there. Rendering the
- * bounded claim over the whole artifact would promise an outcome the mechanism
- * does not reach — and the mechanism is what the reader was owed.
- *
- * It also makes no claim about the wider context: a credential sitting in a
- * repository file was never a `Secret<T>` and the type system was never
- * involved.
- */
-const SAFETY =
-  "Structured fields carry primitives only, and a credential does not compile into one. " +
-  "Nothing bounds the message or the chain, which are prose an error wrote — read them before you send this.";
 
 /**
  * The act is required everywhere but a toast, and the union is what enforces
@@ -243,10 +225,23 @@ export function ErrorNotice(props: ErrorNoticeProps) {
           exact string the control puts on the clipboard, not a second
           rendering of the same fields. What is read on screen is what arrives
           in the issue body. */}
-      {expanded && text !== null ? (
+      {expanded && text !== null && payload !== undefined ? (
         <div className="armada-error__payload">
           <pre className="armada-error__debug">{text}</pre>
           <p className="armada-error__safety">{SAFETY}</p>
+          {/* **Only where the payload is expanded**, which is the full-surface
+              state and a banner somebody opened. Filing is a considered act
+              with a review step, and neither an inline error nor a toast can
+              host one — a toast is gone before it would be read. The control
+              opens the review and sends nothing; nothing here sends. */}
+          <FileAnIssue
+            compose={() => ({
+              title: payload.message,
+              attached: [envelopeOf(payload)],
+              withheld: NOT_OFFERED,
+            })}
+            onCopied={onCopied}
+          />
         </div>
       ) : null}
 

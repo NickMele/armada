@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Check, CircleDot, Cpu, GitBranch, Power, UserCheck, X } from "lucide-react";
+import { BoardControls } from "../../compositions/BoardControls/BoardControls";
 import { Button } from "../../primitives/Button/Button";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { StepBar } from "../../compositions/StepBar/StepBar";
@@ -25,6 +26,22 @@ import { APPROVAL_TRACKS, TheListSixStatesOneRowShape } from "./TheListSixStates
  * glyph until the resource became a real one — Fleet bounds how many drones it
  * runs at once, and a Job past the bound is held at `queued` for that reason
  * and no other.
+ *
+ * **Every row carries origin now, which is the Board's requirement and was
+ * true of one row here.** #218 gave `Job row (stacked)` its sixth track and
+ * left this file alone; the four rows that had run stopped at spend, so origin
+ * was drawn at the gate and nowhere else. The two gate rows keep their own
+ * five-track list — a Job with no worktree has a timestamp where a running row
+ * has elapsed, and no spend at all — and both lists compose the same named
+ * properties rather than repeating widths.
+ *
+ * **The five origin sentences here are literals, and Bridge draws nothing in
+ * that track on a real row.** `origin` is on `JobSummary`, but
+ * `enum-verbs.toml` has no entry for it, so there is no source mapping the
+ * stored value to the rendered word — these fixtures are the drawing, not proof
+ * the track is filled. Issue #234, which also has to decide `sub_dispatched`,
+ * since that one renders as a form with the parent Job's id in it rather than
+ * as a word.
  */
 const meta: Meta<typeof TheListSixStatesOneRowShape> = {
   title: "Screens/The list — six states, one row shape",
@@ -65,11 +82,13 @@ const awaitingApproval: JobRowStackedProps = {
     { value: "created 09:12", quiet: true },
     { value: "Dispatched by you" },
   ],
-  action: (
-    <SplitButton ground="card" items={[{ label: "Reject", danger: true }]}>
-      Approve
-    </SplitButton>
-  ),
+  // **Review, not Approve.** The drawing gave this row an Approve control and
+  // flagged it as a departure from the settled rule that approval is a second
+  // act from detail; it was settled 2026-08-31 in favour of the rule. Review is
+  // the word an `awaiting_review` row already carries and means the same thing
+  // in both places — go read this — because in both places the act is on
+  // detail. Nothing on the Board approves.
+  action: <SplitButton ground="card" items={menu}>Review</SplitButton>,
 };
 
 const queued: JobRowStackedProps = {
@@ -82,6 +101,7 @@ const queued: JobRowStackedProps = {
   statusLabel: "Waiting on resources",
   headline: "Retire the legacy poke path",
   jobId: "job_8b42",
+  tracks: APPROVAL_TRACKS,
   fields: [
     { value: workflow },
     { value: <StepBar total={4} current={0} label="Not started, 4 steps" /> },
@@ -110,6 +130,7 @@ const running: JobRowStackedProps = {
     { value: "Implement", emphasis: true },
     { value: "11m 03s", mono: true },
     { value: "~$1.80", mono: true },
+    { value: "Dispatched by you" },
   ],
   action: open,
 };
@@ -131,6 +152,7 @@ const failed: JobRowStackedProps = {
     { value: "Run tests", emphasis: true },
     { value: "22m 41s", mono: true },
     { value: "~$2.10", mono: true },
+    { value: "Found by Fleet" },
   ],
   action: open,
 };
@@ -156,6 +178,7 @@ const done: JobRowStackedProps = {
     { value: "Summarise" },
     { value: "18m 22s", mono: true },
     { value: "~$2.40", mono: true },
+    { value: "Drafted in Helm" },
   ],
   action: open,
 };
@@ -177,6 +200,7 @@ const killed: JobRowStackedProps = {
     { value: "Implement", emphasis: true },
     { value: "4m 09s", mono: true },
     { value: "~$0.60", mono: true },
+    { value: "Workflow-triggered" },
   ],
   action: open,
 };
@@ -204,6 +228,95 @@ export const TheList: Story = {
     </div>
   ),
 };
+
+/**
+ * The Board with its controls and its keyboard model — sections 1 and 3 of the
+ * drawing, which the six rows above were reproduced without.
+ *
+ * **The count states both numbers.** `1 job needs you. 6 on the Board.` The
+ * first is the number a person is deciding whether to act on and the second is
+ * what it is a fraction of; either alone is a number with nothing to compare
+ * it against. The drawing's own fixture reads `4 jobs need you. 15 on the
+ * Board.` — the shape is the sentence, not the numerals.
+ *
+ * **Five tabs, and their counts are of what the search matched.** With no
+ * search that is the whole board, which is why they read as the board here.
+ *
+ * **The cursor's row carries its key and no other row does.** The chip holds
+ * its width on every row, so nothing moves as the cursor travels; what changes
+ * is whether it is drawn.
+ *
+ * The keys are the contract's contextual tier — `docs/contracts/design-system.md`,
+ * Keyboard and command palette — and none of them is decided here. What the
+ * Board answers of it:
+ *
+ * | Key | Does |
+ * |---|---|
+ * | `/` | Search the list. `Esc` clears it and hands the cursor back |
+ * | `j` `k` `↓` `↑` | Move the cursor; the accent left edge follows it |
+ * | `Enter` `o` | Open the focused job's detail. One act, two names |
+ * | `r` `t` `d` | Review, Attest, Redirect — only where the row carries that verb |
+ * | `x` | Kill, and it confirms |
+ * | `1`–`5` | Set the state filter, in tab order |
+ * | `n` | New job, the one key that acts on nothing on screen |
+ *
+ * **There is no Approve key and no Approve control**, and `a` was deleted from
+ * the map on 2026-08-31 for the reason this row shows: nothing on a list
+ * approves. The row at the gate carries Review — see
+ * `docs/concepts/job-board.md`.
+ */
+export const TheBoard: Story = {
+  render: () => (
+    <div className="armada-screen">
+      <TheListSixStatesOneRowShape
+        heading="Active jobs"
+        summary="1 job needs you. 6 on the Board."
+        action={<Button variant="primary">New job</Button>}
+        controls={
+          <BoardControls
+            query=""
+            onQuery={() => {}}
+            searchKey="/"
+            sorts={[
+              { id: "critical_first", label: "Critical first" },
+              { id: "oldest_first", label: "Oldest first" },
+            ]}
+            sort="critical_first"
+            onSort={() => {}}
+            tabs={[
+              { id: "all", label: "All", count: 6, shortcut: "1" },
+              { id: "needs-you", label: "Needs you", count: 1, shortcut: "2" },
+              { id: "running", label: "Running", count: 1, shortcut: "3" },
+              { id: "queued", label: "Queued", count: 1, shortcut: "4" },
+              { id: "finished", label: "Finished", count: 3, shortcut: "5" },
+            ]}
+            tab="all"
+            onTab={() => {}}
+          />
+        }
+        rows={SIX.map((row, i) => ({
+          ...row,
+          actionKey: KEYS[i],
+          focused: i === 0 || undefined,
+        }))}
+      />
+    </div>
+  ),
+};
+
+/**
+ * Which key each of the six rows answers to, in the order they are drawn.
+ *
+ * **One control per row, so at most one key ever applies.** The gate row
+ * carries Review and answers `r`; the other five carry Open and answer `o`.
+ * Every other verb key no-ops on every one of these rows rather than acting on
+ * the wrong verb.
+ *
+ * `t` and `d` reach nothing here, and that is the fixture rather than the map:
+ * none of the six is at `awaiting_attestation` and none is being piloted, so
+ * neither Attest nor Redirect is a control any of these rows carries.
+ */
+const KEYS = ["r", "o", "o", "o", "o", "o"];
 
 /**
  * The gate. **No branch, because no worktree exists** — track one is the
@@ -236,7 +349,7 @@ export const Killed: Story = { render: () => one(killed) };
  * | Field | Why it is not here |
  * |---|---|
  * | Spend | Measured nowhere — not on the wire, not in the store, not computed |
- * | `Dispatched by you` | No actor on the row, and `origin` has no verb in `enum-verbs.toml` |
+ * | `Dispatched by you` | `origin` is on `JobSummary`, and its five wire values have no rows in `enum-verbs.toml`. The five sentences above are drawn on `docs/concepts/job-board.md` and nowhere a generator reads, so Bridge would have to retype them |
  * | Elapsed on a Job that is over | `JobSummary` carries no instant the Job stopped at, and a terminal elapsed running to now would read as still working |
  *
  * The step is its `step_id`, in mono: `StepDetail` carries a label, but a list

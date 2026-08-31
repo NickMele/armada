@@ -247,13 +247,29 @@ status_token = "--status-escalated"
 vocabulary = "Escalation reason"
 in_code = "Not yet"
 
-[verbs.escalation_reason.not_prepared]
-verb = "the worktree was not prepared"
+[verbs.escalation_reason.no_worktree]
+verb = "the worktree was unusable"
 icon = ""
 status_token = "--status-escalated"
 vocabulary = "Escalation reason"
 in_code = "In code"
-notes = "The verb names the state every path into this trigger leaves behind rather than the one that happened to occur, which is `gate_failure`'s lesson taken before it had to be learned twice: a `setup.requires` command can exit non-zero, be signalled, run past its budget, or not be on the path at all, and a verb saying `the install failed` would be wrong on three of the four and wrong about the command on any repository whose setup is not an install. It is the same sentence `NotPrepared` opens with in the Job's log, where the command and the exit are, so the badge and the line beneath it are one claim. It says nothing failed a check, because nothing was checked — no step had been entered when this fired. No glyph: the shield-* family is reserved to gates and Checks and this is neither, and `folder` and `folder-git-2` are the Git and config family labelling a value in a detail view rather than a state. It stays owed beside `blocked_by_policy`, `check_timeout`, `dependency_failed`, `evidence_too_large` and `resource_exhausted`."
+notes = "The verb names the state all four paths leave behind rather than the one that happened — no worktree created, attachments that would not copy, one reclaimed while the Job was queued, a branch that would not come up to its base. `git could not make one` would be wrong on two of the four and `the worktree is missing` wrong on three, and naming the actor is `gate_failure`'s exact mistake. **It deliberately does not say `not prepared`**: `not_prepared` sits next to it and means a command the Manifest names failed *inside* a good checkout, so the two were given a noun each — this one keeps `worktree`, that one moved to `required command` — because shipped as drafted a reader would have had two badges saying the same English about two different people's problems. No glyph: the shield-* family is reserved to gates and Checks and this is neither, and `folder-git-2` labels a value in a detail view rather than a state. It joins the six escalation reasons that already owe one."
+
+[verbs.escalation_reason.not_configurable]
+verb = "the Drone could not be configured"
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "In code"
+notes = "Both paths in — a brief that would not render and a spawn config that was refused — are values somebody wrote failing to resolve, and `configured` is the word for that. It pairs with `would_not_start` and reads in the order the code runs: configure, then start. A person seeing this looks at `armada.yml` or the model roster; a person seeing `the Drone would not start` looks at the machine. No glyph, for `no_worktree`'s reasons — `settings` and `sliders-horizontal` label a surface rather than a state."
+
+[verbs.escalation_reason.not_prepared]
+verb = "a required command did not succeed"
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "In code"
+notes = "Re-verbed 2026-08-31, from `the worktree was not prepared`. `no_worktree` was minted the same day and the two verbs would have been a near-homograph for two different people's problems — the disk's and the Manifest's — which is the confusion the mint existed to remove. This row gave up the noun because its identity is the command and not the tree: `setup.requires` is what a person edits, and `a required command did not succeed` is the first clause of the trigger's own meaning. The badge no longer repeats `NotPrepared`'s log line word for word, and does not need to: the line beneath names the command, the exit and what it printed, and the badge names who owns it. The verb names the state every path into this trigger leaves behind rather than the one that happened to occur, which is `gate_failure`'s lesson taken before it had to be learned twice: a `setup.requires` command can exit non-zero, be signalled, run past its budget, or not be on the path at all, and a verb saying `the install failed` would be wrong on three of the four and wrong about the command on any repository whose setup is not an install. It is the same sentence `NotPrepared` opens with in the Job's log, where the command and the exit are, so the badge and the line beneath it are one claim. It says nothing failed a check, because nothing was checked — no step had been entered when this fired. No glyph: the shield-* family is reserved to gates and Checks and this is neither, and `folder` and `folder-git-2` are the Git and config family labelling a value in a detail view rather than a state. It stays owed beside `blocked_by_policy`, `check_timeout`, `dependency_failed`, `evidence_too_large` and `resource_exhausted`."
 
 [verbs.escalation_reason.resource_exhausted]
 verb = "ran out of resources"
@@ -285,6 +301,14 @@ status_token = "--status-escalated"
 vocabulary = "Escalation reason"
 in_code = "In code"
 notes = "The enum name is OS jargon. What has to survive is busy-but-going-nowhere against silent, and stalled already owns silent."
+
+[verbs.escalation_reason.would_not_start]
+verb = "the Drone would not start"
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "In code"
+notes = "Says the one thing a reader has to know before anything else: no process ran, so there is no transcript to go through. That is the whole distance from `interrupted`, whose verb sent people to look for one. `would not` rather than `could not` because both paths are a refusal the machine gave back — a disk that would not hold the transcript, a harness that would not launch — and because `could not start` reads as a diagnosis nobody has made yet. No glyph, for `no_worktree`'s reasons; `unplug` is `interrupted`'s and lending it here would put the same picture on the two states this work exists to separate."
 
 [verbs.step_verdict.evidence_suspect]
 verb = "evidence disputed"

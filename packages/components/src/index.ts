@@ -32,6 +32,7 @@ export * from "./primitives/Tooltip/Tooltip";
 
 // Compositions — what M1 composes its screens from.
 export * from "./compositions/ActiveJobsList/ActiveJobsList";
+export * from "./compositions/BoardControls/BoardControls";
 export * from "./compositions/BoardEmptyState/BoardEmptyState";
 export * from "./compositions/ChangedFiles/ChangedFiles";
 export * from "./compositions/CriterionVerdicts/CriterionVerdicts";
@@ -87,3 +88,4 @@ export * from "./screens/TheShell/TheShell";
 // not a primitive and is not a composition of one.
 export * from "./errors/ErrorCode/ErrorCode";
 export * from "./errors/ErrorNotice/ErrorNotice";
+export * from "./errors/FileAnIssue/FileAnIssue";

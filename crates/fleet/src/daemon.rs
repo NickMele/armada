@@ -69,6 +69,7 @@ use tokio::sync::Mutex;
 use crate::admitting::Polled;
 use crate::adrift::Adrift;
 use crate::allowance::Allowance;
+use crate::asked::Asked;
 use crate::clock::Clock;
 use crate::converging::StepNorms;
 use crate::delivery::Delivered;
@@ -714,11 +715,12 @@ where
     /// same function — a Judge call needs the credential floor for the reason a
     /// Drone does, and a second list here would be a second answer.
     ///
-    /// **The Job is a parameter for one reason**: a call that is out has to be
-    /// nameable while it is out, and a wait that cannot say whose it is is a
-    /// fact no surface can place. Nothing else here reads it — a Judge call is
-    /// still assembled from the step and the workflow, and there is no
-    /// arrangement of this argument that could reach the Judge.
+    /// **The Job is a parameter for two reasons, and neither reaches the
+    /// Judge**: a call that is out has to be nameable while it is out, and a
+    /// wait that cannot say whose it is is a fact no surface can place; and
+    /// what the call was asked is filed under the Job it was asked about. A
+    /// Judge call is still assembled from the step and the workflow, and there
+    /// is no arrangement of this argument that puts a Job id into a brief.
     pub(crate) fn judging(&self, job: &JobId) -> Result<Judging, SpawnConfigRefused> {
         Ok(Judging {
             client: Arc::clone(&self.judge),
@@ -736,6 +738,7 @@ where
                 Arc::clone(&self.clock),
                 self.judge_budget,
             ),
+            asked: Asked::under(self.host.repo_root.clone(), job.clone()),
         })
     }
     /// The Judge call that is out, for `serving` to put on `get_job`.

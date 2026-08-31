@@ -30,7 +30,10 @@ use serde_json::{json, Value};
 use crate::codec::{encode, Unencodable};
 
 pub use report::{CheckRan, CheckReport};
-pub use tools::{DeclareScope, NotAnArgument, SubmitEvidence, CHECKS_TOOL, SCOPE_TOOL, TOOL};
+pub use tools::{
+    DeclareScope, NotAnArgument, SubmitEvidence, CHECKS_FIELDS, CHECKS_TOOL, EVIDENCE_FIELDS,
+    SCOPE_FIELDS, SCOPE_TOOL, TOOL,
+};
 
 /// The name Armada's server is registered under in a Drone's MCP
 /// configuration, and therefore the middle of the tool name a Drone is

@@ -117,7 +117,7 @@ export type JobDetail = {
    */
   delivery?: JobDelivery;
   /**
-   * What the job has spent, against what it is allowed to. Since protocol 5.4.
+   * What the job has spent, against what it is allowed to. Since protocol 5.5.
    *
    * **Present on every job, including one that has spent nothing.** That is
    * what makes a job which cost nothing legible as such rather than as a job
@@ -614,6 +614,13 @@ export type Judged = {
   produced?: string;
   /** What that difference does to whoever consumes it. The triage line. */
   consequence?: string;
+  /**
+   * Where the whole brief this verdict answers was written, relative to the
+   * repository root. **The path, never the question** — a brief is the request,
+   * the deliverable and the whole branch diff, and Bridge does not read the
+   * filesystem. Absent where Fleet kept no brief.
+   */
+  brief_path?: string;
 };
 
 /**

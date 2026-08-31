@@ -189,7 +189,7 @@ export function workOf(
  * rule's own reason that admits it.** That rule was written because nothing
  * counted: a file's lines and a log's errors are figures Bridge would have had
  * to invent, so a row named its path and stopped. These four are served —
- * `JobDetail.spend`, since protocol 5.4 — and Fleet is the only side that can
+ * `JobDetail.spend`, since protocol 5.5 — and Fleet is the only side that can
  * add them up, because a job's drones do not know about each other.
  *
  * **Both halves on one row.** A figure with no ceiling says nothing about
@@ -202,7 +202,7 @@ export function workOf(
  * enforces yet, and a figure drawn as though it were capped would be the
  * unenforced-cap failure in another shape.
  *
- * Absent on a Fleet older than 5.4, which draws nothing rather than zeroes —
+ * Absent on a Fleet older than 5.5, which draws nothing rather than zeroes —
  * a job that cost nothing and a Fleet that does not count are different facts.
  * No glyph on either row: nothing in the icon registry depicts money or a turn,
  * and the values read as what they are.

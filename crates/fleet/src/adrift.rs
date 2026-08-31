@@ -112,7 +112,11 @@ pub enum Adrift {
     ///
     /// No trigger names an infrastructure failure at the gate, so this
     /// escalates nothing rather than borrowing a trigger that means something
-    /// else — the same gap `dispatch` names about its own failures.
+    /// else. `dispatch` used to name the same gap about its own failures and no
+    /// longer does — `no_worktree`, `not_configurable` and `would_not_start`
+    /// closed it upstream of a spawn. This one is still open because the
+    /// failure is downstream of every verdict: the work passed, and a commit
+    /// that would not run is not a Job that did not do it.
     NotCommitted {
         job: JobId,
         cause: Box<dyn Error + Send + Sync>,

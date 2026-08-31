@@ -1,5 +1,5 @@
 import { useId } from "react";
-import type { InputHTMLAttributes } from "react";
+import type { ComponentPropsWithRef } from "react";
 
 /**
  * A single-line text field, with its label and its invalid message.
@@ -10,8 +10,14 @@ import type { InputHTMLAttributes } from "react";
  * let a caller render the border with nothing saying why.
  *
  * Field labels never open with a Wh- word. The label is `Project location`.
+ *
+ * `ref` reaches the `input` itself rather than the wrapper, because what a
+ * surface wants a reference to is the thing it puts the cursor in — the Job
+ * Board's `/` focuses this field, and focusing the div around it would do
+ * nothing. React 19 passes `ref` as an ordinary prop, so it rides `...rest`
+ * to the element with the rest of them.
  */
-export type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "size"> & {
+export type InputProps = Omit<ComponentPropsWithRef<"input">, "size"> & {
   /** Sentence case, no Wh- opener. Omitted where a surface labels the field itself. */
   label?: string;
   /** The border goes to `--status-completed-failed` and `message` renders below. */

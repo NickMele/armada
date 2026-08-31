@@ -32,6 +32,7 @@ use crate::tests::daemon::{a_fleet_holding, a_fleet_judged_by, a_proposal, workt
 use crate::tests::gate::{
     budget, diff_evidence, judged_by, judged_by_shared, judging, running_job, worktree,
 };
+use crate::tests::keeping::keeping_nowhere;
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::{declared_by_the_one, submitted_by_the_one};
 
@@ -96,6 +97,7 @@ async fn ruled_by(
         &work,
         budget(),
         judging,
+        &keeping_nowhere(),
     )
     .await
 }
@@ -633,6 +635,7 @@ async fn a_step_with_no_scope_is_neither_checked_nor_read() {
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
 
@@ -672,6 +675,7 @@ async fn an_ungated_step_with_no_scope_advances_on_evidence_alone() {
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
     assert!(ruling.advanced(), "{ruling:?}");

@@ -24,11 +24,13 @@ use verification::{
     CheckFailed, Claimed, NeverRan, NotASubmission, NotClaimed, Request, ShownBy, Submission,
 };
 
+use crate::asked::Asked;
 use crate::at_step::AtStep;
 use crate::clock::Clock;
 use crate::evidence::{Call, EvidenceInbox, EvidenceTool};
 use crate::gate::{apply, rule_on, CheckBudget, Ruling};
 use crate::judging::{Aloft, JudgeBudget, Judging, Marking};
+use crate::tests::keeping::keeping_nowhere;
 
 const NOW: &str = "2026-08-26T09:00:00.000Z";
 
@@ -205,6 +207,7 @@ pub(super) fn judged_by_shared(client: Arc<FakeJudge>) -> Judging {
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: Marking::detached(),
+        asked: Asked::nowhere(),
     }
 }
 
@@ -308,6 +311,7 @@ async fn evidence_and_every_check_passing_advances_the_step() {
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
 
@@ -337,6 +341,7 @@ async fn evidence_with_every_check_failing_advances_nothing() {
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
 
@@ -376,6 +381,7 @@ async fn a_step_with_no_checks_advances_on_evidence_alone() {
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
 
@@ -405,6 +411,7 @@ async fn a_hanging_check_fails_rather_than_hanging() {
         &work,
         CheckBudget::of(Duration::from_millis(300)),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
     let took = started.elapsed();
@@ -443,6 +450,7 @@ async fn a_check_whose_command_does_not_exist_fails_rather_than_passing() {
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
 
@@ -478,6 +486,7 @@ async fn the_check_output_comes_back_for_a_person_to_read() {
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
 
@@ -506,6 +515,7 @@ async fn evidence_of_the_wrong_kind_runs_no_checks_and_moves_nothing() {
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
 
@@ -542,6 +552,7 @@ async fn a_diff_that_cannot_be_read_decides_nothing_and_stops_the_job() {
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
 
@@ -580,6 +591,7 @@ async fn the_diff_fleet_reads_is_of_the_job_s_own_worktree() {
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
 
@@ -605,6 +617,7 @@ async fn a_failed_check_ends_the_job_and_fleet_is_the_actor() {
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
     let moved = apply(&running_job(), &ruling, at(NOW))
@@ -637,6 +650,7 @@ async fn an_advancing_step_does_not_move_the_job() {
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
     assert!(apply(&running_job(), &ruling, at(NOW)).is_none());
@@ -660,6 +674,7 @@ async fn the_last_step_advancing_completes_the_job() {
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
     let moved = apply(&job_with_every_step_advanced(), &ruling, at(NOW))
@@ -733,6 +748,7 @@ async fn ruling_over(work: &FakeWorkProduct) -> Ruling {
         work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await
 }
@@ -869,6 +885,7 @@ async fn a_step_whose_checks_declare_no_paths_never_reads_the_diff_for_one() {
         &work,
         budget(),
         &judging(),
+        &keeping_nowhere(),
     )
     .await;
 

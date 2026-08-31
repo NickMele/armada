@@ -19,6 +19,7 @@ use verification::Request;
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, CheckBudget, Ruling};
 use crate::tests::gate::{diff_evidence, judging, worktree};
+use crate::tests::keeping::keeping_nowhere;
 
 /// The `(name, outcome)` of every Check the step declared, in the order the
 /// ruling carries them.
@@ -55,6 +56,7 @@ async fn ruled<'a>(gates: &'a [Gate<'a>], budget: Duration, touched: &[&str]) ->
         &work,
         CheckBudget::of(budget),
         &judging(),
+        &keeping_nowhere(),
     )
     .await
 }
@@ -241,6 +243,7 @@ async fn ruled_on_a_file(target: &str, write: impl FnOnce(&std::path::Path)) -> 
         &FakeWorkProduct::changed(&[".armada/artifacts/plan.md"]),
         CheckBudget::of(Duration::from_secs(5)),
         &judging(),
+        &keeping_nowhere(),
     )
     .await
 }

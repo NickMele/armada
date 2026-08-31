@@ -81,6 +81,7 @@ use verification::{
     GamingBrief, NothingToJudge, Product, Reference, Refusals, Request, Unreadable,
 };
 
+use crate::asked::Asked;
 use crate::at_step::AtStep;
 use crate::clock::Clock;
 
@@ -125,6 +126,10 @@ pub struct Judging {
     /// told. Bound to one Job, because a wait that cannot name its Job is a
     /// fact no surface can place.
     pub marking: Marking,
+    /// Where the question itself is written down, so a verdict can be re-read
+    /// against what it was answering. Bound to one Job for `marking`'s reason —
+    /// the path is a function of the Job.
+    pub asked: Asked,
 }
 
 /// Which of Fleet's four Judge calls is out.
@@ -414,6 +419,15 @@ pub(crate) async fn judged(
         let model = model_for(check, &judging.default_model)?;
         for criterion in check.criteria() {
             let brief = Brief::about(step, criterion, request, &product, &references, answered);
+            // Once, outside the panel loop, because the panel answers one
+            // brief. See `crate::asked`: the file is not a summary of the
+            // members' briefs, it is the brief all of them were given.
+            let kept = judging.asked.kept(
+                step.id(),
+                at.attempt(),
+                &criterion.criterion_id,
+                brief.question(),
+            );
             // Every member of a panel answers the same brief and none of them
             // sees another's verdict — there is nothing in this loop that
             // carries one answer into the next call.
@@ -436,7 +450,9 @@ pub(crate) async fn judged(
                     },
                 );
                 let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
-                judgments.push(brief.read(&said).map_err(CallFailed::Unreadable)?);
+                let mut judgment = brief.read(&said).map_err(CallFailed::Unreadable)?;
+                judgment.brief_path.clone_from(&kept);
+                judgments.push(judgment);
             }
         }
     }
@@ -446,6 +462,15 @@ pub(crate) async fn judged(
     if let Some(criterion) = verification::drift_criterion(off_plan) {
         let model = fleets_model(step, &judging.default_model)?;
         let brief = Brief::about(step, &criterion, request, &product, &references, answered);
+        // Kept like any other, and this is the one whose brief nobody could
+        // reconstruct: `drift_criterion` assembles a question out of the paths
+        // the work touched, so what it asked is not in any workflow file.
+        let kept = judging.asked.kept(
+            step.id(),
+            at.attempt(),
+            &criterion.criterion_id,
+            brief.question(),
+        );
         let ask = Ask::put(model.clone(), brief.question(), judging.environment.clone())
             .map_err(|_| CallFailed::NothingToAsk)?;
         let _out = judging.marking.out(
@@ -463,7 +488,9 @@ pub(crate) async fn judged(
             },
         );
         let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
-        judgments.push(brief.read(&said).map_err(CallFailed::Unreadable)?);
+        let mut judgment = brief.read(&said).map_err(CallFailed::Unreadable)?;
+        judgment.brief_path = kept;
+        judgments.push(judgment);
     }
     let refusals = Refusals::among(&judgments);
     Ok((judgments, refusals))

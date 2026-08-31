@@ -35,6 +35,7 @@ use crate::adrift::Adrift;
 use crate::at_step::AtStep;
 use crate::daemon::Fleet;
 use crate::gate::{rule_on, Ruling};
+use crate::keeping::Keeping;
 use crate::transcript;
 
 impl<H, V, W> Fleet<H, V, W>
@@ -140,6 +141,7 @@ where
             self.work(),
             self.budget(),
             &judging,
+            &Keeping::of(&self.host().repo_root, job_id),
         )
         .await;
 

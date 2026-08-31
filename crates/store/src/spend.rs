@@ -26,9 +26,9 @@
 use crate::error::{fault, LoadJobError, RowError, WriteError};
 use crate::open::Store;
 
-/// Version 22 — what each Drone of a Job spent.
+/// Version 23 — what each Drone of a Job spent.
 ///
-/// Beside the change it makes, like [`V21`](crate::delivery::V21):
+/// Beside the change it makes, like [`V22`](crate::judged::V22):
 /// `schema.rs` is at the 900 the gate refuses at.
 ///
 /// **A table and not columns on `jobs`**, which is the opposite call to
@@ -44,7 +44,7 @@ use crate::open::Store;
 /// Nothing is backfilled. A Job that ran before this spent what it spent and
 /// the figure was thrown away; an empty set of rows and a Job that has not
 /// started yet are the same answer, which is a total of nothing.
-pub(crate) const V22: &str = r#"
+pub(crate) const V23: &str = r#"
 CREATE TABLE job_drone_spend (
     job_id      TEXT    NOT NULL REFERENCES jobs(job_id),
     drone_id    TEXT    NOT NULL,
@@ -145,7 +145,7 @@ impl Store {
     /// What every Drone of this Job has spent, added up.
     ///
     /// **A Job with no rows answers zero of everything**, which is every Job
-    /// that has not started and every Job that finished before version 22. A
+    /// that has not started and every Job that finished before version 23. A
     /// caller that needs to tell those apart reads [`Spend::drones`].
     pub fn spend_for(&self, job_id: &core_model::JobId) -> Result<Spend, LoadJobError> {
         self.conn

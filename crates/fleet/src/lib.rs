@@ -103,6 +103,7 @@
 pub mod admitting;
 pub mod adrift;
 pub mod allowance;
+pub mod asked;
 pub mod at_step;
 mod boundary;
 pub mod briefing;
@@ -127,6 +128,7 @@ pub mod footprint;
 mod gate;
 pub mod headroom;
 pub mod judging;
+pub mod keeping;
 mod landing;
 pub mod mint;
 /// Where two Jobs claim the same paths, worked out at read time. **A
@@ -170,6 +172,7 @@ mod tests;
 
 pub use adrift::{Adrift, NotDeclared, NotSubmitted};
 pub use allowance::{Allowance, Micros, Overspent};
+pub use asked::Asked;
 pub use at_step::AtStep;
 pub use clock::{Clock, SystemClock};
 pub use converging::{ReportNow, Stage, StepNorms, Tripwire, Wandering};
@@ -185,6 +188,7 @@ pub use evidence::{Call, Decline, EvidenceInbox, EvidenceTool, Landed, Recorded,
 pub use gate::{apply, rule_on, CheckBudget, CheckOutput, Ruling};
 pub use headroom::{Bytes, Headroom, InUse, Machine, Polling, Reading, Short, Spare, TheMachine};
 pub use judging::{Aloft, CallFailed, JudgeBudget, Judging, Look, Marking};
+pub use keeping::{deliverables_dir, Keeping};
 pub use mint::{Mint, UlidMint};
 pub use overruling::Overruling;
 pub use peer::{NotACaller, PeerOf};

@@ -24,4 +24,4 @@
 # Version 4 shipped as a bare integer and is exactly 4.0. A peer that sends one
 # integer is naming a major at minor zero, and is read that way.
 major = 5
-minor = 4
+minor = 5

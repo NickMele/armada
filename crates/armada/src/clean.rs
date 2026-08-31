@@ -167,6 +167,17 @@ pub enum CleanRefused {
 }
 
 /// Clean `root`, as far as `scope` reaches.
+///
+/// **It removes worktrees, branches and store rows, and nothing beside them.**
+/// A Job's log, its Drones' transcripts, its Checks' output and the
+/// deliverables its Judge read all sit under the repository root rather than
+/// inside the checkout — `fleet::transcript`, `fleet::check_output` and
+/// `fleet::keeping` derive their paths from it — so they survive with no
+/// exemption written here. `#223` was the one record that did not: a step's
+/// deliverable is written inside the worktree, reaches no commit because
+/// `.armada/*` is ignored, and went with the checkout an hour after its Job
+/// was merged. Anything added here that reaches outside `.armada/worktrees/`
+/// is that defect arriving again. `#69` bounds the four together.
 pub fn clean(
     root: &Path,
     machine: &Path,

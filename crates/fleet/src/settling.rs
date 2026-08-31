@@ -25,7 +25,10 @@
 //! [`Working::drifting`]: crate::working::Working::drifting
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
-use core_model::{Component, Envelope, FieldValue, JobId, JobStatus, Level, StepId};
+use core_model::{
+    Actor, Component, Envelope, EscalationTrigger, FieldValue, JobId, JobStatus, Level, StepId,
+    Target,
+};
 use verification::Request;
 
 use crate::adrift::Adrift;
@@ -34,6 +37,7 @@ use crate::daemon::Fleet;
 use crate::drone_moves::steps_holding_a_drone;
 use crate::evidence::{Decline, Standing};
 use crate::gate::{rule_on, Ruling};
+use crate::keeping::Keeping;
 use crate::transcript;
 use crate::turning::{Turned, Worked};
 use crate::working::Working;
@@ -182,6 +186,7 @@ where
             self.work(),
             self.budget(),
             &judging,
+            &Keeping::of(&self.host().repo_root, &job_id),
         )
         .await;
         // Before the Job or the step moves. A recorded result the transition
@@ -284,7 +289,18 @@ where
             self.drone_left(job_id, &step).await?;
         }
         let job = self.load(job_id).await?;
-        self.interrupt(&job).await
+        // `move_job` and not a shared wrapper. `dispatch::stopped_before_a_drone`
+        // is next door and is the wrong one on purpose — every caller of it is
+        // upstream of a spawn, and this is the opposite: a Drone was there.
+        // This is the only site that raises `interrupted` through a move, so
+        // there is nothing for a wrapper to share.
+        self.move_job(
+            &job,
+            Target::Escalated(EscalationTrigger::Interrupted),
+            Actor::Fleet,
+        )
+        .await
+        .map(|_| ())
     }
 
     /// Record the decline, and write it down on the turn its reason first

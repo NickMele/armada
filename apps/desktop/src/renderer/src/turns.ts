@@ -23,7 +23,7 @@
 // **per-run** figure there is.
 //
 // **The Job-level total is served now** — `JobDetail.spend`, since protocol
-// 5.4, which `work.ts` draws against the Job's cap. What that closes is a
+// 5.5, which `work.ts` draws against the Job's cap. What that closes is a
 // person opening one Job and seeing what the whole of it has cost. What is
 // still open is comparing Jobs **without** opening one: `JobSummary` carries no
 // spend, so the board has no column and cannot have one until it does.

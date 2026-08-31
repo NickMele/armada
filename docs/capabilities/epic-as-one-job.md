@@ -63,23 +63,28 @@ The delivery half is built: Redirect already injects a note into a live session.
 What is missing is the other direction, and a status meaning *waiting on an
 answer* rather than *stopped and needing a person to restart me*.
 
-## The tracker is an adapter, not the tracker's own MCP server
+## The tracker is an adapter for Bridge, and this workflow does not wait on it
 
-**MCP tools exist only inside a running Drone, and there is no Drone when a
-person is deciding whether to dispatch one.** Bridge talks to Fleet and nothing
-else, so tickets in Bridge require Fleet itself to be able to read tickets. No
-MCP arrangement substitutes for that, which is what settles `#91` as a
-Fleet-side adapter.
+**This workflow does not depend on `#91`.** The argument below settles what `#91`
+is when it is built; it was read for a while as settling that this cannot start
+until it is, and that was wrong. Nothing in this capability fetches a ticket:
+its Drone reads the epic the way it reads anything else, through tools it calls
+inside its own session.
 
-The adapter also removes a dependency the MCP route adds. A tracker's own server
-needs its token in the *Drone's* environment, which is `#65`; a Fleet-side
-adapter keeps the credential in Fleet, which is what
-`docs/contracts/adapters.md` already requires.
+**Where the adapter is necessary is Bridge.** MCP tools exist only inside a
+running Drone, and there is no Drone when a person is looking at a ticket list
+deciding whether to dispatch one. Bridge talks to Fleet and nothing else, so
+tickets *in Bridge* require Fleet itself to be able to read tickets. No MCP
+arrangement substitutes for that, which is what settles `#91` as a Fleet-side
+adapter — and the credential stays in Fleet rather than needing `#65`, which the
+tracker's own stdio server would have.
 
-One fetch serves two consumers. Bridge lists tickets for a person, and this
-workflow's Drone reads the same tickets through tools it calls on its own
-timing — the shape `run_checks` already has, where the Drone decides when and
-Fleet decides how.
+**A Drone is the case the MCP route does serve.** That is why one fetch serving
+two consumers is a saving rather than a prerequisite: when `#91` exists this
+workflow's Drone can read the same tickets through it, on its own timing, in the
+shape `run_checks` already has. Until then it reads them itself, and the only
+thing missing is a person browsing tickets in Bridge — which is `#91`'s own
+feature and not this one's.
 
 **The adapter fetches; the Drone interprets.** Dependencies between issues are
 prose rather than a typed relation, so inferring them is the Drone's work and
