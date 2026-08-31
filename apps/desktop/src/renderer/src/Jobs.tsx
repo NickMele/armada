@@ -256,6 +256,14 @@ export function Jobs({
   }
 
   function press(event: KeyboardEvent): void {
+    // **A modal is up, so every key belongs to it.** The confirmation this
+    // surface opens is `App`'s and the bulk clear's is its own, and neither is
+    // inside this component — so focus is not what tells them apart, and a
+    // window listener would otherwise open a detail behind the dialog a person
+    // is answering. Read off the document rather than passed in, because the
+    // dialogs are on both sides of this file and a flag would have to be
+    // threaded through both.
+    if (document.querySelector('[role="dialog"], [role="alertdialog"]') !== null) return;
     const read = pressOf(event);
     if (read === null) return;
     const job = under();

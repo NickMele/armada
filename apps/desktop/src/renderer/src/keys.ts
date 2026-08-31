@@ -166,6 +166,25 @@ export function holdsText(target: EventTarget | null): boolean {
 }
 
 /**
+ * Whether the focused element answers `Enter` itself.
+ *
+ * **`Enter` belongs to whatever has focus, and never to two things at once.** A
+ * row is a control that opens on `Enter`, a button fires on it, and this map
+ * also carries it — so without this, pressing `Enter` on a row's Kill button
+ * fires the kill and opens the job, and pressing it on the row opens the job
+ * twice. The map's `Enter` is for when focus is on none of them, which is where
+ * a person lands after clicking empty space or reloading the window. `o` is the
+ * same act under a key nothing else claims, so nothing is lost.
+ */
+function answersEnter(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  if (tag === "BUTTON" || tag === "A" || tag === "SUMMARY") return true;
+  const role = target.getAttribute("role");
+  return role === "option" || role === "button" || role === "tab";
+}
+
+/**
  * What a keypress means on the Board, or `null` for nothing.
  *
  * **Every suppression is here rather than at the call sites**, so there is one
@@ -186,7 +205,8 @@ export function pressOf(event: KeyboardEvent): BoardPress | null {
   if (event.key === "/") return { act: "search" };
   if (event.key === "j") return { act: "move", by: 1 };
   if (event.key === "k") return { act: "move", by: -1 };
-  if (event.key === "Enter" || event.key === "o") return { act: "open" };
+  if (event.key === "Enter") return answersEnter(event.target) ? null : { act: "open" };
+  if (event.key === "o") return { act: "open" };
   if (event.key === "x") return { act: "kill" };
   if (event.key === "c") return { act: "copy" };
   if (event.key === "n") return { act: "compose" };

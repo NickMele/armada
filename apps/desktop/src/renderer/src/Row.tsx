@@ -63,7 +63,7 @@
 // what it has is `current_step_id` — the id, in mono. The name is on the detail
 // one click away, where the rail draws it.
 
-import { Button, JobRowStacked, StepBar } from "@armada/components";
+import { Button, JobRowStacked, SplitButton, StepBar } from "@armada/components";
 import type { JobRowField } from "@armada/components";
 import { GitBranch, Layers } from "lucide-react";
 
@@ -215,23 +215,33 @@ export function Row({
       dimmed={stale}
       focused={focused || undefined}
       action={
-        // Secondary, and one. **A list row never takes a primary action** —
-        // fourteen rows offering a decision would be fourteen accent blocks.
-        <div className="flex items-center gap-1">
+        // **One control, and it is secondary.** A list row never takes a
+        // primary action — fourteen rows offering a decision would be fourteen
+        // accent blocks. Kill is in the menu rather than beside it, because two
+        // buttons on a row is two controls whatever they are called, and the
+        // menu is where the drawing already put it.
+        //
+        // A job that is over gets the plain button: there is nothing to kill,
+        // and `Split button` draws its caret whether or not the menu has
+        // anything in it — so a caret over an empty menu is a control that does
+        // not respond.
+        isTerminal(job) ? (
           <Button size="sm" onClick={() => onOpen(job.id)} disabled={stale}>
             {ROW_VERBS[verb].label}
           </Button>
-          {/* Kill sits beside the verb rather than in a menu, because there is
-              no menu here: `Split button` carries one and the row's control is
-              a single act. It is the only destructive thing on the Board, it is
-              never drawn on a job that is already over, and it opens the
-              confirmation rather than killing. */}
-          {isTerminal(job) ? null : (
-            <Button variant="ghost" size="sm" onClick={() => onKill(job.id)} disabled={stale}>
-              Kill
-            </Button>
-          )}
-        </div>
+        ) : (
+          <SplitButton
+            ground="card"
+            disabled={stale}
+            onAction={() => onOpen(job.id)}
+            menuLabel={`More for ${job.title}`}
+            // The binding is displayed here and bound in `keys.ts`, which is
+            // the only way a person finds `x` without reading a contract.
+            items={[{ label: "Kill", shortcut: "x", danger: true, onSelect: () => onKill(job.id) }]}
+          >
+            {ROW_VERBS[verb].label}
+          </SplitButton>
+        )
       }
       // The key that fires the verb, drawn on the cursor's row only. The
       // component holds that rule; this only says which key.
