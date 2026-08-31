@@ -11,6 +11,7 @@
 //! so what those cases hold is the opposite property: a field the tool does not
 //! take is refused rather than ignored.
 
+mod capacity;
 mod fixtures;
 mod gates;
 mod mcp;

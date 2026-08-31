@@ -64,6 +64,10 @@ const ENUMS: &[EnumSource] = &[
         path: "crates/core-model/src/job/fields.rs",
     },
     EnumSource {
+        name: "AdmissionHold",
+        path: "crates/core-model/src/job/fields.rs",
+    },
+    EnumSource {
         name: "Guard",
         path: "crates/core-model/src/job/guard.rs",
     },
@@ -135,6 +139,14 @@ const PAIRINGS: &[Pairing] = &[
         prefix: "verbs.queued_reason.",
         enum_name: "QueuedReason",
     },
+    // The finer half of `waiting_on_resources`, and it has no registry file of
+    // its own either: the set is what `fleet::admitting::Room` can answer, and
+    // the verbs are the only place it is spelled key by key.
+    Pairing {
+        registry: "enum-verbs.toml",
+        prefix: "verbs.admission_hold.",
+        enum_name: "AdmissionHold",
+    },
 ];
 
 /// The vocabularies `enum-verbs.toml` declares in its own header.
@@ -148,6 +160,7 @@ const PAIRINGS: &[Pairing] = &[
 const VOCABULARIES: &[&str] = &[
     "job_status",
     "queued_reason",
+    "admission_hold",
     "escalation_reason",
     "step_verdict",
     "check_outcome",

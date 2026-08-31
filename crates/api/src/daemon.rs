@@ -28,9 +28,9 @@ use crate::mcp::Caller;
 use crate::observing::Observed;
 use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    ChangesRequested, FileReport, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory, JobId,
-    JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redirection, Redispatched,
-    Report, ReportList, WireError, WorkflowSummary,
+    ChangesRequested, FileReport, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobForgotten,
+    JobHistory, JobId, JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redirection,
+    Redispatched, Report, ReportList, WireError, WorkflowSummary,
 };
 
 /// The request-response operations M1 serves.
@@ -50,6 +50,20 @@ use ipc::{
 pub trait Daemon: Send + Sync + 'static {
     /// `list_jobs` — Jobs with state and reason.
     fn list_jobs(&self) -> impl Future<Output = Result<JobList, Refusal>> + Send;
+
+    /// `get_capacity` — the bound, what is occupying it, and the one thing
+    /// holding the next Drone back.
+    ///
+    /// **Fleet-wide, and the answer no per-Job field could give.** A `queued`
+    /// Job's reason folds the concurrency bound and all three machine signals
+    /// into `waiting_on_resources`, because that is the only label the registry
+    /// grants it. This is where the distinction between them lives.
+    ///
+    /// It answers rather than refuses when the machine will not be read: an
+    /// unreadable machine admits, so `held_by` is absent and the two numbers
+    /// are still true. The only `Refusal` here is Fleet being unable to read
+    /// its own roster, which is not a state that has ever occurred.
+    fn get_capacity(&self) -> impl Future<Output = Result<FleetCapacity, Refusal>> + Send;
 
     /// `get_job` — one Job in full: its steps and where each got to, the
     /// criteria it is held to, the branch its worktree is on, and the brief it

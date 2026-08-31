@@ -30,9 +30,9 @@ use core_model::{
 };
 use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    ChangesRequested, JobDelivery, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory,
-    JobId, JobList, JobSummary, ManifestId, ManifestSummary, ModelChoices, Overruled, ProposeJob,
-    Redirection, Redispatched, Work, WorkflowId, WorkflowSummary,
+    ChangesRequested, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence, JobForgotten,
+    JobHistory, JobId, JobList, JobSummary, ManifestId, ManifestSummary, ModelChoices, Overruled,
+    ProposeJob, Redirection, Redispatched, Work, WorkflowId, WorkflowSummary,
 };
 use store::LoadJobError;
 
@@ -79,6 +79,30 @@ where
                 })
                 .collect(),
         })
+    }
+
+    /// How full the fleet is, and the one thing holding the next Drone back.
+    ///
+    /// **The same predicate again, unreduced.** `admit_next` opens with
+    /// `room_for_another` and `queued_reason` folds it to one label; this is
+    /// the third reader of that one answer and it takes it whole. Nothing here
+    /// computes a second opinion about why a Job is waiting — `Room::hold` is a
+    /// `match` over the value admission itself returned.
+    ///
+    /// **`occupied` is `Slots::count`.** The roster is what the bound is
+    /// measured against, and a count taken from Job statuses would disagree
+    /// with it: an escalated Job keeps its Drone alive and idle so a redirect
+    /// costs no respawn, and it keeps its place. `count` sweeps the slots whose
+    /// `Working` has gone, so what it answers is what admission will act on.
+    ///
+    /// The roster lock is taken once and both facts are read under it, so the
+    /// bound, the count and the reason cannot be three readings of three
+    /// different instants. It is admission's own lock order — roster first,
+    /// then the poll lock inside `room_for_another` — so this adds no cycle.
+    async fn get_capacity(&self) -> Result<FleetCapacity, Refusal> {
+        let mut slots = self.slots().lock().await;
+        let room = self.room_for_another(&mut slots).await;
+        Ok(FleetCapacity::of(slots.cap(), slots.count(), room.hold()))
     }
 
     /// One Job in full, folded from its log like every other read.

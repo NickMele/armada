@@ -25,7 +25,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
-use core_model::{Job, JobId, JobStatus};
+use core_model::{AdmissionHold, Job, JobId, JobStatus};
 use store::Moved;
 
 use crate::adrift::Adrift;
@@ -41,20 +41,18 @@ use crate::slots::Slots;
 /// Board, which is the only label `job-statuses.toml` gives a `queued` Job
 /// short of anything. The distinction between them is the operator's.
 ///
-/// # Which one is short reaches nobody, and this is what it would take
+/// # Which one is short now reaches a person, through [`Room::hold`]
 ///
-/// Both callers reduce this to [`Room::granted`] and drop the rest, and
-/// **nothing else in the workspace knows the answer** — so a surface that
-/// wants it returns this value rather than taking a reading of its own. It
-/// needs `Room::Machine(Short)` unreduced, `Slots::count` (which exists) and a
-/// `cap()` accessor on `Slots` (one line). No fourth thing, and no new read.
+/// `queued_reason` still reduces this to [`Room::granted`]. What changed is
+/// that `get_capacity` serves this value unreduced, beside `Slots::cap` and
+/// `Slots::count` — the three things this doc asked for, and no new read.
 ///
-/// **The order is the catch.** The bound is asked first so a Fleet at its cap
-/// pays nothing for a reading, which makes `Bound` and `Machine` exclusive:
-/// "the cap is spent *and* the disk is full" is not a state this can report
-/// without relaxing that or asking twice. The roster lock is held while this
-/// is called, so a status route takes it and then the poll lock — admission's
-/// order, and no new cycle.
+/// **The order is still the catch, and it is deliberately not relaxed.** The
+/// bound is asked first so a Fleet at its cap pays nothing for a reading, which
+/// makes `Bound` and `Machine` exclusive: "the cap is spent *and* the disk is
+/// full" is not a state this can report. What is served is what stops admission
+/// now, and the next thing is served once that clears. Relaxing the order would
+/// put three processes behind every read of a Fleet that is already full.
 ///
 /// Doctor's System stats panel, which `settings.toml`'s headroom row names as
 /// the other reader of these numbers, does not exist either.
@@ -71,6 +69,25 @@ pub(crate) enum Room {
 impl Room {
     pub(crate) fn granted(&self) -> bool {
         matches!(self, Room::Yes)
+    }
+
+    /// The one thing holding the next Drone back, in the registry's own
+    /// spelling, or `None` where nothing is.
+    ///
+    /// **The domain enum, not a word written here.** `enum-verbs.toml` carries
+    /// the verb each of these renders as, and a spelling minted in this file
+    /// would be the second vocabulary the registry exists to prevent. A new
+    /// variant of [`Room`] adds an arm here and a row there, and nothing else —
+    /// `ipc::FleetCapacity` carries the spelling rather than a closed set, so
+    /// the wire does not move for a fifth reason.
+    pub(crate) fn hold(&self) -> Option<AdmissionHold> {
+        match self {
+            Room::Yes => None,
+            Room::Bound => Some(AdmissionHold::ConcurrencyBound),
+            Room::Machine(Short::Cpu) => Some(AdmissionHold::Cpu),
+            Room::Machine(Short::Memory) => Some(AdmissionHold::Memory),
+            Room::Machine(Short::Disk) => Some(AdmissionHold::Disk),
+        }
     }
 }
 

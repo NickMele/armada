@@ -50,6 +50,9 @@
 //! lifeboat that shares a type with the protocol it is the lifeboat for is not
 //! one. [`Skew`] decides when Bridge needs it.
 
+/// How many Drones Fleet may run, how many it is running, and what holds the
+/// next one back. **Fleet-wide, and not a Job's field.**
+mod capacity;
 mod checks;
 mod codec;
 mod detail;
@@ -79,6 +82,7 @@ mod work;
 #[cfg(test)]
 mod tests;
 
+pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use detail::{

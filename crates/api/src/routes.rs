@@ -68,6 +68,14 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/jobs/:job_id",
     },
+    // Fleet's own capacity, not a Job's. It is `/capacity` and not
+    // `/jobs/capacity` because nothing about it is scoped to a Job — the whole
+    // point is the answer no per-Job field could give.
+    Route {
+        operation: "get_capacity",
+        method: "GET",
+        path: "/capacity",
+    },
     // The path taken, under the Job that took it. `get_job_events` drops
     // `get_` and `job_` for the reason `redispatch` drops `_job`: the segment
     // before it already names the Job. It is not `/events`, which is the
@@ -326,6 +334,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/workflows", get(list_workflows::<D>))
         .route("/manifests", get(list_manifests::<D>))
         .route("/models", get(list_models::<D>))
+        .route("/capacity", get(get_capacity::<D>))
         .route("/jobs/:job_id", get(get_job::<D>))
         .route("/jobs/:job_id/events", get(get_job_events::<D>))
         .route("/jobs/:job_id/evidence", get(get_evidence::<D>))
@@ -364,6 +373,18 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
 async fn list_jobs<D: Daemon>(State(served): State<Served<D>>) -> Response {
     match served.daemon.list_jobs().await {
         Ok(jobs) => answer(StatusCode::OK, &jobs, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// The bound, what is occupying it, and what holds the next Drone back.
+///
+/// **Its own route rather than a field on `/jobs`.** That read is a list of
+/// Jobs and is made on every Board refresh; this is three values about Fleet,
+/// asked for by the surface that draws Fleet's state.
+async fn get_capacity<D: Daemon>(State(served): State<Served<D>>) -> Response {
+    match served.daemon.get_capacity().await {
+        Ok(capacity) => answer(StatusCode::OK, &capacity, &served.run_id),
         Err(refusal) => refused(refusal),
     }
 }

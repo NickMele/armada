@@ -36,6 +36,25 @@ transport = "HTTP"
 helm_access = "Yes"
 description = "Completed Jobs, chronological"
 
+[operations.get_capacity]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "How many Drones Fleet may run, how many it is running, and which one thing is holding the next one back"
+notes = """
+Fleet-wide, and the answer no per-Job field could give. `get_job`'s `queued_reason` says why *that row* has not started and folds the concurrency bound, CPU, memory and disk into one label — `waiting_on_resources` is the only thing `job-statuses.toml` grants a `queued` Job short of anything. So a person saw that their Job was held and never what was holding it.
+
+`occupied` is the roster's own count, which is what admission measures the bound against, and never a count of `running` rows. A Job that escalated on a refusal keeps its Drone alive and idle so a redirect costs no respawn, and it keeps its place in the roster while its status is `escalated`. A status-derived count would read "1 of 2" while Fleet admits nothing.
+
+`held_by` carries **one** answer, not a set. `fleet::admitting::Room` asks the bound before it reads the machine so a Fleet at its cap never pays three processes for a reading it would not have acted on, which makes the bound and the machine exclusive: "the cap is spent *and* the disk is full" is not a state this can report. What crosses is what is stopping admission now; the next thing crosses once that clears. Absent means nothing is holding it — not unknown, and not "Fleet did not look", because an unreadable machine admits rather than refuses.
+
+Its spelling is the one open set on this seam. Bridge reads it through the generated vocabulary rather than matching on it, which is the row `docs/practices/protocol.md` calls minor: a fifth reason a Job sits at `queued` is a variant in `core-model` and a row in `enum-verbs.toml`, and moves neither number in `protocol-version.toml`.
+
+A route of its own rather than a field on `list_jobs`, which is read on every Board refresh and is a list of Jobs. This is one small answer about Fleet, asked by the surface that draws Fleet's own state.
+
+`helm_access` is `Yes` for the reason the other queries have it: reading how full the fleet is costs three integers and tells Helm why the Job it dispatched has not started.
+"""
+
 [operations.get_diff]
 kind = "query"
 transport = "HTTP"

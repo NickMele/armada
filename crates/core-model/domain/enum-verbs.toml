@@ -16,6 +16,10 @@
 # The enums, which `xtask`'s `VOCABULARIES` holds the same list of:
 #   job_status                 - where a Job is. Keys match job-statuses.toml
 #   queued_reason              - why a queued Job has not started
+#   admission_hold             - which one thing is holding the next Drone
+#                                back. The finer half of
+#                                `queued_reason.waiting_on_resources`, read
+#                                fleet-wide rather than per Job
 #   escalation_reason          - why a Job stopped and asked. Keys match
 #                                escalation-triggers.toml
 #   step_verdict               - the outcome of one workflow step
@@ -152,6 +156,38 @@ status_token = "--status-not-started"
 vocabulary = "Queued reason"
 in_code = ""
 notes = "A pre-approved Job out of headroom reads waiting on resources rather than falling through unrendered, which is what the old two-axis field did."
+
+[verbs.admission_hold.concurrency_bound]
+verb = "waiting on a free drone"
+icon = ""
+status_token = "--status-not-started"
+vocabulary = "Admission hold"
+in_code = ""
+notes = "The specific form of waiting on resources, so it is spelled the same way and reads as the same axis. A place is held for as long as a Job holds a Drone, which is not the same as the Job running — an escalated Job keeps its Drone alive and idle so a redirect costs no respawn. No glyph: the status bar carries none, and the queued_reason glyph cpu is reserved to that vocabulary."
+
+[verbs.admission_hold.cpu]
+verb = "waiting on CPU"
+icon = ""
+status_token = "--status-not-started"
+vocabulary = "Admission hold"
+in_code = ""
+notes = "CPU as an initialism rather than lowercase. The ban on ALL CAPS targets shouting, and every other spelling of this word in the repository is capitalised."
+
+[verbs.admission_hold.memory]
+verb = "waiting on memory"
+icon = ""
+status_token = "--status-not-started"
+vocabulary = "Admission hold"
+in_code = ""
+notes = "The reading over-reads — ps summed said 64% where darwin said 26% — so this is the backstop rather than the signal that ordinarily fires. The verb says what is short and claims no figure."
+
+[verbs.admission_hold.disk]
+verb = "waiting on disk"
+icon = ""
+status_token = "--status-not-started"
+vocabulary = "Admission hold"
+in_code = ""
+notes = "The one of the three that has actually run out: 31 Aug 2026, a volume filled during a parallel agent run and three agents died at zero bytes free holding uncommitted work. Named first by short_of for that reason."
 
 [verbs.escalation_reason.blocked_by_policy]
 verb = "blocked by policy"

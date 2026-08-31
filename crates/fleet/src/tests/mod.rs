@@ -157,6 +157,7 @@ mod attribution;
 mod boundary;
 mod bounding;
 mod briefing;
+mod capacity;
 mod checking;
 mod checks;
 mod concurrency;
