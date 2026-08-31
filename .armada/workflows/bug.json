@@ -220,6 +220,32 @@
 # Each criterion is its own call, so the entry below is one more Judge call per
 # Job on Bug's cheapest step. That is the price of the front of the workflow
 # being checked at all: a plan for the wrong problem costs every step after it.
+#
+# **`model` is on `handoff` and nowhere else in this file, and the absences are
+# the decision.** Owner's call, 31 Aug 2026: cheap by default, strong where the
+# thinking is. A step naming none is run as the Job was proposed, and the Job's
+# model is the one the picker defaults to -- so a step that wants the ordinary
+# model says nothing, and a value restating the fallback would be a second place
+# to keep it in sync. What is written down is the step that wants less.
+#
+# `plan` decides what the change is and writes the document `implement` is shown
+# as a reference; `implement` writes the diff. Both are the deciding half and
+# both stay on the Job's model. `handoff` reads a diff that already exists and
+# says what was done -- there is no judgement in it that a cheaper model would
+# do worse, and it is the last step of the workflow dispatched most often here.
+#
+# The registry already annotates the Judge this way -- "haiku for routine steps,
+# sonnet for the advisory review pass" -- so this is the same rule applied to the
+# step rather than to the check on it. It is also the direction it is safe to be
+# wrong in: a strong-model default has emptied a weekly limit before, and a
+# summary written by too small a model is a summary somebody rewrites.
+#
+# **A model switch is not free.** The prompt cache prefix is per model, so a step
+# that changes model re-caches its prefix rather than reading one --
+# `docs/spikes/005-what-does-a-job-cost.md` measured a cold run paying 58.6% of
+# its bill on cache writes against 27.6% warm. On a subscription that is latency
+# rather than money, and it is the argument against alternating step by step. One
+# switch, at the last step, is what this file spends.
 {
   "version": 1,
   "workflow_id": "bug",
@@ -349,6 +375,7 @@
       "id": "handoff",
       "label": "Summarise",
       "evidence_type": "facts_note",
+      "model": "haiku",
       "advance_gate": "human_always"
     }
   ]

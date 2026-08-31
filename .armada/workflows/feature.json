@@ -110,6 +110,12 @@
 # `tests` on `test`. The three Bridge Checks do not split that way, because all
 # three are compilers and this workspace has no Bridge test runner to be the
 # other half of the pair.
+#
+# **`model: haiku` on `handoff`, and nowhere else.** `bug.json` carries the
+# reasoning and the cache cost. Here it places the same way: `scope` decides what
+# the change is, `implement` and `tests` each produce a diff a Check and a Judge
+# read, and all three stay on the Job's model by saying nothing. `handoff`
+# summarises work that is already done and already verified.
 {
   "version": 1,
   "workflow_id": "feature",
@@ -293,6 +299,7 @@
       "id": "handoff",
       "label": "Summarise",
       "evidence_type": "facts_note",
+      "model": "haiku",
       "advance_gate": "human_always"
     }
   ]

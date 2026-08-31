@@ -37,6 +37,12 @@
 # both halves is the case: a revert that restores the Rust and leaves the
 # Bridge calling what it removed passes `build` and `test` and does not
 # compile.
+#
+# **`model: haiku` on `handoff`, and nowhere else.** `bug.json` carries the
+# reasoning and the cache cost. `revert` produces a diff and is judged on
+# undoing one named change and nothing else, which is the deciding work of this
+# workflow entire -- it names no model and is run as the Job was proposed.
+# `handoff` reports.
 {
   "version": 1,
   "workflow_id": "revert",
@@ -115,6 +121,7 @@
       "id": "handoff",
       "label": "Summarise",
       "evidence_type": "facts_note",
+      "model": "haiku",
       "advance_gate": "human_always"
     }
   ]

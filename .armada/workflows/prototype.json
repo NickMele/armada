@@ -29,6 +29,13 @@
 #
 # Same reasoning as the Judge above. Neither a criterion nor a footprint has
 # anything here to be true about.
+#
+# **`model: haiku` on `write_up`, and nowhere else.** `bug.json` carries the
+# reasoning and the cache cost. `frame` decides what question the prototype is
+# built to answer, and `build` produces the diff -- gated by nobody but read by
+# the person who asked for it, which is a reason to keep it capable rather than
+# a reason to make it cheap. `write_up` says what was learned once the answer is
+# in, and is the one step here whose work is reporting.
 {
   "version": 1,
   "workflow_id": "prototype",
@@ -51,6 +58,7 @@
       "id": "write_up",
       "label": "Write up",
       "evidence_type": "facts_note",
+      "model": "haiku",
       "advance_gate": "auto"
     }
   ]
