@@ -3059,7 +3059,7 @@ const GATE_TRACKS = [
   "var(--armada-track-origin)",
   "var(--armada-track-bar)",
   "var(--armada-track-step)",
-  "var(--armada-track-time)",
+  "var(--armada-track-created)",
   "var(--armada-track-provenance)"
 ].join(" ");
 const NeedsApproval = {
@@ -8234,11 +8234,11 @@ const __vite_glob_0_58 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   default: meta$3
 }, Symbol.toStringTag, { value: "Module" }));
 const APPROVAL_TRACKS = [
-  "calc(var(--space-12) * 3 + var(--space-6))",
-  "calc(var(--space-12) + var(--space-6))",
-  "calc(var(--space-12) * 2 + var(--space-3))",
-  "calc(var(--space-12) * 2 + var(--space-1))",
-  "calc(var(--space-12) * 2 + var(--space-8))"
+  "var(--armada-track-origin)",
+  "var(--armada-track-bar)",
+  "var(--armada-track-step)",
+  "var(--armada-track-created)",
+  "var(--armada-track-provenance)"
 ].join(" ");
 function TheListSixStatesOneRowShape({
   heading: heading2,
@@ -8305,6 +8305,7 @@ const queued = {
   statusLabel: "Queued",
   headline: "Retire the legacy poke path",
   jobId: "job_8b42",
+  tracks: APPROVAL_TRACKS,
   fields: [
     { value: workflow },
     { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 0, label: "Not started, 4 steps" }) },
@@ -8331,7 +8332,8 @@ const running = {
     { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 2, activity: "running", label: "Step 2 of 4" }) },
     { value: "Implement", emphasis: true },
     { value: "11m 03s", mono: true },
-    { value: "~$1.80", mono: true }
+    { value: "~$1.80", mono: true },
+    { value: "Dispatched by you" }
   ],
   action: open
 };
@@ -8351,7 +8353,8 @@ const failed = {
     { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 3, activity: "failed", label: "Step 3 of 4" }) },
     { value: "Run tests", emphasis: true },
     { value: "22m 41s", mono: true },
-    { value: "~$2.10", mono: true }
+    { value: "~$2.10", mono: true },
+    { value: "Found by Fleet" }
   ],
   action: open
 };
@@ -8373,7 +8376,8 @@ const done = {
     },
     { value: "Summarise" },
     { value: "18m 22s", mono: true },
-    { value: "~$2.40", mono: true }
+    { value: "~$2.40", mono: true },
+    { value: "Drafted in Helm" }
   ],
   action: open
 };
@@ -8393,7 +8397,8 @@ const killed = {
     { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 2, activity: "killed", label: "Step 2 of 4" }) },
     { value: "Implement", emphasis: true },
     { value: "4m 09s", mono: true },
-    { value: "~$0.60", mono: true }
+    { value: "~$0.60", mono: true },
+    { value: "Workflow-triggered" }
   ],
   action: open
 };

@@ -25,6 +25,14 @@ import { APPROVAL_TRACKS, TheListSixStatesOneRowShape } from "./TheListSixStates
  * glyph until the resource became a real one — Fleet bounds how many drones it
  * runs at once, and a Job past the bound is held at `queued` for that reason
  * and no other.
+ *
+ * **Every row carries origin now, which is the Board's requirement and was
+ * true of one row here.** #218 gave `Job row (stacked)` its sixth track and
+ * left this file alone; the four rows that had run stopped at spend, so origin
+ * was drawn at the gate and nowhere else. The two gate rows keep their own
+ * five-track list — a Job with no worktree has a timestamp where a running row
+ * has elapsed, and no spend at all — and both lists compose the same named
+ * properties rather than repeating widths.
  */
 const meta: Meta<typeof TheListSixStatesOneRowShape> = {
   title: "Screens/The list — six states, one row shape",
@@ -82,6 +90,7 @@ const queued: JobRowStackedProps = {
   statusLabel: "Waiting on resources",
   headline: "Retire the legacy poke path",
   jobId: "job_8b42",
+  tracks: APPROVAL_TRACKS,
   fields: [
     { value: workflow },
     { value: <StepBar total={4} current={0} label="Not started, 4 steps" /> },
@@ -110,6 +119,7 @@ const running: JobRowStackedProps = {
     { value: "Implement", emphasis: true },
     { value: "11m 03s", mono: true },
     { value: "~$1.80", mono: true },
+    { value: "Dispatched by you" },
   ],
   action: open,
 };
@@ -131,6 +141,7 @@ const failed: JobRowStackedProps = {
     { value: "Run tests", emphasis: true },
     { value: "22m 41s", mono: true },
     { value: "~$2.10", mono: true },
+    { value: "Found by Fleet" },
   ],
   action: open,
 };
@@ -156,6 +167,7 @@ const done: JobRowStackedProps = {
     { value: "Summarise" },
     { value: "18m 22s", mono: true },
     { value: "~$2.40", mono: true },
+    { value: "Drafted in Helm" },
   ],
   action: open,
 };
@@ -177,6 +189,7 @@ const killed: JobRowStackedProps = {
     { value: "Implement", emphasis: true },
     { value: "4m 09s", mono: true },
     { value: "~$0.60", mono: true },
+    { value: "Workflow-triggered" },
   ],
   action: open,
 };
@@ -236,7 +249,7 @@ export const Killed: Story = { render: () => one(killed) };
  * | Field | Why it is not here |
  * |---|---|
  * | Spend | Measured nowhere — not on the wire, not in the store, not computed |
- * | `Dispatched by you` | No actor on the row, and `origin` has no verb in `enum-verbs.toml` |
+ * | `Dispatched by you` | `origin` is on `JobSummary`, and its five wire values have no rows in `enum-verbs.toml`. The five sentences above are drawn on `docs/concepts/job-board.md` and nowhere a generator reads, so Bridge would have to retype them |
  * | Elapsed on a Job that is over | `JobSummary` carries no instant the Job stopped at, and a terminal elapsed running to now would read as still working |
  *
  * The step is its `step_id`, in mono: `StepDetail` carries a label, but a list

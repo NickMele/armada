@@ -41,17 +41,21 @@ const open = (
 /**
  * The track list a Job at the gate takes: no branch, step or elapsed reading
  * yet, so a "created" timestamp and origin do the work the running row's
- * time and spend tracks do. Composed from this component's own track custom
- * properties, the same way `APPROVAL_TRACKS` in `TheListSixStatesOneRowShape`
- * composes its own — duplicated here rather than imported, because a
- * composition's story cannot reach into a screen, and because
- * `APPROVAL_TRACKS` sits outside this change's write scope. Reported.
+ * time and spend tracks do. Duplicated rather than imported, because a
+ * composition's story cannot reach into a screen — but every width is now a
+ * named property declared in this component's own stylesheet, which is what
+ * makes the duplicate a second reference rather than a second answer.
+ *
+ * The fourth track was `--armada-track-time`, 76px, while `APPROVAL_TRACKS` in
+ * `TheListSixStatesOneRowShape` drew the drawing's 100px as a bare `calc()`.
+ * The drawing wins: the timestamp track is `--armada-track-created`, and both
+ * lists say so in the same words.
  */
 const GATE_TRACKS = [
   "var(--armada-track-origin)",
   "var(--armada-track-bar)",
   "var(--armada-track-step)",
-  "var(--armada-track-time)",
+  "var(--armada-track-created)",
   "var(--armada-track-provenance)",
 ].join(" ");
 

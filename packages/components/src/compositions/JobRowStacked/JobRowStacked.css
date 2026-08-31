@@ -19,6 +19,15 @@
   --armada-track-step: calc(var(--space-12) * 2 + var(--space-3));
   /* 76px: elapsed. */
   --armada-track-time: calc(var(--space-12) + var(--space-6) + var(--space-1));
+  /* 100px: the created or approved timestamp a Job at the gate carries in
+     place of elapsed. Wider than elapsed because `created 09:12` is a longer
+     string than `11m 03s`, and the drawing sizes it for the longer one.
+
+     It stood as a bare `calc()` inside `APPROVAL_TRACKS` in the screens tree,
+     which is why #218's rename did not reach it and why that list and the
+     stories' own `GATE_TRACKS` came to disagree by 24px about the same track.
+     Named here so the gate row's widths live where every other row's do. */
+  --armada-track-created: calc(var(--space-12) * 2 + var(--space-1));
   /* 68px: spend. Sized for both billing modes — `68% quota` and `~$2.40` — not
      for whichever appears first, because neither mode is the default. */
   --armada-track-spend: calc(var(--space-12) + var(--space-4) + var(--space-1));
