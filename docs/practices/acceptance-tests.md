@@ -17,9 +17,14 @@ the gate asserts about it.
 > no network opened, every adapter a fake.
 > Why: a test that reaches the machine measures the machine.
 
-The test is `crates/acceptance/tests/bug_job.rs` and the apparatus it runs on
-is `crates/acceptance/tests/bench/`. The two are separated so that what the
-milestone claims and what it is claimed against read as different things.
+| Milestone | The claim | Where |
+|---|---|---|
+| M1 — Dogfood | A Bug Job runs from the approval gate to `completed_success` | `crates/acceptance/tests/bug_job.rs` |
+| Focus | A Drone belongs to the step it was given | `crates/acceptance/tests/drone_per_step.rs` |
+
+The apparatus is `crates/acceptance/tests/bench/`, shared, with a file per
+milestone. Claim and apparatus are separated so that what a milestone claims and
+what it is claimed against read as different things.
 
 ## Why it is written first
 
@@ -86,16 +91,35 @@ is that Armada does a small real task in the Armada repo and a person merges
 the branch it wrote; the run itself is a person's to perform once. The test's
 own header carries the full list of gaps.
 
-## The next milestone
+## A second milestone's test, and the one thing M0's answer cannot repeat
 
-Whether the next milestone writes its test first and enforces its failure is
-open. It is a decision about how that milestone is built, and neither M0's
-answer nor M1's outcome settles it.
+Focus writes its test first. `CLAUDE.md` says a milestone's test is written
+before the code, so that half was never really open.
 
-## Open questions
+**What is decided here is that it compiles.** M0's test named APIs that did not
+exist, so `cargo test -p acceptance` did not compile and rule one was satisfied
+by a non-zero exit. That is unrepeatable now, for a reason that did not exist
+when there was one milestone: the package holds every milestone's test and the
+gate compiles all of them in one invocation. A Focus test that named `job_steps`'
+Drone pointer before #137 built it would take `bug_job.rs` down with it, and
+M1's claim would stop being run for the length of Focus.
 
-- **[m2-test-first]** Whether the next milestone's acceptance test is written
-  before its code, and whether a gate rule asserts its failure until the
-  milestone closes. M0 did both, at the cost of a workspace test run that could
-  not include the acceptance crate. Nothing decides that the next one repeats
-  it.
+> **Rule.** A milestone's test may not stop an earlier milestone's test running.
+> Why: a shipped claim that quietly stops being checked is the failure the gate
+> exists to prevent, arriving from the inside.
+
+So a test written before its code is written in vocabulary that exists, against
+behaviour that does not. Rule one goes red reporting a **failed assertion**
+rather than a broken build, which is the more precise of the two signals it
+already distinguishes — "it builds, and the claim it makes is not carried".
+
+**What that costs is stated rather than hidden.** A claim needing vocabulary
+that does not exist yet cannot be an assertion, so it is named in the test's own
+header as a claim the file does not carry and why. `drone_per_step.rs` names
+three. That is weaker than a compiler error list, and the compiler error list is
+not available at this price.
+
+**And one gap reports at a time.** A panic ends a run, so a test whose
+assertions are in the order a Job meets them names the earliest unmet one. On
+Focus that is the order the milestone is built in, so each step landing moves
+the failure down the file rather than clearing it.

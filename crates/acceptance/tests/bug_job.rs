@@ -48,6 +48,9 @@
 //! transitioning — is in [`bench`], so that what the milestone claims and what
 //! it is claimed against read as two different things.
 
+// The bench is shared with the other milestone's test and neither uses all of
+// it. Every item in it is reached from one of the two.
+#[allow(dead_code)]
 mod bench;
 
 use adapter_traits::{CallDetail, DroneEvent, WorktreeSpec};
