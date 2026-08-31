@@ -305,8 +305,11 @@ issue tracker and nothing on the wire names the repository's remote, so filing
 produces a body and puts it on the clipboard. Two things follow and are not
 built: a **Reported** strip carrying the issue link and the time, and offering
 an already-filed issue to the second occurrence of a code. Both need an issue
-number, and none ever reaches Bridge. **The body carries what was attached and
-what was not, by name** — with no strip, it is the only place that answer lives.
+number, and none ever reaches Bridge. **The control therefore stays after a
+filing**, and nothing on the error says one happened — a strip saying "reported"
+on the evidence that somebody pressed copy would be Armada claiming to know
+something it does not. **The body carries what was attached and what was not, by
+name** — with no strip, it is the only place that answer lives.
 
 **The record is the only item offered today.** Doctor is not built; a Judge
 response and a diff belong to a Job read whole, which no failure surface holds;
