@@ -110,7 +110,8 @@ flowchart LR
   Q -->|dependency_failed| ESC["escalated"]
   R -->|escalation trigger| ESC
   AR -->|interrupted| ESC
-  ESC -->|"redirect / restart / override"| R
+  ESC -->|redirect| R
+  ESC -->|"restart / override"| Q
 
   R -->|escape_hatch| P["piloted"]
   AR -->|escape_hatch| P
@@ -134,9 +135,9 @@ different name.** They are ordered here by how much they take away.
 
 | Act | Where the Job stands | What survives | Where it lands |
 |---|---|---|---|
-| **Override the verdict** | Anywhere | Everything, including the refused step's own work | `running`, the **next** step |
+| **Override the verdict** | Anywhere | Everything, including the refused step's own work | `queued`, then the **next** step when there is room. On the workflow's last step, `completed_success` |
 | **Redirect** | Mid-step, or at a boundary | The worktree and every step so far. Mid-step the session too; at a boundary there is none, and the words go into the next Drone's opening brief | `running` the same step where a step stopped; where none did, the Job stays `escalated` until the work turns |
-| **Restart a step** | A step stopped, and is to be worked again | The worktree and the branch; earlier steps' work | `running`, the same step, a new Drone |
+| **Restart a step** | A step stopped, and is to be worked again | The worktree and the branch; earlier steps' work | `queued`, then the same step with a new Drone when there is room |
 | **Redispatch** | Anywhere | Nothing. A new Job carries a reference back | A replacement at the approval gate |
 | **Pilot** | Anywhere | The worktree, handed to a person | `piloted` |
 
@@ -229,6 +230,31 @@ Restart Step's, which is the row above.
 
 The override is the exception and says so: the person is disagreeing with a
 verdict, which is the same act wherever the Job stands.
+
+### Two of the five ask for a Drone rather than starting one
+
+**A restart and an override land at `queued`, not at `running`.** The
+concurrency cap bounds how many Drones run at once, and the only thing that
+starts one is admission — so an act that spawned for itself would let a person
+push Fleet past its own cap, one press at a time. Both instead take
+`escalated -> queued` and wait their turn, which is the shape approving at a
+human gate has always had.
+
+**Neither is refused when the cap is spent.** The decision is taken at the
+moment it is made: an override records the person's verdict on the step there
+and then, and a restart records that the Job is to be worked again. What waits
+is only the process. The Job reads `waiting_on_resources` while it waits, so a
+person sees why rather than being asked to press the button again later.
+
+**A restart leaves its step at `stopped` until the Drone starts.** Entering
+`running` is what the record counts as a run of a step, and every verdict, Check
+and piece of evidence is filed under that count — so a step that entered
+`running` when a button was pressed would open a run with nothing in it.
+
+The redirect is the one act on an escalated Job that still goes straight to
+`running`, because it starts nothing: the Drone is there, holding its session.
+An override of the workflow's **last** step also finishes the Job on the spot,
+for the same reason — no Drone is owed, so nothing is waiting on the bound.
 
 **Where a step-level escalation pays off.** Only a step-level trigger reaches a
 step's `last_verdict`, so only a step-level escalation names the step that

@@ -49,7 +49,9 @@
 //! Job is `running` or `awaiting_review`; frozen otherwise, never cleared,
 //! still rendered." [`ADVANCING_STATUSES`] is that sentence — which is why a
 //! step stops *before* the Job escalates, and why a step move and a status move
-//! belong in one log in one order.
+//! belong in one log in one order. It has one exception, and
+//! [`overruled_while_frozen`] is it — a predicate rather than a third entry in
+//! the list, for the reason given there.
 
 use core::fmt;
 
@@ -92,6 +94,28 @@ const fn step_edge(from: StepState, to: StepState) -> StepEdge {
 /// a silent no-op, so a caller that drove a step under the wrong status hears
 /// about it.
 pub const ADVANCING_STATUSES: &[JobStatus] = &[JobStatus::Running, JobStatus::AwaitingReview];
+
+/// The one move a person may make on a step the outer machine has frozen:
+/// `stopped -> advanced` as an override, beneath `escalated`.
+///
+/// **A predicate and not a third entry in [`ADVANCING_STATUSES`]**, because
+/// those are different changes. The list says a step moves *freely* beneath a
+/// status, so `escalated` in it would let the gate stop a step and a dispatch
+/// enter one under a Job parked for a person — the whole of what the freeze
+/// keeps out. This admits the one move the freeze cannot be right about: an
+/// override **is** the ruling the escalation asked for, and there is no status
+/// to make it from first, because where the Job goes next follows from it.
+///
+/// The capability is [`StepTarget::Overridden`], which is already the only
+/// target that may walk `stopped -> advanced` and carries the trigger it
+/// overrules. All three conditions are load-bearing; drop any one and this
+/// admits a resume, an advance of a step that never stopped, or a pass written
+/// over a verdict a person was disagreeing with.
+fn overruled_while_frozen(status: JobStatus, from: StepState, to: &StepTarget) -> bool {
+    status == JobStatus::Escalated
+        && from == StepState::Stopped
+        && matches!(to, StepTarget::Overridden(_))
+}
 
 /// Where a step is going.
 ///
@@ -230,6 +254,11 @@ pub enum IllegalStepTransition {
     /// The Job is not in a status the inner machine advances beneath. Frozen,
     /// in the registry's word — and still rendered, which is why this refuses
     /// rather than clearing anything.
+    ///
+    /// **An override beneath `escalated` does not land here**, and the message
+    /// does not mention it: [`overruled_while_frozen`] admits that one move,
+    /// and naming an exception inside the refusal for everything else would
+    /// read as an invitation to find another.
     StepsAreFrozen { step_id: StepId, status: JobStatus },
     /// Both states exist and no edge joins them. A move from a state to itself
     /// lands here: no self-edge is declared, and a move that changes nothing
@@ -306,7 +335,7 @@ pub(crate) fn admits_step(
     from: StepState,
     to: &StepTarget,
 ) -> Result<(), IllegalStepTransition> {
-    if !ADVANCING_STATUSES.contains(&status) {
+    if !ADVANCING_STATUSES.contains(&status) && !overruled_while_frozen(status, from, to) {
         return Err(IllegalStepTransition::StepsAreFrozen {
             step_id: step_id.clone(),
             status,

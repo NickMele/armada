@@ -486,6 +486,10 @@ The second of the four acts that reach an escalated Job — `docs/concepts/job.m
 
 **It resolves nothing again.** The toolset, the model and the environment come from the snapshot taken when the Job was created, and a restart reads that same snapshot — `docs/concepts/drone.md` has the rule and why it is a rule. A scope revision is the one act that re-resolves, because a person approved the new Manifest set; permissions intersect there, so a widened scope can only produce a narrower toolset than the Drone that asked for it.
 
+**It asks for a Drone; it does not start one.** The Job takes `escalated -> queued` and admission spawns when `settings.concurrency-cap` has room, which is the same shape `approve_review` and `request_changes` have. **It is never refused because the cap is spent** — the act lands, and the Job reads `waiting_on_resources` while it waits rather than the person being asked to press it again later. The step stays `stopped` until the Drone starts, because entering `running` is what the record counts as a run of a step.
+
+Its refusals are answered at the moment it is asked, not deferred: a Drone still standing on the Job, a worktree already reclaimed, or an exit the record has not taken down. Each is a question about now.
+
 Helm does not reach it directly, because Helm access on a command is the ladder rung and this has none.
 """
 
@@ -536,12 +540,19 @@ with no reasons beside it gives the rate and never the cause. The Drone is told
 only that the step was accepted, because it did nothing wrong.
 
 It needs no Drone and refuses on neither presence nor absence, which is what
-separates it from `redirect_drone` and `restart_step`. Where the session is still
-there the acceptance is a turn injected into it; where it is gone a fresh Drone
-takes the *next* step on the surviving worktree, and a worktree that has been
+separates it from `redirect_drone` and `restart_step`. A worktree that has been
 reclaimed is refused with the same sentence `restart_step` uses. Where the
 overruled step was the workflow's last, the work is committed, delivered and the
 Job recorded `completed_success`, exactly as `approve_review` ends one.
+
+**It asks for the next step's Drone rather than starting one.** The Job takes
+`escalated -> queued` and admission spawns when `settings.concurrency-cap` has
+room — the same edge `restart_step` takes and for the same reason: the cap
+bounds Drones, and an act that spawned for itself would let a person push Fleet
+past it. **It is never refused because the cap is spent.** The person's verdict
+is written the moment they give it, on the step, beneath `escalated`; only the
+process waits, and the Job reads `waiting_on_resources` while it does. The
+completion path above spawns nothing and therefore does not wait at all.
 
 Helm does not reach it. Overruling a verifier is the act a verifier exists to
 make somebody take deliberately, and it is not on the Intervention Ladder.

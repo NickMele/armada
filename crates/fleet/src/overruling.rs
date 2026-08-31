@@ -30,7 +30,6 @@ use core_model::{
 use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
-use crate::crossing::{Cleared, Crossed, Produced};
 use crate::daemon::Fleet;
 use crate::transcript;
 
@@ -77,17 +76,30 @@ where
     /// accord — disagreeing with a verdict is exactly the part a person was
     /// escalated to.
     ///
-    /// The order is `crate::resume`'s and for its reason: the inner machine is
-    /// frozen beneath `escalated`, so the Job moves first and the step moves
-    /// beneath the status it arrives in.
+    /// **The step moves beneath `escalated`, and it is the only move that
+    /// may** — `core_model::overruled_while_frozen` is that exception and says
+    /// why. It cannot be deferred: it *is* the act. That separates it from
+    /// `restart_step`, which defers its step move entirely, because entering
+    /// `running` opens a run and a run belongs to a Drone.
+    ///
+    /// **A workflow with a step left goes back in the queue**, at
+    /// `escalated -> queued`, and `crate::readmitting` spawns when
+    /// `concurrency-cap` has room. Until #50's follow-on this act opened a slot
+    /// of its own and consulted no bound. **An override of the last step
+    /// finishes the Job here instead**, because no Drone is owed and there is
+    /// nothing for the bound to bound.
+    ///
+    /// **Neither is refused because the cap is spent.** The act lands, and a
+    /// Job that waits says `waiting_on_resources`.
     pub async fn override_verdict(
         &self,
         job_id: &JobId,
         overruling: &Overruling,
     ) -> Result<Job, Adrift> {
-        // Opened rather than looked up: an overridden verdict puts a fresh
-        // Drone on the next step through `crossed_onto`, and the Job whose
-        // Drone has already gone has no slot in the roster to put it in.
+        // Opened rather than looked up: the Job whose Drone has gone has no
+        // slot in the roster, and `completed` may still have work to land
+        // through one. It holds nothing on the path that re-queues, and
+        // `Slots::sweep` forgets it the moment this call lets it go.
         let slot = self.slot_for(job_id).await;
         let mut working = slot.lock().await;
         let job = self.load(job_id).await?;
@@ -96,52 +108,56 @@ where
         // is a Job whose earlier steps' work is not on disk, and what is being
         // asked for there is a redispatch — the same refusal `restart_step`
         // makes, made before the Job has been half-moved rather than after.
-        // `crossed_onto` reaches the same directory again once the Drone that
-        // was on it has been stood down, because until then the slot is holding
-        // the reading that answers for free.
+        // `crate::readmitting` reaches the same directory again at the spawn.
         self.surviving_worktree(&job)?;
         let passed = self.declared_step(&job, &step)?.clone();
         let next = job.workflow().after(&step).cloned();
-        // **Read before anything moves.** A record that would not open would
-        // otherwise escalate an override that had already moved the Job and
-        // the step. One query buys a refusal that leaves the Job exactly where
-        // the person found it.
-        let recorded = self
-            .store()
-            .lock()
-            .await
-            .step_evidence(job_id)
-            .map_err(Adrift::Reading)?;
 
-        let job = self.move_job(&job, Target::Running, Actor::Human).await?;
+        // **First, and beneath `escalated`.** See the note above: this move is
+        // the act, and the Job's own move is what follows from it rather than
+        // the other way round.
         let job = self
             .move_step_by(&job, &step, StepTarget::Overridden(overruled), Actor::Human)
             .await?;
-        // After both moves and before anything else can fail, so the reason a
-        // person gave is on the record whatever the resume does next.
+        // After the move and before anything else can fail, so the reason a
+        // person gave is on the record whatever happens next.
         self.noted_override(job_id, &step, overruled, overruling);
 
-        let told = OutcomeTurn::approved(&passed, next.as_ref());
-        let Some(next) = next else {
-            return self.completed(&job, &told, job_id, &mut working).await;
-        };
-        let job = self.move_step(&job, next.id(), StepTarget::Running).await?;
-        // **One arm, because the two used to differ over a fact that no longer
-        // decides anything.** It asked whether a process happened to be there:
-        // where one was it was told and carried on, and where one was not a
-        // fresh Drone was put on the next step. A Drone belongs to a step now,
-        // so the second is what happens either way — the Drone that worked the
-        // overridden part is ended whether it was standing or already gone, and
-        // `crate::boundary` is the one place that order is written.
-        //
-        // The two facts a fresh Drone is owed are the ones the missing process
-        // would have held: what the overridden part produced, and that a person
-        // settled it.
-        let crossed = Crossed::nothing()
-            .and_produced(Produced::before(job.workflow(), next.id(), &recorded))
-            .and_cleared(Cleared::reviewed(&passed));
-        self.crossed_onto(&job, next.id(), crossed, &mut working)
-            .await?;
+        if next.is_none() {
+            // Nothing is owed a Drone, so nothing waits on the bound. The Job
+            // takes the edge it has always taken from here, and `completed`
+            // lands the work through the slot above and ends the Drone.
+            let told = OutcomeTurn::approved(&passed, None);
+            let job = self.move_job(&job, Target::Running, Actor::Human).await?;
+            let done = self.completed(&job, &told, job_id, &mut working).await?;
+            // **`completed` does not admit and says so**: it holds a slot, and
+            // taking the roster while holding one is the lock order reversed.
+            // This is the caller doing it, which is what that note asks for and
+            // what this path had been missing — a Job that finished by override
+            // left the bound spent until some later turn noticed.
+            drop(working);
+            self.admit_next().await?;
+            return Ok(done);
+        }
+        // **The overridden part's Drone ends here, before the Job waits.** The
+        // part is settled and there is no more work in it, so a process left
+        // standing would spend a place against `concurrency-cap` on a Job that
+        // is only queued — which is the overrun this change exists to close,
+        // arriving from the other side. `crate::boundary` used to do it, on the
+        // way to a spawn this act no longer makes; `stood_down` is that same
+        // ordering, called directly.
+        self.stood_down(job_id, &mut working).await?;
+        // The actor is **human**, for `crate::reviewing`'s reason: a person
+        // took the Job out of `escalated`, and Fleet only decides which turn it
+        // gets a process back. What the next Drone is told — that a person
+        // settled the part before — is `crate::readmitting`'s to assemble, off
+        // the `advanced` step this call leaves behind.
+        self.move_job(&job, Target::Queued, Actor::Human).await?;
+        // **After the slot is let go**, which is the lock order `crate::slots`
+        // states: admission takes the roster, and a caller holding a slot must
+        // not reach for it. Inline, exactly as an approval re-admits inline.
+        drop(working);
+        self.admit_next().await?;
         self.load(job_id).await
     }
 

@@ -73,6 +73,8 @@ A Job marked `urgency: incident` has its approval surfaced sooner — it interru
 
 **The configurable concurrency cap bounds how many Drones run at once**, and admission refuses past it: a Job approved while the cap is spent stays `queued` and the Board says `waiting_on_resources`. It was informational and display-only until Throughput, when the second working slot arrived and a number that bounded nothing became the number that bounds this.
 
+**Admission is the only thing that starts a Drone**, which is what makes the bound a bound rather than a default. Every act that puts a Job back to work goes through it — approving at a human gate, asking for changes, restarting a step, overruling a verdict — so a person cannot push Fleet past its cap by pressing a button on a Job that is already approved. None of those acts is refused when the cap is spent: the decision lands, and the Job waits at `queued` saying why. [Job](job.md), Recovering an escalated Job, has the two that were exceptions until they were not.
+
 **It bounds Drones and never approvals**, which is the whole of how the two sit together. The cap decides how many *approved* Jobs run at the same time; it never decides that a Job is approved, never batches approvals, and is not a way to approve several at once. The gate above is untouched by it.
 
 Sub-dispatches inside an already-approved Job need no separate approval — see [Workflow](workflow.md), Dispatch Approval, Two Levels. Away-from-desk pre-authorized batches are supported.

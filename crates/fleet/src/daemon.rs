@@ -763,11 +763,11 @@ where
 
     /// One Job's slot, made if it has none.
     ///
-    /// **For the two acts a person takes on a Job Fleet is not holding** — a
-    /// restart and a redispatch. Both put a Drone back on a Job the person is
-    /// already standing over, so neither is an admission from the queue and
-    /// neither consults the bound: what `concurrency-cap` bounds is how many
-    /// Jobs Fleet starts of its own accord.
+    /// **For the acts a person takes on a Job Fleet is not holding**, which
+    /// need somewhere to stand a Drone down or to land work through and have no
+    /// entry in the roster to do it in. None of them starts a Drone: since #50
+    /// only admission does, so an empty slot opened here holds nothing and
+    /// `Slots::sweep` forgets it when the caller lets it go.
     pub(crate) async fn slot_for(&self, job: &JobId) -> Slot {
         self.slots.lock().await.opened_for(job)
     }

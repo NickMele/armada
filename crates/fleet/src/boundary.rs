@@ -49,11 +49,14 @@ where
     /// The whole boundary: end the Drone that finished its step, and put a
     /// fresh one on the same worktree for `next`.
     ///
-    /// **Every advance across a step boundary comes here** — the mechanical one
-    /// in `crate::dispatch`, the person's at a human gate in `crate::reviewing`,
-    /// and the override in `crate::overruling`. Those three used to advance the
-    /// slot in place and inject a turn; they differ now only in what they hand
-    /// to `crossed`, which is the point of that type.
+    /// **Every advance a Drone in a slot makes comes here**, which is the
+    /// mechanical one in `crate::dispatch` and, since #50's follow-on, only
+    /// that one. A person's advance at a human gate and a person's override
+    /// both cross a step boundary too, and both take the Job back to `queued`
+    /// instead — because the boundary they cross also has to consult
+    /// `concurrency-cap`, and only admission does. `crate::readmitting` is
+    /// where they arrive; what they hand a fresh Drone is still a `Crossed`,
+    /// which is the point of that type.
     ///
     /// **A slot that is already empty is not an error.** The Fleet holding the
     /// process restarted, or the Drone ended on its own, and the answer is the

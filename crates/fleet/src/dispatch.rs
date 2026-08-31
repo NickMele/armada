@@ -4,25 +4,24 @@
 //! seams it is assembled from and the things it can be asked. This is what
 //! happens to one Job in a slot, and the only file in the workspace that calls
 //! `Job::transition` and `Job::transition_step`. **Which** Job gets a slot is
-//! [`admitting`](mod@crate::admitting)'s.
+//! [`admitting`](mod@crate::admitting)'s; a Job that has run before is
+//! [`readmitting`](mod@crate::readmitting)'s.
 //!
 //! # The order in `dispatch` is the specification
 //!
-//! `queued -> running` happens **first**, before the worktree and before the
-//! Drone, and that is not the order it reads as. It is forced by two things the
-//! registry already decided. The inner machine advances only beneath `running`,
-//! so a step cannot be started from `queued`. And `queued`'s only outbound
-//! edges are `awaiting_approval`, `killed`, `running` and `escalated` with the
-//! trigger `dependency_failed` — so a disk that will not give up a worktree has
-//! **no expressible destination** from `queued`, and every one it does have
-//! from `running`.
+//! `queued -> running` happens **first**, before the worktree and the Drone,
+//! and that is not the order it reads as. The registry forces it. A step
+//! cannot be started from `queued`, because the inner machine advances only
+//! beneath `running`; and `queued`'s outbound edges give a disk that will not
+//! give up a worktree **no expressible destination**, where `running` has every
+//! one.
 //!
 //! # Nothing here removes a worktree, on any path
 //!
-//! Not on a failed Check, not on a kill, not on an interruption. There is no
-//! method in this workspace that could: `Vcs` has no removal and the reason is
-//! written on the trait. A failed Job's branch is exactly as its Drone left it,
-//! which is what "a person reads the branch" depends on.
+//! Not on a failed Check, a kill or an interruption. No method in this
+//! workspace could: `Vcs` has no removal and the reason is written on the
+//! trait. A failed Job's branch is exactly as its Drone left it, which is what
+//! "a person reads the branch" depends on.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{
@@ -53,16 +52,16 @@ where
     /// Take one approved Job all the way to a running Drone.
     ///
     /// **Two Jobs are queued and only one of them is new.** A Job whose branch
-    /// is already written has run before: it reached a human advance gate, its
-    /// Drone was stood down, the slot went to somebody else, and a person has
-    /// since approved it back into the queue. Its worktree, its branch and
-    /// every earlier step's work are on disk, and starting it from the first
-    /// step would re-run work that was already accepted.
+    /// is already written has run before: a person answered it at a human gate
+    /// or acted on it while it was escalated, and it went back in the queue
+    /// rather than straight to a Drone. Its worktree, its branch and every
+    /// earlier step's work are on disk, and starting it from the first step
+    /// would re-run work that was already accepted.
     ///
     /// The branch is the discriminator and it is exact, not a heuristic: it is
-    /// written once, here, and `queued` is reachable only from
-    /// `awaiting_approval` — where no Job has one — and from `awaiting_review`,
-    /// where every Job does.
+    /// written once, here, and of the three statuses `queued` is reachable from
+    /// only `awaiting_approval` has no branch — `awaiting_review` and
+    /// `escalated` are both downstream of this line.
     ///
     /// Every failure below leaves the Job `escalated` rather than `running`,
     /// and returns the cause. A person decides; Fleet does not retry, and does
@@ -145,76 +144,6 @@ where
         // have started two commits back is told so on its first turn.
         self.put_a_drone_on(&job, &step, worktree, Opening::fresh(), working)
             .await
-    }
-
-    /// Put a Drone back on a Job a person answered at a human gate.
-    ///
-    /// **The slot is the whole reason this exists.** The gate stands its Drone
-    /// down and frees the slot, because a person's review must cost no fleet
-    /// time — so by the time they answer, the slot is very often another Job's.
-    /// The Job goes back in the queue and arrives here when one is free, which
-    /// is why neither answer that keeps it is a resume.
-    ///
-    /// **Every step move already happened**, under `awaiting_review` where the
-    /// inner machine is still live: an approval advances the gate's step and
-    /// enters the next one before it re-queues, and `request_changes` moves
-    /// nothing at all. So what is left is the Job's own move and a Drone.
-    ///
-    /// **The two cross differently, and the waiting note tells them apart.**
-    /// An approval advanced, so `step` is the *next* one and the part before it
-    /// is what the person just took: `Cleared::reviewed`. `request_changes` did
-    /// not, so `step` is the *same* one and the part before it is a step nobody
-    /// just acted on — its gate may have been auto — and "read by a person and
-    /// accepted" over it is a sentence the record does not support. Nothing is
-    /// crossed there, as on a restart. The test is exact: only
-    /// `request_changes` writes a note, and `crate::spawning` clears it at the
-    /// spawn this call is on its way to.
-    async fn readmitted(&self, job: Job, working: &mut Option<Working>) -> Result<(), Adrift> {
-        let job_id = job.id().clone();
-        let Some(step) = job.current_step_id().cloned() else {
-            return Err(Adrift::NoSuchStep {
-                job: job_id,
-                step: None,
-            });
-        };
-        // Before the Job moves. A worktree that has been reclaimed is a Job
-        // whose earlier steps' work is not on disk, and there is nothing to put
-        // a Drone back onto — the same refusal `restart_step` makes, made
-        // before the status has moved rather than after.
-        let worktree = match self.surviving_worktree(&job) {
-            Ok(worktree) => worktree,
-            Err(cause) => {
-                self.interrupt(&job).await?;
-                return Err(cause);
-            }
-        };
-        let recorded = self
-            .store()
-            .lock()
-            .await
-            .step_evidence(&job_id)
-            .map_err(Adrift::Reading)?;
-        let sent_back = job.redirect_waiting().is_some();
-        let passed = the_part_before(job.workflow(), &step).cloned();
-        let job = self.move_job(&job, Target::Running, Actor::Fleet).await?;
-        let mut crossed =
-            Crossed::nothing().and_produced(Produced::before(job.workflow(), &step, &recorded));
-        if let (Some(passed), false) = (&passed, sent_back) {
-            crossed = crossed.and_cleared(Cleared::reviewed(passed));
-        }
-        // **`fresh` and not `resuming`, on both paths.** `Stopped` is read off
-        // `last_verdict` and the Judge's answers, and a step sent back across a
-        // human gate stopped at none of them: it passed everything a machine
-        // asks. What says why this Drone is here is the person's own note,
-        // which `put_a_drone_on` folds in.
-        self.put_a_drone_on(
-            &job,
-            &step,
-            worktree,
-            Opening::fresh().carrying(crossed),
-            working,
-        )
-        .await
     }
 
     /// Read what the worktree holds now, and hold it as this step's baseline.
@@ -738,22 +667,6 @@ pub fn stopping(ruling: &Ruling) -> Option<StepLevelTrigger> {
         Ruling::Failed { .. } => StepLevelTrigger::of(EscalationTrigger::GateFailure),
         other => other.stops_the_step(),
     }
-}
-
-/// The step immediately before this one in the Job's frozen workflow.
-///
-/// `None` on the first step, which has no part before it. A free function
-/// rather than a method for `copy_attachments`'s reason: it touches no Fleet
-/// state, and it answers the same question `Produced::before` answers about
-/// evidence — asked here about the declaration, which is what `Cleared` is
-/// worded from.
-fn the_part_before<'a>(
-    workflow: &'a core_model::FrozenWorkflow,
-    at: &StepId,
-) -> Option<&'a core_model::ResolvedStep> {
-    let steps = workflow.steps();
-    let here = steps.iter().position(|step| step.id() == at)?;
-    steps.get(here.checked_sub(1)?)
 }
 
 /// Copy every attachment the Job carries into this worktree, under

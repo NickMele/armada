@@ -1,26 +1,26 @@
 //! The two acts that put a person back on a Job without redispatching it.
 //!
 //! # Which one applies is decided by the Drone, not by the person
-//!
 //! [`redirect`](Fleet::redirect) needs a live session and [`restart_step`] is
 //! what exists when there is none, so each refuses where the other applies —
 //! `docs/concepts/job.md` is the specification. **Neither asks the other's
-//! question**: a redirect wanted a stopped step only because both were once one
-//! predicate, which held until `stalled` escalated a Job over a live Drone.
+//! question**: a redirect wanted a stopped step until `stalled` escalated a Job
+//! over a live Drone.
 //!
-//! # A step that stopped is moved; a Job that is only quiet is not
+//! # A redirect moves a stopped step; a restart moves nothing
+//! Where a step stopped, a redirect moves both machines in the one order the
+//! registry admits — `escalated -> running`, then `stopped -> running`. Where
+//! none stopped there is nothing to unfreeze, the Job stays `escalated` and
+//! returns on [`watch_redirect`](Fleet::watch_redirect) seeing the Drone turn:
+//! moved on the sending it would read as recovered whether or not anything
+//! woke.
 //!
-//! Where a step stopped, both machines move in the one order the registry
-//! admits — `escalated -> running`, then `stopped -> running` — because the
-//! inner machine advances only beneath `running`. Where none stopped there is
-//! nothing to unfreeze, the Job stays `escalated`, and it comes back on
-//! [`watch_redirect`](Fleet::watch_redirect) seeing the Drone turn: a Job
-//! moved on the sending would read as recovered whether or not anything woke.
+//! **A restart takes neither move**, because it spawns and since #50 nothing
+//! spawns outside admission: `escalated -> queued`, step left at `stopped`,
+//! and `crate::readmitting` makes both moves when there is room.
 //!
-//! # Nothing here is bounded
-//!
-//! A person who can redirect can redirect for ever. Whether that is capped is
-//! decided in no document, so no cap is invented here.
+//! **Nothing here is bounded.** A person who can redirect can redirect for
+//! ever; whether that is capped is decided in no document.
 //!
 //! [`restart_step`]: Fleet::restart_step
 
@@ -32,8 +32,7 @@ use core_model::{
 };
 
 use crate::adrift::Adrift;
-use crate::briefing::{Opening, Stopped};
-use crate::crossing::{Crossed, Produced};
+use crate::briefing::Stopped;
 use crate::daemon::Fleet;
 use crate::session::LiveSession;
 use crate::transcript;
@@ -243,81 +242,75 @@ where
         let _ = transcript::note(&self.host().repo_root, job, &envelope);
     }
 
-    /// Put a fresh Drone on the worktree the last one left. **The second act**,
-    /// and what exists when the Drone is gone.
+    /// Ask for a fresh Drone on the worktree the last one left. **The second
+    /// act**, and what exists when the Drone is gone.
     ///
-    /// **The worktree, the branch and every earlier step's work survive.** The
-    /// steps that advanced did so on real verdicts and their evidence is
-    /// recorded; re-running them is a redispatch, and an expensive one.
+    /// **It asks; it does not start one.** The Job takes `escalated -> queued`
+    /// and `crate::readmitting` spawns when `concurrency-cap` has room, which
+    /// is the shape `approve_review` has had since #50 — and the reversal
+    /// `job-transitions.toml` records on the edge itself. **Never refused
+    /// because the cap is spent**: the act lands and the Job says
+    /// `waiting_on_resources`.
     ///
-    /// **The branch is caught up, and that is not in tension with the line
-    /// above.** A rebase updates the worktree that is there — same path, same
-    /// branch, same work, the base moved underneath it. Nothing is created and
-    /// nothing is discarded, so `#62`'s worktree survives *and* is current. The
-    /// catch-up is inside [`put_a_drone_on`](Fleet::put_a_drone_on), the one
-    /// funnel every spawn goes through; this does not call it, which is #180's
-    /// point.
+    /// **The step does not move here either**, because `store::attempt` counts
+    /// entries into `running` as runs and a run belongs to a Drone. It waits at
+    /// `stopped`, which is both what a rail should render and how re-admission
+    /// knows which act to answer.
     ///
-    /// **A restart is the case a rebase most often conflicts on**: it re-runs
-    /// the *same* step on a worktree already holding an attempt at it. The
-    /// markers then ride the opening brief and are the new Drone's first piece
-    /// of work — there is no session to inject a turn into yet.
+    /// **Every guard below does run here**, because each is a question about
+    /// *now* — a Drone still standing, a worktree still there, an exit still
+    /// unrecorded. Deferred, they would answer about a different instant.
     ///
-    /// **Nothing is inherited from the Drone that went before.** The toolset,
-    /// the model and the environment are resolved again from what the Manifest
-    /// and the Job hold now — see `crate::spawning`.
+    /// **The worktree, the branch and every earlier step's work survive**, and
+    /// the branch is caught up inside
+    /// [`put_a_drone_on`](Fleet::put_a_drone_on) rather than here — #180. A
+    /// restart is the case a rebase most often conflicts on, since it re-runs
+    /// the same step on a tree already holding an attempt; the markers ride the
+    /// opening brief. **Nothing is inherited from the Drone before it.**
     pub async fn restart_step(&self, job_id: &JobId) -> Result<Job, Adrift> {
-        // Opened rather than found: the Job's Drone is gone, so the roster no
-        // longer holds a slot for it. See [`Fleet::slot_for`] for why this one
-        // act does not consult the bound.
-        let slot = self.slot_for(job_id).await;
-        let mut working = slot.lock().await;
+        // Looked up rather than opened: this act starts nothing, so it needs no
+        // place in the roster. What it wants the slot for is the one question
+        // only the slot can answer — whether a Drone is still standing here —
+        // and a Job with none has no slot to hold.
+        let slot = self.slot_of(job_id).await;
         let job = self.load(job_id).await?;
-        let step = self.stopped_step(&job)?;
-        if working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
+        // **First, and the order is the refusals'.** A Job that is `running`,
+        // or escalated with no step stopped, hears which act applies instead —
+        // and hears it before "a Drone is still there", which is true of both
+        // and names neither.
+        self.stopped_step(&job)?;
+        let standing = match &slot {
+            Some(slot) => slot.lock().await.as_ref().is_some_and(|at| at.is(job_id)),
+            None => false,
+        };
+        if standing {
             return Err(Adrift::DroneStillThere {
                 job: job_id.clone(),
             });
         }
-        let worktree = self.surviving_worktree(&job)?;
-        // **Before the spawn, and this used to be missing.** The slot is empty
-        // — the guard above says so — and the record can still name a Drone on
-        // the step being restarted: a Fleet that died holding one leaves
-        // exactly that, and `reconcile` clears it only for the Jobs it read at
-        // boot. `drone_spawned` refuses over a live pointer, so a restart onto
-        // a step whose pointer nobody cleared is a restart that cannot happen.
-        // `#137` left whose this was open; it is the boundary's, and this is
-        // the boundary's rule applied to the act reaching the same spawn from
-        // the other direction.
+        // Read and discarded, for the reason it is read: a restart onto a
+        // worktree that has been reclaimed is a redispatch, and saying so
+        // before the Job moves leaves it exactly where the person found it.
+        // `crate::readmitting` reaches the same directory again at the spawn.
+        self.surviving_worktree(&job)?;
+        // **Before the Job leaves `escalated`, and this used to be before the
+        // spawn.** The record can still name a Drone on the step being
+        // restarted: a Fleet that died holding one leaves exactly that, and
+        // `reconcile` clears it only for the Jobs it read at boot.
+        // `drone_spawned` refuses over a live pointer, so a restart onto a step
+        // whose pointer nobody cleared is a restart that cannot happen — and
+        // hearing that now is better than hearing it when the queue reaches
+        // this Job.
         self.every_exit_recorded(job_id).await?;
-        let stopped = self.what_stopped(&job, &step).await?;
-        // **A restarted Drone is as new as a fresh one.** It knows what
-        // stopped *this* part, which is `stopped`, and nothing at all about
-        // the part before it — a restart of part three is a process that never
-        // saw parts one or two. Read before the Job moves, for the reason
-        // `crate::overruling` reads it there.
-        //
-        // Nothing is carried about how the earlier part cleared: this step did
-        // not advance, so there is no gate outcome to hand over, and `stopped`
-        // is what says why this Drone is here.
-        let recorded = self
-            .store()
-            .lock()
-            .await
-            .step_evidence(job_id)
-            .map_err(Adrift::Reading)?;
-
-        let job = self.resumed(&job, &step, Actor::Human).await?;
-        let crossed =
-            Crossed::nothing().and_produced(Produced::before(job.workflow(), &step, &recorded));
-        self.put_a_drone_on(
-            &job,
-            &step,
-            worktree,
-            Opening::resuming(stopped).carrying(crossed),
-            &mut working,
-        )
-        .await?;
+        // The actor is **human**. A person took the Job out of `escalated`;
+        // Fleet only chooses which turn it gets a process back, which is the
+        // `queued -> running` row `crate::readmitting` writes as its own.
+        self.move_job(&job, Target::Queued, Actor::Human).await?;
+        // Inline, exactly as an approval re-admits inline — so a fleet with
+        // nothing else to do restarts the step now rather than on the next
+        // tick, and a busy one leaves the Job in the queue where a person can
+        // see it waiting.
+        self.admit_next().await?;
         self.load(job_id).await
     }
 
@@ -402,7 +395,12 @@ where
     /// Judge's answers, and what the gaming check flagged. **Nothing is
     /// composed here**: a restarted Drone is told what the log says and not
     /// what Fleet infers.
-    async fn what_stopped(&self, job: &Job, step: &StepId) -> Result<Stopped, Adrift> {
+    ///
+    /// **`crate::readmitting` is the caller**, because a restart asks for a
+    /// Drone here and gets one there. It is read at the spawn and not at the
+    /// act for the reason the step move is deferred: the judgments and flags
+    /// are filed by attempt, and this must read the attempt that stopped.
+    pub(crate) async fn what_stopped(&self, job: &Job, step: &StepId) -> Result<Stopped, Adrift> {
         let store = self.store().lock().await;
         let judged = store.step_judgments(job.id()).map_err(Adrift::Reading)?;
         let flagged = store.step_gaming_flags(job.id()).map_err(Adrift::Reading)?;

@@ -127,7 +127,7 @@ in_code = "Not yet"
 from = "escalated"
 to = "killed"
 in_code = "Not yet"
-notes = "Includes rephrase-and-redispatch, which kills this Job and creates a new one carrying `redispatched_from`. **There is no edge back to `queued`.**"
+notes = "Includes rephrase-and-redispatch, which kills this Job and creates a new one carrying `redispatched_from`. This row said **there is no edge back to `queued`** until #50 made `concurrency-cap` a real bound: a restart and an override each put a Drone back on a Job, and doing that from here spent no slot and consulted no cap. The edge below is that reversal — the two acts re-queue, and admission is the only thing that starts a Drone."
 
 [[transitions]]
 from = "escalated"
@@ -137,9 +137,17 @@ in_code = "Not yet"
 
 [[transitions]]
 from = "escalated"
+to = "queued"
+on = "restart_step, or override_verdict with a step left to run"
+in_code = "Not yet"
+notes = "**A person decides here and Fleet chooses the moment**, which is the shape `awaiting_review -> queued` already has: the act is accepted whether or not `concurrency-cap` has room, the Job waits at `queued` with `waiting_on_resources` as its reason, and admission spawns. It is not `running`, for the reason `awaiting_review -> running` is not taken by `request_changes`: a Job put back to `running` with no process on it escalates as `interrupted` a moment later. The step machine moves differently for the two acts. An override records `stopped -> advanced` **here**, beneath `escalated`, because that move is the person's verdict and nothing else can make it for them — the one exception `step_machine.rs` names to the freeze rule. A restart records no step move at all: entering `running` is what `store::attempt` counts as a run of a step, so it is deferred to the spawn, and the step reads `stopped` while it waits."
+
+[[transitions]]
+from = "escalated"
 to = "running"
 on = "A redirect: context injected mid-step, without a step restart"
 in_code = "Not yet"
+notes = "**A redirect only**, since #50's follow-on. It is the one act on an escalated Job that spawns nothing — the Drone is there holding its session — so it needs no slot and consults no bound. A restart and an override take the `queued` edge above."
 
 [[transitions]]
 from = "piloted"

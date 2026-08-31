@@ -86,6 +86,7 @@ pub static EDGES: &[Edge] = &[
     edge(Escalated, CompletedFailed),
     edge(Escalated, Killed),
     edge(Escalated, Piloted),
+    edge(Escalated, Queued),
     edge(Escalated, Running),
     guarded(Piloted, CompletedSuccess, Guard::EveryStepAdvanced),
     edge(Piloted, Killed),

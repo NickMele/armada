@@ -304,9 +304,10 @@ async fn a_third_approved_job_waits_on_the_bound_and_the_board_says_so() {
 /// of into it.
 ///
 /// A stranded dependent cannot **hold** a slot either, and that needs no case:
-/// a slot is opened by admission, which moves the Job to `running` as it goes,
-/// and by the four acts a person takes on a Job that is `escalated` or at a
-/// gate. Neither reaches a `queued` Job.
+/// a slot is opened by admission, which moves the Job to `running` as it goes.
+/// Nothing else opens one — the acts a person takes on a Job that is
+/// `escalated` or at a gate all re-queue instead, which is what
+/// `crate::tests::bounding` is about.
 #[tokio::test]
 async fn a_dependent_whose_upstream_failed_does_not_take_the_free_place() {
     let home = TempDir::new();
