@@ -190,6 +190,16 @@ The flow, the placement and the copy belong to the Monitor Active Work user jour
 ## Open questions
 
 - **[observe-transcript-sharing]** May an observed transcript leave the machine, and what would have to be true first? Redaction covers credentials Armada brokered, and a transcript carries whatever the Drone read — so the bound today is that the viewer is the operator, on their own machine, reading a Job they dispatched. Attaching a transcript to an escalation, a bug report or a shared Job record would each remove that bound. `../spikes/003-does-headless-output-parse.md` is the worked example: its capture had to be redacted by hand before this repository could hold it, and what needed removing was the session's opening event. Since a `Called` row carries the call's arguments, a shared transcript would also carry every command the Drone ran and every path it touched — which is a wider scrub than the opening event, not the same one.
+  **Something now waits on it.** The filing review built for an error offers a
+  transcript row and offers it *withheld*, named on screen with this as the
+  reason — turning it on by default would answer this question by shipping. Two
+  things have to be settled together: whether it may go at all, and **how much
+  of it goes**, which is undecided and has no defensible answer today. The only
+  bound in the codebase is `HISTORY` in `crates/fleet/src/transcript/backfill.rs`,
+  and it sizes a viewer's backfill in rows rather than a filing in turns, so it
+  is not the number. See the Error Contract's `[filing-transport]`: until
+  something can send, nothing leaves the machine by this route anyway, and the
+  row's default is the whole of the exposure.
 
 - **[observe-reasoning-content]** Does a viewer ever get to read a Drone's reasoning, or only that there was some? The row says the turn reasoned and carries no text, which is the smaller of two readings. The larger one — a collapsed row that opens onto the working — is what a person actually wants when a Job went somewhere surprising, and it is also the whole of the transcript-reading this product exists to escape, at a size no other row comes near. It would need a place in the vocabulary that is not `Unrecognised`, a `Saw` variant with `enum-verbs.toml` rows, and an answer to `[observe-transcript-sharing]` that today's rows do not need, because the working is the one field that has never been bounded by anything.
 
