@@ -50,14 +50,14 @@ why = "Judge citations reference a criterion by its frozen position (\"criterion
 
 [fields.assigned_drone]
 type = "id"
-table = "jobs"
+table = "job_steps"
 storage = "Column"
 nullable = "Yes"
 frozen_at = "Never"
-purpose = "The Drone working this Job, null if not dispatched."
+purpose = "The Drone working this step, null between one and the next."
 in_code = "Yes"
-notes = "Presence, not state. Null also suspends the liveness clock — see the `running` status row. Folded from the log like `status`: a Drone arriving and a Drone leaving are each a row in `job_events`, carrying the `drone_id` and the status they happened beneath. The column is the cache."
-why = "A column written in place could say a Drone is on a Job and never say which one left, or when. It was refused on read for want of an event until it had one, because a rebuild that cannot put a value back must not drop it silently."
+notes = "Presence, not state. Null also suspends the liveness clock — see the `running` status row. Folded from the log like `status`: a Drone arriving on a step and a Drone leaving one are each a row in `job_events`, carrying the `drone_id`, the `step_id` and the status they happened beneath. The column is the cache. One pointer per step, and a second Drone on a step that already holds one is still refused — `restart_step` is the act that reaches it. The Job-level reading a Board draws is derived from these rows and is stored nowhere."
+why = "A column written in place could say a Drone is on a Job and never say which one left, or when. Per Job it could not say which Drone worked which step either: it went null the moment the last one exited, so a Job of four steps could name at most one of its four transcripts. It was refused on read for want of an event until it had one, because a rebuild that cannot put a value back must not drop it silently."
 
 [fields.branch]
 type = "string"

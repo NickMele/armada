@@ -31,6 +31,7 @@ use verification::Request;
 use crate::adrift::Adrift;
 use crate::at_step::AtStep;
 use crate::daemon::Fleet;
+use crate::drone_moves::steps_holding_a_drone;
 use crate::evidence::{Decline, Standing};
 use crate::gate::{rule_on, Ruling};
 use crate::transcript;
@@ -258,7 +259,12 @@ where
         if !escalating {
             return Ok(());
         }
-        self.drone_left(job_id).await;
+        // Every step still holding one, read off the record rather than the
+        // slot: this Job is by definition outside the slot, so the record is
+        // the only thing that can say which step a process was put on.
+        for step in steps_holding_a_drone(&job) {
+            self.drone_left(job_id, &step).await?;
+        }
         let job = self.load(job_id).await?;
         self.interrupt(&job).await
     }

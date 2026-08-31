@@ -271,6 +271,9 @@ impl JobStepAdvanced {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DroneSpawned {
     pub job: JobSummary,
+    /// The step it was put on. A Drone belongs to a workflow step, and this is
+    /// which `job_steps` row a client sets its `assigned_drone` on.
+    pub step_id: StepId,
     pub drone_id: DroneId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub branch: Option<String>,
@@ -291,6 +294,10 @@ pub struct DroneSpawned {
 pub struct DroneExited {
     /// The Job as it now stands, with `assigned_drone` gone.
     pub job: JobSummary,
+    /// The step it left. The row whose `assigned_drone` a client clears — and
+    /// the reason the pair of them can be told apart on a Job that has had
+    /// several.
+    pub step_id: StepId,
     /// The Drone that left. Named, because "which one" is the question an exit
     /// has to answer once a Job has had more than one.
     pub drone_id: DroneId,
@@ -305,6 +312,7 @@ impl DroneSpawned {
     pub fn of(event: &core_model::DroneMoved, job: JobSummary, branch: Option<String>) -> Self {
         DroneSpawned {
             job,
+            step_id: event.step_id().into(),
             drone_id: event.drone_id().into(),
             branch,
             actor: event.actor().into(),
@@ -317,6 +325,7 @@ impl DroneExited {
     pub fn of(event: &core_model::DroneMoved, job: JobSummary) -> Self {
         DroneExited {
             job,
+            step_id: event.step_id().into(),
             drone_id: event.drone_id().into(),
             actor: event.actor().into(),
             at: event.at().into(),

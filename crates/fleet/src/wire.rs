@@ -109,7 +109,12 @@ pub(crate) fn recorded(event: &RecordedEvent) -> ipc::Recorded {
                 // here restates the list.
                 why: why.map(|trigger| trigger.as_wire().to_string()),
             }),
-            Moved::Drone { drone_id, presence } => ipc::Movement::Drone(ipc::DroneMoved {
+            Moved::Drone {
+                step_id,
+                drone_id,
+                presence,
+            } => ipc::Movement::Drone(ipc::DroneMoved {
+                step_id: step_id.into(),
                 drone_id: drone_id.into(),
                 presence: (*presence).into(),
             }),

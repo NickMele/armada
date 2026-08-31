@@ -19,7 +19,7 @@
 //! producing a Job no legal sequence of moves could reach.
 //!
 //! The log carries what a machine moved, and a status transition, a step move
-//! and a Drone arriving are all rows in it, in one order. A step move that
+//! and a Drone arriving on a step are all rows in it, in one order. A step move that
 //! could not be ordered against the status transitions around it could not be
 //! replayed at all, because the inner machine only advances beneath two of the
 //! twelve statuses.
@@ -54,6 +54,8 @@
 
 mod attempt;
 mod columns;
+/// The Drone pointer, where it now lives: one column per step.
+mod drone;
 mod error;
 mod fold;
 mod footprint;

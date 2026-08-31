@@ -50,7 +50,7 @@ use adapter_traits::{
 };
 use config::{Manifest, ResolvedWorkflow};
 use core_model::{
-    Actor, Job, JobId, JobStatus, Target, Timestamp, TransitionReason, Ulid, WorkflowId,
+    Actor, Job, JobId, JobStatus, StepId, Target, Timestamp, TransitionReason, Ulid, WorkflowId,
 };
 use store::{LoadAllError, LoadJobError, Loaded, Moved, Store};
 use tokio::sync::Mutex;
@@ -61,6 +61,7 @@ use crate::converging::{StepNorms, Wandering};
 use crate::delivery::Delivered;
 use crate::drafting::StatedBy;
 use crate::drone::{aftermath, environment, Aftermath, Ending, HostPaths};
+use crate::drone_moves::steps_holding_a_drone;
 use crate::dry_run::DryRuns;
 use crate::evidence::{Decline, EvidenceInbox};
 use crate::gate::{CheckBudget, Ruling};
@@ -314,19 +315,28 @@ where
             unreadable,
             ..Reconciled::default()
         };
-        // Every Job the store says holds a Drone, whatever status it is under.
-        // A Drone is spoken to through a pipe the Fleet that spawned it holds,
-        // so this Fleet has none of them — and `assigned_drone` is read to
-        // decide whether a Job can be redirected at all. A column left saying
-        // yes is a redirect that injects a turn into nothing.
-        let held: Vec<Job> = loaded
+        // Every **step** the store says holds a Drone, whatever status its Job
+        // is under. A Drone is spoken to through a pipe the Fleet that spawned
+        // it holds, so this Fleet has none of them — and `assigned_drone` is
+        // read to decide whether a Job can be redirected at all. A column left
+        // saying yes is a redirect that injects a turn into nothing.
+        //
+        // **Steps and not Jobs**, because the pointer is one per step: a Job
+        // whose current step holds nothing may still have an earlier step whose
+        // row does, and a walk over Jobs would leave it standing. A `running`
+        // Job with no pointer anywhere is still carried here, because a Job
+        // marked running by a Fleet that is gone is interrupted whether or not
+        // its Drone was ever recorded.
+        let held: Vec<(Job, Vec<StepId>)> = loaded
             .jobs
             .iter()
-            .filter(|job| job.assigned_drone().is_some() || job.status() == JobStatus::Running)
-            .cloned()
+            .map(|job| (job.clone(), steps_holding_a_drone(job)))
+            .filter(|(job, steps)| !steps.is_empty() || job.status() == JobStatus::Running)
             .collect();
-        for job in held {
-            self.drone_left(job.id()).await;
+        for (job, steps) in held {
+            for step in steps {
+                self.drone_left(job.id(), &step).await?;
+            }
             let job = self.load(job.id()).await?;
             if let Aftermath::JobMoves(target) =
                 aftermath(job.status(), &Ending::Vanished, self.left())

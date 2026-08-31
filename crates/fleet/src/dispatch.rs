@@ -427,7 +427,9 @@ where
         })? {
             return Ok(None);
         }
-        let job_id = at_work.standing().0;
+        // The step the Drone was **put on**, which is where its pointer is —
+        // not the step the slot has advanced to beneath it.
+        let (job_id, spawned_on, _) = at_work.drone();
         let heard = at_work.heard();
         // The status is read before the ending is folded, because an escalated
         // Job keeps its Drone: a process that is gone no longer proves the Job
@@ -439,7 +441,7 @@ where
             Aftermath::JobMoves(target) => {
                 // The departure first, so the Job's move is published over a
                 // record that already says no Drone is on it.
-                self.drone_left(&job_id).await;
+                self.drone_left(&job_id, &spawned_on).await?;
                 let job = self.load(&job_id).await?;
                 self.move_job(&job, target.clone(), Actor::Fleet).await?;
                 working.take();
@@ -452,7 +454,7 @@ where
             // The idle Drone of a Job a person is already holding. Its going is
             // the only fact, and it is what turns a redirect into a restart.
             Aftermath::AlreadyStopped => {
-                self.drone_left(&job_id).await;
+                self.drone_left(&job_id, &spawned_on).await?;
                 working.take();
                 // Reachable, unlike its neighbour: a Job that stopped while its
                 // Drone was still submitting leaves evidence with no step to be
@@ -515,8 +517,16 @@ where
     pub(crate) async fn end_the_drone(&self, working: &mut Option<Working>) {
         let ended = match working.take() {
             Some(at_work) => {
-                let (job_id, _) = at_work.drone();
-                self.drone_left(&job_id).await;
+                let (job_id, step, _) = at_work.drone();
+                // This one cannot return — six callers end a Drone as part of
+                // moving a Job that has already moved — so the refusal goes
+                // into that Job's own log rather than into a discard. A
+                // departure nobody could write down is what leaves a Board
+                // showing a Drone on a Job that has none, and it used to leave
+                // nothing behind at all.
+                if let Err(why) = self.drone_left(&job_id, &step).await {
+                    self.noted_adrift(&why);
+                }
                 let _ = at_work.session().terminate().await;
                 Some(job_id)
             }

@@ -122,9 +122,9 @@ where
             }
         };
         // After the process exists, never before: `assigned_drone` is presence,
-        // and a Job claiming a Drone that failed to start is exactly the
+        // and a step claiming a Drone that failed to start is exactly the
         // liveness lie the column is read for.
-        self.drone_arrived(job, drone.clone()).await?;
+        self.drone_arrived(job, step, drone.clone()).await?;
 
         *working = Some(Working::holding(
             job_id,
@@ -156,8 +156,8 @@ where
     /// Open this Drone's transcript, and name it in the Job's log.
     ///
     /// The log line is still written: it carries the transcript's path, which
-    /// `assigned_drone` does not — the column names the Drone and this names
-    /// the file its rows are in.
+    /// `assigned_drone` does not — the step's column names the Drone and this
+    /// names the file its rows are in.
     fn recording(
         &self,
         job: &JobId,

@@ -46,10 +46,24 @@ use verification::NotConverging;
 pub(crate) struct Working {
     job: JobId,
     /// The Drone in the slot. The same id its transcript is named by, and what
-    /// `assigned_drone` holds while this slot is full.
+    /// `step`'s `assigned_drone` holds while this slot is full.
     drone: DroneId,
     /// Which step of the frozen workflow the Drone was told to do.
     step: StepId,
+    /// The step the Drone was **put on**, which [`now_on`](Working::now_on)
+    /// does not move.
+    ///
+    /// **Two fields because today they come apart.** A Drone's exit is recorded
+    /// against the step whose `assigned_drone` names it, and that is where it
+    /// was spawned — while `step` follows the workflow and advances beneath a
+    /// process that is still the same one. Ending a Drone against `step` after
+    /// an advance names a step that holds no pointer, and the departure is then
+    /// a no-op nothing reports.
+    ///
+    /// #140 collapses the distinction by ending the Drone at every boundary, at
+    /// which point the two are always equal. Until it does, this is which of
+    /// them the record means.
+    spawned_on: StepId,
     /// The same answer as `step`, held where the transcript's sinks can read
     /// it. **Two places rather than one because the sinks are on the far side
     /// of the reader task**, and a step moved only here left every row after a
@@ -202,6 +216,7 @@ impl Working {
         Working {
             job,
             drone,
+            spawned_on: step.clone(),
             step,
             labelling,
             worktree,
@@ -236,10 +251,19 @@ impl Working {
         self.job == *job
     }
 
-    /// Which Job and which Drone. The pair the exit event needs, cloned
+    /// Which Job, which step, and which Drone. The triple the exit event needs
+    /// — a Drone belongs to a step, so the step is part of naming it — cloned
     /// together so no borrow of the slot outlives the read.
-    pub(crate) fn drone(&self) -> (JobId, DroneId) {
-        (self.job.clone(), self.drone.clone())
+    ///
+    /// **[`spawned_on`](Working::spawned_on) and not `step`**, because the
+    /// pointer the exit clears is on the step the Drone was put on. The two
+    /// differ for exactly as long as one process spans a boundary.
+    pub(crate) fn drone(&self) -> (JobId, StepId, DroneId) {
+        (
+            self.job.clone(),
+            self.spawned_on.clone(),
+            self.drone.clone(),
+        )
     }
 
     /// Move to the next step, **and forget the last one's plan**. A

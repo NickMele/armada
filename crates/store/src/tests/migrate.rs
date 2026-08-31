@@ -556,3 +556,135 @@ fn an_attempt_of_zero_is_refused_by_the_database_itself() {
     );
     assert!(refused.is_err(), "a run numbered zero never happened");
 }
+
+// ------------------------------------------------------------ version nineteen
+
+/// A file at version 18, with one Job whose two steps ran and whose two Drones
+/// arrived and left. Every drone row has a null `step_id`, because the shape
+/// trigger of the day refused any other kind.
+fn version_eighteen(dir: &TempDir, id: &str) {
+    let conn = Connection::open(dir.db()).expect("a file to put version 18 in");
+    for migration in &MIGRATIONS[..18] {
+        conn.execute_batch(migration).expect("a migration");
+    }
+    conn.execute(
+        "INSERT INTO armada_meta (key, value) VALUES (?1, '18')",
+        (SCHEMA_VERSION_KEY,),
+    )
+    .expect("recorded as version 18");
+    conn.execute(
+        "INSERT INTO jobs (
+             job_id, title, status, workflow_id, owner_manifest_id, origin, urgency,
+             atomic, model, acceptance_criteria, dependencies, facts, scope_revisions,
+             write_targets_known, created_at, assigned_drone
+         ) VALUES (?1, 'a job from before the pointer moved', 'running', '01WORKFLOW',
+                   '01OWNERMANIFEST', 'manual', 'normal', 0, 'a-model-name', '[]', '[]',
+                   '', '[]', 0, '2026-08-26T09:00:00.000Z', NULL)",
+        (id,),
+    )
+    .expect("a Job as version 18 wrote it");
+    for (ordinal, step) in ["reproduce", "fix"].iter().enumerate() {
+        conn.execute(
+            "INSERT INTO job_steps (
+                 job_id, step_id, ordinal, state, entered_at, updated_at
+             ) VALUES (?1, ?2, ?3, 'advanced', '2026-08-26T09:00:00.000Z',
+                       '2026-08-26T09:40:00.000Z')",
+            rusqlite::params![id, step, ordinal as i64],
+        )
+        .expect("a step row as version 18 wrote it");
+    }
+    // The order a Job actually produces: the step enters `running`, its Drone
+    // arrives, the Drone leaves, and the next step does the same.
+    for (kind, step, drone, at) in [
+        ("step", "reproduce", None, "09:01:00"),
+        ("drone_spawned", "reproduce", Some("01DRONEONE"), "09:02:00"),
+        ("drone_exited", "reproduce", Some("01DRONEONE"), "09:20:00"),
+        ("step", "fix", None, "09:21:00"),
+        ("drone_spawned", "fix", Some("01DRONETWO"), "09:22:00"),
+    ] {
+        let at = format!("2026-08-26T{at}.000Z");
+        if kind == "step" {
+            conn.execute(
+                "INSERT INTO job_events (
+                     kind, job_id, status_from, status_to, reason_kind, step_id,
+                     state_from, state_to, actor, at
+                 ) VALUES ('step_transition', ?1, 'running', 'running', 'unqualified',
+                           ?2, 'not_started', 'running', 'fleet', ?3)",
+                rusqlite::params![id, step, at],
+            )
+            .expect("a step move as version 18 wrote it");
+        } else {
+            conn.execute(
+                "INSERT INTO job_events (
+                     kind, job_id, status_from, status_to, reason_kind, drone_id, actor, at
+                 ) VALUES (?1, ?2, 'running', 'running', 'unqualified', ?3, 'fleet', ?4)",
+                rusqlite::params![kind, id, drone, at],
+            )
+            .expect("a drone move as version 18 wrote it, with no step on it");
+        }
+    }
+}
+
+/// **The migration that edits the log, which nothing else does.**
+///
+/// A drone row written before V19 carries no step, and the fold now refuses one
+/// that cannot name a step. The step in force is derivable — a step is `running`
+/// before a Drone is put on it — so it is derived, and the append-only trigger
+/// comes off for exactly one statement to write it down.
+#[test]
+fn version_nineteen_gives_every_drone_row_the_step_it_was_on() {
+    let dir = TempDir::new();
+    version_eighteen(&dir, "01BEFORETHESTEP");
+    let store = Store::open(&dir.db()).expect("a version 18 file opens and is migrated");
+    assert_eq!(recorded_version(&store), KNOWN_SCHEMA_VERSION.to_string());
+
+    let rows: Vec<(String, String, String)> = store
+        .conn
+        .prepare(
+            "SELECT kind, drone_id, step_id FROM job_events
+             WHERE kind IN ('drone_spawned', 'drone_exited') ORDER BY seq",
+        )
+        .expect("the log reads")
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .expect("rows")
+        .collect::<Result<_, _>>()
+        .expect("every drone row now names a step");
+    assert_eq!(
+        rows,
+        vec![
+            (
+                "drone_spawned".to_string(),
+                "01DRONEONE".to_string(),
+                "reproduce".to_string()
+            ),
+            (
+                "drone_exited".to_string(),
+                "01DRONEONE".to_string(),
+                "reproduce".to_string()
+            ),
+            (
+                "drone_spawned".to_string(),
+                "01DRONETWO".to_string(),
+                "fix".to_string()
+            ),
+        ],
+        "each Drone is attributed to the step that was running when it arrived"
+    );
+}
+
+/// The log is append-only again on the far side, and it is worth asserting
+/// because the migration is the one thing that ever lifts the trigger.
+#[test]
+fn version_nineteen_puts_the_append_only_trigger_back() {
+    let dir = TempDir::new();
+    version_eighteen(&dir, "01BEFORETHESTEP");
+    let store = Store::open(&dir.db()).expect("migrated");
+
+    let refused = store
+        .conn
+        .execute("UPDATE job_events SET step_id = 'fix' WHERE seq = 1", []);
+    assert!(
+        refused.is_err(),
+        "a recorded move is never edited, including by whoever comes after the migration"
+    );
+}

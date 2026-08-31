@@ -5,9 +5,9 @@
 
 use core_model::{
     Actor, AdvanceGate, Attachment, CheckOutcome, ContextSource, Covers, CriterionId,
-    DeclarePlanAt, DroneId, EvidenceRef, EvidenceType, GamingPattern, Job, JobStatus, JudgeVerdict,
-    Judgment, ModelName, PathPattern, RepoPath, ResolvedCheck, StepCheck, StepEvidence, StepId,
-    Target, Ulid, WriteTargets,
+    DeclarePlanAt, DroneId, EvidenceRef, EvidenceType, GamingPattern, Job, JobStatus, JobStep,
+    JudgeVerdict, Judgment, ModelName, PathPattern, RepoPath, ResolvedCheck, StepCheck,
+    StepEvidence, StepId, Target, Ulid, WriteTargets,
 };
 
 use crate::tests::{created_at, job_id, open, sub_dispatched, top_level, TempDir};
@@ -517,9 +517,9 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
     );
 }
 
-/// `assigned_drone` folds. It was refused on read until a Drone arriving was a
-/// row in the log, because a rebuild that cannot put a value back must not
-/// quietly drop it.
+/// `assigned_drone` folds, onto the step the Drone was put on. It was refused
+/// on read until a Drone arriving was a row in the log, because a rebuild that
+/// cannot put a value back must not quietly drop it.
 #[test]
 fn a_drone_arriving_and_leaving_folds_back_out_of_the_log() {
     let dir = TempDir::new();
@@ -537,10 +537,11 @@ fn a_drone_arriving_and_leaving_folds_back_out_of_the_log() {
         .transition(Target::Running, Actor::Fleet, created_at())
         .expect("a legal move");
     store.record_transition(&running).expect("recorded");
+    let step = StepId::new("reproduce");
     let arrived = running
         .job
-        .drone_spawned(drone.clone(), Actor::Fleet, created_at())
-        .expect("nothing is on it yet");
+        .drone_spawned(&step, drone.clone(), Actor::Fleet, created_at())
+        .expect("nothing is on that step yet");
     store.record_drone_move(&arrived).expect("recorded");
     drop(store);
 
@@ -551,11 +552,17 @@ fn a_drone_arriving_and_leaving_folds_back_out_of_the_log() {
         Some(&drone),
         "the column is not read back; this came off the log"
     );
+    assert_eq!(
+        loaded.step(&step).and_then(JobStep::assigned_drone),
+        Some(&drone),
+        "and it folded onto the step it was put on, which is what lets a \
+         finished Job name every Drone that worked it"
+    );
 
     let mut store = reopened;
     let left = loaded
-        .drone_exited(Actor::Fleet, created_at())
-        .expect("one is on it");
+        .drone_exited(&step, Actor::Fleet, created_at())
+        .expect("one is on that step");
     store.record_drone_move(&left).expect("recorded");
     drop(store);
 
