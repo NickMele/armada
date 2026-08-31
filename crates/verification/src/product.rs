@@ -91,18 +91,22 @@ impl<'a> Written<'a> {
 /// The most a step's deliverable may weigh before the call is refused.
 ///
 /// **A judgement, not a measurement.** There is no calibration record to set it
-/// from. The plan this whole capability was built for is 7,093 bytes and the
+/// from. The plan this whole capability was built for is 7,093 bytes, and the
 /// brief around it already carries the request, the earlier steps' evidence,
-/// the check results and often the entire patch — so the number is chosen to
-/// leave a normal deliverable thirty-odd times the room it needs while keeping
-/// one file from being most of a call.
+/// the check results and often the entire patch — so a deliverable is one part
+/// of a call and must not be able to become most of it. Sixteen kibibytes is
+/// roughly four thousand tokens and a bit over twice the only deliverable
+/// anyone has written, which is the room a document needs and not the room a
+/// log or a dump would take. It was 256 KiB until 2026-08-31, chosen with the
+/// same reasoning and no arithmetic: that is ~65,000 tokens, more than most
+/// briefs weigh in total.
 ///
 /// **Over it is a call that could not be made, not a refusal.** A Drone that
 /// wrote five megabytes has produced something no criterion was written for,
 /// and answering `not_met` on that would be a verdict about the size. So the
 /// step stops and a person reads it, which is what every other unmakeable call
 /// does.
-pub const A_DELIVERABLE: usize = 256 * 1024;
+pub const A_DELIVERABLE: usize = 16 * 1024;
 
 /// The file a step was asked to write, as the Judge is shown it.
 ///
