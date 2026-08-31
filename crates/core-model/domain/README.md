@@ -126,13 +126,6 @@ corrects the data.
 
 ## Open questions
 
-- **[retries-exhausted-destination]** "Retries exhausted" both transitions
-  `running -> completed_failed` and raises the `gate_failure` escalation. One
-  condition, two destinations.
-  What decides it: the two say different things about what happened — a Job
-  that failed, versus a Job that needs a person. The owner's lean is that this
-  deserves a state of its own rather than a choice between the existing two,
-  which would make the condition unambiguous at the cost of a status.
 - **[workflowdef-schema-gaps]** Five keys appear in the workflow samples with
   no row in the field catalogue: `workflow_id`, `version`, `order`, `required`,
   `manifest_rule_overrides`. The `structure` field's prose also cites an `id`

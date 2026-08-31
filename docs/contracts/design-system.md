@@ -765,9 +765,15 @@ already separates. Status appears as a badge in its own column, never as
 a row-background tint — eight tinted rows in a list is unreadable, and
 the tint would fight `--accent-muted` on selection.
 
-**A machine value copies on click.** Anything in mono — a job id, a
-path, a branch name, a command — copies to the clipboard when clicked
-and goes to `--accent` on hover. It carries no `copy` glyph: the
+**An identifier copies on click.** A job id, a drone id, a branch
+name — a value whose whole use is being quoted somewhere else — copies
+to the clipboard when clicked and goes to `--accent` on hover.
+
+**A path or a command is mono and does not copy by default.** Both have
+somewhere to go: a path opens where it lives, a command opens what it
+did. A surface with nowhere to open to may fall back to copying, but the
+gesture belongs to the destination first, and a file list whose paths
+copy instead of opening is the case this rule was narrowed for. It carries no `copy` glyph: the
 affordance token is the affordance, and a 12px icon repeated down
 fourteen rows is the noise Iconography's default-to-no-icon rule exists
 to prevent. A toast confirms, because a clipboard write is silent by
