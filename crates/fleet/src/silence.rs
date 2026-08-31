@@ -163,7 +163,7 @@ where
         // Drone's own long command, which is not quiet at all: the harness
         // emits a progress heartbeat every thirty seconds while a tool runs.
         // See `Progress::heard`.
-        if self.evidence_waiting() > 0 {
+        if self.evidence_waiting_for(&at_work.standing().0) > 0 {
             at_work.waiting(self.now());
             return Ok(None);
         }

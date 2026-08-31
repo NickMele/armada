@@ -83,10 +83,19 @@ where
     /// working slot and is measured against the worktree twice — on every turn
     /// while the step runs, and once at the gate.
     ///
-    /// The Drone names no Job and no step; both are read out of the slot, under
-    /// its lock, so a declaration cannot be aimed at some other step.
-    pub async fn declare_scope(&self, declaration: &DeclareScope) -> Result<Declared, NotDeclared> {
-        let mut working = self.slot().lock().await;
+    /// The Drone names no Job and no step; both are read out of **its own**
+    /// slot, under that slot's lock, so a declaration cannot be aimed at some
+    /// other step — and which slot is `crate::peer`'s answer rather than the
+    /// caller's.
+    pub async fn declare_scope(
+        &self,
+        caller: &JobId,
+        declaration: &DeclareScope,
+    ) -> Result<Declared, NotDeclared> {
+        let Some(slot) = self.slot_of(caller).await else {
+            return Err(NotDeclared::NothingIsWorking);
+        };
+        let mut working = slot.lock().await;
         let Some(at_work) = working.as_mut() else {
             return Err(NotDeclared::NothingIsWorking);
         };
@@ -121,6 +130,20 @@ where
         drop(working);
         self.kept_plan(&job, &step, &paths).await;
         Ok(Declared)
+    }
+
+    /// Declare as the Drone of the one Job being worked. See
+    /// [`Fleet::submitted_by_the_one`](crate::Fleet), which is the same
+    /// shorthand for the same reason.
+    #[cfg(test)]
+    pub(crate) async fn declared_by_the_one(
+        &self,
+        declaration: &DeclareScope,
+    ) -> Result<Declared, NotDeclared> {
+        let Some(job) = self.working_on().await.first().cloned() else {
+            return Err(NotDeclared::NothingIsWorking);
+        };
+        self.declare_scope(&job, declaration).await
     }
 
     /// Write the declaration down, because the slot it was just put on will not

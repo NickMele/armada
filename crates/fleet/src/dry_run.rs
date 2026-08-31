@@ -29,7 +29,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Footprint, Vcs, WorkProduct, Worktree};
-use core_model::{Component, Envelope, FieldValue, Job, Level, ResolvedCheck, StepId};
+use core_model::{JobId, Component, Envelope, FieldValue, Job, Level, ResolvedCheck, StepId};
 use ipc::mcp::{CheckRan, CheckReport};
 use verification::Ran;
 
@@ -177,18 +177,29 @@ where
     /// Run the step's Checks and say what each one did. **Nothing moves.**
     ///
     /// The Drone names no Job, no step and no Check; all three are read out of
-    /// the working slot and the Job's own frozen workflow, which is
-    /// `Fleet::declare_scope`'s binding and for the same reason.
-    pub async fn run_checks(&self) -> Result<CheckReport, NotRun> {
-        let plan = self.dry_run_begins().await?;
+    /// **its own** slot and the Job's own frozen workflow, which is
+    /// `Fleet::declare_scope`'s binding and for the same reason. Which slot is
+    /// `crate::peer`'s answer.
+    pub async fn run_checks(&self, caller: &JobId) -> Result<CheckReport, NotRun> {
+        let plan = self.dry_run_begins(caller).await?;
         let ran = self.dry_run(&plan).await;
         // **Before the result is returned, on both roads out.** A run that
         // failed to end would leave the clocks suspended for the rest of the
         // step, which is the tripwires switched off by an error path.
-        self.dry_run_ends(&plan).await;
+        self.dry_run_ends(caller, &plan).await;
         let report = ran?;
         self.noted_dry_run(&plan, &report);
         Ok(report)
+    }
+
+    /// Run the Checks as the Drone of the one Job being worked. See
+    /// [`Fleet::submitted_by_the_one`](crate::Fleet).
+    #[cfg(test)]
+    pub(crate) async fn checked_by_the_one(&self) -> Result<CheckReport, NotRun> {
+        let Some(job) = self.working_on().await.first().cloned() else {
+            return Err(NotRun::NothingIsWorking);
+        };
+        self.run_checks(&job).await
     }
 
     /// Everything decided under the slot lock: whether there is a run to make,
@@ -196,8 +207,11 @@ where
     ///
     /// **The mark goes on here**, inside the same lock that read the count, so
     /// two calls arriving together cannot both find the budget unspent.
-    async fn dry_run_begins(&self) -> Result<Plan, NotRun> {
-        let mut working = self.slot().lock().await;
+    async fn dry_run_begins(&self, caller: &JobId) -> Result<Plan, NotRun> {
+        let Some(slot) = self.slot_of(caller).await else {
+            return Err(NotRun::NothingIsWorking);
+        };
+        let mut working = slot.lock().await;
         let Some(at_work) = working.as_mut() else {
             return Err(NotRun::NothingIsWorking);
         };
@@ -206,7 +220,7 @@ where
         }
         // Cheaper than the rest and true regardless of them: the gate is about
         // to run these same Checks in this same worktree.
-        if self.evidence_waiting() > 0 {
+        if self.evidence_waiting_for(caller) > 0 {
             return Err(NotRun::AlreadySubmitted);
         }
         let allowed = self.dry_runs().allowed();
@@ -240,9 +254,12 @@ where
     /// in flight: `Working::now_on` has already cleared the mark for the step
     /// that ended, and crediting the new step with the old one's minutes would
     /// hand it a wall clock it did not earn.
-    async fn dry_run_ends(&self, plan: &Plan) {
+    async fn dry_run_ends(&self, caller: &JobId, plan: &Plan) {
         let now = self.now();
-        let mut working = self.slot().lock().await;
+        let Some(slot) = self.slot_of(caller).await else {
+            return;
+        };
+        let mut working = slot.lock().await;
         if let Some(at_work) = working.as_mut() {
             let (job, step, _) = at_work.standing();
             if job == *plan.record.id() && step == plan.step {

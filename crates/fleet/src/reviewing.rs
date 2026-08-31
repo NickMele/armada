@@ -91,7 +91,13 @@ where
     /// **It needs no Drone and there is never one to need.** The decision is
     /// the person's and is recorded whatever the slot holds.
     pub async fn approve_review(&self, job_id: &JobId) -> Result<Job, Adrift> {
-        let mut working = self.slot().lock().await;
+        // **A Job at a human gate has no Drone**, because the gate stood it
+        // down so a person's review costs no fleet time — so ordinarily there
+        // is no slot at all and this is an empty one. It is opened rather than
+        // looked up because `completed` may still have work to land through it,
+        // and it is closed again below whatever happens.
+        let slot = self.slot_for(job_id).await;
+        let mut working = slot.lock().await;
         let job = self.load(job_id).await?;
         let step = self.at_the_gate(&job)?;
         let passed = self.declared_step(&job, &step)?.clone();
@@ -102,7 +108,13 @@ where
         let job = self.move_step(&job, &step, StepTarget::Advanced).await?;
         let told = OutcomeTurn::approved(&passed, next.as_ref());
         let Some(next) = next else {
-            return self.completed(&job, &told, job_id, &mut working).await;
+            let done = self.completed(&job, &told, job_id, &mut working).await?;
+            // **After the slot is let go**, which is the lock order
+            // `crate::slots` states: admission takes the roster, and a caller
+            // holding a slot must not reach for it.
+            drop(working);
+            self.admit_next().await?;
+            return Ok(done);
         };
         // The next step is entered here for the same reason, and it is what
         // re-admission reads to know where to put the Drone: `current_step_id`
@@ -121,7 +133,8 @@ where
         // process that finished it. There is nobody to tell here. That a person
         // accepted the part crosses as a block in the next Drone's opening
         // brief, built by `crate::dispatch`'s re-admission.
-        self.admit_next(&mut working).await?;
+        drop(working);
+        self.admit_next().await?;
         self.load(job_id).await
     }
 
@@ -159,7 +172,8 @@ where
     /// [`Adrift::NoDroneToTell`], narrowed from "no process right now" to "no
     /// process, and none possible".
     pub async fn request_changes(&self, job_id: &JobId, note: &Redirection) -> Result<Job, Adrift> {
-        let mut working = self.slot().lock().await;
+        let slot = self.slot_for(job_id).await;
+        let working = slot.lock().await;
         let job = self.load(job_id).await?;
         self.at_the_gate(&job)?;
         if working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
@@ -204,7 +218,8 @@ where
         // Inline, exactly as an approval re-admits inline — so a fleet with
         // nothing else to do starts the step again now rather than on the next
         // tick.
-        self.admit_next(&mut working).await?;
+        drop(working);
+        self.admit_next().await?;
         self.load(job_id).await
     }
 
@@ -246,17 +261,19 @@ where
     /// which clears a Job off the Board and carries no verdict at all. The
     /// worktree is left where it is, as every ending leaves it.
     pub async fn reject(&self, job_id: &JobId) -> Result<Job, Adrift> {
-        let mut working = self.slot().lock().await;
+        if let Some(slot) = self.slot_of(job_id).await {
+            let mut working = slot.lock().await;
+            if working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
+                self.end_the_drone(&mut working).await;
+            }
+        }
         let job = self.load(job_id).await?;
         self.at_the_gate(&job)?;
-        if working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
-            self.end_the_drone(&mut working).await;
-        }
         let rejected = self.move_job(&job, Target::Rejected, Actor::Human).await?;
-        // The slot is free and a queued Job is entitled to it, the same as
-        // after a kill. A rejection that left the slot held would stop the
+        // The bound has room and a queued Job is entitled to it, the same as
+        // after a kill. A rejection that left the place held would stop the
         // board on a Job that is over.
-        self.admit_next(&mut working).await?;
+        self.admit_next().await?;
         Ok(rejected)
     }
 
@@ -279,7 +296,9 @@ where
             .await?;
         let said = self.tell(job_id, told, None, working).await;
         self.end_the_drone(working).await;
-        self.admit_next(working).await?;
+        // **Admission is the caller's**, and it is not an omission: this holds
+        // a slot, and taking the roster while holding one is the lock order
+        // reversed. Both callers admit once they have let the slot go.
         landed?;
         said?;
         Ok(job)

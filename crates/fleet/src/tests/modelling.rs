@@ -75,7 +75,7 @@ async fn each_step_is_spawned_as_the_model_its_own_step_named() {
     );
 
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("evidence lands");
     fleet.turn().await.expect("the first step advances");

@@ -66,7 +66,7 @@ async fn a_finished_job_says_which_files_were_outside_what_a_step_promised() {
     let fleet = a_fleet_reading(&home, three_kinds(), Arc::clone(&clock), Some(DECLARING));
     let job = started(&fleet, &home).await;
     fleet
-        .declare_scope(&DeclareScope {
+        .declared_by_the_one(&DeclareScope {
             context_paths: vec!["src/parse.rs".to_string()],
         })
         .await
@@ -136,7 +136,7 @@ async fn a_step_that_promised_to_touch_nothing_puts_every_path_outside_it() {
     let fleet = a_fleet_reading(&home, three_kinds(), Arc::clone(&clock), Some(DECLARING));
     let job = started(&fleet, &home).await;
     fleet
-        .declare_scope(&DeclareScope {
+        .declared_by_the_one(&DeclareScope {
             context_paths: Vec::new(),
         })
         .await
@@ -175,7 +175,7 @@ async fn a_step_that_redeclared_is_read_against_what_it_declared_last() {
     let job = started(&fleet, &home).await;
     for paths in [vec!["src/parse.rs"], vec!["src/tokens.rs", "src/legacy.rs"]] {
         fleet
-            .declare_scope(&DeclareScope {
+            .declared_by_the_one(&DeclareScope {
                 context_paths: paths.iter().map(|path| path.to_string()).collect(),
             })
             .await
@@ -216,7 +216,7 @@ async fn a_drone_that_changed_nothing_drifts_from_nothing() {
     );
     let job = started(&fleet, &home).await;
     fleet
-        .declare_scope(&DeclareScope {
+        .declared_by_the_one(&DeclareScope {
             context_paths: vec!["src".to_string()],
         })
         .await

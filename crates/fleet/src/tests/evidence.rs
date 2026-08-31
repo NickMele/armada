@@ -55,6 +55,16 @@ async fn post(app: &Router, uri: &str, body: &str) -> (StatusCode, Vec<u8>) {
         .method("POST")
         .uri(uri)
         .header("content-type", "application/json")
+        // **With a peer, because a Drone tool call is attributed by one.** A
+        // router served by `axum::serve` carries this from the accepted
+        // connection; a `oneshot` carries whatever the test puts on it, and a
+        // request with none is refused rather than guessed at — see
+        // `crate::peer`.
+        .extension(axum::extract::ConnectInfo(
+            "127.0.0.1:51000"
+                .parse::<std::net::SocketAddr>()
+                .expect("a loopback address"),
+        ))
         .body(Body::from(body.to_string()))
         .expect("a well-formed request");
     let response = app
@@ -230,6 +240,12 @@ async fn a_second_submission_for_a_step_already_evidenced_is_refused() {
 /// step the Job is on now, because the call names no step — so the case that
 /// is actually distinguishable is a Job with no step at all. **Refused by
 /// name, and the Drone is told to stop.**
+///
+/// **`#50` moved which refusal it is.** With no Drone anywhere, the call is
+/// refused before it reaches a slot: nothing this Fleet spawned holds the
+/// connection it arrived on, so there is no Job to record it against. The
+/// sentence is `crate::peer`'s and it is the stronger of the two — it says why
+/// the caller could not be placed rather than only that nothing was running.
 #[tokio::test]
 async fn a_submission_with_no_job_running_is_refused_by_name() {
     let home = TempDir::new();
@@ -246,7 +262,7 @@ async fn a_submission_with_no_job_running_is_refused_by_name() {
     let answered = tool_call(&app, A_DIFF).await;
     assert!(answered.is_error());
     assert!(
-        answered.text().contains("no Job is being worked"),
+        answered.text().contains("no Job to record it against"),
         "{}",
         answered.text()
     );

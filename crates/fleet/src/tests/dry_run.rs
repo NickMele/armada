@@ -397,7 +397,7 @@ async fn the_clocks_do_not_count_the_time_a_check_takes() {
 
     let running = tokio::spawn({
         let fleet = Arc::clone(&fleet);
-        async move { fleet.run_checks().await }
+        async move { fleet.checked_by_the_one().await }
     });
     wait_until_checking(&fleet).await;
 
@@ -406,14 +406,14 @@ async fn the_clocks_do_not_count_the_time_a_check_takes() {
     for _ in 0..8 {
         let turned = fleet.turn().await.expect("a turn");
         assert!(
-            turned.quiet.is_none(),
+            turned.quiet().is_none(),
             "the vigil counted a Check Fleet was running against the Drone: {:?}",
-            turned.quiet
+            turned.quiet()
         );
         assert!(
-            turned.wandering.is_none(),
+            turned.wandering().is_none(),
             "the thrashing chain fired while Fleet was answering the Drone: {:?}",
-            turned.wandering
+            turned.wandering()
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
@@ -431,7 +431,8 @@ async fn the_clocks_do_not_count_the_time_a_check_takes() {
     // the rest of the step.
     let now = fleet.now();
     let running_for = fleet
-        .slot()
+        .the_only_slot()
+            .await
         .lock()
         .await
         .as_ref()
@@ -463,11 +464,11 @@ async fn a_second_run_while_one_is_going_is_refused() {
 
     let running = tokio::spawn({
         let fleet = Arc::clone(&fleet);
-        async move { fleet.run_checks().await }
+        async move { fleet.checked_by_the_one().await }
     });
     wait_until_checking(&fleet).await;
 
-    let refused = fleet.run_checks().await;
+    let refused = fleet.checked_by_the_one().await;
     assert!(
         matches!(refused, Err(NotRun::AlreadyRunning)),
         "{refused:?}"
@@ -492,7 +493,7 @@ async fn a_drone_that_has_already_submitted_is_told_to_wait() {
 
     submit(&app).await;
     assert_eq!(fleet.evidence_waiting(), 1, "the gate has not run yet");
-    let refused = fleet.run_checks().await.expect_err("the gate is about to");
+    let refused = fleet.checked_by_the_one().await.expect_err("the gate is about to");
     assert!(matches!(refused, NotRun::AlreadySubmitted), "{refused:?}");
     assert!(
         refused.to_string().contains("later turn"),
@@ -514,8 +515,8 @@ async fn a_step_that_has_spent_its_allowance_is_refused_and_told_why() {
     );
     started(&fleet, &home).await;
 
-    fleet.run_checks().await.expect("the first run");
-    let refused = fleet.run_checks().await.expect_err("the second is refused");
+    fleet.checked_by_the_one().await.expect("the first run");
+    let refused = fleet.checked_by_the_one().await.expect_err("the second is refused");
     assert!(
         matches!(refused, NotRun::Spent { allowed: 1 }),
         "{refused:?}"
@@ -545,7 +546,7 @@ async fn a_step_with_no_checks_is_refused_rather_than_answered_with_nothing() {
     let fleet = a_fleet_checking(&home, unchecked, Arc::new(Held::started()), 3);
     started(&fleet, &home).await;
 
-    let refused = fleet.run_checks().await.expect_err("nothing to run");
+    let refused = fleet.checked_by_the_one().await.expect_err("nothing to run");
     assert!(
         matches!(refused, NotRun::StepHasNoChecks { .. }),
         "{refused:?}"
@@ -564,7 +565,7 @@ async fn a_call_with_nothing_working_is_refused() {
         3,
     );
 
-    let refused = fleet.run_checks().await.expect_err("nothing is working");
+    let refused = fleet.checked_by_the_one().await.expect_err("nothing is working");
     assert!(matches!(refused, NotRun::NothingIsWorking), "{refused:?}");
 }
 
@@ -680,6 +681,16 @@ async fn post(app: &Router, body: &str) -> String {
         .method("POST")
         .uri(api::MCP_PATH)
         .header("content-type", "application/json")
+        // **With a peer, because a Drone tool call is attributed by one.** A
+        // router served by `axum::serve` carries this from the accepted
+        // connection; a `oneshot` carries whatever the test puts on it, and a
+        // request with none is refused rather than guessed at — see
+        // `crate::peer`.
+        .extension(axum::extract::ConnectInfo(
+            "127.0.0.1:51000"
+                .parse::<std::net::SocketAddr>()
+                .expect("a loopback address"),
+        ))
         .body(Body::from(body.to_string()))
         .expect("a well-formed request");
     let response = app
@@ -707,7 +718,8 @@ async fn post(app: &Router, body: &str) -> String {
 async fn wait_until_checking(fleet: &Fixture) {
     for _ in 0..400 {
         if fleet
-            .slot()
+            .the_only_slot()
+            .await
             .lock()
             .await
             .as_ref()

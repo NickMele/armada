@@ -128,12 +128,12 @@ async fn what_the_board_says_is_what_admission_did() {
         blocked.queued_reason.map(|why| why.as_wire()),
         Some("blocked_by_dependency")
     );
-    assert!(fleet.working_on().await.is_none(), "and it did not start");
+    assert!(fleet.working_on().await.is_empty(), "and it did not start");
 
     // The upstream runs and lands. The same Job is admitted, and stops saying
     // it is held — the two moved together or one of these fails.
     fleet.approve(made[0].id()).await.expect("the upstream");
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     fleet.turn().await.expect("the loop turns");
 
     let started = fleet

@@ -54,25 +54,51 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// Start the next approved Job, if the slot is free.
+    /// Start every approved Job the bound has room for.
     ///
-    /// **A queue of one.** The first line is the whole of what "one Job at a
-    /// time" means here, and there is nothing above it deciding an order among
-    /// several — because there is never more than one running to decide
-    /// between.
-    pub(crate) async fn admit_next(
-        &self,
-        working: &mut Option<Working>,
-    ) -> Result<Option<JobId>, Adrift> {
-        if working.is_some() {
-            return Ok(None);
+    /// **`Slots::room` is the whole of what the bound means here**, and it is
+    /// the same predicate `queued_reason` answers `waiting_on_resources` from —
+    /// one answer, because a Board saying a Job is blocked while Fleet is
+    /// starting it is worse than a Board saying nothing.
+    ///
+    /// **The roster lock is held across the loop, and nothing else is.** Two
+    /// admissions running at once would each read the same `queued` Job as
+    /// next and dispatch it twice; holding the roster is what makes admission
+    /// one act. It is released the moment the last Drone is spawned, which is
+    /// what keeps it from being the single working slot again — a slot is held
+    /// for as long as a Job is worked, and this is held for as long as a Job is
+    /// *started*.
+    ///
+    /// Admission stops at the first Job that will not start. The failure is
+    /// returned, its Job is left `escalated` by `dispatch`, and the next turn
+    /// asks again — Fleet does not walk on down the queue to find one that
+    /// works, because the reason the first failed is ordinarily the disk.
+    pub(crate) async fn admit_next(&self) -> Result<Vec<JobId>, Adrift> {
+        let mut slots = self.slots().lock().await;
+        let mut admitted = Vec::new();
+        while slots.room() {
+            let Some(job) = self.next_queued().await? else {
+                break;
+            };
+            let job_id = job.id().clone();
+            let slot = slots.opened_for(&job_id);
+            // The slot exists and counts against the bound before the dispatch
+            // that fills it runs, so a `next_queued` inside this same loop
+            // cannot hand back the Job being started. Nothing else can be
+            // holding this lock — the roster is held, and the Job had none.
+            let mut working = slot.lock().await;
+            if let Err(cause) = self.dispatch(job, &mut working).await {
+                drop(working);
+                // Nothing started, so nothing is being worked, so the bound is
+                // not spent. Left in place it would be a Job with no Drone
+                // holding a place in the roster for ever.
+                slots.closed(&job_id);
+                return Err(cause);
+            }
+            drop(working);
+            admitted.push(job_id);
         }
-        let Some(job) = self.next_queued().await? else {
-            return Ok(None);
-        };
-        let job_id = job.id().clone();
-        self.dispatch(job, working).await?;
-        Ok(Some(job_id))
+        Ok(admitted)
     }
 
     /// The Job that has been waiting longest, by when it was approved.
@@ -559,7 +585,7 @@ where
         // was working, and asking one that already stopped to stop again is the
         // move the machine refuses.
         let standing = self.load(&job_id).await?;
-        let after = aftermath(standing.status(), &Ending::of(&heard), self.left());
+        let after = aftermath(standing.status(), &Ending::of(&heard), self.left(&job_id));
         match &after {
             Aftermath::JobMoves(target) => {
                 // The departure first, so the Job's move is published over a
@@ -572,7 +598,7 @@ where
                 // submission is waiting and this arm is not the one reached.
                 // Said out loud on the arm it is not reached from, because the
                 // one drop nobody wrote down is the defect this pair closes.
-                self.dropped_with_the_job(&job_id, self.empty_the_inbox());
+                self.dropped_with_the_job(&job_id, self.empty_the_inbox(&job_id));
             }
             // The idle Drone of a Job a person is already holding. Its going is
             // the only fact, and it is what turns a redirect into a restart.
@@ -582,16 +608,21 @@ where
                 // Reachable, unlike its neighbour: a Job that stopped while its
                 // Drone was still submitting leaves evidence with no step to be
                 // against. It goes, and the Job's log says it went.
-                self.dropped_with_the_job(&job_id, self.empty_the_inbox());
+                self.dropped_with_the_job(&job_id, self.empty_the_inbox(&job_id));
             }
             Aftermath::TheGateDecides => {}
         }
         Ok(Some(after))
     }
 
-    /// Whether the Drone left anything for the gate to rule on.
-    pub(crate) fn left(&self) -> Left {
-        if self.evidence_waiting() > 0 {
+    /// Whether this Job's Drone left anything for the gate to rule on.
+    ///
+    /// **This Job's and not the inbox's**, which is `#50` arriving on a
+    /// question that used to have one answer for all of Fleet: a Drone that
+    /// exits having submitted nothing must not be read as having left evidence
+    /// because some other Job's Drone did.
+    pub(crate) fn left(&self, job: &JobId) -> Left {
+        if self.evidence_waiting_for(job) > 0 {
             Left::Evidence
         } else {
             Left::Nothing
@@ -655,8 +686,8 @@ where
             }
             None => None,
         };
-        let dropped = self.empty_the_inbox();
         if let Some(job_id) = ended {
+            let dropped = self.empty_the_inbox(&job_id);
             self.dropped_with_the_job(&job_id, dropped);
         }
     }

@@ -234,7 +234,7 @@ where
     ) -> Result<Option<Wandering>, Adrift> {
         // A Drone that has submitted is at the gate, not thrashing. Cheaper
         // than the tripwires and true regardless of them.
-        if self.evidence_waiting() > 0 {
+        if self.evidence_waiting_for(&job) > 0 {
             return Ok(None);
         }
         let at_work = working.as_ref().expect("the slot was read as full");
@@ -312,7 +312,7 @@ where
         // **The whole distinction the trigger turns on.** A Drone that came to
         // rest, or that submitted, did what it was told — and Fleet reads only
         // that it happened, never what it said.
-        if at_work.came_to_rest() || self.evidence_waiting() > 0 {
+        if at_work.came_to_rest() || self.evidence_waiting_for(&job) > 0 {
             if let Some(at_work) = working.as_mut() {
                 at_work.looked();
             }

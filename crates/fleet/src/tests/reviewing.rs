@@ -63,14 +63,14 @@ pub(super) async fn at_the_gate(fleet: &Fixture, home: &TempDir) -> JobId {
     assert_eq!(job.status(), JobStatus::Running);
 
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("the Drone reports its diff");
     let turned = fleet.turn().await.expect("the gate runs");
     assert!(
-        matches!(turned.ruled, Some(Ruling::HeldForReview { .. })),
+        matches!(turned.ruled(), Some(Ruling::HeldForReview { .. })),
         "the gate did not hold the Job for a person: {:?}",
-        turned.ruled
+        turned.ruled()
     );
     let held = fleet.load(job.id()).await.expect("the Job is there");
     assert_eq!(held.status(), JobStatus::AwaitingReview);
@@ -230,7 +230,7 @@ async fn a_conflict_at_a_human_boundary_goes_to_the_drone_that_is_still_there() 
         "and the step the person approved still advanced"
     );
     assert!(
-        fleet.working_on().await.is_some(),
+        !fleet.working_on().await.is_empty(),
         "the Drone is still there to be handed it"
     );
 }
@@ -291,12 +291,12 @@ async fn a_step_after_a_human_boundary_does_not_advance_on_a_rebase_it_did_not_r
     fleet
         .work()
         .wrote(&[("src/log.rs", adapter_traits::Change::Modified)]);
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.expect("the gate runs");
     assert!(
-        matches!(turned.ruled, Some(Ruling::HeldForReview { .. })),
+        matches!(turned.ruled(), Some(Ruling::HeldForReview { .. })),
         "the first step is a person's: {:?}",
-        turned.ruled
+        turned.ruled()
     );
 
     fleet
@@ -305,12 +305,12 @@ async fn a_step_after_a_human_boundary_does_not_advance_on_a_rebase_it_did_not_r
         .expect("the work is taken");
 
     // The second step's Drone resolves nothing and submits anyway.
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.expect("the gate runs again");
-    let Some(Ruling::Failed { failures, .. }) = &turned.ruled else {
+    let Some(Ruling::Failed { failures, .. }) = &turned.ruled() else {
         panic!(
             "the step advanced on markers a person's approval handed it: {:?}",
-            turned.ruled
+            turned.ruled()
         );
     };
     assert_eq!(failures, &[verification::CheckFailed::DiffEmpty]);
@@ -339,24 +339,24 @@ async fn approving_the_last_step_commits_the_work_and_ends_the_job() {
     let job = fleet.approve(job.id()).await.expect("it dispatches");
 
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("the Drone reports its diff");
     let turned = fleet.turn().await.expect("the gate runs");
     assert!(
-        matches!(turned.ruled, Some(Ruling::Advanced { .. })),
+        matches!(turned.ruled(), Some(Ruling::Advanced { .. })),
         "an auto step still advances on its own: {:?}",
-        turned.ruled
+        turned.ruled()
     );
     fleet
-        .submit_evidence(note_evidence())
+        .submitted_by_the_one(note_evidence())
         .await
         .expect("the Drone reports its summary");
     let turned = fleet.turn().await.expect("the gate runs again");
     assert!(
-        matches!(turned.ruled, Some(Ruling::HeldForReview { .. })),
+        matches!(turned.ruled(), Some(Ruling::HeldForReview { .. })),
         "the last step is a person's: {:?}",
-        turned.ruled
+        turned.ruled()
     );
     assert!(
         fleet.vcs().committed().is_empty(),
@@ -431,15 +431,15 @@ async fn work_that_fails_a_check_never_reaches_the_person() {
     fleet.approve(job.id()).await.expect("it dispatches");
 
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("the Drone reports a diff it did not make");
     let turned = fleet.turn().await.expect("the gate runs");
 
     assert!(
-        matches!(turned.ruled, Some(Ruling::Failed { .. })),
+        matches!(turned.ruled(), Some(Ruling::Failed { .. })),
         "the mechanical tier still ends the Job: {:?}",
-        turned.ruled
+        turned.ruled()
     );
     assert_eq!(
         fleet.load(job.id()).await.expect("the Job").status(),
@@ -481,7 +481,7 @@ async fn a_judge_under_a_human_gate_filters_what_reaches_the_person() {
         fleet.approve(job.id()).await.expect("it dispatches");
 
         fleet
-            .submit_evidence(diff_evidence())
+            .submitted_by_the_one(diff_evidence())
             .await
             .expect("the Drone reports its diff");
         let turned = fleet.turn().await.expect("the gate runs");
@@ -490,9 +490,9 @@ async fn a_judge_under_a_human_gate_filters_what_reaches_the_person() {
             fleet.load(job.id()).await.expect("the Job").status(),
             expected,
             "the ruling was {:?}",
-            turned.ruled
+            turned.ruled()
         );
-        let ruled = turned.ruled.expect("the gate answered");
+        let ruled = turned.ruled().expect("the gate answered");
         if expected == JobStatus::AwaitingReview {
             assert!(matches!(ruled, Ruling::HeldForReview { .. }));
             assert_eq!(
@@ -532,7 +532,8 @@ async fn a_job_a_person_is_reading_holds_no_process_and_no_slot() {
     fleet.approve(job.id()).await.expect("it dispatches");
 
     let pid = fleet
-        .slot()
+        .the_only_slot()
+            .await
         .lock()
         .await
         .as_ref()
@@ -545,11 +546,11 @@ async fn a_job_a_person_is_reading_holds_no_process_and_no_slot() {
     );
 
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("the Drone reports its diff");
     let turned = fleet.turn().await.expect("the gate runs");
-    assert!(matches!(turned.ruled, Some(Ruling::HeldForReview { .. })));
+    assert!(matches!(turned.ruled(), Some(Ruling::HeldForReview { .. })));
 
     assert!(
         matches!(holder_of(pid), Ok(Holder::Vacant)),
@@ -557,7 +558,7 @@ async fn a_job_a_person_is_reading_holds_no_process_and_no_slot() {
          gate a person may leave open for a day cannot also be a Drone spending"
     );
     assert!(
-        fleet.slot().lock().await.is_none(),
+        fleet.the_only_slot().await.lock().await.is_none(),
         "and the slot it held is free"
     );
 
@@ -613,7 +614,8 @@ async fn a_job_approved_while_another_holds_the_slot_waits_its_turn() {
     );
     assert!(
         fleet
-            .slot()
+            .the_only_slot()
+            .await
             .lock()
             .await
             .as_ref()

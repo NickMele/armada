@@ -15,6 +15,16 @@
 //! what moved in the turn it got for the next step; a Drone belongs to a step
 //! now, so every boundary that is not the last is a spawn.
 //!
+//! # One Job at a time at the merge end
+//!
+//! Dispatch and the work run N-wide; **the rebase-and-push tail does not.**
+//! Every worktree is cut from one `.git`, and whether two of them can rebase
+//! and push into it concurrently was not measured — so `#50` took the
+//! serialisation rather than discovering git's ref lockfiles by way of a Job
+//! dying at its push, unattended. `Fleet::merge_end` is the lock, it is taken
+//! here and in `crate::landing`, and the cost is real: a Job can wait at the
+//! very end behind another Job's push.
+//!
 //! # A boundary is asked, never the Drone
 //!
 //! Asking the Drone whether its branch is behind would be asking it to manage
@@ -89,6 +99,11 @@ where
         if self.behind(job_id, worktree, &base)? == 0 {
             return Ok(None);
         }
+        // **One Job at a time from here**, and only from here: the two reads
+        // above open the repository and change nothing, and a rebase is the
+        // first thing on this path that writes into the `.git` every worktree
+        // shares. See `Fleet::merge_end`.
+        let _at_the_merge_end = self.merge_end().lock().await;
         let moved = self
             .vcs()
             .bring_up_to_date(worktree, &base)
@@ -96,11 +111,15 @@ where
         // Left where the turn that reports it will find it. A boundary and a
         // finish are two moments and one question — what happened to this Job's
         // branch — so they answer through one field rather than two.
-        *self.delivery_slot().lock().await = Some(Delivered {
-            base: Some(base),
-            caught_up: Some(moved.clone()),
-            ..Delivered::default()
-        });
+        self.left_delivered(
+            job_id,
+            Delivered {
+                base: Some(base),
+                caught_up: Some(moved.clone()),
+                ..Delivered::default()
+            },
+        )
+        .await;
         Ok(Some(match moved {
             BroughtUpToDate::Clean { base, commits } => {
                 TheBaseMoved::BroughtUpToDate { base, commits }

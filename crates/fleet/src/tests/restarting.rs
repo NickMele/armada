@@ -145,7 +145,7 @@ async fn stopped(fleet: &Fixture, home: &TempDir) -> JobId {
 async fn until_reaped(fleet: &Fixture) {
     for _ in 0..400 {
         fleet.turn().await.expect("a turn");
-        if fleet.slot().lock().await.is_none() {
+        if fleet.the_only_slot().await.lock().await.is_none() {
             return;
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
@@ -296,14 +296,14 @@ async fn a_restart_that_resolves_none_of_a_conflicted_rebase_fails_its_diff_chec
 
     // The restarted Drone resolves nothing and submits anyway.
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("the tool took it");
     let turned = fleet.turn().await.expect("the gate ruled");
-    let Some(Ruling::Failed { failures, .. }) = &turned.ruled else {
+    let Some(Ruling::Failed { failures, .. }) = &turned.ruled() else {
         panic!(
             "the restart advanced on markers it did not resolve: {:?}",
-            turned.ruled
+            turned.ruled()
         );
     };
     assert_eq!(failures, &[verification::CheckFailed::DiffEmpty]);

@@ -90,13 +90,18 @@ where
         job: &Job,
         working: &Option<Working>,
     ) -> Result<(), Adrift> {
+        // **One Job at a time from here.** The commit, the rebase and the push
+        // all write into the one `.git` every worktree is cut from, and whether
+        // two of them can do that concurrently is not established. See
+        // `Fleet::merge_end`.
+        let _at_the_merge_end = self.merge_end().lock().await;
         let landed = self.land(job, working).await;
         let delivered = match landed {
             Ok(_) => self.delivered(job, working).await,
             Err(_) => Ok(Delivered::default()),
         };
         if let Ok(delivered) = &delivered {
-            *self.delivery_slot().lock().await = Some(delivered.clone());
+            self.left_delivered(job.id(), delivered.clone()).await;
         }
         landed?;
         delivered?;

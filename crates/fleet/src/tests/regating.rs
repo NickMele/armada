@@ -99,14 +99,14 @@ async fn undecided(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
     worktree_directory(home, &job_id);
     fleet.approve(&job_id).await.expect("released to run");
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("the Drone reports its diff");
     let turned = fleet.turn().await.expect("the gate ran");
     assert!(
-        matches!(turned.ruled, Some(Ruling::CouldNotDecide { .. })),
+        matches!(turned.ruled(), Some(Ruling::CouldNotDecide { .. })),
         "the fixture did not reach an undecided gate: {:?}",
-        turned.ruled
+        turned.ruled()
     );
     let escalated = fleet.load(&job_id).await.expect("the Job reads");
     assert_eq!(escalated.status(), JobStatus::Escalated);
@@ -335,14 +335,14 @@ async fn a_step_the_judge_refused_is_not_re_run() {
     worktree_directory(&home, &job_id);
     fleet.approve(&job_id).await.expect("released to run");
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("the Drone reports its diff");
     let turned = fleet.turn().await.expect("the gate ruled");
     assert!(
-        matches!(turned.ruled, Some(Ruling::Refused { .. })),
+        matches!(turned.ruled(), Some(Ruling::Refused { .. })),
         "the fixture did not reach a refusal: {:?}",
-        turned.ruled
+        turned.ruled()
     );
 
     match fleet.rerun_gate(&job_id).await {

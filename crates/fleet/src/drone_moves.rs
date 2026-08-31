@@ -69,6 +69,11 @@ where
     /// list disagreeing, which is the fault this event exists to make
     /// impossible.
     pub(crate) async fn drone_left(&self, job_id: &JobId, step: &StepId) -> Result<(), Adrift> {
+        // **First, and unconditionally.** A pid left in the index is a
+        // connection that would still attribute to this Job, and every road out
+        // of here — including the two that answer `Ok` without writing anything
+        // — is a road where the Drone has gone.
+        self.drone_gone(job_id);
         let job = self.load(job_id).await?;
         let moved = match job.drone_exited(step, Actor::Fleet, self.now()) {
             Ok(moved) => moved,

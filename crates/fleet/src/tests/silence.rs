@@ -165,7 +165,8 @@ async fn started(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
 async fn after_the_threshold(fleet: &Fixture, clock: &Held, waiting_for: &str) -> Quiet {
     clock.on(QUIET_AFTER.as_secs() + 60);
     for _ in 0..400 {
-        if let Some(quiet) = fleet.turn().await.expect("a turn").quiet {
+        let turned = fleet.turn().await.expect("a turn");
+        if let Some(quiet) = turned.each.into_iter().find_map(|worked| worked.quiet) {
             return quiet;
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
@@ -194,7 +195,8 @@ async fn a_drone_that_keeps_talking_is_never_poked() {
         // past a wall clock that would have fired on the honest case.
         tokio::time::sleep(Duration::from_millis(40)).await;
         clock.on(QUIET_AFTER.as_secs() / 2);
-        if let Some(quiet) = fleet.turn().await.expect("a turn").quiet {
+        let turned = fleet.turn().await.expect("a turn");
+        if let Some(quiet) = turned.each.into_iter().find_map(|worked| worked.quiet) {
             said.push(quiet);
         }
     }
@@ -246,7 +248,8 @@ async fn a_drone_silent_past_the_threshold_is_poked_and_then_escalates() {
     // Read while the Drone is still held, so what is asserted below is measured
     // against a process demonstrably alive rather than assumed to be.
     let pid = fleet
-        .slot()
+        .the_only_slot()
+            .await
         .lock()
         .await
         .as_ref()
@@ -323,7 +326,8 @@ async fn a_drone_that_answers_the_poke_is_heard_and_not_escalated() {
         // Inside the threshold on purpose: what is under test is the answer
         // arriving, and a second silence would be a second episode.
         clock.on(QUIET_AFTER.as_secs() / 8);
-        let quiet = fleet.turn().await.expect("a turn").quiet;
+        let turned = fleet.turn().await.expect("a turn");
+        let quiet = turned.quiet();
         assert!(quiet.is_none(), "the vigil spoke again: {quiet:?}");
         if heard(&fleet).await > before {
             answered = true;
@@ -344,7 +348,8 @@ async fn a_drone_that_answers_the_poke_is_heard_and_not_escalated() {
 /// answered is a claim the gate exists to refuse.
 async fn heard(fleet: &Fixture) -> usize {
     fleet
-        .slot()
+        .the_only_slot()
+            .await
         .lock()
         .await
         .as_ref()

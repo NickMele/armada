@@ -76,9 +76,11 @@ async fn a_workflow_edited_under_a_job_changes_nothing_about_it() {
     // command that exits 1, which this Job would fail on if the file won.
     let after = a_fleet_holding(&home, changed(), two_steps_edited(), 100);
     after.approve(&job_id).await.unwrap();
-    after.submit_evidence(diff_evidence()).await.unwrap();
+    after.submitted_by_the_one(diff_evidence()).await.unwrap();
 
-    let ruling = after.turn().await.unwrap().ruled.expect("the gate ruled");
+    let ruling_turn = after.turn().await.unwrap();
+
+    let ruling = ruling_turn.ruled().expect("the gate ruled");
     assert!(
         matches!(ruling, Ruling::Advanced { .. }),
         "the frozen gate was `diff_nonempty` and it passed; the edited one \
@@ -372,9 +374,11 @@ async fn a_failed_checks_output_is_readable_from_its_file_afterwards() {
         .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
 
-    let ruling = fleet.turn().await.unwrap().ruled.expect("the gate ruled");
+    let ruling_turn = fleet.turn().await.unwrap();
+
+    let ruling = ruling_turn.ruled().expect("the gate ruled");
     assert!(matches!(ruling, Ruling::Failed { .. }), "{ruling:?}");
 
     let ran = step_checks(&fleet, job.id()).await;
@@ -445,7 +449,7 @@ async fn a_check_that_passed_keeps_its_output_and_a_built_in_has_none() {
         .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
 
     let reloaded = fleet.load(job.id()).await.unwrap();

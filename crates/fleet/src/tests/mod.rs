@@ -118,6 +118,13 @@
 //! `superseded` that was meant to be the graceful one — plus the refusal that
 //! makes a cycle unstatable rather than merely undetected.
 //!
+//! `peer` is the twenty-fourth, and it is the only thing here that asserts
+//! against the kernel's own idea of who holds a socket. Its first case is the
+//! one that matters: it opens a second connection from the same process to
+//! somewhere that is not Fleet and asserts the pair refuses it, because a
+//! lookup keyed on the local port alone would say yes and would be wrong
+//! deterministically. See `crate::peer`.
+//!
 //! `boundary` is the twenty-second, and the only thing here that asks the
 //! operating system what happened to a Drone. Every other boundary test asserts
 //! bookkeeping, and would pass over a `setsid`-detached Drone still running.
@@ -153,6 +160,7 @@ mod judging;
 mod landing;
 mod modelling;
 mod overruling;
+mod peer;
 mod planning;
 mod preparing;
 mod process;

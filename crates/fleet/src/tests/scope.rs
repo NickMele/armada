@@ -249,18 +249,18 @@ async fn a_job_that_drifted_is_answerable_rather_than_over() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
     fleet
-        .declare_scope(&DeclareScope {
+        .declared_by_the_one(&DeclareScope {
             context_paths: vec!["docs".to_string()],
         })
         .await
         .unwrap();
 
-    fleet.submit_evidence(a_diff_call()).await.unwrap();
+    fleet.submitted_by_the_one(a_diff_call()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     assert!(
-        matches!(turned.ruled, Some(Ruling::Refused { .. })),
+        matches!(turned.ruled(), Some(Ruling::Refused { .. })),
         "{:?}",
-        turned.ruled
+        turned.ruled()
     );
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),
@@ -350,14 +350,14 @@ async fn a_step_editing_outside_its_plan_is_caught_while_it_runs() {
     fleet.approve(job.id()).await.unwrap();
 
     fleet
-        .declare_scope(&DeclareScope {
+        .declared_by_the_one(&DeclareScope {
             context_paths: vec!["docs".to_string()],
         })
         .await
         .expect("the step declares a scope");
 
     let turned = fleet.turn().await.unwrap();
-    let drifting = turned.drifting.expect("the live check saw the edit");
+    let drifting = turned.drifting().expect("the live check saw the edit");
     assert_eq!(drifting.job, *job.id());
     assert_eq!(drifting.step.as_str(), "implement");
     assert_eq!(
@@ -381,14 +381,14 @@ async fn the_same_drift_is_reported_once_and_not_every_turn() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
     fleet
-        .declare_scope(&DeclareScope {
+        .declared_by_the_one(&DeclareScope {
             context_paths: vec!["docs".to_string()],
         })
         .await
         .unwrap();
 
-    assert!(fleet.turn().await.unwrap().drifting.is_some());
-    assert!(fleet.turn().await.unwrap().drifting.is_none());
+    assert!(fleet.turn().await.unwrap().drifting().is_some());
+    assert!(fleet.turn().await.unwrap().drifting().is_none());
 }
 
 /// **The half that was missing for as long as the check existed.** The finding
@@ -408,13 +408,13 @@ async fn a_drifting_drone_is_told_once_per_path_and_not_again() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
     fleet
-        .declare_scope(&DeclareScope {
+        .declared_by_the_one(&DeclareScope {
             context_paths: vec!["docs".to_string()],
         })
         .await
         .unwrap();
 
-    assert!(fleet.turn().await.unwrap().drifting.is_some());
+    assert!(fleet.turn().await.unwrap().drifting().is_some());
     let told = turns_sent(&fleet, 2).await;
     assert!(
         told[1].contains("src/lib.rs") && told[1].contains("call the scope tool again"),
@@ -424,11 +424,11 @@ async fn a_drifting_drone_is_told_once_per_path_and_not_again() {
 
     // Nothing new this turn, so nothing is said. The Drone then edits a second
     // file outside the plan, which is new and is.
-    assert!(fleet.turn().await.unwrap().drifting.is_none());
+    assert!(fleet.turn().await.unwrap().drifting().is_none());
     fleet
         .work()
         .wrote(&[("src/reader.rs", adapter_traits::Change::Modified)]);
-    assert!(fleet.turn().await.unwrap().drifting.is_some());
+    assert!(fleet.turn().await.unwrap().drifting().is_some());
 
     let told = turns_sent(&fleet, 3).await;
     assert!(told[2].contains("src/reader.rs"), "{}", told[2]);
@@ -450,21 +450,21 @@ async fn declaring_again_replaces_the_plan_and_clears_what_drifted() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
     fleet
-        .declare_scope(&DeclareScope {
+        .declared_by_the_one(&DeclareScope {
             context_paths: vec!["docs".to_string()],
         })
         .await
         .unwrap();
-    assert!(fleet.turn().await.unwrap().drifting.is_some());
+    assert!(fleet.turn().await.unwrap().drifting().is_some());
 
     fleet
-        .declare_scope(&DeclareScope {
+        .declared_by_the_one(&DeclareScope {
             context_paths: vec!["src".to_string()],
         })
         .await
         .unwrap();
     assert!(
-        fleet.turn().await.unwrap().drifting.is_none(),
+        fleet.turn().await.unwrap().drifting().is_none(),
         "the work is inside the plan now, and the plan is the one that counts"
     );
 }
@@ -480,13 +480,13 @@ async fn a_step_with_no_scope_is_not_watched_and_takes_no_declaration() {
     fleet.approve(job.id()).await.unwrap();
 
     let refused = fleet
-        .declare_scope(&DeclareScope {
+        .declared_by_the_one(&DeclareScope {
             context_paths: vec!["src".to_string()],
         })
         .await
         .expect_err("a step that declares no scope takes no declaration");
     assert!(matches!(refused, NotDeclared::StepHasNoScope { .. }));
-    assert!(fleet.turn().await.unwrap().drifting.is_none());
+    assert!(fleet.turn().await.unwrap().drifting().is_none());
 }
 
 /// The denylist resolves last and wins over anything the Drone declared — and
@@ -505,7 +505,7 @@ async fn a_declaration_naming_an_excluded_path_is_refused_where_it_is_made() {
     fleet.approve(job.id()).await.unwrap();
 
     let refused = fleet
-        .declare_scope(&DeclareScope {
+        .declared_by_the_one(&DeclareScope {
             context_paths: vec!["secrets/keys.toml".to_string()],
         })
         .await
@@ -558,28 +558,28 @@ async fn the_plan_does_not_survive_the_step_it_was_declared_for() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
     fleet
-        .declare_scope(&DeclareScope {
+        .declared_by_the_one(&DeclareScope {
             context_paths: vec!["docs".to_string()],
         })
         .await
         .unwrap();
 
-    fleet.submit_evidence(a_diff_call()).await.unwrap();
+    fleet.submitted_by_the_one(a_diff_call()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
-    assert!(matches!(turned.ruled, Some(Ruling::Advanced { .. })));
+    assert!(matches!(turned.ruled(), Some(Ruling::Advanced { .. })));
 
     // The second step inherits nothing. Submitting against it with no
     // declaration of its own fails rather than reusing the first step's.
-    fleet.submit_evidence(a_diff_call()).await.unwrap();
+    fleet.submitted_by_the_one(a_diff_call()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     assert!(
         matches!(
-            turned.ruled,
+            turned.ruled(),
             Some(Ruling::Failed { ref failures, .. })
                 if failures == &vec![CheckFailed::OutOfScope(OutsideScope::NothingDeclared)]
         ),
         "{:?}",
-        turned.ruled
+        turned.ruled()
     );
 }
 

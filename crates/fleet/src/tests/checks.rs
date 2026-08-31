@@ -348,7 +348,7 @@ async fn what_the_gate_found_reaches_the_detail_view() {
     worktree_directory(&home, &job_id);
     fleet.approve(&job_id).await.expect("released to run");
     fleet
-        .submit_evidence(crate::tests::daemon::diff_evidence())
+        .submitted_by_the_one(crate::tests::daemon::diff_evidence())
         .await
         .expect("the tool took it");
     fleet.turn().await.expect("the gate ruled");
@@ -398,7 +398,7 @@ async fn the_record_survives_a_fleet_restart() {
         worktree_directory(&home, job.id());
         fleet.approve(job.id()).await.expect("released to run");
         fleet
-            .submit_evidence(crate::tests::daemon::diff_evidence())
+            .submitted_by_the_one(crate::tests::daemon::diff_evidence())
             .await
             .expect("the tool took it");
         fleet.turn().await.expect("the gate ruled");

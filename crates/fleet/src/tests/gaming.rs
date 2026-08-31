@@ -320,11 +320,11 @@ async fn a_gaming_finding_names_its_patterns_on_the_detail_view() {
     worktree_directory(&home, &job_id);
     fleet.approve(&job_id).await.expect("released to run");
     fleet
-        .submit_evidence(crate::tests::daemon::diff_evidence())
+        .submitted_by_the_one(crate::tests::daemon::diff_evidence())
         .await
         .expect("the tool took it");
     let turned = fleet.turn().await.expect("the gate ruled");
-    assert!(matches!(turned.ruled, Some(Ruling::Suspect { .. })));
+    assert!(matches!(turned.ruled(), Some(Ruling::Suspect { .. })));
 
     let escalated = fleet.load(&job_id).await.expect("the Job reads");
     assert_eq!(escalated.status(), JobStatus::Escalated);

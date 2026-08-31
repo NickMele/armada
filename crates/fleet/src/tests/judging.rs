@@ -253,11 +253,11 @@ async fn a_refusal_escalates_the_job_and_its_citation_reaches_the_detail_view() 
     worktree_directory(&home, &job_id);
     fleet.approve(&job_id).await.expect("released to run");
     fleet
-        .submit_evidence(crate::tests::daemon::diff_evidence())
+        .submitted_by_the_one(crate::tests::daemon::diff_evidence())
         .await
         .expect("the tool took it");
     let turned = fleet.turn().await.expect("the gate ruled");
-    assert!(matches!(turned.ruled, Some(Ruling::Refused { .. })));
+    assert!(matches!(turned.ruled(), Some(Ruling::Refused { .. })));
 
     let escalated = fleet.load(&job_id).await.expect("the Job reads");
     assert_eq!(escalated.status(), JobStatus::Escalated);

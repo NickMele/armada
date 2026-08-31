@@ -72,7 +72,12 @@ where
     /// often as they like without the record filling with runs the Drone never
     /// had.
     pub async fn rerun_gate(&self, job_id: &JobId) -> Result<Job, Adrift> {
-        let mut working = self.slot().lock().await;
+        let Some(slot) = self.slot_of(job_id).await else {
+            return Err(Adrift::NotStandingThere {
+                job: job_id.clone(),
+            });
+        };
+        let mut working = slot.lock().await;
         let job = self.load(job_id).await?;
         let step = self.undecided_step(&job)?;
         // **The slot, and it is a requirement rather than a convenience.** The

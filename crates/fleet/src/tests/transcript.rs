@@ -441,7 +441,7 @@ async fn a_row_written_after_a_step_advances_carries_the_step_it_was_written_und
     );
 
     fleet
-        .submit_evidence(crate::tests::daemon::diff_evidence())
+        .submitted_by_the_one(crate::tests::daemon::diff_evidence())
         .await
         .expect("the step's evidence");
     fleet

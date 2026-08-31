@@ -212,14 +212,16 @@ async fn settled(fleet: &Fixture) {
 
 /// How much the Drone in the slot has said. A count, never the content.
 async fn heard(fleet: &Fixture) -> usize {
-    let slot = fleet.slot().lock().await;
+    let held = fleet.the_only_slot().await;
+    let slot = held.lock().await;
     slot.as_ref().map(|at| at.heard().len()).unwrap_or_default()
 }
 
 /// Turn until the Drone answers the redirect.
 async fn until_roused(fleet: &Fixture) -> Roused {
     for _ in 0..400 {
-        if let Some(roused) = fleet.turn().await.expect("a turn").roused {
+        let turned = fleet.turn().await.expect("a turn");
+        if let Some(roused) = turned.each.into_iter().find_map(|worked| worked.roused) {
             return roused;
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
@@ -231,7 +233,7 @@ async fn until_roused(fleet: &Fixture) -> Roused {
 async fn until_reaped(fleet: &Fixture) {
     for _ in 0..400 {
         fleet.turn().await.expect("a turn");
-        if fleet.slot().lock().await.is_none() {
+        if fleet.the_only_slot().await.lock().await.is_none() {
             return;
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
@@ -302,7 +304,7 @@ async fn the_job_returns_to_running_only_once_the_drone_turns() {
     // Turns before anybody says anything move nothing: the watcher is cold on a
     // Job no redirect is outstanding on.
     for _ in 0..5 {
-        assert!(fleet.turn().await.expect("a turn").roused.is_none());
+        assert!(fleet.turn().await.expect("a turn").roused().is_none());
     }
     assert_eq!(
         fleet.load(&job).await.unwrap().status(),
@@ -330,7 +332,7 @@ async fn the_job_returns_to_running_only_once_the_drone_turns() {
 
     // The wait is over: a Drone that keeps answering does not move it again.
     for _ in 0..5 {
-        assert!(fleet.turn().await.expect("a turn").roused.is_none());
+        assert!(fleet.turn().await.expect("a turn").roused().is_none());
     }
 }
 
@@ -349,7 +351,7 @@ async fn a_drone_that_never_wakes_leaves_the_job_escalated() {
         .expect("the pipe took the write");
 
     for _ in 0..40 {
-        assert!(fleet.turn().await.expect("a turn").roused.is_none());
+        assert!(fleet.turn().await.expect("a turn").roused().is_none());
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
     assert_eq!(
@@ -379,7 +381,7 @@ async fn a_step_that_stopped_is_handed_back_on_the_send() {
     // Nothing is outstanding, so the Drone answering is an ordinary turn rather
     // than the thing the Job was waiting on.
     for _ in 0..20 {
-        assert!(fleet.turn().await.expect("a turn").roused.is_none());
+        assert!(fleet.turn().await.expect("a turn").roused().is_none());
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
     assert_eq!(fleet.load(&job).await.unwrap().status(), JobStatus::Running);
@@ -398,7 +400,7 @@ async fn a_progress_heartbeat_does_not_bring_the_job_back() {
     fleet.redirect(&job, &advice()).await.unwrap();
 
     for _ in 0..40 {
-        assert!(fleet.turn().await.expect("a turn").roused.is_none());
+        assert!(fleet.turn().await.expect("a turn").roused().is_none());
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
     // The pipe carried something back, so this is a reading rather than a Drone

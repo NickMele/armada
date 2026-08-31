@@ -41,7 +41,7 @@ mod stream;
 mod tests;
 
 pub use daemon::{Daemon, Refusal};
-pub use mcp::MCP_PATH;
+pub use mcp::{Caller, MCP_PATH};
 pub use observing::{Feed, Observed, Seen, Turns, Watch, WATCHING};
 pub use routes::{router, Route, Served, SERVED};
 pub use stream::{Broadcaster, Next, Subscription, BACKLOG};

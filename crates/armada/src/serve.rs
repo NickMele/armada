@@ -78,8 +78,8 @@ use adapters::{GitVcs, HeadlessAgent};
 use config::Roster;
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
-    CheckBudget, DryRuns, Fittings, Fleet, Host, JudgeBudget, Liveness, Mint, StepNorms,
-    SystemClock, UlidMint,
+    CheckBudget, Concurrency, DryRuns, Fittings, Fleet, Host, JudgeBudget, Liveness, Mint,
+    StepNorms, SystemClock, UlidMint,
 };
 use ipc::PROTOCOL_VERSION;
 use store::Store;
@@ -215,6 +215,28 @@ pub const PROVISIONAL_LIVENESS: Liveness = Liveness::of(Duration::from_secs(120)
 /// `fleet::converging`: each ask is one of its own calls.
 pub const PROVISIONAL_DRY_RUNS: DryRuns = DryRuns::of(3);
 
+/// How many Jobs Fleet works at once.
+///
+/// **The `concurrency-cap` row in `crates/config/settings.toml`, resolved here**
+/// like every other dial on this page: that file names the knob and carries no
+/// value, and nothing below the composition root reads configuration.
+///
+/// **Two, and the ceiling is not what bounds it.**
+/// `docs/spikes/012-peer-identity-under-concurrency.md` ran five Drones against
+/// one listener and told every one of them apart, so the attribution this rests
+/// on is measured well above two. What is not measured is everything else about
+/// running five: `#47` — two Drones writing the same file, with no write-scope
+/// reservation to stop them — and `#44` — whether the machine has the memory
+/// and the quota for them, which nothing in this workspace reads. Two is the
+/// number `#50`'s own definition of done names, it is enough to make the
+/// deadlock `#215` describes impossible, and it is the smallest step that is
+/// still a step.
+///
+/// **Raising it is a one-line edit here and a real decision.** What it buys is
+/// throughput; what it costs is the two unbuilt guards above, and a longer wait
+/// at the merge end, where `Fleet::merge_end` serialises every Job's push.
+pub const PROVISIONAL_CONCURRENCY: Concurrency = Concurrency::of(2);
+
 /// How often Fleet is turned. **Provisional**, and nothing has measured it.
 ///
 /// It is the latency of a *ruling* rather than of a start — `approve` and each
@@ -319,9 +341,9 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
         reconciled.interrupted.len(),
         reconciled.repaired,
         reconciled.unreadable.len(),
-        match &reconciled.admitted {
-            Some(job) => format!(", admitted {}", job.as_str()),
-            None => String::new(),
+        match reconciled.admitted.as_slice() {
+            [] => String::new(),
+            admitted => format!(", admitted {}", admitted.len()),
         }
     );
     for unreadable in &reconciled.unreadable {
@@ -346,7 +368,13 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     let app = api::router(api::Served::sharing(fleet, run_id, events));
     println!("serving {} on {bound}", api::SERVED.len());
 
-    axum::serve(listener, app)
+    // **With connect info**, because a Drone's tool call is attributed by the
+    // process on the other end of its connection and `ConnectInfo` is how that
+    // peer reaches the handler. See `fleet::peer`.
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
         .with_graceful_shutdown(stop_requested())
         .await?;
 
@@ -481,7 +509,16 @@ fn assemble(
             user,
             mcp_config: mcp_config.to_string_lossy().to_string(),
             attachments_dir: attachments_dir.to_string_lossy().to_string(),
+            // The port the listener actually bound, which is the same one
+            // written into `mcp.json` above — one value, so a Drone's
+            // connection to the address it was given is the connection Fleet
+            // matches its port against. See `fleet::peer`.
+            port,
         },
+        // The kernel, because the question is which process holds a socket.
+        // `fleet::peer` holds the measurement that chose it over `lsof`.
+        peers: Arc::new(fleet::peer::Kernel),
+        concurrency: PROVISIONAL_CONCURRENCY,
         budget: CheckBudget::of(PROVISIONAL_CHECK_BUDGET),
         norms: PROVISIONAL_STEP_NORMS,
         liveness: PROVISIONAL_LIVENESS,

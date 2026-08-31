@@ -167,7 +167,8 @@ async fn started(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
 /// Turn until the chain says something, or give up.
 async fn next_stage(fleet: &Fixture, waiting_for: &str) -> Wandering {
     for _ in 0..400 {
-        if let Some(wandering) = fleet.turn().await.expect("a turn").wandering {
+        let turned = fleet.turn().await.expect("a turn");
+        if let Some(wandering) = turned.each.into_iter().find_map(|worked| worked.wandering) {
             return wandering;
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
@@ -179,7 +180,8 @@ async fn next_stage(fleet: &Fixture, waiting_for: &str) -> Wandering {
 async fn turns(fleet: &Fixture, how_many: usize) -> Vec<Wandering> {
     let mut said = Vec::new();
     for _ in 0..how_many {
-        if let Some(wandering) = fleet.turn().await.expect("a turn").wandering {
+        let turned = fleet.turn().await.expect("a turn");
+        if let Some(wandering) = turned.each.into_iter().find_map(|worked| worked.wandering) {
             said.push(wandering);
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
@@ -291,7 +293,7 @@ async fn work_outside_the_plan_asks_the_judge_and_fails_nothing() {
     );
     let job = started(&fleet, &home).await;
     fleet
-        .declare_scope(&DeclareScope {
+        .declared_by_the_one(&DeclareScope {
             context_paths: vec!["docs".to_string()],
         })
         .await
@@ -422,7 +424,8 @@ async fn a_drone_that_will_not_report_is_escalated_with_its_step_stopped() {
     // Read the pid while the Drone is still held, so the kill below is measured
     // against a process that was demonstrably alive rather than assumed to be.
     let pid = fleet
-        .slot()
+        .the_only_slot()
+            .await
         .lock()
         .await
         .as_ref()
@@ -482,7 +485,7 @@ async fn the_escalation_holds_the_drone_rather_than_ending_it() {
     next_stage(&fleet, "told the Drone to report").await;
     next_stage(&fleet, "escalated").await;
 
-    assert_eq!(fleet.working_on().await, Some(job_id.clone()));
+    assert_eq!(fleet.working_on().await, vec![job_id.clone()]);
     // Once, and never again: the step is stopped and the chain has nowhere
     // further to go.
     assert!(turns(&fleet, 10).await.is_empty());

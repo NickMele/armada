@@ -190,7 +190,7 @@ async fn a_path_outside_the_declared_plan_is_marked_on_its_row() {
     let mut watching = fleet.events().subscribe();
     started(&fleet, &home).await;
     fleet
-        .declare_scope(&DeclareScope {
+        .declared_by_the_one(&DeclareScope {
             context_paths: vec!["src/parse.rs".to_string()],
         })
         .await

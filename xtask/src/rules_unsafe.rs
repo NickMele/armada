@@ -46,6 +46,11 @@ const UNSAFE_SITES: &[(&str, &str)] = &[
         "crates/checks-runner/src/run.rs",
         "the group signal that ends a Check whose budget expired, and everything it spawned",
     ),
+    (
+        "crates/fleet/src/peer/kernel.rs",
+        "proc_pidfdinfo over the Drones Fleet spawned — the only route that can match a \
+         connection's port pair, and the one that is not a 64ms subprocess",
+    ),
 ];
 
 /// What counts as speaking it. `unsafe_code` in a comment or an attribute name

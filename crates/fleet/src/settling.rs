@@ -10,8 +10,8 @@
 //!
 //! | | The guard | The submission |
 //! |---|---|---|
-//! | 1 | nothing is waiting | there is none |
-//! | 2 | nothing is in the slot | **held** — [`stranded`](Fleet::stranded) |
+//! | 1 | nothing of this Job's is waiting | there is none |
+//! | 2 | this Job has no slot | **held** — [`stranded`](Fleet::stranded) |
 //! | 3 | *the take* | |
 //! | 4 | the Job is not running | dropped, argued for at the guard |
 //! | 5 | it names another Job | dropped, argued for at the guard |
@@ -30,7 +30,7 @@ use verification::Request;
 
 use crate::adrift::Adrift;
 use crate::at_step::AtStep;
-use crate::daemon::Fleet;
+use crate::daemon::{Fleet, Turned, Worked};
 use crate::drone_moves::steps_holding_a_drone;
 use crate::evidence::{Decline, Standing};
 use crate::gate::{rule_on, Ruling};
@@ -76,21 +76,25 @@ where
 {
     /// Run the gate over one waiting submission, and do what it says.
     pub(crate) async fn settle(&self, working: &mut Option<Working>) -> Result<Settled, Adrift> {
-        // The whole of an ordinary turn ends here: nothing landed, so nothing
-        // is taken, nothing is declined and nothing is written down. Read
-        // rather than popped, and read under the slot lock every submission is
-        // accepted under, so the take below cannot come up empty.
-        if self.evidence_waiting() == 0 {
-            return Ok(Settled::default());
-        }
+        // A slot the turn walked to and found empty. The Drone has gone and
+        // whatever it left is `stranded_submissions`'s to answer, outside every
+        // slot — there is no Job here to read one against.
         let Some(at_work) = working.as_ref() else {
-            return self.stranded().await;
+            return Ok(Settled::default());
         };
         let (job_id, step, worktree) = at_work.standing();
+        // The whole of an ordinary turn ends here: nothing of this Job's
+        // landed, so nothing is taken, nothing is declined and nothing is
+        // written down. Read rather than popped, and read under the slot lock
+        // every submission is accepted under, so the take below cannot come up
+        // empty.
+        if self.evidence_waiting_for(&job_id) == 0 {
+            return Ok(Settled::default());
+        }
         // **Below every guard that could decline without ruling.** From here
         // down a decline drops the submission, and each of the two says why
         // dropping is the right answer to its own case.
-        let Some(landed) = self.take_evidence() else {
+        let Some(landed) = self.take_evidence(&job_id) else {
             return Ok(Settled::default());
         };
         // A submission from the idle Drone of a Job that is no longer being
@@ -114,21 +118,13 @@ where
         if status != JobStatus::Running {
             return Ok(self.declined(&landed.job, Some(&step), Decline::NotRunning { status }));
         }
-        // The tool is bound to a Job at construction and the inbox is emptied
-        // when a Job ends, so this cannot be a submission about some other Job.
-        // Kept because the alternative to a guard here is a gate ruling on one
-        // Job's step from another Job's evidence.
-        //
-        // The one way it becomes reachable is the strand arriving by a longer
-        // road: a submission held over a turn with no slot, and the *next* Job
-        // admitted into it before the gate came back. So it escalates the Job
-        // it named, for the same reason and by the same rule as `stranded` —
-        // Fleet works one Job at a time, so a running Job that is not the one
-        // in the slot is a running Job with no Drone.
+        // Unreachable, and kept for the reason a `debug_assert` is not enough:
+        // the alternative to a guard here is a gate ruling on one Job's step
+        // from another Job's evidence. `take_for` selects by Job, so the only
+        // way past it would be a bug in the inbox rather than a race — which is
+        // why it no longer escalates anybody. It says so and stops.
         if landed.job != job_id {
-            let declined = self.declined(&landed.job, None, Decline::AnotherJob);
-            self.unreachable(&landed.job).await?;
-            return Ok(declined);
+            return Ok(self.declined(&landed.job, None, Decline::AnotherJob));
         }
 
         let job = self.load(&job_id).await?;
@@ -222,23 +218,42 @@ where
     /// ordinary, and "not at all", which is the escalation — and it is a turn
     /// rather than a duration because what it separates is a race from its
     /// absence, which no clock measures.
-    async fn stranded(&self) -> Result<Settled, Adrift> {
-        // Whose the strand is. A count says a submission is stuck; only the id
-        // says which Job to tell about it.
-        let Some(job_id) = self.inbox().waiting_for() else {
-            return Ok(Settled::default());
-        };
+    async fn stranded(&self, job_id: &JobId) -> Result<Settled, Adrift> {
         let why = Decline::NothingIsWorking;
-        if self.inbox().declining(why.clone()) == Standing::First {
-            self.noted_decline(&job_id, None, &why);
+        if self.inbox().declining(job_id, why.clone()) == Standing::First {
+            self.noted_decline(job_id, None, &why);
             return Ok(Settled::declining(why));
         }
         // Taken here rather than inside, because the Job stops being `running`
         // on the way out: a submission left behind would be declined at a guard
         // with nothing new to say, on every turn, for ever.
-        self.take_evidence();
-        self.unreachable(&job_id).await?;
+        self.take_evidence(job_id);
+        self.unreachable(job_id).await?;
         Ok(Settled::declining(why))
+    }
+
+    /// Every submission whose Job is in no slot at all.
+    ///
+    /// **Outside every slot, because that is what it is about.** `settle` runs
+    /// under one Job's lock and can only answer for that Job; a submission
+    /// whose Job has no slot would never be reached by any of them, which under
+    /// one slot was the same statement and under several is not.
+    ///
+    /// The roster is read once, after every slot has been walked, so a Job
+    /// admitted earlier in this same turn is already in it.
+    pub(crate) async fn stranded_submissions(&self, turned: &mut Turned) -> Result<(), Adrift> {
+        let working = self.working_on().await;
+        for job_id in self.inbox().waiting_for() {
+            if working.contains(&job_id) {
+                continue;
+            }
+            let settled = self.stranded(&job_id).await?;
+            let mut worked = Worked::on(job_id);
+            worked.declined = settled.declined;
+            worked.ruled = settled.ruled;
+            turned.each.push(worked);
+        }
+        Ok(())
     }
 
     /// A Job whose submission nothing will ever rule on.
@@ -274,7 +289,7 @@ where
     /// Record the decline, and write it down on the turn its reason first
     /// stood.
     fn declined(&self, job: &JobId, step: Option<&StepId>, why: Decline) -> Settled {
-        if self.inbox().declining(why.clone()) == Standing::First {
+        if self.inbox().declining(job, why.clone()) == Standing::First {
             self.noted_decline(job, step, &why);
         }
         Settled::declining(why)

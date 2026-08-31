@@ -86,14 +86,14 @@ async fn refused(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
     worktree_directory(home, &job_id);
     fleet.approve(&job_id).await.expect("released to run");
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("the Drone reports its diff");
     let turned = fleet.turn().await.expect("the gate ruled");
     assert!(
-        matches!(turned.ruled, Some(Ruling::Refused { .. })),
+        matches!(turned.ruled(), Some(Ruling::Refused { .. })),
         "the fixture did not reach a refusal: {:?}",
-        turned.ruled
+        turned.ruled()
     );
     let escalated = fleet.load(&job_id).await.expect("the Job reads");
     assert_eq!(escalated.status(), JobStatus::Escalated);
@@ -153,14 +153,14 @@ async fn flagged(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
     worktree_directory(home, &job_id);
     fleet.approve(&job_id).await.expect("released to run");
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("the tool took it");
     let turned = fleet.turn().await.expect("the gate ruled");
     assert!(
-        matches!(turned.ruled, Some(Ruling::Suspect { .. })),
+        matches!(turned.ruled(), Some(Ruling::Suspect { .. })),
         "the fixture did not reach a gaming flag: {:?}",
-        turned.ruled
+        turned.ruled()
     );
     let escalated = fleet.load(&job_id).await.expect("the Job reads");
     assert_eq!(escalated.status(), JobStatus::Escalated);
@@ -453,14 +453,14 @@ async fn a_failed_mechanical_check_cannot_be_overruled() {
     worktree_directory(&home, &job_id);
     fleet.approve(&job_id).await.expect("released to run");
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("the Drone reports a diff it did not make");
     let turned = fleet.turn().await.expect("the gate ruled");
     assert!(
-        matches!(turned.ruled, Some(Ruling::Failed { .. })),
+        matches!(turned.ruled(), Some(Ruling::Failed { .. })),
         "the mechanical tier is what stopped this: {:?}",
-        turned.ruled
+        turned.ruled()
     );
 
     match fleet.override_verdict(&job_id, &a_reason()).await {
@@ -515,14 +515,14 @@ async fn a_gate_that_could_not_decide_has_no_verdict_to_overrule() {
     worktree_directory(&home, &job_id);
     fleet.approve(&job_id).await.expect("released to run");
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("the tool took it");
     let turned = fleet.turn().await.expect("the gate ruled");
     assert!(
-        matches!(turned.ruled, Some(Ruling::CouldNotDecide { .. })),
+        matches!(turned.ruled(), Some(Ruling::CouldNotDecide { .. })),
         "the fixture did not reach an undecided gate: {:?}",
-        turned.ruled
+        turned.ruled()
     );
 
     match fleet.override_verdict(&job_id, &a_reason()).await {

@@ -24,6 +24,7 @@
 
 use std::future::Future;
 
+use crate::mcp::Caller;
 use crate::observing::Observed;
 use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
@@ -449,13 +450,19 @@ pub trait Daemon: Send + Sync + 'static {
     /// # The submission is bound to a Job the caller never names
     ///
     /// There is no `job_id` parameter and no `step_id`, so there is nothing to
-    /// forge: the implementation attributes the submission to the Job it is
-    /// itself working, which it knows and the caller cannot influence. A call
-    /// that arrives while nothing is working is refused rather than queued.
+    /// forge: the implementation attributes the submission to the Job whose
+    /// Drone holds the connection it arrived on, which it knows and the caller
+    /// cannot influence. A call that arrives while that Job is not working is
+    /// refused rather than queued.
+    ///
+    /// **[`Caller`] is the transport's word and never the body's.** It carries
+    /// the peer of the connection and nothing a caller wrote, so there is no
+    /// arrangement of a request that could put a Job id into it.
     ///
     /// **That is binding by construction and not authentication.** Any process
     /// that can reach the listener can make this call; what it cannot do is
-    /// choose which Job the evidence lands against.
+    /// choose which Job the evidence lands against, and a caller the
+    /// implementation cannot place is refused rather than guessed at.
     ///
     /// # It decides nothing
     ///
@@ -464,6 +471,7 @@ pub trait Daemon: Send + Sync + 'static {
     /// gate runs afterwards and the outcome reaches the Drone as a later turn.
     fn submit_evidence(
         &self,
+        caller: Caller,
         submission: SubmitEvidence,
     ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
 
@@ -489,7 +497,10 @@ pub trait Daemon: Send + Sync + 'static {
     /// Bound to a Job and a step the caller never names, for
     /// [`submit_evidence`](Daemon::submit_evidence)'s reason: there is no
     /// parameter at all.
-    fn run_checks(&self) -> impl Future<Output = Result<CheckReport, NotRecorded>> + Send;
+    fn run_checks(
+        &self,
+        caller: Caller,
+    ) -> impl Future<Output = Result<CheckReport, NotRecorded>> + Send;
 
     /// `declare_scope` — where the working Drone says its work for this step
     /// will be. **The one call that arrives before the work rather than
@@ -502,6 +513,7 @@ pub trait Daemon: Send + Sync + 'static {
     /// and again at the gate.
     fn declare_scope(
         &self,
+        caller: Caller,
         declaration: DeclareScope,
     ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
 }

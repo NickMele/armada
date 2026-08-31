@@ -60,7 +60,7 @@ async fn a_finished_job_can_say_every_move_it_made() {
     .await;
     assert_eq!(status, StatusCode::OK);
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("the working Job's Drone submits");
     for _ in 0..400 {
@@ -74,7 +74,7 @@ async fn a_finished_job_can_say_every_move_it_made() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     fleet
-        .submit_evidence(note_evidence())
+        .submitted_by_the_one(note_evidence())
         .await
         .expect("the same Drone, on the second step");
     for _ in 0..400 {

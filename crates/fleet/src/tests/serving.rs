@@ -155,7 +155,7 @@ async fn a_job_approved_over_the_api_reaches_a_terminal_state() {
     // The Drone's first submission. Before this change it would have sat in the
     // inbox for the life of the process.
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("the working Job's Drone submits");
     let midway = until(&app, "advanced past its first step", |job| {
@@ -169,7 +169,7 @@ async fn a_job_approved_over_the_api_reaches_a_terminal_state() {
     );
 
     fleet
-        .submit_evidence(note_evidence())
+        .submitted_by_the_one(note_evidence())
         .await
         .expect("the same Drone, on the second step");
     let ended = until(&app, "reached a terminal state", |job| {

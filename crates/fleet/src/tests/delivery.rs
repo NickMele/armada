@@ -50,11 +50,11 @@ async fn a_branch_that_is_not_behind_is_not_rebased_at_a_boundary() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
 
     assert!(
-        turned.delivered.is_none(),
+        turned.delivered().is_none(),
         "a no-op is not reported — the Drone's turn would carry a paragraph saying nothing"
     );
     assert!(fleet.vcs().delivered().is_empty());
@@ -74,11 +74,11 @@ async fn a_behind_branch_is_brought_up_to_date_at_a_step_boundary() {
     fleet.approve(job.id()).await.unwrap();
 
     // The first step advances, which is a boundary and not the end.
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
 
     let delivered = turned
-        .delivered
+        .delivered()
         .expect("the branch moved, so it is reported");
     assert_eq!(
         delivered.caught_up,
@@ -139,14 +139,14 @@ async fn a_conflicting_rebase_is_handed_to_the_drone_rather_than_failing_the_job
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
 
-    let delivered = turned.delivered.expect("a conflict is reported");
-    let Some(BroughtUpToDate::Conflicted { files, .. }) = delivered.caught_up else {
+    let delivered = turned.delivered().expect("a conflict is reported");
+    let Some(BroughtUpToDate::Conflicted { files, .. }) = &delivered.caught_up else {
         panic!("the conflict is carried: {:?}", delivered.caught_up);
     };
-    assert_eq!(files, ["src/log.rs"]);
+    assert_eq!(files.as_slice(), ["src/log.rs"]);
 
     let job = fleet.load(job.id()).await.unwrap();
     assert_eq!(
@@ -160,7 +160,7 @@ async fn a_conflicting_rebase_is_handed_to_the_drone_rather_than_failing_the_job
         "and the step it passed still advanced"
     );
     assert!(
-        fleet.working_on().await.is_some(),
+        !fleet.working_on().await.is_empty(),
         "the Drone is still there to be handed it"
     );
 }
@@ -207,28 +207,28 @@ async fn a_step_that_resolves_none_of_a_conflicted_rebase_fails_its_diff_check()
     fleet
         .work()
         .wrote(&[("src/log.rs", adapter_traits::Change::Modified)]);
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     assert!(
-        matches!(turned.ruled, Some(Ruling::Advanced { .. })),
+        matches!(turned.ruled(), Some(Ruling::Advanced { .. })),
         "the first step wrote a file: {:?}",
-        turned.ruled
+        turned.ruled()
     );
     assert!(
         matches!(
-            turned.delivered.and_then(|delivered| delivered.caught_up),
+            turned.delivered().and_then(|delivered| delivered.caught_up.clone()),
             Some(BroughtUpToDate::Conflicted { .. })
         ),
         "and the boundary rebase conflicted, leaving markers behind"
     );
 
     // The second step's Drone resolves nothing and submits anyway.
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
-    let Some(Ruling::Failed { failures, .. }) = &turned.ruled else {
+    let Some(Ruling::Failed { failures, .. }) = &turned.ruled() else {
         panic!(
             "the step advanced on a conflict it did not resolve: {:?}",
-            turned.ruled
+            turned.ruled()
         );
     };
     assert_eq!(failures, &[verification::CheckFailed::DiffEmpty]);
@@ -256,12 +256,12 @@ async fn a_finished_job_is_pushed_and_opened_for_review() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
-    fleet.submit_evidence(note_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(note_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
 
-    let delivered = turned.delivered.expect("a finished Job delivers");
+    let delivered = turned.delivered().expect("a finished Job delivers");
     assert_eq!(
         delivered.pushed,
         Some(Pushed::ToTheRemote {
@@ -302,9 +302,9 @@ async fn the_pull_request_body_is_assembled_from_what_was_checked() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
-    fleet.submit_evidence(note_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(note_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
 
     let opened = fleet
@@ -369,9 +369,9 @@ async fn a_job_on_a_repository_with_no_remote_completes_without_a_push() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
-    fleet.submit_evidence(note_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(note_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
 
     assert_eq!(
@@ -379,7 +379,7 @@ async fn a_job_on_a_repository_with_no_remote_completes_without_a_push() {
         JobStatus::CompletedSuccess,
         "no remote is not a failed Job — the Checks passed either way"
     );
-    let delivered = turned.delivered.expect("delivery was attempted");
+    let delivered = turned.delivered().expect("delivery was attempted");
     assert_eq!(delivered.pushed, Some(Pushed::NoRemote));
     assert_eq!(
         delivered.opened,
@@ -421,10 +421,10 @@ async fn the_declared_base_overrides_what_would_have_been_inferred() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
 
-    let delivered = turned.delivered.expect("the branch was brought up to date");
+    let delivered = turned.delivered().expect("the branch was brought up to date");
     assert_eq!(
         delivered.base,
         Some(Base::Declared(String::from("release")))
@@ -457,9 +457,9 @@ async fn a_declared_base_is_what_the_pull_request_merges_into() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
-    fleet.submit_evidence(note_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(note_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
 
     let opened = fleet

@@ -7,15 +7,19 @@
 //! split the 500-line rule exists to prompt. [`dispatch`](mod@crate::dispatch)
 //! is what happens to a Job while it is in that slot.
 //!
-//! # One Job at a time, and the queue is not a list
+//! # N Jobs at a time, and the queue is still not a list
 //!
-//! [`Fleet`] holds one [`Working`] slot. A Job approved while another is being
-//! worked stays at `queued`, which is a status the registry already has and the
-//! store already persists — **so there is no queue object here**, and no
-//! ordering held in memory that a restart could lose or that could disagree
-//! with the log. `queued` is the queue. Throughput is a later milestone, and
-//! what it will add is a second slot, not a scheduler over a structure this one
-//! already built.
+//! [`Fleet`] holds a [`Slots`] roster: one [`Working`] slot per Job being
+//! worked, bounded by [`Concurrency`]. A Job approved while the bound is spent
+//! stays at `queued`, which is a status the registry already has and the store
+//! already persists — **so there is no queue object here**, and no ordering
+//! held in memory that a restart could lose or that could disagree with the
+//! log. `queued` is the queue, and what `#50` added was the second slot rather
+//! than a scheduler over the structure the first one already built.
+//!
+//! **The bound is on Drones and never on approvals.** Every Job-level dispatch
+//! is still approved explicitly and one by one; this decides how many *approved*
+//! Jobs run at once.
 //!
 //! # A refused transition is not survivable
 //!
@@ -36,11 +40,18 @@
 //!
 //! # Locking, and the one order it is taken in
 //!
-//! Two locks: the working slot and the store. **The slot is always taken
-//! first**, and no path takes the store and then reaches for the slot. The gate
-//! holds the slot across a Check, which is what one-Job-at-a-time means in
-//! practice: nothing else can be dispatched while `cargo test` runs, and
-//! nothing wants to be.
+//! Three locks: the roster, one Job's slot, and the store. **They are taken in
+//! that order and in no other**, and no path takes a slot and then reaches for
+//! the roster. [`crate::slots`] holds the argument.
+//!
+//! The gate still holds a slot across a Check. What changed is whose: it is the
+//! slot of the Job being checked, so a `cargo nextest` that runs for a quarter
+//! of an hour holds up that Job's own Drone and nothing else's.
+//!
+//! A fourth lock is not in the order because nothing else takes it while
+//! holding one of the three except in the one direction: [`Fleet::merge_end`]
+//! serialises the rebase-and-push tail, so exactly one Job at a time touches
+//! the repository every worktree is cut from. See [`crate::delivery`].
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -67,10 +78,12 @@ use crate::evidence::{Decline, EvidenceInbox};
 use crate::gate::{CheckBudget, Ruling};
 use crate::judging::{Aloft, JudgeBudget, Judging, Marking};
 use crate::mint::Mint;
+use crate::peer::{attributed, Drones, NotACaller, PeerOf};
 use crate::proposal::Proposing;
 use crate::resume::Roused;
 use crate::scope::Drifting;
 use crate::silence::{Liveness, Quiet};
+use crate::slots::{Concurrency, Slot, Slots};
 use crate::working::Working;
 
 /// What Fleet knows about the machine it runs on.
@@ -96,6 +109,13 @@ pub struct Host {
     pub user: String,
     /// The strict MCP configuration a Drone is bound to.
     pub mcp_config: String,
+    /// The loopback port Fleet is listening on.
+    ///
+    /// **Held because a connection to it is what names a Drone** — see
+    /// `crate::peer`, which matches a caller's port against this one as a pair.
+    /// It is the same number `mcp_config` points at, resolved once by the
+    /// composition root from the listener it actually bound.
+    pub port: u16,
     /// Where Fleet keeps its own copy of a Job's attachments, outside every
     /// worktree. `drafted()` writes under `<attachments_dir>/<job_id>/`, and
     /// `dispatch` reads from there to seed the worktree a Drone actually sees.
@@ -125,6 +145,15 @@ pub struct Fittings<H, V, W> {
     /// toolbelt is built from the commands it declares.
     pub manifest: Manifest,
     pub host: Host,
+    /// How a caller is placed: which process holds the connection a tool call
+    /// arrived on. **A seam so a test can plant one** — the shipped answer is
+    /// [`peer::Kernel`](crate::peer::Kernel), and a fixture has no sockets to
+    /// ask about.
+    pub peers: Arc<dyn PeerOf>,
+    /// How many Jobs Fleet may work at once. **The
+    /// `settings.concurrency-cap` row, enforced** — see [`Concurrency`], which
+    /// has no default for the reason none of the four dials above it does.
+    pub concurrency: Concurrency,
     pub budget: CheckBudget,
     /// What a step is expected to cost before the thrashing chain looks at it.
     /// See [`StepNorms`] for why it has no default.
@@ -175,14 +204,17 @@ pub struct Reconciled {
     /// Rows that would not rebuild at all. **Never dropped** — carried out so a
     /// caller cannot end up holding a short list with nothing saying so.
     pub unreadable: Vec<String>,
-    /// The Job dispatched on the way out, where the slot was free and one was
-    /// waiting.
-    pub admitted: Option<JobId>,
+    /// The Jobs dispatched on the way out, where the bound had room and they
+    /// were waiting. Empty on the ordinary boot.
+    pub admitted: Vec<JobId>,
 }
 
-/// What one turn of the loop did. Every field is ordinarily empty.
-#[derive(Debug, Default)]
-pub struct Turned {
+/// What one turn of the loop did for one working Drone. Every field is
+/// ordinarily empty.
+#[derive(Debug)]
+pub struct Worked {
+    /// Whose turn this was.
+    pub job: JobId,
     /// The gate's answer to a submission that had landed.
     pub ruled: Option<Ruling>,
     /// The gate having been asked and refused. **Never present beside
@@ -191,8 +223,6 @@ pub struct Turned {
     pub declined: Option<Decline>,
     /// What followed from a Drone that had gone.
     pub after: Option<Aftermath>,
-    /// The Job admitted because the slot came free.
-    pub admitted: Option<JobId>,
     /// What became of a finished Job's branch. Present on the turn that
     /// finished one and empty on every other, like the two fields above it.
     pub delivered: Option<Delivered>,
@@ -211,11 +241,98 @@ pub struct Turned {
     /// a person redirected it. Empty on every turn no redirect is outstanding
     /// on, which is nearly all of them.
     pub roused: Option<Roused>,
+}
+
+impl Worked {
+    pub(crate) fn on(job: JobId) -> Worked {
+        Worked {
+            job,
+            ruled: None,
+            declined: None,
+            after: None,
+            delivered: None,
+            drifting: None,
+            wandering: None,
+            quiet: None,
+            roused: None,
+        }
+    }
+}
+
+/// What one turn of the loop did, over every Drone that was working.
+///
+/// **A list, because a turn is no longer about one Job.** It was a flat struct
+/// of options while there was one slot, and the fields read as facts about
+/// Fleet; they are facts about a Drone, and this is where that stopped being a
+/// distinction without a difference.
+#[derive(Debug, Default)]
+pub struct Turned {
+    /// One entry per Drone that was in the roster when the turn began, in Job
+    /// id order. Empty on an idle turn.
+    pub each: Vec<Worked>,
+    /// The Jobs admitted because the bound had room. Ordinarily empty, and
+    /// longer than one only where several came free at once.
+    pub admitted: Vec<JobId>,
     /// Jobs escalated because an upstream they wait on ended badly. **A list
-    /// and not an `Option`**, unlike every field above it: one upstream ending
-    /// releases every dependent that named it, so the turn a Job fails is the
-    /// turn all of them move.
+    /// and not an `Option`**: one upstream ending releases every dependent that
+    /// named it, so the turn a Job fails is the turn all of them move.
+    ///
+    /// **On the turn and not on a [`Worked`]**, which is where `#50` put it
+    /// back. A stranded dependent is `queued` and has no Drone, so it has no
+    /// slot for the walk to have visited — and the walk itself reads the whole
+    /// board once rather than once per working Job.
     pub stranded: Vec<JobId>,
+}
+
+impl Turned {
+    /// The gate's answer, from whichever Drone produced one.
+    ///
+    /// **The convenience a one-Drone Fleet reads by**, and never what a surface
+    /// should take: with the bound above one there may be a second, and this
+    /// answers about the first. Every reader that has to be right about which
+    /// Job walks [`Turned::each`], which carries the Job on every entry.
+    pub fn ruled(&self) -> Option<&Ruling> {
+        self.each.iter().find_map(|worked| worked.ruled.as_ref())
+    }
+
+    /// The gate having been asked and refused. See [`Turned::ruled`].
+    pub fn declined(&self) -> Option<&Decline> {
+        self.each.iter().find_map(|worked| worked.declined.as_ref())
+    }
+
+    /// What followed from a Drone that had gone. See [`Turned::ruled`].
+    pub fn after(&self) -> Option<&Aftermath> {
+        self.each.iter().find_map(|worked| worked.after.as_ref())
+    }
+
+    /// What became of a finished Job's branch. See [`Turned::ruled`].
+    pub fn delivered(&self) -> Option<&Delivered> {
+        self.each
+            .iter()
+            .find_map(|worked| worked.delivered.as_ref())
+    }
+
+    /// Work seen outside the declared scope. See [`Turned::ruled`].
+    pub fn drifting(&self) -> Option<&Drifting> {
+        self.each.iter().find_map(|worked| worked.drifting.as_ref())
+    }
+
+    /// How far the thrashing chain got. See [`Turned::ruled`].
+    pub fn wandering(&self) -> Option<&Wandering> {
+        self.each
+            .iter()
+            .find_map(|worked| worked.wandering.as_ref())
+    }
+
+    /// What the liveness vigil did. See [`Turned::ruled`].
+    pub fn quiet(&self) -> Option<&Quiet> {
+        self.each.iter().find_map(|worked| worked.quiet.as_ref())
+    }
+
+    /// The Job a redirect woke. See [`Turned::ruled`].
+    pub fn roused(&self) -> Option<&Roused> {
+        self.each.iter().find_map(|worked| worked.roused.as_ref())
+    }
 }
 
 /// The daemon core: **the only writer of Job state.**
@@ -249,11 +366,37 @@ pub struct Fleet<H, V, W> {
     /// root.
     turns: api::Turns,
     inbox: EvidenceInbox,
-    /// What the last finished Job's delivery came to, waiting for the turn that
+    /// What each finished Job's delivery came to, waiting for the turn that
     /// reports it. **Drained, not read** — a second turn must not report a
     /// push that happened before it.
-    delivered: Mutex<Option<Delivered>>,
-    working: Mutex<Option<Working>>,
+    ///
+    /// **Keyed by Job**, unlike the single value it was: two Jobs can reach
+    /// their branch in one turn, and one slot for both would have the second
+    /// one's push overwrite the first's before anybody was told about it.
+    delivered: Mutex<BTreeMap<JobId, Delivered>>,
+    /// Which Jobs are being worked and how many may be. See [`crate::slots`]
+    /// for the two locks and the order they are taken in.
+    slots: Mutex<Slots>,
+    /// Which process is working which Job. See [`Drones`], which argues why
+    /// this is not the same fact as the pid inside the slot.
+    ///
+    /// A `std::sync::Mutex` rather than tokio's: it is never held across an
+    /// `.await`, and what it guards is a map of a handful of integers.
+    drones: std::sync::Mutex<Drones>,
+    peers: Arc<dyn PeerOf>,
+    /// The rebase-and-push tail, held by one Job at a time.
+    ///
+    /// **Every worktree is cut from one `.git`**, and whether two of them can
+    /// rebase and push into it concurrently is not established — `#50` accepted
+    /// the serialisation rather than discovering git's ref lockfiles by way of
+    /// a Job dying at its push, unattended. So dispatch and the work run
+    /// N-wide and this one part does not.
+    ///
+    /// **It is at the tail and not at admission.** A lock taken when a Job
+    /// starts would be the single working slot again under another name; this
+    /// one is taken when a Job's branch is touched and released when it has
+    /// been.
+    merge_end: Mutex<()>,
     /// **This process's** run id, minted once at assembly.
     ///
     /// It names the emitter rather than a record, which is the one id a
@@ -297,8 +440,11 @@ where
             events: fittings.events,
             turns: api::Turns::new(),
             inbox: EvidenceInbox::new(),
-            delivered: Mutex::new(None),
-            working: Mutex::new(None),
+            delivered: Mutex::new(BTreeMap::new()),
+            slots: Mutex::new(Slots::bounded_by(fittings.concurrency)),
+            drones: std::sync::Mutex::new(Drones::default()),
+            peers: fittings.peers,
+            merge_end: Mutex::new(()),
             run,
         }
     }
@@ -344,23 +490,23 @@ where
             }
             let job = self.load(job.id()).await?;
             if let Aftermath::JobMoves(target) =
-                aftermath(job.status(), &Ending::Vanished, self.left())
+                aftermath(job.status(), &Ending::Vanished, self.left(job.id()))
             {
                 self.move_job(&job, target, Actor::Fleet).await?;
                 reconciled.interrupted.push(job.id().clone());
             }
         }
-        let mut working = self.working.lock().await;
-        reconciled.admitted = self.admit_next(&mut working).await?;
+        reconciled.admitted = self.admit_next().await?;
         Ok(reconciled)
     }
 
     /// One turn: settle what landed, reap a Drone that is gone, admit the next
-    /// approved Job if the slot came free.
+    /// approved Jobs if the bound has room.
     ///
     /// **Not a scheduler.** It runs the three things that can follow from the
-    /// world having moved, in the one order they can follow in, over a slot
-    /// that holds one Job.
+    /// world having moved, in the one order they can follow in, over each slot
+    /// in turn — and the order *within* a slot is unchanged, because every
+    /// argument for it was about one Drone.
     pub async fn turn(&self) -> Result<Turned, Adrift> {
         let turned = self.turning().await;
         // **Into the Job's own log**, not only onto the reporter the loop was
@@ -375,53 +521,78 @@ where
     }
 
     async fn turning(&self) -> Result<Turned, Adrift> {
-        let mut working = self.working.lock().await;
+        // The roster is read once and let go before any slot is taken, which is
+        // the order `crate::slots` states: a Drone's tool call must not wait on
+        // the roster for as long as another Drone's Check runs.
+        let each = self.slots.lock().await.each();
+        let mut turned = Turned::default();
+        for (job, slot) in each {
+            // A Job whose slot is held by its own Drone's tool call right now.
+            // Waiting is right — it is that Job's own turn — and it blocks no
+            // other Job, which is the whole of what the per-slot lock buys.
+            let mut working = slot.lock().await;
+            turned
+                .each
+                .push(self.turning_one(job, &mut working).await?);
+        }
+        // Below every slot, and outside all of them: a submission whose Job is
+        // in no slot has no slot to be settled under. See `crate::settling`.
+        self.stranded_submissions(&mut turned).await?;
+        // After everything that can end a Job this turn and before admission:
+        // a dependent whose upstream just failed must not be considered for a
+        // slot it can never use. **Once for the turn, not once per Drone** — it
+        // reads the whole board, and a walk per working Job would read it twice
+        // to reach the same answer.
+        turned.stranded = self.strand_dependents().await?;
+        turned.admitted = self.admit_next().await?;
+        Ok(turned)
+    }
+
+    /// The eight watchers, over one Drone's slot. **The order is the one the
+    /// single slot had**, and each argument for it is about the Drone rather
+    /// than about Fleet, which is why none of them needed rewriting.
+    async fn turning_one(
+        &self,
+        job: JobId,
+        working: &mut Option<Working>,
+    ) -> Result<Worked, Adrift> {
+        let mut worked = Worked::on(job.clone());
         // First, because the reading it takes is the one the drift check needs
         // and a turn must not open the same repository twice. It answers `None`
         // on the turns it declines to read, and the drift check then reads for
         // itself exactly as it did before this existed.
-        let footprint = self.watch_footprint(&mut working).await;
+        let footprint = self.watch_footprint(working).await;
         // Before the gate, so a step whose evidence lands this turn has its
         // last live reading taken while its Drone is still the one being
         // watched — and after nothing, because the check reads a worktree and
         // must not run against a slot the gate has just cleared.
-        let drifting = self.watch_scope(&mut working, footprint.as_ref()).await;
+        let drifting = self.watch_scope(working, footprint.as_ref()).await;
         // **Before the vigil, because they are one question in the two
         // directions** and the answers must not be read out of order: a Drone
         // that has answered a redirect is a Drone that is speaking, and a Job
         // still `escalated` is one the vigil declines to measure at all. This
         // is what puts it back under the clock.
-        let roused = self.watch_redirect(&mut working).await?;
+        let roused = self.watch_redirect(working).await?;
         // **Before the thrashing chain, because it is cheaper and more
         // specific.** A Drone that has stopped speaking is not thrashing, and
         // the chain's first stage costs a Judge call — so asking the free
         // question first is what stops Fleet paying a model to look at the work
         // of a Drone that is no longer doing any.
-        let quiet = self.watch_silence(&mut working).await?;
+        let quiet = self.watch_silence(working).await?;
         // After the drift reading it consumes and before the gate, which is the
         // one place both are true: a step whose evidence lands this turn is at
         // the gate rather than thrashing, and `settle` may clear the slot.
-        let wandering = self.watch_convergence(&mut working).await?;
-        let settled = self.settle(&mut working).await?;
-        let delivered = self.delivered.lock().await.take();
-        let after = self.reap(&mut working).await?;
-        // After everything that can end a Job this turn and before admission:
-        // a dependent whose upstream just failed must not be considered for the
-        // slot it can never use.
-        let stranded = self.strand_dependents().await?;
-        let admitted = self.admit_next(&mut working).await?;
-        Ok(Turned {
-            ruled: settled.ruled,
-            declined: settled.declined,
-            after,
-            admitted,
-            delivered,
-            drifting,
-            wandering,
-            quiet,
-            roused,
-            stranded,
-        })
+        let wandering = self.watch_convergence(working).await?;
+        let settled = self.settle(working).await?;
+        worked.delivered = self.take_delivered(&job).await;
+        worked.after = self.reap(working).await?;
+        worked.ruled = settled.ruled;
+        worked.declined = settled.declined;
+        worked.drifting = drifting;
+        worked.wandering = wandering;
+        worked.quiet = quiet;
+        worked.roused = roused;
+        Ok(worked)
     }
 
     /// A Job drafted onto the approval gate. **The gate is unchanged** — what
@@ -481,10 +652,7 @@ where
     pub async fn approve(&self, job_id: &JobId) -> Result<Job, Adrift> {
         let job = self.load(job_id).await?;
         self.move_job(&job, Target::Queued, Actor::Human).await?;
-        {
-            let mut working = self.working.lock().await;
-            self.admit_next(&mut working).await?;
-        }
+        self.admit_next().await?;
         self.load(job_id).await
     }
 
@@ -495,8 +663,8 @@ where
     /// for a person. That is not terminal, so nothing here ends a Job — and it
     /// is not `running` either, which is the state the milestone refuses.
     pub async fn kill_drone(&self, job_id: &JobId) -> Result<Job, Adrift> {
-        {
-            let mut working = self.working.lock().await;
+        if let Some(slot) = self.slot_of(job_id).await {
+            let mut working = slot.lock().await;
             if working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
                 let ending = Ending::of(
                     &working
@@ -507,7 +675,8 @@ where
                 let standing = self.load(job_id).await?.status();
                 self.end_the_drone(&mut working).await;
                 let job = self.load(job_id).await?;
-                if let Aftermath::JobMoves(target) = aftermath(standing, &ending, self.left()) {
+                if let Aftermath::JobMoves(target) = aftermath(standing, &ending, self.left(job_id))
+                {
                     self.move_job(&job, target, Actor::Human).await?;
                 }
             }
@@ -521,9 +690,11 @@ where
     /// under them — which is why it cannot be spelled as
     /// [`kill_drone`](Fleet::kill_drone).
     pub async fn kill_job(&self, job_id: &JobId) -> Result<Job, Adrift> {
-        let mut working = self.working.lock().await;
-        if working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
-            self.end_the_drone(&mut working).await;
+        if let Some(slot) = self.slot_of(job_id).await {
+            let mut working = slot.lock().await;
+            if working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
+                self.end_the_drone(&mut working).await;
+            }
         }
         // And every step the *record* still names one on, which the slot cannot
         // answer for: a Fleet that died holding a Drone leaves the pointer set,
@@ -534,7 +705,7 @@ where
         self.every_exit_recorded(job_id).await?;
         let job = self.load(job_id).await?;
         let killed = self.move_job(&job, Target::Killed, Actor::Human).await?;
-        self.admit_next(&mut working).await?;
+        self.admit_next().await?;
         Ok(killed)
     }
 
@@ -609,14 +780,63 @@ where
         }))
     }
 
-    /// Which Job is being worked, if any.
-    pub async fn working_on(&self) -> Option<JobId> {
-        self.working
-            .lock()
-            .await
-            .as_ref()
-            .map(|at_work| at_work.standing().0)
+    /// Which Jobs are being worked. Empty where none is.
+    ///
+    /// **A list rather than an `Option`**, which is `#50` arriving on the one
+    /// method every surface asked the question through. A caller wanting to
+    /// know about one Job asks [`Fleet::slot_of`].
+    pub async fn working_on(&self) -> Vec<JobId> {
+        self.slots.lock().await.working_on()
     }
+
+    /// How many Jobs may be worked at once.
+    pub async fn concurrency(&self) -> Concurrency {
+        self.slots.lock().await.cap()
+    }
+
+    /// Every Drone this Fleet is holding, as pid and Job.
+    pub fn drones_at_work(&self) -> Vec<(JobId, u32)> {
+        self.held_drones().each()
+    }
+
+    /// Which Job made this call.
+    ///
+    /// **The whole of what a Drone tool call is bound to**, and it asks the
+    /// transport rather than the body: `crate::peer` matches the caller's port
+    /// and Fleet's own listening port as a *pair* against the processes Fleet
+    /// spawned, because a local port number alone is not unique on a host and
+    /// names the wrong process deterministically. Spike 12 is the measurement.
+    ///
+    /// [`NotACaller`] is the only failure, and it is a refusal rather than a
+    /// guess: a caller Fleet cannot place is one whose work it must not credit
+    /// to anybody.
+    pub fn caller_of(&self, caller: &api::Caller) -> Result<JobId, NotACaller> {
+        attributed(
+            caller,
+            self.host.port,
+            &self.held_drones().each(),
+            self.peers.as_ref(),
+        )
+        .ok_or(NotACaller)
+    }
+
+    /// A Drone started on this Job, as this process.
+    pub(crate) fn drone_at_work(&self, job: &JobId, pid: u32) {
+        self.held_drones().arrived(job, pid);
+    }
+
+    /// The Drone on this Job has gone. Called wherever the record's own
+    /// `assigned_drone` is cleared, so the index and the record go together.
+    pub(crate) fn drone_gone(&self, job: &JobId) {
+        self.held_drones().left(job);
+    }
+
+    fn held_drones(&self) -> std::sync::MutexGuard<'_, Drones> {
+        self.drones
+            .lock()
+            .expect("the Drone index is not held across a panic")
+    }
+
 
     /// The stream Fleet publishes transitions on. Cloned for the listener.
     pub fn events(&self) -> api::Broadcaster {
@@ -750,19 +970,64 @@ where
     pub(crate) fn turns(&self) -> &api::Turns {
         &self.turns
     }
-    /// The working slot, for `evidence`.
+    /// The roster, for `dispatch` and for a turn.
+    pub(crate) fn slots(&self) -> &Mutex<Slots> {
+        &self.slots
+    }
+
+    /// One Job's working slot, for the three Drone tools and for every act a
+    /// person takes on a named Job. `None` is a Job with no Drone.
     ///
-    /// Everything the Evidence tool binds to is in it, and taking this lock
-    /// once is what makes which-Job, which-step and which-type one decision
-    /// rather than three reads a turn can interleave with.
-    pub(crate) fn slot(&self) -> &Mutex<Option<Working>> {
-        &self.working
+    /// Everything a Drone tool binds to is inside the slot, and taking that
+    /// lock once is what makes which-Job, which-step and which-type one
+    /// decision rather than three reads a turn can interleave with. **Which
+    /// slot is `crate::peer`'s answer** — the Drone does not name it.
+    pub(crate) async fn slot_of(&self, job: &JobId) -> Option<Slot> {
+        self.slots.lock().await.slot_of(job)
+    }
+
+    /// One Job's slot, made if it has none.
+    ///
+    /// **For the two acts a person takes on a Job Fleet is not holding** — a
+    /// restart and a redispatch. Both put a Drone back on a Job the person is
+    /// already standing over, so neither is an admission from the queue and
+    /// neither consults the bound: what `concurrency-cap` bounds is how many
+    /// Jobs Fleet starts of its own accord.
+    pub(crate) async fn slot_for(&self, job: &JobId) -> Slot {
+        self.slots.lock().await.opened_for(job)
+    }
+
+    /// The one working slot, for a fixture bounded at one.
+    ///
+    /// **A test's convenience and nothing else**, which is why it is `cfg(test)`
+    /// rather than a method a surface could reach: with the bound above one
+    /// there is no such thing as *the* slot, and asking for it is the question
+    /// `#50` exists to stop anybody asking. A Fleet working nothing answers with
+    /// an empty slot, so a caller reads "nothing is working" where it used to.
+    #[cfg(test)]
+    pub(crate) async fn the_only_slot(&self) -> Slot {
+        let mut slots = self.slots.lock().await;
+        match slots.working_on().first() {
+            Some(job) => slots.opened_for(job),
+            None => Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// The rebase-and-push tail's lock. See the field.
+    pub(crate) fn merge_end(&self) -> &Mutex<()> {
+        &self.merge_end
     }
     pub(crate) fn inbox(&self) -> &EvidenceInbox {
         &self.inbox
     }
-    /// Where a finished Job's delivery is left for the turn that reports it.
-    pub(crate) fn delivery_slot(&self) -> &Mutex<Option<Delivered>> {
-        &self.delivered
+    /// Leave what a Job's branch came to for the turn that reports it.
+    pub(crate) async fn left_delivered(&self, job: &JobId, delivered: Delivered) {
+        self.delivered.lock().await.insert(job.clone(), delivered);
+    }
+
+    /// Take what this Job's branch came to, where anything is waiting.
+    /// **Drained, not read**, so a second turn cannot report a push once.
+    pub(crate) async fn take_delivered(&self, job: &JobId) -> Option<Delivered> {
+        self.delivered.lock().await.remove(job)
     }
 }

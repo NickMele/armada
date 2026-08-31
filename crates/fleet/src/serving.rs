@@ -269,12 +269,14 @@ where
         let Some(worktree) = self.worktree_of(&job).map_err(|why| self.refusal(why))? else {
             return Ok(JobDiff { job_id, work: None });
         };
-        let plan = {
-            let working = self.slot().lock().await;
-            working
+        let plan = match self.slot_of(job.id()).await {
+            Some(slot) => slot
+                .lock()
+                .await
                 .as_ref()
                 .filter(|at_work| at_work.is(job.id()))
-                .and_then(|at_work| at_work.declared().cloned())
+                .and_then(|at_work| at_work.declared().cloned()),
+            None => None,
         };
         // **The whole branch, which is what a person opening a Job is reading.**
         let changed = self
@@ -620,8 +622,13 @@ where
     /// Every path answers 200 with `isError` rather than a status code, because
     /// a Drone reads a tool error and can act on it, and a 4xx reaches the model
     /// as a broken server — which is something it stops trying.
-    async fn submit_evidence(&self, submission: SubmitEvidence) -> Result<Receipt, NotRecorded> {
-        match self.record_evidence(&submission).await {
+    async fn submit_evidence(
+        &self,
+        caller: api::Caller,
+        submission: SubmitEvidence,
+    ) -> Result<Receipt, NotRecorded> {
+        let job = self.placed(&caller)?;
+        match self.record_evidence(&job, &submission).await {
             Ok(recorded) => Ok(Receipt {
                 word: recorded.word().to_string(),
             }),
@@ -635,8 +642,13 @@ where
     /// — which Job, which step — is `Fleet::declare_scope`'s, under the slot
     /// lock, and every refusal answers 200 with `isError` so a Drone can read
     /// it and declare again.
-    async fn declare_scope(&self, declaration: DeclareScope) -> Result<Receipt, NotRecorded> {
-        match Fleet::declare_scope(self, &declaration).await {
+    async fn declare_scope(
+        &self,
+        caller: api::Caller,
+        declaration: DeclareScope,
+    ) -> Result<Receipt, NotRecorded> {
+        let job = self.placed(&caller)?;
+        match Fleet::declare_scope(self, &job, &declaration).await {
             Ok(declared) => Ok(Receipt {
                 word: declared.word().to_string(),
             }),
@@ -654,10 +666,13 @@ where
     ///
     /// **What comes back is a report and never a verdict.** The step is exactly
     /// where it was when the call arrived, whatever the Checks said.
-    async fn run_checks(&self) -> Result<CheckReport, NotRecorded> {
-        Fleet::run_checks(self).await.map_err(|why| NotRecorded {
-            because: why.to_string(),
-        })
+    async fn run_checks(&self, caller: api::Caller) -> Result<CheckReport, NotRecorded> {
+        let job = self.placed(&caller)?;
+        Fleet::run_checks(self, &job)
+            .await
+            .map_err(|why| NotRecorded {
+                because: why.to_string(),
+            })
     }
 }
 
@@ -675,6 +690,18 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
+    /// Which Job made this call, as the tool's own refusal.
+    ///
+    /// **Every one of the three opens with this**, and none of them takes a Job
+    /// id: `Fleet::caller_of` reads the connection, and a caller it cannot place
+    /// is told so as a tool error the Drone can read rather than as a 4xx it can
+    /// only retry.
+    fn placed(&self, caller: &api::Caller) -> Result<core_model::JobId, NotRecorded> {
+        self.caller_of(caller).map_err(|why| NotRecorded {
+            because: why.to_string(),
+        })
+    }
+
     /// A Job as a Board row, with the reason its last transition stored.
     async fn summarised(&self, job: &Job) -> Result<JobSummary, Refusal> {
         let reason = self
@@ -711,10 +738,10 @@ where
         if !clear_to_run(job, &standing) {
             return Ok(Some(CoreQueuedReason::BlockedByDependency));
         }
-        Ok(self
-            .working_on()
-            .await
-            .map(|_| CoreQueuedReason::WaitingOnResources))
+        // **The same predicate admission opens with**, asked of the same
+        // roster. A second answer here is how a Board comes to say a Job is
+        // blocked while Fleet is starting it.
+        Ok((!self.slots().lock().await.room()).then_some(CoreQueuedReason::WaitingOnResources))
     }
 
     /// What Fleet knows about a Job's steps beyond the `job_steps` rows.

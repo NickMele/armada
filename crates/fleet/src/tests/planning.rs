@@ -91,7 +91,7 @@ async fn an_approved_dependent_is_not_admitted_before_its_upstream_lands() {
         "approved, and held by the edge rather than by the slot"
     );
     assert!(
-        fleet.working_on().await.is_none(),
+        fleet.working_on().await.is_empty(),
         "nothing is running, so it was the dependency that stopped it"
     );
 }
@@ -120,9 +120,9 @@ async fn a_dependent_is_admitted_once_its_upstream_completes() {
         .approve(made[1].id())
         .await
         .expect("the dependent waits");
-    assert_eq!(fleet.working_on().await.as_ref(), Some(made[0].id()));
+    assert_eq!(fleet.working_on().await, vec![made[0].id().clone()]);
 
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.expect("the loop turns");
 
     assert_eq!(
@@ -130,8 +130,8 @@ async fn a_dependent_is_admitted_once_its_upstream_completes() {
         JobStatus::CompletedSuccess
     );
     assert_eq!(
-        turned.admitted.as_ref(),
-        Some(made[1].id()),
+        turned.admitted,
+        vec![made[1].id().clone()],
         "the edge cleared the moment the upstream landed, and not before"
     );
 }

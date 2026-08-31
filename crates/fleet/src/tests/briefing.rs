@@ -465,7 +465,8 @@ pub(crate) async fn turns_sent(
 ) -> Vec<String> {
     for _ in 0..600 {
         let echoed: Vec<String> = {
-            let slot = fleet.slot().lock().await;
+            let held = fleet.the_only_slot().await;
+    let slot = held.lock().await;
             slot.as_ref()
                 .map(|at_work| {
                     at_work
@@ -510,20 +511,20 @@ pub(super) async fn told_across_the_boundary(
     worktree_directory(home, job.id());
     fleet.approve(job.id()).await.expect("it is approved");
     fleet
-        .declare_scope(&DeclareScope {
+        .declared_by_the_one(&DeclareScope {
             context_paths: vec!["docs".to_string()],
         })
         .await
         .expect("the first step's plan");
     fleet
-        .submit_evidence(submitted)
+        .submitted_by_the_one(submitted)
         .await
         .expect("evidence lands");
     let turned = fleet.turn().await.expect("a turn");
     assert!(
-        matches!(turned.ruled, Some(Ruling::Advanced { .. })),
+        matches!(turned.ruled(), Some(Ruling::Advanced { .. })),
         "the first step advanced: {:?}",
-        turned.ruled
+        turned.ruled()
     );
     // **The slot holds a different Drone now.** The boundary ended the one that
     // worked part one and put a fresh one on part two, so what part two's Drone

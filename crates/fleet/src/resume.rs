@@ -103,7 +103,12 @@ where
     /// only move left on the case a redirect most obviously fits was
     /// kill-and-redispatch.
     pub async fn redirect(&self, job_id: &JobId, instruction: &Redirection) -> Result<Job, Adrift> {
-        let mut working = self.slot().lock().await;
+        let Some(slot) = self.slot_of(job_id).await else {
+            return Err(Adrift::NoDroneToRedirect {
+                job: job_id.clone(),
+            });
+        };
+        let mut working = slot.lock().await;
         let job = self.load(job_id).await?;
         self.held_for_a_person(&job)?;
         // The live session, which is the whole difference between the two acts
@@ -208,7 +213,8 @@ where
     /// and on every redirect that landed on a stopped step: that one moved both
     /// machines on the send, so there was never anything to wait for.
     pub(crate) async fn redirect_awaited(&self, job: &JobId) -> Option<ipc::RedirectInFlight> {
-        let working = self.slot().lock().await;
+        let slot = self.slot_of(job).await?;
+        let working = slot.lock().await;
         working
             .as_ref()
             .filter(|at_work| at_work.is(job))
@@ -261,7 +267,11 @@ where
     /// the model and the environment are resolved again from what the Manifest
     /// and the Job hold now — see `crate::spawning`.
     pub async fn restart_step(&self, job_id: &JobId) -> Result<Job, Adrift> {
-        let mut working = self.slot().lock().await;
+        // Opened rather than found: the Job's Drone is gone, so the roster no
+        // longer holds a slot for it. See [`Fleet::slot_for`] for why this one
+        // act does not consult the bound.
+        let slot = self.slot_for(job_id).await;
+        let mut working = slot.lock().await;
         let job = self.load(job_id).await?;
         let step = self.stopped_step(&job)?;
         if working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {

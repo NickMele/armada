@@ -49,7 +49,7 @@ async fn changes_asked_for_at_a_gate_open_the_next_drone_s_brief() {
     )
     .expect("a note with something in it");
     assert!(
-        fleet.slot().lock().await.is_none(),
+        fleet.the_only_slot().await.lock().await.is_none(),
         "nothing had to be ended for this: the gate opened with no Drone"
     );
     let before = fleet.harness().configured().len();
@@ -117,7 +117,7 @@ async fn a_delivered_note_does_not_cross_the_next_boundary() {
     // The step is worked again, reaches the gate again, and this time it is
     // taken. The next Drone is on the next step.
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("the second attempt reports");
     fleet.turn().await.expect("the gate runs again");
@@ -155,7 +155,11 @@ async fn a_drone_that_is_there_is_told_and_the_record_holds_nothing() {
     // where the Job stands.
     let put_back = fleet.harness().configured().len();
     {
-        let mut working = fleet.slot().lock().await;
+        // **This Job's slot, opened.** The gate stood its Drone down, so the
+        // roster holds none for it — and `the_only_slot` would answer with a
+        // detached one that no tool call could ever reach.
+        let slot = fleet.slot_for(&job_id).await;
+        let mut working = slot.lock().await;
         let job = fleet.load(&job_id).await.expect("the Job is there");
         let worktree = fleet
             .surviving_worktree(&job)
@@ -207,7 +211,8 @@ async fn changes_asked_for_with_nowhere_to_put_a_drone_leave_the_job_at_the_gate
     let said = crate::resume::Redirection::saying("the second case is untested")
         .expect("a note with something in it");
     {
-        let mut working = fleet.slot().lock().await;
+        let slot = fleet.slot_for(&job_id).await;
+        let mut working = slot.lock().await;
         fleet.end_the_drone(&mut working).await;
     }
     let job = fleet.load(&job_id).await.expect("the Job is there");
@@ -261,12 +266,12 @@ async fn a_step_sent_back_carries_no_verdict_about_the_part_before_it() {
     worktree_directory(&home, &job_id);
     fleet.approve(&job_id).await.expect("it dispatches");
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("the first step reports");
     fleet.turn().await.expect("it advances on its own");
     fleet
-        .submit_evidence(note_evidence())
+        .submitted_by_the_one(note_evidence())
         .await
         .expect("the second step reports");
     fleet.turn().await.expect("the gate holds it for a person");

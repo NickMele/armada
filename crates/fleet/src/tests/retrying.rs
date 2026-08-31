@@ -66,9 +66,11 @@ async fn a_failed_check_inside_the_budget_goes_back_to_the_drone() {
         .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
 
-    let ruled = fleet.turn().await.unwrap().ruled.expect("the gate ruled");
+    let ruling_turn = fleet.turn().await.unwrap();
+
+    let ruled = ruling_turn.ruled().expect("the gate ruled");
     assert!(
         matches!(ruled, Ruling::HandedBack { .. }),
         "the correct verdict with somewhere to go: {ruled:?}"
@@ -119,15 +121,17 @@ async fn a_spent_budget_stops() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
-    let first = fleet.turn().await.unwrap().ruled.expect("a first ruling");
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    let ruling_turn = fleet.turn().await.unwrap();
+    let first = ruling_turn.ruled().expect("a first ruling");
     assert!(
         matches!(first, Ruling::HandedBack { .. }),
         "one hand-back is what a budget of one buys: {first:?}"
     );
 
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
-    let second = fleet.turn().await.unwrap().ruled.expect("a second ruling");
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    let ruling_turn = fleet.turn().await.unwrap();
+    let second = ruling_turn.ruled().expect("a second ruling");
     assert!(
         matches!(second, Ruling::Failed { .. }),
         "the second run has nothing left to spend: {second:?}"
@@ -161,9 +165,11 @@ async fn a_step_with_no_budget_fails_on_its_first_failed_check() {
         .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
 
-    let ruled = fleet.turn().await.unwrap().ruled.expect("the gate ruled");
+    let ruling_turn = fleet.turn().await.unwrap();
+
+    let ruled = ruling_turn.ruled().expect("the gate ruled");
     assert!(matches!(ruled, Ruling::Failed { .. }), "{ruled:?}");
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),
@@ -200,9 +206,11 @@ async fn a_failed_check_stops_the_step_and_writes_its_verdict() {
         .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
 
-    let ruled = fleet.turn().await.unwrap().ruled.expect("the gate ruled");
+    let ruling_turn = fleet.turn().await.unwrap();
+
+    let ruled = ruling_turn.ruled().expect("the gate ruled");
     assert!(matches!(ruled, Ruling::Failed { .. }), "{ruled:?}");
 
     let ended = fleet.load(job.id()).await.unwrap();
@@ -247,10 +255,11 @@ async fn a_spent_budget_stops_the_step_the_same_way() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
-    let second = fleet.turn().await.unwrap().ruled.expect("a second ruling");
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    let ruling_turn = fleet.turn().await.unwrap();
+    let second = ruling_turn.ruled().expect("a second ruling");
     assert!(matches!(second, Ruling::Failed { .. }), "{second:?}");
 
     let ended = fleet.load(job.id()).await.unwrap();
@@ -283,9 +292,11 @@ async fn the_drone_is_told_what_the_check_printed() {
         .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
 
-    let ruled = fleet.turn().await.unwrap().ruled.expect("the gate ruled");
+    let ruling_turn = fleet.turn().await.unwrap();
+
+    let ruled = ruling_turn.ruled().expect("the gate ruled");
     let told = ruled.tell().expect("a hand-back tells the Drone").text();
 
     assert!(
@@ -322,9 +333,11 @@ async fn the_turn_says_nothing_about_how_much_budget_is_left() {
         .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
 
-    let ruled = fleet.turn().await.unwrap().ruled.expect("the gate ruled");
+    let ruling_turn = fleet.turn().await.unwrap();
+
+    let ruled = ruling_turn.ruled().expect("the gate ruled");
     let told = ruled.tell().expect("a hand-back tells the Drone").text();
     for word in ["attempt", "retry", "retries", "last", "remaining"] {
         assert!(!told.contains(word), "`{word}` is in the turn: {told}");
@@ -350,9 +363,11 @@ async fn a_check_that_never_ran_is_not_handed_back_however_much_budget_there_is(
         .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
 
-    let ruled = fleet.turn().await.unwrap().ruled.expect("the gate ruled");
+    let ruling_turn = fleet.turn().await.unwrap();
+
+    let ruled = ruling_turn.ruled().expect("the gate ruled");
     assert!(
         matches!(ruled, Ruling::Failed { .. }),
         "a budget must not be spent on a command that is not installed: {ruled:?}"
@@ -380,9 +395,9 @@ async fn both_runs_of_a_retried_step_are_on_the_record() {
         .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
 
     let every = fleet
@@ -424,7 +439,7 @@ async fn the_log_says_the_step_was_handed_back() {
         .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
 
     let moves = fleet

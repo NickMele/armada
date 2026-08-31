@@ -250,7 +250,7 @@ fn submitting_decides_nothing_and_leaves_the_evidence_waiting() {
     tool.submit(diff_call(), at(NOW)).expect("a legal call");
 
     assert_eq!(inbox.waiting(), 1);
-    let landed = inbox.take().expect("the submission");
+    let landed = inbox.take_for(&job_id()).expect("the submission");
     assert_eq!(landed.job, job_id());
     assert_eq!(landed.submission.claimed(), "The loop is a fold.");
     assert_eq!(inbox.waiting(), 0);

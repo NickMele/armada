@@ -62,12 +62,14 @@ where
             // The slot and never `assigned_drone`: the record's pointer
             // survives a Fleet restart and the pipe does not, and it is the
             // pipe a redirect and a gate re-run both need.
-            drone_holding: self
-                .slot()
-                .lock()
-                .await
-                .as_ref()
-                .is_some_and(|at_work| at_work.is(job.id())),
+            drone_holding: match self.slot_of(job.id()).await {
+                Some(slot) => slot
+                    .lock()
+                    .await
+                    .as_ref()
+                    .is_some_and(|at_work| at_work.is(job.id())),
+                None => false,
+            },
             // The same call `restart_step` and `override_verdict` make, so the
             // classification cannot say a worktree is there that they then
             // refuse to find.

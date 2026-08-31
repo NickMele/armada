@@ -148,7 +148,7 @@ async fn a_job_a_check_failed_is_replaced_and_left_where_it_stopped() {
     worktree_directory(&home, &failed);
     fleet.approve(&failed).await.expect("released to run");
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("evidence taken");
     fleet.turn().await.expect("a ruling");
@@ -314,7 +314,7 @@ async fn a_redispatch_freezes_the_failed_jobs_own_workflow_not_the_first_one_hel
     worktree_directory(&home, &failed);
     fleet.approve(&failed).await.expect("released to run");
     fleet
-        .submit_evidence(diff_evidence())
+        .submitted_by_the_one(diff_evidence())
         .await
         .expect("evidence taken");
     fleet.turn().await.expect("a ruling");

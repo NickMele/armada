@@ -46,11 +46,20 @@ fn saying(home: &TempDir, job: &JobId, said: &str) -> usize {
         .count()
 }
 
-/// **The defect, as one case.** A submission that arrives at a turn with no
-/// Job in the slot is not thrown away, and the gate rules on it afterwards.
+/// **The defect, as one case.** A submission that arrives at a turn where its
+/// Job has no slot is not thrown away.
 ///
 /// Before this, the take sat above two of the three guards, so a decline below
 /// it put the submission out of the inbox with nothing anywhere to put it back.
+///
+/// **`#50` rewrote the middle of this case and not its subject.** It used to
+/// hand `settle` an empty `Option<Working>` while the real slot was full, and
+/// then assert that the next turn ruled — which the fixture could produce and
+/// production could not, since nothing in the loop puts a `running` Job back
+/// into a slot. What a Drone that submits and exits inside one interval
+/// actually leaves is a slot with nothing in it, so that is what this makes,
+/// and what it asserts is the half that was real: the submission is still
+/// there.
 #[tokio::test]
 async fn a_submission_that_lands_while_the_slot_is_empty_survives_to_be_ruled_on() {
     let home = TempDir::new();
@@ -59,29 +68,36 @@ async fn a_submission_that_lands_while_the_slot_is_empty_survives_to_be_ruled_on
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
 
-    // The turn that used to lose it: the gate is asked while nothing is in the
-    // slot, which is where a Drone that submits and exits inside one interval
-    // puts it.
-    let mut nothing_working = None;
-    let settled = fleet.settle(&mut nothing_working).await.unwrap();
-    assert!(settled.ruled.is_none(), "there was nothing to rule against");
-    assert_eq!(settled.declined, Some(Decline::NothingIsWorking));
+    // The Drone goes, and its slot with it. Held rather than dropped so the
+    // process's pipes do not close under the test.
+    let _held = fleet.the_only_slot().await.lock().await.take();
+    let turned = fleet.turn().await.unwrap();
+    assert!(turned.ruled().is_none(), "there was nothing to rule against");
+    assert_eq!(turned.declined(), Some(&Decline::NothingIsWorking));
     assert_eq!(
         fleet.evidence_waiting(),
         1,
-        "the submission was consumed by a gate that then declined to rule on it"
+        "the submission survived a gate that declined to rule on it"
+    );
+    assert_eq!(
+        fleet.load(job.id()).await.unwrap().status(),
+        core_model::JobStatus::Running,
+        "one turn is a race and escalates nothing"
     );
 
-    // And the next turn, which does have the slot, rules on it.
+    // And the next turn is the boundary: nothing can put a `running` Job back
+    // into a slot, so a submission still here is one no gate will ever see.
+    // The escalation is the case below; what this one owns is that it survived
+    // long enough to reach it.
     let turned = fleet.turn().await.unwrap();
-    assert!(
-        matches!(turned.ruled, Some(Ruling::Advanced { .. })),
-        "the held submission was ruled on: {:?}",
-        turned.ruled
+    assert!(turned.ruled().is_none(), "there is still nothing to rule with");
+    assert_eq!(
+        fleet.evidence_waiting(),
+        0,
+        "and it went with the escalation rather than being declined for ever"
     );
-    assert_eq!(fleet.evidence_waiting(), 0);
 }
 
 /// The other half. A gate that declines says which guard refused and why, into
@@ -94,10 +110,10 @@ async fn a_decline_says_which_guard_refused_in_the_jobs_log() {
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
 
-    let mut nothing_working = None;
-    fleet.settle(&mut nothing_working).await.unwrap();
+    let _held = fleet.the_only_slot().await.lock().await.take();
+    fleet.turn().await.unwrap();
 
     let written = logged(&home, job.id());
     assert!(
@@ -126,17 +142,17 @@ async fn a_submission_no_slot_will_ever_hold_escalates_the_job_it_was_for() {
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
 
-    let mut nothing_working = None;
-    fleet.settle(&mut nothing_working).await.unwrap();
+    let _held = fleet.the_only_slot().await.lock().await.take();
+    fleet.turn().await.unwrap();
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),
         JobStatus::Running,
         "one turn is a race and escalates nothing"
     );
 
-    fleet.settle(&mut nothing_working).await.unwrap();
+    fleet.turn().await.unwrap();
     let stranded = fleet.load(job.id()).await.unwrap();
     assert_eq!(stranded.status(), JobStatus::Escalated);
     assert_eq!(
@@ -157,12 +173,16 @@ async fn a_submission_no_slot_will_ever_hold_escalates_the_job_it_was_for() {
     assert!(written.contains("\"escalated\":true"), "{written}");
 }
 
-/// **The same strand, reached by the longer road.** A submission is held over a
-/// turn with no slot, and the next approved Job is admitted into that slot
-/// before the gate comes back. The evidence is then for a Job that is not the
-/// one being worked, which is the third guard — and dropping it there without
-/// saying anything would leave the first Job running with no Drone, which is
-/// the same silence one guard along.
+/// **The same strand, with another Job running beside it.** A submission is
+/// held over a turn where its own Job has no slot, and another approved Job is
+/// admitted while it waits.
+///
+/// **`#50` is why this is no longer the `another_job` guard.** The inbox is
+/// taken by Job now, so a second Job's gate cannot reach the first Job's
+/// evidence and the third guard has become unreachable. What the case is
+/// actually about survives and is sharper for it: the first Job is escalated
+/// because *its own* slot is empty, the second Job's step is untouched, and
+/// neither fact depends on the other.
 #[tokio::test]
 async fn a_submission_overtaken_by_the_next_job_escalates_the_one_it_was_for() {
     let home = TempDir::new();
@@ -171,25 +191,30 @@ async fn a_submission_overtaken_by_the_next_job_escalates_the_one_it_was_for() {
     let first = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, first.id());
     fleet.approve(first.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
 
     // The slot emptied while the submission stays where it is — which is the
     // state the fix creates and nothing else in Fleet can produce, since every
     // path that clears the slot empties the inbox with it. The Drone is held
     // rather than dropped so its pipes do not close under the test.
-    let _held = fleet.slot().lock().await.take();
+    let _held = fleet.the_only_slot().await.lock().await.take();
     assert_eq!(fleet.evidence_waiting(), 1);
 
     // The next approved Job goes straight into the slot it found free.
     let second = fleet.propose(a_proposal("fix the writer")).await.unwrap();
     worktree_directory(&home, second.id());
     fleet.approve(second.id()).await.unwrap();
-    assert_eq!(fleet.working_on().await.as_ref(), Some(second.id()));
+    assert_eq!(fleet.working_on().await, vec![second.id().clone()]);
 
-    // The gate now sees a submission for a Job that is not the one being worked.
+    // The strand is answered outside every slot, so the second Job being in one
+    // neither hides it nor is touched by it.
     let turned = fleet.turn().await.unwrap();
-    assert!(turned.ruled.is_none(), "no step of the second Job advanced");
-    assert_eq!(turned.declined, Some(Decline::AnotherJob));
+    assert!(turned.ruled().is_none(), "no step of the second Job advanced");
+    assert_eq!(turned.declined(), Some(&Decline::NothingIsWorking));
+    // The second turn is the one that escalates, for the reason the case above
+    // gives: one turn with no slot is a race.
+    let turned = fleet.turn().await.unwrap();
+    assert!(turned.ruled().is_none(), "and none advanced on the second turn");
 
     let overtaken = fleet.load(first.id()).await.unwrap();
     assert_eq!(overtaken.status(), JobStatus::Escalated);
@@ -198,8 +223,13 @@ async fn a_submission_overtaken_by_the_next_job_escalates_the_one_it_was_for() {
         Some(TransitionReason::Escalation(EscalationTrigger::Interrupted))
     );
     assert!(
-        logged(&home, first.id()).contains("another_job"),
+        logged(&home, first.id()).contains("nothing_is_working"),
         "the guard that refused is named in the log of the Job it refused about"
+    );
+    assert_eq!(
+        fleet.working_on().await,
+        vec![second.id().clone()],
+        "and the second Job is untouched by any of it"
     );
 }
 
@@ -216,11 +246,11 @@ async fn a_decline_that_stands_writes_one_line_rather_than_one_a_turn() {
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
 
-    let mut nothing_working = None;
+    let _held = fleet.the_only_slot().await.lock().await.take();
     for _ in 0..5 {
-        fleet.settle(&mut nothing_working).await.unwrap();
+        fleet.turn().await.unwrap();
     }
 
     assert_eq!(
@@ -259,12 +289,12 @@ async fn nothing_can_submit_to_a_job_a_person_is_holding_at_a_gate() {
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
-    assert!(matches!(turned.ruled, Some(Ruling::HeldForReview { .. })));
+    assert!(matches!(turned.ruled(), Some(Ruling::HeldForReview { .. })));
 
     assert!(
-        fleet.slot().lock().await.is_none(),
+        fleet.the_only_slot().await.lock().await.is_none(),
         "the gate stood its Drone down and freed the slot, which is what makes \
          a person's review cost no fleet time"
     );
@@ -274,15 +304,15 @@ async fn nothing_can_submit_to_a_job_a_person_is_holding_at_a_gate() {
     // this call that could put evidence against a Job a person is reading.
     assert!(
         matches!(
-            fleet.submit_evidence(diff_evidence()).await,
+            fleet.submitted_by_the_one(diff_evidence()).await,
             Err(crate::NotSubmitted::NothingIsWorking)
         ),
         "the gate holds no Drone, so there is nothing to submit through"
     );
 
     let turned = fleet.turn().await.unwrap();
-    assert!(turned.ruled.is_none(), "nothing was re-ruled");
-    assert_eq!(turned.declined, None, "and nothing was declined either");
+    assert!(turned.ruled().is_none(), "nothing was re-ruled");
+    assert_eq!(turned.declined(), None, "and nothing was declined either");
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),
         JobStatus::AwaitingReview,
@@ -309,13 +339,13 @@ async fn a_gate_that_cannot_read_its_artifact_escalates_and_names_the_artifact()
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
 
     let turned = fleet.turn().await.unwrap();
     assert!(
-        matches!(turned.ruled, Some(Ruling::CouldNotDecide { .. })),
+        matches!(turned.ruled(), Some(Ruling::CouldNotDecide { .. })),
         "{:?}",
-        turned.ruled
+        turned.ruled()
     );
 
     let escalated = fleet.load(job.id()).await.unwrap();
@@ -372,12 +402,11 @@ async fn a_gate_that_could_not_decide_keeps_its_drone() {
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
 
     assert_eq!(
-        fleet.working_on().await.as_ref(),
-        Some(job.id()),
+        fleet.working_on().await, vec![job.id().clone()],
         "the session was ended over a reading Fleet could not take"
     );
 }
@@ -433,16 +462,16 @@ fn the_inbox_answers_a_repeated_reason_once_and_a_new_submission_again() {
     use verification::{Claimed, NotClaimed, ShownBy};
 
     let inbox = EvidenceInbox::new();
-    assert_eq!(inbox.declining(Decline::AnotherJob), Standing::First);
-    assert_eq!(inbox.declining(Decline::AnotherJob), Standing::Again);
+    let job = JobId::carried(core_model::Ulid::carried("01J0000000000000000000JOB0"));
+    assert_eq!(inbox.declining(&job, Decline::AnotherJob), Standing::First);
+    assert_eq!(inbox.declining(&job, Decline::AnotherJob), Standing::Again);
     // A different reason about the same submission is news of its own.
     assert_eq!(
-        inbox.declining(Decline::NothingIsWorking),
+        inbox.declining(&job, Decline::NothingIsWorking),
         Standing::First,
         "a guard that changed is a different fact about the Job"
     );
 
-    let job = JobId::carried(core_model::Ulid::carried("01J0000000000000000000JOB0"));
     EvidenceTool::for_job(job.clone(), &inbox)
         .submit(
             Call {
@@ -454,9 +483,9 @@ fn the_inbox_answers_a_repeated_reason_once_and_a_new_submission_again() {
             Timestamp::from_rfc3339("2026-08-28T10:21:28.000Z"),
         )
         .expect("a submission");
-    assert_eq!(inbox.waiting_for().as_ref(), Some(&job));
+    assert_eq!(inbox.waiting_for(), vec![job.clone()]);
     assert_eq!(
-        inbox.declining(Decline::NothingIsWorking),
+        inbox.declining(&job, Decline::NothingIsWorking),
         Standing::First,
         "the head changed, so what was said about the last one is not about this"
     );

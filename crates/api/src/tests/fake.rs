@@ -778,7 +778,15 @@ impl Daemon for FakeDaemon {
         })
     }
 
-    async fn submit_evidence(&self, submission: SubmitEvidence) -> Result<Receipt, NotRecorded> {
+    /// The caller is taken and not read. **A fake daemon has no processes to
+    /// place one against** — which Job a connection belongs to is
+    /// `fleet::peer`'s answer and is tested there, and a router test is about
+    /// the route rather than about the attribution.
+    async fn submit_evidence(
+        &self,
+        _caller: crate::Caller,
+        submission: SubmitEvidence,
+    ) -> Result<Receipt, NotRecorded> {
         let running = self
             .jobs
             .lock()
@@ -801,7 +809,11 @@ impl Daemon for FakeDaemon {
         })
     }
 
-    async fn declare_scope(&self, declaration: DeclareScope) -> Result<Receipt, NotRecorded> {
+    async fn declare_scope(
+        &self,
+        _caller: crate::Caller,
+        declaration: DeclareScope,
+    ) -> Result<Receipt, NotRecorded> {
         let running = self
             .jobs
             .lock()
@@ -827,7 +839,7 @@ impl Daemon for FakeDaemon {
     /// One passing Check and one failing one, so a test over this router can
     /// tell that a report reaches the Drone **and** that a failure in it is
     /// still a successful tool call.
-    async fn run_checks(&self) -> Result<CheckReport, NotRecorded> {
+    async fn run_checks(&self, _caller: crate::Caller) -> Result<CheckReport, NotRecorded> {
         let running = self
             .jobs
             .lock()

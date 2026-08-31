@@ -135,6 +135,11 @@ where
         // After the process exists, never before: `assigned_drone` is presence,
         // and a step claiming a Drone that failed to start is exactly the
         // liveness lie the column is read for.
+        //
+        // The pid index goes in beside it, for `crate::peer`: the two are one
+        // fact — a Drone is on this Job — recorded in the two places that can
+        // answer for it, the record for a person and the index for a caller.
+        self.drone_at_work(&job_id, started.session.pid());
         self.drone_arrived(job, step, drone.clone()).await?;
         // After the process exists too, and for the same reason: a note
         // cleared over a spawn that then failed is a note nobody was told.

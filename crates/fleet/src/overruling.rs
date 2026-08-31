@@ -85,7 +85,11 @@ where
         job_id: &JobId,
         overruling: &Overruling,
     ) -> Result<Job, Adrift> {
-        let mut working = self.slot().lock().await;
+        // Opened rather than looked up: an overridden verdict puts a fresh
+        // Drone on the next step through `crossed_onto`, and the Job whose
+        // Drone has already gone has no slot in the roster to put it in.
+        let slot = self.slot_for(job_id).await;
+        let mut working = slot.lock().await;
         let job = self.load(job_id).await?;
         let (step, overruled) = self.overridable(&job).await?;
         // Read before anything moves, and discarded. A worktree that is gone

@@ -147,7 +147,7 @@ fn delete_the_worktree(home: &TempDir, job: &JobId) {
 async fn until_reaped(fleet: &Fixture) {
     for _ in 0..400 {
         fleet.turn().await.expect("a turn");
-        if fleet.slot().lock().await.is_none() {
+        if fleet.the_only_slot().await.lock().await.is_none() {
             return;
         }
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
@@ -160,7 +160,8 @@ async fn settled(fleet: &Fixture) {
     let mut last = usize::MAX;
     for _ in 0..400 {
         let seen = fleet
-            .slot()
+            .the_only_slot()
+            .await
             .lock()
             .await
             .as_ref()

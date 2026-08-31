@@ -44,6 +44,7 @@ use crate::gate::{CheckBudget, Ruling};
 use crate::judging::JudgeBudget;
 use crate::mint::Mint;
 use crate::silence::Liveness;
+use crate::slots::Concurrency;
 use crate::tests::tmp::TempDir;
 
 /// A clock that answers a different second each time it is asked.
@@ -302,12 +303,26 @@ pub fn fitted_with(
             path: "/usr/bin:/bin".to_string(),
             home: root,
             mcp_config: "/etc/armada/mcp.json".to_string(),
+            // A port nothing is listening on. Attribution is planted in these
+            // fixtures, so this is the other half of a pair no fake ever
+            // matches on.
+            port: 47821,
             attachments_dir: home
                 .path()
                 .join("attachments")
                 .to_string_lossy()
                 .to_string(),
         },
+        // Nothing to place. A fake harness opens no sockets, so a fixture that
+        // answered otherwise would be asserting against the machine rather than
+        // against Fleet. `crate::tests::peer` plants one where the subject is
+        // attribution.
+        peers: Arc::new(crate::tests::peer::TheOnlyDrone),
+        // **One, so every fixture but the concurrency cases behaves exactly as
+        // it did when there was one slot.** A bound of two here would make every
+        // test that queues a second Job assert a different thing than it was
+        // written to.
+        concurrency: Concurrency::of(1),
         budget: CheckBudget::of(Duration::from_secs(5)),
         norms: UNTRIPPABLE,
         liveness: NEVER_QUIET,
@@ -552,7 +567,7 @@ async fn a_job_is_driven_from_created_to_completed_and_survives_a_reopen() {
 
     let approved = fleet.approve(job.id()).await.unwrap();
     assert_eq!(approved.status(), JobStatus::Running);
-    assert_eq!(fleet.working_on().await.as_ref(), Some(job.id()));
+    assert_eq!(fleet.working_on().await, vec![job.id().clone()]);
     assert_eq!(
         approved.current_step_id().map(|id| id.as_str()),
         Some("implement")
@@ -560,7 +575,7 @@ async fn a_job_is_driven_from_created_to_completed_and_survives_a_reopen() {
 
     // The receipt is not a verdict: nothing has been decided at this point,
     // which is the whole reason the inbox exists.
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     assert_eq!(fleet.evidence_waiting(), 1);
     assert_eq!(
         fleet
@@ -576,7 +591,7 @@ async fn a_job_is_driven_from_created_to_completed_and_survives_a_reopen() {
 
     let turned = fleet.turn().await.unwrap();
     assert!(
-        matches!(turned.ruled, Some(Ruling::Advanced { .. })),
+        matches!(turned.ruled(), Some(Ruling::Advanced { .. })),
         "the diff was non-empty and the step declared no other check"
     );
     let midway = fleet.load(job.id()).await.unwrap();
@@ -590,10 +605,10 @@ async fn a_job_is_driven_from_created_to_completed_and_survives_a_reopen() {
         Some("summarise")
     );
 
-    fleet.submit_evidence(note_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(note_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
-    assert!(matches!(turned.ruled, Some(Ruling::Finished { .. })));
-    assert_eq!(fleet.working_on().await, None, "the slot came free");
+    assert!(matches!(turned.ruled(), Some(Ruling::Finished { .. })));
+    assert!(fleet.working_on().await.is_empty(), "the slot came free");
 
     drop(fleet);
     let mut reopened = Store::open(&home.path().join("armada.db")).expect("the same store");
@@ -633,16 +648,16 @@ async fn a_failed_check_ends_the_job_and_keeps_the_worktree() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
-    let Some(Ruling::Failed { failures, .. }) = turned.ruled else {
+    let Some(Ruling::Failed { failures, .. }) = turned.ruled() else {
         panic!("an empty diff is a failed check");
     };
     assert_eq!(failures.len(), 1);
 
     let ended = fleet.load(job.id()).await.unwrap();
     assert_eq!(ended.status(), JobStatus::CompletedFailed);
-    assert_eq!(fleet.working_on().await, None);
+    assert!(fleet.working_on().await.is_empty());
 
     let spec = WorktreeSpec::for_job(&home.path().to_string_lossy(), job.id().as_str()).unwrap();
     assert!(
@@ -671,21 +686,21 @@ async fn a_second_approved_job_waits_while_one_is_worked() {
         JobStatus::Queued,
         "approved, and not started"
     );
-    assert_eq!(fleet.working_on().await.as_ref(), Some(first.id()));
+    assert_eq!(fleet.working_on().await, vec![first.id().clone()]);
 
     // Finish the first. Its slot is what the second was waiting for, and
     // nothing else about it changed.
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
-    fleet.submit_evidence(note_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(note_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
 
     assert_eq!(
-        turned.admitted.as_ref(),
-        Some(second.id()),
+        turned.admitted,
+        vec![second.id().clone()],
         "the queue is the store's `queued` status, and it emptied by one"
     );
-    assert_eq!(fleet.working_on().await.as_ref(), Some(second.id()));
+    assert_eq!(fleet.working_on().await, vec![second.id().clone()]);
     assert_eq!(
         fleet.load(first.id()).await.unwrap().status(),
         JobStatus::CompletedSuccess
@@ -728,7 +743,7 @@ async fn a_running_job_with_no_drone_is_interrupted_at_startup() {
     );
     assert_eq!(
         restarted.working_on().await,
-        None,
+        Vec::new(),
         "an interrupted Job is not picked back up"
     );
 }
@@ -743,10 +758,10 @@ async fn a_submission_of_the_wrong_kind_moves_nothing() {
     fleet.approve(job.id()).await.unwrap();
 
     // The first step asks for a diff.
-    fleet.submit_evidence(note_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(note_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
 
-    assert!(matches!(turned.ruled, Some(Ruling::NotWhatTheStepAsked(_))));
+    assert!(matches!(turned.ruled(), Some(Ruling::NotWhatTheStepAsked(_))));
     let unmoved = fleet.load(job.id()).await.unwrap();
     assert_eq!(unmoved.status(), JobStatus::Running);
     assert_eq!(
@@ -754,7 +769,7 @@ async fn a_submission_of_the_wrong_kind_moves_nothing() {
         Some("implement"),
         "nothing ran and nothing moved"
     );
-    assert_eq!(fleet.working_on().await.as_ref(), Some(job.id()));
+    assert_eq!(fleet.working_on().await, vec![job.id().clone()]);
 }
 
 /// Killing a Job ends it, wherever it stood, and frees the slot.
@@ -769,7 +784,7 @@ async fn killing_a_job_ends_it_and_frees_the_slot() {
     let killed = Fleet::kill_job(&fleet, job.id()).await.unwrap();
     assert_eq!(killed.status(), JobStatus::Killed);
     assert!(killed.status().is_terminal());
-    assert_eq!(fleet.working_on().await, None);
+    assert!(fleet.working_on().await.is_empty());
 }
 
 /// **No aftermath leaves a Job running.** A Drone that finished having
@@ -792,8 +807,8 @@ async fn a_drone_that_leaves_without_submitting_does_not_leave_the_job_running()
     let mut after = None;
     for _ in 0..200 {
         let turned = fleet.turn().await.unwrap();
-        if turned.after.is_some() {
-            after = turned.after;
+        if let Some(aftermath) = turned.each.into_iter().find_map(|worked| worked.after) {
+            after = Some(aftermath);
             break;
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -809,7 +824,7 @@ async fn a_drone_that_leaves_without_submitting_does_not_leave_the_job_running()
         !paused.status().is_terminal(),
         "escalated holds the worktree until a person answers — it does not end the Job"
     );
-    assert_eq!(fleet.working_on().await, None, "the slot came free");
+    assert!(fleet.working_on().await.is_empty(), "the slot came free");
 }
 
 /// **The boundary is read, and a step is gated on what it did rather than on
@@ -841,12 +856,12 @@ async fn a_second_step_that_writes_nothing_is_not_credited_with_the_first_step_s
     fleet
         .work()
         .wrote(&[("src/log.rs", adapter_traits::Change::Modified)]);
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     assert!(
-        matches!(turned.ruled, Some(Ruling::Advanced { .. })),
+        matches!(turned.ruled(), Some(Ruling::Advanced { .. })),
         "the first step wrote a file: {:?}",
-        turned.ruled
+        turned.ruled()
     );
     assert_eq!(
         fleet
@@ -859,12 +874,12 @@ async fn a_second_step_that_writes_nothing_is_not_credited_with_the_first_step_s
     );
 
     // The second step's Drone writes nothing at all and submits anyway.
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
-    let Some(Ruling::Failed { failures, .. }) = &turned.ruled else {
+    let Some(Ruling::Failed { failures, .. }) = &turned.ruled() else {
         panic!(
             "the second step advanced having written nothing: {:?}",
-            turned.ruled
+            turned.ruled()
         );
     };
     assert_eq!(failures, &[verification::CheckFailed::DiffEmpty]);

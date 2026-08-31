@@ -16,10 +16,13 @@
 //! only agree or disagree, and the disagreeing case would need a rule.
 //!
 //! **The tool a Drone reaches carries neither either**, and refuses a call that
-//! invents one rather than dropping it — see `ipc::mcp`. What that buys is a
-//! bound submission and not an authenticated one: a caller cannot choose a Job,
-//! and nothing stops a caller that is not the Drone from reaching the endpoint
-//! at all.
+//! invents one rather than dropping it — see `ipc::mcp`. Which Job the call is
+//! bound to is `crate::peer`'s answer: the process on the other end of the
+//! connection, matched against the Drones Fleet spawned. **That is an
+//! attribution and still not an authentication** — what a caller cannot do is
+//! choose a Job, and what nothing stops is a caller that is not a Drone
+//! reaching the endpoint. A caller Fleet cannot place is refused rather than
+//! guessed at.
 //!
 //! # The fields are the ones the Drone prompt already names
 //!
@@ -48,7 +51,7 @@
 //! from the typed call inward, on both sides of the inbox: the tool, the queue,
 //! and Fleet's own answering half.
 
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::Mutex;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
@@ -188,13 +191,17 @@ pub enum Standing {
 #[derive(Debug, Default)]
 pub struct EvidenceInbox {
     waiting: Mutex<VecDeque<Landed>>,
-    /// What the gate last declined the submission at the head for.
+    /// What the gate last declined each Job's oldest waiting submission for.
     ///
     /// **Held on the inbox rather than on the working slot**, because the
     /// decline this exists for is the one where there is no slot to hold it on.
-    /// Cleared whenever the head changes, so the reason standing is always
-    /// about the submission standing.
-    standing: Mutex<Option<Decline>>,
+    /// Cleared whenever that Job's head changes, so the reason standing is
+    /// always about the submission standing.
+    ///
+    /// **Keyed by Job**, which is `#50`: with several Drones the head of one
+    /// queue says nothing about another's, and one memo for all of them wrote
+    /// a Job's decline line about a different Job's submission.
+    standing: Mutex<BTreeMap<JobId, Decline>>,
 }
 
 impl EvidenceInbox {
@@ -202,25 +209,32 @@ impl EvidenceInbox {
         EvidenceInbox::default()
     }
 
-    /// The oldest submission not yet taken, in arrival order.
+    /// This Job's oldest submission not yet taken, in arrival order.
     ///
     /// **Taking is what the gate does**, and there is no method that reads one
     /// without removing it — a peek would let two gate runs decide the same
     /// evidence.
-    pub fn take(&self) -> Option<Landed> {
-        let taken = self
+    ///
+    /// **By Job, because the gate is now per Drone.** A gate run for Job A
+    /// popping the queue's head would take Job B's submission and rule Job A's
+    /// step against it, which is exactly the `AnotherJob` guard firing on a
+    /// defect rather than on a race.
+    pub fn take_for(&self, job: &JobId) -> Option<Landed> {
+        let mut waiting = self
             .waiting
             .lock()
-            .expect("the evidence inbox is not held across a panic")
-            .pop_front();
-        // The head has changed, so whatever the gate last said about it is
-        // about a submission that is no longer here.
-        self.forget();
+            .expect("the evidence inbox is not held across a panic");
+        let at = waiting.iter().position(|landed| &landed.job == job)?;
+        let taken = waiting.remove(at);
+        drop(waiting);
+        // This Job's head has changed, so whatever the gate last said about it
+        // is about a submission that is no longer here.
+        self.forget(job);
         taken
     }
 
-    /// How many submissions are waiting. For a test, and for a Doctor probe
-    /// that wants to see a gate that has stopped draining.
+    /// How many submissions are waiting, for every Job. For a test, and for a
+    /// Doctor probe that wants to see a gate that has stopped draining.
     pub fn waiting(&self) -> usize {
         self.waiting
             .lock()
@@ -228,29 +242,48 @@ impl EvidenceInbox {
             .len()
     }
 
-    /// Which Job the submission at the head is for, without taking it.
-    ///
-    /// **Not the peek [`take`](EvidenceInbox::take) refuses to be.** What that
-    /// doctrine protects is the submission: two gate runs must not rule on one.
-    /// A Job id cannot be ruled on — it is only whose the strand is, and
-    /// without it a submission nothing can settle has nobody to be reported to.
-    pub fn waiting_for(&self) -> Option<JobId> {
+    /// How many of this Job's submissions are waiting.
+    pub fn waiting_for_job(&self, job: &JobId) -> usize {
         self.waiting
             .lock()
             .expect("the evidence inbox is not held across a panic")
-            .front()
-            .map(|landed| landed.job.clone())
+            .iter()
+            .filter(|landed| &landed.job == job)
+            .count()
     }
 
-    /// Record that the gate declined the submission at the head, and answer
+    /// Every Job with a submission waiting, oldest arrival first and each Job
+    /// named once.
+    ///
+    /// **Not the peek [`take_for`](EvidenceInbox::take_for) refuses to be.**
+    /// What that doctrine protects is the submission: two gate runs must not
+    /// rule on one. A Job id cannot be ruled on — it is only whose the strand
+    /// is, and without it a submission nothing can settle has nobody to be
+    /// reported to.
+    pub fn waiting_for(&self) -> Vec<JobId> {
+        let mut named: Vec<JobId> = Vec::new();
+        for landed in self
+            .waiting
+            .lock()
+            .expect("the evidence inbox is not held across a panic")
+            .iter()
+        {
+            if !named.contains(&landed.job) {
+                named.push(landed.job.clone());
+            }
+        }
+        named
+    }
+
+    /// Record that the gate declined this Job's oldest submission, and answer
     /// whether that is news.
-    pub fn declining(&self, why: Decline) -> Standing {
+    pub fn declining(&self, job: &JobId, why: Decline) -> Standing {
         let mut standing = self
             .standing
             .lock()
             .expect("the evidence inbox is not held across a panic");
-        let first = standing.as_ref() != Some(&why);
-        *standing = Some(why);
+        let first = standing.get(job) != Some(&why);
+        standing.insert(job.clone(), why);
         match first {
             true => Standing::First,
             false => Standing::Again,
@@ -262,22 +295,23 @@ impl EvidenceInbox {
             .waiting
             .lock()
             .expect("the evidence inbox is not held across a panic");
-        let was_empty = waiting.is_empty();
+        let job = landed.job.clone();
+        let was_first = !waiting.iter().any(|held| held.job == job);
         waiting.push_back(landed);
         drop(waiting);
-        // Only where this one became the head. A submission that queued behind
-        // another has not changed what the gate is declining, and forgetting on
-        // it would buy the one in front a second log line.
-        if was_empty {
-            self.forget();
+        // Only where this one became this Job's head. A submission that queued
+        // behind another has not changed what the gate is declining, and
+        // forgetting on it would buy the one in front a second log line.
+        if was_first {
+            self.forget(&job);
         }
     }
 
-    fn forget(&self) {
-        *self
-            .standing
+    fn forget(&self, job: &JobId) {
+        self.standing
             .lock()
-            .expect("the evidence inbox is not held across a panic") = None;
+            .expect("the evidence inbox is not held across a panic")
+            .remove(job);
     }
 }
 
@@ -342,9 +376,16 @@ where
     /// ran would time out, so this returns the receipt and the gate runs on the
     /// next turn — which is also what makes "nothing has been decided yet"
     /// assertable.
-    pub async fn submit_evidence(&self, call: Call<'_>) -> Result<Recorded, NotSubmitted> {
+    pub async fn submit_evidence(
+        &self,
+        job: &JobId,
+        call: Call<'_>,
+    ) -> Result<Recorded, NotSubmitted> {
         let at = self.now();
-        let working = self.slot().lock().await;
+        let Some(slot) = self.slot_of(job).await else {
+            return Err(NotSubmitted::NothingIsWorking);
+        };
+        let working = slot.lock().await;
         let Some(at_work) = working.as_ref() else {
             return Err(NotSubmitted::NothingIsWorking);
         };
@@ -365,10 +406,14 @@ where
     /// who is calling.
     pub async fn record_evidence(
         &self,
+        caller: &JobId,
         submission: &SubmitEvidence,
     ) -> Result<Recorded, NotSubmitted> {
         let at = self.now();
-        let working = self.slot().lock().await;
+        let Some(slot) = self.slot_of(caller).await else {
+            return Err(NotSubmitted::NothingIsWorking);
+        };
+        let working = slot.lock().await;
         let Some(at_work) = working.as_ref() else {
             return Err(NotSubmitted::NothingIsWorking);
         };
@@ -388,7 +433,9 @@ where
         };
         // Before anything is recorded. A second submission would sit behind the
         // first and be ruled on against the step the first one advanced to.
-        if self.inbox().waiting() > 0 {
+        // **This Job's own queue**, because another Job's Drone having
+        // submitted says nothing about this step.
+        if self.inbox().waiting_for_job(&job) > 0 {
             return Err(NotSubmitted::AlreadyWaiting { step });
         }
         EvidenceTool::for_job(job, self.inbox())
@@ -404,28 +451,52 @@ where
             .map_err(NotSubmitted::Malformed)
     }
 
-    /// How many submissions are waiting for the gate.
+    /// Submit as the Drone of the one Job being worked.
+    ///
+    /// **A fixture's shorthand, and `cfg(test)` for exactly that reason.** The
+    /// shipped path takes the Job from `crate::peer`, which reads the socket a
+    /// call arrived on; a fake harness holds no socket, so a test says which
+    /// Drone is speaking by there being one of them.
+    #[cfg(test)]
+    pub(crate) async fn submitted_by_the_one(
+        &self,
+        call: Call<'_>,
+    ) -> Result<Recorded, NotSubmitted> {
+        let Some(job) = self.working_on().await.first().cloned() else {
+            return Err(NotSubmitted::NothingIsWorking);
+        };
+        self.submit_evidence(&job, call).await
+    }
+
+    /// How many submissions are waiting for the gate, over every Job.
     pub fn evidence_waiting(&self) -> usize {
         self.inbox().waiting()
     }
 
-    pub(crate) fn take_evidence(&self) -> Option<Landed> {
-        self.inbox().take()
+    /// How many of one Job's submissions are waiting for the gate.
+    pub fn evidence_waiting_for(&self, job: &JobId) -> usize {
+        self.inbox().waiting_for_job(job)
+    }
+
+    pub(crate) fn take_evidence(&self, job: &JobId) -> Option<Landed> {
+        self.inbox().take_for(job)
     }
 
     /// Drop every submission still waiting, and say how many went.
     ///
     /// Called when a Job ends: evidence for a Job that is over has no step to
-    /// be against, and leaving it would let the next Job's gate rule on the
-    /// last one's work.
+    /// be against, and leaving it would let a later run of the same Job rule on
+    /// this one's work. **This Job's own submissions and no others** — the
+    /// drain used to empty the queue, which under one slot could only have been
+    /// this Job's and under several would take somebody else's.
     ///
     /// **The count is answered rather than swallowed.** Ordinarily it is zero,
     /// because the gate drains the inbox before anything reaps — so a
     /// submission still in here when a Job ends is one no gate ever saw, and
     /// that is the fact a person needs and the one that was missing.
-    pub(crate) fn empty_the_inbox(&self) -> usize {
+    pub(crate) fn empty_the_inbox(&self, job: &JobId) -> usize {
         let mut dropped = 0;
-        while self.inbox().take().is_some() {
+        while self.inbox().take_for(job).is_some() {
             dropped += 1;
         }
         dropped

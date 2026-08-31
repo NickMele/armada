@@ -19,8 +19,10 @@
 //! without either answers — and it means **this endpoint adds nothing to the
 //! unbounded-sink risk on the event socket**: every message is a reply to a
 //! request, on the Drone's own connection, with no queue behind it.
+use std::net::SocketAddr;
+
 use axum::body::Bytes;
-use axum::extract::State;
+use axum::extract::{ConnectInfo, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
@@ -40,8 +42,56 @@ use crate::routes::Served;
 /// value.
 pub const MCP_PATH: &str = "/mcp";
 
+/// Where a Drone's call came from: the address the listener saw on the other
+/// end of the connection it arrived on.
+///
+/// **Minted by the transport and by nothing else.** There is no constructor
+/// taking a Job id and no field a caller could put one in, which is what makes
+/// "a Drone cannot choose which Job its evidence lands against" a property of
+/// the type rather than of a check somebody remembered to write. What the
+/// daemon does with it — matching the port pair against the processes it
+/// spawned — is `fleet::peer`'s, and this crate holds none of that.
+///
+/// `None` for the port is a request that arrived with no connection information
+/// on it, which is a test's router rather than a served one. It attributes to
+/// nothing, and a Drone tool call is refused rather than guessed at.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Caller(Option<SocketAddr>);
+
+impl Caller {
+    /// The peer of an accepted connection.
+    pub fn at(peer: SocketAddr) -> Caller {
+        Caller(Some(peer))
+    }
+
+    /// A call that arrived with no peer address. See the type.
+    pub fn unplaceable() -> Caller {
+        Caller(None)
+    }
+
+    /// The port the peer opened the connection from. **Half of the pair** —
+    /// the other half is the port Fleet is listening on, and the daemon knows
+    /// that for itself.
+    pub fn port(&self) -> Option<u16> {
+        self.0.map(|peer| peer.port())
+    }
+}
+
 pub fn mounted<D: Daemon>() -> Router<Served<D>> {
     Router::new().route(MCP_PATH, post(called::<D>).get(no_stream).delete(no_stream))
+}
+
+/// The peer of the connection this request arrived on.
+///
+/// **Read out of the extensions rather than extracted**, so a router served
+/// without `into_make_service_with_connect_info` answers
+/// [`Caller::unplaceable`] instead of rejecting the request. A rejection would
+/// be a 500 where the honest answer is that nothing said who called.
+fn who_called(parts: &axum::http::request::Parts) -> Caller {
+    match parts.extensions.get::<ConnectInfo<SocketAddr>>() {
+        Some(ConnectInfo(peer)) => Caller::at(*peer),
+        None => Caller::unplaceable(),
+    }
 }
 
 /// One JSON-RPC message in, at most one out.
@@ -49,7 +99,19 @@ pub fn mounted<D: Daemon>() -> Router<Served<D>> {
 /// A notification is acknowledged with 202 and no body, because JSON-RPC
 /// forbids answering one and an empty 200 would be a response with no id that
 /// a client has to guess about.
-async fn called<D: Daemon>(State(served): State<Served<D>>, body: Bytes) -> Response {
+async fn called<D: Daemon>(
+    State(served): State<Served<D>>,
+    request: axum::extract::Request,
+) -> Response {
+    let (parts, body) = request.into_parts();
+    let caller = who_called(&parts);
+    let body = match axum::body::to_bytes(body, MOST_A_CALL_MAY_BE).await {
+        Ok(body) => body,
+        // A body larger than any tool call, or one that stopped arriving. The
+        // same shape every other unreadable call gets: a tool error the Drone
+        // reads, never a status code it can only retry.
+        Err(_) => Bytes::new(),
+    };
     let answered = match mcp::read(&body) {
         Incoming::Nothing => return StatusCode::ACCEPTED.into_response(),
         Incoming::Handshake { id, revision } => Answered::Handshake { id, revision },
@@ -67,13 +129,13 @@ async fn called<D: Daemon>(State(served): State<Served<D>>, body: Bytes) -> Resp
             },
         },
         Incoming::Submit { id, submission } => {
-            match served.daemon().submit_evidence(submission).await {
+            match served.daemon().submit_evidence(caller, submission).await {
                 Ok(receipt) => Answered::Recorded { id, receipt },
                 Err(why) => Answered::Refused { id, why },
             }
         }
         Incoming::Declare { id, declaration } => {
-            match served.daemon().declare_scope(declaration).await {
+            match served.daemon().declare_scope(caller, declaration).await {
                 Ok(receipt) => Answered::Recorded { id, receipt },
                 Err(why) => Answered::Refused { id, why },
             }
@@ -85,7 +147,7 @@ async fn called<D: Daemon>(State(served): State<Served<D>>, body: Bytes) -> Resp
         // unbounded-sink risk this module's comment names — it is still one
         // reply on the Drone's own connection — and what bounds the cost is
         // `Daemon::run_checks`'s, not the transport's.
-        Incoming::RunChecks { id } => match served.daemon().run_checks().await {
+        Incoming::RunChecks { id } => match served.daemon().run_checks(caller).await {
             Ok(report) => Answered::Checked { id, report },
             Err(why) => Answered::Refused { id, why },
         },
@@ -102,6 +164,14 @@ async fn called<D: Daemon>(State(served): State<Served<D>>, body: Bytes) -> Resp
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
+
+/// The most a tool call may weigh.
+///
+/// Three prose fields and a path list; a megabyte is far more than any of them
+/// and far less than a stream. It exists because reading the body by hand —
+/// which is what taking the connection's peer costs — means saying what the
+/// extractor said for itself.
+const MOST_A_CALL_MAY_BE: usize = 1024 * 1024;
 
 /// There is no server-initiated stream and no session to end.
 async fn no_stream() -> Response {
