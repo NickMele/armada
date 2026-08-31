@@ -204,6 +204,17 @@ So the question a surface asks is where the Job stands:
 | Mid-step, the step stopped | Yes — a turn into the session | Yes |
 | At a boundary, between steps | Yes — it waits, and opens the next Drone's brief | No. There is no stopped step to restart |
 
+**The boundary a person actually stands at is a human advance gate, and the act
+there is spelled `request_changes`.** It is the same act by the row above — a
+person's words, waiting for the next Drone — and it is a second operation
+because a gate takes three answers and this is one of them. The note goes onto
+the Job's record, the Job re-queues, and the fresh Drone put on the same step
+opens with it. It is cleared on delivery: a note that outlived one boundary
+would reach a Drone working a part it was never about, which is worse than
+losing it. `redirect_drone` itself still asks for a live session, because every
+Job it is offered on has one — a step that stopped with its Drone gone is
+Restart Step's, which is the row above.
+
 The override is the exception and says so: the person is disagreeing with a
 verdict, which is the same act wherever the Job stands.
 
