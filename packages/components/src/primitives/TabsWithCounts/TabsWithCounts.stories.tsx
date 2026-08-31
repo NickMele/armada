@@ -65,3 +65,28 @@ export const TheBoard: Story = {
     ],
   },
 };
+
+/**
+ * Suspended: on screen, still selected, and narrowing nothing — because
+ * something else on the surface is. The Job Board sets this while its search
+ * field holds text.
+ *
+ * **Set back, never disabled.** `Running` is still the tab a person chose and
+ * still says so; it has only given up the accent underline, which would
+ * otherwise claim to be what is on screen. Pressing a tab is how the state is
+ * left, so every tab stays pressable — a disabled strip would make the way out
+ * the thing that does not work.
+ */
+export const Suspended: Story = {
+  args: {
+    defaultValue: "running",
+    suspended: true,
+    items: [
+      { id: "all", label: "All", count: 3, shortcut: "1" },
+      { id: "needs-you", label: "Needs you", count: 1, shortcut: "2" },
+      { id: "running", label: "Running", count: 2, shortcut: "3" },
+      { id: "queued", label: "Queued", shortcut: "4" },
+      { id: "finished", label: "Finished", shortcut: "5" },
+    ],
+  },
+};

@@ -33,21 +33,25 @@
 // would let `piloted` be told apart from `running` by the registry instead of by
 // this comment. Reported, not done here.
 //
-// # Search reads every job whatever tab is set
+// # Search reads every job whatever tab is set, and the tab is suspended
 //
-// A text match is not a state, so it does not narrow by one — and the way that
-// is honoured is that **starting a search puts the tab back to `All`**. Typing
-// is asking a question across every state, so the state control returns to the
-// state that means "every", and the sentence holds literally: whatever tab was
-// set, the search reads every job.
+// **The sentence is about what search reaches, not an instruction to move the
+// tab.** While the field holds text the state tab is bypassed — the list is
+// every match — and the tab itself does not change: it stays where the person
+// put it, drawn set back, and clearing the search restores it.
 //
-// It happens on the transition into a search and never again, which is the
-// difference between a control that gets out of the way and one that fights
-// you: refining a query does not snap the tab back, so searching, pressing `3`
-// and typing another letter narrows the way a person meant it to.
+// Resetting it to `All` was built first and was wrong for one reason: it spends
+// a filter the person chose in order to make a sentence true, and then cannot
+// give it back. Suspending makes the same sentence true and costs nothing.
 //
-// Every tab's count is a count of what the search matched, so the strip says
-// where the matches are as well as how many there are — and a tab that empties
+// **Choosing a tab clears the search**, whether by `1`–`5` or by clicking one.
+// A suspended tab that did nothing when pressed would be a dead control, and
+// pressing one is asking for a state rather than for a match — so the search is
+// what gives way, in the direction that has an undo. Retyping a query is a
+// keystroke; recovering a tab you did not know you had lost is not.
+//
+// Every tab's count stays a count of what the search matched, so a suspended
+// strip is still a breakdown of what is on screen — and a tab that empties
 // under a search renders no count rather than a `0`.
 
 import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
@@ -119,6 +123,17 @@ export function needsYou(job: JobSummary): boolean {
 /** Whether a tab admits a job. `all` admits every one, including the unplaceable. */
 export function inTab(job: JobSummary, tab: BoardTab): boolean {
   return tab === "all" || tabOf(job) === tab;
+}
+
+/**
+ * Whether the state tab is suspended — bypassed, and not changed.
+ *
+ * A text match is not a state, so while one is running the tab does not narrow.
+ * It is not reset either: the person's choice is still there and comes back the
+ * moment the field is empty.
+ */
+export function tabSuspended(query: string): boolean {
+  return query.trim() !== "";
 }
 
 /**
@@ -206,16 +221,17 @@ function oldest(a: JobSummary, b: JobSummary): number {
  * it is a fraction of, and a board reading `4 jobs` gives no sense of whether
  * that is the whole of it or a corner.
  *
- * Under a search the sentence changes shape rather than the numbers changing
- * meaning: the match count leads, because that is the number the person just
- * created, and how many of them need a person follows.
+ * Under a search the first number changes and the second does not:
+ * `3 jobs match “auth”. 15 on the Board.` The needs-you count is dropped rather
+ * than recomputed over the matches — the tab is suspended, so the only two
+ * numbers a control on screen produced are what matched and what exists.
  */
 export function countSentence(args: {
   /** Every job Bridge holds, before any filter. */
   total: number;
   /** How many the text match left, where there is one. */
   matched: number;
-  /** How many of those need a person. */
+  /** How many need a person. Read only when there is no search. */
   needsYou: number;
   /** The text match, as typed. Empty is no match. */
   query: string;
@@ -224,12 +240,18 @@ export function countSentence(args: {
   if (args.query.trim() === "") {
     return `${needsYouClause(args.needsYou)} ${board}`;
   }
-  // The query itself is not echoed. It is in the field the person is looking
-  // at, and a sentence carrying somebody's typing back at them breaks the
-  // moment they type a quotation mark.
-  if (args.matched === 0) return `No jobs match. ${board}`;
-  const of = `${args.matched} of ${plural(args.total)} match.`;
-  return args.needsYou === 0 ? of : `${of} ${args.needsYou} needs you.`;
+  // **Against the Board, not against the tab**, because the tab is suspended
+  // while a search runs and a fraction of a filter that is not applying would
+  // be a number nothing on screen produced.
+  //
+  // The query is quoted back so the sentence says what was matched rather than
+  // leaving "3 jobs match" to be read against a field the eye has already left.
+  // Curly, because these are quotation marks in a sentence and not code — the
+  // first pair in any product string here, so this is where the convention
+  // starts rather than where it breaks.
+  const quoted = `“${args.query.trim()}”`;
+  if (args.matched === 0) return `No jobs match ${quoted}. ${board}`;
+  return `${plural(args.matched)} match ${quoted}. ${board}`;
 }
 
 /** "Nothing needs you", or how many do. */
@@ -251,8 +273,9 @@ export function plural(total: number): string {
  * next press is obvious rather than guessed at.
  */
 export function emptiedBy(tab: BoardTab, query: string): string | null {
-  const named = BOARD_TABS.find((row) => row.id === tab);
-  if (query.trim() === "") return tab === "all" ? null : (named?.empty ?? null);
-  if (tab === "all") return "No jobs match your search.";
-  return `No jobs match your search under ${named?.label ?? tab}.`;
+  // The tab is suspended while a search runs, so it did not do this and naming
+  // it would send a person to clear the wrong control.
+  if (tabSuspended(query)) return "No jobs match your search.";
+  if (tab === "all") return null;
+  return BOARD_TABS.find((row) => row.id === tab)?.empty ?? null;
 }

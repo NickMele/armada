@@ -20,10 +20,16 @@ import {
  * The arrangement is the argument: what narrows by state is on the state line,
  * and what cuts across every state is above it.
  *
- * **Search reads every job whatever tab is set.** The surface owns that — this
- * draws the field and reports what was typed — but it is why the field is
- * placed where it is, and why the tab counts a surface passes in should be
- * counts of what the search already matched rather than of the whole board.
+ * **Search reads every job whatever tab is set, and the tab is suspended while
+ * it does.** The sentence is about what search reaches, not an instruction to
+ * move the tab: the surface bypasses the tab, passes `suspended`, and the strip
+ * steps back without losing the selection — so clearing the field gives the
+ * person their filter back. Resetting the tab to `All` instead would spend a
+ * choice to make a sentence true and then have nothing to restore.
+ *
+ * The tab counts a surface passes in should be counts of what the search
+ * already matched rather than of the whole board, so a suspended strip is still
+ * a breakdown of what is on screen.
  *
  * **Nothing here is bound to a key.** The tabs display their keys and this
  * displays the search's, because the surface is the only thing that knows
@@ -65,7 +71,14 @@ export type BoardControlsProps = {
   /** The state tabs, each carrying its own count and its own key. */
   tabs: readonly TabsWithCountsItem[];
   tab: string;
+  /**
+   * Choosing a tab. **The surface clears the search here**, because a suspended
+   * tab that did nothing when pressed would be a dead control — and pressing
+   * one asks for a state rather than for a match.
+   */
   onTab: (tab: string) => void;
+  /** The tab is bypassed by something else on the surface, and drawn set back. */
+  suspended?: boolean;
   /** The key that focuses the field, drawn beside it. Omitted draws nothing. */
   searchKey?: string;
 };
@@ -85,6 +98,7 @@ export function BoardControls({
   tabs,
   tab,
   onTab,
+  suspended = false,
   searchKey,
 }: BoardControlsProps) {
   // Escape clears the field and gives the cursor back, in that order and always
@@ -129,7 +143,7 @@ export function BoardControls({
           </Select>
         </div>
       </div>
-      <TabsWithCounts items={[...tabs]} value={tab} onChange={onTab} />
+      <TabsWithCounts items={[...tabs]} value={tab} onChange={onTab} suspended={suspended} />
     </div>
   );
 }

@@ -95,11 +95,21 @@ set by subtraction. Carrying it would also let `piloted` be told apart from
 
 ### Search reads every job whatever tab is set
 
-A text match is not a state, so it sits with sort, above the tabs. **Beginning a
-search returns the tab to `All`** — on that transition and not on every
-keystroke, so refining a query does not fight the tab a person then chose. Each
-tab's count is a count of what the search matched, so the strip says where the
-matches are as well as how many there are.
+A text match is not a state, so it sits with sort, above the tabs.
+
+**The state tab is suspended while a search runs, not changed.** The list is
+every match; the tab keeps the value the person chose and is drawn set back,
+without its accent underline; clearing the search restores it. The sentence
+above is a statement about what search reaches, and moving the tab to satisfy it
+would spend a filter the person chose with nothing left to give back.
+
+**Choosing a tab clears the search**, by `1`–`5` or by clicking one. A suspended
+control that did nothing when pressed would be a dead one, and pressing a tab
+asks for a state rather than a match — so the match gives way, in the direction
+that has an undo.
+
+Each tab's count is a count of what the search matched, so a suspended strip is
+still a breakdown of what is on screen.
 
 ### The count states both numbers
 
@@ -107,6 +117,11 @@ matches are as well as how many there are.
 first is what a person is deciding whether to act on, and the second is what it
 is a fraction of. Both move with the filter, so the sentence sits beside the
 controls rather than in the surface's own head.
+
+Under a search the first number changes and the second does not —
+`3 jobs match “auth”. 15 on the Board.` It reads against the Board rather than
+against the tab, because the tab is suspended and a fraction of a filter that is
+not applying would be a number no control on screen produced.
 
 ### The default sort is Critical first
 

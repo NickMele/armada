@@ -45,9 +45,30 @@ export type TabsWithCountsProps = {
   value?: string;
   defaultValue?: string;
   onChange?: (id: string) => void;
+  /**
+   * The strip is not narrowing anything right now — something else on the
+   * surface is. Every tab steps back to `--fg-subtle` and the selected one
+   * gives up its accent underline, because an underline that reads as "this is
+   * what you are looking at" would be saying something untrue.
+   *
+   * **Set back, never disabled.** The selection is still there and still says
+   * which tab a person chose; pressing one is how they get it back, so the
+   * tabs stay pressable and keep their counts. A disabled strip would make the
+   * way out of the state the way that does not work.
+   *
+   * The Job Board sets it while its search field holds text: a text match is
+   * not a state, so it bypasses the state tab rather than changing it.
+   */
+  suspended?: boolean;
 };
 
-export function TabsWithCounts({ items, value, defaultValue, onChange }: TabsWithCountsProps) {
+export function TabsWithCounts({
+  items,
+  value,
+  defaultValue,
+  onChange,
+  suspended = false,
+}: TabsWithCountsProps) {
   const [internal, setInternal] = useState(defaultValue ?? items[0]?.id);
   const active = value ?? internal;
 
@@ -74,7 +95,12 @@ export function TabsWithCounts({ items, value, defaultValue, onChange }: TabsWit
   }
 
   return (
-    <div className="armada-tabs-counts" role="tablist" onKeyDown={onKey}>
+    <div
+      className="armada-tabs-counts"
+      role="tablist"
+      data-suspended={suspended || undefined}
+      onKeyDown={onKey}
+    >
       {items.map((item) => (
         <button
           key={item.id}

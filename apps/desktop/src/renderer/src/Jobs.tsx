@@ -88,6 +88,7 @@ import {
   needsYou,
   sorted,
   tabOf,
+  tabSuspended,
   type BoardSort,
   type BoardTab,
 } from "./board";
@@ -177,11 +178,15 @@ export function Jobs({
   const search = useRef<HTMLInputElement>(null);
 
   const showing = unfolded ? [...board.shown, ...board.folded] : board.shown;
-  // The search first and the tab second, which is the order they are drawn in
-  // and the order they narrow in. The tab counts below are counts of `matched`,
-  // so the strip says where the matches are rather than what the board holds.
+  // The search first, and the tab second only where the search is not running.
+  // **A text match suspends the state tab rather than changing it**: while the
+  // field holds text every match is drawn, the tab keeps the value the person
+  // chose, and clearing the field gives it straight back. The tab counts below
+  // stay counts of `matched`, so a suspended strip is still a breakdown of what
+  // is on screen.
+  const suspended = tabSuspended(query);
   const matched = showing.filter((job) => matches(job, query, workflows));
-  const narrowed = matched.filter((job) => inTab(job, tab));
+  const narrowed = suspended ? matched : matched.filter((job) => inTab(job, tab));
   const bounded = sorted(narrowed, sort).slice(0, DRAWN);
   const drawn = bounded.filter((job) => readingOf(job).as === "badge");
   const undrawable = bounded.filter((job) => readingOf(job).as !== "badge");
@@ -203,18 +208,20 @@ export function Jobs({
   }));
 
   /**
-   * Start a search and the tab goes back to `All`.
+   * Choose a state tab, and the search is cleared.
    *
-   * **On the transition into a search and never again.** A text match is not a
-   * state, so beginning one asks a question across every state and the state
-   * control returns to the state that means "every" — which is what makes
-   * "search reads every job whatever tab is set" true rather than a claim. It
-   * does not fire on every keystroke, because a control that snapped back while
-   * you refined a query would be fighting you.
+   * **The tab is suspended while a search runs, so pressing one has to end the
+   * search or do nothing at all** — and a control that does nothing when pressed
+   * is the worse of the two. Pressing a tab is asking for a state rather than
+   * for a match, so the match is what gives way, and it gives way in the
+   * direction that has an undo: retyping a query is a keystroke, while
+   * recovering a tab you did not know you had lost is not.
+   *
+   * The same function serves `1`–`5` and a click, because they are one act.
    */
-  function typed(next: string): void {
-    if (query.trim() === "" && next.trim() !== "") setTab("all");
-    setQuery(next);
+  function chooseTab(next: BoardTab): void {
+    setTab(next);
+    setQuery("");
   }
 
   /** The rows, as the DOM has them — the only place their drawn order is. */
@@ -305,7 +312,7 @@ export function Jobs({
         // swallowed.
         return;
       case "tab":
-        setTab(read.tab);
+        chooseTab(read.tab);
         break;
       case "compose":
         onCompose();
@@ -369,7 +376,7 @@ export function Jobs({
         controls={
           <BoardControls
             query={query}
-            onQuery={typed}
+            onQuery={setQuery}
             searchRef={search}
             searchKey={SEARCH_KEY}
             onLeaveSearch={restoreCursor}
@@ -378,7 +385,8 @@ export function Jobs({
             onSort={(next) => setSort(next as BoardSort)}
             tabs={tabs}
             tab={tab}
-            onTab={(next) => setTab(next as BoardTab)}
+            onTab={(next) => chooseTab(next as BoardTab)}
+            suspended={suspended}
           />
         }
         empty={
@@ -391,18 +399,21 @@ export function Jobs({
               Fleet is not connected, so there is nothing to show.
             </BoardEmptyState>
           ) : why !== null ? (
+            // **The control offered is the one that emptied the list.** Only
+            // one of the two can have, because a search suspends the tab — so
+            // clearing the search restores whatever tab was set rather than
+            // discarding it, which is the whole reason suspending won over
+            // resetting. A single "Show every job" here would have spent the
+            // filter at the last moment it could have been kept.
             <BoardEmptyState
               quiet
               action={
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    setQuery("");
-                    setTab("all");
-                  }}
+                  onClick={() => (suspended ? setQuery("") : setTab("all"))}
                 >
-                  Show every job
+                  {suspended ? "Clear the search" : "Show every job"}
                 </Button>
               }
             >
@@ -441,7 +452,7 @@ export function Jobs({
         </p>
       )}
 
-      {/* Counted against what the filter left, not against the board: the
+      {/* Counted against what the filters left, not against the board: the
           window bounds what is drawn, and what is drawn is what the controls
           admitted. Saying "200 of 900" under a filter holding 210 would name a
           number no control on screen produced. */}

@@ -1,6 +1,6 @@
 import { jsx, jsxs, Fragment } from "react/jsx-runtime";
 import { useState, createContext, useCallback, useContext, useRef, useEffect, Children, cloneElement, useId, Fragment as Fragment$1, useMemo, createElement } from "react";
-import { ChevronDown, UserCheck, Cpu, GitBranch, CircleDot, X, Check, Power, Flag, RotateCw, Eye, CircleX, CircleCheck, ShieldCheck, ChevronRight, ExternalLink, File, TriangleAlert, OctagonAlert, Folder, GitCommitHorizontal, GitPullRequest, FileCheck, Clock, MessageSquare, ClipboardList, Activity, Bell, ScrollText, Stethoscope, FileCog, ShieldMinus as ShieldMinus$1, ShieldOff, ShieldX, Lock, Stamp, Terminal, Link, Ban, Archive, RefreshCw, FileQuestionMark, Split, Unplug, ArrowUpToLine, Send, CornerUpRight, Settings } from "lucide-react";
+import { ChevronDown, UserCheck, Cpu, GitBranch, CircleDot, X, Check, Power, Flag, RotateCw, Eye, CircleX, CircleCheck, ShieldCheck, ChevronRight, ExternalLink, File, TriangleAlert, OctagonAlert, Folder, GitCommitHorizontal, GitPullRequest, FileCheck, Clock, MessageSquare, ClipboardList, Activity, Bell, ScrollText, Stethoscope, FileCog, ShieldMinus, ShieldOff, ShieldX, Lock, Stamp, Terminal, Link, Ban, Archive, RefreshCw, FileQuestionMark, Split, Unplug, ArrowUpToLine, Send, CornerUpRight, Settings } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 function Button({
   variant = "secondary",
@@ -692,7 +692,13 @@ function Select({ label: label2, invalid = false, message, id, children, ...rest
     showMessage && /* @__PURE__ */ jsx("span", { className: "armada-select-field__message", id: messageId, children: message })
   ] });
 }
-function TabsWithCounts({ items, value, defaultValue, onChange }) {
+function TabsWithCounts({
+  items,
+  value,
+  defaultValue,
+  onChange,
+  suspended = false
+}) {
   const [internal, setInternal] = useState(defaultValue ?? items[0]?.id);
   const active = value ?? internal;
   function select(id) {
@@ -713,24 +719,33 @@ function TabsWithCounts({ items, value, defaultValue, onChange }) {
       select(items[(at - 1 + items.length) % items.length].id);
     }
   }
-  return /* @__PURE__ */ jsx("div", { className: "armada-tabs-counts", role: "tablist", onKeyDown: onKey, children: items.map((item) => /* @__PURE__ */ jsxs(
-    "button",
+  return /* @__PURE__ */ jsx(
+    "div",
     {
-      type: "button",
-      role: "tab",
-      "aria-selected": item.id === active,
-      tabIndex: item.id === active ? 0 : -1,
-      className: item.id === active ? "armada-tabs-counts__tab armada-tabs-counts__tab--active" : "armada-tabs-counts__tab",
-      onClick: () => select(item.id),
-      "aria-keyshortcuts": item.shortcut,
-      children: [
-        item.shortcut ? /* @__PURE__ */ jsx(Kbd, { "aria-hidden": true, children: item.shortcut }) : null,
-        item.label,
-        item.count ? /* @__PURE__ */ jsx("span", { className: "armada-tabs-counts__count", children: item.count }) : null
-      ]
-    },
-    item.id
-  )) });
+      className: "armada-tabs-counts",
+      role: "tablist",
+      "data-suspended": suspended || void 0,
+      onKeyDown: onKey,
+      children: items.map((item) => /* @__PURE__ */ jsxs(
+        "button",
+        {
+          type: "button",
+          role: "tab",
+          "aria-selected": item.id === active,
+          tabIndex: item.id === active ? 0 : -1,
+          className: item.id === active ? "armada-tabs-counts__tab armada-tabs-counts__tab--active" : "armada-tabs-counts__tab",
+          onClick: () => select(item.id),
+          "aria-keyshortcuts": item.shortcut,
+          children: [
+            item.shortcut ? /* @__PURE__ */ jsx(Kbd, { "aria-hidden": true, children: item.shortcut }) : null,
+            item.label,
+            item.count ? /* @__PURE__ */ jsx("span", { className: "armada-tabs-counts__count", children: item.count }) : null
+          ]
+        },
+        item.id
+      ))
+    }
+  );
 }
 const SEARCHES_EVERYTHING = "Search every job";
 function BoardControls({
@@ -745,6 +760,7 @@ function BoardControls({
   tabs,
   tab,
   onTab,
+  suspended = false,
   searchKey
 }) {
   function onSearchKey(event) {
@@ -771,7 +787,7 @@ function BoardControls({
       searchKey === void 0 ? null : /* @__PURE__ */ jsx(Kbd, { className: "armada-board-controls__hint", "aria-hidden": true, children: searchKey }),
       /* @__PURE__ */ jsx("div", { className: "armada-board-controls__sort", children: /* @__PURE__ */ jsx(Select, { "aria-label": "Sort", value: sort, onChange: (event) => onSort(event.target.value), children: sorts.map((option) => /* @__PURE__ */ jsx("option", { value: option.id, children: option.label }, option.id)) }) })
     ] }),
-    /* @__PURE__ */ jsx(TabsWithCounts, { items: [...tabs], value: tab, onChange: onTab })
+    /* @__PURE__ */ jsx(TabsWithCounts, { items: [...tabs], value: tab, onChange: onTab, suspended })
   ] });
 }
 const meta$Z = {
@@ -805,7 +821,11 @@ function Live(props) {
       sort,
       onSort: setSort,
       tab,
-      onTab: setTab
+      onTab: (next) => {
+        setTab(next);
+        setQuery("");
+      },
+      suspended: query.trim() !== ""
     }
   ) });
 }
@@ -815,6 +835,7 @@ const Searching = {
     Live,
     {
       query: "poke",
+      tab: "running",
       tabs: [
         { id: "all", label: "All", count: 3, shortcut: "1" },
         { id: "needs-you", label: "Needs you", count: 1, shortcut: "2" },
@@ -3083,7 +3104,7 @@ const meta$M = {
   title: "Compositions/Job outcome",
   component: JobOutcome
 };
-const NOTE$2 = "Armada does not push and does not merge. The branch is yours to take.";
+const NOTE$2 = "Armada does not merge. The branch is pushed and the review is yours to take.";
 const WhatIsServedToday = {
   args: {
     note: NOTE$2,
@@ -3098,13 +3119,14 @@ const WhatIsServedToday = {
         name: "Commit",
         icon: GitCommitHorizontal,
         iconLabel: "Commit",
-        absent: "Fleet does not commit at the last step yet, so there is nothing to name."
+        value: "5375d705cb7713a21a91681c1028166b98a0d6de",
+        meta: "origin/armada/01M1CNPKTV0018H2M1CXDNBK06"
       },
       {
         name: "Pull request",
         icon: GitPullRequest,
         iconLabel: "Pull request",
-        absent: "Fleet does not open one yet, so there is nothing to open."
+        value: "https://example.invalid/armada/pull/229"
       },
       {
         /* No glyph. `file` is reserved to the log row and `file-check` to a
@@ -4316,8 +4338,8 @@ const running$1 = [
     status: "running · 6m 12s",
     current: true,
     gates: [
-      { command: "build · cargo build --workspace", result: "not reached", icon: ShieldMinus$1, iconLabel: "Not reached" },
-      { command: "diff_nonempty", result: "not reached", icon: ShieldMinus$1, iconLabel: "Not reached" }
+      { command: "build · cargo build --workspace", result: "not reached", icon: ShieldMinus, iconLabel: "Not reached" },
+      { command: "diff_nonempty", result: "not reached", icon: ShieldMinus, iconLabel: "Not reached" }
     ],
     declarations: [{ label: "judge · 2 criteria", result: "not reached" }, { label: "advance_gate · auto_if_judge_passes" }]
   },
@@ -4326,7 +4348,7 @@ const running$1 = [
     label: "Run tests",
     activity: "not_started",
     status: "not started",
-    gates: [{ command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus$1, iconLabel: "Not reached" }],
+    gates: [{ command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus, iconLabel: "Not reached" }],
     declarations: [{ label: "judge · 1 criterion · gaming check", result: "not reached" }, { label: "advance_gate · auto_if_judge_passes" }]
   },
   {
@@ -4529,7 +4551,7 @@ const EveryStepState = {
         labelIsAnIdentifier: true,
         activity: "not_started",
         status: "not_started",
-        gates: [{ command: "build", result: "not reached", icon: ShieldMinus$1, iconLabel: "not reached" }]
+        gates: [{ command: "build", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }]
       },
       {
         id: "running",
@@ -4539,7 +4561,7 @@ const EveryStepState = {
         status: "running",
         current: true,
         elapsed: "6m 12s",
-        gates: [{ command: "test", result: "not reached", icon: ShieldMinus$1, iconLabel: "not reached" }]
+        gates: [{ command: "test", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }]
       },
       { id: "awaiting_human", label: "awaiting_human", labelIsAnIdentifier: true, activity: "awaiting_human", status: "awaiting_human", elapsed: "1m 04s" },
       { id: "retrying", label: "retrying", labelIsAnIdentifier: true, activity: "retrying", status: "retrying", elapsed: "3m 41s", verdict: "failed · failed a check", verdictNamed: "failed" },
@@ -4732,7 +4754,7 @@ const AFailedCheckNamesItsOutput = {
         current: true,
         gates: [
           { command: "test · cargo test --workspace", result: "failed · exit 0 → exit 101", icon: ShieldX, iconLabel: "Failed", outputPath: ".armada/jobs/job_2d90bb/checks/test.log" },
-          { command: "diff_nonempty", result: "never started", icon: ShieldMinus$1, iconLabel: "Never started" }
+          { command: "diff_nonempty", result: "never started", icon: ShieldMinus, iconLabel: "Never started" }
         ]
       }
     ]
@@ -4763,7 +4785,7 @@ const FourJobsOverAndOneResumable = {
           status: "killed",
           current: true,
           elapsed: "4m 09s",
-          gates: [{ command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus$1, iconLabel: "not reached" }]
+          gates: [{ command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }]
         }
       ],
       [
@@ -6978,9 +7000,23 @@ const TheBoard$1 = {
     ]
   }
 };
+const Suspended = {
+  args: {
+    defaultValue: "running",
+    suspended: true,
+    items: [
+      { id: "all", label: "All", count: 3, shortcut: "1" },
+      { id: "needs-you", label: "Needs you", count: 1, shortcut: "2" },
+      { id: "running", label: "Running", count: 2, shortcut: "3" },
+      { id: "queued", label: "Queued", shortcut: "4" },
+      { id: "finished", label: "Finished", shortcut: "5" }
+    ]
+  }
+};
 const __vite_glob_0_50 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Queues,
+  Suspended,
   TheBoard: TheBoard$1,
   Zero,
   default: meta$c
@@ -7848,7 +7884,7 @@ const brief$1 = {
     { text: "A ceiling of zero is refused at load rather than at run.", source: "check" }
   ]
 };
-const NOTE = "The branch is unpushed and unmerged. Armada does not push and has no merge action — read the diff in your own tools and land it yourself.";
+const NOTE = "The branch is pushed and a review is open. Armada has no merge action — read the diff in your own tools and land it yourself.";
 const paths = /* @__PURE__ */ jsx(
   JobLogReference,
   {
@@ -7912,13 +7948,14 @@ const AsBridgeDrawsItToday$1 = {
             name: "Commit",
             icon: GitCommitHorizontal,
             iconLabel: "Commit",
-            absent: "Fleet does not commit at the last step yet, so there is nothing to name."
+            value: "5375d705cb7713a21a91681c1028166b98a0d6de",
+            meta: "origin/armada/01M1CNPKTV0018H2M1CXDNBK06"
           },
           {
             name: "Pull request",
             icon: GitPullRequest,
             iconLabel: "Pull request",
-            absent: "Fleet does not open one yet, so there is nothing to open."
+            value: "https://example.invalid/armada/pull/229"
           },
           {
             /* No glyph: `file` is reserved to the log row and `file-check` to
@@ -8281,13 +8318,13 @@ const steps = [
       {
         command: "build · cargo build --workspace",
         result: "not reached",
-        icon: ShieldMinus$1,
+        icon: ShieldMinus,
         iconLabel: "Not reached"
       },
       {
         command: "diff_nonempty",
         result: "not reached",
-        icon: ShieldMinus$1,
+        icon: ShieldMinus,
         iconLabel: "Not reached"
       }
     ],
@@ -8305,7 +8342,7 @@ const steps = [
       {
         command: "test · cargo test --workspace",
         result: "not reached",
-        icon: ShieldMinus$1,
+        icon: ShieldMinus,
         iconLabel: "Not reached"
       }
     ],
