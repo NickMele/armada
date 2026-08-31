@@ -292,19 +292,23 @@ export function JobRowStacked({
 export const JOB_ROW_LIST = "armada-job-row-list";
 
 /**
- * The field run's drawn track list — the M1 field set, in order: the branch or
- * the workflow, the step bar, the step, elapsed, spend.
+ * The field run's drawn track list — the field set, in order: the branch or
+ * the workflow, the step bar, the step, elapsed, spend, origin.
  *
  * **This is the fallback.** Inside a list the tracks come from the list and
- * these five widths are their floor; outside one, and on an engine without
+ * these six widths are their floor; outside one, and on an engine without
  * `subgrid`, this is the whole answer. Fixed widths make the list read down as
  * well as across, so a column of elapsed figures lines up whatever precedes
  * it — but fixed is also why a row truncates on a wide window, which is what
- * the list's own tracks fix. None of the five has a token; each is composed
+ * the list's own tracks fix. None of the six has a token; each is composed
  * from the spacing scale in this component's stylesheet. Reported.
  *
+ * Origin is sixth because the built row ran five — branch, step bar, step,
+ * elapsed, spend — and the Board requires origin on every row besides. See
+ * issue 218.
+ *
  * A field set with a different shape passes its own `tracks`; a longer one
- * gets `auto` past the fifth, which is honest rather than silently wrong.
+ * gets `auto` past the sixth, which is honest rather than silently wrong.
  */
 const DRAWN_TRACKS = [
   "var(--armada-track-origin)",
@@ -312,6 +316,7 @@ const DRAWN_TRACKS = [
   "var(--armada-track-step)",
   "var(--armada-track-time)",
   "var(--armada-track-spend)",
+  "var(--armada-track-provenance)",
 ];
 
 function trackList(count: number): string {
