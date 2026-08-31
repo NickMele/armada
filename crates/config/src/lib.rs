@@ -11,9 +11,9 @@
 //!
 //! # What is built, and what is refused
 //!
-//! M1 reads **six keys** from an `armada.yml` — `version`, `id`,
+//! M1 reads **seven keys** from an `armada.yml` — `version`, `id`,
 //! `checks.<name>.run`, `checks.<name>.when`, `commands.<name>.run`,
-//! `commands.<name>.destructive` —
+//! `commands.<name>.destructive`, `setup.requires` —
 //! and **five fields** of a WorkflowDef. Everything else in either schema is an
 //! unknown key and hard-fails.
 //!
@@ -53,7 +53,7 @@ mod yaml;
 mod tests;
 
 pub use error::{Fault, LoadError, Refusal, ResolveError, UnknownCheck};
-pub use manifest::{Check, Command, Manifest};
+pub use manifest::{Check, Command, Manifest, Preparation};
 pub use resolve::ResolvedWorkflow;
 pub use roster::Roster;
 pub use workflow::{MechanicalCheck, Step, Structure, WorkflowDef};

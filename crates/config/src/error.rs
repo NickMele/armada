@@ -98,6 +98,32 @@ pub enum Fault {
     /// maps sharing no keys, so the same name in both leaves nothing able to
     /// say which registry a reference meant.
     DeclaredInBothRegistries,
+    /// **A `setup.requires` entry naming no declared Command.** The same
+    /// question [`UnknownCheck`] asks of a workflow step, asked one file
+    /// earlier: a name that resolves to nothing is a worktree nothing prepares,
+    /// and what a person then sees is whichever Check needed what was never
+    /// installed.
+    NotADeclaredCommand {
+        value: String,
+        /// **The name is declared, under `checks`.** A different mistake with a
+        /// different fix, and a field rather than a variant for
+        /// [`UnknownCheck::is_a_command`]'s reason: the author wrote a real
+        /// name in the wrong registry.
+        is_a_check: bool,
+        /// What the file does declare under `commands`, in order.
+        declared: Vec<String>,
+    },
+    /// **One `setup.requires` entry written twice.** Preparation runs once per
+    /// worktree because running an install twice costs the second one's wall
+    /// clock and changes nothing — and a parser that silently de-duplicated
+    /// would be deciding on the author's behalf what a list repeating itself
+    /// meant.
+    RequiredTwice { first_at: usize },
+    /// **A `setup.requires` entry whose Command is `destructive`.** The flag
+    /// means a Drone invoking it pauses for a person; preparation runs before
+    /// any Drone exists and before the Job has anything to show, so there is
+    /// nobody the approval could be asked of.
+    PreparedBySomethingDestructive { value: String },
     /// Two steps in one workflow carry one `id`. Reported on the second, and
     /// names where the first was, because the fix is to look at both.
     DuplicateStepId { first_at: usize },
@@ -209,6 +235,37 @@ impl fmt::Display for Fault {
             Fault::DeclaredInBothRegistries => write!(
                 f,
                 "is declared under both `checks` and `commands`, which share no names"
+            ),
+            Fault::NotADeclaredCommand {
+                value,
+                is_a_check: true,
+                ..
+            } => write!(
+                f,
+                "is `{value}`, which is declared as a Check, not a Command. \
+                 Preparation runs a Command"
+            ),
+            Fault::NotADeclaredCommand {
+                value, declared, ..
+            } => {
+                let names: Vec<&str> = declared.iter().map(String::as_str).collect();
+                write!(
+                    f,
+                    "is `{value}`, which this file declares no Command by. It \
+                     declares {}",
+                    Listed(&names, "none")
+                )
+            }
+            Fault::RequiredTwice { first_at } => write!(
+                f,
+                "is already required by setup.requires[{first_at}], and running \
+                 it twice would cost the second run and change nothing"
+            ),
+            Fault::PreparedBySomethingDestructive { value } => write!(
+                f,
+                "is `{value}`, which is declared `destructive: true`. That flag \
+                 means somebody approves before it runs, and preparation runs \
+                 before there is anybody to ask"
             ),
             Fault::DuplicateStepId { first_at } => {
                 write!(f, "repeats the id already used by steps[{first_at}]")

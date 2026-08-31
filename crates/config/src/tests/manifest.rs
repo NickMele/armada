@@ -1,8 +1,8 @@
-//! `armada.yml`: the six keys, and everything that is not one of them.
+//! `armada.yml`: the seven keys, and everything that is not one of them.
 
 use crate::error::Fault;
 use crate::manifest::Manifest;
-use crate::tests::{fault_at, named, refusals};
+use crate::tests::{fault_at, named, refused as refused_at, refusals};
 
 /// The whole of what M1 reads, in one file.
 const WHOLE: &str = r#"
@@ -20,6 +20,9 @@ commands:
   reset:
     run: rm -rf .armada/store.db
     destructive: true
+setup:
+  requires:
+    - fmt
 "#;
 
 fn parse(text: &str) -> Result<Manifest, crate::LoadError> {
@@ -27,8 +30,8 @@ fn parse(text: &str) -> Result<Manifest, crate::LoadError> {
 }
 
 #[test]
-fn the_six_keys_parse_and_nothing_else_is_needed() {
-    let manifest = parse(WHOLE).expect("the six keys");
+fn the_seven_keys_parse_and_nothing_else_is_needed() {
+    let manifest = parse(WHOLE).expect("the seven keys");
     assert_eq!(manifest.version(), 1);
     assert_eq!(manifest.id().as_str(), "armada");
     assert_eq!(manifest.base(), Some("main"));
@@ -38,11 +41,12 @@ fn the_six_keys_parse_and_nothing_else_is_needed() {
         manifest.check("test").map(super::super::Check::run),
         Some("cargo nextest run --workspace")
     );
+    assert_eq!(manifest.prepared_by().len(), 1);
 }
 
 #[test]
 fn destructive_is_read_when_present_and_false_when_absent() {
-    let manifest = parse(WHOLE).expect("the six keys");
+    let manifest = parse(WHOLE).expect("the seven keys");
     assert!(manifest.command("reset").expect("reset").is_destructive());
     assert!(!manifest.command("fmt").expect("fmt").is_destructive());
 }
@@ -92,7 +96,10 @@ fn a_section_m1_does_not_read_hard_fails_and_names_what_it_does_read() {
     let Fault::Unknown { known } = fault_at(&refused, "ports") else {
         panic!("ports should be an unknown key");
     };
-    assert_eq!(*known, ["version", "id", "base", "checks", "commands"]);
+    assert_eq!(
+        *known,
+        ["version", "id", "base", "checks", "commands", "setup"]
+    );
 }
 
 #[test]
@@ -307,4 +314,141 @@ fn when_is_the_only_key_a_check_gained() {
         fault_at(&refused, "checks.build.timeout"),
         Fault::Unknown { known } if known.contains(&"when")
     ));
+}
+
+// ------------------------------------------------------- setup.requires
+
+#[test]
+fn a_required_command_arrives_resolved_to_the_line_that_runs() {
+    // The whole reason it is resolved at load: a caller holds the name **and**
+    // the command line, so a failure can say which entry of the file it was
+    // and what was actually executed.
+    let manifest = parse(WHOLE).expect("the seven keys");
+    let prepared = manifest.prepared_by();
+    assert_eq!(prepared.len(), 1);
+    assert_eq!(prepared[0].name(), "fmt");
+    assert_eq!(prepared[0].run(), "cargo fmt --all");
+}
+
+#[test]
+fn a_repository_that_requires_nothing_says_so_with_an_empty_list_of_its_own() {
+    let manifest = parse("version: 1\nid: a\n").expect("no setup at all");
+    assert!(manifest.prepared_by().is_empty());
+}
+
+#[test]
+fn order_is_the_files_and_is_kept() {
+    // `[install, generate]` is a sequence somebody wrote. Sorting it — which
+    // every other registry in this file is — would run the second before what
+    // it depends on.
+    let manifest = parse(
+        "version: 1\nid: a\ncommands:\n  zeta:\n    run: b\n  alpha:\n    run: a\n\
+         setup:\n  requires: [zeta, alpha]\n",
+    )
+    .expect("two commands in the author's order");
+    let named: Vec<&str> = manifest.prepared_by().iter().map(|p| p.name()).collect();
+    assert_eq!(named, ["zeta", "alpha"]);
+}
+
+#[test]
+fn a_name_no_command_declares_is_refused_at_load() {
+    // The guard `tests/shipped.rs` already puts on a step naming an undeclared
+    // Check, one file earlier. Without it the worktree is never prepared and
+    // what a person sees is whichever Check needed what was not installed.
+    let refused = refusals(parse(
+        "version: 1\nid: a\ncommands:\n  fmt:\n    run: x\nsetup:\n  requires: [bootstrap]\n",
+    ));
+    let Fault::NotADeclaredCommand {
+        value,
+        is_a_check,
+        declared,
+    } = fault_at(&refused, "setup.requires[0]")
+    else {
+        panic!("expected an undeclared command, got {refused:?}");
+    };
+    assert_eq!(value, "bootstrap");
+    assert!(!is_a_check);
+    assert_eq!(declared, &["fmt".to_string()]);
+}
+
+#[test]
+fn a_name_declared_as_a_check_is_a_different_refusal_from_a_name_declared_nowhere() {
+    // The mirror of `UnknownCheck::is_a_command`: a real name in the wrong
+    // registry has a different fix from a typo, and one message covering both
+    // sends the author looking in the wrong place.
+    let refused = refusals(parse(
+        "version: 1\nid: a\nchecks:\n  build:\n    run: x\nsetup:\n  requires: [build]\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "setup.requires[0]"),
+        Fault::NotADeclaredCommand { is_a_check: true, .. }
+    ));
+}
+
+#[test]
+fn one_name_required_twice_is_refused_rather_than_run_twice() {
+    let refused = refusals(parse(
+        "version: 1\nid: a\ncommands:\n  fmt:\n    run: x\nsetup:\n  requires: [fmt, fmt]\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "setup.requires[1]"),
+        Fault::RequiredTwice { first_at: 0 }
+    ));
+}
+
+#[test]
+fn a_destructive_command_cannot_be_required() {
+    // `fleet::spawning` withholds a destructive Command from a Drone for the
+    // reason this refuses one here: the flag asks for an approval, and there is
+    // nobody to ask before the first Drone exists.
+    let refused = refusals(parse(
+        "version: 1\nid: a\ncommands:\n  reset:\n    run: x\n    destructive: true\n\
+         setup:\n  requires: [reset]\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "setup.requires[0]"),
+        Fault::PreparedBySomethingDestructive { value } if value == "reset"
+    ));
+}
+
+#[test]
+fn an_empty_requires_is_refused_rather_than_read_as_none() {
+    // `when`'s answer, for `when`'s reason: a list with nothing in it is a key
+    // to delete, and reading it as "requires nothing" would make two different
+    // files mean one thing.
+    let refused = refusals(parse(
+        "version: 1\nid: a\ncommands:\n  fmt:\n    run: x\nsetup:\n  requires: []\n",
+    ));
+    assert!(matches!(fault_at(&refused, "setup.requires"), Fault::Empty));
+}
+
+#[test]
+fn a_setup_with_no_requires_is_refused() {
+    let refused = refusals(parse("version: 1\nid: a\nsetup: {}\n"));
+    assert!(matches!(
+        fault_at(&refused, "setup.requires"),
+        Fault::Missing
+    ));
+}
+
+#[test]
+fn requires_is_the_only_key_setup_has() {
+    let refused = refusals(parse(
+        "version: 1\nid: a\ncommands:\n  fmt:\n    run: x\n\
+         setup:\n  requires: [fmt]\n  timeout: 60\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "setup.timeout"),
+        Fault::Unknown { known } if *known == ["requires"]
+    ));
+}
+
+#[test]
+fn every_bad_requirement_in_one_file_is_reported_in_one_pass() {
+    let refused = refusals(parse(
+        "version: 1\nid: a\ncommands:\n  fmt:\n    run: x\n\
+         setup:\n  requires: [nope, also_nope]\n",
+    ));
+    assert!(refused_at(&refused, "setup.requires[0]"));
+    assert!(refused_at(&refused, "setup.requires[1]"));
 }
