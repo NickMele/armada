@@ -31,8 +31,8 @@ use core_model::{
 use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
     ChangesRequested, JobDelivery, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory,
-    JobId, JobList, JobSummary, ManifestId, ManifestSummary, ModelChoices, Overruled, ProposeJob,
-    Redirection, Redispatched, Work, WorkflowId, WorkflowSummary,
+    JobId, JobList, JobSpend, JobSummary, ManifestId, ManifestSummary, ModelChoices, Overruled,
+    ProposeJob, Redirection, Redispatched, Work, WorkflowId, WorkflowSummary,
 };
 use store::LoadJobError;
 
@@ -163,6 +163,23 @@ where
             }
         };
         let queued = self.queued_reason(&job).await?;
+        // **Read for every Job, unlike the footprint and the delivery above.**
+        // Those two are absent until a Job finishes; this one is what a person
+        // watching a running Job wants most, and it is one indexed query. The
+        // cap travels with the figure because neither half is readable alone.
+        let allowance = self.allowance();
+        let spent = self
+            .spend_of(job.id())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        let spend = Some(JobSpend {
+            cost_micros: spent.cost_micros,
+            cost_cap_micros: allowance.cost().count(),
+            turns: spent.turns,
+            turn_cap: allowance.turns(),
+            ran_ms: spent.ran_ms,
+            drones: spent.drones,
+        });
         // Before `step_facts`, which consumes the Check runs: the
         // classification reads them to answer whether an override is available,
         // and reading them twice would be a second answer to one question.
@@ -185,6 +202,7 @@ where
             stuck.as_ref(),
             overlaps,
             delivery,
+            spend,
         ))
     }
 

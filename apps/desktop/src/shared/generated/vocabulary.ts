@@ -42,6 +42,7 @@ export const JOB_STATUS: Readonly<Record<string, Rendering | undefined>> = {
 /** `queued_reason`, keyed by the wire value. */
 export const QUEUED_REASON: Readonly<Record<string, Rendering | undefined>> = {
   "blocked_by_dependency": { verb: "blocked", icon: Link, badgeStatus: "not-started", statusToken: "--status-not-started" },
+  "over_budget": { verb: "over budget", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
   "waiting_on_resources": { verb: "waiting on resources", icon: Cpu, badgeStatus: "not-started", statusToken: "--status-not-started" },
 };
 
@@ -145,6 +146,7 @@ export type Gap = {
 
 export const GAPS: readonly Gap[] = [
   { vocabulary: "job_status", variant: "escalated", missing: ["verb", "icon"] },
+  { vocabulary: "queued_reason", variant: "over_budget", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "blocked_by_policy", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "check_timeout", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "dependency_failed", missing: ["icon"] },

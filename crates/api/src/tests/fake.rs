@@ -195,6 +195,7 @@ impl Daemon for FakeDaemon {
             return Err(self.no_such_job(&job_id));
         };
         Ok(JobDetail {
+            spend: None,
             delivery: None,
             job: job.clone(),
             created_at: Instant::carried("2026-08-26T09:00:00.000Z"),

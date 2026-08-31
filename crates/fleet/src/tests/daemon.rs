@@ -34,12 +34,12 @@ use store::Store;
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch};
 use verification::{Claimed, NotClaimed, ShownBy};
 
+use crate::allowance::{Allowance, Micros};
 use crate::converging::StepNorms;
 use crate::daemon::{Fittings, Fleet, Host};
 use crate::dry_run::DryRuns;
 use crate::evidence::Call;
 use crate::gate::{CheckBudget, Ruling};
-use crate::allowance::{Allowance, Micros};
 use crate::headroom::{Bytes, Headroom, Polling, Spare};
 use crate::judging::JudgeBudget;
 use crate::silence::Liveness;

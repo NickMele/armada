@@ -82,7 +82,7 @@ mod tests;
 pub use checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use detail::{
-    Criterion, Dependency, Flagged, JobDelivery, JobDetail, JudgeInFlight, Judged,
+    Criterion, Dependency, Flagged, JobDelivery, JobDetail, JobSpend, JudgeInFlight, Judged,
     RedirectInFlight, RedirectWaiting, StepDetail, StepFacts, Stuck, Verdict,
 };
 pub use enums::{

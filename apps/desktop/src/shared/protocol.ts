@@ -117,6 +117,15 @@ export type JobDetail = {
    */
   delivery?: JobDelivery;
   /**
+   * What the job has spent, against what it is allowed to. Since protocol 5.4.
+   *
+   * **Present on every job, including one that has spent nothing.** That is
+   * what makes a job which cost nothing legible as such rather than as a job
+   * Fleet has not measured, and it is why `drones` is on the payload: a cost of
+   * zero across one drone and a cost of zero across none are different facts.
+   */
+  spend?: JobSpend;
+  /**
    * The redirect this job's drone has been sent and has not answered yet.
    * Since protocol 4.14.
    *
@@ -254,6 +263,39 @@ export type RedirectWaiting = {
  * and a row that treated them as one would say "unknown" about a branch that is
  * sitting on a remote right now.
  */
+/**
+ * What one job has spent and what it is allowed to spend.
+ *
+ * **Four numbers and no verdict**, deliberately. Whether the job is over is the
+ * pair being compared, and a boolean could not say by how much or which of the
+ * two ceilings it was — which is exactly what `queued_reason: "over_budget"`
+ * leaves out.
+ *
+ * `cost_micros` and `cost_cap_micros` are millionths of a dollar, and they are
+ * **notional**. The figure is what the run would have cost at list price, which
+ * is not what a subscription account is billed; a surface that presents it as
+ * money owed is presenting a currency nothing here spends. What it is for is
+ * telling a runaway from a job that started with a cold cache.
+ *
+ * `ran_ms` has no cap beside it on purpose. Wall clock is bounded by a
+ * different setting at a different scope, which nothing enforces yet, so the
+ * figure is here to be read and there is no ceiling to draw it against.
+ */
+export type JobSpend = {
+  /** What every drone of this job has cost, added up, in millionths of a dollar. */
+  cost_micros: number;
+  /** What it may cost before Fleet stops starting drones on it. */
+  cost_cap_micros: number;
+  /** How many turns every drone of this job has taken, added up. */
+  turns: number;
+  /** How many it may take before Fleet stops starting drones on it. */
+  turn_cap: number;
+  /** How long those drones ran, in milliseconds. No cap beside it — see above. */
+  ran_ms: number;
+  /** How many drones this is the sum of. Zero is a job nothing has run for. */
+  drones: number;
+};
+
 export type JobDelivery = {
   /** The commit Fleet wrote over the job's work, by its id. */
   commit?: string;

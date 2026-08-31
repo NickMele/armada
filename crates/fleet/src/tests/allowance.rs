@@ -175,7 +175,10 @@ fn a_drone_that_never_reported_folds_to_nothing_rather_than_to_nothing_at_all() 
     );
     assert_eq!(folded.cost_micros, 0);
     assert_eq!(folded.turns, 0);
-    assert_eq!(folded.ran_ms, 400, "it still held a slot for four hundred ms");
+    assert_eq!(
+        folded.ran_ms, 400,
+        "it still held a slot for four hundred ms"
+    );
 }
 
 // ------------------------------------------------------------ against a Fleet
@@ -194,7 +197,10 @@ async fn a_job_past_its_dollar_cap_is_not_started_and_says_why() {
     let waiting = approved(&fleet, &home, "a change that has already cost too much").await;
     spend(&fleet, &waiting, "01DRONE00000000000000001", 6_000_000, 40).await;
 
-    fleet.kill_job(&running).await.expect("the slot is given back");
+    fleet
+        .kill_job(&running)
+        .await
+        .expect("the slot is given back");
     fleet.turn().await.expect("the loop turns");
 
     assert!(
@@ -218,7 +224,10 @@ async fn a_job_past_its_turn_cap_is_held_back_too() {
     let waiting = approved(&fleet, &home, "a change that went round and round").await;
     spend(&fleet, &waiting, "01DRONE00000000000000002", 40_000, 400).await;
 
-    fleet.kill_job(&running).await.expect("the slot is given back");
+    fleet
+        .kill_job(&running)
+        .await
+        .expect("the slot is given back");
     fleet.turn().await.expect("the loop turns");
 
     assert!(
@@ -369,5 +378,8 @@ async fn a_drone_standing_down_writes_what_it_spent() {
         "the figure the Drone reported, against the Job rather than the Drone"
     );
     assert_eq!(spent.turns, 7);
-    assert_eq!(spent.drones, 1, "one Drone worked it, and the record says so");
+    assert_eq!(
+        spent.drones, 1,
+        "one Drone worked it, and the record says so"
+    );
 }

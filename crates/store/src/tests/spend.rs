@@ -38,7 +38,11 @@ fn a_job_that_has_not_run_has_spent_nothing() {
     let read = store
         .spend_for(&job_id("01SPEND00000000000000001"))
         .expect("the spend is read");
-    assert_eq!(read, Spend::default(), "nothing has run, so nothing is spent");
+    assert_eq!(
+        read,
+        Spend::default(),
+        "nothing has run, so nothing is spent"
+    );
 }
 
 /// **The join the cap needs.** Four Drones of one Job, none of which knows
