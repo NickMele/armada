@@ -111,6 +111,24 @@ gap, an aside that deserved an issue, a `TODO` left in code.
 file it and fix it, fix it without an issue, or drop it. A follow-up that exists
 only as a sentence in the transcript counts as **not documented**.
 
+**The history file is not a home, and writing one does not discharge this
+step.** It is a record of a session, read by nobody looking for open work. A
+deferred item needs a durable home in the repository — an **open question** in
+the document that blocks on it (`armada-open-questions`), or a **GitHub
+issue** — and the history file then points at that.
+
+**"Talk it through later" is not an outcome; it is where the item goes while it
+waits.** A decision the owner defers is exactly what an open question is for:
+one lives in the document that blocks on it and carries a slug code can cite, so
+answering it surfaces everything that was waiting. Offer that as an option
+alongside filing an issue, and say which fits — a call to make is a question, a
+thing to do is an issue.
+
+Confirmed 2026-08-31: two design conversations were deferred, recorded in the
+history file, and reported as "recorded as decisions, not loose ends." The owner
+read that and said they would get lost. They were right — `docs/OPEN.md` is what
+the repository reads, and neither was in it.
+
 ## 6. The running Fleet
 
 **A running Fleet is a stale binary the moment you merge.** If
@@ -160,6 +178,15 @@ only. **One sentence when nothing needs them** — do not leave it to be inferre
 - **The report is not the work.** An agent's summary is written by the thing with
   an interest in it being right. Read the diff. A gaming flag was once relayed to
   the owner as a Drone cheating; the diff showed both flags were false positives.
+- **Abandoned work is not unlanded work.** Confirmed 2026-08-31: a `stash@{0}`
+  dated three days earlier was described to the owner as a whole `forget_job`
+  operation existing nowhere else, and dropping it as irreversible — on the
+  strength of its date and its contents. `forget_job` was already on `main`,
+  landed after the stash was taken. **Grep the tree for what the artifact
+  contains before saying what losing it would cost**; a stash, an old branch or
+  a detached worktree is a claim about the past, and the present is what decides
+  whether it matters. The wrong framing had already reached a decision — the
+  owner chose "leave it" against a loss that could not happen.
 - **A branch left unmerged reads exactly like a merged one** from the session
   transcript. This skill found one that had been reported as "verified and
   waiting" and then never merged. Check `git branch --list`, not your memory.
