@@ -122,6 +122,15 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
     for check in step.mechanical_checks() {
         match check {
             MechanicalCheck::DiffNonempty => checks.push(ResolvedCheck::DiffNonempty),
+            // Nothing to resolve: the target is a path in the Job's own
+            // worktree, and no worktree exists at the moment this runs. What
+            // the parser already established is that the string could name a
+            // file at all, which is the half a Manifest could never answer.
+            MechanicalCheck::ArtifactExists { target } => {
+                checks.push(ResolvedCheck::ArtifactExists {
+                    target: target.clone(),
+                })
+            }
             MechanicalCheck::ManifestCheck {
                 check,
                 expect_exit_code,

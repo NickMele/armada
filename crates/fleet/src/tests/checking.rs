@@ -11,7 +11,7 @@
 
 use std::time::{Duration, Instant};
 
-use adapter_traits::Footprint;
+use adapter_traits::{Footprint, Worktree};
 use core_model::CheckOutcome;
 use testkit::{FakeWorkProduct, Gate, Sketch};
 use verification::Request;
@@ -206,5 +206,107 @@ async fn a_skipped_check_holds_its_place_among_the_ones_that_ran() {
     assert!(
         ruling.advanced(),
         "the skipped check would have failed had it run: {ruling:?}"
+    );
+}
+
+/// Rule on a step that must have written `target`, against a real directory
+/// holding whatever `write` puts there.
+///
+/// A real directory rather than a fake: the whole of `artifact_exists` is a
+/// `stat`, so a fake filesystem would be asserting this crate's guess at one.
+async fn ruled_on_a_file(target: &str, write: impl FnOnce(&std::path::Path)) -> Ruling {
+    let dir = crate::tests::tmp::TempDir::new();
+    write(dir.path());
+    let workflow = testkit::resolved(&[Sketch {
+        id: "plan",
+        label: "Plan the change",
+        evidence_type: Some("facts_note"),
+        gates: &[Gate::ArtifactExists { target }],
+        judged_on: &[],
+        scope: None,
+        gaming: None,
+    }]);
+    let worktree = Worktree::at(
+        dir.path().to_string_lossy().to_string(),
+        "armada/01J0000000000000000000JOB0",
+    );
+    let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
+    rule_on(
+        at_step,
+        Request::of(testkit::asked_for()),
+        &crate::tests::gate::note_evidence(),
+        None,
+        Some(&Footprint::nothing()),
+        &[],
+        &FakeWorkProduct::changed(&[".armada/artifacts/plan.md"]),
+        CheckBudget::of(Duration::from_secs(5)),
+        &judging(),
+    )
+    .await
+}
+
+/// **The step advances on the file, not on the sentence about it.**
+///
+/// This is the whole of #138 measured end to end: the step declares the path,
+/// Fleet reads the worktree, and what it found is what decides.
+#[tokio::test]
+async fn a_step_that_wrote_its_file_advances_and_one_that_did_not_does_not() {
+    let ruling = ruled_on_a_file(".armada/artifacts/plan.md", |root| {
+        std::fs::create_dir_all(root.join(".armada/artifacts")).expect("the directory");
+        std::fs::write(root.join(".armada/artifacts/plan.md"), "The cause is X.\n")
+            .expect("the file");
+    })
+    .await;
+    assert!(ruling.advanced(), "the file was written: {ruling:?}");
+    assert_eq!(
+        recorded(&ruling),
+        [(".armada/artifacts/plan.md", CheckOutcome::Passed)]
+    );
+
+    let ruling = ruled_on_a_file(".armada/artifacts/plan.md", |_| {}).await;
+    assert!(!ruling.advanced(), "nothing was written: {ruling:?}");
+    assert_eq!(
+        recorded(&ruling),
+        [(".armada/artifacts/plan.md", CheckOutcome::Failed)]
+    );
+}
+
+/// A Drone that created the file and wrote nothing into it has not delivered
+/// the step's product, and the gate says which of the two happened.
+#[tokio::test]
+async fn an_empty_file_stops_the_step_and_the_row_says_it_is_empty() {
+    let ruling = ruled_on_a_file(".armada/artifacts/plan.md", |root| {
+        std::fs::create_dir_all(root.join(".armada/artifacts")).expect("the directory");
+        std::fs::write(root.join(".armada/artifacts/plan.md"), "").expect("the file");
+    })
+    .await;
+
+    assert!(!ruling.advanced(), "an empty file advanced: {ruling:?}");
+    let row = &ruling.checks()[0];
+    assert_eq!(row.outcome, CheckOutcome::Failed);
+    assert_eq!(
+        row.produced.as_deref(),
+        Some("`.armada/artifacts/plan.md` is there and holds nothing")
+    );
+}
+
+/// **The look is confined to the worktree by the parser, so nothing here has
+/// to re-check it.** What this asserts is the half that is this function's:
+/// the path is joined onto the Job's own worktree and not onto the process's
+/// working directory, so two Jobs on one machine cannot satisfy each other.
+#[tokio::test]
+async fn the_file_is_looked_for_in_the_jobs_worktree_and_not_beside_the_daemon() {
+    let elsewhere = crate::tests::tmp::TempDir::new();
+    std::fs::create_dir_all(elsewhere.path().join(".armada/artifacts")).expect("the directory");
+    std::fs::write(
+        elsewhere.path().join(".armada/artifacts/plan.md"),
+        "another Job's plan\n",
+    )
+    .expect("the file");
+
+    let ruling = ruled_on_a_file(".armada/artifacts/plan.md", |_| {}).await;
+    assert!(
+        !ruling.advanced(),
+        "a file in another worktree advanced this step: {ruling:?}"
     );
 }

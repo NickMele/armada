@@ -6,7 +6,7 @@ use std::time::Duration;
 use config::EvidenceType;
 
 use crate::gate::{decide, Accepted, NotWhatTheStepAsked, Verdict};
-use crate::mechanical::{CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran};
+use crate::mechanical::{Artifact, CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran};
 use crate::submission::{Claimed, NotClaimed, ShownBy, Submission};
 use crate::tests::{gated, ungated, workflow};
 
@@ -468,4 +468,110 @@ fn the_turn_says_which_of_the_three_things_happened() {
         .to_string();
     assert!(!told.contains("passed"), "nothing passed: {told}");
     assert!(told.contains("none was run"), "{told}");
+}
+
+/// A one-step workflow whose only gate is the file it was asked to write.
+///
+/// Design Plan's `draft` is this shape in the shipped set — no Judge, no
+/// Manifest Check — which is why the four answers below are the whole of what
+/// stands between a Drone and an advance.
+fn writes_a_file() -> config::ResolvedWorkflow {
+    testkit::resolved(&[testkit::Sketch {
+        id: "plan",
+        label: "Plan the change",
+        evidence_type: Some("facts_note"),
+        gates: &[testkit::Gate::ArtifactExists {
+            target: ".armada/artifacts/plan.md",
+        }],
+        judged_on: &[],
+        scope: None,
+        gaming: None,
+    }])
+}
+
+#[test]
+fn the_file_being_there_with_something_in_it_advances_the_step() {
+    let workflow = writes_a_file();
+    let step = &workflow.steps()[0];
+    let ran = Ran::of(step, &[Observed::Artifact(Artifact::Written)]).expect("the check ran");
+
+    assert!(ran.all_passed());
+    let evidence = note_evidence();
+    let accepted = Accepted::of(step, &evidence).expect("the right kind of evidence");
+    assert_eq!(decide(accepted, &ran), Verdict::Advance);
+}
+
+/// **An empty file is not the artifact.** The step's product is what the next
+/// step reads, and a zero-byte file is the vacuous pass in file form — on a
+/// step whose only gate is this one, nothing else would ever open it.
+///
+/// Each of the three not-founds says something different, because they are
+/// three different mistakes and a Drone told "it is not there" about a
+/// directory it can see spends its retries writing the file again.
+#[test]
+fn an_empty_file_a_directory_and_a_missing_file_each_stop_the_step_and_say_which() {
+    let workflow = writes_a_file();
+    let step = &workflow.steps()[0];
+    for (found, produced) in [
+        (
+            Artifact::Empty,
+            "`.armada/artifacts/plan.md` is there and holds nothing",
+        ),
+        (
+            Artifact::NotAFile,
+            "`.armada/artifacts/plan.md` is not a file",
+        ),
+        (
+            Artifact::Missing,
+            "nothing is at `.armada/artifacts/plan.md`",
+        ),
+    ] {
+        let ran = Ran::of(step, &[Observed::Artifact(found)]).expect("the check ran");
+        assert!(!ran.advances(), "{found:?} advanced the step");
+        let failed = ran.failures();
+        assert_eq!(
+            failed.as_slice(),
+            [CheckFailed::ArtifactNotThere {
+                target: ".armada/artifacts/plan.md".to_string(),
+                found,
+            }]
+        );
+        assert_eq!(
+            failed[0].expected(),
+            "the step writes `.armada/artifacts/plan.md`"
+        );
+        assert_eq!(failed[0].produced(), produced);
+        // Writing the file is something a Drone can do, so the budget is worth
+        // spending — unlike a Check that is not installed.
+        assert!(failed[0].the_drone_can_answer());
+    }
+}
+
+/// The recorded row names the path rather than the kind, so a step declaring
+/// two artifacts does not write down two rows nobody can tell apart.
+#[test]
+fn the_recorded_row_names_the_file_that_was_looked_for() {
+    let workflow = writes_a_file();
+    let step = &workflow.steps()[0];
+    let ran = Ran::of(step, &[Observed::Artifact(Artifact::Missing)]).expect("the check ran");
+    let recorded = ran.recorded();
+
+    assert_eq!(recorded.len(), 1);
+    assert_eq!(recorded[0].name, ".armada/artifacts/plan.md");
+}
+
+/// A command's exit code is not an answer to "is the file there", and pairing
+/// them is a bug in the caller rather than a failing step.
+#[test]
+fn an_exit_code_offered_for_an_artifact_look_is_refused_rather_than_read() {
+    let workflow = writes_a_file();
+    let step = &workflow.steps()[0];
+    assert_eq!(
+        Ran::of(step, &[PASSED]),
+        Err(ChecksOutstanding::WrongKind {
+            at: 0,
+            check: "artifact_exists",
+            observed: "a command run",
+        })
+    );
 }

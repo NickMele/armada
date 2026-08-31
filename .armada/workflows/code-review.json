@@ -11,8 +11,9 @@
 # The designed `code-review.json` is already linear and already three steps --
 # `read`, `assess`, `deliver` -- so nothing here is folded. What is still
 # dropped: the `manifest_rule:review_gate` on `deliver`, which is refused as
-# `OutsideM1`, and every `artifact_exists` check, since that mechanical-check
-# type is not in M1's carried set. `assess`'s `evidence_type` is `facts_note`
+# `OutsideM1`. The `artifact_exists` checks were dropped with it and are back --
+# that mechanical-check type is in M1's carried set now, and the last paragraph
+# below says what it is doing here. `assess`'s `evidence_type` is `facts_note`
 # rather than the designed `review_findings`, which is not a value the schema
 # has -- see `[review-findings-evidence-type]` in `docs/OPEN.md`.
 #
@@ -43,7 +44,25 @@
 #
 # This is the "Code Review inverts" exception `docs/concepts/workflow.md` flags
 # against its own evidence-type table. It needs a step whose work product is a
-# review of a diff Armada holds somewhere it can read.
+# review of a diff Armada holds somewhere it can read.#
+# **A step whose product a later step reads writes a file.** `artifact_exists`
+# is carried now, and `bug.json` carries the reasoning: a written step used to
+# hand the next one three prose strings, two of which `verification::submission`
+# says nothing routes on. The deliverable goes under `.armada/artifacts/`, which
+# `.gitignore` un-ignores for exactly this -- Fleet reads the branch diff with
+# untracked files in and ignored files out, so a deliverable under an ignored
+# path is one no Judge can open. The check reads the file's size and never its
+# bytes: an empty file fails, and whether what is in it is any good is the
+# Judge's question.
+#
+# **The `artifact_exists` checks the designed file declares are restored.** The
+# paragraph above that said "every `artifact_exists` check" was dropped because
+# the type is not in M1's carried set is no longer true -- it is. The designed
+# targets are a registry name on `read` and `REVIEW.md` on `assess`; M1 has no
+# artifact registry, so both are paths. On this workflow they matter more than
+# anywhere else: `assess` has no Judge and cannot have one until the diff it
+# reviews is somewhere Armada can read, so a `read` step that produced nothing
+# would otherwise reach `assess` and `deliver` unnoticed.
 {
   "version": 1,
   "workflow_id": "code_review",
@@ -54,12 +73,24 @@
       "id": "read",
       "label": "Read the diff",
       "evidence_type": "facts_note",
+      "mechanical_checks": [
+        {
+          "type": "artifact_exists",
+          "target": ".armada/artifacts/read.md"
+        }
+      ],
       "advance_gate": "auto"
     },
     {
       "id": "assess",
       "label": "Assess",
       "evidence_type": "facts_note",
+      "mechanical_checks": [
+        {
+          "type": "artifact_exists",
+          "target": ".armada/artifacts/assess.md"
+        }
+      ],
       "evidence_scope": {
         "context_source": "hybrid",
         "exclude_paths": [

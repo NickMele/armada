@@ -65,7 +65,16 @@
 # **`typecheck`, `bridge_build` and `storybook` are on `implement`.** See
 # `bug.json` for the defect they were added for. Refactor is where a rename
 # that compiles in Rust and breaks an import in TypeScript is the likeliest
-# single failure, and `implement`'s `test` said nothing about it.
+# single failure, and `implement`'s `test` said nothing about it.#
+# **A step whose product a later step reads writes a file.** `artifact_exists`
+# is carried now, and `bug.json` carries the reasoning: a written step used to
+# hand the next one three prose strings, two of which `verification::submission`
+# says nothing routes on. The deliverable goes under `.armada/artifacts/`, which
+# `.gitignore` un-ignores for exactly this -- Fleet reads the branch diff with
+# untracked files in and ignored files out, so a deliverable under an ignored
+# path is one no Judge can open. The check reads the file's size and never its
+# bytes: an empty file fails, and whether what is in it is any good is the
+# Judge's question.
 {
   "version": 1,
   "workflow_id": "refactor",
@@ -76,6 +85,12 @@
       "id": "plan",
       "label": "Scope the refactor",
       "evidence_type": "facts_note",
+      "mechanical_checks": [
+        {
+          "type": "artifact_exists",
+          "target": ".armada/artifacts/plan.md"
+        }
+      ],
       "evidence_scope": {
         "context_source": "drone_declared",
         "exclude_paths": [

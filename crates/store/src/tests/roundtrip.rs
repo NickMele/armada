@@ -435,8 +435,19 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
                 when: Covers::of(vec![PathPattern::parse("crates/**").expect("a pattern")]),
             },
             ResolvedCheck::DiffNonempty,
+            ResolvedCheck::ArtifactExists {
+                target: ".armada/artifacts/fix.md".to_string(),
+            },
         ],
         "the command lifted out of the Manifest, not the name it was written as"
+    );
+    // **The path is the whole of an artifact check**, so a row that came back
+    // without it would be a step whose deliverable nothing could look for —
+    // and a check with nothing to assert reads as one that passed.
+    assert_eq!(
+        fix.checks()[2].name(),
+        Some(".armada/artifacts/fix.md"),
+        "the file the step was asked to write survives the round trip"
     );
     // **Which paths the Check covers is frozen with the command.** A row that
     // came back without it would leave the gate deciding against the live

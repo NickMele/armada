@@ -81,7 +81,7 @@ pub use gaming::{in_the_diff, judged_patterns, Baseline, Flagged, GamingBrief};
 pub use gate::{decide, Accepted, NotWhatTheStepAsked, Verdict};
 pub use judge::{field, Brief, Refusals, Unreadable};
 pub use mechanical::{
-    CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran, EVIDENCE_SCOPE,
+    Artifact, CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran, EVIDENCE_SCOPE,
 };
 pub use outcome::{OutcomeTurn, Printed, TheBaseMoved, Verified};
 pub use product::{NothingToJudge, Product, Reference, Written};

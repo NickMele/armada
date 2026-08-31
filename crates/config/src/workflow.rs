@@ -58,12 +58,12 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use core_model::{
-    AdvanceGate, EvidenceScope, EvidenceType, JudgeCheck, StepId, Ulid, WorkflowId, DIFF_NONEMPTY,
-    MANIFEST_CHECK,
+    AdvanceGate, EvidenceScope, EvidenceType, JudgeCheck, StepId, Ulid, WorkflowId,
+    ARTIFACT_EXISTS, DIFF_NONEMPTY, MANIFEST_CHECK,
 };
 use serde_yaml_ng::Value;
 
-use crate::error::{Fault, LoadError, Refusal};
+use crate::error::{BadTarget, Fault, LoadError, Refusal};
 use crate::judge;
 use crate::scope;
 use crate::yaml::{self, Table};
@@ -123,11 +123,19 @@ const EVIDENCE_LEGAL: &[&str] = &[
     "document",
 ];
 
-/// A deterministic assertion. **Two types, of five sanctioned.**
+/// A deterministic assertion. **Three types, of five sanctioned.**
 ///
-/// `artifact_exists`, `test_run` and `pr_merged` are the other three, and each
-/// needs machinery M1 has not built — an artifact registry, a per-step test
-/// invocation distinct from a named Check, and a merged pull request.
+/// `test_run` and `pr_merged` are the other two, and each needs machinery M1
+/// has not built — a per-step test invocation distinct from a named Check, and
+/// a merged pull request.
+///
+/// **`artifact_exists` is carried now, and it carries a path rather than a
+/// name.** The schema's samples name a registry entry — `root_cause_note` —
+/// and there is no artifact registry to resolve one against. What there is, on
+/// every step, is a worktree Fleet reads for itself, so the target is the
+/// worktree-relative path of the file the step writes. That is also what makes
+/// a step's product something the next step can open rather than a sentence the
+/// last Drone typed about it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MechanicalCheck {
     /// A named Check in the repo's `armada.yml` ran and exited as expected.
@@ -141,18 +149,21 @@ pub enum MechanicalCheck {
     },
     /// The step produced a non-empty diff.
     DiffNonempty,
+    /// The step wrote the file named by `target`.
+    ArtifactExists { target: String },
 }
 
 const CHECK_TYPE_LEGAL: &[&str] = &[
     MANIFEST_CHECK,
     DIFF_NONEMPTY,
-    "artifact_exists",
+    ARTIFACT_EXISTS,
     "test_run",
     "pr_merged",
 ];
-const CHECK_TYPE_M1: &[&str] = &[MANIFEST_CHECK, DIFF_NONEMPTY];
+const CHECK_TYPE_M1: &[&str] = &[MANIFEST_CHECK, DIFF_NONEMPTY, ARTIFACT_EXISTS];
 const MANIFEST_CHECK_KEYS: &[&str] = &["type", "check", "expect_exit_code"];
 const DIFF_NONEMPTY_KEYS: &[&str] = &["type"];
+const ARTIFACT_EXISTS_KEYS: &[&str] = &["type", "target"];
 
 /// One step of a workflow.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -540,6 +551,44 @@ fn gate(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<AdvanceGate> 
     None
 }
 
+/// A `target` that names exactly one file inside the worktree, or a refusal
+/// saying which of the four ways it does not.
+///
+/// **Every one of these is a step no Drone could ever pass**, and each was
+/// cheaper to catch here than at the gate. v1 measured the glob case on a real
+/// Job: the `design` workflow named `docs/design/*.md`, the gate probed it as a
+/// literal path, and the step retried until the Job hit its token ceiling with
+/// the file it asked for sitting on disk. A pattern is refused rather than
+/// matched because Fleet has to hand the next step's Drone a path, and
+/// "whichever file matched" is not one.
+///
+/// The path is not resolved against a worktree here. This crate reads files and
+/// never a Job's, and whether the Drone wrote it is the gate's question — what
+/// is answered here is whether the string could name it at all.
+fn artifact_target(at: &str, target: String, out: &mut Vec<Refusal>) -> Option<String> {
+    let why = if target.contains('*') || target.contains('?') {
+        Some(BadTarget::Globbed)
+    } else if target.starts_with('/') {
+        Some(BadTarget::Absolute)
+    } else if target.ends_with('/') {
+        Some(BadTarget::ADirectory)
+    } else if target.split('/').any(|segment| segment == "..") {
+        Some(BadTarget::Escapes)
+    } else {
+        None
+    };
+    match why {
+        None => Some(target),
+        Some(why) => {
+            out.push(Refusal::new(
+                at,
+                Fault::NotAnArtifactPath { value: target, why },
+            ));
+            None
+        }
+    }
+}
+
 fn mechanical_check(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<MechanicalCheck> {
     let mut table = Table::open(at, value, out)?;
     let kind = table
@@ -563,6 +612,15 @@ fn mechanical_check(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<M
         DIFF_NONEMPTY => {
             table.close(DIFF_NONEMPTY_KEYS, out);
             Some(MechanicalCheck::DiffNonempty)
+        }
+        ARTIFACT_EXISTS => {
+            let target_key = table.at("target");
+            let target = table
+                .required("target", out)
+                .and_then(|value| yaml::text(&target_key, value, out))
+                .and_then(|target| artifact_target(&target_key, target, out));
+            table.close(ARTIFACT_EXISTS_KEYS, out);
+            Some(MechanicalCheck::ArtifactExists { target: target? })
         }
         other => {
             let fault = if CHECK_TYPE_LEGAL.contains(&other) {

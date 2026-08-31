@@ -43,11 +43,22 @@ storybook-static/
 # `.armada/worktrees/` untracked but unignored for a while, and a path keyed by
 # a Job id cannot be named in advance at all.
 #
-# **A Drone's plan is ignored here, and that is this repository's call rather
-# than Armada's.** A repository that wants its plans in history deletes the
-# first line and gets them, keyed by Job id and colliding with nothing. This one
-# is public and the workspace the plans would quote is not — the same reason
-# `.gnhf/` and `.lavish/` are above. The cost is that a plan is reclaimed with
-# the worktree it sits in, so it lives as long as the Job does and no longer.
+# **A Drone's scratch is ignored here, and that is this repository's call
+# rather than Armada's.** A repository that wants a Drone's working files in
+# history deletes the first line and gets them, keyed by Job id and colliding
+# with nothing. This one is public and the workspace those files would quote is
+# not — the same reason `.gnhf/` and `.lavish/` are above. The cost is that
+# scratch is reclaimed with the worktree it sits in, so it lives as long as the
+# Job does and no longer.
+#
+# **`.armada/artifacts/` is not scratch and is not ignored.** It holds what a
+# step was asked to deliver — the file its `artifact_exists` check names, which
+# the next step reads and the Judge is shown. It has to be visible for that to
+# be true: Fleet reads the branch diff with untracked files included and
+# ignored ones excluded, so a deliverable under an ignored path is a
+# deliverable no Judge can open. That was measured on a real Job, which spent
+# nineteen hours being refused for a root cause written on page one of a file
+# nothing could see.
 .armada/*
 !.armada/workflows/
+!.armada/artifacts/

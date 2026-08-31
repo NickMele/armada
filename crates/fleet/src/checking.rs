@@ -30,7 +30,7 @@ use checks_runner::{Attempt, Output};
 use core_model::ResolvedCheck;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
-use verification::{Exit, NeverRan, Observed};
+use verification::{Artifact, Exit, NeverRan, Observed};
 
 /// How many of a step's Checks may run at once.
 ///
@@ -103,6 +103,31 @@ enum Planned {
     Command { name: String, run: String },
 }
 
+/// What is at the path a step's `artifact_exists` names.
+///
+/// **`join` on a relative path and nothing cleverer.** `config` refused a
+/// target that globs, that is absolute, that ends in `/` or that holds `..`
+/// where the workflow was parsed, so what arrives here cannot leave the
+/// worktree and cannot match two files. A second guard here would be a second
+/// rule to keep in step with the first.
+///
+/// **Settled before anything is spawned**, beside the skip decision and for the
+/// same reason: it is one `metadata` call with no command, no budget and no
+/// ordering. Settling it first also means no Check's own output can be what
+/// satisfies it.
+///
+/// Every way the filesystem says no reads as [`Artifact::Missing`]: the
+/// overwhelmingly common reason is that the Drone did not write it, which is
+/// the answer the gate wants and the one the Drone can act on.
+fn looked_for(worktree: &Path, target: &str) -> Artifact {
+    match std::fs::metadata(worktree.join(target)) {
+        Err(_) => Artifact::Missing,
+        Ok(found) if !found.is_file() => Artifact::NotAFile,
+        Ok(found) if found.len() == 0 => Artifact::Empty,
+        Ok(_) => Artifact::Written,
+    }
+}
+
 /// Run the step's Checks in `worktree` and say what each one did.
 ///
 /// `moved` is `diff_nonempty`'s answer, decided by the caller: it is a read of
@@ -126,6 +151,9 @@ pub(crate) async fn ran(
                     run: run.clone(),
                 },
                 ResolvedCheck::DiffNonempty => Planned::Already(Observed::Diff { moved }),
+                ResolvedCheck::ArtifactExists { target } => {
+                    Planned::Already(Observed::Artifact(looked_for(worktree, target)))
+                }
             },
         })
         .collect();

@@ -101,6 +101,14 @@ pub fn workflow() -> FrozenWorkflow {
                         when: Covers::of(vec![PathPattern::parse("crates/**").expect("a pattern")]),
                     },
                     ResolvedCheck::DiffNonempty,
+                    // Carried on the shared fixture for `when`'s reason: every
+                    // round trip in this crate then walks a check whose whole
+                    // content is a path, which is the one kind that comes back
+                    // wrong if the writer and the reader disagree about a key
+                    // name.
+                    ResolvedCheck::ArtifactExists {
+                        target: ".armada/artifacts/fix.md".to_string(),
+                    },
                 ],
                 AdvanceGate::AutoIfJudgePasses,
                 vec![JudgeCheck::declared(

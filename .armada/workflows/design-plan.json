@@ -24,7 +24,24 @@
 # that carries the reading back is `structure: loop`, which M1 does not have.
 #
 # So this stays thin until the loop lands, and a Judge would not make it less
-# thin -- it would gate a draft on a machine's opinion of a conversation.
+# thin -- it would gate a draft on a machine's opinion of a conversation.#
+# **A step whose product a later step reads writes a file.** `artifact_exists`
+# is carried now, and `bug.json` carries the reasoning: a written step used to
+# hand the next one three prose strings, two of which `verification::submission`
+# says nothing routes on. The deliverable goes under `.armada/artifacts/`, which
+# `.gitignore` un-ignores for exactly this -- Fleet reads the branch diff with
+# untracked files in and ignored files out, so a deliverable under an ignored
+# path is one no Judge can open. The check reads the file's size and never its
+# bytes: an empty file fails, and whether what is in it is any good is the
+# Judge's question.
+#
+# **`draft` is the one step where `artifact_exists` is the whole gate.** This
+# workflow carries no Judge, so nothing else reads what `draft` produced --
+# which is exactly why the check has to answer more than "a path exists". It
+# refuses an empty file and it refuses a directory of that name, and it still
+# cannot tell a considered design from a sentence. `present` is
+# `human_always`, so the reader of the design is a person, which is what this
+# workflow says it wants.
 {
   "version": 1,
   "workflow_id": "design_plan",
@@ -35,6 +52,12 @@
       "id": "draft",
       "label": "Draft",
       "evidence_type": "document",
+      "mechanical_checks": [
+        {
+          "type": "artifact_exists",
+          "target": ".armada/artifacts/draft.md"
+        }
+      ],
       "advance_gate": "auto"
     },
     {

@@ -29,7 +29,7 @@ use core_model::{
     EvidenceRef, EvidenceScope, EvidenceType, FrozenWorkflow, GamingCheck, GamingPattern, JobId,
     JudgeCheck, JudgeCriterion, ModelName, PathPattern, PilotReason, RepoPath, ResolvedCheck,
     ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, Timestamp, TransitionReason, Ulid,
-    WorkflowId, DIFF_NONEMPTY, MANIFEST_CHECK,
+    WorkflowId, ARTIFACT_EXISTS, DIFF_NONEMPTY, MANIFEST_CHECK,
 };
 use serde_json::{json, Map, Value};
 
@@ -329,6 +329,10 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
                         .map(|pattern| pattern.as_str()).collect::<Vec<&str>>()),
                 }),
                 ResolvedCheck::DiffNonempty => json!({ "type": DIFF_NONEMPTY }),
+                ResolvedCheck::ArtifactExists { target } => json!({
+                    "type": ARTIFACT_EXISTS,
+                    "target": target,
+                }),
             }).collect::<Vec<Value>>(),
         })).collect::<Vec<Value>>(),
     })
@@ -529,6 +533,9 @@ fn read_check(entry: &Map<String, Value>) -> Result<ResolvedCheck, Malformed> {
             when: read_when(entry)?,
         }),
         DIFF_NONEMPTY => Ok(ResolvedCheck::DiffNonempty),
+        ARTIFACT_EXISTS => Ok(ResolvedCheck::ArtifactExists {
+            target: text(entry, "target")?,
+        }),
         other => Err(format!("`type` holds `{other}`")),
     }
 }

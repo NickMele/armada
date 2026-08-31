@@ -131,6 +131,44 @@ pub enum Fault {
     /// other dialect matches nothing and a Check that silently never runs again
     /// is the failure `when` exists to prevent.
     NotAPathPattern { value: String, why: BadPattern },
+    /// **An `artifact_exists` target that cannot name one file.** Refused where
+    /// the definition is parsed rather than discovered at the gate, because
+    /// every one of these fails at the gate whatever the Drone wrote: v1
+    /// shipped a `design` workflow whose target was `docs/design/*.md`, probed
+    /// it as a literal path, and made the step unpassable for every Job — the
+    /// commit that fixed it dates the Job it was measured against.
+    ///
+    /// The path is also what Fleet has to be able to hand the next step's
+    /// Drone, so "whichever file matched" is not an answer this can carry.
+    NotAnArtifactPath { value: String, why: BadTarget },
+}
+
+/// Why a step's `artifact_exists` target cannot name the one file the next step
+/// will be pointed at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BadTarget {
+    /// It holds `*` or `?`. A pattern matches none, one or many, and none of
+    /// those three is a path a brief can quote.
+    Globbed,
+    /// It starts at the filesystem root, so it names something outside the
+    /// worktree — where it would be the same file for every Job on the machine.
+    Absolute,
+    /// It climbs out of the worktree with `..`.
+    Escapes,
+    /// It ends in `/`, so it names a directory and a directory is not the
+    /// deliverable.
+    ADirectory,
+}
+
+impl fmt::Display for BadTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BadTarget::Globbed => write!(f, "it is a pattern, and a step's artifact is one file"),
+            BadTarget::Absolute => write!(f, "it is absolute, and the step works in a worktree"),
+            BadTarget::Escapes => write!(f, "it climbs out of the worktree"),
+            BadTarget::ADirectory => write!(f, "it names a directory"),
+        }
+    }
 }
 
 impl fmt::Display for Fault {
@@ -184,6 +222,10 @@ impl fmt::Display for Fault {
             Fault::NotAPathPattern { value, why } => {
                 write!(f, "is `{value}`, which is not a path pattern: {why}")
             }
+            Fault::NotAnArtifactPath { value, why } => write!(
+                f,
+                "is `{value}`, which cannot name the file this step writes: {why}"
+            ),
             Fault::GateAndJudgeDisagree { gate: "auto" } => write!(
                 f,
                 "is `auto`, which is the mechanical tier alone, and the step \

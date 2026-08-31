@@ -212,8 +212,15 @@ used_by = ["Bug", "Refactor"]
 
 [[fields.mechanical_checks.types]]
 type = "artifact_exists"
-asserts = "A named artifact is present. Carries `target`"
-used_by = ["Bug", "Refactor", "Design Plan"]
+asserts = "The file named by `target` is in the worktree and is not empty. Carries `target`"
+used_by = ["Bug", "Refactor", "Design Plan", "Feature", "Code Review"]
+notes = """
+**`target` is a worktree-relative path, not a registry name.** The samples write one — `root_cause_note`, `plan_document` — and there is no artifact registry to resolve it against. What every step has is a worktree Fleet reads for itself, so the target is the path of the file the step writes, and the parser refuses one that globs, that is absolute, that ends in `/` or that holds `..`. A pattern is refused rather than matched because Fleet has to be able to quote the path to the next step's Drone, and "whichever file matched" is not a path. v1 matched patterns and measured the other half of that: its `design` workflow named `docs/design/*.md`, its gate probed the string literally, and the step was unpassable whatever the Drone wrote.
+
+**An empty file fails it.** The check reads the file's size and never its bytes. Design Plan's `draft` carries no Judge at all, so this is the whole of its gate, and a zero-byte deliverable that passed would be the vacuous pass the mechanical tier exists to refuse.
+
+This is what makes a step's product a file rather than a claim about one. A step whose output a later step reads used to hand it three prose strings, two of which nothing routes on — which inverts the rule that a Drone cannot be trusted to manage its own state.
+"""
 
 [[fields.mechanical_checks.types]]
 type = "test_run"

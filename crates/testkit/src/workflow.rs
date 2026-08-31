@@ -39,6 +39,8 @@ pub enum Gate<'a> {
     },
     /// The step produced a non-empty diff.
     DiffNonempty,
+    /// The step wrote the file at this worktree-relative path.
+    ArtifactExists { target: &'a str },
 }
 
 /// One step of a fixture workflow.
@@ -211,6 +213,9 @@ fn workflow_text(steps: &[Sketch<'_>], retry_limit: u32) -> String {
                      expect_exit_code: {expect_exit_code}\n"
                 )),
                 Gate::DiffNonempty => text.push_str("      - type: diff_nonempty\n"),
+                Gate::ArtifactExists { target } => text.push_str(&format!(
+                    "      - type: artifact_exists\n        target: \"{target}\"\n"
+                )),
             }
         }
     }
