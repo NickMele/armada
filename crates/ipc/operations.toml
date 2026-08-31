@@ -448,7 +448,7 @@ description = "Hard stop"
 notes = """
 Reserved for hard stops only.
 
-**Terminal, and that is what makes it a hard stop.** `rejected` is a verdict on the work — the registry's own line is "approval denied, or `reject` at a human gate" — and no terminal has an outbound edge, so the Job is over and its Drone is ended. The act for work that is nearly right is `request_changes`, which keeps the Job, the worktree and the session.
+**Terminal, and that is what makes it a hard stop.** `rejected` is a verdict on the work — the registry's own line is "approval denied, or `reject` at a human gate" — and no terminal has an outbound edge, so the Job is over and nothing further runs against its worktree. The act for work that is nearly right is `request_changes`, which keeps the Job and the worktree.
 
 Refused on a Job that is not at `awaiting_review`. `awaiting_approval -> rejected` is a legal edge and it belongs to `deny_dispatch`, which is a different act on a Job that has never run.
 """
@@ -461,11 +461,11 @@ description = "Design Plan feedback loop"
 notes = """
 The third answer at a human gate, between taking the work and ending the Job. The Job goes back to `running` at the same step and the note reaches the work that was waiting — so the worktree and every step so far survive, which is what separates this from a redispatch.
 
-**It needs the Drone that is there**, and refuses with a 409 where it is gone: there is nobody to tell, and a Job put back to `running` with no process on it is a Job that will escalate as `interrupted` a moment later having lost the note. A Drone that dies at the gate escalates on its own, and `restart_step` is the act from there.
+**There is no Drone at the gate to take the note.** A Drone ends when its step's work passes the machine gates, so the step standing at a human gate has none — `docs/concepts/drone.md` has the rule. This act is therefore what `redirect_drone` is at a step boundary: words that open the next Drone's brief, not a turn injected into a session.
 
-**Whether there is a Drone at a human advance gate at all is open** — `[drone-at-a-human-advance-gate]` in `docs/concepts/drone.md`. A Drone belongs to a workflow step, and a step at `awaiting_review` has submitted and passed its machine gates without advancing, so whether its Drone was ended when the work finished or is held for the length of the wait is undecided. If it is ended, this act stops being a turn into a session and becomes what `redirect_drone` is at a boundary: words that open the next brief. The 409 above is written for the answer the code gives today and is the first thing that question changes.
+**It still refuses with a 409 where the Drone is gone**, which is now every time. The refusal was written against a Job put back to `running` with no process on it, which escalates as `interrupted` a moment later having lost the note; it stands until a note has somewhere to wait. #207.
 
-The body carries the person's own words and is a type of its own rather than a redirect's — a redirect steers a Drone whose step stopped, and this answers a gate the Drone is waiting at. Blank is refused.
+The body carries the person's own words and is a type of its own rather than a redirect's — a redirect steers a Drone whose step stopped, and this answers a gate. Blank is refused.
 """
 
 [operations.restart_step]

@@ -179,10 +179,10 @@ where
         // this point restarts the clock.
         let record = self.load(&job).await?;
         // **The registry's own rule**: the liveness timer runs only while the
-        // Job is `running`. A Job at a human gate has an idle Drone by design,
-        // and `job-statuses.toml` says the clock suspends there — what catches
-        // a Drone that dies at a gate is `interrupted`, from the restart
-        // reconciliation, and not this.
+        // Job is `running`. Nothing is working at a human gate — the step's
+        // Drone ended when its work passed the machine gates — and an escalated
+        // Job holds an idle one, so `job-statuses.toml` suspends the clock
+        // beneath both. Silence there is the design, not a symptom.
         if record.status() != JobStatus::Running {
             if let Some(at_work) = working.as_mut() {
                 at_work.waiting(self.now());

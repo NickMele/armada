@@ -68,7 +68,7 @@ flowchart LR
 
 **The Drone is not a third machine.** It has no independent state of its own, only presence: `assigned_drone` is a nullable pointer, set when a Drone arrives and null again when it leaves, and `drone_runs` records spawns with an exit state. Which is why `escalated` holding a live, idle Drone is not a contradiction — the pointer says a process exists, not what it is doing.
 
-**The pointer goes null at every step boundary**, because a Drone belongs to a step ([Drone](drone.md)) and a Job has one per step. So it names at most the Drone on the step being worked, and never the Drones that worked the earlier ones — reading it as "the Job's Drone" is reading a Job's whole history off a slot that holds one entry.
+**The pointer goes null as soon as a step's work is done**, because a Drone belongs to a step ([Drone](drone.md)) and a Job has one per step. That is every step boundary, and it is also `awaiting_review`, where the work has passed the step's machine gates and the step has not advanced — a Drone ends on the first of those, not the second. So the pointer names at most the Drone on the step being worked, and never the Drones that worked the earlier ones — reading it as "the Job's Drone" is reading a Job's whole history off a slot that holds one entry.
 
 **Watching a Drone work writes nothing here.** [Observe](observe.md) is a read: no status, no transition, no field — unlike [Pilot](pilot.md), which changes who is driving and is therefore a status.
 

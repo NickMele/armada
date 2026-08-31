@@ -181,12 +181,12 @@ async fn a_branch_that_is_not_behind_is_left_alone_at_a_human_boundary() {
     assert!(fleet.vcs().delivered().is_empty());
 }
 
-/// A conflict at a human gate is handed to the Drone that is standing there.
+/// A conflict at a human gate is handed to whatever Drone the slot holds.
 ///
-/// `HeldForReview` keeps the Drone alive holding its context, so the ordinary
-/// human gate has somebody to give the resolution to — and a conflict is work
-/// rather than a verdict, so the Job carries on and the step the person
-/// approved still advanced.
+/// What it pins is that a conflict is work rather than a verdict: the Job
+/// carries on and the step the person approved still advanced. **The gate is
+/// designed to hold no Drone** — one ends when its step's work passes the
+/// machine gates — so `#140` turns this into the module doc's empty-slot path.
 #[tokio::test]
 async fn a_conflict_at_a_human_boundary_goes_to_the_drone_that_is_still_there() {
     let home = TempDir::new();
