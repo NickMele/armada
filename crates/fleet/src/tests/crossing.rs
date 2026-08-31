@@ -356,6 +356,13 @@ fn a_part_a_person_took_says_a_person_took_it() {
 /// **No count, on the one turn most likely to grow one.** The rule
 /// `verification::OutcomeTurn` carries about attempts holds here: a Drone given
 /// an arithmetic has an incentive to satisfy it.
+///
+/// **The baseline is subtracted first, because it does not cross anything.**
+/// It is the same constant on every turn of every Job, and `#204` gave it the
+/// word `attempt` — unnumbered, naming that a failed check may come back once
+/// more. Read against the whole assembled turn this case would fail on that,
+/// which would say the boundary had grown a counter when the boundary is
+/// unchanged. What it guards is the assembled block, so that is what it reads.
 #[test]
 fn nothing_that_crosses_a_boundary_is_a_number_a_drone_could_be_judged_on() {
     let workflow = note_then_fix();
@@ -365,9 +372,10 @@ fn nothing_that_crosses_a_boundary_is_a_number_a_drone_could_be_judged_on() {
         "fix",
         crossing(&workflow, "fix", &recorded("root_cause")).and_cleared(Cleared::checked(passed)),
     );
+    let crossed = said.replace(crate::briefing::BASELINE, "");
 
-    assert!(!said.contains("attempt"), "{said}");
-    assert!(!said.contains("skipped"), "{said}");
+    assert!(!crossed.contains("attempt"), "{crossed}");
+    assert!(!crossed.contains("skipped"), "{crossed}");
 }
 
 // ------------------------------------------------ what carries and what does not

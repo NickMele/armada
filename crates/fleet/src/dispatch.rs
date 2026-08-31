@@ -446,8 +446,11 @@ where
             // sends a step back to its Drone is a check that ran and said no.
             // A refusal says the work runs and is not what was asked for,
             // which is a person's to answer — resubmitting under the same
-            // instructions would produce the same work. The refusal reprompt
-            // the prompt contract specifies is still unwritten.
+            // instructions would produce the same work. **The refusal
+            // reprompt the contract specifies is not injected here and no
+            // longer waits to be** — the step stopping is what ends the
+            // Drone, so `expected` and `produced` reach the opening brief of
+            // the Drone a person restarts the step with instead. `#204`.
             //
             // **`CouldNotDecide` is the fourth, and it is not a verdict.** The
             // shape is shared and the claim is not: the other three weighed the

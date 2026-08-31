@@ -197,9 +197,14 @@ The samples below, the assembled wording, and the decisions visible in each are 
 │ will not move on.
 │
 │ Submitting returns "recorded". That is a receipt, not
-│ a verdict — your work is checked after you submit. If
-│ it does not pass you will be told in a later turn,
-│ with the reason. Wait for that turn.
+│ a verdict — your work is checked after you submit. A
+│ later turn comes only where the part is coming back to
+│ you: a check failed and there is another attempt, or
+│ what you submitted could not be read. Wait for it
+│ rather than submitting again. Every other outcome ends
+│ your part where it stands and sends you nothing — work
+│ that runs and is refused for what it is goes to a
+│ person, and you are not asked about it again.
 └──────────────────────────────────────────────
 ┌─ JOB BRIEF ───────────────────────────────────
 │ Repository: armada
@@ -338,11 +343,14 @@ A run ending with no evidence and at least one refusal is `blocked_by_policy` �
 | Fleet receives | Fleet does | Counts against retry_limit? |
 | --- | --- | --- |
 | Valid evidence, passes Mechanical + Judge check | Advances the workflow step | N/A |
-| Valid evidence, fails Mechanical or Judge check | Standard gate-failure retry flow | Yes |
+| Valid evidence, fails a Mechanical check with an attempt left | Hands the step back to the Drone that submitted it | Yes |
+| Valid evidence, fails a Mechanical check with none left | Ends the Job. The Drone is terminated without a turn | Yes |
+| Valid evidence, and a Judge refused it | Escalates. The step stops and its Drone ends, unasked | No — the budget answers a check that ran and said no |
 | Missing or insufficient evidence | Prompts the Drone for more — a free clarification round | No |
 | No evidence, and at least one tool call refused | Escalates as `blocked_by_policy` | No |
 
-- **On a gate failure**, the refusal reprompt carries the Judge record's `expected` and `produced` back to the Drone — never `consequence`, and never a counter.
+- **On a mechanical failure with an attempt left**, the hand-back carries what each Check expected and produced, and what it printed — never a counter.
+- **On a Judge refusal, nothing goes back to the Drone.** Resubmitting under the same instructions produces the same work, so it is a person's to answer, and the step stopping is what ends the Drone. The record's `expected` and `produced` — never `consequence` — open the brief of the Drone a person restarts the step with, which is why the baseline promises a later turn only where the part is coming back.
 - **On missing or insufficient evidence**, the clarification round is capped, then escalates as `stalled`. `silent` is a sub-kind of `stalled`, not a separate trigger. The cap's value is a config row and is still undecided — tracked in `../contracts/configuration.md`.
 - **On `blocked_by_policy`**, the refused calls and their inputs go on the payload. No clarification round is spent first — asking again cannot produce a tool the Drone is not permitted to call, and nothing was attempted that a Check could fail.
 
