@@ -182,6 +182,7 @@ where
                 .as_ref()
                 .map(|(footprint, plans)| kept(footprint, plans)),
             self.redirect_awaited(job.id()).await,
+            self.question_awaited(job.id()).await,
             stuck.as_ref(),
             overlaps,
             delivery,
@@ -613,6 +614,55 @@ where
     /// Every path answers 200 with `isError` rather than a status code, because
     /// a Drone reads a tool error and can act on it, and a 4xx reaches the model
     /// as a broken server — which is something it stops trying.
+    /// A person's answer to the question a waiting Drone asked.
+    ///
+    /// **Nothing moves.** The Job was `running` while it waited and is `running`
+    /// now; what changed is that the Drone has been handed a turn. The summary
+    /// comes back for the reason every other command's does — a caller folds
+    /// the row rather than re-reading the board — and not because anything
+    /// about it is different.
+    ///
+    /// The four refusals are `crate::asking::NotAnswered`'s and it says each;
+    /// this only carries one out as the 409 it is.
+    async fn answer_question(
+        &self,
+        job_id: JobId,
+        answer: ipc::Answer,
+    ) -> Result<JobSummary, Refusal> {
+        let id = job_id.to_domain();
+        Fleet::answer_question(self, &id, answer.question_id.as_str(), &answer.chose)
+            .await
+            .map_err(|why| self.refusal(why.about(&id)))?;
+        let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
+    /// The working Drone asking a person something it cannot answer from the
+    /// repository.
+    ///
+    /// The same shape as the three tool calls below and the same reason for it:
+    /// the binding — which Job, which step — is `Fleet::ask_question`'s, under
+    /// the slot lock, and every refusal answers 200 with `isError` so a Drone
+    /// can read it and call again.
+    ///
+    /// **The receipt says the question was taken and never that it was
+    /// answered.** What a person chose arrives in the Drone's own session as a
+    /// turn, however much later, which is why this call does not block. See
+    /// `crate::asking`.
+    async fn ask_question(
+        &self,
+        caller: api::Caller,
+        asking: ipc::mcp::AskQuestion,
+    ) -> Result<Receipt, NotRecorded> {
+        let job = self.placed(&caller)?;
+        Fleet::ask_question(self, &job, asking)
+            .await
+            .map(|_| Receipt {
+                word: "asked".to_string(),
+            })
+            .map_err(NotRecorded::from)
+    }
+
     async fn submit_evidence(
         &self,
         caller: api::Caller,

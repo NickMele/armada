@@ -192,6 +192,12 @@ pub enum Adrift {
     /// have kept, and the record would say a person injected context into a
     /// session that did not exist.
     NoDroneToRedirect { job: JobId },
+    /// An answer to a question that is not outstanding, is not the one
+    /// outstanding, names a label the Drone never offered, or would not go down
+    /// the pipe. **One variant carrying a sentence rather than four**: all four
+    /// are the same act refused for a reason the Job's state does not name, and
+    /// the recourse is identical — `crate::asking::NotAnswered` says which.
+    NotAnswerable { job: JobId, because: String },
     /// A review act was asked for on a Job that is not at a human gate.
     ///
     /// **Not an illegal transition.** Two of the three moves a review makes are
@@ -548,6 +554,9 @@ impl fmt::Display for Adrift {
                  the worktree it left behind",
                 job.as_str()
             ),
+            // `crate::asking::NotAnswered`'s sentence, carried whole: a second
+            // wording here would be a second authority for one refusal.
+            Adrift::NotAnswerable { because, .. } => out.write_str(because),
             Adrift::NotUnderReview { job, status } => write!(
                 out,
                 "{} is {} and is not standing at a human gate. Approve, request changes and \
@@ -751,6 +760,7 @@ impl Adrift {
             | Adrift::NotResumable { job, .. }
             | Adrift::NoStepStopped { job }
             | Adrift::NoDroneToRedirect { job }
+            | Adrift::NotAnswerable { job, .. }
             | Adrift::NotUnderReview { job, .. }
             | Adrift::NoDroneToTell { job }
             | Adrift::NoteAlreadyWaiting { job, .. }
@@ -823,6 +833,8 @@ impl Error for Adrift {
             | Adrift::NotResumable { .. }
             | Adrift::NoStepStopped { .. }
             | Adrift::NoDroneToRedirect { .. }
+            // And an answer that does not apply, which is the same shape.
+            | Adrift::NotAnswerable { .. }
             // The two review refusals join them: a Job that is not at a gate
             // has nothing underneath saying why, only the state it is in.
             | Adrift::NotUnderReview { .. }

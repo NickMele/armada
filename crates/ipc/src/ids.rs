@@ -94,6 +94,39 @@ impl From<&core_model::StepId> for StepId {
     }
 }
 
+/// One question a Drone asked, by the id Fleet minted for it.
+///
+/// Not a [`wire_id`]: **a question is not a record**. It lives on the working
+/// slot for as long as it is unanswered and is gone the instant it is answered,
+/// exactly as [`JudgeInFlight`](crate::JudgeInFlight) does, so there is no
+/// `core-model` id underneath for this to carry. Fleet still mints it, and for
+/// the reason every other id is minted there: an answer naming an id a peer
+/// invented joins to nothing.
+///
+/// **It is what makes a stale answer a refusal rather than a wrong Job.** A
+/// window left open on a question that has since been answered and replaced
+/// would otherwise send a label that matches the *new* question's options by
+/// coincidence, and the cost of that here is a dispatched Job that runs and
+/// spends.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct QuestionId(String);
+
+impl QuestionId {
+    pub fn carried(value: impl Into<String>) -> Self {
+        QuestionId(value.into())
+    }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<&core_model::Ulid> for QuestionId {
+    fn from(id: &core_model::Ulid) -> Self {
+        QuestionId(id.as_str().to_string())
+    }
+}
+
 /// An acceptance criterion's frozen identifier.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]

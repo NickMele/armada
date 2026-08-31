@@ -78,6 +78,8 @@ pub struct FakeDaemon {
     pub submitted: Mutex<Vec<SubmitEvidence>>,
     /// Every scope declaration taken, in arrival order.
     pub declared: Mutex<Vec<DeclareScope>>,
+    /// Every question taken, in arrival order.
+    pub asked: Mutex<Vec<ipc::mcp::AskQuestion>>,
     /// How many dry runs were asked for, so a test can assert that a refused
     /// call ran nothing.
     pub checked: AtomicU64,
@@ -101,6 +103,7 @@ impl FakeDaemon {
             minted: AtomicU64::new(0),
             submitted: Mutex::new(Vec::new()),
             declared: Mutex::new(Vec::new()),
+            asked: Mutex::new(Vec::new()),
             checked: AtomicU64::new(0),
             reports: Mutex::new(Vec::new()),
             mute: Mutex::new(false),
@@ -223,6 +226,9 @@ impl Daemon for FakeDaemon {
             // Absent for the same reason, one layer further in: an outstanding
             // redirect is read from a working slot, and this daemon holds none.
             redirecting: None,
+            // Absent for the redirect's reason exactly: an unanswered question
+            // lives on a working slot, and this daemon holds none.
+            asking: None,
             // Absent again: a waiting note is a column on `jobs`, and this
             // daemon's Jobs are wire summaries rather than records.
             redirect_waiting: None,
@@ -578,6 +584,29 @@ impl Daemon for FakeDaemon {
         Ok(job.clone())
     }
 
+    /// The answer to a question, faked on the one thing a `JobSummary` can see:
+    /// **there is no Drone waiting.** Which question is outstanding and which
+    /// labels it offered are read off a working slot this daemon has none of,
+    /// so it does not pretend to know — `fleet`'s own suite asserts those.
+    async fn answer_question(
+        &self,
+        job_id: JobId,
+        _answer: ipc::Answer,
+    ) -> Result<JobSummary, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+            return Err(self.no_such_job(&job_id));
+        };
+        if job.assigned_drone.is_none() {
+            return Err(Refusal::IllegalMove(ipc::WireError::raised(
+                "fake.nothing_is_asking",
+                "this Job has no Drone waiting on an answer".to_string(),
+                run_id(),
+            )));
+        }
+        Ok(job.clone())
+    }
+
     async fn restart_step(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         let jobs = self.jobs.lock().expect("not poisoned");
         let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
@@ -836,6 +865,33 @@ impl Daemon for FakeDaemon {
             .push(declaration);
         Ok(Receipt {
             word: "declared".to_string(),
+        })
+    }
+
+    /// A question taken, refused on the one thing this daemon can see: nothing
+    /// is being worked. **The receipt says taken and never answered** — what a
+    /// person chose arrives in the Drone's session, which no fake has.
+    async fn ask_question(
+        &self,
+        _caller: crate::Caller,
+        asking: ipc::mcp::AskQuestion,
+    ) -> Result<Receipt, NotRecorded> {
+        let running = self
+            .jobs
+            .lock()
+            .expect("not poisoned")
+            .iter()
+            .any(|job| job.status.as_wire() == "running");
+        if !running {
+            return Err(NotRecorded {
+                because: "no Job is being worked, so there is no step for this \
+                          question to be about"
+                    .to_string(),
+            });
+        }
+        self.asked.lock().expect("not poisoned").push(asking);
+        Ok(Receipt {
+            word: "asked".to_string(),
         })
     }
 

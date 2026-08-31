@@ -27,7 +27,7 @@
 //! and would need a subscribe message, an unsubscribe message and a rule for
 //! what a resync means when the set changes mid-stream.
 //!
-//! # Six event kinds are produced at M1
+//! # Seven event kinds are produced at M1
 //!
 //! The rest of `operations.toml`'s — `alert.raised`, `review.ready`,
 //! `evidence.submitted` and `usage.threshold` — describe records this workspace
@@ -78,7 +78,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::detail::JudgeInFlight;
+use crate::detail::{JudgeInFlight, QuestionInFlight};
 use crate::enums::{Actor, JobStatus, StepState};
 use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
 use crate::job::{JobForgotten, JobList, JobSummary};
@@ -160,6 +160,8 @@ pub enum Event {
     JobFilesChanged(JobFilesChanged),
     #[serde(rename = "job.judging")]
     JobJudging(JobJudging),
+    #[serde(rename = "job.asking")]
+    JobAsking(JobAsking),
     #[serde(rename = "job.forgotten")]
     JobForgotten(JobForgotten),
 }
@@ -452,6 +454,50 @@ pub struct JobJudging {
     pub judging: Option<JudgeInFlight>,
     /// Always Fleet. A Judge call authenticates as Fleet and no Drone can cause
     /// one. Carried for the reason [`DroneSpawned`] carries one.
+    pub actor: Actor,
+    pub at: Instant,
+}
+
+/// A Drone asked a person a question, or the one that was out was answered.
+///
+/// **Two messages per question and never a third.** The one going out carries
+/// [`asking`](JobAsking::asking); the one coming back carries nothing, and that
+/// absence is the message rather than the stream going quiet. It is
+/// [`JobJudging`]'s shape exactly and for the same reason: a surface ages the
+/// wait from `asked_at`, so a question that waits four hours costs this channel
+/// two messages and not fourteen thousand.
+///
+/// **The actor differs between the two, which no other kind here does.** Going
+/// out it is [`Actor::Drone`] and coming back [`Actor::Human`], because those
+/// are the two ends of the act. Fleet caused neither.
+///
+/// **It names no [`JobSummary`](crate::JobSummary).** Nothing on the Board's
+/// row changes when a question goes out, and this is read by a detail view
+/// somebody has open on one Job — [`JobFilesChanged`]'s terms exactly.
+///
+/// # What it costs the channel, stated
+///
+/// The bound is `api::stream::BACKLOG`, shared by every kind. This one produces
+/// at the rate a **person answers**, the slowest rate anything here produces at,
+/// and it holds no queue of its own — the question lives on the working slot. It
+/// adds nothing measurable to the unbounded-sink risk
+/// `docs/practices/protocol.md` names.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobAsking {
+    pub job_id: JobId,
+    /// Which step's Drone is waiting. A Job runs one step at a time.
+    pub step_id: StepId,
+    /// The question that was asked. **Absent because it was answered**, and the
+    /// answer itself does not travel here: what a person chose is in the Job's
+    /// own log, and what the Drone does with it is the work it goes on to do.
+    ///
+    /// This is the field that makes the absence legible: a Job nobody is
+    /// waiting on and a Job whose question has just been answered are the same,
+    /// and they are both this message with nothing in it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asking: Option<QuestionInFlight>,
+    /// [`Actor::Drone`] on the way out and [`Actor::Human`] on the way back.
+    /// See the type.
     pub actor: Actor,
     pub at: Instant,
 }

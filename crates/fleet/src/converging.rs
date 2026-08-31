@@ -17,9 +17,9 @@
 //!
 //! [`Chain`] holds where a step stands and is cleared when the step changes, so
 //! a tripwire that stays tripped — drift does — buys no second call.
-//!
 //! **Nothing here kills a Drone.** `docs/concepts/helm.md`: a thrashing Drone
-//! is *held*, worktree intact, which leaves a redirect available.
+//! is *held*, worktree intact, which leaves a redirect available. A Drone
+//! waiting on an answer is **not** thrashing — see `crate::asking`.
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
@@ -238,6 +238,14 @@ where
             return Ok(None);
         }
         let at_work = working.as_ref().expect("the slot was read as full");
+        // **A Drone waiting on an answer is not working badly; it is not
+        // working at all.** The wall clock runs while a person thinks, so
+        // without this the tripwire fires the instant an answer lands, buying a
+        // Judge call on a step that has just been unblocked. Free, and true
+        // regardless of the tripwires — the evidence reading's terms exactly.
+        if crate::asking::waiting_on_an_answer(at_work) {
+            return Ok(None);
+        }
         let Some(tripped) = self.tripped(at_work) else {
             return Ok(None);
         };

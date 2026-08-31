@@ -114,6 +114,7 @@ where
             Adrift::NotResumable { job, .. }
             | Adrift::NoStepStopped { job }
             | Adrift::NoDroneToRedirect { job }
+            | Adrift::NotAnswerable { job, .. }
             | Adrift::DroneStillThere { job }
             | Adrift::WorktreeGone { job, .. }
             | Adrift::NotTheJudges { job, .. }

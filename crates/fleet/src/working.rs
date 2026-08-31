@@ -31,6 +31,7 @@ use adapter_traits::{AgentHarness, DroneEvent, Footprint, Worktree};
 use core_model::{DeclaredPaths, DroneId, JobId, RepoPath, StepId, Timestamp};
 use tokio::process::ChildStderr;
 
+use crate::asking::Asked;
 use crate::converging::{elapsed, Chain};
 use crate::drone::{Ending, Started};
 use crate::footprint::Publishing;
@@ -115,6 +116,24 @@ pub(crate) struct Working {
     /// costs the same care. The instant is kept beside the baseline because the
     /// wait is a fact a person is owed — `Fleet::redirect_awaited` serves it.
     answering: Option<Awaiting>,
+    /// The question this Drone asked and nobody has answered yet.
+    ///
+    /// **`Some` is a Drone that is waiting rather than working**, and it is the
+    /// only thing that tells the two apart: the process is alive, the Job is
+    /// `running`, the step is `running`, and nothing is arriving. Both vigils
+    /// read this and decline, exactly as they decline on evidence sitting at
+    /// the gate — see `crate::asking`.
+    ///
+    /// Held here and written to no column, for
+    /// [`JudgeInFlight`](ipc::JudgeInFlight)'s reason: it is only ever true
+    /// now. A Fleet that restarts loses the Drone that asked, and the Job it
+    /// asked on is escalated as `interrupted`, so a stored question would
+    /// outlive the only process that could act on the answer.
+    ///
+    /// **One at a time.** `Fleet::ask_question` refuses a second while one is
+    /// held, because a Drone that could stack questions would be holding a
+    /// conversation and a queue is a thing a person answers out of order.
+    asked: Option<Asked>,
     /// How many liveness pokes this step has spent.
     ///
     /// **The step's budget, not the episode's.** A Drone that answers a poke
@@ -241,6 +260,7 @@ impl Working {
             heard_at: at,
             heard: 0,
             answering: None,
+            asked: None,
             pokes: 0,
             publishing: Publishing::default(),
             entered_with: None,
@@ -510,6 +530,30 @@ impl Working {
     pub(crate) fn waiting(&mut self, at: Timestamp) {
         self.heard = self.transcript.progress().heard;
         self.heard_at = at;
+    }
+
+    /// The question this Drone is waiting on, where there is one.
+    pub(crate) fn asked(&self) -> Option<&Asked> {
+        self.asked.as_ref()
+    }
+
+    /// Hold the question the Drone just asked.
+    ///
+    /// **Nothing here checks that none is held.** `Fleet::ask_question` does,
+    /// under this slot's lock and before it mints an id, because the refusal it
+    /// answers with names the question already outstanding — which is a value
+    /// this method has no way to return.
+    pub(crate) fn asks(&mut self, asked: Asked) {
+        self.asked = Some(asked);
+    }
+
+    /// The question has been answered and the answer is down the pipe.
+    ///
+    /// **After the write, never before.** A session that would not take the
+    /// answer leaves the question standing, so a person can answer again rather
+    /// than being told there is nothing to answer on a Drone that never heard.
+    pub(crate) fn answered_question(&mut self) {
+        self.asked = None;
     }
 
     /// How many pokes this step has spent.

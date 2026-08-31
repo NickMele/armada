@@ -31,8 +31,9 @@ use crate::codec::{encode, Unencodable};
 
 pub use report::{CheckRan, CheckReport};
 pub use tools::{
-    DeclareScope, NotAnArgument, SubmitEvidence, CHECKS_FIELDS, CHECKS_TOOL, EVIDENCE_FIELDS,
-    SCOPE_FIELDS, SCOPE_TOOL, TOOL,
+    AskQuestion, AskedOption, DeclareScope, NotAnArgument, SubmitEvidence, ASK_FIELDS, ASK_TOOL,
+    CHECKS_FIELDS, CHECKS_TOOL, EVIDENCE_FIELDS, FEWEST_OPTIONS, MOST_OPTIONS, SCOPE_FIELDS,
+    SCOPE_TOOL, TOOL,
 };
 
 /// The name Armada's server is registered under in a Drone's MCP
@@ -105,6 +106,17 @@ pub enum Incoming {
     /// printed, and no step moves on it in either direction.
     RunChecks {
         id: CallId,
+    },
+    /// A call of the asking tool that read as a question. Whether it *is* one
+    /// Fleet may hold is the daemon's answer, not this module's.
+    ///
+    /// **The one call whose answer is not in the reply.** Every other arm here
+    /// is answered from something Fleet already has; this one is answered by a
+    /// person, later, as a turn injected into the Drone's session. What comes
+    /// back on this connection is a receipt saying the question was taken.
+    Ask {
+        id: CallId,
+        asking: AskQuestion,
     },
     /// A tool call this server would not take. **Answered as a tool error and
     /// never as a transport failure** — a Drone reads a tool error and can act
@@ -281,6 +293,12 @@ fn called(id: CallId, params: Option<&Value>) -> Incoming {
     if tool == SCOPE_TOOL {
         return match tools::declaration(arguments) {
             Ok(declaration) => Incoming::Declare { id, declaration },
+            Err(why) => Incoming::NotASubmission { id, why },
+        };
+    }
+    if tool == ASK_TOOL {
+        return match tools::question(arguments) {
+            Ok(asking) => Incoming::Ask { id, asking },
             Err(why) => Incoming::NotASubmission { id, why },
         };
     }

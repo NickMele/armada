@@ -1,4 +1,4 @@
-//! The Drone endpoint: one path, three tools, on the listener that was already
+//! The Drone endpoint: one path, four tools, on the listener that was already
 //! there.
 //!
 //! # Why this is not in the route table
@@ -149,6 +149,19 @@ async fn called<D: Daemon>(
         // `Daemon::run_checks`'s, not the transport's.
         Incoming::RunChecks { id } => match served.daemon().run_checks(caller).await {
             Ok(report) => Answered::Checked { id, report },
+            Err(why) => Answered::Refused { id, why },
+        },
+        // **Answered immediately, and the answer is not here.** The receipt
+        // says Fleet took the question; what a person chose arrives in the
+        // Drone's session as a turn, however much later. Holding this open
+        // would put a person's thinking time on an HTTP connection and would
+        // swallow every redirect sent to unstick the Drone while it waited —
+        // an injected turn is consumed when the current tool call returns.
+        //
+        // So it adds nothing to the unbounded-sink risk either: one reply on
+        // the Drone's own connection, with no queue behind it.
+        Incoming::Ask { id, asking } => match served.daemon().ask_question(caller, asking).await {
+            Ok(receipt) => Answered::Recorded { id, receipt },
             Err(why) => Answered::Refused { id, why },
         },
     };

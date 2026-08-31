@@ -102,6 +102,7 @@
 
 pub mod admitting;
 pub mod adrift;
+pub mod asking;
 pub mod at_step;
 mod boundary;
 pub mod briefing;
@@ -169,6 +170,7 @@ pub mod working;
 mod tests;
 
 pub use adrift::{Adrift, NotDeclared, NotSubmitted};
+pub use asking::{Answered, Asked, NotAnswered, NotAsked, Told};
 pub use at_step::AtStep;
 pub use clock::{Clock, SystemClock};
 pub use converging::{ReportNow, Stage, StepNorms, Tripwire, Wandering};

@@ -25,8 +25,8 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
 use ipc::{
-    ChangesRequested, FileReport, JobId, JobRequest, Missed, Overruled, ProposeJob, Redirection,
-    Resync, RunId, StreamMessage, WireError, PROTOCOL_VERSION,
+    Answer, ChangesRequested, FileReport, JobId, JobRequest, Missed, Overruled, ProposeJob,
+    Redirection, Resync, RunId, StreamMessage, WireError, PROTOCOL_VERSION,
 };
 use serde::Serialize;
 use std::sync::Arc;
@@ -199,6 +199,14 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/restart_step",
     },
+    // Its own route rather than a shape `redirect` also takes: that one carries
+    // a person's own words and this carries one of a closed set the Drone
+    // offered, and one route taking either would make the closed set optional.
+    Route {
+        operation: "answer_question",
+        method: "POST",
+        path: "/jobs/:job_id/answer_question",
+    },
     // What a person says went wrong, under the Job it is about, and every
     // report filed, which is not under one — a report outlives the Job it
     // names, so a listing reachable only through a Job would lose exactly the
@@ -242,6 +250,11 @@ pub const SERVED: &[Route] = &[
     },
     Route {
         operation: "job.files_changed",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "job.asking",
         method: "GET",
         path: "/events",
     },
@@ -348,6 +361,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/redispatch", post(redispatch_job::<D>))
         .route("/jobs/:job_id/redirect", post(redirect_drone::<D>))
         .route("/jobs/:job_id/restart_step", post(restart_step::<D>))
+        .route("/jobs/:job_id/answer_question", post(answer_question::<D>))
         .route("/jobs/:job_id/report", post(file_report::<D>))
         .route("/reports", get(list_reports::<D>))
         .route("/jobs/:job_id/observe", get(observe_job::<D>))
@@ -455,13 +469,7 @@ async fn propose_job<D: Daemon>(State(served): State<Served<D>>, body: Bytes) ->
         Ok(proposal) => proposal,
         // 400 is the transport's own refusal and never the daemon's — the
         // bytes did not become a request, so nothing downstream was asked.
-        Err(why) => {
-            return problem(
-                StatusCode::BAD_REQUEST,
-                &WireError::raised(UNDECODABLE_REQUEST, why.to_string(), served.run_id.clone())
-                    .caused_by(vec![why.to_string()]),
-            )
-        }
+        Err(why) => return undecodable(&why.to_string(), &served.run_id),
     };
     match served.daemon.propose_job(proposal).await {
         // 201: the Job now exists, at the approval gate. It is not running, and
@@ -477,13 +485,7 @@ async fn propose_job<D: Daemon>(State(served): State<Served<D>>, body: Bytes) ->
 async fn propose_from_request<D: Daemon>(State(served): State<Served<D>>, body: Bytes) -> Response {
     let request: JobRequest = match ipc::decode("request", &body) {
         Ok(request) => request,
-        Err(why) => {
-            return problem(
-                StatusCode::BAD_REQUEST,
-                &WireError::raised(UNDECODABLE_REQUEST, why.to_string(), served.run_id.clone())
-                    .caused_by(vec![why.to_string()]),
-            )
-        }
+        Err(why) => return undecodable(&why.to_string(), &served.run_id),
     };
     match served.daemon.propose_from_request(request).await {
         Ok(job) => answer(StatusCode::CREATED, &job, &served.run_id),
@@ -529,13 +531,7 @@ async fn request_changes<D: Daemon>(
 ) -> Response {
     let note: ChangesRequested = match ipc::decode("a review note", &body) {
         Ok(note) => note,
-        Err(why) => {
-            return problem(
-                StatusCode::BAD_REQUEST,
-                &WireError::raised(UNDECODABLE_REQUEST, why.to_string(), served.run_id.clone())
-                    .caused_by(vec![why.to_string()]),
-            )
-        }
+        Err(why) => return undecodable(&why.to_string(), &served.run_id),
     };
     match served
         .daemon
@@ -575,13 +571,7 @@ async fn override_verdict<D: Daemon>(
 ) -> Response {
     let overruling: Overruled = match ipc::decode("an override", &body) {
         Ok(overruling) => overruling,
-        Err(why) => {
-            return problem(
-                StatusCode::BAD_REQUEST,
-                &WireError::raised(UNDECODABLE_REQUEST, why.to_string(), served.run_id.clone())
-                    .caused_by(vec![why.to_string()]),
-            )
-        }
+        Err(why) => return undecodable(&why.to_string(), &served.run_id),
     };
     match served
         .daemon
@@ -680,13 +670,7 @@ async fn redirect_drone<D: Daemon>(
 ) -> Response {
     let instruction: Redirection = match ipc::decode("a redirect", &body) {
         Ok(instruction) => instruction,
-        Err(why) => {
-            return problem(
-                StatusCode::BAD_REQUEST,
-                &WireError::raised(UNDECODABLE_REQUEST, why.to_string(), served.run_id.clone())
-                    .caused_by(vec![why.to_string()]),
-            )
-        }
+        Err(why) => return undecodable(&why.to_string(), &served.run_id),
     };
     match served
         .daemon
@@ -696,6 +680,42 @@ async fn redirect_drone<D: Daemon>(
         Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
         Err(refusal) => refused(refusal),
     }
+}
+
+/// Answer the question a Drone asked. **The Job comes back unchanged** — it was
+/// `running` while it waited and is `running` now; what moved is the Drone,
+/// handed the answer as a turn. 409 where nothing is waiting, where the id
+/// names a question already answered, and where the label was not offered.
+async fn answer_question<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+    body: Bytes,
+) -> Response {
+    let chosen: Answer = match ipc::decode("an answer", &body) {
+        Ok(chosen) => chosen,
+        Err(why) => return undecodable(&why.to_string(), &served.run_id),
+    };
+    match served
+        .daemon
+        .answer_question(JobId::carried(job_id), chosen)
+        .await
+    {
+        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// A body that would not parse, as the 400 it is.
+///
+/// **Written once.** This arm was spelled out at every command that takes a
+/// body, seven times, each one four lines of `WireError` construction that has
+/// to agree with the other six. Adding the eighth is what made it a function.
+fn undecodable(why: &str, run_id: &RunId) -> Response {
+    problem(
+        StatusCode::BAD_REQUEST,
+        &WireError::raised(UNDECODABLE_REQUEST, why.to_string(), run_id.clone())
+            .caused_by(vec![why.to_string()]),
+    )
 }
 
 /// Put a new Drone on the worktree the last one left. **One Job comes back**,
@@ -727,13 +747,7 @@ async fn file_report<D: Daemon>(
 ) -> Response {
     let filing: FileReport = match ipc::decode("a report", &body) {
         Ok(filing) => filing,
-        Err(why) => {
-            return problem(
-                StatusCode::BAD_REQUEST,
-                &WireError::raised(UNDECODABLE_REQUEST, why.to_string(), served.run_id.clone())
-                    .caused_by(vec![why.to_string()]),
-            )
-        }
+        Err(why) => return undecodable(&why.to_string(), &served.run_id),
     };
     match served
         .daemon

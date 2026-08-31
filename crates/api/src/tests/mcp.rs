@@ -114,20 +114,97 @@ async fn a_notification_is_acknowledged_and_not_answered() {
     assert!(answered.body.is_empty());
 }
 
-/// Three tools, named as the allowlist names them and as `adapters` joins them.
+/// Four tools, named as the allowlist names them and as `adapters` joins them.
 #[tokio::test]
-async fn the_tool_list_carries_three_tools_and_no_fourth() {
+async fn the_tool_list_carries_four_tools_and_no_fifth() {
     let app = wired(FakeDaemon::new(Broadcaster::new()));
     let answered = call(&app, r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#).await;
     assert_eq!(answered.status, StatusCode::OK);
     assert!(answered.body.contains("\"name\":\"submit_evidence\""));
     assert!(answered.body.contains("\"name\":\"declare_scope\""));
     assert!(answered.body.contains("\"name\":\"run_checks\""));
-    // Three, and no fourth. **Only one of them reports** — the count matters
+    assert!(answered.body.contains("\"name\":\"ask_question\""));
+    // Four, and no fifth. **Only one of them reports** — the count matters
     // because a Drone choosing between reporting-shaped tools is spike 6's one
-    // miss, and neither a declaration nor a dry run is a report.
-    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 3);
+    // miss, and none of a declaration, a dry run or a question is a report.
+    //
+    // `ask_question`'s own schema nests an object, so the count is of the
+    // top-level key: `inputSchema` appears once per tool and the option shape
+    // inside it is `items`.
+    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 4);
 }
+
+/// A question is taken and answered with a receipt that is **not** the answer.
+///
+/// The point of the assertion is the word: `asked` rather than `recorded`,
+/// because a Drone that read this as its answer would carry on having been told
+/// nothing. What a person chose arrives later as a turn, which no router test
+/// can see and `fleet`'s own suite asserts.
+#[tokio::test]
+async fn a_question_is_taken_and_the_receipt_is_not_the_answer() {
+    let daemon = FakeDaemon::new(Broadcaster::new());
+    running(&daemon, "01JOB0");
+    let app = wired(daemon);
+
+    let answered = call(&app, QUESTION).await;
+    assert_eq!(answered.status, StatusCode::OK);
+    assert!(!answered.is_error());
+    assert_eq!(answered.text(), "asked");
+}
+
+/// **The structure is the requirement, so a shapeless question is refused by
+/// name.** One option is not a question, and a Drone told so can fix it and call
+/// again — which is what a tool error is for and what a 4xx would not be.
+#[tokio::test]
+async fn a_question_with_one_answer_is_refused_and_takes_nothing() {
+    let daemon = FakeDaemon::new(Broadcaster::new());
+    running(&daemon, "01JOB0");
+    let app = wired(daemon);
+
+    let answered = call(
+        &app,
+        r#"{"jsonrpc":"2.0","id":9,"method":"tools/call",
+            "params":{"name":"ask_question","arguments":{
+                "question":"Split by crate?",
+                "options":[{"label":"Yes","consequence":"one Job per crate"}]}}}"#,
+    )
+    .await;
+    assert_eq!(answered.status, StatusCode::OK);
+    assert!(answered.is_error(), "a refusal the Drone reads: {}", answered.text());
+    assert!(
+        answered.text().contains("Offer between"),
+        "and it names the bound: {}",
+        answered.text()
+    );
+}
+
+/// Two answers a person could not tell apart are two answers that mean either.
+#[tokio::test]
+async fn two_answers_with_one_label_are_refused() {
+    let daemon = FakeDaemon::new(Broadcaster::new());
+    running(&daemon, "01JOB0");
+    let app = wired(daemon);
+
+    let answered = call(
+        &app,
+        r#"{"jsonrpc":"2.0","id":10,"method":"tools/call",
+            "params":{"name":"ask_question","arguments":{
+                "question":"Split by crate?",
+                "options":[{"label":"Yes","consequence":"one Job per crate"},
+                           {"label":"Yes","consequence":"one Job for all of them"}]}}}"#,
+    )
+    .await;
+    assert!(answered.is_error());
+    assert!(answered.text().contains("labelled `Yes`"), "{}", answered.text());
+}
+
+/// One well-formed question, reused by the tests above.
+const QUESTION: &str = r#"{"jsonrpc":"2.0","id":8,"method":"tools/call",
+    "params":{"name":"ask_question","arguments":{
+        "question":"Should the store schema change be its own Job?",
+        "options":[
+            {"label":"Its own Job","consequence":"dispatch a migration Job first and make the rest depend on it"},
+            {"label":"Fold it in","consequence":"the first Job that needs the column adds it"}]}}}"#;
 
 /// The happy path, end to end through the router: a call becomes a receipt and
 /// the daemon holds the submission.

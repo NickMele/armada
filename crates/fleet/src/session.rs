@@ -13,13 +13,11 @@
 //!
 //! # Every write is checked, and a truncated one is a failure
 //!
-//! `write_all` either writes the whole turn or fails; there is no path here
-//! that reports how much of a turn went. v1's equivalent read a short payload
-//! as an empty grant, so a partial write became a silent absence of authority
-//! and the run then failed naming a secret rather than the pipe. The shape of
-//! that defect is what this module refuses: a half-delivered instruction is an
+//! `write_all` either writes the whole turn or fails; nothing here reports how
+//! much of a turn went. v1's equivalent read a short payload as an empty grant,
+//! so a partial write became a silent absence of authority and the run failed
+//! naming a secret rather than the pipe. A half-delivered instruction is an
 //! error, never a Drone that was told part of something.
-//!
 //! # What the spike also established, and what it costs this trait
 //!
 //! **Delivery waits for the current turn to end.** A message injected while the
@@ -28,11 +26,12 @@
 //! that cost is zero: a Drone that has just submitted evidence is between turns
 //! by definition, which is exactly the moment the gate speaks.
 //!
-//! # Six methods, and none of them can start anything
+//! # Seven methods, and none of them can start anything
 //!
 //! [`tell`](LiveSession::tell), [`notice`](LiveSession::notice),
 //! [`redirect`](LiveSession::redirect), [`interrupt`](LiveSession::interrupt),
-//! [`poke`](LiveSession::poke) and [`terminate`](LiveSession::terminate). There
+//! [`answer`](LiveSession::answer), [`poke`](LiveSession::poke),
+//! [`terminate`](LiveSession::terminate). There
 //! is no spawn, no respawn and no restart, because the gate must not be able to
 //! produce a Drone — and no way to remove a worktree, because nothing in this
 //! workspace can. A restart is `crate::resume`'s, and it reaches a spawn rather
@@ -40,9 +39,9 @@
 //!
 //! Each carries a different authorship, which is why one method taking text
 //! would be wrong: a verdict Fleet reached, something Fleet observed while the
-//! step ran, a person's own words, Fleet's own directive at the third stage of
-//! the thrashing chain, and Fleet asking a Drone that has gone quiet whether it
-//! is still there.
+//! step ran, a person's own words, Fleet's directive at the third stage of the
+//! thrashing chain, the answer a person picked from a set the Drone offered, and
+//! Fleet asking a quiet Drone whether it is still there.
 
 use std::future::Future;
 use std::io;
@@ -53,6 +52,7 @@ use tokio::process::{Child, ChildStdin};
 use tokio::sync::Mutex;
 use verification::OutcomeTurn;
 
+use crate::asking::Answered;
 use crate::briefing::{Declaring, Redeclaring};
 use crate::converging::ReportNow;
 use crate::resume::Redirection;
@@ -129,6 +129,20 @@ pub trait LiveSession {
         &self,
         directive: &ReportNow,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// Hand the waiting Drone a person's answer to the question it asked.
+    ///
+    /// **A separate method from [`redirect`](LiveSession::redirect) because the
+    /// two carry different authorship**, the same argument that keeps `redirect`
+    /// apart from [`tell`](LiveSession::tell). A redirect is a person's own
+    /// words and Fleet adds none; this is Fleet's own sentence built around a
+    /// label the Drone itself offered, and there is no way to send other text
+    /// under it — [`Answered`] has no constructor taking one.
+    ///
+    /// One method taking either would let a person's free text arrive as though
+    /// it were an answer to a closed question, which is the conversation
+    /// `crate::asking` exists instead of.
+    fn answer(&self, answer: &Answered) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Ask a Drone that has said nothing whether it is still there.
     ///
@@ -219,6 +233,16 @@ impl Turn {
     /// text under it.
     pub fn reporting(directive: &ReportNow) -> Turn {
         Turn::of(directive.text())
+    }
+
+    /// A person's answer to the question this Drone asked, injected into a
+    /// session already running.
+    ///
+    /// The wording is [`Answered`]'s and there is no way to send other text
+    /// under it — which is the difference from [`redirection`](Turn::redirection),
+    /// where a person's own words are exactly what travels.
+    pub fn answering(answer: &Answered) -> Turn {
+        Turn::of(answer.text())
     }
 
     /// Fleet's own liveness nudge, injected into a session that has said
@@ -333,6 +357,10 @@ impl LiveSession for DroneSession {
 
     async fn interrupt(&self, directive: &ReportNow) -> Result<(), io::Error> {
         self.say(&Turn::reporting(directive)).await
+    }
+
+    async fn answer(&self, answer: &Answered) -> Result<(), io::Error> {
+        self.say(&Turn::answering(answer)).await
     }
 
     async fn poke(&self, nudge: &Poke) -> Result<(), io::Error> {

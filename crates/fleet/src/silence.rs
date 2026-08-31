@@ -4,14 +4,12 @@
 //!
 //! Spike 9 measured 31 completed steps: the longest silence inside an honest
 //! one was **79s**, against a step wall clock whose p90 was 437s. **Every stuck
-//! step was quiet, not long** — a `scope` step whose Drone had said nothing for
-//! 1636 seconds, process alive and 33 calls already made, was killed by a
-//! person two seconds before the wall clock would have fired. So neither
-//! tripwire in [`converging`](mod@crate::converging) can reach this: that one
-//! fires on a slow honest step long before it catches a quiet one, and the call
-//! count **cannot fire at all** on a Drone that has stopped making calls — the
-//! counter freezes and reads as a step that is merely early.
-//!
+//! step was quiet, not long** — a `scope` step quiet for 1636 seconds, process
+//! alive and 33 calls made, was killed two seconds before the wall clock would
+//! have fired. So neither tripwire in [`converging`](mod@crate::converging)
+//! reaches this: that one fires on a slow honest step long before it catches a
+//! quiet one, and the call count **cannot fire at all** on a Drone that has
+//! stopped making calls — the counter freezes and reads as merely early.
 //! # Three stages, and no Judge in any of them
 //!
 //! | Stage | What | Costs |
@@ -20,9 +18,11 @@
 //! | The poke | "nothing has arrived from you for N minutes" | a turn |
 //! | `stalled` | **once `poke_limit` is spent** | the escalation |
 //!
+//! **Two silences are declined outright**: evidence at the gate, and a question
+//! waiting on a person — neither is silent, see `crate::asking`.
 //! `escalation-triggers.toml` types the trigger and this builds what it says.
-//! **No model is asked anything**: whether the Drone spoke is a count rather
-//! than a judgement, and *why* it stopped is another issue's.
+//! **No model is asked anything**: whether the Drone spoke is a count, and *why*
+//! it stopped is another issue's.
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
@@ -78,11 +78,12 @@ impl Liveness {
 /// explicit about: "this turn must never become 'second of two pokes', which
 /// would tell a Drone precisely how long it has left to look busy."
 ///
-/// **The draft's third branch is not sent.** It offers the escape hatch, and no
-/// escape hatch exists in this workspace yet — a Drone pointed at a tool it
-/// does not have is a Drone whose call is silently denied, which is the one
-/// thing a turn to a Drone in trouble must not do. What stands in its place is
-/// the wording [`ReportNow`] already uses for the same situation.
+/// **The draft's third branch is still not sent.** It offers an escape hatch,
+/// and `ask_question` is now one — but a Drone reached by this poke is a Drone
+/// that has said *nothing*, which is not the shape asking answers: asking is for
+/// a Drone that knows exactly what it does not know. Pointing a silent Drone at
+/// it would invite a question instead of the report the poke is asking for.
+/// What stands in its place is still the wording [`ReportNow`] already uses.
 ///
 /// [`ReportNow`]: crate::ReportNow
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -164,6 +165,22 @@ where
         // emits a progress heartbeat every thirty seconds while a tool runs.
         // See `Progress::heard`.
         if self.evidence_waiting_for(&at_work.standing().0) > 0 {
+            at_work.waiting(self.now());
+            return Ok(None);
+        }
+        // **And a Drone that has asked a person a question is not silent
+        // either.** It is the same sentence one step further out: the Drone has
+        // done everything it can and the next move is somebody else's. The
+        // difference is who — the gate there, a person here — and the wait here
+        // has no budget at all, because a person is asleep or at lunch. Poking
+        // one would tell a Drone that is correctly waiting to keep going, and
+        // three of those would escalate the Job as `stalled` over a question
+        // sitting unanswered on a Board.
+        //
+        // Free, and read second only because the evidence reading is cheaper
+        // still: this is a field on the slot already in hand. See
+        // `crate::asking`.
+        if crate::asking::waiting_on_an_answer(at_work) {
             at_work.waiting(self.now());
             return Ok(None);
         }

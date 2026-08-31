@@ -82,8 +82,9 @@ mod tests;
 pub use checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use detail::{
-    Criterion, Dependency, Flagged, JobDelivery, JobDetail, JudgeInFlight, Judged,
-    RedirectInFlight, RedirectWaiting, StepDetail, StepFacts, Stuck, Verdict,
+    Answer, AskedOption, Criterion, Dependency, Flagged, JobDelivery, JobDetail, JudgeInFlight,
+    Judged, QuestionInFlight, RedirectInFlight, RedirectWaiting, StepDetail, StepFacts, Stuck,
+    Verdict,
 };
 pub use enums::{
     Actor, AdvanceGate, CheckOutcome, CriterionSource, DependencyDirection, DronePresence,
@@ -92,12 +93,12 @@ pub use enums::{
 };
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
-    ChangeKind, ChangedFile, Cursor, Delivered, DroneExited, DroneSpawned, Event, JobCreated,
-    JobFilesChanged, JobJudging, JobStateChanged, JobStepAdvanced, Missed, Reason, Resync,
-    StreamMessage,
+    ChangeKind, ChangedFile, Cursor, Delivered, DroneExited, DroneSpawned, Event, JobAsking,
+    JobCreated, JobFilesChanged, JobJudging, JobStateChanged, JobStepAdvanced, Missed, Reason,
+    Resync, StreamMessage,
 };
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
-pub use ids::{CriterionId, DroneId, Instant, JobId, ManifestId, StepId, WorkflowId};
+pub use ids::{CriterionId, DroneId, Instant, JobId, ManifestId, QuestionId, StepId, WorkflowId};
 pub use job::{
     AttachmentRef, DependencyEdge, JobForgotten, JobList, JobRequest, JobSummary, ProposeJob,
     ProposedCriterion, ProposedPlan, Redirection, Redispatched, Subject, UnreadableJob,

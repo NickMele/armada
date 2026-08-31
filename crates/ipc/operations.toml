@@ -279,6 +279,23 @@ The counterpart to `approve_dispatch`, at the other end: that one is the gate be
 Refused with a 409 on a Job that is not at `awaiting_review`. The three review acts share that refusal, and it is what keeps this from quietly becoming `approve_dispatch`: `awaiting_approval -> rejected` is a legal edge too, and it belongs to `deny_dispatch`.
 """
 
+[operations.answer_question]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "A person picks one of the answers a waiting Drone offered"
+notes = """
+**The other half of a Drone's `ask_question`.** That tool is on the Fleet/Drone seam and is in no row here; this is the Fleet/Bridge half, and the two are the same act seen from its two ends.
+
+The body carries the question's id and the label chosen, and there is no field for prose. That is the whole difference between this and the conversation `docs/scope.md` records as abandoned: the medium is a closed set the Drone itself offered, so a question is asked once and answered once and nothing waits on somebody typing. A person who needs to say something the options do not cover has `redirect_drone`, which is rung one of the ladder and already carries a person's own words.
+
+The id is what makes a stale answer a refusal. A window left open across an answered question would otherwise send a label that matched the *next* question's options by coincidence, and what a wrong answer produces here is dispatched Jobs that run and spend rather than a bad verdict.
+
+**`helm_access` is `No`, on `file_report`'s argument.** Answering on the owner's behalf without his sentence is the failure mode that rule names, and here it is worse than a filed report: the answer becomes work that exists. Helm reads the outstanding question through `get_job` like every other fact, and the answer is the one thing it may not supply.
+
+It moves no status and no step state. The Job is `running` while it waits and `running` after — see `job.asking`.
+"""
+
 [operations.deny_dispatch]
 kind = "command"
 transport = "HTTP"
@@ -693,6 +710,23 @@ It carries only the id. `job.created` carries the row whole because a client
 has nothing to insert without it; a forgotten Job is the opposite problem —
 there is no row left to carry, so the id is the whole of what a client needs
 to drop it from whatever it is holding.
+"""
+
+[operations."job.asking"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A Drone asks a person a question, or the one that was out is answered"
+notes = """
+A Drone that does not know had two moves and neither worked. **Escalate** stops the Job — the step freezes and the worktree and port span are held until a person transitions it back — and a step whose work is deciding what other Jobs should exist is decision-dense, so it would escalate on the first ambiguity and every one after. **Guess** is unprevented, and where the output is Jobs the cost of a guess is Drones spending on work nobody asked for.
+
+Not a step state and not a Job status, for `job.judging`'s reason and in its exact shape. `step-states.toml` declares six and `job-statuses.toml` eleven; a variant either side matches on is a major bump by this seam's own table, and it would be the wrong fact anyway — a step whose Drone is waiting on an answer is still `running`, and it stops waiting without moving. So the question rides beside the state and both registries are untouched.
+
+Two messages per question and never a third. The one going out carries the question, its options and the instant it was asked; the one coming back carries nothing. A surface subtracts for itself, so a question that waits four hours costs this channel two messages.
+
+**The actor differs between the two, which no other kind here does.** Going out it is `drone` and coming back it is `human`, because those are the two ends of the act. Fleet caused neither.
+
+It produces at the rate a person answers, which is the slowest rate on this channel, and it holds no queue of its own — the outstanding question lives on the working slot. So it adds nothing to the unbounded-sink risk `docs/practices/protocol.md` names.
 """
 
 [operations."job.judging"]

@@ -26,11 +26,11 @@ use std::future::Future;
 
 use crate::mcp::Caller;
 use crate::observing::Observed;
-use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
+use ipc::mcp::{AskQuestion, CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    ChangesRequested, FileReport, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory, JobId,
-    JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redirection, Redispatched,
-    Report, ReportList, WireError, WorkflowSummary,
+    Answer, ChangesRequested, FileReport, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory,
+    JobId, JobList, JobSummary, ManifestSummary, ModelChoices, ProposeJob, Redirection,
+    Redispatched, Report, ReportList, WireError, WorkflowSummary,
 };
 
 /// The request-response operations M1 serves.
@@ -440,6 +440,59 @@ pub trait Daemon: Send + Sync + 'static {
     /// already finished, and one whose Drone went with the Fleet that spawned
     /// it all reach a viewer that way.
     fn observe_job(&self, job_id: JobId) -> impl Future<Output = Result<Observed, Refusal>> + Send;
+
+    /// `answer_question` — a person picks one of the answers a waiting Drone
+    /// offered.
+    ///
+    /// **The Bridge half of the Drone's [`ask_question`](Daemon::ask_question)**,
+    /// and one act seen from its two ends: a Drone asked and stopped, and this
+    /// starts it again. The answer goes into the live session as a turn, the
+    /// delivery half `redirect_drone` already uses.
+    ///
+    /// **It moves nothing.** The Job is `running` before and after, and it comes
+    /// back for the reason every other command answers with one — a caller folds
+    /// the row rather than re-reading the board.
+    ///
+    /// **There is no field for prose.** [`Answer::chose`] is one of the labels
+    /// the Drone offered and a label matching none is refused rather than passed
+    /// through; words reach a Drone through [`Daemon::redirect_drone`] and
+    /// nothing else, which is what keeps this from becoming the conversation
+    /// `docs/scope.md` rejected.
+    ///
+    /// [`Refusal::IllegalMove`] where nothing is outstanding, where the id names
+    /// a question already answered, and where the label was not offered.
+    fn answer_question(
+        &self,
+        job_id: JobId,
+        answer: Answer,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `ask_question` — the working Drone asks the person who approved the Job
+    /// something it cannot answer from the repository, and offers the answers it
+    /// will accept.
+    ///
+    /// **Not an inventory operation and not Bridge's**, exactly as
+    /// [`Daemon::submit_evidence`] is not: its caller is a Drone, which is why
+    /// its refusal is [`NotRecorded`]. The Bridge half is
+    /// [`Daemon::answer_question`].
+    ///
+    /// # The receipt is not the answer
+    ///
+    /// It returns as soon as Fleet has taken the question, like submitting and
+    /// unlike [`Daemon::run_checks`]. Holding it open was rejected twice over: a
+    /// person's wait has no budget that could bound an HTTP call, and an injected
+    /// turn is consumed when the current tool call returns — so a Drone blocked
+    /// inside this would swallow every redirect sent to unstick it. The answer
+    /// arrives as a later turn in the Drone's own session.
+    ///
+    /// **One at a time**, because a Drone that could stack questions would be
+    /// holding a conversation. Bound to a Job and a step the caller never names,
+    /// for [`submit_evidence`](Daemon::submit_evidence)'s reason.
+    fn ask_question(
+        &self,
+        caller: Caller,
+        asking: AskQuestion,
+    ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
 
     /// `submit_evidence` — the Evidence tool, called by the Drone that is
     /// working. **Not an inventory operation and not Bridge's**: its caller is

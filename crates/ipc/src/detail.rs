@@ -30,7 +30,7 @@ use crate::checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 use crate::enums::{
     AdvanceGate, CriterionSource, DependencyDirection, JudgeVerdict, Recourse, StepState,
 };
-use crate::ids::{CriterionId, Instant, JobId, StepId};
+use crate::ids::{CriterionId, Instant, JobId, QuestionId, StepId};
 use crate::job::{JobSummary, Subject};
 use crate::overlap::ScopeOverlap;
 use crate::work::JobFootprint;
@@ -172,6 +172,19 @@ pub struct JobDetail {
     /// Job nothing had looked at.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub write_scope_overlaps: Option<Vec<ScopeOverlap>>,
+    /// The question this Job's Drone asked and nobody has answered yet.
+    ///
+    /// **Absent is the ordinary case.** A Drone that never asked, a Drone whose
+    /// question has been answered and a Job with no Drone on it are all this
+    /// field absent, and the Job's own status tells them apart — a Job that is
+    /// not `running` has nothing waiting on an answer.
+    ///
+    /// **It is not a status and there is no seventh one.** The Job is `running`
+    /// and its step is `running`, exactly as they are while a Judge call is
+    /// out, and the question stops being outstanding without either moving. See
+    /// [`QuestionInFlight`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asking: Option<QuestionInFlight>,
     /// What kind of stuck this Job is, and what moves it.
     ///
     /// **Absent is "this Job did not stop"**, and it is the whole of the
@@ -277,6 +290,7 @@ impl JobDetail {
         steps: &[StepFacts],
         footprint: Option<JobFootprint>,
         redirecting: Option<RedirectInFlight>,
+        asking: Option<QuestionInFlight>,
         stuck: Option<&core_model::Stuck>,
         write_scope_overlaps: Option<Vec<ScopeOverlap>>,
         delivery: Option<JobDelivery>,
@@ -316,6 +330,11 @@ impl JobDetail {
             dependencies: job.dependencies().iter().map(Dependency::from).collect(),
             footprint,
             redirecting,
+            // An argument like `redirecting`, and for the same reason: the
+            // question lives on the working slot for as long as it is
+            // unanswered and the record carries no column for it. A question is
+            // only ever true now.
+            asking,
             // Read straight off the record, and deliberately not an argument
             // like the six above it: every one of those is a fact the Job does
             // not carry, and this one is a column on `jobs`. A caller asked to
@@ -401,6 +420,90 @@ impl RedirectWaiting {
             note: waiting.text().to_string(),
         }
     }
+}
+
+/// One question a Drone asked a person, while it is still unanswered.
+///
+/// # It is not a status, and neither registry is touched
+///
+/// `step-states.toml` declares six and `job-statuses.toml` eleven; a variant
+/// added to either is one the other side matches on, which is a **major** bump
+/// by this seam's own table. It would be the wrong fact anyway: a step whose
+/// Drone is waiting is `running` in exactly the way a step whose gate is asking
+/// a Judge is `running`, and it stops waiting without moving. So this rides
+/// beside the state, as [`JudgeInFlight`] does.
+///
+/// # A question is an event on a Job, not a conversation
+///
+/// `docs/scope.md` records that orchestrator agents with sub agents was
+/// abandoned because having a conversation was not the tool that was wanted.
+/// The distinction is not whether a person is involved — it is whether a
+/// conversation is the medium. So: **asked once, answered once**, one
+/// outstanding per Job, the answer one of the options the Drone offered, and no
+/// field a reply could arrive in. A person who needs to say something the
+/// options do not cover has `redirect_drone`.
+///
+/// **`asked_at` crosses once and every surface subtracts for itself**, as
+/// [`JudgeInFlight::since`] does. Nothing ticks: a question that waits an hour
+/// costs this seam two messages.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuestionInFlight {
+    /// The id Fleet minted for this question. **What an answer names**, and
+    /// what makes answering a question that has since been replaced a refusal
+    /// rather than a coincidence — see [`QuestionId`].
+    pub question_id: QuestionId,
+    /// Which step's Drone is waiting. A Job is `running` under one step at a
+    /// time and this is that step, so a rail can mark the row that is stopped.
+    pub step_id: StepId,
+    /// When the Drone asked, by Fleet's clock.
+    pub asked_at: Instant,
+    /// What was asked, in the Drone's own words. **One question, not a
+    /// thread** — there is no id joining this to an earlier one and no field a
+    /// follow-up could arrive in.
+    pub question: String,
+    /// What the Drone will accept as an answer. **Never fewer than two and
+    /// never more than four**, and every label distinct: Fleet refuses the tool
+    /// call otherwise, so a surface may draw these as a closed set of controls
+    /// without checking.
+    ///
+    /// The whole of "structured answers" is here. A person picks one of these
+    /// and types nothing.
+    pub options: Vec<AskedOption>,
+}
+
+/// One answer a Drone said it would accept.
+///
+/// **Two fields, because a label alone is not a decision.** `label` is what a
+/// control says and `consequence` is what pressing it commits to — which is the
+/// briefing register the design contract asks for, applied to the smallest
+/// surface there is. A person deciding between two ways of splitting a
+/// milestone at 11pm needs to be told what each produces, and the Drone is the
+/// only thing that knows.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AskedOption {
+    /// What a person picks. **The answer's own name** — an answer names the
+    /// label rather than a position, so a log line reads as a sentence and an
+    /// off-by-one cannot pick the wrong option.
+    pub label: String,
+    /// What the Drone will do if this one is picked, in its own words. Never
+    /// blank: Fleet refuses a question whose options do not say what they mean.
+    pub consequence: String,
+}
+
+/// A person's answer to one question. The request half of `answer_question`.
+///
+/// **It carries no prose and there is no field for any.** The answer is one of
+/// the labels the Drone offered, and an answer Fleet cannot match to one of them
+/// is refused rather than passed through — which is what keeps this from
+/// becoming the conversation `docs/scope.md` rejected. Words go to a Drone
+/// through [`Redirection`](crate::Redirection) and through nothing else.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Answer {
+    /// Which question is being answered. A window that has been open across an
+    /// answered question names an id Fleet no longer holds, and is told so.
+    pub question_id: QuestionId,
+    /// The [`AskedOption::label`] chosen, verbatim.
+    pub chose: String,
 }
 
 /// One `job_steps` row: which step, where in the order, and where it got to.
