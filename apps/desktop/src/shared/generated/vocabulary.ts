@@ -53,7 +53,7 @@ export const ESCALATION_REASON: Readonly<Record<string, Rendering | undefined>> 
   "evidence_suspect": { verb: "evidence disputed", icon: FileQuestionMark, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "evidence_too_large": { verb: "evidence too large", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "fan_out": { verb: "hit the sub-dispatch cap", icon: Split, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "gate_failure": { verb: "refused by the judge", icon: CircleX, badgeStatus: "escalated", statusToken: "--status-escalated" },
+  "gate_failure": { verb: "stopped at the gate", icon: CircleX, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "gate_undecided": { verb: "the gate could not decide", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "hatch_unbidden": { verb: "stalled", icon: OctagonAlert, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "interrupted": { verb: "interrupted", icon: Unplug, badgeStatus: "escalated", statusToken: "--status-escalated" },
