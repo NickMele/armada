@@ -105,6 +105,19 @@ export type JobDetail = {
    */
   redirecting?: RedirectInFlight;
   /**
+   * The note a person wrote at a human gate that no drone has opened with yet.
+   * Since protocol 5.2. **The other half of `redirecting`** — that one is an
+   * instruction with a session to go into, this one is one with none, and until
+   * a slot frees the job sits at `queued` looking exactly like a job nobody
+   * typed anything into.
+   *
+   * **Absent is the ordinary case, and absent is also delivered.** Fleet clears
+   * it the instant a drone's brief is built from it, so nothing here can be a
+   * badge that goes stale: the delivery is the move to `running`, which is an
+   * event this window already re-reads the open job on.
+   */
+  redirect_waiting?: RedirectWaiting;
+  /**
    * What kind of stuck this job is, and what moves it. Since protocol 4.16.
    *
    * **Absent is "this job did not stop"**, and it is the whole of the second
@@ -184,6 +197,28 @@ export type RedirectInFlight = {
    * subtracts; nothing ticks on the wire**, as `JudgeInFlight.since` does.
    */
   sent_at: string;
+};
+
+/**
+ * A person's note written where no drone was there to take it, still waiting
+ * for the one that comes next. `crates/ipc/src/detail.rs`.
+ *
+ * **It is the note or it is nothing**: the record holds the words and clears
+ * them on delivery, so this value's presence *is* the fact that one is waiting,
+ * and there is no delivered flag and no instant because there is no state
+ * between the two.
+ *
+ * **The words cross, and a count would not do.** `RedirectInFlight` serves no
+ * text because that instruction went into a live session and the move back to
+ * `running` is the answer; this one has gone nowhere, and a field saying only
+ * that *some* note waits leaves a person who wrote two no better off.
+ */
+export type RedirectWaiting = {
+  /**
+   * What the person typed, verbatim. **Never blank** — the record refuses a
+   * note with nothing in it, so a present value always has words in it.
+   */
+  note: string;
 };
 
 /**
