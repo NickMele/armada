@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { CircleCheck, CircleX, File, Folder, GitBranch, OctagonAlert, Power, ShieldCheck, ShieldX, Unplug } from "lucide-react";
+import { CircleCheck, CircleX, File, Folder, GitBranch, OctagonAlert, Power, ShieldCheck, ShieldMinus, ShieldX, Unplug } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
 import { Dialog } from "../../primitives/Dialog/Dialog";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
