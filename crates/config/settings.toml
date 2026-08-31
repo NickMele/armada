@@ -426,14 +426,18 @@ Personal-dashboard preference, same tier as Voice/tone. Orphan risk: Bridge is T
 [settings.job-board-default-sort-filter]
 name = "Job Board default sort/filter"
 scope = "Kit → Manifest"
-default = "undecided"
+default = "Critical first; state filter All"
 lifetime = "Read at render"
 merge_strategy = "REPLACE"
 peer_polarity = "Unconstrained — cosmetic"
 owner = "Job Board"
 read_by = "bridge (TS)"
 notes = """
-No default sort was fixed in concept design beyond "sortable/filterable"; priority conventions plausibly vary by project.
+Decided while drawing the Board, 2026-08-31, answering `[job-board-sort-order]` — which had carried no body at all since it was filed, because nobody had argued it.
+
+Needs you first because the row waiting longest is usually waiting on nothing, while the row that needs a person is the only one that stops until it is read. Oldest first stays available in the control, and inside every group the order is oldest first.
+
+The sort agrees with the state filter rather than cutting across it: the tab grouping the statuses that stop until a person reads them lifts the same set to the top, so changing tab reorders nothing a person had already learned.
 """
 
 [settings.landing-manifest-last-opened-project]

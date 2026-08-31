@@ -608,29 +608,60 @@ display next to it.
 
 ```
 ⌘K       command palette
-⌘ digit  Bridge surfaces, in sidebar order
-⌘ last   Helm, the digit after the last Bridge surface
+⌘1–⌘4    Bridge surfaces, in rail order
+⌘5       Helm, the digit after the last Bridge surface
 ⌘\       toggle sidebar
-⌘F       filter the current list
 ⌘[ ⌘]    back / forward
-Esc      close overlay, or return to the list from a detail route
+Esc      close an overlay, or return to the list from a detail route
 ```
 
-**Contextual — single-key, act on the focused row.** This is what makes
-triage fast: move down the alert queue and act without reaching for a
-modifier.
+**Contextual — single-key, on the focused row or the open job.** This is
+what makes triage fast: move down the queue and act without reaching for
+a modifier.
 
 ```
-j / k    move focus down / up
-Enter    open the focused job
-a        approve
-r        redirect
-x        kill        (confirms)
-/        focus the filter input
+j / k / ↓ / ↑  move focus
+Enter          open the focused job. Acts on nothing
+o              open. The same act, named so the palette can display it
+r              review
+t              attest
+d              redirect
+s              restart step        (detail only)
+p              pilot
+c              copy debug info
+x              kill                (confirms)
+n              new job
+/              search the current list
+1–5            state filter        (Job Board only, in tab order)
 ```
 
-The list above is the pattern, not the complete map — the full set comes
-from the one artifact above once the action set is final.
+**This is the map, not a pattern.** It was settled by drawing the Job
+Board and the command palette together, which is what forced the two
+halves into one artifact — the palette displays a binding beside every
+entry, so an unreconciled map is a palette that cannot be drawn.
+
+Three reversals against what stood before, each with a reason:
+
+- **`a` is deleted.** Nothing on a list approves. Approval is a second
+  act from detail, which [Job Board](../concepts/job-board.md) has always
+  said and the built row contradicted.
+- **`r` is review, and redirect moves to `d`.** Review is on every
+  needs-you row and is the most-pressed contextual key in the app;
+  redirect is reached from a job that has already gone wrong.
+- **`⌘F` is deleted.** `/` already searches the current list, and two
+  bindings for one act breaks the one-artifact rule above.
+
+**`x` for kill and every safety rule below are unchanged.** Neither was
+in play, and the destructive-key rule is what kept `x` off `k`.
+
+**`⌘1`–`⌘4` follow the rail, which is four destinations** — Job Board,
+Alerts, Doctor, Manifest — since Active Jobs, Reviews and the Activity
+Feed folded into the Board. The digits shift if the rail does; the rule
+is rail order, not the numbers.
+
+**`1`–`5` and `⌘1`–`⌘5` are different acts on one row of keys.** One is
+modified and one is not, which is the whole separation. It was drawn
+that way deliberately rather than by omission.
 
 ### Safety rules for single-key actions
 
