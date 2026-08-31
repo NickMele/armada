@@ -9,11 +9,17 @@
 //! And that the bar it is measured against is the one the Job was created with,
 //! not the one the Manifest holds when the boundary is crossed.
 //!
-//! Written before the code, so five of its assertions fail. Each is marked with
-//! the step of Focus that makes it hold, and they are in the order a Job meets
-//! them — which is the order the milestone is built in, so a step landing moves
-//! the failure down the file rather than clearing it. Why it compiles rather
-//! than naming APIs that do not exist is `docs/practices/acceptance-tests.md`.
+//! Written before the code, so its assertions fail. Each is marked with the
+//! step of Focus that makes it hold, and they are in the order a Job meets them
+//! — which is the order the milestone is built in, so a step landing moves the
+//! failure down the file rather than clearing it. Why it compiles rather than
+//! naming APIs that do not exist is `docs/practices/acceptance-tests.md`.
+//!
+//! **#137 has landed**, so its three assertions hold and the failure has moved
+//! down to #139's. **The pointer is presence and the log is what is durable**:
+//! a step's `assigned_drone` is null once its Drone has gone — it has to be, or
+//! `restart_step` could never put a second one on the same step — so which
+//! Drone worked which step, after the fact, is the `step_id` on each drone row.
 //!
 //! # What this does not prove
 //!
@@ -22,12 +28,6 @@
 //! outliving the slot that held it — the assertion #140 says will pass while
 //! being wrong. The boundary is driven the way `bug_job.rs` drives a gate: by
 //! calling what `fleet::dispatch` calls, in the order it calls it.
-//!
-//! **Not which Drone worked which step, read off the Job.** `job_steps` has no
-//! Drone pointer and `DroneMoved` has no step, so there is no expression to
-//! assert on. What is asserted instead is the log envelope's `step_id` on each
-//! Drone move — the same fact, on the surface that already carries it. #137
-//! builds both, and these assertions should move to the record when it does.
 //!
 //! **Not a redirect that arrived at a boundary reaching the next Drone**, which
 //! is the second rule's one testable consequence. Nothing records a redirect on
@@ -50,7 +50,7 @@
 #[allow(dead_code)]
 mod bench;
 
-use core_model::{Actor, FieldValue, JobStatus, StepState};
+use core_model::{Actor, FieldValue, JobStatus, JobStep, StepState};
 use fleet::{briefing, Ruling};
 use testkit::{FakeJudge, FakeWorkProduct};
 
@@ -84,17 +84,23 @@ async fn a_drone_belongs_to_the_step_it_was_given() {
     let first = drone(1);
     let arrived = run
         .job
-        .drone_spawned(first.clone(), Actor::Fleet, now(&bench))
-        .expect("nothing is on the Job yet");
+        .drone_spawned(&bench.step(0), first.clone(), Actor::Fleet, now(&bench))
+        .expect("nothing is on the first step yet");
     run.job = arrived.job;
 
-    // #137. A Drone is put on a step, so the move that records it names one.
-    // Today the shape trigger on `job_events` asserts the opposite — a
-    // `drone_spawned` row must have a null `step_id` or the write aborts.
+    // #137. A Drone is put on a step, so the move that records it names one,
+    // and so does the step's own row.
     assert_eq!(
         arrived.event.fields().get("step_id"),
         Some(&FieldValue::Str(bench.step(0).as_str().to_string())),
         "a Drone arrives on a step, and the record of its arrival says which"
+    );
+    assert_eq!(
+        run.job
+            .step(&bench.step(0))
+            .and_then(JobStep::assigned_drone),
+        Some(&first),
+        "and the step's row is where the pointer lives"
     );
 
     let ruling = gate_against(
@@ -118,8 +124,8 @@ async fn a_drone_belongs_to_the_step_it_was_given() {
     // that the record can tell the two apart.
     let left = run
         .job
-        .drone_exited(Actor::Fleet, now(&bench))
-        .expect("the first Drone is on the Job");
+        .drone_exited(&bench.step(0), Actor::Fleet, now(&bench))
+        .expect("the first Drone is on the first step");
     run.job = left.job;
 
     // #137. An exit names its step for the same reason an arrival does — a
@@ -139,7 +145,7 @@ async fn a_drone_belongs_to_the_step_it_was_given() {
     let second = drone(2);
     let arrived = run
         .job
-        .drone_spawned(second.clone(), Actor::Fleet, now(&bench))
+        .drone_spawned(&bench.step(1), second.clone(), Actor::Fleet, now(&bench))
         .expect("the first Drone is gone");
     run.job = arrived.job;
 
@@ -151,6 +157,25 @@ async fn a_drone_belongs_to_the_step_it_was_given() {
         arrived.event.fields().get("step_id"),
         Some(&FieldValue::Str(bench.step(1).as_str().to_string())),
         "the second Drone is on the second step"
+    );
+
+    // #137. The pointer is per step, so the boundary is legible on the record
+    // and not only in the log: the step that finished holds nothing, the step
+    // being worked holds the Drone working it, and the Job-level reading is
+    // derived from the pair rather than being a third copy of it.
+    assert_eq!(
+        run.job
+            .steps()
+            .iter()
+            .map(|step| (step.step_id().as_str(), step.assigned_drone()))
+            .collect::<Vec<_>>(),
+        vec![("root_cause", None), ("fix", Some(&second))],
+        "a step whose work is done holds no Drone, and the one being worked does"
+    );
+    assert_eq!(
+        run.job.assigned_drone(),
+        Some(&second),
+        "and the Job's own reading is the Drone of the step being worked"
     );
 
     // ------------------------------------------------- what crossed with it

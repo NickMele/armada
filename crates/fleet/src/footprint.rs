@@ -162,7 +162,7 @@ where
         }
         at_work.publishing().reading(&now);
         let (job, step, worktree) = at_work.standing();
-        let (_, drone) = at_work.drone();
+        let (_, _, drone) = at_work.drone();
         let changed = self.work().changed_files(&worktree).ok()?;
         let plan = at_work.declared().cloned();
         let files = seen(&changed, plan.as_ref());

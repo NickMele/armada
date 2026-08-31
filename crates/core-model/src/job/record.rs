@@ -29,8 +29,8 @@
 //! [`on_branch`](Job::on_branch) writes `branch` alone and mints no event,
 //! because no event carries a worktree.
 //! [`drone_spawned`](Job::drone_spawned) and
-//! [`drone_exited`](Job::drone_exited) write `assigned_drone` alone and do mint
-//! one, because presence has to fold. **No method here takes `&mut self`.**
+//! [`drone_exited`](Job::drone_exited) write one step's `assigned_drone` and
+//! mint one, because presence has to fold. **No method takes `&mut self`.**
 
 use alloc::vec::Vec;
 
@@ -142,7 +142,6 @@ pub struct Job {
     model: ModelName,
     acceptance_criteria: Vec<AcceptanceCriterion>,
     current_step_id: Option<StepId>,
-    assigned_drone: Option<DroneId>,
     dependencies: Vec<DependencyEdge>,
     dispatched_by: Option<DispatchOrigin>,
     redispatched_from: Option<JobId>,
@@ -204,7 +203,6 @@ impl Job {
             // A Job at the approval gate, and a `queued` Job, have no current
             // step. What sets this is the inner machine, which is not here.
             current_step_id: None,
-            assigned_drone: None,
             dependencies: new.dependencies,
             dispatched_by,
             redispatched_from: new.redispatched_from,
@@ -265,44 +263,70 @@ impl Job {
         job
     }
 
-    /// Record that a Drone is now working this Job.
+    /// Record that a Drone is now working one step of this Job.
     ///
-    /// Refuses where one already is: `assigned_drone` is a single pointer, and
-    /// a second spawn over a live one would lose the first Drone's id — the
-    /// only thing naming its transcript.
+    /// **Refuses where one already is on that step, and the refusal narrowed
+    /// rather than went away.** `assigned_drone` is one pointer per step, and
+    /// `restart_step` is the act that puts a second Drone on the same step, so
+    /// a spawn over a live one would still lose the first Drone's id — the only
+    /// thing naming its transcript. What it no longer refuses is a Drone on
+    /// step two while step one's row still names the Drone that worked it,
+    /// which is the whole point of the column being per step.
+    ///
+    /// Refuses a step the Job does not have. The Job's steps are frozen at
+    /// creation, so a name that is not among them is a caller's mistake and
+    /// never a Job that has moved on.
     pub fn drone_spawned(
         &self,
+        step_id: &StepId,
         drone: DroneId,
         by: Actor,
         at: Timestamp,
     ) -> Result<DroneAssigned, IllegalDroneMove> {
-        if let Some(held) = &self.assigned_drone {
+        let index = self.step_index(step_id)?;
+        if let Some(held) = self.steps[index].assigned_drone() {
             return Err(IllegalDroneMove::AlreadyAssigned {
+                step: step_id.clone(),
                 held: held.clone(),
                 offered: drone,
             });
         }
-        Ok(self.drone_moved(drone, DronePresence::Spawned, by, at))
+        Ok(self.drone_moved(index, drone, DronePresence::Spawned, by, at))
     }
 
-    /// Record that the Job's Drone is gone, however it went.
+    /// Record that the Drone on a step is gone, however it went.
     ///
-    /// Refuses where none is assigned. A Job that never had a Drone cannot lose
-    /// one, and an exit recorded twice would read as two Drones having run.
+    /// Refuses where none is on that step. A step that never had a Drone cannot
+    /// lose one, and an exit recorded twice would read as two Drones having run
+    /// it.
     pub fn drone_exited(
         &self,
+        step_id: &StepId,
         by: Actor,
         at: Timestamp,
     ) -> Result<DroneAssigned, IllegalDroneMove> {
-        let held = self
-            .assigned_drone
-            .clone()
-            .ok_or(IllegalDroneMove::NoneAssigned)?;
-        Ok(self.drone_moved(held, DronePresence::Exited, by, at))
+        let index = self.step_index(step_id)?;
+        let held = self.steps[index].assigned_drone().cloned().ok_or_else(|| {
+            IllegalDroneMove::NoneAssigned {
+                step: step_id.clone(),
+            }
+        })?;
+        Ok(self.drone_moved(index, held, DronePresence::Exited, by, at))
+    }
+
+    /// Where a step is among the rows, or the refusal that it is not one.
+    fn step_index(&self, step_id: &StepId) -> Result<usize, IllegalDroneMove> {
+        self.steps
+            .iter()
+            .position(|row| row.step_id() == step_id)
+            .ok_or_else(|| IllegalDroneMove::NoSuchStep {
+                step: step_id.clone(),
+            })
     }
 
     fn drone_moved(
         &self,
+        index: usize,
         drone: DroneId,
         presence: DronePresence,
         by: Actor,
@@ -310,6 +334,7 @@ impl Job {
     ) -> DroneAssigned {
         let event = DroneMoved::recorded(
             self.id.clone(),
+            self.steps[index].step_id().clone(),
             drone.clone(),
             presence,
             self.status,
@@ -317,10 +342,10 @@ impl Job {
             at,
         );
         let mut job = self.clone();
-        job.assigned_drone = match presence {
+        job.steps[index] = self.steps[index].drone_now(match presence {
             DronePresence::Spawned => Some(drone),
             DronePresence::Exited => None,
-        };
+        });
         DroneAssigned { job, event }
     }
 
@@ -424,9 +449,23 @@ impl Job {
     pub fn current_step_id(&self) -> Option<&StepId> {
         self.current_step_id.as_ref()
     }
-    /// Presence, not state. Null also suspends the liveness clock.
+    /// The Drone on this Job. Presence, not state — and null also suspends the
+    /// liveness clock.
+    ///
+    /// **Derived from the step rows, never stored.** The pointer is a
+    /// `job_steps` column, and this is the reading every caller of the old
+    /// Job-level field was after: whether a process is on the Job right now. It
+    /// goes null at a step boundary and stays null while a person reads at
+    /// `awaiting_review`, because there is no Drone then — and each step's row
+    /// still names the Drone that worked it, which is what a finished Job's
+    /// history is read from.
+    ///
+    /// **Any step and not the current one.** A Drone is always put on the step
+    /// the cursor names, so on every history the two readings agree; taking it
+    /// from the cursor would make this answer `None` on a record where a
+    /// pointer is genuinely set, which is the one answer it must never give.
     pub fn assigned_drone(&self) -> Option<&DroneId> {
-        self.assigned_drone.as_ref()
+        self.steps_holding_a_drone().next().map(|(_, drone)| drone)
     }
     pub fn dependencies(&self) -> &[DependencyEdge] {
         &self.dependencies
@@ -469,6 +508,20 @@ impl Job {
     pub fn step(&self, step_id: &StepId) -> Option<&JobStep> {
         self.steps.iter().find(|row| row.step_id() == step_id)
     }
+    /// Every step that has a Drone on it, in the order the rows were written.
+    ///
+    /// **The reading a boot reconciliation is made of.** A Drone is spoken to
+    /// through a pipe the Fleet that spawned it holds, so a Fleet that has just
+    /// started holds none of them and every one of these pointers is a claim
+    /// about a process nobody can reach. Ordinarily one, because one Drone
+    /// works one step at a time; the iterator is what makes that a reading
+    /// rather than an assumption.
+    pub fn steps_holding_a_drone(&self) -> impl Iterator<Item = (&StepId, &DroneId)> {
+        self.steps
+            .iter()
+            .filter_map(|step| step.assigned_drone().map(|drone| (step.step_id(), drone)))
+    }
+
     /// The `workflow_status` projection: the row `current_step_id` names.
     /// Derived, never stored — storing it would risk the two disagreeing.
     pub fn current_step(&self) -> Option<&JobStep> {

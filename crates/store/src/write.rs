@@ -53,13 +53,13 @@ impl Store {
             .execute(
                 "INSERT OR IGNORE INTO jobs (
                      job_id, title, status, workflow_id, owner_manifest_id, origin, urgency,
-                     atomic, model, acceptance_criteria, current_step_id, assigned_drone,
+                     atomic, model, acceptance_criteria, current_step_id,
                      dependencies, dispatched_by_job_id, dispatched_by_step_id,
                      redispatched_from, subject_kind, subject_ref, facts, scope_revisions,
                      write_targets_known, created_at, branch, workflow
                  ) VALUES (
-                     ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
-                     ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24
+                     ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
+                     ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23
                  )",
                 rusqlite::params![
                     job.id().as_str(),
@@ -78,7 +78,6 @@ impl Store {
                     job.model().as_str(),
                     columns::write_acceptance_criteria(job.acceptance_criteria()),
                     job.current_step_id().map(|id| id.as_str()),
-                    job.assigned_drone().map(|id| id.as_str()),
                     columns::write_dependencies(job.dependencies()),
                     job.dispatched_by().map(|by| by.job_id.as_str()),
                     job.dispatched_by().map(|by| by.step_id.as_str()),
@@ -292,7 +291,7 @@ impl Store {
         Ok(seq)
     }
 
-    /// Record a Drone arriving on a Job, or leaving it: the column, and the
+    /// Record a Drone arriving on a step, or leaving it: the column, and the
     /// log entry it caches.
     ///
     /// Takes a [`DroneAssigned`], which only `Job::drone_spawned` and
@@ -300,10 +299,18 @@ impl Store {
     /// the same reason. `assigned_drone` and its event cannot disagree because
     /// there is no call that writes one without the other.
     ///
+    /// **The column is on `job_steps` and the row is found by the pair.** A
+    /// step the Job does not have is [`WriteError::NoSuchStep`], the same
+    /// refusal [`record_step_transition`] makes — and the model has already
+    /// refused it, so reaching this is a store that disagrees with the record
+    /// it was handed.
+    ///
     /// [`record_transition`]: Store::record_transition
+    /// [`record_step_transition`]: Store::record_step_transition
     pub fn record_drone_move(&mut self, moved: &DroneAssigned) -> Result<i64, WriteError> {
         let event = &moved.event;
         let job_id = event.job_id().as_str();
+        let step_id = event.step_id().as_str();
 
         let tx = self
             .conn
@@ -313,26 +320,36 @@ impl Store {
 
         let updated = tx
             .execute(
-                "UPDATE jobs SET assigned_drone = ?2 WHERE job_id = ?1",
-                rusqlite::params![job_id, moved.job.assigned_drone().map(|id| id.as_str())],
+                "UPDATE job_steps SET assigned_drone = ?3 WHERE job_id = ?1 AND step_id = ?2",
+                rusqlite::params![
+                    job_id,
+                    step_id,
+                    moved
+                        .job
+                        .step(event.step_id())
+                        .and_then(JobStep::assigned_drone)
+                        .map(|id| id.as_str()),
+                ],
             )
             .map_err(fault("updating the assigned drone"))
             .map_err(WriteError::Database)?;
         if updated == 0 {
-            return Err(WriteError::NoSuchJob {
+            return Err(WriteError::NoSuchStep {
                 job_id: event.job_id().clone(),
+                step_id: event.step_id().clone(),
             });
         }
 
         tx.execute(
             "INSERT INTO job_events (
                  kind, job_id, status_from, status_to, reason_kind, reason_value,
-                 drone_id, actor, at
-             ) VALUES (?1, ?2, ?3, ?3, 'unqualified', NULL, ?4, ?5, ?6)",
+                 step_id, drone_id, actor, at
+             ) VALUES (?1, ?2, ?3, ?3, 'unqualified', NULL, ?4, ?5, ?6, ?7)",
             rusqlite::params![
                 kind_of(event.presence()),
                 job_id,
                 event.under().as_wire(),
+                step_id,
                 event.drone_id().as_str(),
                 event.actor().as_wire(),
                 event.at().as_str(),
@@ -540,14 +557,19 @@ fn write_steps(tx: &Transaction<'_>, job: &Job) -> Result<(), WriteError> {
     for step in job.steps() {
         tx.execute(
             "INSERT INTO job_steps (
-                 job_id, step_id, ordinal, state, last_verdict, entered_at, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                 job_id, step_id, ordinal, state, last_verdict, assigned_drone,
+                 entered_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             rusqlite::params![
                 job.id().as_str(),
                 step.step_id().as_str(),
                 step.ordinal(),
                 step.state().as_wire(),
                 verdict(step),
+                // Ordinarily null: a step is written at creation, long before
+                // anything is put on it. Bound anyway, so a Job rebuilt and
+                // reinserted does not lose which Drone worked which step.
+                step.assigned_drone().map(|id| id.as_str()),
                 step.entered_at().as_str(),
                 step.updated_at().as_str(),
             ],

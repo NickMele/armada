@@ -74,7 +74,8 @@ pub enum Movement {
     Status(StatusMoved),
     /// One step moved and the Job did not.
     Step(StepMoved),
-    /// A Drone arrived on the Job or left it, and neither machine moved.
+    /// A Drone arrived on a step of the Job or left it, and neither machine
+    /// moved.
     Drone(DroneMoved),
 }
 
@@ -119,8 +120,14 @@ pub struct StepMoved {
 /// moments it was.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DroneMoved {
+    /// Which step it arrived on, or left. **Present on both**, for the reason
+    /// `drone_id` is: a Drone belongs to a workflow step, and a timeline that
+    /// did not say which step a Drone was put on could not tell one boundary's
+    /// pair of rows from the next one's.
+    pub step_id: StepId,
     /// Which Drone. **The question an exit has to answer** once a Job has had
-    /// more than one, which a restart or a redispatch gives it.
+    /// more than one, which a restart, a redispatch or a step boundary gives
+    /// it.
     pub drone_id: DroneId,
     pub presence: DronePresence,
 }

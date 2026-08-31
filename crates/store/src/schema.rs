@@ -71,6 +71,7 @@ pub const MIGRATIONS: &[&str] = &[
     // order still lives here, which is the part that may not be anywhere else.
     crate::report::V17,
     crate::plan::V18,
+    crate::drone::V19,
 ];
 
 /// Every table whose rows belong to one Job, asked of the file rather than

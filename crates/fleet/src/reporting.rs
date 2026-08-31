@@ -510,10 +510,15 @@ fn moved(event: &store::RecordedEvent) -> String {
             why.map(|trigger| format!(", {}", trigger.as_wire()))
                 .unwrap_or_default()
         ),
-        store::Moved::Drone { drone_id, presence } => format!(
-            "{seq} {at} — drone {} {}",
+        store::Moved::Drone {
+            step_id,
+            drone_id,
+            presence,
+        } => format!(
+            "{seq} {at} — drone {} {} step {}",
             drone_id.as_str(),
-            presence.as_wire()
+            presence.as_wire(),
+            step_id.as_str()
         ),
     }
 }
