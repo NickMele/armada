@@ -23,7 +23,7 @@ use testkit::{FakeVcs, FakeWorkProduct};
 use crate::tests::daemon::{
     a_fleet_gated_on_a_person, a_proposal, diff_evidence, note_evidence, worktree_directory,
 };
-use crate::tests::reviewing::{a_fleet_reviewing_the_first_step, at_the_gate};
+use crate::tests::reviewing::{a_fleet_reviewing_the_first_step, at_the_gate, Fixture};
 use crate::tests::tmp::TempDir;
 use crate::Adrift;
 
@@ -296,4 +296,93 @@ async fn a_step_sent_back_carries_no_verdict_about_the_part_before_it() {
         !brief.contains("THE PART BEFORE THIS ONE"),
         "but nothing claims a person cleared a step whose gate was auto: {brief}"
     );
+}
+
+/// **A note with nowhere to go yet says so on the wire, and stops saying it
+/// when it goes.** `#212`.
+///
+/// The fleet is busy, which is the case the field is worth having for: a
+/// sent-back Job re-queues behind whatever holds the slot, so a person watching
+/// their Job sits in front of `queued` for as long as that lasts. Every other
+/// case in this module has a free fleet, where the note is written and
+/// delivered inside one call and the window is an instant.
+///
+/// **Nothing here reads the Job's log.** Both halves of the record are written
+/// there and that is where an audit reads them; a badge drawn from a log would
+/// be a second source for a fact the record answers directly.
+#[tokio::test]
+async fn a_note_waiting_behind_a_busy_fleet_is_on_the_wire_until_it_is_delivered() {
+    let home = TempDir::new();
+    let fleet = a_fleet_reviewing_the_first_step(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let job_id = at_the_gate(&fleet, &home).await;
+
+    // The gate stood its Drone down, so the slot is free and a sent-back Job
+    // would be re-admitted inside `request_changes`. Somebody else takes it
+    // first.
+    let other = fleet
+        .propose(a_proposal("a second Job, holding the only slot"))
+        .await
+        .expect("a proposal");
+    let other_id = other.id().clone();
+    worktree_directory(&home, &other_id);
+    fleet
+        .approve(&other_id)
+        .await
+        .expect("the second Job takes the slot");
+
+    let said = crate::resume::Redirection::saying("name the cause, not the symptom")
+        .expect("a note with something in it");
+    let sent_back = fleet
+        .request_changes(&job_id, &said)
+        .await
+        .expect("a note at a boundary has somewhere to wait");
+    assert_eq!(
+        sent_back.status(),
+        JobStatus::Queued,
+        "the slot is somebody else's, so the Job waits with the note on it"
+    );
+
+    let waiting = detail(&fleet, &job_id).await;
+    assert_eq!(
+        waiting
+            .redirect_waiting
+            .as_ref()
+            .map(|note| note.note.as_str()),
+        Some("name the cause, not the symptom"),
+        "`get_job` says a note is waiting, and says which — a queued Job \
+         somebody typed into no longer looks like one nobody did"
+    );
+
+    // The slot comes free and the queue moves, which is what delivers the note.
+    fleet
+        .kill_job(&other_id)
+        .await
+        .expect("the Job holding the slot is cleared off the Board");
+    fleet.turn().await.expect("the queue moves");
+
+    let delivered = detail(&fleet, &job_id).await;
+    assert!(
+        delivered.redirect_waiting.is_none(),
+        "and it stops saying so the moment a Drone opens with it, so nothing \
+         on a screen can go stale"
+    );
+    assert!(
+        fleet
+            .harness()
+            .configured()
+            .last()
+            .expect("a Drone was put on the step")
+            .prompt()
+            .as_str()
+            .contains("name the cause, not the symptom"),
+        "the note went where it was waiting to go"
+    );
+}
+
+/// One Job, as `GET /jobs/:job_id` serves it. The wire answer and not the
+/// record, because what `#212` is about is the difference between the two.
+async fn detail(fleet: &Fixture, job: &core_model::JobId) -> ipc::JobDetail {
+    api::Daemon::get_job(fleet, ipc::JobId::from(job))
+        .await
+        .expect("a Job that exists")
 }
