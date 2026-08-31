@@ -24,6 +24,8 @@ export type TheListSixStatesOneRowShapeProps = {
   summary?: ReactNode;
   /** The surface's one primary action, outside the frame. */
   action?: ReactNode;
+  /** Where `Board controls` mounts: under the heading, over the frame. */
+  controls?: ReactNode;
   /** The rows, in the order they are to be drawn. */
   rows: JobRowStackedProps[];
   /** Where `Board empty state` mounts when there are none. */
@@ -38,22 +40,34 @@ export type TheListSixStatesOneRowShapeProps = {
 /**
  * The track list a Job at the gate takes: it has no branch, no step and no
  * elapsed yet, so the run is a different field set and carries its own tracks.
- * 168px 72px 108px 100px 128px from the drawing, composed off the spacing scale
- * rather than written as literals. Exported because the surface drawing real
- * Jobs needs the same tracks, and a second copy is how the two start to differ.
+ * 168px 72px 108px 100px 128px from the drawing — the workflow, the empty bar,
+ * the step, the timestamp it has instead of elapsed, and origin. Exported
+ * because the surface drawing real Jobs needs the same tracks, and a second
+ * copy is how the two start to differ.
+ *
+ * **Named properties, not five `calc()` literals.** It was the literals, which
+ * is precisely how it missed #218: that change gave `Job row (stacked)` a sixth
+ * track and had to call it `--armada-track-provenance`, because
+ * `--armada-track-origin` was already spent on the branch-or-workflow track —
+ * and nothing here referred to either name, so the fifth width here went on
+ * meaning origin by coincidence. The stories' own `GATE_TRACKS`, written in the
+ * same change to stand in for this list, had already drifted 24px on the fourth
+ * track. Both now read the same properties, declared once in
+ * `JobRowStacked.css`.
  */
 export const APPROVAL_TRACKS = [
-  "calc(var(--space-12) * 3 + var(--space-6))",
-  "calc(var(--space-12) + var(--space-6))",
-  "calc(var(--space-12) * 2 + var(--space-3))",
-  "calc(var(--space-12) * 2 + var(--space-1))",
-  "calc(var(--space-12) * 2 + var(--space-8))",
+  "var(--armada-track-origin)",
+  "var(--armada-track-bar)",
+  "var(--armada-track-step)",
+  "var(--armada-track-created)",
+  "var(--armada-track-provenance)",
 ].join(" ");
 
 export function TheListSixStatesOneRowShape({
   heading,
   summary,
   action,
+  controls,
   rows,
   empty,
   selectable,
@@ -65,6 +79,7 @@ export function TheListSixStatesOneRowShape({
       heading={heading}
       summary={summary}
       action={action}
+      controls={controls}
       empty={empty}
       selectable={selectable}
       label={label}

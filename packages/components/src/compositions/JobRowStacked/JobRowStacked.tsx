@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { createContext, useCallback, useContext } from "react";
 import { Badge } from "../../primitives/Badge/Badge";
+import { Kbd } from "../../primitives/Kbd/Kbd";
 
 /**
  * Where this row sits in a roving list, supplied by the list that holds it.
@@ -125,6 +126,20 @@ export type JobRowStackedProps = {
   /** The one secondary control. Never a primary, and never more than one. */
   action?: ReactNode;
   /**
+   * The single key that fires `action`, drawn beside it **on the focused row
+   * and nowhere else**. A key captioned down fourteen rows is the noise the
+   * default-to-no-icon rule exists to prevent, and it would say the same thing
+   * fourteen times about a control only one row's cursor can reach.
+   *
+   * Rendered on every row and hidden until the cursor lands, rather than
+   * mounted on arrival: the width is reserved either way, so the run of rows
+   * does not reflow as the cursor moves down it.
+   *
+   * Displayed only. The row does not bind it — a row cannot know whether a
+   * text input elsewhere on the screen holds focus.
+   */
+  actionKey?: string;
+  /**
    * The running mark, still working. **Whether this Job is running**, which is
    * all a caller knows and all it is asked for.
    *
@@ -197,6 +212,7 @@ export function JobRowStacked({
   fields,
   tracks,
   action,
+  actionKey,
   pulsing = false,
   focused,
   selected,
@@ -296,6 +312,11 @@ export function JobRowStacked({
         // also navigate.
         <div className="armada-job-row__action" onClick={(e) => e.stopPropagation()}>
           {action}
+          {actionKey === undefined ? null : (
+            <Kbd className="armada-job-row__key" aria-hidden>
+              {actionKey}
+            </Kbd>
+          )}
         </div>
       ) : null}
     </div>

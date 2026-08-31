@@ -1,6 +1,6 @@
 import { jsx, jsxs, Fragment } from "react/jsx-runtime";
-import { useState, createContext, useCallback, useContext, useRef, useEffect, Children, cloneElement, Fragment as Fragment$1, useId, useMemo, createElement } from "react";
-import { ChevronDown, UserCheck, Cpu, GitBranch, CircleDot, X, Check, Power, Flag, RotateCw, Eye, CircleX, CircleCheck, ShieldCheck, ChevronRight, ExternalLink, File, TriangleAlert, OctagonAlert, Folder, GitCommitHorizontal, GitPullRequest, FileCheck, Clock, MessageSquare, ClipboardList, Activity, Bell, ScrollText, Stethoscope, FileCog, ShieldMinus as ShieldMinus$1, ShieldOff, ShieldX, Lock, Stamp, Terminal, Link, Ban, Archive, RefreshCw, FileQuestionMark, Split, Unplug, ArrowUpToLine, Send, CornerUpRight, Settings } from "lucide-react";
+import { useState, createContext, useCallback, useContext, useRef, useEffect, Children, cloneElement, useId, Fragment as Fragment$1, useMemo, createElement } from "react";
+import { ChevronDown, UserCheck, Cpu, GitBranch, CircleDot, X, Check, Power, Flag, RotateCw, Eye, CircleX, CircleCheck, ShieldCheck, ChevronRight, ExternalLink, File, TriangleAlert, OctagonAlert, Folder, GitCommitHorizontal, GitPullRequest, FileCheck, Clock, MessageSquare, ClipboardList, Activity, Bell, ScrollText, Stethoscope, FileCog, ShieldMinus, ShieldOff, ShieldX, Lock, Stamp, Terminal, Link, Ban, Archive, RefreshCw, FileQuestionMark, Split, Unplug, ArrowUpToLine, Send, CornerUpRight, Settings } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 function Button({
   variant = "secondary",
@@ -103,6 +103,12 @@ function Badge({ status, icon: Icon, children, pulsing = false }) {
     }
   );
 }
+function Kbd({ className, ...rest }) {
+  return /* @__PURE__ */ jsx("kbd", { className: className ? `armada-kbd ${className}` : "armada-kbd", ...rest });
+}
+function KbdChord({ className, ...rest }) {
+  return /* @__PURE__ */ jsx("span", { className: className ? `armada-kbd-chord ${className}` : "armada-kbd-chord", ...rest });
+}
 const RovingOption = createContext(null);
 const FIELD_ICON = 12;
 const FIELD_STROKE = 2;
@@ -136,6 +142,7 @@ function JobRowStacked({
   fields,
   tracks,
   action,
+  actionKey,
   pulsing = false,
   focused,
   selected,
@@ -154,7 +161,9 @@ function JobRowStacked({
   );
   const opens = onOpen !== void 0;
   const roving = useContext(RovingOption);
-  const tabIndex = !opens ? void 0 : roving === null || roving.index === roving.active ? 0 : -1;
+  const onCursor = roving === null || roving.index === roving.active;
+  const tabIndex = !opens ? void 0 : onCursor ? 0 : -1;
+  const pulses = pulsing && onCursor;
   return /* @__PURE__ */ jsxs(
     "div",
     {
@@ -169,7 +178,7 @@ function JobRowStacked({
       onClick: onOpen,
       onKeyDown: opens ? handleKeyDown : void 0,
       children: [
-        /* @__PURE__ */ jsx("div", { className: "armada-job-row__badge", children: /* @__PURE__ */ jsx(Badge, { status, icon: statusIcon, pulsing, children: statusLabel }) }),
+        /* @__PURE__ */ jsx("div", { className: "armada-job-row__badge", children: /* @__PURE__ */ jsx(Badge, { status, icon: statusIcon, pulsing: pulses, children: statusLabel }) }),
         /* @__PURE__ */ jsxs("div", { className: "armada-job-row__body", children: [
           /* @__PURE__ */ jsxs("div", { className: "armada-job-row__headline", children: [
             /* @__PURE__ */ jsx("span", { className: "armada-job-row__title", children: headline }),
@@ -217,7 +226,10 @@ function JobRowStacked({
         action ? (
           // The control stops the row's own open, so clicking Approve does not
           // also navigate.
-          /* @__PURE__ */ jsx("div", { className: "armada-job-row__action", onClick: (e) => e.stopPropagation(), children: action })
+          /* @__PURE__ */ jsxs("div", { className: "armada-job-row__action", onClick: (e) => e.stopPropagation(), children: [
+            action,
+            actionKey === void 0 ? null : /* @__PURE__ */ jsx(Kbd, { className: "armada-job-row__key", "aria-hidden": true, children: actionKey })
+          ] })
         ) : null
       ]
     }
@@ -300,6 +312,7 @@ function ActiveJobsList({
   heading: heading2,
   summary,
   action,
+  controls,
   children,
   empty,
   selectable = false,
@@ -344,6 +357,7 @@ function ActiveJobsList({
       ] }),
       action ? /* @__PURE__ */ jsx("div", { className: "armada-active-jobs__action", children: action }) : null
     ] }) : null,
+    controls ? /* @__PURE__ */ jsx("div", { className: "armada-active-jobs__controls", children: controls }) : null,
     /* @__PURE__ */ jsx(
       "div",
       {
@@ -362,7 +376,7 @@ function ActiveJobsList({
     )
   ] });
 }
-const meta$Z = {
+const meta$_ = {
   title: "Compositions/Active jobs list",
   component: ActiveJobsList
 };
@@ -410,13 +424,17 @@ const SixStates = {
         {
           status: "not-started",
           statusIcon: Cpu,
-          statusLabel: "Queued",
+          statusLabel: "Waiting on resources",
           headline: "Retire the legacy poke path",
           jobId: "job_8b42",
           fields: [
             { value: WORKFLOW },
             { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 0, label: "Not started, 4 steps" }) },
-            { value: "Waiting on a drone", emphasis: true },
+            // The step, like every other row's third field. It read "Waiting on a
+            // drone", which said the reason a second time and said it wrong: the
+            // Job is behind the cap rather than behind the one drone there used
+            // to be. The badge carries the reason; a field does not repeat it.
+            { value: "Not started", quiet: true },
             { value: "approved 09:20", quiet: true },
             { value: "Dispatched by you" }
           ],
@@ -529,6 +547,81 @@ const Selectable = {
     )
   }
 };
+const TwoRunning = {
+  args: {
+    heading: "Active jobs",
+    summary: "3 jobs.",
+    selectable: true,
+    label: "Active jobs",
+    children: [
+      /* @__PURE__ */ jsx(
+        JobRowStacked,
+        {
+          status: "running",
+          statusIcon: CircleDot,
+          statusLabel: "Running",
+          headline: "Split the settings reducer",
+          jobId: "job_2d90bb",
+          pulsing: true,
+          onOpen: () => {
+          },
+          fields: [
+            { value: "fix/settings-split", mono: true, icon: GitBranch, copyValue: "fix/settings-split" },
+            { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 2, activity: "running", label: "Step 2 of 4" }) },
+            { value: "Implement", emphasis: true },
+            { value: "11m 03s", mono: true },
+            { value: "~$1.80", mono: true }
+          ],
+          action: /* @__PURE__ */ jsx(SplitButton, { ground: "card", items: menu$1, children: "Open" })
+        },
+        "a"
+      ),
+      /* @__PURE__ */ jsx(
+        JobRowStacked,
+        {
+          status: "running",
+          statusIcon: CircleDot,
+          statusLabel: "Running",
+          headline: "Coalesce concurrent token refreshes",
+          jobId: "job_7c31",
+          pulsing: true,
+          onOpen: () => {
+          },
+          fields: [
+            { value: "bug/token-refresh", mono: true, icon: GitBranch, copyValue: "bug/token-refresh" },
+            { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 1, activity: "running", label: "Step 1 of 4" }) },
+            { value: "Plan", emphasis: true },
+            { value: "2m 47s", mono: true },
+            { value: "~$0.30", mono: true }
+          ],
+          action: /* @__PURE__ */ jsx(SplitButton, { ground: "card", items: menu$1, children: "Open" })
+        },
+        "b"
+      ),
+      /* @__PURE__ */ jsx(
+        JobRowStacked,
+        {
+          status: "not-started",
+          statusIcon: Cpu,
+          statusLabel: "Waiting on resources",
+          headline: "Retire the legacy poke path",
+          jobId: "job_8b42",
+          onOpen: () => {
+          },
+          fields: [
+            { value: WORKFLOW },
+            { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 0, label: "Not started, 4 steps" }) },
+            { value: "Not started", quiet: true },
+            { value: "approved 09:20", quiet: true },
+            { value: "Dispatched by you" }
+          ],
+          action: /* @__PURE__ */ jsx(SplitButton, { ground: "card", items: menu$1, children: "Open" })
+        },
+        "c"
+      )
+    ]
+  }
+};
 const OneOption = {
   args: {
     heading: "Active jobs",
@@ -551,6 +644,228 @@ const __vite_glob_0_0 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   OneOption,
   Selectable,
   SixStates,
+  TwoRunning,
+  default: meta$_
+}, Symbol.toStringTag, { value: "Module" }));
+function Input({ label: label2, invalid = false, message, mono = false, id, ...rest }) {
+  const generated = useId();
+  const inputId = id ?? generated;
+  const messageId = `${inputId}-message`;
+  const showMessage = invalid && message !== void 0;
+  return /* @__PURE__ */ jsxs("div", { className: "armada-input-field", children: [
+    label2 !== void 0 && /* @__PURE__ */ jsx("label", { className: "armada-input-field__label", htmlFor: inputId, children: label2 }),
+    /* @__PURE__ */ jsx(
+      "input",
+      {
+        ...rest,
+        id: inputId,
+        className: "armada-input",
+        "data-mono": mono || void 0,
+        "aria-invalid": invalid || void 0,
+        "aria-describedby": showMessage ? messageId : void 0
+      }
+    ),
+    showMessage && /* @__PURE__ */ jsx("span", { className: "armada-input-field__message", id: messageId, children: message })
+  ] });
+}
+function Select({ label: label2, invalid = false, message, id, children, ...rest }) {
+  const generated = useId();
+  const selectId = id ?? generated;
+  const messageId = `${selectId}-message`;
+  const showMessage = invalid && message !== void 0;
+  return /* @__PURE__ */ jsxs("div", { className: "armada-select-field", children: [
+    label2 !== void 0 && /* @__PURE__ */ jsx("label", { className: "armada-select-field__label", htmlFor: selectId, children: label2 }),
+    /* @__PURE__ */ jsxs("span", { className: "armada-select-shell", children: [
+      /* @__PURE__ */ jsx(
+        "select",
+        {
+          ...rest,
+          id: selectId,
+          className: "armada-select",
+          "aria-invalid": invalid || void 0,
+          "aria-describedby": showMessage ? messageId : void 0,
+          children
+        }
+      ),
+      /* @__PURE__ */ jsx(ChevronDown, { className: "armada-select__caret", size: 16, strokeWidth: 2, "aria-hidden": true })
+    ] }),
+    showMessage && /* @__PURE__ */ jsx("span", { className: "armada-select-field__message", id: messageId, children: message })
+  ] });
+}
+function TabsWithCounts({
+  items,
+  value,
+  defaultValue,
+  onChange,
+  suspended = false
+}) {
+  const [internal, setInternal] = useState(defaultValue ?? items[0]?.id);
+  const active = value ?? internal;
+  function select(id) {
+    if (value === void 0) setInternal(id);
+    onChange?.(id);
+  }
+  function onKey(event) {
+    const at = items.findIndex((item) => item.id === active);
+    if (items.length === 0) {
+      return;
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      select(items[(at + 1) % items.length].id);
+    }
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      select(items[(at - 1 + items.length) % items.length].id);
+    }
+  }
+  return /* @__PURE__ */ jsx(
+    "div",
+    {
+      className: "armada-tabs-counts",
+      role: "tablist",
+      "data-suspended": suspended || void 0,
+      onKeyDown: onKey,
+      children: items.map((item) => /* @__PURE__ */ jsxs(
+        "button",
+        {
+          type: "button",
+          role: "tab",
+          "aria-selected": item.id === active,
+          tabIndex: item.id === active ? 0 : -1,
+          className: item.id === active ? "armada-tabs-counts__tab armada-tabs-counts__tab--active" : "armada-tabs-counts__tab",
+          onClick: () => select(item.id),
+          "aria-keyshortcuts": item.shortcut,
+          children: [
+            item.shortcut ? /* @__PURE__ */ jsx(Kbd, { "aria-hidden": true, children: item.shortcut }) : null,
+            item.label,
+            item.count ? /* @__PURE__ */ jsx("span", { className: "armada-tabs-counts__count", children: item.count }) : null
+          ]
+        },
+        item.id
+      ))
+    }
+  );
+}
+const SEARCHES_EVERYTHING = "Search every job";
+function BoardControls({
+  query,
+  onQuery,
+  placeholder = SEARCHES_EVERYTHING,
+  searchRef,
+  onLeaveSearch,
+  sorts,
+  sort,
+  onSort,
+  tabs,
+  tab,
+  onTab,
+  suspended = false,
+  searchKey
+}) {
+  function onSearchKey(event) {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    onQuery("");
+    onLeaveSearch?.();
+  }
+  return /* @__PURE__ */ jsxs("div", { className: "armada-board-controls", children: [
+    /* @__PURE__ */ jsxs("div", { className: "armada-board-controls__line", children: [
+      /* @__PURE__ */ jsx("div", { className: "armada-board-controls__search", children: /* @__PURE__ */ jsx(
+        Input,
+        {
+          ref: searchRef,
+          type: "search",
+          value: query,
+          placeholder,
+          "aria-label": placeholder,
+          onChange: (event) => onQuery(event.target.value),
+          onKeyDown: onSearchKey
+        }
+      ) }),
+      searchKey === void 0 ? null : /* @__PURE__ */ jsx(Kbd, { className: "armada-board-controls__hint", "aria-hidden": true, children: searchKey }),
+      /* @__PURE__ */ jsx("div", { className: "armada-board-controls__sort", children: /* @__PURE__ */ jsx(Select, { "aria-label": "Sort", value: sort, onChange: (event) => onSort(event.target.value), children: sorts.map((option) => /* @__PURE__ */ jsx("option", { value: option.id, children: option.label }, option.id)) }) })
+    ] }),
+    /* @__PURE__ */ jsx(TabsWithCounts, { items: [...tabs], value: tab, onChange: onTab, suspended })
+  ] });
+}
+const meta$Z = {
+  title: "Compositions/Board controls",
+  component: BoardControls
+};
+const SORTS = [
+  { id: "critical_first", label: "Critical first" },
+  { id: "oldest_first", label: "Oldest first" }
+];
+const TABS = [
+  { id: "all", label: "All", count: 15, shortcut: "1" },
+  { id: "needs-you", label: "Needs you", count: 4, shortcut: "2" },
+  { id: "running", label: "Running", count: 6, shortcut: "3" },
+  { id: "queued", label: "Queued", count: 2, shortcut: "4" },
+  { id: "finished", label: "Finished", count: 3, shortcut: "5" }
+];
+function Live(props) {
+  const [query, setQuery] = useState(props.query ?? "");
+  const [sort, setSort] = useState(props.sort ?? "critical_first");
+  const [tab, setTab] = useState(props.tab ?? "all");
+  return /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    BoardControls,
+    {
+      sorts: SORTS,
+      tabs: TABS,
+      searchKey: "/",
+      ...props,
+      query,
+      onQuery: setQuery,
+      sort,
+      onSort: setSort,
+      tab,
+      onTab: (next) => {
+        setTab(next);
+        setQuery("");
+      },
+      suspended: query.trim() !== ""
+    }
+  ) });
+}
+const Resting$2 = { render: () => /* @__PURE__ */ jsx(Live, {}) };
+const Searching = {
+  render: () => /* @__PURE__ */ jsx(
+    Live,
+    {
+      query: "poke",
+      tab: "running",
+      tabs: [
+        { id: "all", label: "All", count: 3, shortcut: "1" },
+        { id: "needs-you", label: "Needs you", count: 1, shortcut: "2" },
+        { id: "running", label: "Running", count: 2, shortcut: "3" },
+        { id: "queued", label: "Queued", shortcut: "4" },
+        { id: "finished", label: "Finished", shortcut: "5" }
+      ]
+    }
+  )
+};
+const NothingNeedsYou = {
+  render: () => /* @__PURE__ */ jsx(
+    Live,
+    {
+      tab: "needs-you",
+      tabs: [
+        { id: "all", label: "All", count: 9, shortcut: "1" },
+        { id: "needs-you", label: "Needs you", shortcut: "2" },
+        { id: "running", label: "Running", count: 6, shortcut: "3" },
+        { id: "queued", label: "Queued", count: 3, shortcut: "4" },
+        { id: "finished", label: "Finished", shortcut: "5" }
+      ]
+    }
+  )
+};
+const __vite_glob_0_1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  NothingNeedsYou,
+  Resting: Resting$2,
+  Searching,
   default: meta$Z
 }, Symbol.toStringTag, { value: "Module" }));
 function BoardEmptyState({
@@ -598,7 +913,7 @@ const FleetIsNotRunning$1 = {
     note: "Run that in a terminal. Bridge connects on its own once the runtime file appears."
   }
 };
-const __vite_glob_0_1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_2 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   FleetIsNotRunning: FleetIsNotRunning$1,
   FleetRunningNoJobs,
@@ -696,7 +1011,7 @@ const TheKindsThatAreNotAnEdit = {
 const NothingChangedYet = {
   args: { files: [], emptyNote: NOTHING_YET$3 }
 };
-const __vite_glob_0_2 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_3 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   NoPlanIsRecordedAgainstIt,
   NothingChangedYet,
@@ -1094,7 +1409,7 @@ const BeneathTheStepItJudged = {
     }
   )
 };
-const __vite_glob_0_3 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_4 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   ARefusal,
   BeneathTheStepItJudged,
@@ -1491,7 +1806,7 @@ const RowsWrittenBeforeTheStepWasRecorded = {
     ]
   }
 };
-const __vite_glob_0_4 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_5 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   ADroneThinking: ADroneThinking$1,
   ADroneWorking,
@@ -1578,7 +1893,7 @@ const NotClaimedEmpty$1 = {
     shownBy: "3 files +214 −96 · branch fix/poke-ceiling"
   }
 };
-const __vite_glob_0_5 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_6 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AnArtifactThatIsACommand,
   NotClaimedEmpty: NotClaimedEmpty$1,
@@ -1689,7 +2004,7 @@ const OneEntry = {
     ]
   }
 };
-const __vite_glob_0_6 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_7 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AFinishedJob: AFinishedJob$1,
   NotClaimedEmpty,
@@ -1976,7 +2291,7 @@ const NothingButTheSentence = {
     next: "Reload Bridge. If it happens again, quit and reopen."
   }
 };
-const __vite_glob_0_7 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_8 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AJobCannotBeRead,
   FleetIsNotRunningDeadPid,
@@ -2183,7 +2498,7 @@ const OverrulingTwoFlags = {
     }
   )
 };
-const __vite_glob_0_8 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_9 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   FlaggedAndNotCited,
   OnTheRail,
@@ -2253,7 +2568,7 @@ const CriteriaOnly = {
 const FactsOnly = {
   args: { criteria: [], facts, only: "facts" }
 };
-const __vite_glob_0_9 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_10 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Brief,
   CriteriaOnly,
@@ -2282,51 +2597,6 @@ function CardContent({ className, ...rest }) {
 }
 function CardFooter({ className, ...rest }) {
   return /* @__PURE__ */ jsx("div", { className: joined$1("armada-card-footer", className), ...rest });
-}
-function Input({ label: label2, invalid = false, message, mono = false, id, ...rest }) {
-  const generated = useId();
-  const inputId = id ?? generated;
-  const messageId = `${inputId}-message`;
-  const showMessage = invalid && message !== void 0;
-  return /* @__PURE__ */ jsxs("div", { className: "armada-input-field", children: [
-    label2 !== void 0 && /* @__PURE__ */ jsx("label", { className: "armada-input-field__label", htmlFor: inputId, children: label2 }),
-    /* @__PURE__ */ jsx(
-      "input",
-      {
-        ...rest,
-        id: inputId,
-        className: "armada-input",
-        "data-mono": mono || void 0,
-        "aria-invalid": invalid || void 0,
-        "aria-describedby": showMessage ? messageId : void 0
-      }
-    ),
-    showMessage && /* @__PURE__ */ jsx("span", { className: "armada-input-field__message", id: messageId, children: message })
-  ] });
-}
-function Select({ label: label2, invalid = false, message, id, children, ...rest }) {
-  const generated = useId();
-  const selectId = id ?? generated;
-  const messageId = `${selectId}-message`;
-  const showMessage = invalid && message !== void 0;
-  return /* @__PURE__ */ jsxs("div", { className: "armada-select-field", children: [
-    label2 !== void 0 && /* @__PURE__ */ jsx("label", { className: "armada-select-field__label", htmlFor: selectId, children: label2 }),
-    /* @__PURE__ */ jsxs("span", { className: "armada-select-shell", children: [
-      /* @__PURE__ */ jsx(
-        "select",
-        {
-          ...rest,
-          id: selectId,
-          className: "armada-select",
-          "aria-invalid": invalid || void 0,
-          "aria-describedby": showMessage ? messageId : void 0,
-          children
-        }
-      ),
-      /* @__PURE__ */ jsx(ChevronDown, { className: "armada-select__caret", size: 16, strokeWidth: 2, "aria-hidden": true })
-    ] }),
-    showMessage && /* @__PURE__ */ jsx("span", { className: "armada-select-field__message", id: messageId, children: message })
-  ] });
 }
 function JobComposer({
   title,
@@ -2391,7 +2661,7 @@ const NoChecksOnTheWorkflow = {
     provenance: "Dispatched by you"
   }
 };
-const __vite_glob_0_10 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_11 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   NoChecksOnTheWorkflow,
   WhatM1Renders,
@@ -2609,7 +2879,7 @@ const AtTheApprovalGate = {
     ] })
   }
 };
-const __vite_glob_0_11 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_12 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AFailedJob,
   AFinishedJob,
@@ -2782,7 +3052,7 @@ const WhenThePathIsGone = {
     children: "The branch is still there. The directory it was checked out into is not."
   }
 };
-const __vite_glob_0_12 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_13 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   LongPaths,
   OnAFailedJob,
@@ -2834,7 +3104,7 @@ const meta$M = {
   title: "Compositions/Job outcome",
   component: JobOutcome
 };
-const NOTE$2 = "Armada does not push and does not merge. The branch is yours to take.";
+const NOTE$2 = "Armada does not merge. The branch is pushed and the review is yours to take.";
 const WhatIsServedToday = {
   args: {
     note: NOTE$2,
@@ -2849,13 +3119,14 @@ const WhatIsServedToday = {
         name: "Commit",
         icon: GitCommitHorizontal,
         iconLabel: "Commit",
-        absent: "Fleet does not commit at the last step yet, so there is nothing to name."
+        value: "5375d705cb7713a21a91681c1028166b98a0d6de",
+        meta: "origin/armada/01M1CNPKTV0018H2M1CXDNBK06"
       },
       {
         name: "Pull request",
         icon: GitPullRequest,
         iconLabel: "Pull request",
-        absent: "Fleet does not open one yet, so there is nothing to open."
+        value: "https://example.invalid/armada/pull/229"
       },
       {
         /* No glyph. `file` is reserved to the log row and `file-check` to a
@@ -2914,7 +3185,7 @@ const NoBranch = {
     ]
   }
 };
-const __vite_glob_0_13 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_14 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   EveryPartServed: EveryPartServed$1,
   NoBranch,
@@ -3033,7 +3304,7 @@ const NothingRecorded = {
 function Panel({ children }) {
   return /* @__PURE__ */ jsx("p", { className: "armada-record__note", children });
 }
-const __vite_glob_0_14 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   ASectionOpened,
   FoldedRecord,
@@ -3059,7 +3330,7 @@ const GATE_TRACKS = [
   "var(--armada-track-origin)",
   "var(--armada-track-bar)",
   "var(--armada-track-step)",
-  "var(--armada-track-time)",
+  "var(--armada-track-created)",
   "var(--armada-track-provenance)"
 ].join(" ");
 const NeedsApproval = {
@@ -3091,7 +3362,7 @@ const Queued$2 = {
     fields: [
       { label: "Workflow", value: "bug, 4 steps", quiet: true },
       { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 0, label: "Not started, 4 steps" }) },
-      { value: "Waiting on a drone", emphasis: true },
+      { value: "Not started", quiet: true },
       { value: "approved 09:20", quiet: true },
       { value: "Dispatched by you" }
     ],
@@ -3119,6 +3390,12 @@ const Running$5 = {
 };
 const RunningFocused = {
   args: { ...Running$5.args, focused: true }
+};
+const FocusedWithItsKey = {
+  args: { ...Running$5.args, focused: true, actionKey: "o" }
+};
+const UnfocusedWithItsKey = {
+  args: { ...Running$5.args, actionKey: "o" }
 };
 const Selected = {
   args: { ...Running$5.args, selected: true }
@@ -3271,7 +3548,7 @@ const SubDispatchedWaitingOnResources = {
     action: /* @__PURE__ */ jsx(SplitButton, { ground: "card", variant: "destructive", items: [], children: "Kill" })
   }
 };
-const __vite_glob_0_15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_16 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheWidthFloor,
   Convoy,
@@ -3280,6 +3557,7 @@ const __vite_glob_0_15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   EscalatedSecondTime,
   EscalatedStalled,
   Failed: Failed$4,
+  FocusedWithItsKey,
   Killed: Killed$6,
   NeedsApproval,
   Queued: Queued$2,
@@ -3288,6 +3566,7 @@ const __vite_glob_0_15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Selected,
   SpendAsQuota,
   SubDispatchedWaitingOnResources,
+  UnfocusedWithItsKey,
   default: meta$K
 }, Symbol.toStringTag, { value: "Module" }));
 function Separator({
@@ -3392,7 +3671,7 @@ const NotConnectedToFleet = {
     disabledNote: "Fleet is not connected, so nothing here can be sent."
   }
 };
-const __vite_glob_0_16 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_17 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   ADecisionAlreadySent,
   ANoteWritten,
@@ -3512,7 +3791,7 @@ const M1OneSurface = {
 const FlatForContrast = {
   args: { surfaces, activeId: "active", sectionLabel: void 0, appName: "Armada" }
 };
-const __vite_glob_0_17 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_18 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtMaximumWidth,
   AtMinimumWidth,
@@ -3628,7 +3907,7 @@ const AtTheItemCeiling = {
     spend: "~$2.40 of $20"
   }
 };
-const __vite_glob_0_18 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_19 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheItemCeiling,
   FleetNotRunning,
@@ -3693,7 +3972,7 @@ const EveryValue = {
     ] }, activity)) });
   }
 };
-const __vite_glob_0_19 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_20 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Advanced,
   AwaitingHuman: AwaitingHuman$1,
@@ -3739,7 +4018,7 @@ const RunningNeverPulses = {
     /* @__PURE__ */ jsx(StepBar, { total: 4, current: 3, activity: "running", label: "Step 3 of 4" })
   ] })
 };
-const __vite_glob_0_20 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_21 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AllAdvanced,
   AwaitingHuman,
@@ -3893,7 +4172,7 @@ const TwoMovesInOneInstant = {
 const NothingRecordedYet = {
   args: { moves: [], emptyNote: NOTHING_YET$1 }
 };
-const __vite_glob_0_21 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_22 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AJobThatEndedSomewhereSurprising,
   AJobThatRanClean,
@@ -4030,7 +4309,7 @@ const AJobWithNoWorktree = {
     emptyNote: "This job has no worktree, so there is nothing to read. A job at the approval gate has not been given one."
   }
 };
-const __vite_glob_0_22 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_23 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   ADroneThatChangedNothing,
   AFileOutsideTheDeclaredPlan,
@@ -4059,8 +4338,8 @@ const running$1 = [
     status: "running · 6m 12s",
     current: true,
     gates: [
-      { command: "build · cargo build --workspace", result: "not reached", icon: ShieldMinus$1, iconLabel: "Not reached" },
-      { command: "diff_nonempty", result: "not reached", icon: ShieldMinus$1, iconLabel: "Not reached" }
+      { command: "build · cargo build --workspace", result: "not reached", icon: ShieldMinus, iconLabel: "Not reached" },
+      { command: "diff_nonempty", result: "not reached", icon: ShieldMinus, iconLabel: "Not reached" }
     ],
     declarations: [{ label: "judge · 2 criteria", result: "not reached" }, { label: "advance_gate · auto_if_judge_passes" }]
   },
@@ -4069,7 +4348,7 @@ const running$1 = [
     label: "Run tests",
     activity: "not_started",
     status: "not started",
-    gates: [{ command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus$1, iconLabel: "Not reached" }],
+    gates: [{ command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus, iconLabel: "Not reached" }],
     declarations: [{ label: "judge · 1 criterion · gaming check", result: "not reached" }, { label: "advance_gate · auto_if_judge_passes" }]
   },
   {
@@ -4272,7 +4551,7 @@ const EveryStepState = {
         labelIsAnIdentifier: true,
         activity: "not_started",
         status: "not_started",
-        gates: [{ command: "build", result: "not reached", icon: ShieldMinus$1, iconLabel: "not reached" }]
+        gates: [{ command: "build", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }]
       },
       {
         id: "running",
@@ -4282,7 +4561,7 @@ const EveryStepState = {
         status: "running",
         current: true,
         elapsed: "6m 12s",
-        gates: [{ command: "test", result: "not reached", icon: ShieldMinus$1, iconLabel: "not reached" }]
+        gates: [{ command: "test", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }]
       },
       { id: "awaiting_human", label: "awaiting_human", labelIsAnIdentifier: true, activity: "awaiting_human", status: "awaiting_human", elapsed: "1m 04s" },
       { id: "retrying", label: "retrying", labelIsAnIdentifier: true, activity: "retrying", status: "retrying", elapsed: "3m 41s", verdict: "failed · failed a check", verdictNamed: "failed" },
@@ -4475,7 +4754,7 @@ const AFailedCheckNamesItsOutput = {
         current: true,
         gates: [
           { command: "test · cargo test --workspace", result: "failed · exit 0 → exit 101", icon: ShieldX, iconLabel: "Failed", outputPath: ".armada/jobs/job_2d90bb/checks/test.log" },
-          { command: "diff_nonempty", result: "never started", icon: ShieldMinus$1, iconLabel: "Never started" }
+          { command: "diff_nonempty", result: "never started", icon: ShieldMinus, iconLabel: "Never started" }
         ]
       }
     ]
@@ -4506,7 +4785,7 @@ const FourJobsOverAndOneResumable = {
           status: "killed",
           current: true,
           elapsed: "4m 09s",
-          gates: [{ command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus$1, iconLabel: "not reached" }]
+          gates: [{ command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }]
         }
       ],
       [
@@ -4563,7 +4842,7 @@ const WhatAStepDeclares = {
     ]
   }
 };
-const __vite_glob_0_23 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_24 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AChecksPathsAreDrawnBeforeItRuns,
   AFailedCheckNamesItsOutput,
@@ -4608,16 +4887,83 @@ const AgainstAStatusBadge = {
     /* @__PURE__ */ jsx(ErrorCode, { kind: "fault", code: "fleet.approve.refused" })
   ] })
 };
-const __vite_glob_0_24 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_25 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AgainstAStatusBadge,
   Degraded,
   Fault,
   default: meta$B
 }, Symbol.toStringTag, { value: "Module" }));
+const GAP = 3;
+const INDENT = "  ";
+const NO_CODE = "none";
+function aligned(rows, indent) {
+  const width = Math.max(...rows.map(([label2]) => label2.length)) + GAP;
+  return rows.map(([label2, value]) => {
+    const pad = " ".repeat(indent.length + width);
+    const [head, ...rest] = value.split("\n");
+    const first = `${indent}${label2}${" ".repeat(width - label2.length)}${head ?? ""}`;
+    return [first, ...rest.map((line) => `${pad}${line}`)].join("\n");
+  });
+}
+function ordered(chain) {
+  const width = String(chain.length).length;
+  return chain.map((entry, at) => `${INDENT}${String(at + 1).padStart(width)}  ${entry}`);
+}
+function debugInfo(payload) {
+  const guaranteed = [
+    ["code", payload.code ?? NO_CODE],
+    ["message", payload.message]
+  ];
+  if (payload.run_id !== void 0) guaranteed.push(["run_id", payload.run_id]);
+  if (payload.job_id !== void 0) guaranteed.push(["job_id", payload.job_id]);
+  if (payload.drone_id !== void 0) guaranteed.push(["drone_id", payload.drone_id]);
+  if (payload.step_id !== void 0) guaranteed.push(["step_id", payload.step_id]);
+  const blocks = [["armada error"], aligned(guaranteed, "")];
+  const fields = payload.fields ?? [];
+  if (fields.length > 0) {
+    blocks.push([
+      "fields",
+      ...aligned(
+        fields.map((field) => [field.key, field.value]),
+        INDENT
+      )
+    ]);
+  }
+  const chain = payload.chain ?? [];
+  if (chain.length > 0) blocks.push(["chain", ...ordered(chain)]);
+  const tail2 = [`bridge protocol ${payload.bridgeProtocol}`];
+  if (payload.fleetProtocol !== void 0) tail2.push(`fleet protocol ${payload.fleetProtocol}`);
+  tail2.push(`taken ${payload.at}`);
+  blocks.push([tail2.join("  ")]);
+  return blocks.map((block) => block.join("\n")).join("\n\n");
+}
+function copyDebugInfo(payload, onCopied) {
+  const said = () => onCopied?.(COPIED);
+  void navigator.clipboard.writeText(debugInfo(payload)).then(said, said);
+}
+const COPIED = "The debug info";
+const COPY_DEBUG_INFO = "Copy debug info";
+const SAFETY = "Structured fields carry primitives only, and a credential does not compile into one. Nothing bounds the message or the chain, which are prose an error wrote — read them before you send this.";
+const EXPANDABLE = {
+  inline: "never",
+  toast: "never",
+  banner: "disclosed",
+  surface: "always"
+};
 function ErrorNotice(props) {
-  const { kind, code, message, fields, actions, placement } = props;
+  const { kind, code, message, fields, actions, placement, payload, onCopied } = props;
   const act = props.act;
+  const dismiss = props.placement === "toast" ? props.onDismiss : void 0;
+  const [open2, setOpen] = useState(false);
+  const disclosure = EXPANDABLE[placement];
+  const expanded = payload !== void 0 && (disclosure === "always" || open2);
+  const text = payload === void 0 ? null : debugInfo(payload);
+  const copy = useCallback(() => {
+    if (payload === void 0) return;
+    copyDebugInfo(payload, onCopied);
+    dismiss?.();
+  }, [payload, onCopied, dismiss]);
   return /* @__PURE__ */ jsxs(
     "section",
     {
@@ -4638,11 +4984,43 @@ function ErrorNotice(props) {
             /* @__PURE__ */ jsx("dd", { className: "armada-error__value", children: field.value })
           ] }, at)) }) : null
         ] }),
-        actions !== void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-error__actions", children: actions }) : null
+        expanded && text !== null ? /* @__PURE__ */ jsxs("div", { className: "armada-error__payload", children: [
+          /* @__PURE__ */ jsx("pre", { className: "armada-error__debug", children: text }),
+          /* @__PURE__ */ jsx("p", { className: "armada-error__safety", children: SAFETY })
+        ] }) : null,
+        payload !== void 0 || actions !== void 0 ? /* @__PURE__ */ jsxs("div", { className: "armada-error__actions", children: [
+          payload === void 0 ? null : /* @__PURE__ */ jsx(Button, { variant: "ghost", size: "sm", onClick: copy, children: COPY_DEBUG_INFO }),
+          payload !== void 0 && disclosure === "disclosed" ? /* @__PURE__ */ jsx(Button, { variant: "ghost", size: "sm", "aria-expanded": open2, onClick: () => setOpen((was) => !was), children: "Details" }) : null,
+          actions
+        ] }) : null
       ]
     }
   );
 }
+const REFUSED = {
+  code: "judge.undecided",
+  message: "judge returned prose for criterion 2",
+  run_id: "01JQ8ZC4M2WYVK7T3RQN8H",
+  job_id: "job_31c7",
+  drone_id: "drn_4c8",
+  step_id: "verify",
+  fields: [
+    { key: "criterion", value: "2" },
+    // The tier, not the vendor's id for it. Every other story in this package
+    // says `sonnet` for the same reason the vendor-literal rule refuses the
+    // other spelling: a model name typed into a sample is a second roster.
+    { key: "judge_model", value: "sonnet" },
+    { key: "response_bytes", value: "1184" }
+  ],
+  chain: [
+    "judge: no verdict parsed from response",
+    "gate verify: undecided",
+    "job_31c7: escalated"
+  ],
+  bridgeProtocol: "5.2",
+  fleetProtocol: "5.2",
+  at: "2026-08-30T09:16:40Z"
+};
 const meta$A = {
   title: "Errors/Error notice",
   component: ErrorNotice
@@ -4715,13 +5093,69 @@ const FullSurface = {
     actions: /* @__PURE__ */ jsx(Button, { variant: "secondary", size: "sm", children: "Check again" })
   }
 };
-const __vite_glob_0_25 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const InlineWithPayload = {
+  args: { ...Inline.args, payload: REFUSED }
+};
+const ToastWithPayload = {
+  render: (args) => /* @__PURE__ */ jsx("div", { className: "armada-error-toast-region", children: /* @__PURE__ */ jsx(ErrorNotice, { ...args }) }),
+  args: {
+    kind: "fault",
+    placement: "toast",
+    code: "judge.undecided",
+    message: "Job 31c7 escalated. The judge returned prose for criterion 2.",
+    payload: REFUSED
+  }
+};
+const BannerWithPayload = {
+  args: { ...Banner.args, payload: REFUSED }
+};
+const FullSurfaceWithPayload = {
+  render: (args) => /* @__PURE__ */ jsx("div", { className: "armada-error-surface-region", children: /* @__PURE__ */ jsx(ErrorNotice, { ...args }) }),
+  args: {
+    kind: "fault",
+    placement: "surface",
+    code: "judge.undecided",
+    message: "Job 31c7 escalated. The judge returned prose for criterion 2.",
+    act: "Read the judge's response, then overrule the verdict or redispatch the job.",
+    payload: REFUSED
+  }
+};
+const CodelessPayload = {
+  render: (args) => /* @__PURE__ */ jsx("div", { className: "armada-error-surface-region", children: /* @__PURE__ */ jsx(ErrorNotice, { ...args }) }),
+  args: {
+    kind: "fault",
+    placement: "surface",
+    code: "bridge.render.threw",
+    message: "Bridge could not draw the job board.",
+    act: "Reload Bridge. Fleet keeps running and jobs keep progressing.",
+    payload: {
+      message: "Cannot read properties of undefined (reading 'status')",
+      fields: [
+        { key: "region", value: "the job board" },
+        { key: "component", value: "JobRowStacked" }
+      ],
+      chain: [
+        "at JobRowStacked (JobRowStacked.tsx:88:19)",
+        "at JobBoard (JobBoard.tsx:142:7)",
+        "at Shell (Shell.tsx:61:5)"
+      ],
+      bridgeProtocol: "5.2",
+      at: "2026-08-30T09:16:40Z"
+    }
+  }
+};
+const __vite_glob_0_26 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Banner,
   BannerFault,
+  BannerWithPayload,
+  CodelessPayload,
   FullSurface,
+  FullSurfaceWithPayload,
   Inline,
+  InlineWithPayload,
   Toast: Toast$1,
+  ToastWithPayload,
   default: meta$A
 }, Symbol.toStringTag, { value: "Module" }));
 function Alert({ tone = "escalated", title, children, icon, action }) {
@@ -4772,7 +5206,7 @@ const Neutral = {
     action: /* @__PURE__ */ jsx("button", { type: "button", className: "armada-alert__button", children: "Open Doctor" })
   }
 };
-const __vite_glob_0_26 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_27 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Escalated: Escalated$1,
   Neutral,
@@ -4811,7 +5245,7 @@ const LongFilename = {
 const ReadOnly = {
   args: { filename: "evidence.log" }
 };
-const __vite_glob_0_27 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_28 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$7,
   LongFilename,
@@ -4882,7 +5316,7 @@ const EscalationReasons = {
     /* @__PURE__ */ jsx(Badge, { status: "escalated", icon: ArrowUpToLine, children: "Reached its ceiling" })
   ] })
 };
-const __vite_glob_0_28 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_29 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AwaitingApproval: AwaitingApproval$1,
   AwaitingAttestation,
@@ -5000,7 +5434,7 @@ const Light$7 = {
     /* @__PURE__ */ jsx(Button, { variant: "secondary", children: "Cancel" })
   ] }) })
 };
-const __vite_glob_0_29 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_30 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Destructive,
   Disabled: Disabled$7,
@@ -5052,7 +5486,7 @@ const Dimmed$1 = {
     /* @__PURE__ */ jsx(CardDescription, { children: "The work landed outside this job." })
   ] })
 };
-const __vite_glob_0_30 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_31 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$6,
   Dimmed: Dimmed$1,
@@ -5105,7 +5539,7 @@ const Disabled$6 = {
 const Light$6 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$5, { children: /* @__PURE__ */ jsx(Checkbox, { defaultChecked: true, children: "Run Doctor before dispatch" }) }) })
 };
-const __vite_glob_0_31 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_32 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Checked,
   Disabled: Disabled$6,
@@ -5356,7 +5790,7 @@ const DestructiveEntryConfirms = {
     ] });
   }
 };
-const __vite_glob_0_32 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_33 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AliasFindsTheLexiconTerm,
   DestructiveEntryConfirms,
@@ -5440,7 +5874,7 @@ const MoreThanFitsWithAFieldToReach = {
     ] })
   }
 };
-const __vite_glob_0_33 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_34 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Confirmation,
   KillTheDrone,
@@ -5564,7 +5998,7 @@ const AtTheRightEdge$2 = {
 const WithNoRoomBelow$2 = {
   render: () => /* @__PURE__ */ jsx(Frame$2, { edge: "bottom", children: /* @__PURE__ */ jsx(DropdownMenu, { defaultOpen: true, triggerLabel: "More", entries: rowActions }) })
 };
-const __vite_glob_0_34 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_35 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheLeftEdge: AtTheLeftEdge$2,
   AtTheRightEdge: AtTheRightEdge$2,
@@ -5627,7 +6061,7 @@ const Disabled$5 = {
 const Light$5 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$4, { children: /* @__PURE__ */ jsx(Input, { label: "Job title", defaultValue: "Refresh the auth token flow" }) }) })
 };
-const __vite_glob_0_35 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_36 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$5,
   Disabled: Disabled$5,
@@ -5638,12 +6072,6 @@ const __vite_glob_0_35 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Placeholder: Placeholder$1,
   default: meta$q
 }, Symbol.toStringTag, { value: "Module" }));
-function Kbd({ className, ...rest }) {
-  return /* @__PURE__ */ jsx("kbd", { className: className ? `armada-kbd ${className}` : "armada-kbd", ...rest });
-}
-function KbdChord({ className, ...rest }) {
-  return /* @__PURE__ */ jsx("span", { className: className ? `armada-kbd-chord ${className}` : "armada-kbd-chord", ...rest });
-}
 const meta$p = {
   title: "Primitives/kbd",
   component: Kbd
@@ -5668,7 +6096,7 @@ const ContextualKeys = {
     /* @__PURE__ */ jsx(Kbd, { children: "/" })
   ] })
 };
-const __vite_glob_0_36 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_37 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Chord,
   ContextualKeys,
@@ -5750,7 +6178,7 @@ const AtTheRightEdge$1 = {
 const WithNoRoomBelow$1 = {
   render: () => /* @__PURE__ */ jsx(Frame$1, { edge: "bottom", children: /* @__PURE__ */ jsx(Popover, { defaultOpen: true, trigger, children: body }) })
 };
-const __vite_glob_0_37 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_38 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AlignedToTheEnd,
   AtTheLeftEdge: AtTheLeftEdge$1,
@@ -5783,7 +6211,7 @@ const WhatItWillNotDraw = {
     text: "A link is written [like this](https://example.invalid/x) and stays written that way.\n\n> A blockquote is a paragraph that opens with a caret.\n\n| so | is | a table |"
   }
 };
-const __vite_glob_0_38 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_39 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AFlagsCitation,
   AJudgesConsequence,
@@ -5849,7 +6277,7 @@ const Light$4 = {
     /* @__PURE__ */ jsx(Radio, { name: "kit-light", children: "Start fresh" })
   ] }) }) })
 };
-const __vite_glob_0_39 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_40 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$3,
   Disabled: Disabled$4,
@@ -5966,7 +6394,7 @@ const WithinBounds = {
     }
   )
 };
-const __vite_glob_0_40 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_41 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Scrolling,
   WithinBounds,
@@ -6021,7 +6449,7 @@ const Disabled$3 = {
 const Light$3 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$2, { children: /* @__PURE__ */ jsx(Select, { label: "Concurrency ceiling", children: ceilings }) }) })
 };
-const __vite_glob_0_41 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_42 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$2,
   Disabled: Disabled$3,
@@ -6094,7 +6522,7 @@ const Vertical = {
 const Announced = {
   args: { decorative: false }
 };
-const __vite_glob_0_42 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_43 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Announced,
   Horizontal,
@@ -6166,7 +6594,7 @@ const Left = {
     children: "The command tripped the allowlist 5 times and was approved every time. Adding it here stops the prompt."
   }
 };
-const __vite_glob_0_43 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_44 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Left,
   Right,
@@ -6221,7 +6649,7 @@ const InACard = {
     /* @__PURE__ */ jsx(SkeletonText, { label: "Loading evidence" })
   ] })
 };
-const __vite_glob_0_44 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_45 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   InACard,
   Single,
@@ -6303,7 +6731,7 @@ const FocusedOnPrimary = {
     /* @__PURE__ */ jsx("div", { "data-preview-focus": "caret", children: /* @__PURE__ */ jsx(SplitButton, { items: reviewActions, variant: "primary", children: "Approve" }) })
   ] })
 };
-const __vite_glob_0_45 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_46 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Closed,
   Disabled: Disabled$2,
@@ -6377,7 +6805,7 @@ const WithADescription = {
 const Light$1 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$1, { children: /* @__PURE__ */ jsx(Switch, { defaultChecked: true, children: "Escalate on stall" }) }) })
 };
-const __vite_glob_0_46 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_47 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Disabled: Disabled$1,
   Focused: Focused$1,
@@ -6497,7 +6925,7 @@ const RowsGrowWithContent = {
     ] })
   ] }) })
 };
-const __vite_glob_0_47 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_48 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$1,
   Dimmed,
@@ -6530,50 +6958,12 @@ const LastActive = {
     ]
   }
 };
-const __vite_glob_0_48 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_49 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   LastActive,
   SectionsOfOneObject,
   default: meta$d
 }, Symbol.toStringTag, { value: "Module" }));
-function TabsWithCounts({ items, value, defaultValue, onChange }) {
-  const [internal, setInternal] = useState(defaultValue ?? items[0]?.id);
-  const active = value ?? internal;
-  function select(id) {
-    if (value === void 0) setInternal(id);
-    onChange?.(id);
-  }
-  function onKey(event) {
-    const at = items.findIndex((item) => item.id === active);
-    if (items.length === 0) {
-      return;
-    }
-    if (event.key === "ArrowRight") {
-      event.preventDefault();
-      select(items[(at + 1) % items.length].id);
-    }
-    if (event.key === "ArrowLeft") {
-      event.preventDefault();
-      select(items[(at - 1 + items.length) % items.length].id);
-    }
-  }
-  return /* @__PURE__ */ jsx("div", { className: "armada-tabs-counts", role: "tablist", onKeyDown: onKey, children: items.map((item) => /* @__PURE__ */ jsxs(
-    "button",
-    {
-      type: "button",
-      role: "tab",
-      "aria-selected": item.id === active,
-      tabIndex: item.id === active ? 0 : -1,
-      className: item.id === active ? "armada-tabs-counts__tab armada-tabs-counts__tab--active" : "armada-tabs-counts__tab",
-      onClick: () => select(item.id),
-      children: [
-        item.label,
-        item.count ? /* @__PURE__ */ jsx("span", { className: "armada-tabs-counts__count", children: item.count }) : null
-      ]
-    },
-    item.id
-  )) });
-}
 const meta$c = {
   title: "Primitives/Tabs with counts",
   component: TabsWithCounts
@@ -6598,9 +6988,36 @@ const Zero = {
     ]
   }
 };
-const __vite_glob_0_49 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const TheBoard$1 = {
+  args: {
+    defaultValue: "all",
+    items: [
+      { id: "all", label: "All", count: 15, shortcut: "1" },
+      { id: "needs-you", label: "Needs you", count: 4, shortcut: "2" },
+      { id: "running", label: "Running", count: 6, shortcut: "3" },
+      { id: "queued", label: "Queued", count: 2, shortcut: "4" },
+      { id: "finished", label: "Finished", count: 3, shortcut: "5" }
+    ]
+  }
+};
+const Suspended = {
+  args: {
+    defaultValue: "running",
+    suspended: true,
+    items: [
+      { id: "all", label: "All", count: 3, shortcut: "1" },
+      { id: "needs-you", label: "Needs you", count: 1, shortcut: "2" },
+      { id: "running", label: "Running", count: 2, shortcut: "3" },
+      { id: "queued", label: "Queued", shortcut: "4" },
+      { id: "finished", label: "Finished", shortcut: "5" }
+    ]
+  }
+};
+const __vite_glob_0_50 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Queues,
+  Suspended,
+  TheBoard: TheBoard$1,
   Zero,
   default: meta$c
 }, Symbol.toStringTag, { value: "Module" }));
@@ -6658,7 +7075,7 @@ const Overflowing = {
 const Light = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Textarea, { label: "Brief", defaultValue: BRIEF }) }) })
 };
-const __vite_glob_0_50 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_51 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default,
   Disabled,
@@ -6706,7 +7123,7 @@ const Landed = {
     actionLabel: "View"
   }
 };
-const __vite_glob_0_51 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_52 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Copied,
   Killed: Killed$1,
@@ -6751,7 +7168,7 @@ const AtTheRightEdge = {
 const WithNoRoomBelow = {
   render: () => /* @__PURE__ */ jsx(Frame, { edge: "bottom", children: /* @__PURE__ */ jsx(Tooltip, { defaultOpen: true, label: longPath, children: /* @__PURE__ */ jsx("span", { className: "armada-tooltip__truncated", children: longPath }) }) })
 };
-const __vite_glob_0_52 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_53 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheLeftEdge,
   AtTheRightEdge,
@@ -7393,7 +7810,7 @@ const EscalatedWithNoStepToResume = {
     }
   ) })
 };
-const __vite_glob_0_53 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_54 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AJudgeRefusedACriterion,
   EscalatedWithNoStepToResume,
@@ -7467,7 +7884,7 @@ const brief$1 = {
     { text: "A ceiling of zero is refused at load rather than at run.", source: "check" }
   ]
 };
-const NOTE = "The branch is unpushed and unmerged. Armada does not push and has no merge action — read the diff in your own tools and land it yourself.";
+const NOTE = "The branch is pushed and a review is open. Armada has no merge action — read the diff in your own tools and land it yourself.";
 const paths = /* @__PURE__ */ jsx(
   JobLogReference,
   {
@@ -7531,13 +7948,14 @@ const AsBridgeDrawsItToday$1 = {
             name: "Commit",
             icon: GitCommitHorizontal,
             iconLabel: "Commit",
-            absent: "Fleet does not commit at the last step yet, so there is nothing to name."
+            value: "5375d705cb7713a21a91681c1028166b98a0d6de",
+            meta: "origin/armada/01M1CNPKTV0018H2M1CXDNBK06"
           },
           {
             name: "Pull request",
             icon: GitPullRequest,
             iconLabel: "Pull request",
-            absent: "Fleet does not open one yet, so there is nothing to open."
+            value: "https://example.invalid/armada/pull/229"
           },
           {
             /* No glyph: `file` is reserved to the log row and `file-check` to
@@ -7625,7 +8043,7 @@ const BeforeTheDetailArrives = {
 function Stub({ children }) {
   return /* @__PURE__ */ jsx("p", { className: "armada-record__note", children });
 }
-const __vite_glob_0_54 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_55 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AsBridgeDrawsItToday: AsBridgeDrawsItToday$1,
   BeforeTheDetailArrives,
@@ -7828,7 +8246,7 @@ const TheDiffNotReadYet = {
     diffAbsent: "Reading this job's diff."
   }
 };
-const __vite_glob_0_55 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_56 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AClaimWithNothingBehindIt,
   APatchTooLongToDraw,
@@ -7900,13 +8318,13 @@ const steps = [
       {
         command: "build · cargo build --workspace",
         result: "not reached",
-        icon: ShieldMinus$1,
+        icon: ShieldMinus,
         iconLabel: "Not reached"
       },
       {
         command: "diff_nonempty",
         result: "not reached",
-        icon: ShieldMinus$1,
+        icon: ShieldMinus,
         iconLabel: "Not reached"
       }
     ],
@@ -7924,7 +8342,7 @@ const steps = [
       {
         command: "test · cargo test --workspace",
         result: "not reached",
-        icon: ShieldMinus$1,
+        icon: ShieldMinus,
         iconLabel: "Not reached"
       }
     ],
@@ -8154,7 +8572,7 @@ const AGateReplyWaitingForTheNextDrone = {
     }
   ) })
 };
-const __vite_glob_0_56 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_57 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AGateReplyWaitingForTheNextDrone,
   AsBridgeDrawsItToday,
@@ -8188,7 +8606,7 @@ const Dispatch = {
     }
   ) })
 };
-const __vite_glob_0_57 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_58 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Dispatch,
   default: meta$4
@@ -8228,22 +8646,23 @@ const FirstLaunch = {
     }
   ) })
 };
-const __vite_glob_0_58 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_59 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   FirstLaunch,
   default: meta$3
 }, Symbol.toStringTag, { value: "Module" }));
 const APPROVAL_TRACKS = [
-  "calc(var(--space-12) * 3 + var(--space-6))",
-  "calc(var(--space-12) + var(--space-6))",
-  "calc(var(--space-12) * 2 + var(--space-3))",
-  "calc(var(--space-12) * 2 + var(--space-1))",
-  "calc(var(--space-12) * 2 + var(--space-8))"
+  "var(--armada-track-origin)",
+  "var(--armada-track-bar)",
+  "var(--armada-track-step)",
+  "var(--armada-track-created)",
+  "var(--armada-track-provenance)"
 ].join(" ");
 function TheListSixStatesOneRowShape({
   heading: heading2,
   summary,
   action,
+  controls,
   rows,
   empty,
   selectable,
@@ -8256,6 +8675,7 @@ function TheListSixStatesOneRowShape({
       heading: heading2,
       summary,
       action,
+      controls,
       empty,
       selectable,
       label: label2,
@@ -8297,18 +8717,29 @@ const awaitingApproval = {
     { value: "created 09:12", quiet: true },
     { value: "Dispatched by you" }
   ],
-  action: /* @__PURE__ */ jsx(SplitButton, { ground: "card", items: [{ label: "Reject", danger: true }], children: "Approve" })
+  // **Review, not Approve.** The drawing gave this row an Approve control and
+  // flagged it as a departure from the settled rule that approval is a second
+  // act from detail; it was settled 2026-08-31 in favour of the rule. Review is
+  // the word an `awaiting_review` row already carries and means the same thing
+  // in both places — go read this — because in both places the act is on
+  // detail. Nothing on the Board approves.
+  action: /* @__PURE__ */ jsx(SplitButton, { ground: "card", items: menu, children: "Review" })
 };
 const queued = {
   status: "not-started",
   statusIcon: Cpu,
-  statusLabel: "Queued",
+  // The reason supplies the verb as well as the glyph. This carried cpu with
+  // "Queued" beside it, which is half the registry's rule, and the field
+  // beneath said "Waiting on a drone" — the reason a second time, and named
+  // for the one drone Fleet used to run. The resource is the concurrency cap.
+  statusLabel: "Waiting on resources",
   headline: "Retire the legacy poke path",
   jobId: "job_8b42",
+  tracks: APPROVAL_TRACKS,
   fields: [
     { value: workflow },
     { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 0, label: "Not started, 4 steps" }) },
-    { value: "Waiting on a drone", emphasis: true },
+    { value: "Not started", quiet: true },
     { value: "approved 09:20", quiet: true },
     { value: "Dispatched by you" }
   ],
@@ -8331,7 +8762,8 @@ const running = {
     { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 2, activity: "running", label: "Step 2 of 4" }) },
     { value: "Implement", emphasis: true },
     { value: "11m 03s", mono: true },
-    { value: "~$1.80", mono: true }
+    { value: "~$1.80", mono: true },
+    { value: "Dispatched by you" }
   ],
   action: open
 };
@@ -8351,7 +8783,8 @@ const failed = {
     { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 3, activity: "failed", label: "Step 3 of 4" }) },
     { value: "Run tests", emphasis: true },
     { value: "22m 41s", mono: true },
-    { value: "~$2.10", mono: true }
+    { value: "~$2.10", mono: true },
+    { value: "Found by Fleet" }
   ],
   action: open
 };
@@ -8373,7 +8806,8 @@ const done = {
     },
     { value: "Summarise" },
     { value: "18m 22s", mono: true },
-    { value: "~$2.40", mono: true }
+    { value: "~$2.40", mono: true },
+    { value: "Drafted in Helm" }
   ],
   action: open
 };
@@ -8393,7 +8827,8 @@ const killed = {
     { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 2, activity: "killed", label: "Step 2 of 4" }) },
     { value: "Implement", emphasis: true },
     { value: "4m 09s", mono: true },
-    { value: "~$0.60", mono: true }
+    { value: "~$0.60", mono: true },
+    { value: "Workflow-triggered" }
   ],
   action: open
 };
@@ -8412,6 +8847,48 @@ const TheList = {
     }
   ) })
 };
+const TheBoard = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    TheListSixStatesOneRowShape,
+    {
+      heading: "Active jobs",
+      summary: "1 job needs you. 6 on the Board.",
+      action: /* @__PURE__ */ jsx(Button, { variant: "primary", children: "New job" }),
+      controls: /* @__PURE__ */ jsx(
+        BoardControls,
+        {
+          query: "",
+          onQuery: () => {
+          },
+          searchKey: "/",
+          sorts: [
+            { id: "critical_first", label: "Critical first" },
+            { id: "oldest_first", label: "Oldest first" }
+          ],
+          sort: "critical_first",
+          onSort: () => {
+          },
+          tabs: [
+            { id: "all", label: "All", count: 6, shortcut: "1" },
+            { id: "needs-you", label: "Needs you", count: 1, shortcut: "2" },
+            { id: "running", label: "Running", count: 1, shortcut: "3" },
+            { id: "queued", label: "Queued", count: 1, shortcut: "4" },
+            { id: "finished", label: "Finished", count: 3, shortcut: "5" }
+          ],
+          tab: "all",
+          onTab: () => {
+          }
+        }
+      ),
+      rows: SIX.map((row, i) => ({
+        ...row,
+        actionKey: KEYS[i],
+        focused: i === 0 || void 0
+      }))
+    }
+  ) })
+};
+const KEYS = ["r", "o", "o", "o", "o", "o"];
 const AwaitingApproval = { render: () => one(awaitingApproval) };
 const Queued = { render: () => one(queued) };
 const Running = { render: () => one(running) };
@@ -8442,7 +8919,7 @@ const WhatTheWireServes = {
   ) })
 };
 const STILL_RUNNING = { 0: "1h 04m", 1: "38m 12s", 2: "11m 03s" };
-const __vite_glob_0_59 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_60 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AwaitingApproval,
   Done,
@@ -8450,6 +8927,7 @@ const __vite_glob_0_59 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Killed,
   Queued,
   Running,
+  TheBoard,
   TheList,
   WhatTheWireServes,
   default: meta$2
@@ -8539,7 +9017,7 @@ const FleetIsNotRunning = {
   },
   render: Shell.render
 };
-const __vite_glob_0_60 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_61 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   CollapsedRail,
   FleetIsNotRunning,
@@ -8739,7 +9217,7 @@ const NothingButToolCalls = {
     }
   ) })
 };
-const __vite_glob_0_61 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_62 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   ADroneThatOutlivedItsFleet,
   ADroneThinking,
@@ -8753,67 +9231,68 @@ const __vite_glob_0_61 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
 }, Symbol.toStringTag, { value: "Module" }));
 const stories = /* @__PURE__ */ Object.assign({
   "../src/compositions/ActiveJobsList/ActiveJobsList.stories.tsx": __vite_glob_0_0,
-  "../src/compositions/BoardEmptyState/BoardEmptyState.stories.tsx": __vite_glob_0_1,
-  "../src/compositions/ChangedFiles/ChangedFiles.stories.tsx": __vite_glob_0_2,
-  "../src/compositions/CriterionVerdicts/CriterionVerdicts.stories.tsx": __vite_glob_0_3,
-  "../src/compositions/DroneTurns/DroneTurns.stories.tsx": __vite_glob_0_4,
-  "../src/compositions/EvidenceCard/EvidenceCard.stories.tsx": __vite_glob_0_5,
-  "../src/compositions/EvidenceTrail/EvidenceTrail.stories.tsx": __vite_glob_0_6,
-  "../src/compositions/FailureNotice/FailureNotice.stories.tsx": __vite_glob_0_7,
-  "../src/compositions/GamingFlags/GamingFlags.stories.tsx": __vite_glob_0_8,
-  "../src/compositions/JobBrief/JobBrief.stories.tsx": __vite_glob_0_9,
-  "../src/compositions/JobComposer/JobComposer.stories.tsx": __vite_glob_0_10,
-  "../src/compositions/JobDetailHeaderActions/JobDetailHeaderActions.stories.tsx": __vite_glob_0_11,
-  "../src/compositions/JobLogReference/JobLogReference.stories.tsx": __vite_glob_0_12,
-  "../src/compositions/JobOutcome/JobOutcome.stories.tsx": __vite_glob_0_13,
-  "../src/compositions/JobRecord/JobRecord.stories.tsx": __vite_glob_0_14,
-  "../src/compositions/JobRowStacked/JobRowStacked.stories.tsx": __vite_glob_0_15,
-  "../src/compositions/ReviewDecision/ReviewDecision.stories.tsx": __vite_glob_0_16,
-  "../src/compositions/Sidebar/Sidebar.stories.tsx": __vite_glob_0_17,
-  "../src/compositions/StatusBar/StatusBar.stories.tsx": __vite_glob_0_18,
-  "../src/compositions/StepActivityMark/StepActivityMark.stories.tsx": __vite_glob_0_19,
-  "../src/compositions/StepBar/StepBar.stories.tsx": __vite_glob_0_20,
-  "../src/compositions/TransitionHistory/TransitionHistory.stories.tsx": __vite_glob_0_21,
-  "../src/compositions/UnifiedDiff/UnifiedDiff.stories.tsx": __vite_glob_0_22,
-  "../src/compositions/WorkflowRail/WorkflowRail.stories.tsx": __vite_glob_0_23,
-  "../src/errors/ErrorCode/ErrorCode.stories.tsx": __vite_glob_0_24,
-  "../src/errors/ErrorNotice/ErrorNotice.stories.tsx": __vite_glob_0_25,
-  "../src/primitives/Alert/Alert.stories.tsx": __vite_glob_0_26,
-  "../src/primitives/AttachmentChip/AttachmentChip.stories.tsx": __vite_glob_0_27,
-  "../src/primitives/Badge/Badge.stories.tsx": __vite_glob_0_28,
-  "../src/primitives/Button/Button.stories.tsx": __vite_glob_0_29,
-  "../src/primitives/Card/Card.stories.tsx": __vite_glob_0_30,
-  "../src/primitives/Checkbox/Checkbox.stories.tsx": __vite_glob_0_31,
-  "../src/primitives/CommandPalette/CommandPalette.stories.tsx": __vite_glob_0_32,
-  "../src/primitives/Dialog/Dialog.stories.tsx": __vite_glob_0_33,
-  "../src/primitives/DropdownMenu/DropdownMenu.stories.tsx": __vite_glob_0_34,
-  "../src/primitives/Input/Input.stories.tsx": __vite_glob_0_35,
-  "../src/primitives/Kbd/Kbd.stories.tsx": __vite_glob_0_36,
-  "../src/primitives/Popover/Popover.stories.tsx": __vite_glob_0_37,
-  "../src/primitives/Prose/Prose.stories.tsx": __vite_glob_0_38,
-  "../src/primitives/Radio/Radio.stories.tsx": __vite_glob_0_39,
-  "../src/primitives/ScrollArea/ScrollArea.stories.tsx": __vite_glob_0_40,
-  "../src/primitives/Select/Select.stories.tsx": __vite_glob_0_41,
-  "../src/primitives/Separator/Separator.stories.tsx": __vite_glob_0_42,
-  "../src/primitives/Sheet/Sheet.stories.tsx": __vite_glob_0_43,
-  "../src/primitives/Skeleton/Skeleton.stories.tsx": __vite_glob_0_44,
-  "../src/primitives/SplitButton/SplitButton.stories.tsx": __vite_glob_0_45,
-  "../src/primitives/Switch/Switch.stories.tsx": __vite_glob_0_46,
-  "../src/primitives/Table/Table.stories.tsx": __vite_glob_0_47,
-  "../src/primitives/Tabs/Tabs.stories.tsx": __vite_glob_0_48,
-  "../src/primitives/TabsWithCounts/TabsWithCounts.stories.tsx": __vite_glob_0_49,
-  "../src/primitives/Textarea/Textarea.stories.tsx": __vite_glob_0_50,
-  "../src/primitives/Toast/Toast.stories.tsx": __vite_glob_0_51,
-  "../src/primitives/Tooltip/Tooltip.stories.tsx": __vite_glob_0_52,
-  "../src/screens/AFailedJobADeadEndReadAsOne/AFailedJobADeadEndReadAsOne.stories.tsx": __vite_glob_0_53,
-  "../src/screens/AFinishedJobWhatItWasAndWhatItProduced/AFinishedJobWhatItWasAndWhatItProduced.stories.tsx": __vite_glob_0_54,
-  "../src/screens/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop.stories.tsx": __vite_glob_0_55,
-  "../src/screens/ARunningJob/ARunningJob.stories.tsx": __vite_glob_0_56,
-  "../src/screens/DispatchAJobFullWithTheM1SubsetMarked/DispatchAJobFullWithTheM1SubsetMarked.stories.tsx": __vite_glob_0_57,
-  "../src/screens/FirstLaunch/FirstLaunch.stories.tsx": __vite_glob_0_58,
-  "../src/screens/TheListSixStatesOneRowShape/TheListSixStatesOneRowShape.stories.tsx": __vite_glob_0_59,
-  "../src/screens/TheShell/TheShell.stories.tsx": __vite_glob_0_60,
-  "../src/screens/WatchingADroneWork/WatchingADroneWork.stories.tsx": __vite_glob_0_61
+  "../src/compositions/BoardControls/BoardControls.stories.tsx": __vite_glob_0_1,
+  "../src/compositions/BoardEmptyState/BoardEmptyState.stories.tsx": __vite_glob_0_2,
+  "../src/compositions/ChangedFiles/ChangedFiles.stories.tsx": __vite_glob_0_3,
+  "../src/compositions/CriterionVerdicts/CriterionVerdicts.stories.tsx": __vite_glob_0_4,
+  "../src/compositions/DroneTurns/DroneTurns.stories.tsx": __vite_glob_0_5,
+  "../src/compositions/EvidenceCard/EvidenceCard.stories.tsx": __vite_glob_0_6,
+  "../src/compositions/EvidenceTrail/EvidenceTrail.stories.tsx": __vite_glob_0_7,
+  "../src/compositions/FailureNotice/FailureNotice.stories.tsx": __vite_glob_0_8,
+  "../src/compositions/GamingFlags/GamingFlags.stories.tsx": __vite_glob_0_9,
+  "../src/compositions/JobBrief/JobBrief.stories.tsx": __vite_glob_0_10,
+  "../src/compositions/JobComposer/JobComposer.stories.tsx": __vite_glob_0_11,
+  "../src/compositions/JobDetailHeaderActions/JobDetailHeaderActions.stories.tsx": __vite_glob_0_12,
+  "../src/compositions/JobLogReference/JobLogReference.stories.tsx": __vite_glob_0_13,
+  "../src/compositions/JobOutcome/JobOutcome.stories.tsx": __vite_glob_0_14,
+  "../src/compositions/JobRecord/JobRecord.stories.tsx": __vite_glob_0_15,
+  "../src/compositions/JobRowStacked/JobRowStacked.stories.tsx": __vite_glob_0_16,
+  "../src/compositions/ReviewDecision/ReviewDecision.stories.tsx": __vite_glob_0_17,
+  "../src/compositions/Sidebar/Sidebar.stories.tsx": __vite_glob_0_18,
+  "../src/compositions/StatusBar/StatusBar.stories.tsx": __vite_glob_0_19,
+  "../src/compositions/StepActivityMark/StepActivityMark.stories.tsx": __vite_glob_0_20,
+  "../src/compositions/StepBar/StepBar.stories.tsx": __vite_glob_0_21,
+  "../src/compositions/TransitionHistory/TransitionHistory.stories.tsx": __vite_glob_0_22,
+  "../src/compositions/UnifiedDiff/UnifiedDiff.stories.tsx": __vite_glob_0_23,
+  "../src/compositions/WorkflowRail/WorkflowRail.stories.tsx": __vite_glob_0_24,
+  "../src/errors/ErrorCode/ErrorCode.stories.tsx": __vite_glob_0_25,
+  "../src/errors/ErrorNotice/ErrorNotice.stories.tsx": __vite_glob_0_26,
+  "../src/primitives/Alert/Alert.stories.tsx": __vite_glob_0_27,
+  "../src/primitives/AttachmentChip/AttachmentChip.stories.tsx": __vite_glob_0_28,
+  "../src/primitives/Badge/Badge.stories.tsx": __vite_glob_0_29,
+  "../src/primitives/Button/Button.stories.tsx": __vite_glob_0_30,
+  "../src/primitives/Card/Card.stories.tsx": __vite_glob_0_31,
+  "../src/primitives/Checkbox/Checkbox.stories.tsx": __vite_glob_0_32,
+  "../src/primitives/CommandPalette/CommandPalette.stories.tsx": __vite_glob_0_33,
+  "../src/primitives/Dialog/Dialog.stories.tsx": __vite_glob_0_34,
+  "../src/primitives/DropdownMenu/DropdownMenu.stories.tsx": __vite_glob_0_35,
+  "../src/primitives/Input/Input.stories.tsx": __vite_glob_0_36,
+  "../src/primitives/Kbd/Kbd.stories.tsx": __vite_glob_0_37,
+  "../src/primitives/Popover/Popover.stories.tsx": __vite_glob_0_38,
+  "../src/primitives/Prose/Prose.stories.tsx": __vite_glob_0_39,
+  "../src/primitives/Radio/Radio.stories.tsx": __vite_glob_0_40,
+  "../src/primitives/ScrollArea/ScrollArea.stories.tsx": __vite_glob_0_41,
+  "../src/primitives/Select/Select.stories.tsx": __vite_glob_0_42,
+  "../src/primitives/Separator/Separator.stories.tsx": __vite_glob_0_43,
+  "../src/primitives/Sheet/Sheet.stories.tsx": __vite_glob_0_44,
+  "../src/primitives/Skeleton/Skeleton.stories.tsx": __vite_glob_0_45,
+  "../src/primitives/SplitButton/SplitButton.stories.tsx": __vite_glob_0_46,
+  "../src/primitives/Switch/Switch.stories.tsx": __vite_glob_0_47,
+  "../src/primitives/Table/Table.stories.tsx": __vite_glob_0_48,
+  "../src/primitives/Tabs/Tabs.stories.tsx": __vite_glob_0_49,
+  "../src/primitives/TabsWithCounts/TabsWithCounts.stories.tsx": __vite_glob_0_50,
+  "../src/primitives/Textarea/Textarea.stories.tsx": __vite_glob_0_51,
+  "../src/primitives/Toast/Toast.stories.tsx": __vite_glob_0_52,
+  "../src/primitives/Tooltip/Tooltip.stories.tsx": __vite_glob_0_53,
+  "../src/screens/AFailedJobADeadEndReadAsOne/AFailedJobADeadEndReadAsOne.stories.tsx": __vite_glob_0_54,
+  "../src/screens/AFinishedJobWhatItWasAndWhatItProduced/AFinishedJobWhatItWasAndWhatItProduced.stories.tsx": __vite_glob_0_55,
+  "../src/screens/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop.stories.tsx": __vite_glob_0_56,
+  "../src/screens/ARunningJob/ARunningJob.stories.tsx": __vite_glob_0_57,
+  "../src/screens/DispatchAJobFullWithTheM1SubsetMarked/DispatchAJobFullWithTheM1SubsetMarked.stories.tsx": __vite_glob_0_58,
+  "../src/screens/FirstLaunch/FirstLaunch.stories.tsx": __vite_glob_0_59,
+  "../src/screens/TheListSixStatesOneRowShape/TheListSixStatesOneRowShape.stories.tsx": __vite_glob_0_60,
+  "../src/screens/TheShell/TheShell.stories.tsx": __vite_glob_0_61,
+  "../src/screens/WatchingADroneWork/WatchingADroneWork.stories.tsx": __vite_glob_0_62
 });
 function label(key) {
   return key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim();

@@ -41,17 +41,21 @@ const open = (
 /**
  * The track list a Job at the gate takes: no branch, step or elapsed reading
  * yet, so a "created" timestamp and origin do the work the running row's
- * time and spend tracks do. Composed from this component's own track custom
- * properties, the same way `APPROVAL_TRACKS` in `TheListSixStatesOneRowShape`
- * composes its own — duplicated here rather than imported, because a
- * composition's story cannot reach into a screen, and because
- * `APPROVAL_TRACKS` sits outside this change's write scope. Reported.
+ * time and spend tracks do. Duplicated rather than imported, because a
+ * composition's story cannot reach into a screen — but every width is now a
+ * named property declared in this component's own stylesheet, which is what
+ * makes the duplicate a second reference rather than a second answer.
+ *
+ * The fourth track was `--armada-track-time`, 76px, while `APPROVAL_TRACKS` in
+ * `TheListSixStatesOneRowShape` drew the drawing's 100px as a bare `calc()`.
+ * The drawing wins: the timestamp track is `--armada-track-created`, and both
+ * lists say so in the same words.
  */
 const GATE_TRACKS = [
   "var(--armada-track-origin)",
   "var(--armada-track-bar)",
   "var(--armada-track-step)",
-  "var(--armada-track-time)",
+  "var(--armada-track-created)",
   "var(--armada-track-provenance)",
 ].join(" ");
 
@@ -152,6 +156,36 @@ export const Running: Story = {
  */
 export const RunningFocused: Story = {
   args: { ...Running.args, focused: true } as never,
+};
+
+/**
+ * The cursor's row, with the key that fires its control.
+ *
+ * **One key per verb, and one control per row**, so at most one key ever
+ * applies to the row under the cursor: `o` opens, `r` reviews, `t` attests,
+ * `d` redirects. Every other verb key no-ops rather than acting on the wrong
+ * one. Each key is the verb's own initial except Redirect, because `r` is
+ * spent on Review.
+ *
+ * **The chip is drawn on every row and hidden until the cursor lands.** It
+ * holds its width either way, so the run does not reflow as the cursor moves —
+ * and the cost of that is a chip's width on rows that are not showing one.
+ *
+ * The row does not bind the key. A row cannot know whether a text input
+ * elsewhere on the screen holds focus, and the contract suppresses every
+ * single-key action while one does.
+ */
+export const FocusedWithItsKey: Story = {
+  args: { ...Running.args, focused: true, actionKey: "o" } as never,
+};
+
+/**
+ * The same key on a row nothing has the cursor on. It renders as a reserved
+ * gap rather than a chip: the width is what keeps the list from moving, and
+ * the caption is what would say the same thing fourteen times.
+ */
+export const UnfocusedWithItsKey: Story = {
+  args: { ...Running.args, actionKey: "o" } as never,
 };
 
 /** `--accent-muted` fill. Selected and focused are different states and coexist. */

@@ -56,3 +56,28 @@
   font-weight: var(--weight-body);
   color: var(--fg-subtle);
 }
+
+/* Suspended: the strip is on screen and is not narrowing anything, because
+ * something else on the surface is. Every tab steps back to --fg-subtle and the
+ * selected one gives up its accent underline — an underline reads as "this is
+ * what you are looking at", and while suspended that is not true.
+ *
+ * The selection is kept, not cleared: it is what a person gets back when the
+ * other control lets go, and the tab that holds it keeps --weight-medium so it
+ * is still legible as the one chosen. Nothing is disabled — pressing a tab is
+ * the way out, so the way out must work.
+ *
+ * A token step, never an opacity. Dimming is a token everywhere in this app. */
+.armada-tabs-counts[data-suspended] .armada-tabs-counts__tab {
+  color: var(--fg-subtle);
+}
+
+.armada-tabs-counts[data-suspended] .armada-tabs-counts__tab--active {
+  border-bottom-color: transparent;
+  color: var(--fg-subtle);
+}
+
+/* Hover still lifts, because the tab is still a control. */
+.armada-tabs-counts[data-suspended] .armada-tabs-counts__tab:hover {
+  color: var(--fg-muted);
+}

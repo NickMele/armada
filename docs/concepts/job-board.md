@@ -63,7 +63,79 @@ Default view (list vs. graph) is user-configurable, not fixed — see Configurat
 
 A Convoy in the graph is expected rather than exceptional, and whether it renders as an ordinary node, is visually distinguished, or expands its declared Workspaces is unstated.
 
-## Job status on the Board
+## The controls
+
+**Two axes: state, plus one text match.** The Manifest is already the scope, so
+it is not an axis, and origin is a label rather than an axis — drawn as a filter
+and rejected, see Origin tagging below. What is left is a state filter, a text
+match and a sort.
+
+### Five state tabs, each carrying its own count
+
+All, Needs you, Running, Queued, Finished. The count is mono and trailing; a tab
+with nothing behind it renders no count rather than a `0`.
+
+| Tab | What it holds |
+| --- | --- |
+| All | Every Job on the Board |
+| Needs you | The statuses that stop until a person reads them — `awaiting_approval`, `awaiting_attestation`, `awaiting_review`, `escalated` |
+| Running | Everything in flight, `piloted` included: a Job a person has taken over is still moving |
+| Queued | `queued`, whatever its reason |
+| Finished | Every terminal status |
+
+**The four state tabs partition every status**, which is what makes the counts
+add up and what makes `All` a sum rather than a sixth reading. The partition is
+derived from `job-statuses.toml` — `terminal`, `mode` and `who_is_acting` —
+rather than listed anywhere a surface can retype it.
+
+| Tab | Rule |
+| --- | --- |
+| Finished | `terminal` |
+| Running | `mode = "Working"` |
+| Needs you | `who_is_acting = "Person"` |
+| Queued | `who_is_acting = "Drone"` |
+
+**Every tab is a positive rule and none is a leftover.** `Needs you` is
+`who_is_acting = "Person"` and nothing else — the field the tab has always been
+described by. Reaching the same four by subtracting the ones that could be named
+would make its membership depend on the absence of a rule, so the next status
+added anywhere would join it silently.
+
+**`Working` is asked before the actor.** `piloted` is `Working` with a person
+acting, and a Job somebody has taken over is still moving.
+
+A status matching none of the four is drawn under `All` and under no state tab,
+so the counts visibly stop summing rather than it falling quietly into one.
+
+### Search reads every job whatever tab is set
+
+A text match is not a state, so it sits with sort, above the tabs.
+
+**The state tab is suspended while a search runs, not changed.** The list is
+every match; the tab keeps the value the person chose and is drawn set back,
+without its accent underline; clearing the search restores it. The sentence
+above is a statement about what search reaches, and moving the tab to satisfy it
+would spend a filter the person chose with nothing left to give back.
+
+**Choosing a tab clears the search**, by `1`–`5` or by clicking one. A suspended
+control that did nothing when pressed would be a dead one, and pressing a tab
+asks for a state rather than a match — so the match gives way, in the direction
+that has an undo.
+
+Each tab's count is a count of what the search matched, so a suspended strip is
+still a breakdown of what is on screen.
+
+### The count states both numbers
+
+`4 jobs need you. 15 on the Board.` Neither number says anything alone: the
+first is what a person is deciding whether to act on, and the second is what it
+is a fraction of. Both move with the filter, so the sentence sits beside the
+controls rather than in the surface's own head.
+
+Under a search the first number changes and the second does not —
+`3 jobs match “auth”. 15 on the Board.` It reads against the Board rather than
+against the tab, because the tab is suspended and a fraction of a filter that is
+not applying would be a number no control on screen produced.
 
 ### The default sort is Critical first
 
@@ -75,6 +147,19 @@ The sort agrees with the filter rather than cutting across it: the tab that
 groups the statuses which stop until a person reads them is the same set the
 default sort lifts to the top, so changing the tab reorders nothing a person had
 learned. The setting's key is `job_board.default_sort`.
+
+### The keyboard is the contract's contextual tier
+
+**The Board decides no binding.** `docs/contracts/design-system.md`, Keyboard and
+command palette, is the map; the Board answers the contextual keys that reach
+something here and leaves the rest alone. `1`–`5` are the state filter above, in
+tab order, and are the one part of that tier which is this surface's only.
+
+**A row's one control names the verb its state calls for, and opens the Job.**
+Review, Attest and Redirect all mean *go read this*, because none of the three
+acts happens on a board — see Dispatch flow. `o` and `Enter` open unconditionally;
+`r`, `t` and `d` open only where the row carries that verb, and no-op otherwise
+rather than acting on the wrong one.
 
 ## Job status on the Board
 
