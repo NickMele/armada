@@ -490,8 +490,10 @@ export type BridgeApi = {
    * Legal on an escalated Job whose stopped step carries `gate_undecided`.
    * Fleet refuses 409 on any other trigger — that one is an override or
    * nothing — and on a Job it is no longer standing at, because the baseline
-   * the gate reads against lives in the working slot and a Fleet restarted
-   * since the escalation has none. Where the cause has not gone away the gate
+   * the gate reads against lives in that Job's slot and a Fleet restarted since
+   * the escalation has none. Fleet stands at several Jobs at once, so the
+   * refusal is about this Job's slot being gone rather than about the one slot
+   * holding somebody else. Where the cause has not gone away the gate
    * is undecided again and **nothing moves**, which is not a failure.
    */
   rerunGate: (jobId: string) => Promise<Outcome>;

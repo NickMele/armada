@@ -279,9 +279,12 @@ export const DIFF_READ_FROM = "Read from this job's worktree against the branch 
 /**
  * What an unreadable declaration says, and it is the whole of #157.
  *
- * `get_diff` reads the plan declaration out of the live working slot, which a
- * job whose drone has stopped no longer holds — so `plan_declared` is false
- * there whatever the step declared. The old sentence read "This step declared
+ * `get_diff` reads the plan declaration out of the slot this job's own drone
+ * holds, which a job whose drone has stopped no longer has — so `plan_declared`
+ * is false there whatever the step declared. It said "the live working slot"
+ * while there was one of those; Fleet keeps a roster of slots now, and the read
+ * is keyed by job id, so a second job working beside this one changes nothing
+ * about which declaration comes back. The old sentence read "This step declared
  * no plan, so no file is marked," which is **a claim about what the drone did**
  * rather than a report of what can be read, and four of the shipped workflows
  * declare a plan at step start. A reader deciding whether work stayed in scope

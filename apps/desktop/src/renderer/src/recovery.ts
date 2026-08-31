@@ -16,8 +16,8 @@
 // still on disk: a renderer reads no filesystem, so a restart was offered on a
 // Job whose worktree had been reclaimed and the refusal arrived on the press.
 // `stuck` on `GET /jobs/:job_id` is Fleet's own answer — read off the disk, the
-// store and its own working slot — and `stuck.recourse` names each act as the
-// operation that performs it.
+// store and the slot this Job's own Drone holds, never a neighbour's — and
+// `stuck.recourse` names each act as the operation that performs it.
 //
 // **There is no second path to it.** Nothing re-derives an act where `stuck` is
 // absent: absent is Fleet classifying nothing, and a fallback would resurrect
@@ -42,8 +42,8 @@
 //
 // `gate_undecided` is the gate declining to rule in either direction. There is
 // nothing to overrule, so what is left is to ask again —
-// `crates/fleet/src/regating.rs` — and that runs out of the working slot, so it
-// co-occurs with a redirect rather than replacing it.
+// `crates/fleet/src/regating.rs` — and that runs out of the Job's own slot, so
+// it co-occurs with a redirect rather than replacing it.
 
 import { JOB_STATUS } from "../../shared/generated/vocabulary";
 import type {

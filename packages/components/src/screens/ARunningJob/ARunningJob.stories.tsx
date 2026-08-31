@@ -317,8 +317,9 @@ export const AsBridgeDrawsItToday: Story = {
  * A Job sent back at a gate, holding an instruction nothing has taken yet.
  *
  * **The window this draws is the only one worth drawing.** A person replies at
- * a human gate, the Job re-queues, and where the fleet is busy it sits behind
- * whoever holds the slot — minutes, sometimes longer. For that whole stretch a
+ * a human gate, the Job re-queues, and where every slot the concurrency cap
+ * allows is taken it sits behind the Jobs holding them — minutes, sometimes
+ * longer. The cap makes that window rarer, never absent. For that whole stretch a
  * Job somebody typed into and a Job nobody typed into are the same row and the
  * same screen, and this block is the difference.
  *

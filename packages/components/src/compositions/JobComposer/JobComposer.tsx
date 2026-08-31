@@ -24,7 +24,8 @@ import { Textarea } from "../../primitives/Textarea/Textarea";
  * Bridge is secondary or ghost so that this one reads as the decision.
  *
  * **`Approve` lands the job in `queued`, not `running`** — a drone spawning is
- * what starts it, and Fleet runs one at a time. **`Cancel` writes `killed`**: a
+ * what starts it, and Fleet runs a bounded number of them at once, so an
+ * approved job waits where the bound is reached. **`Cancel` writes `killed`**: a
  * job you never dispatched was not stopped, it was abandoned, and `rejected` is
  * a verdict exit that M1 does not have. The copy names what the person is
  * doing; the record names what happened.

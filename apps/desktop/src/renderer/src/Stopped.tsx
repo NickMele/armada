@@ -303,8 +303,10 @@ function recordOf({
     },
     {
       id: CHANGED,
-      // The declaration is not readable here: `get_diff` takes it from the live
-      // working slot and a stopped Job's Drone has let go of it. The note says
+      // The declaration is not readable here: `get_diff` takes it from the slot
+      // this Job's own Drone holds — not "the working slot", singular, since
+      // Fleet works several Jobs at once and a neighbour's slot is never read
+      // in its place — and a stopped Job's Drone has let go of it. The note says
       // so, rather than reporting a step that declared a plan as one that
       // declared none — and where the section beside it marks the drift, it
       // names that tab instead of stopping at the silence.

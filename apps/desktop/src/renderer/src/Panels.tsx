@@ -171,10 +171,12 @@ export function Changed({
    * plan it declared can be read at all.
    *
    * **False on a stopped Job and on a finished one.** `get_diff` takes the
-   * declaration from the live working slot, so `plan_declared` comes back false
-   * for a step that declared one — and the note beneath the diff then says the
-   * declaration is unreadable rather than saying none was made. The caller
-   * knows which of the two it is drawing and the wire does not.
+   * declaration from the slot this Job's own Drone holds, so `plan_declared`
+   * comes back false for a step that declared one — and the note beneath the
+   * diff then says the declaration is unreadable rather than saying none was
+   * made. The caller knows which of the two it is drawing and the wire does
+   * not. **Not "the working slot", which is what this said**: Fleet works
+   * several Jobs at once, and the slot in question is this Job's.
    */
   planReadable?: boolean;
   /**
