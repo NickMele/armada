@@ -34,20 +34,16 @@
 //! person reads, and a conflict would put markers into the diff being judged.
 //!
 //! The rebase is inside [`put_a_drone_on`](Fleet::put_a_drone_on), which the
-//! approval reaches through `crate::boundary` like every other advance: the
-//! next step's Drone is a fresh process, so what the catch-up came to rides its
-//! opening brief rather than being injected into a session.
+//! approval reaches through `crate::boundary` like every other advance.
 //!
 //! # The Drone that did the work does not cross the gate
 //!
-//! An approval ends it and starts a fresh one on the next step, the same as a
-//! mechanical advance — a Drone belongs to a step and a person taking the work
-//! is that step ending. What is **not** changed here is *when*: the process is
-//! still standing while the Job waits at `awaiting_review`, and it ends when
-//! the person answers rather than when the machine tiers held.
-//! `job-statuses.toml` says the gate should hold no session at all; freeing the
-//! working slot for a wait a person may take a day over is a scheduling
-//! question nothing has answered, so this file does not answer it either.
+//! An approval ends it and starts a fresh one on the next step, a Drone
+//! belonging to a step. What is **not** changed is *when*: it is still standing
+//! while the Job waits, and ends when the person answers rather than when the
+//! machine tiers held. `job-statuses.toml` says the gate should hold no session
+//! at all, and freeing the working slot for a wait a person may take a day over
+//! is a scheduling question nothing has answered.
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{Actor, Job, JobId, JobStatus, StepId, StepTarget, Target};
 use std::path::Path;

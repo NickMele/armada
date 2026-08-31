@@ -485,16 +485,16 @@ where
         }
     }
 
-    /// Inject the gate's outcome into the live session, with whatever the step
-    /// it moves the Drone on to asks for.
+    /// Inject the gate's outcome into the live session.
     ///
-    /// **Only ever reached from the advance path.** `Ruling::tell` answers
-    /// `None` on every ruling that is not an advance, so there is no call here
-    /// that could deliver a verdict to a Drone about to be terminated.
+    /// **Reached only where the Drone is still there afterwards**: a hand-back,
+    /// which is the same step going round again in the same process, and the
+    /// last step of a Job, where there is no next step to spawn onto and the
+    /// turn goes to the process that finished the work. A step boundary reaches
+    /// `crate::boundary` instead, because there is no session to inject into.
     ///
-    /// `declaring` is `None` where the next step asks for no plan, and where
-    /// there is no next step at all — a Job that has finished asks its Drone
-    /// for nothing.
+    /// `declaring` is `None` at both — a hand-back re-asks for no plan it never
+    /// cleared, and a Job that has finished asks its Drone for nothing.
     pub(crate) async fn tell(
         &self,
         job_id: &JobId,

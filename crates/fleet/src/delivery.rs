@@ -9,27 +9,19 @@
 //! # Two moments, and they used to be three
 //!
 //! At a **spawn** the rebase runs before the process exists and what moved
-//! rides the opening brief: see `crate::spawning`. At the last step the branch
-//! is pushed and opened for review, and there is no Drone to hand anything to.
-//!
-//! The third was a boundary that is not the last, where the Drone was alive and
-//! was told what moved in the turn it got for the next step. There is no such
-//! moment now: a Drone belongs to a step, so every boundary that is not the
-//! last is a spawn — `crate::boundary` — and the conflict a Drone is asked to
-//! resolve reaches it in the brief it opens with rather than a turn it is sent.
-//! [`Fleet::caught_up`] was the method for that moment and it is gone with it.
-//!
-//! [`Fleet::caught_up`]: Fleet::caught_up_onto
+//! rides the opening brief — `crate::spawning`. At the last step the branch is
+//! pushed and opened for review, with no Drone to hand anything to. The third
+//! was a boundary that is not the last, where the Drone was alive and heard
+//! what moved in the turn it got for the next step; a Drone belongs to a step
+//! now, so every boundary that is not the last is a spawn.
 //!
 //! # A boundary is asked, never the Drone
 //!
-//! The Drone has just submitted and nothing is in flight, so git can answer
-//! every question here on its own. Asking the Drone whether its branch is
-//! behind would be asking it to manage its own state, which
-//! `docs/concepts/drone.md` says outright it cannot be trusted to do. What the
+//! Asking the Drone whether its branch is behind would be asking it to manage
+//! its own state, which `docs/concepts/drone.md` says it cannot be trusted to
+//! do — and it has just submitted, so git can answer on its own. What the
 //! worktree is *holding* is not checked either: the rebase carries uncommitted
-//! work across and puts it back, and where it cannot the branch is. See
-//! `adapters`' delivery module.
+//! work across and puts it back. See `adapters`' delivery module.
 
 use adapter_traits::{
     AgentHarness, Base, BroughtUpToDate, Delivery, Opened, Pushed, Standing, Vcs, WorkProduct,

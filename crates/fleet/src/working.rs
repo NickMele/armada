@@ -252,32 +252,18 @@ impl Working {
 
     /// End the Drone in this slot, and read the rest of what it said.
     ///
-    /// **The order of the three acts is the whole of this method**, and each
-    /// step of it answers a failure the one before it causes.
-    ///
-    /// **Terminate explicitly, because dropping the slot does not.** A Drone is
-    /// started `setsid`-detached — `crate::detach` says why, and it is not
-    /// negotiable — so a child whose parent's handle goes away keeps running,
-    /// keeps holding its worktree and keeps spending. Assigning a new slot over
-    /// this one would drop a [`DroneSession`] without ever signalling the
-    /// process behind it.
-    ///
-    /// **Drain before dropping, because [`Watching`]'s `Drop` aborts.** The
-    /// reader task holds whatever the operating system had buffered on the
-    /// Drone's stdout, and at an exit that is the last thing the Drone said.
-    /// Every sink is fed from that task, so this is also what puts a run's
-    /// final rows into the transcript file.
-    ///
-    /// **Fold afterwards, never before.** [`Ending::of`] over a stream still
-    /// being read is a fold over a prefix, and the terminating event it is
-    /// looking for is at the end.
-    ///
     /// **It consumes the slot.** A `Working` whose process has been ended is a
     /// slot that lies about a Drone — it would still answer `session()`,
     /// `heard()` and `standing()` — so there is no version of this taking
-    /// `&mut self`. What the caller needs afterwards comes back in
-    /// [`StoodDown`], and recording the exit is the caller's: this type reaches
-    /// no store.
+    /// `&mut self`. What the caller needs afterwards is [`StoodDown`], and
+    /// recording the exit is the caller's: this type reaches no store.
+    ///
+    /// The order of the three acts is `crate::boundary`'s subject and each of
+    /// them answers a failure the one before it causes. In one line each:
+    /// dropping a slot signals nothing and the child is `setsid`-detached;
+    /// [`Watching`]'s `Drop` aborts the reader over whatever the pipe still
+    /// held; and [`Ending::of`] over a stream still being read is a fold over
+    /// a prefix, missing the terminating event at the end of it.
     pub(crate) async fn stood_down(mut self) -> StoodDown {
         let terminated = self.session.terminate().await;
         self.transcript.drained().await;

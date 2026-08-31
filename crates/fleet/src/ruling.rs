@@ -26,9 +26,10 @@ use crate::gate::CheckOutput;
 /// a human gate by satisfying it.
 #[derive(Debug)]
 pub enum Ruling {
-    /// The step passed. The Drone is told and goes on to the next step. The Job
-    /// stays where it is: `running` has no self-edge, and a step advancing is
-    /// the inner machine, not the outer one.
+    /// The step passed. The Drone that worked it is ended and a fresh one takes
+    /// the next step on the same worktree — `crate::boundary`. The Job stays
+    /// where it is: `running` has no self-edge, and a step advancing is the
+    /// inner machine, not the outer one.
     Advanced {
         tell: OutcomeTurn,
         /// Every declared Check with what it did. **Carried on a pass too**,
@@ -42,7 +43,9 @@ pub enum Ruling {
         judged: Vec<Judgment>,
     },
     /// The last step passed. The Drone is told, then terminated, and the Job
-    /// reaches `completed_success`.
+    /// reaches `completed_success`. **The one advance that still tells its
+    /// Drone**: there is no next step to put a fresh one on, so the turn goes
+    /// to the process that did the work.
     Finished {
         tell: OutcomeTurn,
         checks: Vec<StepCheck>,
@@ -58,16 +61,12 @@ pub enum Ruling {
     /// because they are the material a person opens rather than a record of a
     /// verdict.
     ///
-    /// **No turn, and no session to take one.** The Drone is not told
-    /// anything — a turn here would spend its remaining tool call to say
-    /// "someone is looking at this" — and its work is over, because a Drone
-    /// ends when its step's work passes the machine gates rather than when the
-    /// step advances. So the gate holds no Drone, and the person's answer opens
-    /// the next Drone's brief instead of reaching this one.
-    ///
-    /// **The ending is not wired here yet** — `#140` does it. This says what the
-    /// ruling means; `crate::dispatch` still leaves the process standing, which
-    /// is why `request_changes` can find one to tell.
+    /// **No turn, and the ending is still not wired.** A turn here would spend
+    /// the Drone's remaining tool call to say "someone is looking at this".
+    /// `#140` ended a Drone at every advance and not here: an empty slot at a
+    /// gate a person may hold for a day is a slot `admit_next` gives away, and
+    /// there would then be none to approve back into. So the process stands,
+    /// which is why `request_changes` can find one to tell.
     ///
     /// The step stays `running` while the Job stands at the gate.
     /// `ADVANCING_STATUSES` admits `awaiting_review`, so the inner machine is
@@ -211,6 +210,11 @@ impl Ruling {
     /// The turn to inject, where there is one. **Two advances and one
     /// hand-back**, and nothing else — a Job that is over does not tell its
     /// Drone why, because the Drone is terminated rather than told.
+    ///
+    /// [`Advanced`](Ruling::Advanced)'s is built and no longer delivered: a
+    /// step boundary ends the process it would have gone to. What the verdict
+    /// said crosses as a `crate::crossing::Cleared`, re-tensed for a Drone that
+    /// was not there — which is a different value and not a moved string.
     pub fn tell(&self) -> Option<&OutcomeTurn> {
         match self {
             Ruling::Advanced { tell, .. }

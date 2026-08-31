@@ -1,43 +1,28 @@
 //! Crossing a step boundary: the Drone that finished ends, and a fresh one is
 //! put on the same worktree for the next step.
 //!
-//! # Why the process does not carry on
+//! A Drone belongs to a workflow step — `docs/concepts/drone.md`. The worktree
+//! and the branch survive, because nothing in this workspace can remove one;
+//! what crosses is a directory holding every step's work so far, uncommitted,
+//! as `crate::landing` requires.
 //!
-//! A Drone belongs to a workflow step (`docs/concepts/drone.md`). One process
-//! spanning a whole Job carries every step's transcript into the next step's
-//! context, and the step that pays for it is the last one — which is the step
-//! whose work lands. Ending it is not a cost saved so much as a context reset
-//! that the record already claimed was happening.
-//!
-//! **The worktree and the branch survive, and nothing here could remove one.**
-//! `Vcs` has no removal and the reason is written on the trait; what crosses the
-//! boundary is a directory holding the work of every step so far, uncommitted,
-//! exactly as `crate::landing` requires.
-//!
-//! # The order is fixed, and each step of it exists for a failure
+//! # The order is fixed, and each part of it answers a failure
 //!
 //! 1. **Terminate explicitly.** [`put_a_drone_on`](Fleet::put_a_drone_on)
 //!    assigns straight over the slot, and dropping a [`Working`] drops its
-//!    `DroneSession` without signalling anything. The child was started
-//!    `setsid`-detached, so it survives its parent's handle going away and
-//!    keeps spending.
-//! 2. **Drain before dropping.** `Watching`'s `Drop` aborts the reader task, so
-//!    whatever the pipe still held never reaches the transcript or the fold —
-//!    and what a pipe holds at an exit is the last thing the Drone said.
-//! 3. **Record the exit before the spawn.** `Job::drone_spawned` refuses a
-//!    second Drone over a live pointer, so a boundary that spawned first would
-//!    be refused by the record it had just failed to update. That refusal is
-//!    `#137`'s `AlreadyAssigned` and it is real.
+//!    `DroneSession` without signalling. The child is `setsid`-detached, so it
+//!    survives its parent's handle going away and keeps spending.
+//! 2. **Drain before dropping.** `Watching`'s `Drop` aborts the reader, and
+//!    what a pipe holds at an exit is the last thing the Drone said.
+//! 3. **Record the exit before the spawn.** `Job::drone_spawned` refuses over a
+//!    live pointer — `#137`'s `AlreadyAssigned` — so a spawn ordered first is
+//!    refused by the record it had just failed to update.
 //!
-//! The first two are [`Working::stood_down`], which consumes the slot. The
+//! The first two are [`Working::stood_down`], which consumes the slot; the
 //! third and the spawn are here, because both reach a store.
 //!
-//! # What crosses is a value, not the injected turn
-//!
-//! `crate::crossing` is the whole of it, and its module doc argues why a
-//! rendered `OutcomeTurn` cannot simply be moved into an opening brief. This
-//! file resolves the two facts that value is built from — what the part before
-//! produced, and that it is closed — and hands them to the one spawn funnel.
+//! What crosses is `crate::crossing`'s value and not the injected turn, for the
+//! reason that module's own doc gives: a rendered turn cannot be re-tensed.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{Component, Envelope, FieldValue, Job, JobId, Level, StepId};

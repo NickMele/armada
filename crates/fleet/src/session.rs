@@ -67,8 +67,12 @@ pub trait LiveSession {
 
     /// Inject a turn. The Drone reads it at the next turn boundary.
     ///
-    /// Called only where the step advanced. A failed step ends the Job, and the
-    /// Drone is terminated rather than told — see `verification::OutcomeTurn`.
+    /// **Two callers, and neither crosses a step boundary.** A hand-back is the
+    /// same step going round again under the same process, and a Job that
+    /// finished has no next step to put a fresh Drone on. Everywhere else the
+    /// Drone is ended: a failed step ends the Job, and an advance ends the
+    /// Drone that worked the step — what the verdict said reaches the next one
+    /// as a block in its opening brief, not as a turn.
     ///
     /// `declaring` is the ask the step being started makes of its Drone, where
     /// it makes one. **It travels with the verdict rather than as a turn of its
@@ -176,6 +180,11 @@ impl Turn {
     /// finished, and what the next part wants before it starts. Splitting them
     /// would cost a second turn boundary to deliver the half a Drone acts on
     /// first.
+    ///
+    /// `declaring` is `Some` on no path that survives: a step boundary spawns
+    /// now, and the ask is in the opening brief. It stays because the pairing
+    /// is the shape of an outcome turn rather than a caller's arrangement of
+    /// two.
     pub fn outcome(turn: &OutcomeTurn, declaring: Option<&Declaring>) -> Turn {
         match declaring {
             Some(asked) => Turn::of(&format!("{}\n\n{}", turn.text(), asked.text())),

@@ -4,39 +4,25 @@
 //! # These start a real child, and it is the only way to ask
 //!
 //! Every other test of a step boundary drives it by calling what
-//! `crate::dispatch` calls, and every one of them would pass over a Drone that
-//! was still running: the slot was replaced, the record says the exit landed,
-//! and a new process arrived. **That is bookkeeping.** A Drone is started
-//! `setsid`-detached, so nothing about a slot being dropped reaches the process
-//! — it keeps its worktree open and keeps spending, and the only thing that can
-//! say otherwise is the operating system.
+//! `crate::dispatch` calls, and every one would pass over a Drone still
+//! running: the slot was replaced, the record says the exit landed, a new
+//! process arrived. **That is bookkeeping.** A Drone is `setsid`-detached, so
+//! nothing about a dropped slot reaches the process — and the only thing that
+//! can say otherwise is the operating system, asked here through [`holder_of`].
 //!
-//! So these ask it, through [`holder_of`] — the same `ps` probe the runtime
-//! file's identity check uses. The pair is `crate::tests::detach`'s shape: one
-//! case asserts the property, and the one beside it asserts that the property
-//! is not free, because an assertion that passes over the broken code as well
-//! proves nothing.
-//!
-//! **`holder_of` and not `DroneSession::exited`.** That one asks a handle this
-//! test would have to keep, and standing a Drone down consumes the handle along
-//! with everything else — which is the point of it. `ps` asks about a pid and
-//! reports a zombie as held; `terminate` waits on the child, so a pid still
-//! held afterwards is a process still there.
+//! The pair is `crate::tests::detach`'s shape: one case asserts the property
+//! and the one beside it asserts the property is not free.
 //!
 //! # The drain is asserted on `Watching` and not through the slot
 //!
-//! [`Watching::drained`] is what stops a Drone's last lines being thrown away,
-//! and the state it exists for — the reader task behind a pipe that has already
-//! closed — is one a test has to construct rather than hope for. It is
-//! constructed here by never letting the reader run: `#[tokio::test]` is a
-//! current-thread runtime, so a *blocking* sleep in the test body is a window
-//! in which the child writes everything it will ever write and nothing reads
-//! any of it.
+//! [`Watching::drained`] exists for a reader behind a pipe that has already
+//! closed, which a test has to construct: `#[tokio::test]` is a current-thread
+//! runtime, so a *blocking* sleep is a window in which the child writes
+//! everything it will ever write and nothing reads any of it.
 //!
-//! Asked of the slot instead, the same case proves less than it looks like it
-//! does. Ending a Drone waits on the child, and a fast fake catches up inside
-//! that wait whether or not anything asked it to — so a slot-level assertion
-//! passes over a missing drain and reports that the drain is tested.
+//! Asked of the slot instead, the same case proves less than it looks like.
+//! Ending a Drone waits on the child, and a fast fake catches up inside that
+//! wait whether or not anything asked — so it passes over a missing drain.
 
 use std::sync::Arc;
 use std::time::Duration;
