@@ -10,7 +10,7 @@ Design fidelity: not set. Analysis: Complete. UI/UX design: In progress.
 
 **Concepts touched:** Bridge (Doctor).
 
-**Milestone:** Surface.
+**Milestone:** Board. Doctor is #79, and the layout is what answers this journey's three open questions.
 
 **Design file:** `Journey 2 - Check system health.dc.html` in the Armada Mockups project. One file per journey; this document is the record, the file is the drawing.
 
