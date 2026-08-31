@@ -11,7 +11,6 @@
 // and mean nothing to the lookup Bridge does.
 
 import { File } from "lucide-react";
-import { debugInfo } from "@armada/components";
 import type { DebugField, DebugPayload, FailureDetail, FailureMachineValue } from "@armada/components";
 
 import type { BridgeIdentity, Connection } from "../../shared/bridge";
@@ -34,6 +33,16 @@ import type { Uncaught } from "./uncaught";
  *
  * `at` is added at the moment of copying rather than here — the payload is
  * built on every render and the timestamp is a fact about the press.
+ * `copyDebugInfoFor` in `FailureSurface.tsx` is what stamps it, and it is the
+ * same function `c` runs.
+ *
+ * **The app's voice is not in here.** What the old hand-rolled report put on
+ * the clipboard was the headline and the `next` sentence — what the screen
+ * said, not what the machine had. A reader who was not there needs the second:
+ * `message` is the machine's own words and the fields under it say more than a
+ * sentence could. The log paths survive as fields, because a report that names
+ * a failure without naming the file the rest of it is written in is one
+ * somebody has to answer with a question.
  */
 export type FailureFacts = Omit<DebugPayload, "at">;
 
@@ -525,27 +534,4 @@ export function uncaughtFailure(uncaught: Uncaught, bridge: BridgeIdentity): Fai
     values: machineLog(bridge),
     note: "No error boundary sees this: a boundary catches a render, and this happened outside one. There is no run id, because this may never have reached Fleet at all.",
   };
-}
-
-/**
- * The whole failure as the one artifact anybody quotes.
- *
- * **This is what the copy action carries**, and it is the same format an
- * `ErrorNotice` shows in its expanded view, from the same producer — so what a
- * person read on one surface is what arrives in the issue body from another.
- * Nobody retypes a stack, a path or a run id off a screen.
- *
- * What it dropped when it stopped being a hand-rolled report: the app's voice.
- * The headline and the `next` sentence are not in it. They are what the screen
- * said, not what the machine had, and a reader who was not there needs the
- * second — the machine's own message is `payload.message` and the fields under
- * it say more than a sentence could.
- *
- * The log paths survive as fields rather than as their own rows. They are not
- * wire fields and never will be, but a report that names a failure without
- * naming the file the rest of it is written in is one somebody has to answer
- * with a question.
- */
-export function reportOf(failure: Failure, at: string): string {
-  return debugInfo({ ...failure.payload, at });
 }

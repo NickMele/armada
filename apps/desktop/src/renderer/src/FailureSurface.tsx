@@ -5,18 +5,32 @@
 // discipline as six Job states through one row shape. A generic error screen is
 // three failures given one *sentence*, which is what this repairs.
 
-import { Button, FailureNotice } from "@armada/components";
+import { Button, COPY_DEBUG_INFO, copyDebugInfo, FailureNotice } from "@armada/components";
 
 import type { BridgeIdentity } from "../../shared/bridge";
 import { CopiedToast, useCopied } from "./CopiedToast";
 import type { Caught, Failure } from "./failures";
-import { rendererFailure, reportOf } from "./failures";
+import { rendererFailure } from "./failures";
 
 /**
- * What the toast says was copied. A noun, because the artifact is fifteen lines
- * and the toast is one — `CopiedToast` reads the value it is given.
+ * Copy debug info, for one of Bridge's failures.
+ *
+ * **This is what `c` calls.** The contextual key map binds `c` to copy debug
+ * info on the focused row or the open job, and the key handler is not this
+ * file's — so the act is exported as one function rather than left inside the
+ * control's `onClick`, where a binding could only have reimplemented it.
+ *
+ * It stamps the instant here rather than at render. The payload is rebuilt on
+ * every draw and `taken` is a fact about the press: a banner is a standing
+ * condition somebody copies long after it appeared, which is the whole reason
+ * the tail labels it.
+ *
+ * The write itself is `@armada/components`' — one implementation of the act,
+ * shared with the control the error treatment draws.
  */
-const COPIED = "The debug info";
+export function copyDebugInfoFor(failure: Failure, onCopied: (what: string) => void): void {
+  copyDebugInfo({ ...failure.payload, at: new Date().toISOString() }, onCopied);
+}
 
 export type FailureBlockProps = {
   failure: Failure;
@@ -39,12 +53,12 @@ export type FailureBlockProps = {
  * reloading redraws a window, and copying puts the machine's own record of the
  * failure onto the clipboard so nobody retypes a stack.
  *
- * **The label says what leaves the machine, not what the person is doing with
- * it.** "Copy report" named an act somebody might be about to perform and left
- * the artifact unnamed; "Copy debug info" names the artifact, which is the
- * thing a person is deciding whether to paste into a public issue. The same
- * words are on the control the error treatment draws, so it is one act with
- * one name wherever it appears.
+ * **The label is the key map's verb, not a second name for one act.** `c` is
+ * bound to copy debug info, the palette displays that wording beside the
+ * binding, and this control says the same. It also happens to be the better
+ * label on its own: "Copy report" named an act somebody might be about to
+ * perform and left the artifact unnamed, and what a person is deciding is
+ * whether to paste a machine record into a public issue.
  */
 export function FailureBlock({
   failure,
@@ -52,18 +66,6 @@ export function FailureBlock({
   reloadable = true,
   onDismiss,
 }: FailureBlockProps) {
-  function copyDebugInfo(): void {
-    // Taken now, not at render: the payload is rebuilt on every draw and the
-    // instant in it is a fact about this press.
-    const text = reportOf(failure, new Date().toISOString());
-    void navigator.clipboard.writeText(text).then(
-      () => onCopied(COPIED),
-      // A failed clipboard write is otherwise indistinguishable from a dead
-      // control, so the surface is told either way.
-      () => onCopied(COPIED),
-    );
-  }
-
   return (
     <FailureNotice
       headline={failure.headline}
@@ -87,8 +89,16 @@ export function FailureBlock({
               Reload Bridge
             </Button>
           ) : null}
-          <Button variant="ghost" size="sm" ground="sunken" onClick={copyDebugInfo}>
-            Copy debug info
+          {/* No glyph and no kbd on the control. The error treatment carries
+              no glyph at all, and a binding is discovered in the palette and
+              the tooltip — the two surfaces the contract gives a kbd to. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            ground="sunken"
+            onClick={() => copyDebugInfoFor(failure, onCopied)}
+          >
+            {COPY_DEBUG_INFO}
           </Button>
           {onDismiss === undefined ? null : (
             <Button variant="ghost" size="sm" ground="sunken" onClick={onDismiss}>

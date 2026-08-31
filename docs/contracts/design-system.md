@@ -1048,9 +1048,22 @@ again, not a second decision.
 | Banner | Copy, plus **Details** opening the expanded view. A standing condition gets read, not only quoted |
 | Full-surface | Shown rather than offered. Nothing else is on the screen |
 
-**The act is called "Copy debug info" wherever it appears.** It names the
-artifact rather than what somebody is about to do with it, because the decision
-being taken is whether to paste a machine record into a public issue.
+**The act is called "Copy debug info" wherever it appears, and it is bound to
+`c`.** One verb for one act, from the contextual key map above — the control,
+the palette entry and the tooltip all say it. It names the artifact rather than
+what somebody is about to do with it, because the decision being taken is
+whether to paste a machine record into a public issue.
+
+**The control carries no glyph and no kbd.** No glyph, because nothing in the
+error treatment carries one and `triangle-alert` and `octagon-alert` are
+spoken for. No kbd, because a binding is discovered in the palette and the
+tooltip, which are the two surfaces this document gives one to — a kbd inside
+every button that has a binding would put the reference material on the thing
+it describes.
+
+**The key runs the control's own function, never its own copy.** A binding that
+reimplemented the write would be a second artifact the day either side changed,
+and this whole treatment rests on there being one producer.
 
 **The expanded view renders the exact string the control copies.** One producer
 formats it, so what was read on screen is what arrives in the issue body — not
