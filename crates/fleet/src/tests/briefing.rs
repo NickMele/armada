@@ -32,6 +32,7 @@ use crate::evidence::Call;
 use crate::gate::Ruling;
 use crate::tests::daemon::{a_fleet_holding, a_proposal, worktree_directory};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::{declared_by_the_one, submitted_by_the_one};
 
 /// **`pub(super)` so `dry_run` can use it**: the briefing block that offers the
 /// dry run is assembled here, and a second Job fixture would be a second answer
@@ -509,14 +510,13 @@ pub(super) async fn told_across_the_boundary(
         .expect("a proposal");
     worktree_directory(home, job.id());
     fleet.approve(job.id()).await.expect("it is approved");
-    fleet
-        .declared_by_the_one(&DeclareScope {
-            context_paths: vec!["docs".to_string()],
-        })
+    let plan = DeclareScope {
+        context_paths: vec!["docs".to_string()],
+    };
+    declared_by_the_one(&fleet, &plan)
         .await
         .expect("the first step's plan");
-    fleet
-        .submitted_by_the_one(submitted)
+    submitted_by_the_one(&fleet, submitted)
         .await
         .expect("evidence lands");
     let turned = fleet.turn().await.expect("a turn");

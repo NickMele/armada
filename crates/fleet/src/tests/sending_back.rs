@@ -25,6 +25,7 @@ use crate::tests::daemon::{
 };
 use crate::tests::reviewing::{a_fleet_reviewing_the_first_step, at_the_gate, Fixture};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 use crate::Adrift;
 
 /// **Sending work back across a human gate reaches the Drone that comes next,
@@ -116,8 +117,7 @@ async fn a_delivered_note_does_not_cross_the_next_boundary() {
 
     // The step is worked again, reaches the gate again, and this time it is
     // taken. The next Drone is on the next step.
-    fleet
-        .submitted_by_the_one(diff_evidence())
+    submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the second attempt reports");
     fleet.turn().await.expect("the gate runs again");
@@ -265,13 +265,11 @@ async fn a_step_sent_back_carries_no_verdict_about_the_part_before_it() {
     let job_id = job.id().clone();
     worktree_directory(&home, &job_id);
     fleet.approve(&job_id).await.expect("it dispatches");
-    fleet
-        .submitted_by_the_one(diff_evidence())
+    submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the first step reports");
     fleet.turn().await.expect("it advances on its own");
-    fleet
-        .submitted_by_the_one(note_evidence())
+    submitted_by_the_one(&fleet, note_evidence())
         .await
         .expect("the second step reports");
     fleet.turn().await.expect("the gate holds it for a person");

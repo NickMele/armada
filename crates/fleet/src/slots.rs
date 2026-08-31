@@ -1,38 +1,27 @@
 //! How many Jobs Fleet works at once, and where each one's Drone is held.
 //!
-//! # The bound is a number somebody configured, not one Fleet computed
+//! **The bound is configured, not computed.** Nothing in this workspace reads
+//! memory, CPU or quota — `#44` is where that arrives — so [`Concurrency`] is
+//! handed in by the composition root like every other of Fleet's dials, and
+//! `settings.toml`'s `concurrency-cap` row is the specification it satisfies.
 //!
-//! Nothing in this workspace reads memory, CPU or quota — `#44` is where that
-//! arrives — so [`Concurrency`] is handed in by the composition root, exactly
-//! as the Check budget and the liveness thresholds are. `settings.toml`'s
-//! `concurrency-cap` row is the specification it satisfies, and that row stopped
-//! being informational when this type started refusing admissions.
-//!
-//! **It bounds Drones, never approvals.** `docs/concepts/fleet.md` is
-//! unambiguous that every Job-level dispatch is approved explicitly, one by one,
-//! and nothing here is reached until a person has done that: `admit_next` picks
-//! from `queued`, and a Job reaches `queued` only by [`Fleet::approve`] or by
-//! being created sub-dispatched inside a parent somebody already approved.
-//!
-//! [`Fleet::approve`]: crate::Fleet::approve
+//! **It bounds Drones, never approvals.** `docs/concepts/fleet.md` holds that
+//! rule; nothing here is reached until a person has approved, because
+//! `admit_next` picks from `queued` and nothing but an approval puts a Job
+//! there.
 //!
 //! # Two locks, and the order between them is the whole of the concurrency
 //!
 //! The roster — this type, behind one mutex — and each Job's own slot, behind
-//! its own. **The roster is always taken first**, and no path takes a slot and
-//! then reaches for the roster.
+//! its own. **The roster is always taken first.** It is held briefly to find a
+//! slot, and across an admission, so one dispatch runs at a time; a slot is held
+//! for everything about that one Job, including its gate.
 //!
-//! | Held for | What it blocks |
-//! |---|---|
-//! | The roster, briefly | Another Job's slot being *found*. Milliseconds |
-//! | The roster, across an admission | One dispatch at a time — a worktree, a rebase, a spawn |
-//! | One Job's slot | Everything about **that** Job: its watchers, its gate, its Drone's tool calls |
-//!
-//! A single lock over the whole set would have been simpler and would have been
-//! the working slot again under another name: the gate holds a slot across a
-//! Check, so one Job running `cargo nextest` would have held every other Job's
-//! Drone out of `submit_evidence` for the length of it. The slot a Check holds
-//! is the slot of the Job being checked, and nothing else waits on it.
+//! One lock over the whole set would have been the working slot again under
+//! another name: the gate holds a slot across a Check, so a Job running `cargo
+//! nextest` would have held every other Drone out of `submit_evidence` for the
+//! length of it. The slot a Check holds is the checked Job's, and nothing else
+//! waits on it.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

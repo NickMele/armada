@@ -31,6 +31,7 @@ use crate::tests::daemon::{
 };
 use crate::tests::http::call;
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 use crate::Adrift;
 
 pub(super) type Fixture = Fleet<testkit::FakeHarness, testkit::FakeVcs, FakeWorkProduct>;
@@ -62,8 +63,7 @@ pub(super) async fn at_the_gate(fleet: &Fixture, home: &TempDir) -> JobId {
     let job = fleet.approve(job.id()).await.expect("it dispatches");
     assert_eq!(job.status(), JobStatus::Running);
 
-    fleet
-        .submitted_by_the_one(diff_evidence())
+    submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the Drone reports its diff");
     let turned = fleet.turn().await.expect("the gate runs");
@@ -291,7 +291,7 @@ async fn a_step_after_a_human_boundary_does_not_advance_on_a_rebase_it_did_not_r
     fleet
         .work()
         .wrote(&[("src/log.rs", adapter_traits::Change::Modified)]);
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.expect("the gate runs");
     assert!(
         matches!(turned.ruled(), Some(Ruling::HeldForReview { .. })),
@@ -305,7 +305,7 @@ async fn a_step_after_a_human_boundary_does_not_advance_on_a_rebase_it_did_not_r
         .expect("the work is taken");
 
     // The second step's Drone resolves nothing and submits anyway.
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.expect("the gate runs again");
     let Some(Ruling::Failed { failures, .. }) = &turned.ruled() else {
         panic!(
@@ -338,8 +338,7 @@ async fn approving_the_last_step_commits_the_work_and_ends_the_job() {
     worktree_directory(&home, job.id());
     let job = fleet.approve(job.id()).await.expect("it dispatches");
 
-    fleet
-        .submitted_by_the_one(diff_evidence())
+    submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the Drone reports its diff");
     let turned = fleet.turn().await.expect("the gate runs");
@@ -348,8 +347,7 @@ async fn approving_the_last_step_commits_the_work_and_ends_the_job() {
         "an auto step still advances on its own: {:?}",
         turned.ruled()
     );
-    fleet
-        .submitted_by_the_one(note_evidence())
+    submitted_by_the_one(&fleet, note_evidence())
         .await
         .expect("the Drone reports its summary");
     let turned = fleet.turn().await.expect("the gate runs again");
@@ -430,8 +428,7 @@ async fn work_that_fails_a_check_never_reaches_the_person() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.expect("it dispatches");
 
-    fleet
-        .submitted_by_the_one(diff_evidence())
+    submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the Drone reports a diff it did not make");
     let turned = fleet.turn().await.expect("the gate runs");
@@ -480,8 +477,7 @@ async fn a_judge_under_a_human_gate_filters_what_reaches_the_person() {
         worktree_directory(&home, job.id());
         fleet.approve(job.id()).await.expect("it dispatches");
 
-        fleet
-            .submitted_by_the_one(diff_evidence())
+        submitted_by_the_one(&fleet, diff_evidence())
             .await
             .expect("the Drone reports its diff");
         let turned = fleet.turn().await.expect("the gate runs");
@@ -533,7 +529,7 @@ async fn a_job_a_person_is_reading_holds_no_process_and_no_slot() {
 
     let pid = fleet
         .the_only_slot()
-            .await
+        .await
         .lock()
         .await
         .as_ref()
@@ -545,8 +541,7 @@ async fn a_job_a_person_is_reading_holds_no_process_and_no_slot() {
         "the Drone is running before the gate opens, or the rest proves nothing"
     );
 
-    fleet
-        .submitted_by_the_one(diff_evidence())
+    submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the Drone reports its diff");
     let turned = fleet.turn().await.expect("the gate runs");

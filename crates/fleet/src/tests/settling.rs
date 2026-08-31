@@ -26,6 +26,7 @@ use crate::tests::daemon::{
     a_fleet, a_fleet_gated_on_a_person, a_proposal, diff_evidence, worktree_directory,
 };
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 use crate::transcript::log_of;
 use crate::Adrift;
 
@@ -52,14 +53,10 @@ fn saying(home: &TempDir, job: &JobId, said: &str) -> usize {
 /// Before this, the take sat above two of the three guards, so a decline below
 /// it put the submission out of the inbox with nothing anywhere to put it back.
 ///
-/// **`#50` rewrote the middle of this case and not its subject.** It used to
-/// hand `settle` an empty `Option<Working>` while the real slot was full, and
-/// then assert that the next turn ruled — which the fixture could produce and
-/// production could not, since nothing in the loop puts a `running` Job back
-/// into a slot. What a Drone that submits and exits inside one interval
-/// actually leaves is a slot with nothing in it, so that is what this makes,
-/// and what it asserts is the half that was real: the submission is still
-/// there.
+/// **The slot is emptied rather than faked.** A `settle` handed an empty
+/// `Option<Working>` while the real slot was full could then be asserted to
+/// rule on the next turn, which production cannot do: nothing in the loop puts
+/// a `running` Job back into a slot.
 #[tokio::test]
 async fn a_submission_that_lands_while_the_slot_is_empty_survives_to_be_ruled_on() {
     let home = TempDir::new();
@@ -68,13 +65,16 @@ async fn a_submission_that_lands_while_the_slot_is_empty_survives_to_be_ruled_on
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
 
     // The Drone goes, and its slot with it. Held rather than dropped so the
     // process's pipes do not close under the test.
     let _held = fleet.the_only_slot().await.lock().await.take();
     let turned = fleet.turn().await.unwrap();
-    assert!(turned.ruled().is_none(), "there was nothing to rule against");
+    assert!(
+        turned.ruled().is_none(),
+        "there was nothing to rule against"
+    );
     assert_eq!(turned.declined(), Some(&Decline::NothingIsWorking));
     assert_eq!(
         fleet.evidence_waiting(),
@@ -87,12 +87,13 @@ async fn a_submission_that_lands_while_the_slot_is_empty_survives_to_be_ruled_on
         "one turn is a race and escalates nothing"
     );
 
-    // And the next turn is the boundary: nothing can put a `running` Job back
-    // into a slot, so a submission still here is one no gate will ever see.
-    // The escalation is the case below; what this one owns is that it survived
-    // long enough to reach it.
+    // The next turn is the boundary — the escalation is the case below, and
+    // what this one owns is that the submission survived to reach it.
     let turned = fleet.turn().await.unwrap();
-    assert!(turned.ruled().is_none(), "there is still nothing to rule with");
+    assert!(
+        turned.ruled().is_none(),
+        "there is still nothing to rule with"
+    );
     assert_eq!(
         fleet.evidence_waiting(),
         0,
@@ -110,7 +111,7 @@ async fn a_decline_says_which_guard_refused_in_the_jobs_log() {
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
 
     let _held = fleet.the_only_slot().await.lock().await.take();
     fleet.turn().await.unwrap();
@@ -142,7 +143,7 @@ async fn a_submission_no_slot_will_ever_hold_escalates_the_job_it_was_for() {
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
 
     let _held = fleet.the_only_slot().await.lock().await.take();
     fleet.turn().await.unwrap();
@@ -177,11 +178,9 @@ async fn a_submission_no_slot_will_ever_hold_escalates_the_job_it_was_for() {
 /// held over a turn where its own Job has no slot, and another approved Job is
 /// admitted while it waits.
 ///
-/// **`#50` is why this is no longer the `another_job` guard.** The inbox is
-/// taken by Job now, so a second Job's gate cannot reach the first Job's
-/// evidence and the third guard has become unreachable. What the case is
-/// actually about survives and is sharper for it: the first Job is escalated
-/// because *its own* slot is empty, the second Job's step is untouched, and
+/// **Not the `another_job` guard any more**: the inbox is taken by Job, so a
+/// second Job's gate cannot reach the first Job's evidence. The first is
+/// escalated because *its own* slot is empty, the second is untouched, and
 /// neither fact depends on the other.
 #[tokio::test]
 async fn a_submission_overtaken_by_the_next_job_escalates_the_one_it_was_for() {
@@ -191,7 +190,7 @@ async fn a_submission_overtaken_by_the_next_job_escalates_the_one_it_was_for() {
     let first = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, first.id());
     fleet.approve(first.id()).await.unwrap();
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
 
     // The slot emptied while the submission stays where it is — which is the
     // state the fix creates and nothing else in Fleet can produce, since every
@@ -209,12 +208,18 @@ async fn a_submission_overtaken_by_the_next_job_escalates_the_one_it_was_for() {
     // The strand is answered outside every slot, so the second Job being in one
     // neither hides it nor is touched by it.
     let turned = fleet.turn().await.unwrap();
-    assert!(turned.ruled().is_none(), "no step of the second Job advanced");
+    assert!(
+        turned.ruled().is_none(),
+        "no step of the second Job advanced"
+    );
     assert_eq!(turned.declined(), Some(&Decline::NothingIsWorking));
     // The second turn is the one that escalates, for the reason the case above
     // gives: one turn with no slot is a race.
     let turned = fleet.turn().await.unwrap();
-    assert!(turned.ruled().is_none(), "and none advanced on the second turn");
+    assert!(
+        turned.ruled().is_none(),
+        "and none advanced on the second turn"
+    );
 
     let overtaken = fleet.load(first.id()).await.unwrap();
     assert_eq!(overtaken.status(), JobStatus::Escalated);
@@ -246,7 +251,7 @@ async fn a_decline_that_stands_writes_one_line_rather_than_one_a_turn() {
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
 
     let _held = fleet.the_only_slot().await.lock().await.take();
     for _ in 0..5 {
@@ -289,7 +294,7 @@ async fn nothing_can_submit_to_a_job_a_person_is_holding_at_a_gate() {
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     assert!(matches!(turned.ruled(), Some(Ruling::HeldForReview { .. })));
 
@@ -304,7 +309,7 @@ async fn nothing_can_submit_to_a_job_a_person_is_holding_at_a_gate() {
     // this call that could put evidence against a Job a person is reading.
     assert!(
         matches!(
-            fleet.submitted_by_the_one(diff_evidence()).await,
+            submitted_by_the_one(&fleet, diff_evidence()).await,
             Err(crate::NotSubmitted::NothingIsWorking)
         ),
         "the gate holds no Drone, so there is nothing to submit through"
@@ -339,7 +344,7 @@ async fn a_gate_that_cannot_read_its_artifact_escalates_and_names_the_artifact()
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
 
     let turned = fleet.turn().await.unwrap();
     assert!(
@@ -402,11 +407,12 @@ async fn a_gate_that_could_not_decide_keeps_its_drone() {
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
 
     assert_eq!(
-        fleet.working_on().await, vec![job.id().clone()],
+        fleet.working_on().await,
+        vec![job.id().clone()],
         "the session was ended over a reading Fleet could not take"
     );
 }

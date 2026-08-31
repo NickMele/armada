@@ -32,6 +32,7 @@ use crate::tests::daemon::{
 };
 use crate::tests::http::call;
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 
 type Fixture = Fleet<testkit::FakeHarness, testkit::FakeVcs, FakeWorkProduct>;
 
@@ -80,8 +81,7 @@ async fn refused(fleet: &Fixture, home: &TempDir, brief: &str) -> core_model::Jo
     let job_id = job.id().clone();
     worktree_directory(home, &job_id);
     fleet.approve(&job_id).await.expect("released to run");
-    fleet
-        .submitted_by_the_one(diff_evidence())
+    submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the Drone reports its diff");
     let turned = fleet.turn().await.expect("the gate ruled");

@@ -28,6 +28,7 @@ use testkit::{FakeWorkProduct, Scoped};
 
 use crate::tests::footprint::{a_fleet_reading, started, three_kinds, Held};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::declared_by_the_one;
 
 /// A step that declares its plan at step start and is checked against it.
 const DECLARING: Scoped<'static> = Scoped {
@@ -65,12 +66,14 @@ async fn a_finished_job_says_which_files_were_outside_what_a_step_promised() {
     let clock = Held::at_nine();
     let fleet = a_fleet_reading(&home, three_kinds(), Arc::clone(&clock), Some(DECLARING));
     let job = started(&fleet, &home).await;
-    fleet
-        .declared_by_the_one(&DeclareScope {
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
             context_paths: vec!["src/parse.rs".to_string()],
-        })
-        .await
-        .expect("a declaration");
+        },
+    )
+    .await
+    .expect("a declaration");
 
     fleet.kill_job(&job).await.expect("a terminal status");
 
@@ -135,12 +138,14 @@ async fn a_step_that_promised_to_touch_nothing_puts_every_path_outside_it() {
     let clock = Held::at_nine();
     let fleet = a_fleet_reading(&home, three_kinds(), Arc::clone(&clock), Some(DECLARING));
     let job = started(&fleet, &home).await;
-    fleet
-        .declared_by_the_one(&DeclareScope {
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
             context_paths: Vec::new(),
-        })
-        .await
-        .expect("a declaration of nothing");
+        },
+    )
+    .await
+    .expect("a declaration of nothing");
 
     fleet.kill_job(&job).await.expect("a terminal status");
 
@@ -174,12 +179,14 @@ async fn a_step_that_redeclared_is_read_against_what_it_declared_last() {
     let fleet = a_fleet_reading(&home, three_kinds(), Arc::clone(&clock), Some(DECLARING));
     let job = started(&fleet, &home).await;
     for paths in [vec!["src/parse.rs"], vec!["src/tokens.rs", "src/legacy.rs"]] {
-        fleet
-            .declared_by_the_one(&DeclareScope {
+        declared_by_the_one(
+            &fleet,
+            &DeclareScope {
                 context_paths: paths.iter().map(|path| path.to_string()).collect(),
-            })
-            .await
-            .expect("a declaration");
+            },
+        )
+        .await
+        .expect("a declaration");
     }
 
     fleet.kill_job(&job).await.expect("a terminal status");
@@ -215,12 +222,14 @@ async fn a_drone_that_changed_nothing_drifts_from_nothing() {
         Some(DECLARING),
     );
     let job = started(&fleet, &home).await;
-    fleet
-        .declared_by_the_one(&DeclareScope {
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
             context_paths: vec!["src".to_string()],
-        })
-        .await
-        .expect("a declaration");
+        },
+    )
+    .await
+    .expect("a declaration");
 
     fleet.kill_job(&job).await.expect("a terminal status");
 

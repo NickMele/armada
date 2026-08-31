@@ -35,6 +35,7 @@ use crate::daemon::Fleet;
 use crate::gate::Ruling;
 use crate::tests::daemon::{a_proposal, diff_evidence, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 use crate::transcript::transcript_of;
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
@@ -295,8 +296,7 @@ async fn a_restart_that_resolves_none_of_a_conflicted_rebase_fails_its_diff_chec
     fleet.restart_step(&job).await.expect("a restart");
 
     // The restarted Drone resolves nothing and submits anyway.
-    fleet
-        .submitted_by_the_one(diff_evidence())
+    submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the tool took it");
     let turned = fleet.turn().await.expect("the gate ruled");

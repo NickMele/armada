@@ -18,6 +18,7 @@ use crate::tests::daemon::{
     workflow_named_gated_on_diff, worktree_directory,
 };
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 
 async fn call(app: &Router, uri: &str) -> (StatusCode, Vec<u8>) {
     let request = Request::builder()
@@ -147,8 +148,7 @@ async fn a_job_a_check_failed_is_replaced_and_left_where_it_stopped() {
     let failed = job.id().clone();
     worktree_directory(&home, &failed);
     fleet.approve(&failed).await.expect("released to run");
-    fleet
-        .submitted_by_the_one(diff_evidence())
+    submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("evidence taken");
     fleet.turn().await.expect("a ruling");
@@ -313,8 +313,7 @@ async fn a_redispatch_freezes_the_failed_jobs_own_workflow_not_the_first_one_hel
     let failed = job.id().clone();
     worktree_directory(&home, &failed);
     fleet.approve(&failed).await.expect("released to run");
-    fleet
-        .submitted_by_the_one(diff_evidence())
+    submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("evidence taken");
     fleet.turn().await.expect("a ruling");

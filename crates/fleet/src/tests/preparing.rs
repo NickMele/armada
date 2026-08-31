@@ -25,6 +25,7 @@ use crate::tests::daemon::{
     a_proposal, diff_evidence, fittings, note_evidence, worktree_directory,
 };
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 
 /// A Fleet whose `armada.yml` declares one Command and requires it.
 ///
@@ -148,7 +149,7 @@ async fn a_required_command_that_fails_escalates_the_job_and_enters_no_step() {
             .all(|step| step.state() == StepState::NotStarted),
         "no step was entered, so nothing can read this as failing work"
     );
-    assert_eq!(fleet.working_on().await, None, "the slot came free");
+    assert!(fleet.working_on().await.is_empty(), "the slot came free");
 }
 
 /// **(d)** One install for a Job, however many Drones it spawns.
@@ -169,7 +170,9 @@ async fn preparation_runs_once_for_the_worktree_and_not_once_per_drone() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.expect("dispatch runs");
 
-    fleet.submit_evidence(diff_evidence()).await.expect("filed");
+    submitted_by_the_one(&fleet, diff_evidence())
+        .await
+        .expect("filed");
     fleet.turn().await.expect("the first step advances");
 
     let midway = fleet.load(job.id()).await.expect("readable");
@@ -184,7 +187,9 @@ async fn preparation_runs_once_for_the_worktree_and_not_once_per_drone() {
         "the second Drone is on the same worktree, and nothing prepared it again"
     );
 
-    fleet.submit_evidence(note_evidence()).await.expect("filed");
+    submitted_by_the_one(&fleet, note_evidence())
+        .await
+        .expect("filed");
     fleet.turn().await.expect("the Job finishes");
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),

@@ -375,8 +375,8 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
         listener,
         app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
     )
-        .with_graceful_shutdown(stop_requested())
-        .await?;
+    .with_graceful_shutdown(stop_requested())
+    .await?;
 
     // Between turns, letting the one in flight finish. A stop that returned
     // mid-turn could leave a step moved and its Job not — so this waits, and

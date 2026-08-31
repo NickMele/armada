@@ -28,6 +28,7 @@ use crate::clock::Clock;
 use crate::daemon::Fleet;
 use crate::tests::daemon::{a_proposal, fittings, one, worktree_directory};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::declared_by_the_one;
 
 pub(super) type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
@@ -189,12 +190,14 @@ async fn a_path_outside_the_declared_plan_is_marked_on_its_row() {
     let fleet = a_fleet_reading(&home, three_kinds(), Arc::clone(&clock), Some(scope));
     let mut watching = fleet.events().subscribe();
     started(&fleet, &home).await;
-    fleet
-        .declared_by_the_one(&DeclareScope {
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
             context_paths: vec!["src/parse.rs".to_string()],
-        })
-        .await
-        .expect("a declaration");
+        },
+    )
+    .await
+    .expect("a declaration");
 
     fleet.turn().await.expect("a turn");
     let published = drained(&mut watching).await;

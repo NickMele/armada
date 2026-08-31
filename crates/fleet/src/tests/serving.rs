@@ -21,6 +21,7 @@ use testkit::FakeWorkProduct;
 use crate::tests::daemon::{a_fleet, a_proposal, diff_evidence, note_evidence, worktree_directory};
 use crate::tests::http::call;
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 
 pub(crate) const A_PROPOSAL: &str = r#"{
     "title": "fix the off-by-one in the log reader",
@@ -154,8 +155,7 @@ async fn a_job_approved_over_the_api_reaches_a_terminal_state() {
 
     // The Drone's first submission. Before this change it would have sat in the
     // inbox for the life of the process.
-    fleet
-        .submitted_by_the_one(diff_evidence())
+    submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the working Job's Drone submits");
     let midway = until(&app, "advanced past its first step", |job| {
@@ -168,8 +168,7 @@ async fn a_job_approved_over_the_api_reaches_a_terminal_state() {
         "a step advanced, and a step is the inner machine"
     );
 
-    fleet
-        .submitted_by_the_one(note_evidence())
+    submitted_by_the_one(&fleet, note_evidence())
         .await
         .expect("the same Drone, on the second step");
     let ended = until(&app, "reached a terminal state", |job| {

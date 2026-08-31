@@ -28,6 +28,7 @@ use crate::converging::{stops_the_step, ReportNow, Stage, StepNorms, Tripwire, W
 use crate::daemon::Fleet;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::declared_by_the_one;
 use ipc::mcp::DeclareScope;
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
@@ -292,12 +293,14 @@ async fn work_outside_the_plan_asks_the_judge_and_fails_nothing() {
         })),
     );
     let job = started(&fleet, &home).await;
-    fleet
-        .declared_by_the_one(&DeclareScope {
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
             context_paths: vec!["docs".to_string()],
-        })
-        .await
-        .expect("the step declares a scope");
+        },
+    )
+    .await
+    .expect("the step declares a scope");
 
     let wandering = next_stage(&fleet, "looked at the drift").await;
     assert!(matches!(
@@ -425,7 +428,7 @@ async fn a_drone_that_will_not_report_is_escalated_with_its_step_stopped() {
     // against a process that was demonstrably alive rather than assumed to be.
     let pid = fleet
         .the_only_slot()
-            .await
+        .await
         .lock()
         .await
         .as_ref()

@@ -12,6 +12,7 @@ use crate::proposing::NotProposed;
 use crate::tests::daemon::{a_fleet_proposing_through, diff_evidence, worktree_directory};
 use crate::tests::proposing::{a_catalogue, read};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 
 pub(crate) const A_PLAN: &str = "\
 job: 1
@@ -122,7 +123,7 @@ async fn a_dependent_is_admitted_once_its_upstream_completes() {
         .expect("the dependent waits");
     assert_eq!(fleet.working_on().await, vec![made[0].id().clone()]);
 
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.expect("the loop turns");
 
     assert_eq!(

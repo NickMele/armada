@@ -33,6 +33,7 @@ use crate::tests::gate::{
     budget, diff_evidence, judged_by, judged_by_shared, judging, running_job, worktree,
 };
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::{declared_by_the_one, submitted_by_the_one};
 
 fn a_diff_call<'a>() -> Call<'a> {
     Call {
@@ -248,14 +249,16 @@ async fn a_job_that_drifted_is_answerable_rather_than_over() {
     let job = fleet.propose(a_proposal("write the plan")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet
-        .declared_by_the_one(&DeclareScope {
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
             context_paths: vec!["docs".to_string()],
-        })
-        .await
-        .unwrap();
+        },
+    )
+    .await
+    .unwrap();
 
-    fleet.submitted_by_the_one(a_diff_call()).await.unwrap();
+    submitted_by_the_one(&fleet, a_diff_call()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     assert!(
         matches!(turned.ruled(), Some(Ruling::Refused { .. })),
@@ -349,12 +352,14 @@ async fn a_step_editing_outside_its_plan_is_caught_while_it_runs() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet
-        .declared_by_the_one(&DeclareScope {
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
             context_paths: vec!["docs".to_string()],
-        })
-        .await
-        .expect("the step declares a scope");
+        },
+    )
+    .await
+    .expect("the step declares a scope");
 
     let turned = fleet.turn().await.unwrap();
     let drifting = turned.drifting().expect("the live check saw the edit");
@@ -380,12 +385,14 @@ async fn the_same_drift_is_reported_once_and_not_every_turn() {
     let job = fleet.propose(a_proposal("write the plan")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet
-        .declared_by_the_one(&DeclareScope {
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
             context_paths: vec!["docs".to_string()],
-        })
-        .await
-        .unwrap();
+        },
+    )
+    .await
+    .unwrap();
 
     assert!(fleet.turn().await.unwrap().drifting().is_some());
     assert!(fleet.turn().await.unwrap().drifting().is_none());
@@ -407,12 +414,14 @@ async fn a_drifting_drone_is_told_once_per_path_and_not_again() {
     let job = fleet.propose(a_proposal("write the plan")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet
-        .declared_by_the_one(&DeclareScope {
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
             context_paths: vec!["docs".to_string()],
-        })
-        .await
-        .unwrap();
+        },
+    )
+    .await
+    .unwrap();
 
     assert!(fleet.turn().await.unwrap().drifting().is_some());
     let told = turns_sent(&fleet, 2).await;
@@ -449,20 +458,24 @@ async fn declaring_again_replaces_the_plan_and_clears_what_drifted() {
     let job = fleet.propose(a_proposal("write the plan")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet
-        .declared_by_the_one(&DeclareScope {
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
             context_paths: vec!["docs".to_string()],
-        })
-        .await
-        .unwrap();
+        },
+    )
+    .await
+    .unwrap();
     assert!(fleet.turn().await.unwrap().drifting().is_some());
 
-    fleet
-        .declared_by_the_one(&DeclareScope {
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
             context_paths: vec!["src".to_string()],
-        })
-        .await
-        .unwrap();
+        },
+    )
+    .await
+    .unwrap();
     assert!(
         fleet.turn().await.unwrap().drifting().is_none(),
         "the work is inside the plan now, and the plan is the one that counts"
@@ -479,12 +492,14 @@ async fn a_step_with_no_scope_is_not_watched_and_takes_no_declaration() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    let refused = fleet
-        .declared_by_the_one(&DeclareScope {
+    let refused = declared_by_the_one(
+        &fleet,
+        &DeclareScope {
             context_paths: vec!["src".to_string()],
-        })
-        .await
-        .expect_err("a step that declares no scope takes no declaration");
+        },
+    )
+    .await
+    .expect_err("a step that declares no scope takes no declaration");
     assert!(matches!(refused, NotDeclared::StepHasNoScope { .. }));
     assert!(fleet.turn().await.unwrap().drifting().is_none());
 }
@@ -504,12 +519,14 @@ async fn a_declaration_naming_an_excluded_path_is_refused_where_it_is_made() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    let refused = fleet
-        .declared_by_the_one(&DeclareScope {
+    let refused = declared_by_the_one(
+        &fleet,
+        &DeclareScope {
             context_paths: vec!["secrets/keys.toml".to_string()],
-        })
-        .await
-        .expect_err("the denylist wins");
+        },
+    )
+    .await
+    .expect_err("the denylist wins");
     assert!(matches!(refused, NotDeclared::Outside(_)));
 }
 
@@ -557,20 +574,22 @@ async fn the_plan_does_not_survive_the_step_it_was_declared_for() {
     let job = fleet.propose(a_proposal("plan then do")).await.unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet
-        .declared_by_the_one(&DeclareScope {
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
             context_paths: vec!["docs".to_string()],
-        })
-        .await
-        .unwrap();
+        },
+    )
+    .await
+    .unwrap();
 
-    fleet.submitted_by_the_one(a_diff_call()).await.unwrap();
+    submitted_by_the_one(&fleet, a_diff_call()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     assert!(matches!(turned.ruled(), Some(Ruling::Advanced { .. })));
 
     // The second step inherits nothing. Submitting against it with no
     // declaration of its own fails rather than reusing the first step's.
-    fleet.submitted_by_the_one(a_diff_call()).await.unwrap();
+    submitted_by_the_one(&fleet, a_diff_call()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     assert!(
         matches!(

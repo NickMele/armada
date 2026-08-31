@@ -100,6 +100,7 @@
 //!
 //! [`Fleet::turn`]: crate::Fleet::turn
 
+pub mod admitting;
 pub mod adrift;
 pub mod at_step;
 mod boundary;
@@ -177,6 +178,7 @@ pub use gate::{apply, rule_on, CheckBudget, CheckOutput, Ruling};
 pub use judging::{Aloft, CallFailed, JudgeBudget, Judging, Look, Marking};
 pub use mint::{Mint, UlidMint};
 pub use overruling::Overruling;
+pub use peer::{NotACaller, PeerOf};
 pub use process::{holder_of, Holder, ProbeFailed, StartedAt};
 pub use proposal::{proposed, Proposing};
 pub use proposing::{NotProposed, Proposal, ProposedJob, Unresolved};
@@ -191,7 +193,6 @@ pub use runtime::{
 pub use scope::{Declared, Drifting};
 pub use session::{DroneSession, LiveSession, Turn};
 pub use settling::Settled;
-pub use peer::{NotACaller, PeerOf};
 pub use silence::{Liveness, Poke, Quiet, Vigil};
 pub use slots::Concurrency;
 pub use transcript::{history, log_of, transcript_of, Live, Recording, Spine, Tap, Taps};

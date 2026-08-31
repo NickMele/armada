@@ -23,6 +23,7 @@ use crate::tests::daemon::{a_fleet, diff_evidence, note_evidence, worktree_direc
 use crate::tests::http::call;
 use crate::tests::serving::A_PROPOSAL;
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 
 /// A Job driven from the gate to `completed_success` by the real loop, and then
 /// asked how it got there.
@@ -59,8 +60,7 @@ async fn a_finished_job_can_say_every_move_it_made() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    fleet
-        .submitted_by_the_one(diff_evidence())
+    submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the working Job's Drone submits");
     for _ in 0..400 {
@@ -73,8 +73,7 @@ async fn a_finished_job_can_say_every_move_it_made() {
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    fleet
-        .submitted_by_the_one(note_evidence())
+    submitted_by_the_one(&fleet, note_evidence())
         .await
         .expect("the same Drone, on the second step");
     for _ in 0..400 {

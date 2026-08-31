@@ -24,6 +24,7 @@ use crate::drone::start;
 use crate::tests::daemon::Ticking;
 use crate::tests::drone::config;
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 use crate::transcript::{history, log_of, transcript_of, Recording, Spine, Tap};
 use crate::watch::Watching;
 
@@ -440,8 +441,7 @@ async fn a_row_written_after_a_step_advances_carries_the_step_it_was_written_und
         "the Drone said something under the step it was spawned on"
     );
 
-    fleet
-        .submitted_by_the_one(crate::tests::daemon::diff_evidence())
+    submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
         .await
         .expect("the step's evidence");
     fleet

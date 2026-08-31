@@ -451,23 +451,6 @@ where
             .map_err(NotSubmitted::Malformed)
     }
 
-    /// Submit as the Drone of the one Job being worked.
-    ///
-    /// **A fixture's shorthand, and `cfg(test)` for exactly that reason.** The
-    /// shipped path takes the Job from `crate::peer`, which reads the socket a
-    /// call arrived on; a fake harness holds no socket, so a test says which
-    /// Drone is speaking by there being one of them.
-    #[cfg(test)]
-    pub(crate) async fn submitted_by_the_one(
-        &self,
-        call: Call<'_>,
-    ) -> Result<Recorded, NotSubmitted> {
-        let Some(job) = self.working_on().await.first().cloned() else {
-            return Err(NotSubmitted::NothingIsWorking);
-        };
-        self.submit_evidence(&job, call).await
-    }
-
     /// How many submissions are waiting for the gate, over every Job.
     pub fn evidence_waiting(&self) -> usize {
         self.inbox().waiting()

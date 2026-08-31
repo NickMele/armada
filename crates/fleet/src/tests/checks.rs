@@ -23,6 +23,7 @@ use crate::tests::daemon::{a_fleet, a_proposal, worktree_directory};
 use crate::tests::detail::get;
 use crate::tests::gate::{budget, diff_evidence, judging, note_evidence, workflow, worktree};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 use core_model::StepId;
 
 /// The `(name, outcome, produced)` of every check the step declared, in order.
@@ -347,8 +348,7 @@ async fn what_the_gate_found_reaches_the_detail_view() {
     let job_id = job.id().clone();
     worktree_directory(&home, &job_id);
     fleet.approve(&job_id).await.expect("released to run");
-    fleet
-        .submitted_by_the_one(crate::tests::daemon::diff_evidence())
+    submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
         .await
         .expect("the tool took it");
     fleet.turn().await.expect("the gate ruled");
@@ -397,8 +397,7 @@ async fn the_record_survives_a_fleet_restart() {
             .expect("a Job at the gate");
         worktree_directory(&home, job.id());
         fleet.approve(job.id()).await.expect("released to run");
-        fleet
-            .submitted_by_the_one(crate::tests::daemon::diff_evidence())
+        submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
             .await
             .expect("the tool took it");
         fleet.turn().await.expect("the gate ruled");

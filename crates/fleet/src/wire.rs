@@ -8,8 +8,8 @@
 //! so the field-by-field decision is written here, where every type involved
 //! is in scope.
 
-use ipc::mcp::NotRecorded;
 use core_model::Job;
+use ipc::mcp::NotRecorded;
 use ipc::{
     CheckRun, DeclaredCheck, DeclaredJudge, Flagged, Judged, StepFacts, StepId, Submitted,
     WorkflowStep,
@@ -237,11 +237,11 @@ fn unreadable(column: &'static str, value: &str) -> Adrift {
 /// [`Aloft`], and asking for that rather than for the daemon is what keeps it
 /// in this file. `serving.rs` is the trait impl; its helpers live here.
 pub(crate) fn step_facts(
-aloft: &Aloft,
-job: &Job,
-ran: Vec<(core_model::StepId, Vec<core_model::StepCheck>)>,
-judged: Vec<(core_model::StepId, Vec<core_model::Judgment>)>,
-flagged: Vec<(core_model::StepId, Vec<core_model::GamingFlag>)>,
+    aloft: &Aloft,
+    job: &Job,
+    ran: Vec<(core_model::StepId, Vec<core_model::StepCheck>)>,
+    judged: Vec<(core_model::StepId, Vec<core_model::Judgment>)>,
+    flagged: Vec<(core_model::StepId, Vec<core_model::GamingFlag>)>,
 ) -> Vec<StepFacts> {
     job.steps()
         .iter()
@@ -272,8 +272,7 @@ flagged: Vec<(core_model::StepId, Vec<core_model::GamingFlag>)>,
                 .unwrap_or_default(),
             // The one fact here that is not a row. Read from the live slot
             // as the answer is assembled, because nothing writes it down.
-            judging: aloft
-                .on(&ipc::JobId::from(job.id()), &StepId::from(step.step_id())),
+            judging: aloft.on(&ipc::JobId::from(job.id()), &StepId::from(step.step_id())),
         })
         .collect()
 }

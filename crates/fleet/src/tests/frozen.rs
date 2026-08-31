@@ -20,6 +20,7 @@ use crate::tests::daemon::{
     workflow_named, worktree_directory,
 };
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 
 fn changed() -> FakeWorkProduct {
     FakeWorkProduct::changed(&["src/log.rs"])
@@ -76,7 +77,7 @@ async fn a_workflow_edited_under_a_job_changes_nothing_about_it() {
     // command that exits 1, which this Job would fail on if the file won.
     let after = a_fleet_holding(&home, changed(), two_steps_edited(), 100);
     after.approve(&job_id).await.unwrap();
-    after.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&after, diff_evidence()).await.unwrap();
 
     let ruling_turn = after.turn().await.unwrap();
 
@@ -374,7 +375,7 @@ async fn a_failed_checks_output_is_readable_from_its_file_afterwards() {
         .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
 
     let ruling_turn = fleet.turn().await.unwrap();
 
@@ -449,7 +450,7 @@ async fn a_check_that_passed_keeps_its_output_and_a_built_in_has_none() {
         .unwrap();
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
 
     let reloaded = fleet.load(job.id()).await.unwrap();

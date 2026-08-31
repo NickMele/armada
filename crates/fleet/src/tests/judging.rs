@@ -38,6 +38,7 @@ use crate::tests::gate::{
     budget, diff_evidence, judged_by_shared, marking, note_evidence, running_job, worktree,
 };
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 
 const THE_QUESTION: &str = "Does the fix address the cause the note names?";
 
@@ -252,8 +253,7 @@ async fn a_refusal_escalates_the_job_and_its_citation_reaches_the_detail_view() 
     let job_id = job.id().clone();
     worktree_directory(&home, &job_id);
     fleet.approve(&job_id).await.expect("released to run");
-    fleet
-        .submitted_by_the_one(crate::tests::daemon::diff_evidence())
+    submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
         .await
         .expect("the tool took it");
     let turned = fleet.turn().await.expect("the gate ruled");

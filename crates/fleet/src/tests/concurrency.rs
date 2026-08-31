@@ -21,12 +21,14 @@ use std::sync::Arc;
 use adapter_traits::WorktreeSpec;
 use core_model::JobId;
 use ipc::mcp::DeclareScope;
-use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Gate, Scoped, Sketch};
+use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Scoped, Sketch};
 
 use crate::daemon::{Fittings, Fleet};
 use crate::slots::Concurrency;
 use crate::tests::daemon::{a_proposal, fittings, one, worktree_directory};
 use crate::tests::peer::Placing;
+use crate::tests::planning::A_PLAN;
+use crate::tests::proposing::a_catalogue;
 use crate::tests::tmp::TempDir;
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
@@ -171,7 +173,9 @@ async fn each_drones_call_lands_on_its_own_step_and_not_on_the_others() {
         .expect("the first Drone declares");
 
     let caller = api::Caller::at("127.0.0.1:51002".parse().expect("an address"));
-    let job = fleet.caller_of(&caller).expect("the second Drone is placed");
+    let job = fleet
+        .caller_of(&caller)
+        .expect("the second Drone is placed");
     fleet
         .declare_scope(
             &job,
@@ -287,5 +291,76 @@ async fn a_third_approved_job_waits_on_the_bound_and_the_board_says_so() {
     assert!(
         working.contains(&first) && working.contains(&second),
         "and the two that were approved first are the two running"
+    );
+}
+
+/// **A stranded dependent does not take the room the bound has left.**
+///
+/// `#48` escalates a `queued` Job whose upstream ended badly, and it does so on
+/// the turn before admission. With one working slot that ordering was enough on
+/// its own, because there was no room to compete for; with two there is, and
+/// this is the case that says the ordering still holds — one Job working, one
+/// place free, and the Job that would have taken it moved off `queued` instead
+/// of into it.
+///
+/// A stranded dependent cannot **hold** a slot either, and that needs no case:
+/// a slot is opened by admission, which moves the Job to `running` as it goes,
+/// and by the four acts a person takes on a Job that is `escalated` or at a
+/// gate. Neither reaches a `queued` Job.
+#[tokio::test]
+async fn a_dependent_whose_upstream_failed_does_not_take_the_free_place() {
+    let home = TempDir::new();
+    let mut fittings: Fittings<FakeHarness, FakeVcs, FakeWorkProduct> =
+        fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    fittings.workflows = a_catalogue()
+        .into_iter()
+        .map(|workflow| (workflow.id().clone(), workflow))
+        .collect();
+    fittings.judge = Arc::new(FakeJudge::saying(A_PLAN));
+    fittings.concurrency = Concurrency::of(2);
+    let fleet = Fleet::assembled(fittings);
+
+    let made = fleet
+        .propose_from("two coupled changes")
+        .await
+        .expect("a plan");
+    // The upstream runs, which is what leaves exactly one place free.
+    worktree_directory(&home, made[0].id());
+    fleet.approve(made[0].id()).await.expect("the upstream");
+    worktree_directory(&home, made[1].id());
+    fleet.approve(made[1].id()).await.expect("the dependent");
+    assert_eq!(
+        fleet.working_on().await,
+        vec![made[0].id().clone()],
+        "the dependent is queued behind its upstream and not behind the bound"
+    );
+
+    fleet
+        .kill_job(made[0].id())
+        .await
+        .expect("the upstream ends");
+    let turned = fleet.turn().await.expect("the loop turns");
+
+    assert_eq!(
+        turned.stranded,
+        vec![made[1].id().clone()],
+        "the dependent moved off queued"
+    );
+    assert!(
+        !turned.admitted.contains(made[1].id()),
+        "and admission, which ran after it and had room, did not take it: {:?}",
+        turned.admitted
+    );
+    assert!(
+        !fleet.working_on().await.contains(made[1].id()),
+        "so no Drone is on a base that never landed"
+    );
+    assert_eq!(
+        fleet
+            .load(made[1].id())
+            .await
+            .expect("the Job reads")
+            .status(),
+        core_model::JobStatus::Escalated,
     );
 }

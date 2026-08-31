@@ -47,6 +47,7 @@ use crate::dry_run::{DryRuns, NotRun};
 use crate::silence::Liveness;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::checked_by_the_one;
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
@@ -397,7 +398,7 @@ async fn the_clocks_do_not_count_the_time_a_check_takes() {
 
     let running = tokio::spawn({
         let fleet = Arc::clone(&fleet);
-        async move { fleet.checked_by_the_one().await }
+        async move { checked_by_the_one(&fleet).await }
     });
     wait_until_checking(&fleet).await;
 
@@ -432,7 +433,7 @@ async fn the_clocks_do_not_count_the_time_a_check_takes() {
     let now = fleet.now();
     let running_for = fleet
         .the_only_slot()
-            .await
+        .await
         .lock()
         .await
         .as_ref()
@@ -464,11 +465,11 @@ async fn a_second_run_while_one_is_going_is_refused() {
 
     let running = tokio::spawn({
         let fleet = Arc::clone(&fleet);
-        async move { fleet.checked_by_the_one().await }
+        async move { checked_by_the_one(&fleet).await }
     });
     wait_until_checking(&fleet).await;
 
-    let refused = fleet.checked_by_the_one().await;
+    let refused = checked_by_the_one(&fleet).await;
     assert!(
         matches!(refused, Err(NotRun::AlreadyRunning)),
         "{refused:?}"
@@ -493,7 +494,9 @@ async fn a_drone_that_has_already_submitted_is_told_to_wait() {
 
     submit(&app).await;
     assert_eq!(fleet.evidence_waiting(), 1, "the gate has not run yet");
-    let refused = fleet.checked_by_the_one().await.expect_err("the gate is about to");
+    let refused = checked_by_the_one(&fleet)
+        .await
+        .expect_err("the gate is about to");
     assert!(matches!(refused, NotRun::AlreadySubmitted), "{refused:?}");
     assert!(
         refused.to_string().contains("later turn"),
@@ -515,8 +518,10 @@ async fn a_step_that_has_spent_its_allowance_is_refused_and_told_why() {
     );
     started(&fleet, &home).await;
 
-    fleet.checked_by_the_one().await.expect("the first run");
-    let refused = fleet.checked_by_the_one().await.expect_err("the second is refused");
+    checked_by_the_one(&fleet).await.expect("the first run");
+    let refused = checked_by_the_one(&fleet)
+        .await
+        .expect_err("the second is refused");
     assert!(
         matches!(refused, NotRun::Spent { allowed: 1 }),
         "{refused:?}"
@@ -546,7 +551,9 @@ async fn a_step_with_no_checks_is_refused_rather_than_answered_with_nothing() {
     let fleet = a_fleet_checking(&home, unchecked, Arc::new(Held::started()), 3);
     started(&fleet, &home).await;
 
-    let refused = fleet.checked_by_the_one().await.expect_err("nothing to run");
+    let refused = checked_by_the_one(&fleet)
+        .await
+        .expect_err("nothing to run");
     assert!(
         matches!(refused, NotRun::StepHasNoChecks { .. }),
         "{refused:?}"
@@ -565,7 +572,9 @@ async fn a_call_with_nothing_working_is_refused() {
         3,
     );
 
-    let refused = fleet.checked_by_the_one().await.expect_err("nothing is working");
+    let refused = checked_by_the_one(&fleet)
+        .await
+        .expect_err("nothing is working");
     assert!(matches!(refused, NotRun::NothingIsWorking), "{refused:?}");
 }
 

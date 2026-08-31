@@ -21,6 +21,7 @@ use crate::gate::Ruling;
 use crate::tests::daemon::{a_fleet_judged_by, a_proposal, diff_evidence, worktree_directory};
 use crate::tests::http::call;
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 use crate::transcript::log_of;
 use crate::Adrift;
 
@@ -98,8 +99,7 @@ async fn undecided(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
     let job_id = job.id().clone();
     worktree_directory(home, &job_id);
     fleet.approve(&job_id).await.expect("released to run");
-    fleet
-        .submitted_by_the_one(diff_evidence())
+    submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the Drone reports its diff");
     let turned = fleet.turn().await.expect("the gate ran");
@@ -334,8 +334,7 @@ async fn a_step_the_judge_refused_is_not_re_run() {
     let job_id = job.id().clone();
     worktree_directory(&home, &job_id);
     fleet.approve(&job_id).await.expect("released to run");
-    fleet
-        .submitted_by_the_one(diff_evidence())
+    submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the Drone reports its diff");
     let turned = fleet.turn().await.expect("the gate ruled");

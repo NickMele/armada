@@ -25,6 +25,7 @@ use crate::tests::daemon::{a_fleet_judged_by, a_proposal, worktree_directory};
 use crate::tests::detail::get;
 use crate::tests::gate::{budget, diff_evidence, running_job, worktree};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 
 /// The diff a Drone submits when it narrows the gate instead of fixing the
 /// bug: the `run:` string is untouched and the config it resolves through is
@@ -319,8 +320,7 @@ async fn a_gaming_finding_names_its_patterns_on_the_detail_view() {
     let job_id = job.id().clone();
     worktree_directory(&home, &job_id);
     fleet.approve(&job_id).await.expect("released to run");
-    fleet
-        .submitted_by_the_one(crate::tests::daemon::diff_evidence())
+    submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
         .await
         .expect("the tool took it");
     let turned = fleet.turn().await.expect("the gate ruled");

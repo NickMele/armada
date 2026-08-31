@@ -89,7 +89,7 @@ async fn a_killed_upstream_escalates_its_dependent_as_dependency_failed() {
         "escalated for the upstream and not for anything of its own"
     );
     assert!(
-        fleet.working_on().await.is_none(),
+        fleet.working_on().await.is_empty(),
         "and nothing was dispatched onto a base that never landed"
     );
 }

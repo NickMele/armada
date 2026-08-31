@@ -64,9 +64,9 @@
 //! carries no directory, so the repository is not something the call declines
 //! to open — it is somewhere the call is not.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::process::Stdio;
-use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 

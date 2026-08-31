@@ -1,10 +1,10 @@
 //! The inside of the loop: taking an approved Job, running it, and ending it.
 //!
-//! Split from [`daemon`](mod@crate::daemon) because the two are different
-//! subjects. That file is what Fleet *is* — the slot, the seams it is assembled
-//! from, and the five things it can be asked. This one is what happens to one
-//! Job while it is in the slot, and it is the only file in the workspace that
-//! calls `Job::transition` and `Job::transition_step`.
+//! Split from [`daemon`](mod@crate::daemon), which is what Fleet *is* — the
+//! seams it is assembled from and the things it can be asked. This is what
+//! happens to one Job in a slot, and the only file in the workspace that calls
+//! `Job::transition` and `Job::transition_step`. **Which** Job gets a slot is
+//! [`admitting`](mod@crate::admitting)'s.
 //!
 //! # The order in `dispatch` is the specification
 //!
@@ -24,19 +24,15 @@
 //! written on the trait. A failed Job's branch is exactly as its Drone left it,
 //! which is what "a person reads the branch" depends on.
 
-use std::collections::BTreeMap;
-
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{
-    Actor, Branch, EscalationTrigger, Job, JobId, JobStatus, StepId, StepLevelTrigger, StepTarget,
-    Target, Transitioned,
+    Actor, Branch, EscalationTrigger, Job, JobId, StepId, StepLevelTrigger, StepTarget, Target,
+    Transitioned,
 };
-use store::Moved;
 use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
 use crate::briefing::{Declaring, Opening};
-use crate::coupling::{coupling, Coupling};
 use crate::crossing::{Cleared, Crossed, Produced};
 use crate::daemon::Fleet;
 use crate::drone::{aftermath, Aftermath, Ending, Left};
@@ -54,115 +50,6 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// Start every approved Job the bound has room for.
-    ///
-    /// **`Slots::room` is the whole of what the bound means here**, and it is
-    /// the same predicate `queued_reason` answers `waiting_on_resources` from —
-    /// one answer, because a Board saying a Job is blocked while Fleet is
-    /// starting it is worse than a Board saying nothing.
-    ///
-    /// **The roster lock is held across the loop, and nothing else is.** Two
-    /// admissions running at once would each read the same `queued` Job as
-    /// next and dispatch it twice; holding the roster is what makes admission
-    /// one act. It is released the moment the last Drone is spawned, which is
-    /// what keeps it from being the single working slot again — a slot is held
-    /// for as long as a Job is worked, and this is held for as long as a Job is
-    /// *started*.
-    ///
-    /// Admission stops at the first Job that will not start. The failure is
-    /// returned, its Job is left `escalated` by `dispatch`, and the next turn
-    /// asks again — Fleet does not walk on down the queue to find one that
-    /// works, because the reason the first failed is ordinarily the disk.
-    pub(crate) async fn admit_next(&self) -> Result<Vec<JobId>, Adrift> {
-        let mut slots = self.slots().lock().await;
-        let mut admitted = Vec::new();
-        while slots.room() {
-            let Some(job) = self.next_queued().await? else {
-                break;
-            };
-            let job_id = job.id().clone();
-            let slot = slots.opened_for(&job_id);
-            // The slot exists and counts against the bound before the dispatch
-            // that fills it runs, so a `next_queued` inside this same loop
-            // cannot hand back the Job being started. Nothing else can be
-            // holding this lock — the roster is held, and the Job had none.
-            let mut working = slot.lock().await;
-            if let Err(cause) = self.dispatch(job, &mut working).await {
-                drop(working);
-                // Nothing started, so nothing is being worked, so the bound is
-                // not spent. Left in place it would be a Job with no Drone
-                // holding a place in the roster for ever.
-                slots.closed(&job_id);
-                return Err(cause);
-            }
-            drop(working);
-            admitted.push(job_id);
-        }
-        Ok(admitted)
-    }
-
-    /// The Job that has been waiting longest, by when it was approved.
-    ///
-    /// Ordered by the sequence of the event that put it at `queued`, not by id
-    /// and not by creation: two Jobs created in either order can be approved in
-    /// the other, and the person who approved first is entitled to expect
-    /// theirs to run first.
-    ///
-    /// A row that would not rebuild is not dispatchable, and is reported by
-    /// every read that returns a list rather than being silently completed
-    /// here.
-    async fn next_queued(&self) -> Result<Option<Job>, Adrift> {
-        let (loaded, _) = self.every_job().await?;
-        let standing: BTreeMap<JobId, JobStatus> = loaded
-            .jobs
-            .iter()
-            .map(|job| (job.id().clone(), job.status()))
-            .collect();
-        let mut waiting = Vec::new();
-        for job in loaded.jobs {
-            if job.status() != JobStatus::Queued {
-                continue;
-            }
-            // Approved and still waiting on a peer. It is skipped rather than
-            // reordered — the queue is by approval and this is not a Job's turn
-            // being taken, it is a Job that has nothing to work against yet.
-            if !clear_to_run(&job, &standing) {
-                continue;
-            }
-            waiting.push((self.approved_at(job.id()).await?, job));
-        }
-        waiting.sort_by_key(|(seq, _)| *seq);
-        Ok(waiting.into_iter().next().map(|(_, job)| job))
-    }
-
-    /// When the Job was released to run, as the log's own sequence.
-    ///
-    /// A Job with no such event was **created** at `queued` — a sub-dispatch,
-    /// approved as part of its parent — and is therefore older than anything
-    /// that had to be approved on its own.
-    async fn approved_at(&self, job_id: &JobId) -> Result<i64, Adrift> {
-        let events = self
-            .store()
-            .lock()
-            .await
-            .events_for(job_id)
-            .map_err(|cause| Adrift::Reading(store::LoadJobError::Unreadable(cause)))?;
-        Ok(events
-            .iter()
-            .rev()
-            .find(|event| {
-                matches!(
-                    event.moved(),
-                    Moved::Job {
-                        to: JobStatus::Queued,
-                        ..
-                    }
-                )
-            })
-            .map(|event| event.seq())
-            .unwrap_or(i64::MIN))
-    }
-
     /// Take one approved Job all the way to a running Drone.
     ///
     /// **Two Jobs are queued and only one of them is new.** A Job whose branch
@@ -180,7 +67,11 @@ where
     /// Every failure below leaves the Job `escalated` rather than `running`,
     /// and returns the cause. A person decides; Fleet does not retry, and does
     /// not put the Job back in the queue for itself to fail on again.
-    async fn dispatch(&self, job: Job, working: &mut Option<Working>) -> Result<(), Adrift> {
+    pub(crate) async fn dispatch(
+        &self,
+        job: Job,
+        working: &mut Option<Working>,
+    ) -> Result<(), Adrift> {
         if job.branch().is_some() {
             return self.readmitted(job, working).await;
         }
@@ -858,25 +749,6 @@ fn the_part_before<'a>(
     let steps = workflow.steps();
     let here = steps.iter().position(|step| step.id() == at)?;
     steps.get(here.checked_sub(1)?)
-}
-
-/// Whether every Job this one waits on has finished, and finished well.
-///
-/// `pub(crate)` because `serving` renders the same fact as a label. **One
-/// answer, not two** — a Board saying a Job is blocked while admission
-/// disagrees is worse than a Board saying nothing.
-///
-/// **No terminal weaker than `completed_success` or `superseded`.** A dependent
-/// admitted after a failed upstream would do its work against a base that never
-/// landed, which is the half-landed upstream the linked-DAG shape exists to
-/// prevent. A superseded upstream is not that case: the work landed outside the
-/// Job, so the base is there and only the record has nothing to say.
-///
-/// The three-way weighing, and which peer failed, are
-/// [`coupling`](crate::coupling::coupling)'s — this is the yes-or-no admission
-/// reads, and it is the same call `serving` labels a Board row from.
-pub(crate) fn clear_to_run(job: &Job, standing: &BTreeMap<JobId, JobStatus>) -> bool {
-    matches!(coupling(job, standing), Coupling::Clear { .. })
 }
 
 /// Copy every attachment the Job carries into this worktree, under

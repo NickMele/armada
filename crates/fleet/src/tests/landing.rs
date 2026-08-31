@@ -14,6 +14,7 @@ use crate::tests::daemon::{
     a_fleet_committing_through, a_proposal, diff_evidence, note_evidence, worktree_directory,
 };
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 
 /// The window the fixture clock answers within. A commit stamped outside it
 /// came from the machine rather than from the injected clock, which is the
@@ -38,14 +39,14 @@ async fn the_work_is_committed_when_the_last_step_advances() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
     assert!(
         fleet.vcs().committed().is_empty(),
         "a step that is not the last commits nothing"
     );
 
-    fleet.submitted_by_the_one(note_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     assert!(matches!(turned.ruled(), Some(Ruling::Finished { .. })));
 
@@ -101,9 +102,9 @@ async fn a_job_that_changed_nothing_is_answered_rather_than_committed() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
-    fleet.submitted_by_the_one(note_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
 
     assert!(
@@ -127,7 +128,7 @@ async fn a_job_that_fails_mid_workflow_gets_no_commit() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     assert!(matches!(turned.ruled(), Some(Ruling::Failed { .. })));
 
@@ -159,9 +160,9 @@ async fn a_refused_commit_still_completes_the_job_and_says_so() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
-    fleet.submitted_by_the_one(note_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
 
     let adrift = fleet.turn().await.expect_err("the commit was refused");
     let Adrift::NotCommitted { job: named, .. } = &adrift else {

@@ -1,80 +1,28 @@
 //! Which Drone is on the other end of a connection.
 //!
-//! # The Drone is not asked, and there is no scheme in which it could be
+//! **The Drone is not asked, because no scheme where it holds its own identity
+//! survives.** `docs/spikes/011-what-can-one-drone-reach.md` measured all five
+//! — a port, a socket path, a token in a file, in the environment, in argv —
+//! against a Drone holding `Write` and a `cargo` rule, which together are
+//! native code at the operator's uid. So the identity is the connection, which
+//! `docs/spikes/010-can-a-drone-be-identified.md` told two Drones apart by, on
+//! one listener and one config file.
 //!
-//! The three tools take no job id **by name** — `ipc::mcp::tools` refuses a call
-//! that invents one — because a value a Drone supplies is a value a Drone chose.
-//! With one working slot Fleet needed no other answer: there was one caller, so
-//! nothing had to ask who. With several there is, and every scheme in which the
-//! *Drone holds* its identity was measured and none survives:
-//! `docs/spikes/011-what-can-one-drone-reach.md` puts `Write` and
-//! `Bash(cargo …:*)` together and gets arbitrary native code at the operator's
-//! uid, which reads any same-uid file, any same-uid process's argv **and its
-//! environment**, and opens any socket. A port per Drone, a socket path per
-//! Drone, a token in a file, in the environment or in argv: all five are as
-//! private as same-uid isolation on macOS, which is to say not private.
+//! **The pair, never the port.** A local port is not unique on a host, so a
+//! lookup keyed on the peer's port alone names the wrong pid whenever it meets
+//! the impostor first — deterministically, not as a race, which is why a test
+//! that passes against it proves nothing. Matching `insi_lport` *and*
+//! `insi_fport` was right in every ordering.
+//! `docs/spikes/012-peer-identity-under-concurrency.md` holds that
+//! reproduction, the four routes it timed — `proc_pidfdinfo` at 22µs against
+//! `lsof` at 64ms, and it is the only one that can match a pair — and the 384
+//! connections engineered to lose their peer, of which **none came back naming
+//! another process**.
 //!
-//! **So the identity is the connection.** `docs/spikes/010` spawned two Drones
-//! against one listener and one config file and told them apart by the process
-//! at the far end of each connection — including a Drone that skipped the tool
-//! entirely and `curl`ed a Job name of its choosing, where the payload said one
-//! thing and the transport said another and the transport was right. A shell
-//! cannot give a process an ancestry it does not have, so the property needs no
-//! confinement, which matters because `docs/scope.md` declines to build one.
-//!
-//! # The port pair, and why the obvious lookup is wrong every time
-//!
-//! `docs/spikes/012-peer-identity-under-concurrency.md` is the measurement that
-//! decides the shape of this file.
-//!
-//! **A local port number is not unique on a host.** Two processes may each hold
-//! port 24101 as long as they are talking to different places. So a lookup keyed
-//! on the peer's port alone — `lsof -nP -i TCP:<port>`, which is what spike 10
-//! used — names the wrong live pid **deterministically**, whenever it happens to
-//! scan the impostor first. It is not a rare race, it is the wrong question, and
-//! a test that passes against it proves nothing.
-//!
-//! **The pair (local port, foreign port) is the right one.** `insi_fport` sits
-//! four bytes from `insi_lport` in the same kernel record, and matching both was
-//! right in every ordering the reproduction was run in. That is what
-//! [`PeerOf::holds`] matches, and the pair test in `crate::tests::peer` is what
-//! would fail if it stopped.
-//!
-//! # And it asks the pids Fleet already holds, rather than the machine
-//!
-//! Spike 12 timed the same answer four ways. `lsof -i TCP:<port>` is 64ms and
-//! scans every process on the machine; bounding it to five pids saves a third
-//! and no more, because what it costs is a process spawn and a kernel table
-//! walk. `netstat` prints no loopback TCP rows at all on darwin 27 and is not a
-//! route. `proc_pidfdinfo` over the pids the caller already holds is **22µs** —
-//! between 240 and 2,900 times cheaper, with no subprocess — and it is the only
-//! one of the four that can match the pair.
-//!
-//! `crate::process` asks `ps` and gives its reason: the check there is one
-//! Bridge has to be able to make too. Nothing outside this process asks this
-//! question, so that argument does not reach here, and this crate already
-//! carries `libc` for `setsid`.
-//!
-//! # Failing absent, never wrong
-//!
-//! Spike 12 engineered 384 connections to lose their peer and **not one came
-//! back naming another process**: a peer that does not outlive the lookup is
-//! unidentifiable as *nothing*, because a dead process holds no socket and the
-//! port it held is not yet anyone else's. That is the direction this has to fail
-//! in, and it is why [`NotACaller`] is a refusal rather than a guess.
-//!
-//! It is also why the lookup is on the tool call rather than at accept: a call
-//! being served is a connection that is open, so the deadline spike 12 measured
-//! — about 2ms for this route — cannot be missed by the caller that matters.
-//!
-//! # A Drone that goes round the tool is refused rather than traced
-//!
-//! Spike 10's bypass — `curl` from the Drone's own Bash — arrives from a pid
-//! whose *ancestry* runs back to the Drone but which is not the Drone. This asks
-//! only about the pids Fleet spawned, so such a call matches nothing and is
-//! refused. That is narrower than the ancestry walk the spike demonstrated and
-//! it needs no walk: the sanctioned road is the tool, and a call that did not
-//! come down the CLI's own connection is not one.
+//! Absent is therefore the only failure, and [`NotACaller`] is a refusal rather
+//! than a guess. It is why the lookup runs on the tool call rather than at
+//! accept — a call being served is a connection that is open — and why spike
+//! 10's `curl` bypass, from a pid Fleet did not spawn, matches nothing.
 
 use std::collections::BTreeMap;
 

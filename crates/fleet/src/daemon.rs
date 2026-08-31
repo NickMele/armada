@@ -206,7 +206,6 @@ pub struct Reconciled {
     pub admitted: Vec<JobId>,
 }
 
-
 /// The daemon core: **the only writer of Job state.**
 pub struct Fleet<H, V, W> {
     store: Mutex<Store>,
@@ -613,7 +612,6 @@ where
             .lock()
             .expect("the Drone index is not held across a panic")
     }
-
 
     /// The stream Fleet publishes transitions on. Cloned for the listener.
     pub fn events(&self) -> api::Broadcaster {

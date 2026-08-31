@@ -29,7 +29,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Footprint, Vcs, WorkProduct, Worktree};
-use core_model::{JobId, Component, Envelope, FieldValue, Job, Level, ResolvedCheck, StepId};
+use core_model::{Component, Envelope, FieldValue, Job, JobId, Level, ResolvedCheck, StepId};
 use ipc::mcp::{CheckRan, CheckReport};
 use verification::Ran;
 
@@ -190,16 +190,6 @@ where
         let report = ran?;
         self.noted_dry_run(&plan, &report);
         Ok(report)
-    }
-
-    /// Run the Checks as the Drone of the one Job being worked. See
-    /// [`Fleet::submitted_by_the_one`](crate::Fleet).
-    #[cfg(test)]
-    pub(crate) async fn checked_by_the_one(&self) -> Result<CheckReport, NotRun> {
-        let Some(job) = self.working_on().await.first().cloned() else {
-            return Err(NotRun::NothingIsWorking);
-        };
-        self.run_checks(&job).await
     }
 
     /// Everything decided under the slot lock: whether there is a run to make,

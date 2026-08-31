@@ -190,4 +190,5 @@ mod settling;
 mod silence;
 mod stuck;
 mod tmp;
+mod tools;
 mod transcript;

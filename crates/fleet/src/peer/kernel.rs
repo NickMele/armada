@@ -1,56 +1,20 @@
 //! Asking the kernel which connections a process holds.
 //!
-//! # Transcribed from `sys/proc_info.h`, and checked by the compiler
+//! **`libc` carries the two calls and not `socket_fdinfo`**, so that record's
+//! shape is transcribed from `sys/proc_info.h` below. Each piece is `#[repr(C)]`
+//! with a `const` assertion on its size, so a field transcribed wrongly is a
+//! build failure rather than an offset that reads four bytes of somebody else's
+//! port. `docs/spikes/012-peer-identity-under-concurrency.md` recovered these
+//! offsets at runtime because it was Python; a layout the compiler agrees with
+//! is the better guarantee.
 //!
-//! `libc` carries `proc_pidinfo`, `proc_pidfdinfo`, `proc_fdinfo` and the two
-//! constants, and it does **not** carry `socket_fdinfo` — so the record's shape
-//! is written out here. Every struct below is `#[repr(C)]` and is followed by a
-//! `const` assertion on its size, so a field transcribed wrongly is a build
-//! failure rather than an offset that reads four bytes of somebody else's port.
-//!
-//! `docs/spikes/012` recovered these offsets at runtime because it was Python.
-//! This is not, and a layout the compiler agrees with is a better guarantee than
-//! a calibration that has to be right every time it runs.
-//!
-//! # Only as far as the ports, and the buffer is still whole
-//!
-//! `soi_proto` is a union of seven protocol records and only two of them are
-//! read here — `SOCKINFO_IN` and `SOCKINFO_TCP`, which begin with the same
-//! `in_sockinfo` and therefore with the same two ports. The rest of the union is
-//! not transcribed, because nothing reads it and a wrong size in a part nobody
+//! Only as far as the two ports. `soi_proto` is a union of seven records and
+//! the two that are read — `SOCKINFO_IN` and `SOCKINFO_TCP` — both open with an
+//! `in_sockinfo`, so the rest is not transcribed: a wrong size in a part nobody
 //! reads is a wrong size all the same.
 //!
-//! What the kernel is given is a **byte buffer larger than any of them**, since
-//! `proc_pidfdinfo` refuses a buffer smaller than the flavour's own size and
-//! copies out that size regardless of how much more is there.
-//!
-//! # A failure is silence
-//!
-//! Every call here answers `false` on any error. `crate::peer` says why that is
-//! the only direction this may fail in: a caller Fleet cannot place is refused,
-//! and a caller it places wrongly is one Job's work credited to another.
-//!
-//! # SAFETY: what makes the three blocks sound
-//!
-//! Three `unsafe` blocks and one argument covering all of them: **the kernel
-//! writes into a buffer this side owns, and never more of it than it was
-//! told.** Each call is handed a pointer to a live local — a `Vec` sized before
-//! the call, or a fixed byte array — together with that allocation's own size
-//! in bytes, computed with `size_of` rather than written down. Neither call
-//! retains the pointer past its return, neither takes ownership of it, and both
-//! answer how many bytes they wrote, which is checked against the size of the
-//! record being read before anything is read out of it.
-//!
-//! `proc_pidinfo` and `proc_pidfdinfo` are safe to call with a pid or a
-//! descriptor that has ceased to exist; that is an error return, which is the
-//! silence above. There is no lifetime here to get wrong: nothing borrows, and
-//! every value read out is a `u16` copied by value.
-//!
-//! The `read_unaligned` is sound because the layout is `#[repr(C)]` and matches
-//! `struct socket_fdinfo`'s prefix — asserted at compile time on each piece's
-//! size — and because the read is guarded on the kernel having written at least
-//! that many bytes. `read_unaligned` rather than a cast-and-deref precisely
-//! because the byte array carries no alignment promise.
+//! Every call here answers `false` on any error, which is the only direction
+//! `crate::peer` may fail in. Each `unsafe` block carries its own `SAFETY:`.
 
 use std::mem::size_of;
 
@@ -213,6 +177,11 @@ fn sockets_of(pid: u32) -> Vec<c_int> {
     // `FDS` open files is truncated rather than mis-parsed, and a Drone's
     // session connection is not the two-hundred-and-fifty-seventh thing the CLI
     // opened.
+    // SAFETY: the pointer is to `entries`, which is live for this call and
+    // longer, and the size handed over is that allocation's own, from
+    // `size_of`. The kernel writes no more than it is told, retains nothing,
+    // and answers how many bytes it wrote. A pid that has gone is an error
+    // return rather than a fault.
     #[allow(unsafe_code)]
     let bytes = unsafe {
         proc_pidinfo(
@@ -241,6 +210,10 @@ fn sockets_of(pid: u32) -> Vec<c_int> {
 /// the list and this call, or any error at all.
 fn ports_of(pid: u32, fd: c_int) -> Option<(u16, u16)> {
     let mut buffer = [0u8; BUFFER];
+    // SAFETY: `buffer` is a live local and `BUFFER` is its own length. The call
+    // refuses a buffer smaller than the flavour's record and copies out that
+    // record and no more, so it cannot write past the end; a descriptor closed
+    // between the list and here is an error return.
     #[allow(unsafe_code)]
     let bytes = unsafe {
         proc_pidfdinfo(
@@ -257,6 +230,11 @@ fn ports_of(pid: u32, fd: c_int) -> Option<(u16, u16)> {
     // `read_unaligned` because the buffer is a byte array: the layout is the
     // C one and the compiler has agreed its size above, but the array itself
     // carries no alignment promise.
+    // SAFETY: the layout is `#[repr(C)]` and matches `struct socket_fdinfo`'s
+    // prefix, whose size the assertions above hold; the guard on `bytes` proves
+    // the kernel wrote at least that many. `read_unaligned` and not a deref
+    // because a byte array carries no alignment promise. Nothing borrows — the
+    // two values taken out are `u16`s copied by value.
     #[allow(unsafe_code)]
     let info = unsafe { buffer.as_ptr().cast::<SocketPorts>().read_unaligned() };
     if info.soi_kind != SOCKINFO_IN && info.soi_kind != SOCKINFO_TCP {

@@ -17,6 +17,7 @@ use crate::tests::daemon::{
 use crate::tests::planning::A_PLAN;
 use crate::tests::proposing::a_catalogue;
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 
 /// A Job held behind one that has not landed says so.
 #[tokio::test]
@@ -133,7 +134,7 @@ async fn what_the_board_says_is_what_admission_did() {
     // The upstream runs and lands. The same Job is admitted, and stops saying
     // it is held — the two moved together or one of these fails.
     fleet.approve(made[0].id()).await.expect("the upstream");
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.expect("the loop turns");
 
     let started = fleet

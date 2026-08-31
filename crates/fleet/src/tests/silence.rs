@@ -249,7 +249,7 @@ async fn a_drone_silent_past_the_threshold_is_poked_and_then_escalates() {
     // against a process demonstrably alive rather than assumed to be.
     let pid = fleet
         .the_only_slot()
-            .await
+        .await
         .lock()
         .await
         .as_ref()
@@ -349,7 +349,7 @@ async fn a_drone_that_answers_the_poke_is_heard_and_not_escalated() {
 async fn heard(fleet: &Fixture) -> usize {
     fleet
         .the_only_slot()
-            .await
+        .await
         .lock()
         .await
         .as_ref()

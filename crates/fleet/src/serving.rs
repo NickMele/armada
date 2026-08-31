@@ -39,9 +39,9 @@ use ipc::{
 };
 use store::{LoadJobError, WriteError};
 
+use crate::admitting::clear_to_run;
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
-use crate::dispatch::clear_to_run;
 use crate::footprint::kept;
 // The wire's `Redirection` is a struct with a public field; Fleet's is a
 // newtype that cannot hold an empty instruction. Both names are in scope here,
@@ -49,9 +49,7 @@ use crate::footprint::kept;
 use crate::overruling::Overruling;
 use crate::reporting::Filed;
 use crate::resume::Redirection as Instruction;
-use crate::wire::{
-    canonical, declared, recorded, reported, step_facts, submitted, told,
-};
+use crate::wire::{canonical, declared, recorded, reported, step_facts, submitted, told};
 
 /// The codes this boundary raises, declared beside the thing that raises them.
 ///

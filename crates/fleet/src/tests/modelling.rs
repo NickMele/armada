@@ -16,6 +16,7 @@ use testkit::{FakeWorkProduct, Gate, Sketch};
 
 use crate::tests::daemon::{a_fleet_holding, a_proposal, diff_evidence, worktree_directory};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 
 /// Two steps: `implement` produces a diff and names no model, `summarise`
 /// reports and names one. The shape every shipped workflow has — the
@@ -74,8 +75,7 @@ async fn each_step_is_spawned_as_the_model_its_own_step_named() {
         "`implement` names no model, so it is run as the Job was proposed"
     );
 
-    fleet
-        .submitted_by_the_one(diff_evidence())
+    submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("evidence lands");
     fleet.turn().await.expect("the first step advances");

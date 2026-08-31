@@ -132,20 +132,6 @@ where
         Ok(Declared)
     }
 
-    /// Declare as the Drone of the one Job being worked. See
-    /// [`Fleet::submitted_by_the_one`](crate::Fleet), which is the same
-    /// shorthand for the same reason.
-    #[cfg(test)]
-    pub(crate) async fn declared_by_the_one(
-        &self,
-        declaration: &DeclareScope,
-    ) -> Result<Declared, NotDeclared> {
-        let Some(job) = self.working_on().await.first().cloned() else {
-            return Err(NotDeclared::NothingIsWorking);
-        };
-        self.declare_scope(&job, declaration).await
-    }
-
     /// Write the declaration down, because the slot it was just put on will not
     /// survive the step.
     ///

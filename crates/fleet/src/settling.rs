@@ -31,11 +31,11 @@ use verification::Request;
 use crate::adrift::Adrift;
 use crate::at_step::AtStep;
 use crate::daemon::Fleet;
-use crate::turning::{Turned, Worked};
 use crate::drone_moves::steps_holding_a_drone;
 use crate::evidence::{Decline, Standing};
 use crate::gate::{rule_on, Ruling};
 use crate::transcript;
+use crate::turning::{Turned, Worked};
 use crate::working::Working;
 
 /// What the gate did about a submission this turn.

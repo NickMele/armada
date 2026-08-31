@@ -1,42 +1,27 @@
 //! One turn of the loop, what it came to, and the thing that asks for one every
 //! quarter of a second.
 //!
-//! **Both halves, because the argument for the tick is an argument about what a
-//! turn does.** They were two files while a turn was about one Job and its
-//! result was a flat struct of options; `#50` made a turn a walk over a roster
-//! and its result a list, and the reasoning about a Check outlasting a tick
-//! stopped being separable from the reasoning about which slot the Check holds.
-//!
 //! # A tick, because two of the three things a turn does have no sender
 //!
 //! A turn rules on evidence that landed, reaps a Drone that is gone and admits
 //! the next approved Job. A Drone exiting is a process event nothing here
-//! awaits, and a submission arrives on the Evidence tool, which has no server
-//! in front of it at M1 — so waking on a signal means inventing senders for
-//! events that have none. A tick needs none, and is correct for all three.
+//! awaits, and a submission arrives on the Evidence tool, which has no server in
+//! front of it at M1 — so waking on a signal means inventing senders for events
+//! that have none. A tick needs none and is correct for all three.
 //!
-//! It is cheap where it matters: a turn while a Job is worked reads no store,
-//! because that Job's inbox is empty, its transcript has not ended and its slot
-//! is full. The store read is the *idle* turn, which nothing waits on. Nor does
-//! admission depend on it — `approve` dispatches inline — so this interval is
-//! the latency of a **ruling** rather than of a start.
+//! It is cheap where it matters: a turn over a Job being worked reads no store,
+//! and admission does not wait on the tick — `approve` dispatches inline — so
+//! this interval is the latency of a **ruling** rather than of a start.
 //!
 //! # A Check that outlasts a tick
 //!
-//! `turn` holds a slot across its Check and this loop awaits each turn, so a
-//! long Check stacks nothing and never runs two gates over one Job: the tick it
-//! ran through is dropped, and the next turn is one interval after it finished.
-//!
-//! **What that costs is now one Job's and not Fleet's.** The slot held is the
-//! slot of the Job being checked, so a `cargo nextest` that runs for a quarter
-//! of an hour holds up that Job's own `kill_drone`, its own `kill_job` and its
-//! own Drone's tool calls — and nothing else's. What it does still hold up is
-//! *every* Job's next turn, because this loop is one task walking the roster in
-//! order: a long Check on one Job delays the ruling on another by however long
-//! it runs. That is `#50`'s remaining cost and it is not measured.
-//!
-//! A failed turn goes to the caller's reporter, a **required** argument, and
-//! ticking continues: one turn's fault is not every later Job's.
+//! This loop awaits each turn, so a long Check stacks nothing: the tick it ran
+//! through is dropped. **What it holds is one Job's slot and not Fleet's**, so a
+//! quarter of an hour of `cargo nextest` holds up that Job's own kills and its
+//! own Drone's tool calls and nothing else's. What it still delays is every
+//! Job's next *turn* — this is one task walking the roster in order — which is
+//! `#50`'s remaining cost and is not measured. A failed turn is reported and
+//! ticking continues either way: one turn's fault is not every later Job's.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -48,6 +33,7 @@ use tokio::task::JoinHandle;
 use tokio::time::MissedTickBehavior;
 
 use crate::adrift::Adrift;
+use crate::converging::Wandering;
 use crate::daemon::Fleet;
 use crate::delivery::Delivered;
 use crate::drone::Aftermath;
@@ -56,7 +42,6 @@ use crate::gate::Ruling;
 use crate::resume::Roused;
 use crate::scope::Drifting;
 use crate::silence::Quiet;
-use crate::converging::Wandering;
 use crate::working::Working;
 
 /// What one turn of the loop did for one working Drone. Every field is
@@ -195,7 +180,6 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-
     /// One turn: settle what landed, reap a Drone that is gone, admit the next
     /// approved Jobs if the bound has room.
     ///
@@ -227,9 +211,7 @@ where
             // Waiting is right — it is that Job's own turn — and it blocks no
             // other Job, which is the whole of what the per-slot lock buys.
             let mut working = slot.lock().await;
-            turned
-                .each
-                .push(self.turning_one(job, &mut working).await?);
+            turned.each.push(self.turning_one(job, &mut working).await?);
         }
         // Below every slot, and outside all of them: a submission whose Job is
         // in no slot has no slot to be settled under. See `crate::settling`.
@@ -290,7 +272,6 @@ where
         worked.roused = roused;
         Ok(worked)
     }
-
 }
 
 /// Turn `fleet` every `every`, reporting a failed turn to `adrift`.

@@ -46,6 +46,7 @@ use crate::mint::Mint;
 use crate::silence::Liveness;
 use crate::slots::Concurrency;
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 
 /// A clock that answers a different second each time it is asked.
 ///
@@ -575,7 +576,7 @@ async fn a_job_is_driven_from_created_to_completed_and_survives_a_reopen() {
 
     // The receipt is not a verdict: nothing has been decided at this point,
     // which is the whole reason the inbox exists.
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     assert_eq!(fleet.evidence_waiting(), 1);
     assert_eq!(
         fleet
@@ -605,7 +606,7 @@ async fn a_job_is_driven_from_created_to_completed_and_survives_a_reopen() {
         Some("summarise")
     );
 
-    fleet.submitted_by_the_one(note_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     assert!(matches!(turned.ruled(), Some(Ruling::Finished { .. })));
     assert!(fleet.working_on().await.is_empty(), "the slot came free");
@@ -648,7 +649,7 @@ async fn a_failed_check_ends_the_job_and_keeps_the_worktree() {
     worktree_directory(&home, job.id());
     fleet.approve(job.id()).await.unwrap();
 
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     let Some(Ruling::Failed { failures, .. }) = turned.ruled() else {
         panic!("an empty diff is a failed check");
@@ -690,9 +691,9 @@ async fn a_second_approved_job_waits_while_one_is_worked() {
 
     // Finish the first. Its slot is what the second was waiting for, and
     // nothing else about it changed.
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
-    fleet.submitted_by_the_one(note_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
 
     assert_eq!(
@@ -758,10 +759,13 @@ async fn a_submission_of_the_wrong_kind_moves_nothing() {
     fleet.approve(job.id()).await.unwrap();
 
     // The first step asks for a diff.
-    fleet.submitted_by_the_one(note_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
 
-    assert!(matches!(turned.ruled(), Some(Ruling::NotWhatTheStepAsked(_))));
+    assert!(matches!(
+        turned.ruled(),
+        Some(Ruling::NotWhatTheStepAsked(_))
+    ));
     let unmoved = fleet.load(job.id()).await.unwrap();
     assert_eq!(unmoved.status(), JobStatus::Running);
     assert_eq!(
@@ -856,7 +860,7 @@ async fn a_second_step_that_writes_nothing_is_not_credited_with_the_first_step_s
     fleet
         .work()
         .wrote(&[("src/log.rs", adapter_traits::Change::Modified)]);
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     assert!(
         matches!(turned.ruled(), Some(Ruling::Advanced { .. })),
@@ -874,7 +878,7 @@ async fn a_second_step_that_writes_nothing_is_not_credited_with_the_first_step_s
     );
 
     // The second step's Drone writes nothing at all and submits anyway.
-    fleet.submitted_by_the_one(diff_evidence()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     let Some(Ruling::Failed { failures, .. }) = &turned.ruled() else {
         panic!(
