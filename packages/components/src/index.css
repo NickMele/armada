@@ -63,3 +63,7 @@
    with nothing to export. One stylesheet, owned by the screens tree, because
    seven copies of one frame is how the seven drift apart. */
 @import "./screens/screens.css";
+
+/* The error treatment. Same rule: a component owns its own file. */
+@import "./errors/ErrorCode/ErrorCode.css";
+@import "./errors/ErrorNotice/ErrorNotice.css";

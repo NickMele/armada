@@ -81,3 +81,9 @@ export * from "./screens/TheListSixStatesOneRowShape/TheListSixStatesOneRowShape
 // inside. A screen like them, and lifted for the same reason: Bridge needs the
 // frame as a component, and the story renders it from the drawing's fixture.
 export * from "./screens/TheShell/TheShell";
+
+// The error treatment. Its own group, because an error is Armada failing and a
+// failed Job is Armada working — the vocabulary that keeps the two apart is
+// not a primitive and is not a composition of one.
+export * from "./errors/ErrorCode/ErrorCode";
+export * from "./errors/ErrorNotice/ErrorNotice";

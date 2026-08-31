@@ -931,6 +931,81 @@ than one timeout message.
 
 ---
 
+## The error treatment
+
+A failed Job is Armada working. An error is Armada failing. Both are red,
+and they are told apart by shape.
+
+What an error carries and how it crosses the wire is the [Error
+Contract](error-contract.md). This section governs what a person sees.
+
+### One red, told apart by shape
+
+**`--error` aliases `--status-completed-failed` and carries no value of its
+own.** One red, and no ninth hue to keep in step when the state machine
+moves.
+
+**Shape separates an error from a status, on two channels.** An error is the
+only solid fill on a data surface, where every Job status is a 12% tint in a
+chip; and an error always carries a code, which a status never does.
+
+**The code is always shown, in mono at `--text-2xs`.** It is what a person
+reads back to someone else, and the wire guarantees one on every error.
+
+**No generic alarm glyph.** `triangle-alert` is Doctor's and `octagon-alert`
+is `stalled`'s, so an error carries the code and the sentence instead.
+
+```
+code chip  solid --error or --degraded fill · --fg-inverse text
+           --h-badge · --space-2 horizontal padding · --radius-sm
+           --text-2xs mono · weight 500 — the status badge's geometry exactly
+edge       leading, --error-edge or --degraded-edge. Never a box: the solid
+           fill in this treatment belongs to the chip
+surface    the placement's own. Inline adds none; banner and full-surface
+           take --bg-raised; toast takes --bg-overlay and a shadow
+```
+
+### Two fault classes, and only one is red
+
+| Class | Edge | Headline | Dot | Means |
+| --- | --- | --- | --- | --- |
+| Fault | `--error-edge` in `--error` | `--error` | none | Armada cannot do the thing |
+| Degraded | `--degraded-edge` in `--degraded` | `--fg-default` | `--degraded-dot` | Armada cannot refresh what it shows |
+
+**Unreachable Fleet and dropped events are degraded, not faults.** The fixes
+are opposite — restarting Fleet is wrong when the process is alive — so the
+dot has to differ.
+
+**The dot is amber rather than red.** Amber already means a person is waited
+on rather than something being broken, and stale data is a wait.
+
+**One value, not a ladder.** Placement carries blast radius, so severity picks
+nothing but the edge.
+
+### The four placements
+
+| Placement | Where | Rule |
+| --- | --- | --- |
+| Inline | In the row, or beside the act | Contained to the thing you touched |
+| Toast | Bottom trailing, inset `--space-6`, clear of the status bar, shadowed | The only one that may carry no act |
+| Banner | Above the surface, inside it | Persistent. The surface works beneath |
+| Full-surface | Replaces the surface | The one placement that takes the screen |
+
+**Blast radius picks the placement, never severity.** Approve-refused is
+red-serious and affects one row, so it renders in that row and nowhere else.
+
+**Rows around an inline error are undisturbed.** Same height, same badges, and
+the pulse continues.
+
+**Every placement names the failure and the act.** A toast is the one
+exception, because it reports something already over.
+
+**A toast clears the status bar rather than covering it.** The bar states
+Fleet's liveness out loud, which is the one thing still true while everything
+else fails.
+
+---
+
 ## Voice & Copy
 
 ### Typography of reference — applies to docs, not just UI
