@@ -87,6 +87,9 @@
   --color-step-stopped-bg: var(--step-stopped-bg);
   --color-verdict-met: var(--verdict-met);
   --color-verdict-not-met: var(--verdict-not-met);
+  --color-error: var(--error);
+  --color-degraded: var(--degraded);
+  --color-degraded-dot: var(--degraded-dot);
   --font-weight-body: var(--weight-body);
   --font-weight-medium: var(--weight-medium);
   --font-weight-heading: var(--weight-heading);
@@ -158,6 +161,8 @@
    --z-modal — a stacking order, not a scale value
    --z-toast — a stacking order, not a scale value
    --z-palette — a stacking order, not a scale value
+   --error-edge — a fault's edge width, read beside --error
+   --degraded-edge — a degraded edge's width, read beside --degraded
    --duration-fast — v4 has no --duration-* namespace; read it in CSS
    --duration-base — v4 has no --duration-* namespace; read it in CSS
    --tooltip-delay — v4 has no --delay-* namespace; read it in CSS

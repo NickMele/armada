@@ -1,6 +1,6 @@
 import { jsx, jsxs, Fragment } from "react/jsx-runtime";
 import { useState, createContext, useCallback, useContext, useRef, useEffect, Children, cloneElement, Fragment as Fragment$1, useId, useMemo, createElement } from "react";
-import { ChevronDown, UserCheck, Cpu, GitBranch, CircleDot, X, Check, Power, Flag, RotateCw, Eye, CircleX, CircleCheck, ShieldCheck, ChevronRight, ExternalLink, File, TriangleAlert, OctagonAlert, Folder, GitCommitHorizontal, GitPullRequest, FileCheck, Clock, MessageSquare, ClipboardList, Activity, Bell, ScrollText, Stethoscope, FileCog, ShieldMinus as ShieldMinus$1, ShieldX, Lock, Stamp, Terminal, Link, Ban, Archive, RefreshCw, FileQuestionMark, Split, Unplug, ArrowUpToLine, Send, CornerUpRight, Settings } from "lucide-react";
+import { ChevronDown, UserCheck, Cpu, GitBranch, CircleDot, X, Check, Power, Flag, RotateCw, Eye, CircleX, CircleCheck, ShieldCheck, ChevronRight, ExternalLink, File, TriangleAlert, OctagonAlert, Folder, GitCommitHorizontal, GitPullRequest, FileCheck, Clock, MessageSquare, ClipboardList, Activity, Bell, ScrollText, Stethoscope, FileCog, ShieldMinus as ShieldMinus$1, ShieldOff, ShieldX, Lock, Stamp, Terminal, Link, Ban, Archive, RefreshCw, FileQuestionMark, Split, Unplug, ArrowUpToLine, Send, CornerUpRight, Settings } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 function Button({
   variant = "secondary",
@@ -229,7 +229,8 @@ const DRAWN_TRACKS = [
   "var(--armada-track-bar)",
   "var(--armada-track-step)",
   "var(--armada-track-time)",
-  "var(--armada-track-spend)"
+  "var(--armada-track-spend)",
+  "var(--armada-track-provenance)"
 ];
 function trackList(count2) {
   return Array.from({ length: count2 }, (_, i) => DRAWN_TRACKS[i] ?? "minmax(0, auto)").join(" ");
@@ -947,6 +948,7 @@ function WorkflowRail({ steps: steps2, pulsing = false, onCopied }) {
             gate.iconLabel ? /* @__PURE__ */ jsx("span", { className: "armada-rail__sr", children: gate.iconLabel }) : null
           ] }),
           /* @__PURE__ */ jsx("span", { className: "armada-rail__gate-command", children: gate.command }),
+          gate.covers ? /* @__PURE__ */ jsx("span", { className: "armada-rail__gate-covers", title: gate.covers, children: gate.covers }) : null,
           gate.result ? /* @__PURE__ */ jsx("span", { className: "armada-rail__gate-result", children: gate.result }) : null,
           gate.outputPath === void 0 ? null : (
             // The whole path is on the clipboard and in the title
@@ -2194,11 +2196,17 @@ function JobBrief({
   criteriaAbsent,
   facts: facts2,
   factsAbsent,
+  waiting,
   criteriaLabel = "Done means",
   factsLabel = "What it was told",
+  waitingLabel = "Waiting to be told",
   only
 }) {
   return /* @__PURE__ */ jsxs("div", { className: "armada-job-brief", children: [
+    waiting === void 0 ? null : /* @__PURE__ */ jsxs("div", { className: "armada-job-brief__block", "data-waiting": true, children: [
+      /* @__PURE__ */ jsx("span", { className: "armada-job-brief__label", children: waitingLabel }),
+      /* @__PURE__ */ jsx("p", { className: "armada-job-brief__facts", children: waiting })
+    ] }),
     only === "facts" ? null : /* @__PURE__ */ jsxs("div", { className: "armada-job-brief__block", children: [
       /* @__PURE__ */ jsx("span", { className: "armada-job-brief__label", children: criteriaLabel }),
       criteria2.length === 0 ? /* @__PURE__ */ jsx("p", { className: "armada-job-brief__note", children: criteriaAbsent }) : /* @__PURE__ */ jsx("ol", { className: "armada-job-brief__criteria", children: criteria2.map((criterion, i) => /* @__PURE__ */ jsxs("li", { className: "armada-job-brief__criterion", children: [
@@ -3047,6 +3055,13 @@ const open$1 = /* @__PURE__ */ jsx(
     children: "Open"
   }
 );
+const GATE_TRACKS = [
+  "var(--armada-track-origin)",
+  "var(--armada-track-bar)",
+  "var(--armada-track-step)",
+  "var(--armada-track-time)",
+  "var(--armada-track-provenance)"
+].join(" ");
 const NeedsApproval = {
   args: {
     status: "awaiting-approval",
@@ -3054,6 +3069,7 @@ const NeedsApproval = {
     statusLabel: "Needs approval",
     headline: "Coalesce concurrent token refreshes",
     jobId: "job_7c31",
+    tracks: GATE_TRACKS,
     fields: [
       { label: "Workflow", value: "bug, 4 steps", quiet: true },
       { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 0, label: "Not started, 4 steps" }) },
@@ -3071,6 +3087,7 @@ const Queued$2 = {
     statusLabel: "Queued",
     headline: "Retire the legacy poke path",
     jobId: "job_8b42",
+    tracks: GATE_TRACKS,
     fields: [
       { label: "Workflow", value: "bug, 4 steps", quiet: true },
       { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 0, label: "Not started, 4 steps" }) },
@@ -3094,7 +3111,8 @@ const Running$5 = {
       { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 2, activity: "running", label: "Step 2 of 4" }) },
       { value: "Implement", emphasis: true },
       { value: "11m 03s", mono: true },
-      { value: "~$1.80", mono: true }
+      { value: "~$1.80", mono: true },
+      { value: "Dispatched by you" }
     ],
     action: open$1
   }
@@ -3120,7 +3138,8 @@ const EscalatedStalled = {
       { value: /* @__PURE__ */ jsx(StepBar, { total: 5, current: 3, activity: "stopped", label: "Step 3 of 5" }) },
       { value: "3 pokes", emphasis: true },
       { value: "12m", mono: true },
-      { value: "~$1.80", mono: true }
+      { value: "~$1.80", mono: true },
+      { value: "Found by Fleet" }
     ],
     action: /* @__PURE__ */ jsx(SplitButton, { ground: "card", items: [{ label: "Kill", danger: true }], children: "Pilot" })
   }
@@ -3143,7 +3162,8 @@ const Failed$4 = {
       { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 3, activity: "failed", label: "Step 3 of 4" }) },
       { value: "Run tests", emphasis: true },
       { value: "22m 41s", mono: true },
-      { value: "~$2.10", mono: true }
+      { value: "~$2.10", mono: true },
+      { value: "Found by Fleet" }
     ],
     action: open$1
   }
@@ -3160,7 +3180,8 @@ const Killed$6 = {
       { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 2, activity: "killed", label: "Step 2 of 4" }) },
       { value: "Implement", emphasis: true },
       { value: "4m 09s", mono: true },
-      { value: "~$0.60", mono: true }
+      { value: "~$0.60", mono: true },
+      { value: "Workflow-triggered" }
     ],
     action: open$1
   }
@@ -3177,7 +3198,8 @@ const Done$1 = {
       { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 5, activity: "advanced", label: "All 4 of 4 steps advanced" }) },
       { value: "Summarise" },
       { value: "18m 22s", mono: true },
-      { value: "~$2.40", mono: true }
+      { value: "~$2.40", mono: true },
+      { value: "Drafted in Helm" }
     ],
     action: open$1
   }
@@ -3190,7 +3212,8 @@ const SpendAsQuota = {
       { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 2, activity: "running", label: "Step 2 of 4" }) },
       { value: "Implement", emphasis: true },
       { value: "11m 03s", mono: true },
-      { value: "68% quota", mono: true }
+      { value: "68% quota", mono: true },
+      { value: "Dispatched by you" }
     ]
   }
 };
@@ -3208,7 +3231,8 @@ const AtTheWidthFloor = {
         { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 2, activity: "running", label: "Step 2 of 4" }) },
         { value: "Implement", emphasis: true },
         { value: "11m 03s", mono: true },
-        { value: "~$1.80", mono: true }
+        { value: "~$1.80", mono: true },
+        { value: "Dispatched by you" }
       ],
       action: open$1
     }
@@ -3223,8 +3247,28 @@ const Convoy = {
       { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 2, activity: "running", label: "Step 2 of 4" }) },
       { value: "Implement", emphasis: true },
       { value: "11m 03s", mono: true },
-      { value: "~$4.20", mono: true }
+      { value: "~$4.20", mono: true },
+      { value: "Workflow-triggered" }
     ]
+  }
+};
+const SubDispatchedWaitingOnResources = {
+  args: {
+    status: "not-started",
+    statusIcon: Cpu,
+    statusLabel: "Waiting on resources",
+    headline: "Precompute embeddings for the batch import step",
+    jobId: "job_9f21",
+    dimmed: true,
+    tracks: GATE_TRACKS,
+    fields: [
+      { label: "Workflow", value: "chore, 3 steps", quiet: true },
+      { value: /* @__PURE__ */ jsx(StepBar, { total: 3, current: 1, label: "Step 2 of 3, waiting" }) },
+      { value: "Held for CPU headroom", emphasis: true },
+      { value: "queued 09:41", quiet: true },
+      { value: "Sub-dispatched by job_2d90bb" }
+    ],
+    action: /* @__PURE__ */ jsx(SplitButton, { ground: "card", variant: "destructive", items: [], children: "Kill" })
   }
 };
 const __vite_glob_0_15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
@@ -3243,6 +3287,7 @@ const __vite_glob_0_15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   RunningFocused,
   Selected,
   SpendAsQuota,
+  SubDispatchedWaitingOnResources,
   default: meta$I
 }, Symbol.toStringTag, { value: "Module" }));
 function Separator({
@@ -3740,12 +3785,26 @@ const AJobThatRanClean = {
     moves: [
       { seq: 1, at: "09:14:02", kind: "status", moved: "awaiting_approval → queued", actor: "human" },
       { seq: 2, at: "09:14:02", kind: "status", moved: "queued → running", actor: "fleet" },
-      { seq: 3, at: "09:14:03", kind: "drone", subject: "drn_01M13", moved: "drone_spawned", actor: "fleet" },
+      {
+        seq: 3,
+        at: "09:14:03",
+        kind: "drone",
+        subject: "drn_01M13",
+        moved: "drone_spawned on plan",
+        actor: "fleet"
+      },
       { seq: 4, at: "09:14:03", kind: "step", subject: "plan", moved: "not_started → running", actor: "fleet" },
       { seq: 5, at: "09:21:41", kind: "step", subject: "plan", moved: "running → advanced", actor: "fleet" },
       { seq: 6, at: "09:21:41", kind: "step", subject: "implement", moved: "not_started → running", actor: "fleet" },
       { seq: 7, at: "10:02:18", kind: "step", subject: "implement", moved: "running → advanced", actor: "fleet" },
-      { seq: 8, at: "10:02:19", kind: "drone", subject: "drn_01M13", moved: "drone_exited", actor: "fleet" },
+      {
+        seq: 8,
+        at: "10:02:19",
+        kind: "drone",
+        subject: "drn_01M13",
+        moved: "drone_exited on plan",
+        actor: "fleet"
+      },
       { seq: 9, at: "10:02:19", kind: "status", moved: "running → completed_success", actor: "fleet" }
     ]
   }
@@ -3757,7 +3816,14 @@ const AJobThatEndedSomewhereSurprising = {
     moves: [
       { seq: 1, at: "13:40:11", kind: "status", moved: "awaiting_approval → queued", actor: "human" },
       { seq: 2, at: "13:40:11", kind: "status", moved: "queued → running", actor: "fleet" },
-      { seq: 3, at: "13:40:12", kind: "drone", subject: "drn_01M2A", moved: "drone_spawned", actor: "fleet" },
+      {
+        seq: 3,
+        at: "13:40:12",
+        kind: "drone",
+        subject: "drn_01M2A",
+        moved: "drone_spawned on implement",
+        actor: "fleet"
+      },
       { seq: 4, at: "13:40:12", kind: "step", subject: "implement", moved: "not_started → running", actor: "fleet" },
       {
         seq: 5,
@@ -3776,9 +3842,23 @@ const AJobThatEndedSomewhereSurprising = {
         why: "refused by the judge · owes c-2, c-4",
         actor: "fleet"
       },
-      { seq: 7, at: "14:06:33", kind: "drone", subject: "drn_01M2A", moved: "drone_exited", actor: "human" },
+      {
+        seq: 7,
+        at: "14:06:33",
+        kind: "drone",
+        subject: "drn_01M2A",
+        moved: "drone_exited on implement",
+        actor: "human"
+      },
       { seq: 8, at: "14:11:50", kind: "step", subject: "implement", moved: "stopped → retrying", actor: "human" },
-      { seq: 9, at: "14:11:51", kind: "drone", subject: "drn_01M2F", moved: "drone_spawned", actor: "fleet" },
+      {
+        seq: 9,
+        at: "14:11:51",
+        kind: "drone",
+        subject: "drn_01M2F",
+        moved: "drone_spawned on implement",
+        actor: "fleet"
+      },
       { seq: 10, at: "14:11:51", kind: "status", moved: "escalated → running", actor: "human" },
       {
         seq: 11,
@@ -3788,7 +3868,14 @@ const AJobThatEndedSomewhereSurprising = {
         why: "hit the iteration cap",
         actor: "fleet"
       },
-      { seq: 12, at: "14:52:00", kind: "drone", subject: "drn_01M2F", moved: "drone_exited", actor: "fleet" },
+      {
+        seq: 12,
+        at: "14:52:00",
+        kind: "drone",
+        subject: "drn_01M2F",
+        moved: "drone_exited on implement",
+        actor: "fleet"
+      },
       { seq: 13, at: "14:52:00", kind: "status", moved: "escalated → killed", actor: "human" }
     ]
   }
@@ -4322,7 +4409,7 @@ const UngatedAndUnanswerable = {
     pulsing: true
   }
 };
-const TheFiveCheckOutcomes = {
+const TheSixCheckOutcomes = {
   args: {
     steps: [
       {
@@ -4339,7 +4426,39 @@ const TheFiveCheckOutcomes = {
           { command: "build", result: "failed · exit 0 → exit 101" },
           { command: "test", result: "signalled · SIGKILL" },
           { command: "audit", result: "timed_out · 120s budget" },
-          { command: "typecheck", result: "never_ran · tsc is not installed" }
+          { command: "typecheck", result: "never_ran · tsc is not installed" },
+          { command: "storybook", result: "skipped · no changed file is under packages/**" }
+        ]
+      }
+    ]
+  }
+};
+const AChecksPathsAreDrawnBeforeItRuns = {
+  args: {
+    steps: [
+      {
+        id: "implement",
+        label: "Implement",
+        labelIsAnIdentifier: true,
+        activity: "not_started",
+        status: "not_started",
+        gates: [
+          { command: "build · cargo build --workspace --locked" },
+          { command: "storybook · pnpm -C packages/components build-storybook", covers: "when packages/**, apps/desktop/**" }
+        ]
+      },
+      {
+        id: "verify",
+        label: "Verify",
+        labelIsAnIdentifier: true,
+        activity: "advanced",
+        status: "advanced",
+        elapsed: "1m 22s",
+        verdict: "passed",
+        verdictNamed: "passed",
+        gates: [
+          { command: "build · cargo build --workspace --locked", result: "passed", icon: ShieldCheck, iconLabel: "passed" },
+          { command: "storybook · pnpm -C packages/components build-storybook", covers: "when packages/**, apps/desktop/**", result: "not run · no changed file is under packages/**, apps/desktop/**", icon: ShieldOff, iconLabel: "not run" }
         ]
       }
     ]
@@ -4446,6 +4565,7 @@ const WhatAStepDeclares = {
 };
 const __vite_glob_0_23 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  AChecksPathsAreDrawnBeforeItRuns,
   AFailedCheckNamesItsOutput,
   AFlaggedStepIsNeverUngated,
   AVerdictBesideTheState,
@@ -4463,7 +4583,7 @@ const __vite_glob_0_23 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   RunningPulseElsewhere,
   ServedSteps,
   Stopped,
-  TheFiveCheckOutcomes,
+  TheSixCheckOutcomes,
   UngatedAndUnanswerable,
   WaitingAndRetrying,
   WhatAStepDeclares,
@@ -7853,8 +7973,55 @@ const AsBridgeDrawsItToday = {
     }
   ) })
 };
+const AGateReplyWaitingForTheNextDrone = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    ARunningJob,
+    {
+      heading: {
+        ...heading$1,
+        status: "queued",
+        statusIcon: CircleDot,
+        statusLabel: "Queued",
+        fields: [
+          { label: "Step", value: "2 of 4", mono: true },
+          {
+            label: "Branch",
+            value: "fix/settings-split",
+            mono: true,
+            copyValue: "fix/settings-split"
+          },
+          { label: "Elapsed", value: "24m 11s", mono: true },
+          { label: "Dispatched by you" }
+        ],
+        actions: /* @__PURE__ */ jsx(Button, { variant: "destructive", children: "Kill" })
+      },
+      steps,
+      footprintAbsent: "No drone is working this job, so nothing is reporting changed files.",
+      evidenceAbsent: "Submissions are read at the review gate, beside the diff they are claims about.",
+      log: {
+        brief: {
+          criteria: [
+            {
+              text: "settings.rs is split into a reducer and a selector module.",
+              source: "check"
+            },
+            {
+              text: "No change in behaviour, and the existing suite still passes.",
+              source: "judge"
+            }
+          ],
+          facts: "The reducer is the only caller of `apply_defaults`. Keep the public signature.",
+          waiting: "The selectors module still reaches into the reducer's private state. Name the cause, not the symptom — say why the boundary is where it is before you move anything."
+        },
+        rows: WORK_ROWS,
+        note: "The worktree and the log are derived from the job id and the repository the manifest was read from. The branch is served."
+      }
+    }
+  ) })
+};
 const __vite_glob_0_54 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  AGateReplyWaitingForTheNextDrone,
   AsBridgeDrawsItToday,
   RunningJob,
   default: meta$5

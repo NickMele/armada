@@ -119,6 +119,21 @@ pub const THEME: &[(&str, Slot)] = &[
         "--pad-row-stacked",
         Slot::Named("spacing", "row-stacked-pad"),
     ),
+    // The error treatment. Two colours and two edge widths sharing a stem, so
+    // the widths need exact entries: a `--error-` prefix into `color` would
+    // emit `--color-error-edge: 3px`, which is the shape `--edge-active`
+    // already has and is wrong for the same reason.
+    ("--error", Slot::Named("color", "error")),
+    (
+        "--error-edge",
+        Slot::CssOnly("a fault's edge width, read beside --error"),
+    ),
+    ("--degraded", Slot::Named("color", "degraded")),
+    ("--degraded-dot", Slot::Named("color", "degraded-dot")),
+    (
+        "--degraded-edge",
+        Slot::CssOnly("a degraded edge's width, read beside --degraded"),
+    ),
     // Colours.
     ("--bg-", Slot::NsFull("color")),
     ("--fg-", Slot::NsFull("color")),

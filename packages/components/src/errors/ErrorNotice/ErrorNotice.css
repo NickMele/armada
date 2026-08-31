@@ -1,0 +1,195 @@
+/* Error notice. One treatment, four placements, and the placement changes
+   where the thing sits and nothing about what it says.
+
+   The edge is the only channel severity moves on, so it is the only thing the
+   two classes differ in besides the dot: --error-edge in --error for a fault,
+   the narrower --degraded-edge in --degraded for degraded. A leading edge
+   rather than a box: a 3px red frame reads as a filled alert, and the solid
+   fill in this treatment is reserved to the code chip, which is what tells an
+   error apart from a status. The edge also points at what failed, which a
+   frame does not.
+
+   No background of its own beyond the surface each placement sits on. A 12%
+   red tint here would render an error as exactly the thing it must not be
+   mistaken for. */
+.armada-error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  border-inline-start-style: solid;
+}
+
+/* Armada cannot do the thing. Red on the wider edge, and the headline red too:
+   an outcome states itself in both channels. */
+.armada-error--fault {
+  border-inline-start-width: var(--error-edge);
+  border-inline-start-color: var(--error);
+}
+
+.armada-error--fault .armada-error__message {
+  color: var(--error);
+}
+
+/* Armada cannot refresh what it is showing. Neutral edge, --fg-default
+   headline, and an amber dot: nothing here is broken, so nothing here is red.
+   Sending somebody to restart a live Fleet is what a red edge would cost. */
+.armada-error--degraded {
+  border-inline-start-width: var(--degraded-edge);
+  border-inline-start-color: var(--degraded);
+}
+
+.armada-error__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The dot sits on the first line's optical centre, not the block's: a 6px dot
+   inside a 22px line box is 8px down, which is one spacing step exactly. */
+.armada-error__dot {
+  flex: none;
+  width: var(--dot);
+  height: var(--dot);
+  margin-block-start: var(--space-2);
+  border-radius: 50%;
+  background: var(--degraded-dot);
+}
+
+.armada-error__message {
+  flex: 1;
+  min-width: 0;
+  font-weight: var(--weight-medium);
+  text-wrap: pretty;
+}
+
+/* What to do, one step down, because the sentence is read first and the
+   instruction next. */
+.armada-error__act {
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  text-wrap: pretty;
+}
+
+/* The code, then the facts, in one wrapping run. The code leads it rather than
+   trailing the headline: beside the sentence it competes for the line, and at
+   the toast's measure a long code takes half of it and reflows the sentence
+   into a column. Here it wraps with everything else and needs no threshold to
+   decide when. */
+.armada-error__facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+}
+
+/* The status grammar's labelled field run: a headline, then the facts needed
+   to decide, on one line where they fit. */
+.armada-error__fields {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+.armada-error__field {
+  display: flex;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-error__label {
+  color: var(--fg-subtle);
+}
+
+.armada-error__value {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--font-mono);
+  color: var(--fg-default);
+  overflow-wrap: anywhere;
+}
+
+.armada-error__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Inline. Contained to the thing you touched, so it takes the surface it is
+   already on and adds no box: an error inside a row that drew its own card
+   would disturb the rows around it, and the rule is that they stay untouched —
+   same height, same badges, and the pulse carries on. */
+.armada-error--inline {
+  padding-block: var(--space-2);
+  padding-inline-start: var(--space-3);
+}
+
+/* Banner. Above the surface and inside it, persistent, with the surface
+   working normally beneath. Card treatment, because it is a standing
+   condition on a surface rather than a floating layer. */
+.armada-error--banner {
+  padding: var(--space-3);
+  border-block: var(--border-width) solid var(--border-default);
+  border-inline-end: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+
+/* Toast. The one placement that is a floating layer, so --bg-overlay and a
+   shadow, capped at the toast measure so a sentence wraps rather than running
+   the window's width. It does not animate in; nothing on a data surface does. */
+.armada-error--toast {
+  max-width: var(--w-toast);
+  padding: var(--space-3);
+  border-block: var(--border-width) solid var(--border-default);
+  border-inline-end: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-overlay);
+}
+
+/* Full-surface. The one placement that takes the screen. Capped at the wide
+   dialog measure, which is ~85 characters at --text-sm and the top of the
+   comfortable measure — a sentence running an unbounded width is the reason
+   that token exists. The type does not grow with the placement: severity gets
+   the edge and nothing else, and a full-surface error is a blast radius rather
+   than a louder failure. */
+.armada-error--surface {
+  max-width: var(--w-dialog-wide);
+  padding: var(--space-4);
+  border-block: var(--border-width) solid var(--border-default);
+  border-inline-end: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+
+/* Where a toast actually sits: bottom trailing, inset --space-6, and clear of
+   the status bar. The bar is a liveness indicator for a daemon that outlives
+   the window, so a toast that covers it hides the one thing guaranteed to be
+   true while everything else is failing. */
+.armada-error-toast-region {
+  position: fixed;
+  inset-inline-end: var(--space-6);
+  inset-block-end: calc(var(--h-status-bar) + var(--space-6));
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Where a full-surface error sits: centred in the region it replaces. */
+.armada-error-surface-region {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  padding: var(--space-8);
+}

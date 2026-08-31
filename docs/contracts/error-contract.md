@@ -217,7 +217,10 @@ these are guaranteed.**
 
 The message names the failure **and the action**. Where it appears is
 decided by **blast radius, not severity** — inline, then toast, then
-banner, then a full-surface state. Severity only picks the colour.
+banner, then a full-surface state. Severity picks the edge, not the
+placement — and not the colour either: there is one error red, and the
+[Design System](design-system.md) contract's error treatment says what
+separates a fault from a degraded condition.
 
 ---
 

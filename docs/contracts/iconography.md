@@ -81,9 +81,15 @@ looking mixed-weight. 2 everywhere is lint-enforceable and holds the set
 together. Never use `absoluteStrokeWidth` — a 2px stroke inside a 12px box is
 a blob.
 
-**Contrast floor.** Icons never render in `--fg-subtle`. `#5D6B7C` on
-`--bg-raised` is ~3.2:1, which a 1px stroke does not survive. `--fg-muted` is
-the minimum for chrome.
+**Contrast floor.** Icons never render in `--fg-subtle`, with one exception:
+`circle-minus`, below. `--fg-subtle` was `#5D6B7C` on `--bg-raised`, ~3.2:1,
+which a 1px stroke does not survive, so `--fg-muted` was the minimum for
+chrome and for badges alike. The 20 Aug legibility lift raised `--fg-subtle`
+to `#7E8CA0`, 4.58:1 on `--bg-overlay` (`packages/tokens/src/colors.css`), which
+clears the floor the earlier value could not. `circle-minus` is the one
+glyph drawn against it, because `gate_undecided` reads as unjudged rather
+than judged, and a verdict hue would say the wrong thing — see Judge
+criterion verdicts below.
 
 > **Flag for the parent document.** The grey badges are the weakest in the
 > set — `--status-not-started` measures 4.39:1 as badge text on its own tint
@@ -251,8 +257,9 @@ reads as a gate that failed to render rather than one that is absent.
 
 ### Judge criterion verdicts
 
-`met` and `not_met` take `circle-check` and `circle-x` — see
-`packages/icons/icons.toml`, group `Step and Verdict`.
+`met` and `not_met` take `circle-check` and `circle-x`; `gate_undecided`
+takes `circle-minus` — see `packages/icons/icons.toml`, group
+`Step and Verdict`.
 
 **The Judge owns `circle-*`, decided 2026-08-21.** Three families, one per
 verification source: `shield-*` for Checks, `file-*` for evidence artifacts,
@@ -267,8 +274,22 @@ rather than damaging it. Bare `check` and `x` are out of criterion rows
 entirely — `check` already means `advanced` in step activity, so a criterion
 and a finished step were reading alike.
 
-**Reserved:** nothing outside a Judge verdict may use `circle-check` or
-`circle-x`.
+**A third outcome, `gate_undecided`, takes `circle-minus` back.** `met` and
+`not_met` are both judged; `gate_undecided` is what the Judge reports when it
+could not read the artifact at all, which is not a criterion judged badly —
+there is no judgment to render. `circle-minus` returns to the family it left
+on 2026-08-21, but the meaning is new rather than restored: `shield-minus`
+keeps Check's `not_reached`, and this is a distinct state in a distinct
+family that happens to share its outline. `core-model`'s escalation module
+states why the rendering differs from a verdict: `gate_undecided` is the one
+escalation trigger that is not overrulable, because the machine is saying it
+could not read the artifact, so there is nothing ruled to disagree with —
+`Recourse::RerunGate` is what answers it, not Override. It renders in
+`--fg-subtle`, not `--verdict-met` or `--verdict-not-met`, because the
+criterion went unjudged rather than judged and coloured.
+
+**Reserved:** nothing outside a Judge verdict may use `circle-check`,
+`circle-x` or `circle-minus`.
 
 **A criterion attested by a person carries no glyph here.** Source
 Attestation reads `confirmed` and `withheld`, and every verdict family is
@@ -404,9 +425,10 @@ refresh-cw     churning only. Refresh controls use rotate-cw
 octagon-alert  stalled only. Generic warnings use triangle-alert
 file-*         evidence only
 shield-*       gates and checks only
-circle-*       Judge criterion verdicts only. circle-check and circle-x may
-               not be reused — not for Doctor results, not as generic
-               success/failure marks
+circle-*       Judge criterion verdicts only. circle-check, circle-x and
+               circle-minus may not be reused — not for Doctor results, not
+               as generic success/failure marks, and circle-minus never for
+               disabled, absent or removed
 human figure   human required, or actor=human
 eye            review
 terminal       Pilot only. The action and the piloted status, which are one
@@ -439,8 +461,9 @@ no table has not been decided, whatever it looks like in a mockup.
 4. The outline must differ from every other icon **sharing its hue**.
    Across hue groups, collisions are fine.
 5. Never reuse a reserved glyph above.
-6. Never render an icon in `--fg-subtle`, and never let an icon carry colour
-   independently of its badge.
+6. Never render an icon in `--fg-subtle`, except `circle-minus` — see
+   Contrast floor above — and never let an icon carry colour independently
+   of its badge.
 7. **A new enum variant must add a table here.** The codegen test asserting
    every variant has a verb asserts it has an icon in the same pass, so a
    new reason cannot ship iconless.

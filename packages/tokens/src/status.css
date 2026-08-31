@@ -157,3 +157,47 @@
   --verdict-met: var(--status-completed-success);
   --verdict-not-met: var(--status-completed-failed);
 }
+
+/* The error treatment: one red, told apart from a Job status by shape.
+
+   A failed Job is Armada working and an error is Armada failing, so both are
+   red and neither may be mistaken for the other. --error ALIASES
+   completed_failed rather than carrying a value of its own — one red, and no
+   ninth hue to keep in step when the state machine moves.
+
+   The separation is therefore shape, and it runs on two channels a status has
+   neither of. An error is the only SOLID fill on a data surface, where every
+   Job status is a 12% tint in a chip. And an error always carries a CODE,
+   which a status never does.
+
+   Two fault classes, and only one of them is red.
+
+   A FAULT is Armada unable to do the thing. It takes --error on an edge of
+   --error-edge, with the headline in --error too.
+
+   DEGRADED is Armada unable to refresh what it is showing — an unreachable
+   Fleet, a dropped event, a value that has stopped updating. It takes no hue:
+   a --degraded edge at --degraded-edge, and an amber --degraded-dot beside a
+   headline that stays --fg-default. The fixes are opposite, which is the whole
+   reason the two must not render alike. Restarting Fleet is the wrong move
+   when the process is alive and only the stream has stopped, and a red edge on
+   that message is what would send somebody to do it.
+
+   Text on either solid fill is --fg-inverse: 6.54:1 on --error and 7.03:1 on
+   --degraded, both clear of 4.5:1 at --text-2xs. Nothing here introduces a
+   value; all three resolve to a colour the set already held. */
+:root {
+  --error: var(--status-completed-failed);
+
+  /* Neutral, and declared anyway, beside the value it pairs with.
+     Left to a component the two classes would be a hue on one side and an
+     unwritten convention on the other, and the pair is what carries the rule. */
+  --degraded: var(--fg-muted);
+
+  /* Amber rather than red, because stale data is a wait and not a break.
+     Amber already means a person is waited on rather than something being
+     broken, and this resolves on its own when the stream comes back. Hue below
+     Job level, so hard rule 3 requires it to be declared here rather than
+     picked at a component. */
+  --degraded-dot: var(--status-awaiting-review);
+}
