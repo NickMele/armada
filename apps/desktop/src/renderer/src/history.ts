@@ -61,7 +61,19 @@ function moveOf(recorded: Recorded): TransitionMove {
   // A Drone arrived or left. Presence, not a state pair — so there is one word
   // and no arrow, and inventing a `from` for it would be drawing a machine
   // `assigned_drone` does not have.
-  return { ...common, kind: moved.kind, subject: moved.drone_id, moved: moved.presence };
+  //
+  // **The step is on the move and the Drone is the subject.** A Drone belongs
+  // to a workflow step, so a Job that ran four of them has four pairs of rows
+  // here; the id says which Drone and the step says which piece of work it was
+  // put on. Neither alone tells one pair from the next — a restart puts a
+  // second Drone on the same step, and a boundary puts a different one on the
+  // next.
+  return {
+    ...common,
+    kind: moved.kind,
+    subject: moved.drone_id,
+    moved: `${moved.presence} on ${moved.step_id}`,
+  };
 }
 
 /** The two step states the pair below is read off. */

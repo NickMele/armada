@@ -30,7 +30,7 @@ use crate::checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 use crate::enums::{
     AdvanceGate, CriterionSource, DependencyDirection, JudgeVerdict, Recourse, StepState,
 };
-use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
+use crate::ids::{CriterionId, Instant, JobId, StepId};
 use crate::job::{JobSummary, Subject};
 use crate::work::JobFootprint;
 
@@ -331,19 +331,6 @@ pub struct StepDetail {
     /// future without reading the workflow.
     pub ordinal: u32,
     pub state: StepState,
-    /// The Drone that worked this step, and `None` between one and the next.
-    ///
-    /// **This is what makes a finished Job's history readable.** The Job-level
-    /// pointer names the process that is running right now and goes null when
-    /// it exits — which is at every step boundary — so a Job of four steps
-    /// could name at most one of its four transcripts. Per step, every Drone
-    /// that ever worked the Job is on the row of the step it worked.
-    ///
-    /// Absent is not a gap and not an error: a step that has not started has no
-    /// Drone, a step whose work is done and is waiting on a person has none
-    /// either, and both are the ordinary case.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub assigned_drone: Option<DroneId>,
     /// The Checks this step declares, in the order the workflow declares them.
     ///
     /// **Empty means the step is ungated; absent means Fleet cannot say.**
@@ -518,7 +505,6 @@ impl StepDetail {
                 .unwrap_or_else(|| step.step_id().as_str().to_string()),
             ordinal: step.ordinal(),
             state: step.state().into(),
-            assigned_drone: step.assigned_drone().map(DroneId::from),
             checks: facts.and_then(|facts| facts.declares.clone()),
             check_runs: facts.map(|facts| facts.ran.clone()).unwrap_or_default(),
             judge_checks: declared.map(|declared| DeclaredJudge::firing(declared.judge_checks())),

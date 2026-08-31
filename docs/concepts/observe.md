@@ -57,7 +57,7 @@ What that gives up is a payload the vocabulary has no variant for: `Unrecognised
 | **What it contains** | One row per `DroneEvent`, in the order the Drone emitted them, each with the instant Fleet saw it and the step that was running then. Never the wire shape |
 | **Who writes it** | Fleet, and nothing else. It is opened before the Drone is spawned, so a disk that will not hold the record escalates the Job instead of losing a transcript quietly |
 | **What reads it** | Observe's backfill, and Debug's turn history. Nothing decodes it — the rows are already the vocabulary |
-| **What names it** | A line in the Job's log carrying `job_id`, `drone_id`, `step_id` and the path in `fields`. **The only record of the path**: `assigned_drone` on the Job record names the Drone while it is running, and is null again once it has exited — which is now at every step boundary, so a Job of four steps has four transcripts and that pointer can name at most one of them |
+| **What names it** | A line in the Job's log carrying `job_id`, `drone_id`, `step_id` and the path in `fields`. **The only record of the path**: `assigned_drone` on the step's row names the Drone while it is running, and is null again once it has exited — which is now at every step boundary, so a Job of four steps has four transcripts and that pointer can name at most one of them |
 
 **Fleet going away does not corrupt it.** Each row is flushed as it is written, so what was taken is on disk; the writer goes with Fleet, and Fleet never puts a Drone back onto a Job it did not spawn. A closing line in the Job log says how many rows the file holds.
 

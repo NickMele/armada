@@ -46,7 +46,6 @@ fn step_rail(
         label: step_id.to_string(),
         ordinal,
         state: ipc::StepState::from_wire("not_started").expect("a step state the registry has"),
-        assigned_drone: None,
         checks: Some(Vec::new()),
         check_runs: Vec::new(),
         judge_checks: Some(judge_checks),

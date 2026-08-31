@@ -87,7 +87,7 @@ Why: the transcript is far larger than everything else a Job emits and carries i
 
 **A retry is a second `drone_id` under one `job_id`, so a retry gets its own file** rather than interleaving with the first. Nothing appends to a transcript whose Drone is gone.
 
-**The join is both a column and a line, and they answer different questions.** `assigned_drone` on the Job record names which Drone is on the Job — folded from the `drone.spawned` and `drone.exited` rows in `job_events`, so it is null again once the Drone is gone. The Job log line names the *file*, which the column does not: it carries `job_id`, `drone_id`, `step_id` and the transcript's path in `fields`, and it is what survives after the column has been cleared.
+**The join is both a column and a line, and they answer different questions.** `assigned_drone` on the step's row names which Drone is on that step — folded from the `drone.spawned` and `drone.exited` rows in `job_events`, each of which carries the step it is about, so it is null again once the Drone is gone. The Job log line names the *file*, which the column does not: it carries `job_id`, `drone_id`, `step_id` and the transcript's path in `fields`, and it is what survives after the column has been cleared.
 
 The row shape and what is in it belong to [Observe](observe.md). This document owns only the fact that the two files are separate and how they join.
 

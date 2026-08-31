@@ -30,12 +30,26 @@ export const AJobThatRanClean: Story = {
     moves: [
       { seq: 1, at: "09:14:02", kind: "status", moved: "awaiting_approval → queued", actor: "human" },
       { seq: 2, at: "09:14:02", kind: "status", moved: "queued → running", actor: "fleet" },
-      { seq: 3, at: "09:14:03", kind: "drone", subject: "drn_01M13", moved: "drone_spawned", actor: "fleet" },
+      {
+        seq: 3,
+        at: "09:14:03",
+        kind: "drone",
+        subject: "drn_01M13",
+        moved: "drone_spawned on plan",
+        actor: "fleet",
+      },
       { seq: 4, at: "09:14:03", kind: "step", subject: "plan", moved: "not_started → running", actor: "fleet" },
       { seq: 5, at: "09:21:41", kind: "step", subject: "plan", moved: "running → advanced", actor: "fleet" },
       { seq: 6, at: "09:21:41", kind: "step", subject: "implement", moved: "not_started → running", actor: "fleet" },
       { seq: 7, at: "10:02:18", kind: "step", subject: "implement", moved: "running → advanced", actor: "fleet" },
-      { seq: 8, at: "10:02:19", kind: "drone", subject: "drn_01M13", moved: "drone_exited", actor: "fleet" },
+      {
+        seq: 8,
+        at: "10:02:19",
+        kind: "drone",
+        subject: "drn_01M13",
+        moved: "drone_exited on plan",
+        actor: "fleet",
+      },
       { seq: 9, at: "10:02:19", kind: "status", moved: "running → completed_success", actor: "fleet" },
     ],
   },
@@ -45,6 +59,10 @@ export const AJobThatRanClean: Story = {
  * A Job that ended somewhere surprising — the case this exists for. Two Drones,
  * a step retried, a refusal, and a kill. The sequence is what says which of
  * those caused which.
+ *
+ * **Both Drones are on the same step**, because a restart is what puts a second
+ * one there. The step alone would not tell the two pairs apart and neither
+ * would the id alone; the row carries both.
  */
 export const AJobThatEndedSomewhereSurprising: Story = {
   args: {
@@ -53,7 +71,14 @@ export const AJobThatEndedSomewhereSurprising: Story = {
     moves: [
       { seq: 1, at: "13:40:11", kind: "status", moved: "awaiting_approval → queued", actor: "human" },
       { seq: 2, at: "13:40:11", kind: "status", moved: "queued → running", actor: "fleet" },
-      { seq: 3, at: "13:40:12", kind: "drone", subject: "drn_01M2A", moved: "drone_spawned", actor: "fleet" },
+      {
+        seq: 3,
+        at: "13:40:12",
+        kind: "drone",
+        subject: "drn_01M2A",
+        moved: "drone_spawned on implement",
+        actor: "fleet",
+      },
       { seq: 4, at: "13:40:12", kind: "step", subject: "implement", moved: "not_started → running", actor: "fleet" },
       {
         seq: 5,
@@ -72,9 +97,23 @@ export const AJobThatEndedSomewhereSurprising: Story = {
         why: "refused by the judge · owes c-2, c-4",
         actor: "fleet",
       },
-      { seq: 7, at: "14:06:33", kind: "drone", subject: "drn_01M2A", moved: "drone_exited", actor: "human" },
+      {
+        seq: 7,
+        at: "14:06:33",
+        kind: "drone",
+        subject: "drn_01M2A",
+        moved: "drone_exited on implement",
+        actor: "human",
+      },
       { seq: 8, at: "14:11:50", kind: "step", subject: "implement", moved: "stopped → retrying", actor: "human" },
-      { seq: 9, at: "14:11:51", kind: "drone", subject: "drn_01M2F", moved: "drone_spawned", actor: "fleet" },
+      {
+        seq: 9,
+        at: "14:11:51",
+        kind: "drone",
+        subject: "drn_01M2F",
+        moved: "drone_spawned on implement",
+        actor: "fleet",
+      },
       { seq: 10, at: "14:11:51", kind: "status", moved: "escalated → running", actor: "human" },
       {
         seq: 11,
@@ -84,7 +123,14 @@ export const AJobThatEndedSomewhereSurprising: Story = {
         why: "hit the iteration cap",
         actor: "fleet",
       },
-      { seq: 12, at: "14:52:00", kind: "drone", subject: "drn_01M2F", moved: "drone_exited", actor: "fleet" },
+      {
+        seq: 12,
+        at: "14:52:00",
+        kind: "drone",
+        subject: "drn_01M2F",
+        moved: "drone_exited on implement",
+        actor: "fleet",
+      },
       { seq: 13, at: "14:52:00", kind: "status", moved: "escalated → killed", actor: "human" },
     ],
   },
