@@ -11,7 +11,7 @@
 // one is listed in `GAPS` so a surface can say what it could not render instead
 // of inventing copy for it.
 
-import { Archive, ArrowUpToLine, Ban, Check, CircleCheck, CircleDot, CircleX, Clock, Cpu, Eye, FileQuestionMark, Link, OctagonAlert, Power, RefreshCw, ShieldCheck, ShieldMinus, ShieldOff, ShieldX, Split, Stamp, Terminal, Unplug, UserCheck, X } from "lucide-react";
+import { Archive, ArrowUpToLine, Ban, Check, CircleCheck, CircleDot, CircleMinus, CircleX, Clock, Cpu, Eye, FileQuestionMark, Link, OctagonAlert, Power, RefreshCw, ShieldCheck, ShieldMinus, ShieldOff, ShieldX, Split, Stamp, Terminal, Unplug, UserCheck, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /** How one variant reads. `null` where the registry carries no answer. */
@@ -54,7 +54,7 @@ export const ESCALATION_REASON: Readonly<Record<string, Rendering | undefined>> 
   "evidence_too_large": { verb: "evidence too large", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "fan_out": { verb: "hit the sub-dispatch cap", icon: Split, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "gate_failure": { verb: "stopped at the gate", icon: CircleX, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "gate_undecided": { verb: "the gate could not decide", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
+  "gate_undecided": { verb: "the gate could not decide", icon: CircleMinus, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "hatch_unbidden": { verb: "stalled", icon: OctagonAlert, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "interrupted": { verb: "interrupted", icon: Unplug, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "loop_cap": { verb: "hit the iteration cap", icon: ArrowUpToLine, badgeStatus: "escalated", statusToken: "--status-escalated" },
@@ -149,7 +149,6 @@ export const GAPS: readonly Gap[] = [
   { vocabulary: "escalation_reason", variant: "check_timeout", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "dependency_failed", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "evidence_too_large", missing: ["icon"] },
-  { vocabulary: "escalation_reason", variant: "gate_undecided", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "not_prepared", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "resource_exhausted", missing: ["icon"] },
   { vocabulary: "criterion_verdict_check", variant: "failed", missing: ["icon", "token"] },

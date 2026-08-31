@@ -211,11 +211,11 @@ in_code = "In code"
 
 [verbs.escalation_reason.gate_undecided]
 verb = "the gate could not decide"
-icon = ""
+icon = "circle-minus"
 status_token = "--status-escalated"
 vocabulary = "Escalation reason"
 in_code = ""
-notes = "The verb says the gate could not decide rather than that the work failed, which is the whole distinction the trigger carries: `stopped at the gate` is `gate_failure`'s and says the opposite about the same step: that one ran and answered. What could not be read is on the Job's log as `artifact`, and the badge does not try to hold it. No glyph, for `check_timeout`'s reason — the shield-* family is reserved to gates and checks, so the natural candidate sits there. `in_code` is empty because there is no source value to carry: the row was authored here."
+notes = "The verb says the gate could not decide rather than that the work failed, which is the whole distinction the trigger carries: `stopped at the gate` is `gate_failure`'s and says the opposite about the same step: that one ran and answered. What could not be read is on the Job's log as `artifact`, and the badge does not try to hold it. `circle-minus`, registered for this trigger on 2026-08-31 and wired here. The shield-* family is reserved to gates and Checks, so the natural candidate sat there — `packages/icons/icons.toml` took the circle-* name back into the Judge family instead, where this is a third outcome beside met and not_met: the Judge could not read the artifact at all, which is neither verdict rendered badly. Drawn in `--fg-subtle` rather than either verdict hue, because the criterion went unjudged rather than judged. `in_code` is empty because there is no source value to carry: the row was authored here."
 
 [verbs.escalation_reason.hatch_unbidden]
 verb = "stalled"
@@ -245,7 +245,7 @@ icon = ""
 status_token = "--status-escalated"
 vocabulary = "Escalation reason"
 in_code = "In code"
-notes = "The verb names the state every path into this trigger leaves behind rather than the one that happened to occur, which is `gate_failure`'s lesson taken before it had to be learned twice: a `setup.requires` command can exit non-zero, be signalled, run past its budget, or not be on the path at all, and a verb saying `the install failed` would be wrong on three of the four and wrong about the command on any repository whose setup is not an install. It is the same sentence `NotPrepared` opens with in the Job's log, where the command and the exit are, so the badge and the line beneath it are one claim. It says nothing failed a check, because nothing was checked — no step had been entered when this fired. No glyph: the shield-* family is reserved to gates and Checks and this is neither, and `folder` and `folder-git-2` are the Git and config family labelling a value in a detail view rather than a state. It stays owed beside `blocked_by_policy`, `check_timeout`, `dependency_failed`, `evidence_too_large`, `gate_undecided` and `resource_exhausted`."
+notes = "The verb names the state every path into this trigger leaves behind rather than the one that happened to occur, which is `gate_failure`'s lesson taken before it had to be learned twice: a `setup.requires` command can exit non-zero, be signalled, run past its budget, or not be on the path at all, and a verb saying `the install failed` would be wrong on three of the four and wrong about the command on any repository whose setup is not an install. It is the same sentence `NotPrepared` opens with in the Job's log, where the command and the exit are, so the badge and the line beneath it are one claim. It says nothing failed a check, because nothing was checked — no step had been entered when this fired. No glyph: the shield-* family is reserved to gates and Checks and this is neither, and `folder` and `folder-git-2` are the Git and config family labelling a value in a detail view rather than a state. It stays owed beside `blocked_by_policy`, `check_timeout`, `dependency_failed`, `evidence_too_large` and `resource_exhausted`."
 
 [verbs.escalation_reason.resource_exhausted]
 verb = "ran out of resources"
