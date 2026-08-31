@@ -24,18 +24,16 @@
 //! second-vocabulary defect in a test.
 
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::{Model, WorktreeSpec};
 use config::{EvidenceType, Manifest};
-use core_model::{JobStatus, StepState, Timestamp, Ulid};
+use core_model::{JobStatus, StepState};
 use store::Store;
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch};
 use verification::{Claimed, NotClaimed, ShownBy};
 
-use crate::clock::Clock;
 use crate::converging::StepNorms;
 use crate::daemon::{Fittings, Fleet, Host};
 use crate::dry_run::DryRuns;
@@ -43,7 +41,6 @@ use crate::evidence::Call;
 use crate::gate::{CheckBudget, Ruling};
 use crate::headroom::{Bytes, Headroom, Polling, Spare};
 use crate::judging::JudgeBudget;
-use crate::mint::Mint;
 use crate::silence::Liveness;
 use crate::slots::Concurrency;
 pub use crate::tests::planted::{Counted, Ticking};

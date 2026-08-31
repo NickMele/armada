@@ -1,9 +1,8 @@
 //! What this crate proves about itself so far.
 //!
-//! The OS lifecycle is three subjects that are one subject: a Fleet that
-//! outlives the app is only useful if something can find it, and a runtime file
-//! is only useful if its reader can tell a live Fleet from a number that used
-//! to be one.
+//! The OS lifecycle is three subjects that are one: a Fleet that outlives the
+//! app must be findable, and a runtime file must let its reader tell a live
+//! Fleet from a number that used to be one.
 //!
 //! `process` proves the identity primitive, `runtime` proves the file built on
 //! it, `detach` proves a Drone is not in Fleet's process group. Nothing here
@@ -34,8 +33,8 @@
 //! `scope` is the eleventh: evidence bound to what the step actually touched.
 //! Its cases are the two moments the comparison runs at — the gate, where a
 //! footprint outside the declaration fails the step, and the turn, where it is
-//! recorded and the Drone may declare again — plus the case that asserts
-//! nothing new, a step with no scope behaving exactly as it always did.
+//! recorded and the Drone may declare again — plus a step with no scope
+//! behaving exactly as it always did.
 //!
 //! `judging` is the tenth: the semantic tier, run through Fleet's own process
 //! runner against a shell that prints a scripted verdict. Its three cases are
@@ -72,22 +71,20 @@
 //! tell — because those are what keep the three from becoming acts they are
 //! not.
 //!
-//! `settling` is the sixteenth, and every case in it is one where nothing
-//! advances: the gate asked and refusing. What it proves is that a refusal
-//! keeps the submission where it can still be ruled on, says which guard
-//! refused, and escalates rather than sitting once nothing can reach it.
+//! `settling` is the sixteenth, and every case is the gate asked and refusing:
+//! a refusal keeps the submission where it can still be ruled on, says which
+//! guard refused, and escalates rather than sitting once nothing can reach it.
 //!
 //! `overruling` is the seventeenth, and its proportion is the claim: one case
 //! where a refused step advances because a person disagreed with the Judge, and
-//! four where nothing moves. What keeps an appeal from being an
-//! approve-anything is the four.
+//! four where nothing moves — which is what keeps an appeal from being an
+//! approve-anything.
 //!
 //! `redirect` is the eighteenth: steering a Drone that is still there. Its
 //! claim is the pair a single predicate used to conflate — a Job escalated over
 //! a **live** Drone with no step stopped takes a redirect and nothing else
 //! does, and it comes back to `running` on the Drone's own next turn rather
-//! than on the sending. Most of its cases are ones where the Job stays
-//! escalated, which is the proportion the act is about.
+//! than on the sending.
 //! `dry_run` is the nineteenth, and it is `gate` asked from the other side: a
 //! Drone finding out where it stands before it spends a step finding out the
 //! hard way. One case gives it an answer and five prove an absence — the step
@@ -132,10 +129,8 @@
 //! lookup keyed on the local port alone would say yes and would be wrong
 //! deterministically. See `crate::peer`.
 //!
-//! `headroom` is `#44`'s own claim and the twenty-sixth: a Job held back
-//! because the machine has too little left. Its last case is the one that
-//! matters — a running Job whose machine fills keeps running, because the other
-//! half of that failure is `resource_exhausted` and nothing raises it.
+//! `headroom` is `#44`'s and the twenty-sixth: a Job held back because the
+//! machine is short, and a running one left alone when it fills.
 //!
 //! `boundary` is the twenty-second, and the only thing here that asks the
 //! operating system what happened to a Drone. Every other boundary test asserts
