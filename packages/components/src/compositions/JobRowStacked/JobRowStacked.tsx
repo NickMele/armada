@@ -41,10 +41,22 @@ export const RovingOption = createContext<Roving | null>(null);
  *
  * **The badge carries the pulse; the bar never does.** It sits in the same
  * fixed column on every row, so the motion appears in one predictable place
- * rather than moving with the workflow's length. Focus has nothing to do with
- * it: a running row pulses whether or not the cursor is on it. The rule is one
- * pulse per screen, on the most specific mark present — so on job detail the
- * rail takes it and this badge goes static, which is what `pulsing` is for.
+ * rather than moving with the workflow's length. The rule is one pulse per
+ * screen, on the most specific mark present — so on job detail the rail takes
+ * it and this badge goes static, which is what `pulsing` is for.
+ *
+ * **Inside a roving list the pulse follows the cursor, not the status.** This
+ * paragraph used to say the opposite — "a running row pulses whether or not
+ * the cursor is on it" — and the Motion section of the design contract says
+ * "on the focused row only", so the two disagreed and the contract wins. The
+ * disagreement was unobservable while Fleet worked one Job: there was never a
+ * second running row to pulse. There is now, and two marks breathing at
+ * `--duration-pulse` is the thing that section forbids in its first sentence.
+ * Hue still says which rows are running, on every one of them; the pulse says
+ * *still working*, and that is only asked of the row being read.
+ *
+ * A row standing outside a roving list keeps `pulsing` as given — it is the
+ * only row there is, so the cursor cannot single one out.
  */
 
 export type JobRowField = {
@@ -113,9 +125,14 @@ export type JobRowStackedProps = {
   /** The one secondary control. Never a primary, and never more than one. */
   action?: ReactNode;
   /**
-   * The running mark, still working. One per screen, and on the focused row
-   * only — a list carries one running mark per Job and fourteen breathing dots
-   * is what the motion rules forbid outright.
+   * The running mark, still working. **Whether this Job is running**, which is
+   * all a caller knows and all it is asked for.
+   *
+   * One per screen is the rule, and inside a roving list the row applies it
+   * rather than the caller: the cursor's row takes the mark and every other
+   * running row goes static. A caller cannot apply it, because it does not
+   * know where the cursor is — the same reason `tabIndex` is not the caller's
+   * either.
    */
   pulsing?: boolean;
   /** 2px `--accent` left edge over `--bg-hover`. The keyboard cursor. */
@@ -204,7 +221,11 @@ export function JobRowStacked({
   // Outside a roving list every row is its own tab stop, which is right for a
   // row standing alone. Inside one, only the row the cursor is on is.
   const roving = useContext(RovingOption);
-  const tabIndex = !opens ? undefined : roving === null || roving.index === roving.active ? 0 : -1;
+  const onCursor = roving === null || roving.index === roving.active;
+  const tabIndex = !opens ? undefined : onCursor ? 0 : -1;
+  // One animated mark per screen. `pulsing` says this Job is running; the
+  // cursor says which running row is being read, and only that one breathes.
+  const pulses = pulsing && onCursor;
 
   return (
     <div
@@ -223,7 +244,7 @@ export function JobRowStacked({
       onKeyDown={opens ? handleKeyDown : undefined}
     >
       <div className="armada-job-row__badge">
-        <Badge status={status} icon={statusIcon} pulsing={pulsing}>
+        <Badge status={status} icon={statusIcon} pulsing={pulses}>
           {statusLabel}
         </Badge>
       </div>

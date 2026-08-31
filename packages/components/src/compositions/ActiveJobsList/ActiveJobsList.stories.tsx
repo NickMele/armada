@@ -38,8 +38,13 @@ const menu = [
 
 /**
  * Six states, one row shape. The one running row carries the one pulse on the
- * screen, focused or not — there is only ever one, because Fleet runs one
- * drone at M1, and fourteen breathing dots is what the motion rules forbid.
+ * screen.
+ *
+ * **One, because one row is running here — not because only one can be.** This
+ * paragraph used to say the pulse rode the status "focused or not, because
+ * Fleet runs one drone at M1". Fleet runs several now, and the pulse is the
+ * cursor's: this list is a plain list with no cursor in it, so the running row
+ * takes the mark. `Two jobs running at once` is the same rule where it bites.
  */
 export const SixStates: Story = {
   args: {
@@ -72,18 +77,25 @@ export const SixStates: Story = {
       <JobRowStacked
         key="b"
         status="not-started"
-        // `cpu`, not `clock`. `enum-verbs.toml` gives job_status.queued the
-        // clock and then says a reason's verb and glyph replace it where one is
-        // set; M1's only queued reason is waiting_on_resources, whose glyph is
-        // cpu. The drawing draws cpu for the same reason.
+        // `cpu`, not `clock`, and the verb goes with the glyph. `enum-verbs.toml`
+        // gives job_status.queued the clock and then says a reason's verb *and*
+        // glyph replace it where one is set; this row's reason is
+        // waiting_on_resources, whose pair is cpu and "waiting on resources".
+        // The label read "Queued" while the glyph read cpu, which is half the
+        // rule applied — and the resource it waits on is now real: the
+        // concurrency cap bounds how many drones Fleet runs at once.
         statusIcon={Cpu}
-        statusLabel="Queued"
+        statusLabel="Waiting on resources"
         headline="Retire the legacy poke path"
         jobId="job_8b42"
         fields={[
           { value: WORKFLOW },
           { value: <StepBar total={4} current={0} label="Not started, 4 steps" /> },
-          { value: "Waiting on a drone", emphasis: true },
+          // The step, like every other row's third field. It read "Waiting on a
+          // drone", which said the reason a second time and said it wrong: the
+          // Job is behind the cap rather than behind the one drone there used
+          // to be. The badge carries the reason; a field does not repeat it.
+          { value: "Not started", quiet: true },
           { value: "approved 09:20", quiet: true },
           { value: "Dispatched by you" },
         ]}
@@ -215,6 +227,11 @@ export const AtAWideWindow: StoryObj = {
  *
  * Clamped rather than wrapped: Down on the last row stays there. A Board is
  * scanned, and a list that jumps back to the top loses the reader's place.
+ *
+ * **The running row does not pulse here and the approval row is where the
+ * cursor is.** A cursor exists in this list, so the mark is its to carry;
+ * arrow down twice and the pulse arrives with it. `Six states` is the same
+ * rows with no cursor at all, and there the running row keeps it.
  */
 export const Selectable: Story = {
   args: {
@@ -224,6 +241,91 @@ export const Selectable: Story = {
     children: (SixStates.args?.children as ReactElement<JobRowStackedProps>[]).map((row, i) =>
       cloneElement(row, { onOpen: () => {}, selected: i === 2 }),
     ),
+  },
+};
+
+/**
+ * Two jobs running at once, which is a board this list could not hold until
+ * Fleet's working slot became a roster of them.
+ *
+ * **Both rows read as running and one of them breathes.** Hue says which Jobs
+ * are running, on both; the pulse says *still working*, and the Motion section
+ * asks that of the row being read and no other. Two marks at
+ * `--duration-pulse` is what its first sentence forbids, and it is what this
+ * list drew for as long as the pulse followed the status — invisibly, because
+ * a second running row was unreachable.
+ *
+ * The cursor starts on the first row, so the pulse starts there. Arrow down
+ * onto the second running row and the mark moves with it: one screen, one
+ * animated mark, wherever the eye is.
+ *
+ * **Nothing here says two is the ceiling.** The bound is
+ * `settings.concurrency-cap`, resolved in Fleet's composition root, and no
+ * route or event carries it — so a list cannot say "2 of 2" without inventing
+ * the number. A Job held back by the cap says so on its own row instead, which
+ * is the `waiting on resources` badge above.
+ */
+export const TwoRunning: Story = {
+  args: {
+    heading: "Active jobs",
+    summary: "3 jobs.",
+    selectable: true,
+    label: "Active jobs",
+    children: [
+      <JobRowStacked
+        key="a"
+        status="running"
+        statusIcon={CircleDot}
+        statusLabel="Running"
+        headline="Split the settings reducer"
+        jobId="job_2d90bb"
+        pulsing
+        onOpen={() => {}}
+        fields={[
+          { value: "fix/settings-split", mono: true, icon: GitBranch, copyValue: "fix/settings-split" },
+          { value: <StepBar total={4} current={2} activity="running" label="Step 2 of 4" /> },
+          { value: "Implement", emphasis: true },
+          { value: "11m 03s", mono: true },
+          { value: "~$1.80", mono: true },
+        ]}
+        action={<SplitButton ground="card" items={menu}>Open</SplitButton>}
+      />,
+      <JobRowStacked
+        key="b"
+        status="running"
+        statusIcon={CircleDot}
+        statusLabel="Running"
+        headline="Coalesce concurrent token refreshes"
+        jobId="job_7c31"
+        pulsing
+        onOpen={() => {}}
+        fields={[
+          { value: "bug/token-refresh", mono: true, icon: GitBranch, copyValue: "bug/token-refresh" },
+          { value: <StepBar total={4} current={1} activity="running" label="Step 1 of 4" /> },
+          { value: "Plan", emphasis: true },
+          { value: "2m 47s", mono: true },
+          { value: "~$0.30", mono: true },
+        ]}
+        action={<SplitButton ground="card" items={menu}>Open</SplitButton>}
+      />,
+      <JobRowStacked
+        key="c"
+        status="not-started"
+        statusIcon={Cpu}
+        statusLabel="Waiting on resources"
+        headline="Retire the legacy poke path"
+        jobId="job_8b42"
+        onOpen={() => {}}
+        fields={[
+          { value: WORKFLOW },
+          { value: <StepBar total={4} current={0} label="Not started, 4 steps" /> },
+          { value: "Not started", quiet: true },
+          { value: "approved 09:20", quiet: true },
+          { value: "Dispatched by you" },
+        ]}
+        action={<SplitButton ground="card" items={menu}>Open</SplitButton>}
+      />,
+    ],
   },
 };
 

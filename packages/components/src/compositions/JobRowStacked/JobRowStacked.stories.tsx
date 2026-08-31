@@ -89,7 +89,13 @@ export const NeedsApproval: Story = {
 /**
  * `queued` renders grey whatever its reason, and a reader correctly moves past
  * a grey row. Where a reason is set it supplies the headline verb and the
- * glyph; with none it reads queued.
+ * glyph; with none it reads queued, which is this row.
+ *
+ * **The step field says the step has not started, and nothing more.** It read
+ * "Waiting on a drone" — a reason, written into a field on a row whose badge
+ * carries none, and the reason it named is not one the registry has. A queued
+ * Job blocked on the concurrency cap reads `waiting_on_resources` on the badge;
+ * see `Active jobs list`.
  */
 export const Queued: Story = {
   args: {
@@ -102,7 +108,7 @@ export const Queued: Story = {
     fields: [
       { label: "Workflow", value: "bug, 4 steps", quiet: true },
       { value: <StepBar total={4} current={0} label="Not started, 4 steps" /> },
-      { value: "Waiting on a drone", emphasis: true },
+      { value: "Not started", quiet: true },
       { value: "approved 09:20", quiet: true },
       { value: "Dispatched by you" },
     ],
@@ -111,9 +117,13 @@ export const Queued: Story = {
 };
 
 /**
- * The running row, as the list draws it: the badge pulses, and the row is not
- * focused. The pulse is the Job's state rather than the cursor's position, and
- * the step bar beside it stays still.
+ * The running row standing alone, outside any list: the badge pulses and the
+ * step bar beside it stays still.
+ *
+ * **Alone is why it pulses here.** `pulsing` says the Job is running; a row
+ * inside a roving list takes the mark only when the cursor is on it, because
+ * one screen gets one animated mark and several Jobs run at once. There is no
+ * cursor here to single a row out, so the row takes it.
  */
 export const Running: Story = {
   args: {

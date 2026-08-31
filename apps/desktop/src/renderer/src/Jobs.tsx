@@ -463,6 +463,10 @@ function Row({
       headline={headline}
       jobId={job.id}
       fields={fields}
+      // **Every running row, and the row applies the ceiling.** Two Jobs run
+      // at once now, so this alone would breathe twice on one board — which
+      // Motion forbids and then names: the pulse rides the focused row. The
+      // row knows where the cursor is and this does not, so the rule is its.
       pulsing={job.status === "running" && !stale}
       dimmed={stale}
       action={
