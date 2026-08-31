@@ -14,6 +14,7 @@ mod commit;
 mod delivery;
 mod harness;
 mod judge;
+mod mcp;
 mod reclaim;
 pub mod repo;
 mod transcript;
