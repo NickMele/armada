@@ -249,6 +249,17 @@ do.**
 ---
 
 ## Open questions
-Nothing. Every question the three source proposals raised is answered
-above. Two only looked open and were settled elsewhere: Bridge gets no log
-viewer, and where a code lives is decided by the collection rule.
+
+- **[error-occurrence-grouping]** Does Bridge count a repeat occurrence of an
+  error on `code` alone, or on `code` plus `step_id`? Raised by the error-states
+  drawing on 2026-08-31, which offers an already-filed issue to the second
+  occurrence of a code and shows the count. Drawn on `code` alone, and the
+  drawing says so is the over-grouping reading: two `judge.undecided` errors on
+  different steps of different Jobs are one row under it. Code plus `step_id`
+  under-groups in the other direction — the same fault at two steps reads as two
+  problems. What decides it is which one a person filing a bug would rather be
+  wrong about, and that has not been argued.
+
+Every question the three source proposals raised is answered above. Two only
+looked open and were settled elsewhere: Bridge gets no log viewer, and where a
+code lives is decided by the collection rule.
