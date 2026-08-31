@@ -187,7 +187,7 @@ reason_vocabulary = "blocked_by_dependency / waiting_on_resources / none"
 transitions_in = ["awaiting_approval -> queued", "awaiting_review -> queued"]
 transitions_out = ["queued -> running", "queued -> awaiting_approval", "queued -> escalated", "queued -> killed"]
 in_code = "Not yet"
-notes = "Approved, waiting for a Drone — on headroom, or on a dependency. The reason is computed from `dependencies` and live headroom at read time rather than stored: a held port span never self-clears, so a stored value would go stale the moment headroom frees. This is the one status where the recomputed-label rule is applied literally."
+notes = "Approved, waiting for a Drone — on headroom, or on a dependency. The reason is computed from `dependencies` and live headroom at read time rather than stored: CPU, memory and disk all free without anything moving the Job, so a stored value would be wrong from the moment it was written. This is the one status where the recomputed-label rule is applied literally. `fleet::admitting::Room` is the predicate both admission and the label read."
 
 [statuses.rejected]
 terminal = true

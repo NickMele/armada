@@ -81,7 +81,15 @@ Sub-dispatches inside an already-approved Job need no separate approval — see 
 
 ### Concurrency gating (resources)
 
-**Fleet polls CPU and memory headroom before spawning each Drone.** If capacity is unavailable the Job queues and shows "waiting" on the [Job Board](job-board.md). This determines resource eligibility only; the approval gate above determines whether a Drone starts at all.
+**Fleet reads CPU, memory and disk headroom before spawning each Drone.** If capacity is unavailable the Job queues and shows "waiting" on the [Job Board](job-board.md). This determines resource eligibility only; the approval gate above determines whether a Drone starts at all.
+
+**It is the same predicate the concurrency cap is asked through**, so a Board cannot say a Job is blocked while Fleet is starting it, and the reason is recomputed at every read rather than stored — headroom frees on its own, so a written-down reason is wrong from the moment it is written.
+
+**Disk is the third signal and it earns its place from a measured failure**, not from symmetry with the other two: a volume filled during a parallel agent run and agents died at zero bytes free holding uncommitted work, with no warning of any kind. It is also the one held against an absolute floor rather than a share, because what a Job costs in disk — a worktree plus a build — is a number of gigabytes rather than a fraction of whatever volume it landed on.
+
+**Quota is not a fourth.** The agent's rate-limit event carries a window and a status and no quantity, so there is no number to hold a Job back against. See the spike on what a Job costs.
+
+**A machine that cannot be read admits.** A failed reading holds nothing back: a Fleet that queues every Job for ever because a command did not answer is a Fleet that looks dead, and the concurrency cap is still the cap.
 
 **That poll only covers Jobs that have not started.** A Job that exhausts CPU or memory while already running has nowhere to queue back to and escalates as `resource_exhausted`.
 

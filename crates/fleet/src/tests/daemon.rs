@@ -41,61 +41,14 @@ use crate::daemon::{Fittings, Fleet, Host};
 use crate::dry_run::DryRuns;
 use crate::evidence::Call;
 use crate::gate::{CheckBudget, Ruling};
+use crate::headroom::{Bytes, Headroom, Polling, Spare};
 use crate::judging::JudgeBudget;
 use crate::mint::Mint;
 use crate::silence::Liveness;
 use crate::slots::Concurrency;
+pub use crate::tests::planted::{Counted, Ticking};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
-
-/// A clock that answers a different second each time it is asked.
-///
-/// Different, so the pair of timestamps on a step row says how long the step
-/// took; fixed in shape, so a test can write the answer down.
-pub struct Ticking(AtomicU64);
-
-impl Ticking {
-    pub fn from_nine() -> Ticking {
-        Ticking(AtomicU64::new(0))
-    }
-}
-
-impl Clock for Ticking {
-    fn now(&self) -> Timestamp {
-        let tick = self.0.fetch_add(1, Ordering::SeqCst);
-        Timestamp::from_rfc3339(format!(
-            "2026-08-26T09:{:02}:{:02}.000Z",
-            tick / 60,
-            tick % 60
-        ))
-    }
-}
-
-/// Ids a test can write down. Twenty-six characters, and every one of them
-/// legal in a directory name and in a branch name, because `WorktreeSpec`
-/// refuses anything else.
-pub struct Counted(AtomicU64);
-
-impl Counted {
-    pub fn from_one() -> Counted {
-        Counted(AtomicU64::new(1))
-    }
-
-    /// A real mint is a ULID and cannot repeat; this one restarts at one on
-    /// every assembly, so two Fleets over one store would hand out one id twice.
-    pub fn from_next(next: u64) -> Counted {
-        Counted(AtomicU64::new(next))
-    }
-}
-
-impl Mint for Counted {
-    fn ulid(&self) -> Ulid {
-        Ulid::carried(format!(
-            "01TEST{:020}",
-            self.0.fetch_add(1, Ordering::SeqCst)
-        ))
-    }
-}
 
 /// Two steps: one gated on a non-empty diff, one gated on nothing.
 ///
@@ -324,6 +277,16 @@ pub fn fitted_with(
         // test that queues a second Job assert a different thing than it was
         // written to.
         concurrency: Concurrency::of(1),
+        // A machine with plenty of everything, so no fixture but `headroom`'s
+        // own is ever held back by one. Reading the real machine here would
+        // make every test in this crate pass or fail on what else is running.
+        machine: Arc::new(crate::tests::headroom::Plentiful),
+        // The production threshold, so the cases that trip it trip the one that
+        // ships. See `armada::serve::PROVISIONAL_HEADROOM`.
+        headroom: Headroom::of(Spare::percent(15), Bytes::gibibytes(10)),
+        // No interval, so a fixture that moves the machine sees it move. The
+        // one case about the interval sets its own.
+        polling: Polling::every(Duration::ZERO),
         budget: CheckBudget::of(Duration::from_secs(5)),
         norms: UNTRIPPABLE,
         liveness: NEVER_QUIET,

@@ -751,12 +751,17 @@ where
     /// but the waiting ones — the board read is the cost, and a status that
     /// cannot have this reason must not pay it.
     ///
-    /// The dependency half is [`clear_to_run`], the predicate admission itself
+    /// The dependency half is [`clear_to_run`] and the resource half is
+    /// `Fleet::room_for_another`, and both are the predicates admission itself
     /// uses. A second answer here is how a Board comes to say a Job is blocked
     /// while Fleet is starting it.
     ///
-    /// **`None` is the registry's `none`** — approved, unblocked, and the slot
-    /// is free, which is a Job about to run rather than one held.
+    /// **`None` is the registry's `none`** — approved, unblocked, and there is
+    /// room, which is a Job about to run rather than one held.
+    ///
+    /// **Nothing is stored.** Headroom frees on its own, so a reason written
+    /// down is wrong from the moment it is — which is why `job-statuses.toml`
+    /// applies the recomputed-label rule literally on this one status.
     async fn queued_reason(&self, job: &Job) -> Result<Option<CoreQueuedReason>, Refusal> {
         if job.status() != CoreJobStatus::Queued {
             return Ok(None);
@@ -772,8 +777,12 @@ where
         }
         // **The same predicate admission opens with**, asked of the same
         // roster. A second answer here is how a Board comes to say a Job is
-        // blocked while Fleet is starting it.
-        Ok((!self.slots().lock().await.room()).then_some(CoreQueuedReason::WaitingOnResources))
+        // blocked while Fleet is starting it. The bound and each of the three
+        // machine readings fold to the one label the registry gives a `queued`
+        // Job short of anything; which of them it was is not a Board fact.
+        let mut slots = self.slots().lock().await;
+        let room = self.room_for_another(&mut slots).await;
+        Ok((!room.granted()).then_some(CoreQueuedReason::WaitingOnResources))
     }
 
     /// Which of the three refusals a failure is, decided from its type.

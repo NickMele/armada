@@ -78,8 +78,8 @@ use adapters::{GitVcs, HeadlessAgent};
 use config::Roster;
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
-    CheckBudget, Concurrency, DryRuns, Fittings, Fleet, Host, JudgeBudget, Liveness, Mint,
-    StepNorms, SystemClock, UlidMint,
+    Bytes, CheckBudget, Concurrency, DryRuns, Fittings, Fleet, Headroom, Host, JudgeBudget,
+    Liveness, Mint, Polling, Spare, StepNorms, SystemClock, TheMachine, UlidMint,
 };
 use ipc::PROTOCOL_VERSION;
 use store::Store;
@@ -236,6 +236,36 @@ pub const PROVISIONAL_DRY_RUNS: DryRuns = DryRuns::of(3);
 /// throughput; what it costs is the two unbuilt guards above, and a longer wait
 /// at the merge end, where `Fleet::merge_end` serialises every Job's push.
 pub const PROVISIONAL_CONCURRENCY: Concurrency = Concurrency::of(2);
+
+/// How much of the machine has to be free before another Drone starts.
+///
+/// **The `cpu-mem-headroom-threshold-for-spawning` row for the first number**,
+/// resolved here like every other dial on this page. The second is disk, and
+/// it is not a share: see [`Headroom::of`].
+///
+/// **A sixth of the machine, and it is a floor rather than a measurement.**
+/// Nothing has measured what a Drone costs in CPU or memory — a Drone spends
+/// most of its life waiting on an API, and what actually loads this machine is
+/// the Checks its gate runs. What the number is for is refusing to start work
+/// on a machine that is already saturated, and a sixth is the smallest reserve
+/// that is visibly not noise.
+///
+/// **Ten gibibytes of disk, and that one is measured.** A parallel agent run
+/// filled a volume at 220 GB across 74 worktrees — three gigabytes each, cut
+/// worktree plus build output — and three agents died at zero bytes free
+/// holding uncommitted work. Ten is about three of those: enough that the Job
+/// being started can finish and the operator has warning before the next one.
+const PROVISIONAL_HEADROOM: Headroom = Headroom::of(Spare::percent(15), Bytes::gibibytes(10));
+
+/// How stale a machine reading may be before it is taken again. **The
+/// `fleet-health-check-resource-poll-interval` row.**
+///
+/// A reading costs three short-lived processes and about eighty milliseconds,
+/// so taking one on every turn — four a second — would be a measurable share of
+/// a core spent on a number that does not move that fast. Five seconds is
+/// twenty turns, and what the staleness can cost is one Job admitted against a
+/// machine that filled since: the bound is what stops that being unbounded.
+const PROVISIONAL_RESOURCE_POLL: Polling = Polling::every(Duration::from_secs(5));
 
 /// How often Fleet is turned. **Provisional**, and nothing has measured it.
 ///
@@ -492,6 +522,10 @@ fn assemble(
         judge_model(std::env::var(JUDGE_MODEL).ok()).map_err(|refused| refused.said())?;
     let proposer_model =
         proposer_model(std::env::var(PROPOSER_MODEL).ok()).map_err(|refused| refused.said())?;
+    // Resolved once and used twice: it is what a Drone is given as its
+    // repository, and it is the volume whose free space holds a Job back. Every
+    // worktree is cut beneath it, so it is the disk that actually fills.
+    let repo_root = root.canonicalize()?.to_string_lossy().to_string();
 
     Ok(Fleet::assembled(Fittings {
         store: Store::open(&machine.join(STORE_FILE))?,
@@ -503,7 +537,7 @@ fn assemble(
         workflows,
         manifest,
         host: Host {
-            repo_root: root.canonicalize()?.to_string_lossy().to_string(),
+            repo_root: repo_root.clone(),
             path,
             home,
             user,
@@ -519,6 +553,12 @@ fn assemble(
         // `fleet::peer` holds the measurement that chose it over `lsof`.
         peers: Arc::new(fleet::peer::Kernel),
         concurrency: PROVISIONAL_CONCURRENCY,
+        // The shell, not a platform crate: `fleet::headroom` carries the
+        // argument, which is `fleet::process`'s and is about one spelling on
+        // both platforms rather than about convenience.
+        machine: Arc::new(TheMachine::watching(&repo_root)),
+        headroom: PROVISIONAL_HEADROOM,
+        polling: PROVISIONAL_RESOURCE_POLL,
         budget: CheckBudget::of(PROVISIONAL_CHECK_BUDGET),
         norms: PROVISIONAL_STEP_NORMS,
         liveness: PROVISIONAL_LIVENESS,

@@ -11,17 +11,66 @@
 //! could lose or that could disagree with the log, so [`Fleet::next_queued`]
 //! reads the board and sorts by the sequence of the approving event.
 //!
+//! # One predicate, and every reason to refuse belongs inside it
+//!
+//! [`Room`] is the whole answer to "may another Drone start". `admit_next`
+//! opens with it and `queued_reason` labels a Board row from it, so a Board
+//! cannot say a Job is blocked while Fleet is starting it. A new reason to
+//! refuse a dispatch is a variant here and a branch in
+//! [`Fleet::room_for_another`] — never a second check beside the call.
+//!
 //! [`Fleet::next_queued`]: crate::Fleet
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{Job, JobId, JobStatus};
 use store::Moved;
 
 use crate::adrift::Adrift;
+use crate::converging::elapsed;
 use crate::coupling::{coupling, Coupling};
 use crate::daemon::Fleet;
+use crate::headroom::{Reading, Short};
+use crate::slots::Slots;
+
+/// Whether Fleet may start another Drone, and what stops it where it may not.
+///
+/// **Every variant but the first folds to `waiting_on_resources`** on the
+/// Board, which is the only label `job-statuses.toml` gives a `queued` Job
+/// short of anything. The distinction between them is the operator's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Room {
+    /// There is room.
+    Yes,
+    /// The concurrency bound is spent. `settings.concurrency-cap`.
+    Bound,
+    /// The machine has too little of something. `crate::headroom`.
+    Machine(Short),
+}
+
+impl Room {
+    pub(crate) fn granted(&self) -> bool {
+        matches!(self, Room::Yes)
+    }
+}
+
+/// The last machine reading and when it was taken, whether or not it read.
+///
+/// **A failed reading is recorded too.** Without that, a machine that will not
+/// answer is asked again on every admission and every Board row, which is three
+/// processes per ask; with it, a failure costs no more than a success.
+pub(crate) struct Polled {
+    at: core_model::Timestamp,
+    saw: Option<Reading>,
+}
+
+impl Polled {
+    pub(crate) fn taken(at: core_model::Timestamp, saw: Option<Reading>) -> Polled {
+        Polled { at, saw }
+    }
+}
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -33,12 +82,64 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// Start every approved Job the bound has room for.
+    /// Whether Fleet may start another Drone right now.
     ///
-    /// **`Slots::room` is the whole of what the bound means here**, and it is
-    /// the same predicate `queued_reason` answers `waiting_on_resources` from —
-    /// one answer, because a Board saying a Job is blocked while Fleet is
-    /// starting it is worse than a Board saying nothing.
+    /// **The one predicate.** [`Fleet::admit_next`] opens with it and
+    /// `serving`'s `queued_reason` answers `waiting_on_resources` from it, so
+    /// there is no second answer for a Board to disagree with admission by.
+    ///
+    /// **The bound is asked first because it is free.** `Slots::room` reads a
+    /// map; the machine reading costs three processes. A Fleet already at its
+    /// cap never pays for a reading it would not have acted on.
+    ///
+    /// The roster is passed in rather than taken, because `admit_next` is
+    /// already holding it — taking it here would deadlock, and the lock order
+    /// `crate::slots` states is roster first and everything else after.
+    pub(crate) async fn room_for_another(&self, slots: &mut Slots) -> Room {
+        if !slots.room() {
+            return Room::Bound;
+        }
+        match self
+            .machine_reading()
+            .await
+            .and_then(|reading| self.headroom().short_of(&reading))
+        {
+            Some(short) => Room::Machine(short),
+            None => Room::Yes,
+        }
+    }
+
+    /// What the machine had left, read again only once the last reading is
+    /// older than the poll interval.
+    ///
+    /// **The clock is the injected one**, so a test decides when a reading goes
+    /// stale rather than waiting for it to. The reading itself is taken on a
+    /// blocking thread: it is three processes and about eighty milliseconds,
+    /// which is not something to hold a runtime worker for.
+    async fn machine_reading(&self) -> Option<Reading> {
+        let now = self.clock().now();
+        let mut polled = self.polled().lock().await;
+        if let Some(last) = polled.as_ref() {
+            if elapsed(&last.at, &now) < self.polling().interval() {
+                return last.saw;
+            }
+        }
+        let machine = Arc::clone(self.machine());
+        let saw = tokio::task::spawn_blocking(move || machine.read())
+            .await
+            .ok()
+            .flatten();
+        *polled = Some(Polled::taken(now, saw));
+        saw
+    }
+
+    /// Start every approved Job there is room for.
+    ///
+    /// **[`Fleet::room_for_another`] is the whole of what "room" means here**,
+    /// and it is the same predicate `queued_reason` answers
+    /// `waiting_on_resources` from — one answer, because a Board saying a Job
+    /// is blocked while Fleet is starting it is worse than a Board saying
+    /// nothing.
     ///
     /// **The roster lock is held across the loop, and nothing else is.** Two
     /// admissions running at once would each read the same `queued` Job as
@@ -55,7 +156,7 @@ where
     pub(crate) async fn admit_next(&self) -> Result<Vec<JobId>, Adrift> {
         let mut slots = self.slots().lock().await;
         let mut admitted = Vec::new();
-        while slots.room() {
+        while self.room_for_another(&mut slots).await.granted() {
             let Some(job) = self.next_queued().await? else {
                 break;
             };

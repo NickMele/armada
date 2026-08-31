@@ -29,7 +29,13 @@ peer_polarity = "n/a — single layer"
 owner = "Fleet"
 read_by = "fleet"
 notes = """
+**Enforced.** `fleet::headroom::Headroom` carries it and `Fleet::room_for_another` is the predicate: `admit_next` opens with it, and a Job approved onto a machine short of it stays `queued` with `waiting_on_resources` as its reason — the same predicate, so a Board cannot say a Job is blocked while Fleet is starting it. It read as unparsed until Throughput.
+
+**One share for CPU and memory, and disk is not held against it.** A fraction of the volume is the wrong unit for a cost that is absolute: a tenth of a 4 TB disk holds 400 GB in reserve against a worktree that needs three, and a tenth of a 60 GB disk leaves less than one build. The disk floor is a number of gibibytes, carried in `armada::serve::PROVISIONAL_HEADROOM` beside this one, and **it has no row here yet.**
+
 Machine constraint. Also sets Doctor's System stats warn boundary — below threshold is warn, since Drones queue rather than spawn. System stats is the one Doctor module whose warn is live degradation rather than "works now, will break later".
+
+It has no value here for the reason none of Fleet's other dials does — `crates/armada/src/serve.rs` resolves it, and carries the argument for the number. It ships at a sixth of the machine: nothing has measured what a Drone costs in CPU or memory, and what the number is for is refusing to start work on a machine that is already saturated.
 """
 
 [settings.fleet-health-check-resource-poll-interval]
@@ -41,6 +47,10 @@ peer_polarity = "n/a — single layer"
 owner = "Fleet"
 read_by = "fleet"
 notes = """
+**Enforced**, as a freshness bound rather than as a second timer. `fleet::headroom::Polling` carries it and `Fleet::room_for_another` refreshes the machine reading only once it is older than this — a background poll and a lazily refreshed reading are the same number and the same staleness, and the bound costs nothing while Fleet is idle.
+
+A reading is three short-lived processes and about eighty milliseconds, so taking one on every turn — four a second — would be a measurable share of a core spent on a number that does not move that fast. It ships at five seconds, which is twenty turns.
+
 Daemon-level. Distinct from Drone heartbeat/liveness timeout, which is per-Drone silence rather than Fleet's own polling.
 """
 

@@ -124,6 +124,7 @@ pub mod dry_run;
 pub mod evidence;
 pub mod footprint;
 mod gate;
+pub mod headroom;
 pub mod judging;
 mod landing;
 pub mod mint;
@@ -179,6 +180,7 @@ pub use drone::{
 pub use dry_run::{DryRuns, NotRun};
 pub use evidence::{Call, Decline, EvidenceInbox, EvidenceTool, Landed, Recorded, Standing};
 pub use gate::{apply, rule_on, CheckBudget, CheckOutput, Ruling};
+pub use headroom::{Bytes, Headroom, InUse, Machine, Polling, Reading, Short, Spare, TheMachine};
 pub use judging::{Aloft, CallFailed, JudgeBudget, Judging, Look, Marking};
 pub use mint::{Mint, UlidMint};
 pub use overruling::Overruling;

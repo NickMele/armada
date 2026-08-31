@@ -132,6 +132,11 @@
 //! lookup keyed on the local port alone would say yes and would be wrong
 //! deterministically. See `crate::peer`.
 //!
+//! `headroom` is `#44`'s own claim and the twenty-sixth: a Job held back
+//! because the machine has too little left. Its last case is the one that
+//! matters — a running Job whose machine fills keeps running, because the other
+//! half of that failure is `resource_exhausted` and nothing raises it.
+//!
 //! `boundary` is the twenty-second, and the only thing here that asks the
 //! operating system what happened to a Drone. Every other boundary test asserts
 //! bookkeeping, and would pass over a `setsid`-detached Drone still running.
@@ -162,6 +167,7 @@ mod forget;
 mod frozen;
 mod gaming;
 mod gate;
+mod headroom;
 mod history;
 mod host;
 mod http;
@@ -172,6 +178,7 @@ mod overlap;
 mod overruling;
 mod peer;
 mod planning;
+mod planted;
 mod preparing;
 mod process;
 mod proposing;

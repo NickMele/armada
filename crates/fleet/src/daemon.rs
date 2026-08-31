@@ -66,6 +66,7 @@ use core_model::{
 use store::{LoadAllError, LoadJobError, Loaded, Moved, Store};
 use tokio::sync::Mutex;
 
+use crate::admitting::Polled;
 use crate::adrift::Adrift;
 use crate::clock::Clock;
 use crate::converging::StepNorms;
@@ -76,6 +77,7 @@ use crate::drone_moves::steps_holding_a_drone;
 use crate::dry_run::DryRuns;
 use crate::evidence::EvidenceInbox;
 use crate::gate::CheckBudget;
+use crate::headroom::{Headroom, Machine, Polling};
 use crate::judging::{Aloft, JudgeBudget, Judging, Marking};
 use crate::mint::Mint;
 use crate::peer::{attributed, Drones, NotACaller, PeerOf};
@@ -151,6 +153,19 @@ pub struct Fittings<H, V, W> {
     /// `settings.concurrency-cap` row, enforced** — see [`Concurrency`], which
     /// has no default for the reason none of the four dials above it does.
     pub concurrency: Concurrency,
+    /// What the machine has left, asked rather than assumed. **A seam so a
+    /// test can plant one**, exactly as `peers` is — the shipped answer is
+    /// [`TheMachine`](crate::headroom::TheMachine) and a fixture has no machine
+    /// it can hold still.
+    pub machine: Arc<dyn Machine>,
+    /// How much of the machine must be free before another Drone starts. **The
+    /// `settings.cpu-mem-headroom-threshold-for-spawning` row, enforced** — see
+    /// [`Headroom`], which has no default for [`Concurrency`]'s reason.
+    pub headroom: Headroom,
+    /// How stale a machine reading may be. **The
+    /// `settings.fleet-health-check-resource-poll-interval` row** — see
+    /// [`Polling`] for why it is a freshness bound rather than a second timer.
+    pub polling: Polling,
     pub budget: CheckBudget,
     /// What a step is expected to cost before the thrashing chain looks at it.
     /// See [`StepNorms`] for why it has no default.
@@ -248,6 +263,16 @@ pub struct Fleet<H, V, W> {
     /// Which Jobs are being worked and how many may be. See [`crate::slots`]
     /// for the two locks and the order they are taken in.
     slots: Mutex<Slots>,
+    machine: Arc<dyn Machine>,
+    headroom: Headroom,
+    polling: Polling,
+    /// The last machine reading, and when it was taken. **Never written down**
+    /// — headroom frees on its own, so a reading that outlived the process
+    /// would be a reason that was already wrong when it was read back.
+    ///
+    /// Taken after the roster and never before it, which is the order
+    /// `crate::slots` states. Nothing is held while this one is.
+    polled: Mutex<Option<Polled>>,
     /// Which process is working which Job. See [`Drones`], which argues why
     /// this is not the same fact as the pid inside the slot.
     ///
@@ -313,6 +338,10 @@ where
             inbox: EvidenceInbox::new(),
             delivered: Mutex::new(BTreeMap::new()),
             slots: Mutex::new(Slots::bounded_by(fittings.concurrency)),
+            machine: fittings.machine,
+            headroom: fittings.headroom,
+            polling: fittings.polling,
+            polled: Mutex::new(None),
             drones: std::sync::Mutex::new(Drones::default()),
             peers: fittings.peers,
             merge_end: Mutex::new(()),
@@ -748,6 +777,21 @@ where
     /// The roster, for `dispatch` and for a turn.
     pub(crate) fn slots(&self) -> &Mutex<Slots> {
         &self.slots
+    }
+
+    /// The three dials the headroom half of admission reads. All of them are
+    /// `crate::admitting`'s, which is the only caller.
+    pub(crate) fn machine(&self) -> &Arc<dyn Machine> {
+        &self.machine
+    }
+    pub(crate) fn headroom(&self) -> &Headroom {
+        &self.headroom
+    }
+    pub(crate) fn polling(&self) -> Polling {
+        self.polling
+    }
+    pub(crate) fn polled(&self) -> &Mutex<Option<Polled>> {
+        &self.polled
     }
 
     /// One Job's working slot, for the three Drone tools and for every act a
