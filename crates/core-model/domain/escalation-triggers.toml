@@ -179,6 +179,28 @@ Nothing failed — the loop simply did not converge, which is why the count that
 Because `retry_count` resets on each loop return, a looping step can burn `retry_limit × iteration_cap` attempts before this fires, and `completed_failed` is unreachable on such a step — `loop_cap` always gets there first. The aggregate attempt cap in `default_gate_policy` bounds that.
 """
 
+[triggers.not_prepared]
+kind = "Trigger"
+level = "Job"
+meaning = "A command the Manifest's setup.requires names did not succeed, so the worktree is not one work can be run in. Nothing had been spawned and no step had been entered."
+in_code = ""
+notes = """
+Job-level, and it could not be anything else: preparation runs immediately after the worktree is made and before the first step is entered, so there is no step for the trigger to attach to and nothing for `last_verdict` to hold. That is the same reason `dependency_failed` is Job-level, arriving from the other end of the Job.
+
+Not `gate_failure` and not `check_timeout`, which are the two rows a reader reaches for. Both are about a step: one is work that was submitted and did not clear the bar, the other is a Check that gates a step and did not finish. Preparation gates nothing. `crates/fleet/src/preparing.rs` shares only the process runner with the Checks, and the module says why.
+
+Every path into it — a non-zero exit, a signal, a budget overrun, a program not on the path, a worktree that has gone — leaves the same fact behind, which is why the meaning names the worktree rather than any one of them. Which one it was is on the Job's log, with the `setup.requires` entry and the line that ran.
+
+Fires the default edge, `running -> escalated`: the Job is `running` by the time the worktree exists.
+
+`in_code` is empty rather than "Not yet" for `gate_undecided`'s reason — the row was authored here and has no source value to carry.
+"""
+why = """
+It was raised as `interrupted` from the day preparation shipped until 2026-08-31, which is a lie of the same shape `gate_failure` told an hour earlier: `interrupted` means a Job marked running has no matching OS process, and a person reading it goes looking for a dead Drone. There was never a Drone. The remedy is a line in `armada.yml` or a missing tool on the path, and neither is anywhere near where that verb sends them.
+
+A payload on `interrupted` was the alternative and is refused for the reason `silent` is a sub-kind rather than a field: what a person reads first is the trigger, and a distinction carried only in a payload is a distinction the badge does not make.
+"""
+
 [triggers.resource_exhausted]
 kind = "Trigger"
 level = "Job"

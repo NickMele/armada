@@ -16,7 +16,7 @@ use std::path::Path;
 
 use adapter_traits::WorktreeSpec;
 use config::Manifest;
-use core_model::{EscalationTrigger, JobStatus, StepState, TransitionReason};
+use core_model::{EscalationTrigger, JobStatus, StepState, TransitionReason, TriggerLevel};
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
 
 use crate::adrift::Adrift;
@@ -139,8 +139,13 @@ async fn a_required_command_that_fails_escalates_the_job_and_enters_no_step() {
     assert_eq!(stopped.status(), JobStatus::Escalated);
     assert_eq!(
         fleet.last_reason(job.id()).await.unwrap(),
-        Some(TransitionReason::Escalation(EscalationTrigger::Interrupted)),
-        "the same trigger every other pre-flight failure in `dispatch` takes"
+        Some(TransitionReason::Escalation(EscalationTrigger::NotPrepared)),
+        "not `interrupted`, which would send a reader after a process that never started"
+    );
+    assert_eq!(
+        EscalationTrigger::NotPrepared.level(),
+        TriggerLevel::Job,
+        "no step had been entered, so there is none for the trigger to name"
     );
     assert!(
         stopped

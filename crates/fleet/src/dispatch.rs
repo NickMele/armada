@@ -591,6 +591,11 @@ where
     /// behind. **No trigger names an infrastructure failure at dispatch**, and
     /// that gap is named in this crate's report rather than papered over with a
     /// trigger that means something else.
+    ///
+    /// Preparation used to come through here and no longer does: a
+    /// `setup.requires` command that fails leaves a worktree and no process to
+    /// be missing, so `crate::preparing` raises `not_prepared` instead. The
+    /// remaining callers are the ones where the sentence above still holds.
     pub(crate) async fn interrupt(&self, job: &Job) -> Result<(), Adrift> {
         self.move_job(
             job,

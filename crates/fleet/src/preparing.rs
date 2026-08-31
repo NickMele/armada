@@ -42,7 +42,7 @@ use std::time::Duration;
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree};
 use checks_runner::Output;
 use config::Preparation;
-use core_model::{Component, Envelope, FieldValue, Job, Level};
+use core_model::{Actor, Component, Envelope, EscalationTrigger, FieldValue, Job, Level, Target};
 use tokio::time::Instant;
 use verification::{Exit, NeverRan};
 
@@ -94,7 +94,18 @@ where
         .await;
         let took = began.elapsed();
         if let Err(cause) = ran {
-            self.interrupt(job).await?;
+            // **`not_prepared`, not `interrupted`.** `interrupted` means a Job
+            // marked running has no matching OS process, so it sends whoever
+            // reads it hunting for a Drone that died. Nothing had been spawned
+            // here. `move_job` rather than a wrapper beside `interrupt`,
+            // because this is the only site that raises it — the trigger names
+            // the worktree and the `Adrift` beside it names the command.
+            self.move_job(
+                job,
+                Target::Escalated(EscalationTrigger::NotPrepared),
+                Actor::Fleet,
+            )
+            .await?;
             return Err(Adrift::NotPrepared {
                 job: job.id().clone(),
                 cause: Box::new(cause),
