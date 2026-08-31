@@ -32,6 +32,7 @@ export * from "./primitives/Tooltip/Tooltip";
 
 // Compositions — what M1 composes its screens from.
 export * from "./compositions/ActiveJobsList/ActiveJobsList";
+export * from "./compositions/BoardControls/BoardControls";
 export * from "./compositions/BoardEmptyState/BoardEmptyState";
 export * from "./compositions/ChangedFiles/ChangedFiles";
 export * from "./compositions/CriterionVerdicts/CriterionVerdicts";

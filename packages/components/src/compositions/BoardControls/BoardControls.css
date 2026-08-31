@@ -1,0 +1,52 @@
+/* Board controls — the text match and the sort on one line, the state tabs
+   beneath them.
+
+   The arrangement carries the argument. A text match is not a state, so it
+   never shares a row with the tabs: on the state line everything narrows by
+   state, and what cuts across every state sits above it. */
+.armada-board-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-board-controls__line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The field takes the slack and the sort keeps its measure. A search box that
+   shrank to fit a long sort label would be the narrower of the two controls,
+   and it is the one being typed into. */
+.armada-board-controls__search {
+  flex: 1;
+  min-width: 0;
+}
+
+.armada-board-controls__sort {
+  flex: none;
+}
+
+/* The key that focuses the field, beside it rather than inside it. Inside
+   would mean padding the input from out here, and a component owns its own
+   stylesheet — the hint would be this file reaching into `Input`'s.
+
+   It is hidden once the cursor is in the field: the hint answers "how do I get
+   there", and somebody already there is being told something they did with
+   their own hands a moment ago. `visibility` rather than `display`, so the row
+   does not reflow as the field takes focus — the layout that shifts under a
+   keystroke is the failure the v1 log recorded. */
+.armada-board-controls__line:focus-within .armada-board-controls__hint {
+  visibility: hidden;
+}
+
+/* The engine's own clear button, suppressed. It appears inside the field with
+   the user agent's glyph, its own hit area and no token behind any of it —
+   a control the design system never drew. `Esc` clears the field, and it is
+   drawn as a `kbd` where a person can learn it. */
+.armada-board-controls__search input::-webkit-search-cancel-button {
+  display: none;
+}

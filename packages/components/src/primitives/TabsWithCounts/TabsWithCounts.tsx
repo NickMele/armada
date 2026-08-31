@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Kbd } from "../Kbd/Kbd";
 
 /**
  * Separate queues, each carrying how much is waiting. A separate component and
@@ -15,6 +16,13 @@ import { useState } from "react";
  *
  * The count is a trailing mono value in `--fg-subtle`, never a filled pill: a
  * pill is a badge and a badge carries status.
+ *
+ * **A tab may carry the key that selects it, and then the key is bordered and
+ * the count is not.** Both are numerals in the same row on the Job Board —
+ * `1` selects the tab and `15` is how many jobs are behind it — so the `kbd`
+ * chip is the whole of what separates the key you press from the number, and
+ * the two sit on opposite sides of the label besides. A tab with no shortcut
+ * renders none; nothing here invents one from the tab's position.
  */
 export type TabsWithCountsItem = {
   id: string;
@@ -22,6 +30,14 @@ export type TabsWithCountsItem = {
   label: string;
   /** A backlog. Omitted, or zero, renders as nothing. */
   count?: number;
+  /**
+   * The single key that selects this tab, drawn leading the label as a `kbd`.
+   * Displayed only — binding it is the surface's, because a tab strip cannot
+   * know whether a text input on the same screen holds focus, and a single-key
+   * shortcut that fires while somebody is typing is the failure the design
+   * contract's safety rules name first.
+   */
+  shortcut?: string;
 };
 
 export type TabsWithCountsProps = {
@@ -72,7 +88,9 @@ export function TabsWithCounts({ items, value, defaultValue, onChange }: TabsWit
               : "armada-tabs-counts__tab"
           }
           onClick={() => select(item.id)}
+          aria-keyshortcuts={item.shortcut}
         >
+          {item.shortcut ? <Kbd aria-hidden>{item.shortcut}</Kbd> : null}
           {item.label}
           {item.count ? <span className="armada-tabs-counts__count">{item.count}</span> : null}
         </button>
