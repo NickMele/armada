@@ -145,15 +145,18 @@ pub const THEME: &[(&str, Slot)] = &[
     ("--step-", Slot::NsFull("color")),
     ("--verdict-", Slot::NsFull("color")),
     ("--surface-", Slot::NsFull("color")),
+    // Exact before prefix, and this pair is why the table says so: --edge-active
+    // is a width, and `--edge-` below would claim it first and emit
+    // `--color-edge-active: 2px` — a colour utility carrying a length.
+    (
+        "--edge-active",
+        Slot::CssOnly("a border width read beside --edge-* colours"),
+    ),
     ("--edge-", Slot::NsFull("color")),
     // Everything sized. One namespace, by v4's design.
     ("--w-", Slot::Ns("spacing")),
     ("--z-", Slot::CssOnly("a stacking order, not a scale value")),
     ("--dot", Slot::Named("spacing", "dot")),
-    (
-        "--edge-active",
-        Slot::CssOnly("a border width read beside --edge-* colours"),
-    ),
     ("--space-", Slot::Ns("spacing")),
     ("--h-", Slot::Ns("spacing")),
     ("--pad-", Slot::Ns("spacing")),

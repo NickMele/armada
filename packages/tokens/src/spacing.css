@@ -110,8 +110,9 @@
      stroke.
 
      Both are named for the class rather than joined to --edge-*, which is a
-     colour namespace — --edge-active already lands in it as --color-edge-active
-     carrying 2px. Reported, not fixed here. */
+     colour namespace: joining it would emit --color-error-edge carrying 3px.
+     That is the bug --edge-active had until its exact entry was moved above
+     the --edge- prefix in xtask/src/tokens.rs. */
   --error-edge: 3px;
 
   /* A degraded edge, narrower than a fault's on purpose.
