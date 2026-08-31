@@ -62,7 +62,7 @@ use core_model::{
 };
 use verification::TheBaseMoved;
 
-use crate::crossing::{Crossed, Produced, Reconciling};
+use crate::crossing::{Crossed, Produced, Reconciling, Redirected};
 
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering.
 ///
@@ -93,8 +93,8 @@ turn, with the reason. Wait for that turn.";
 /// three needs to know what part two produced exactly as a fresh one does, and
 /// an enum would have had to carry [`Crossed`] in both arms. It is also what
 /// keeps [`put_a_drone_on`]'s signature closed: the carried items ride the
-/// `Opening` a caller already passes, so `#207` adds one without a spawn
-/// funnel changing shape.
+/// `Opening` a caller already passes, which is how `#207`'s waiting redirect
+/// arrived without the spawn funnel changing shape.
 ///
 /// [`put_a_drone_on`]: crate::daemon::Fleet::put_a_drone_on
 #[derive(Clone, Debug)]
@@ -139,6 +139,23 @@ impl Opening {
     /// constructors.
     pub fn carrying(self, crossed: Crossed) -> Opening {
         Opening { crossed, ..self }
+    }
+
+    /// The same opening, plus the note a person left where there was no Drone
+    /// to take it.
+    ///
+    /// **Folded in rather than passed in**, and it is the one carried item no
+    /// caller supplies. `crate::spawning` asks the record for it on every
+    /// spawn, because "the very next opening brief" is a fact about the Job
+    /// and not about the act that happened to reach the spawn — a redirect
+    /// that waited through a boundary because the caller building the
+    /// `Crossed` did not know about it is the whole failure `#207` exists to
+    /// close.
+    pub(crate) fn also_carrying(self, redirect: Option<Redirected>) -> Opening {
+        Opening {
+            crossed: self.crossed.and_redirect(redirect),
+            ..self
+        }
     }
 
     /// The whole opening turn: the four blocks, what stopped the last attempt
@@ -371,6 +388,14 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
     if let Some(cleared) = crossed.cleared() {
         text.push_str("\n\n");
         text.push_str(&cleared.text());
+    }
+    // **Before the step and not after it.** A Drone that stops reading at the
+    // step block has read the instruction, and the block itself says which of
+    // the two comes first — an instruction placed after the definition it
+    // overrides reads as a footnote to it.
+    if let Some(redirect) = crossed.redirect() {
+        text.push_str("\n\n");
+        text.push_str(&redirect.text());
     }
     if let Some(step) = workflow.steps().iter().find(|step| step.id() == at) {
         text.push_str("\n\n");

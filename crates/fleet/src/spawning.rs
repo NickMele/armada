@@ -30,10 +30,11 @@ use adapter_traits::{
     AgentHarness, Delivery, DroneSpawnConfig, Grant, McpConfig, Model, Prompt, SpawnConfigRefused,
     Toolbelt, Vcs, WorkProduct, Worktree,
 };
-use core_model::{DroneId, Job, JobId, StepId};
+use core_model::{Component, DroneId, Envelope, Job, JobId, Level, StepId};
 
 use crate::adrift::Adrift;
 use crate::briefing::Opening;
+use crate::crossing::Redirected;
 use crate::daemon::Fleet;
 use crate::drone::{self, environment, HostPaths};
 use crate::transcript::{Spine, Taps};
@@ -59,6 +60,11 @@ where
     /// Every failure leaves the Job `escalated` and returns the cause. A person
     /// decides; Fleet does not retry.
     ///
+    /// **A note waiting on the record rides the brief.** `#207`. It is folded
+    /// in **here** and not by whichever act reached the spawn, for the reason
+    /// the rebase is: this is the one funnel, and "the very next opening brief"
+    /// is a fact about the Job. A caller that had to remember it could forget.
+    ///
     /// **The branch is caught up first, and the brief is assembled after.**
     /// See this module's header for why the order is that way round and why the
     /// prompt is not a parameter. A catch-up that will not run joins the other
@@ -82,6 +88,11 @@ where
                 return Err(cause);
             }
         };
+        // Asked of the record on every spawn, and answered `None` on almost
+        // all of them. It is read before the brief because it is part of the
+        // brief, and kept beside it because clearing it needs the same value.
+        let waiting = job.redirect_waiting().map(Redirected::of);
+        let opening = opening.also_carrying(waiting.clone());
         let brief = match opening.turn(job, job.workflow(), step, moved.as_ref()) {
             Ok(brief) => brief,
             Err(cause) => {
@@ -125,6 +136,11 @@ where
         // and a step claiming a Drone that failed to start is exactly the
         // liveness lie the column is read for.
         self.drone_arrived(job, step, drone.clone()).await?;
+        // After the process exists too, and for the same reason: a note
+        // cleared over a spawn that then failed is a note nobody was told.
+        if waiting.is_some() {
+            self.redirect_delivered(job, step).await?;
+        }
 
         *working = Some(Working::holding(
             job_id,
@@ -150,6 +166,44 @@ where
         // a Drone that resolved nothing would pass it on the markers it was
         // handed.
         self.marked(working);
+        Ok(())
+    }
+
+    /// The note went into the brief this Drone opened with, so nothing is
+    /// waiting any more.
+    ///
+    /// **The log says *delivered*, not that one was written.** That is the
+    /// owner's second consequence: a person who left a note at a gate can tell
+    /// "you were told" from "nobody was there", and the two lines are written
+    /// by two different acts — `request_changes` writes the first and this
+    /// writes the second.
+    ///
+    /// **Cleared once the Drone exists and not before.** The ruling is that a
+    /// note survives one boundary and no more; a spawn that failed is not a
+    /// boundary that happened, and clearing on the way in would lose the note
+    /// to a worktree that would not open.
+    ///
+    /// A log line that will not write does not undo the delivery, for
+    /// `resume::noted_roused`'s reason. The column write does return: a note
+    /// that stayed on the record would be delivered a second time, into a
+    /// Drone working a part it was never about.
+    async fn redirect_delivered(&self, job: &Job, step: &StepId) -> Result<(), Adrift> {
+        let delivered = job.redirect_delivered();
+        self.store()
+            .lock()
+            .await
+            .record_redirect_waiting(&delivered)
+            .map_err(Adrift::Writing)?;
+        let envelope = Envelope::new(
+            self.now(),
+            Level::Info,
+            Component::Fleet,
+            self.run().clone(),
+            "the note a person left at the gate was delivered into this Drone's opening brief",
+        )
+        .in_job(job.id().as_ulid().clone())
+        .at_step(step.as_str());
+        let _ = crate::transcript::note(&self.host().repo_root, job.id(), &envelope);
         Ok(())
     }
 

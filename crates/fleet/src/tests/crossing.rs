@@ -21,12 +21,12 @@
 //! Drone that starts the next part.
 
 use crate::evidence::Call;
-use core_model::{EvidenceType, FrozenWorkflow, StepEvidence, StepId};
+use core_model::{EvidenceType, FrozenWorkflow, RedirectWaiting, StepEvidence, StepId};
 use testkit::{Gate, Sketch};
 use verification::NotClaimed;
 
 use crate::briefing::first_turn;
-use crate::crossing::{Cleared, Crossed, Produced};
+use crate::crossing::{Cleared, Crossed, Produced, Redirected};
 use crate::tests::briefing::a_job;
 use crate::tests::briefing::{a_diff_call, told_across_the_boundary};
 use crate::tests::tmp::TempDir;
@@ -384,28 +384,80 @@ fn a_boundary_carrying_nothing_adds_no_block_at_all() {
     assert!(!bare.contains("THE PART BEFORE THIS ONE"), "{bare}");
 }
 
-/// **Two carried items compose, and a third will.** `#207` adds a redirect that
-/// arrived while no Drone was there, and it adds a method rather than reshaping
-/// the value every caller passes.
+/// **Three carried items compose, and a fourth would.** `#207` arrived as the
+/// third — a person's note written where no Drone was there to take it — and it
+/// added a method rather than reshaping the value every caller passes.
+///
+/// **The order is the argument.** The rail establishes that an earlier part
+/// exists, the closed block says it is settled, the instruction says why this
+/// part is being worked, and the step says what it is. Each is only readable
+/// once the one before it has been read.
 #[test]
-fn the_two_things_a_boundary_carries_are_both_in_one_turn() {
+fn the_three_things_a_boundary_carries_are_all_in_one_turn() {
     let workflow = note_then_fix();
     let passed = &workflow.steps()[0];
     let said = turn(
         &workflow,
         "fix",
-        crossing(&workflow, "fix", &recorded("root_cause")).and_cleared(Cleared::checked(passed)),
+        crossing(&workflow, "fix", &recorded("root_cause"))
+            .and_cleared(Cleared::checked(passed))
+            .and_redirect(Some(Redirected::of(
+                &RedirectWaiting::saying("do the writer too").expect("a note"),
+            ))),
     );
 
     assert!(said.contains("What part 1 produced"), "{said}");
     assert!(said.contains("THE PART BEFORE THIS ONE"), "{said}");
+    assert!(said.contains("WHAT A PERSON ASKED FOR"), "{said}");
+    assert!(said.contains("do the writer too"), "{said}");
     assert!(
         said.find("What part 1 produced") < said.find("THE PART BEFORE THIS ONE"),
         "the rail establishes that a part before exists before anything says it is closed: {said}"
     );
     assert!(
-        said.find("THE PART BEFORE THIS ONE") < said.find("STEP: Implement"),
-        "and both precede the part this Drone is actually being asked to do: {said}"
+        said.find("THE PART BEFORE THIS ONE") < said.find("WHAT A PERSON ASKED FOR"),
+        "and a part is closed before a person's note about what to do next: {said}"
+    );
+    assert!(
+        said.find("WHAT A PERSON ASKED FOR") < said.find("STEP: Implement"),
+        "and all three precede the part this Drone is actually being asked to do: {said}"
+    );
+}
+
+/// **Nothing renders where nothing was said**, which is every ordinary spawn.
+/// `and_redirect` takes the `Option` the record answers with for that reason —
+/// a block saying a person said nothing is a block a Drone has to read.
+#[test]
+fn a_boundary_nobody_spoke_at_renders_no_instruction_block() {
+    let workflow = note_then_fix();
+    let said = turn(
+        &workflow,
+        "fix",
+        crossing(&workflow, "fix", &recorded("root_cause")).and_redirect(None),
+    );
+
+    assert!(!said.contains("WHAT A PERSON ASKED FOR"), "{said}");
+}
+
+/// **The words pass through untouched.** A person read the work and wrote this
+/// from it; Fleet summarising it would be Fleet deciding what they meant, which
+/// is `resume::redirect`'s reason for not carrying the Judge's citation either.
+#[test]
+fn the_note_reaches_the_drone_as_the_person_typed_it() {
+    let workflow = note_then_fix();
+    let typed = "stop at the reader. the writer is #219 and is not yours.";
+    let said = turn(
+        &workflow,
+        "fix",
+        Crossed::nothing().and_redirect(Some(Redirected::of(
+            &RedirectWaiting::saying(typed).expect("a note"),
+        ))),
+    );
+
+    assert!(said.contains(typed), "{said}");
+    assert!(
+        said.contains("It is not part of the step's definition"),
+        "and it is framed as an instruction rather than as the step: {said}"
     );
 }
 

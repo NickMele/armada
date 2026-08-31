@@ -222,24 +222,28 @@ where
             .await
     }
 
-    /// Put a Drone back on a Job a person approved across a human gate.
+    /// Put a Drone back on a Job a person answered at a human gate.
     ///
     /// **The slot is the whole reason this exists.** The gate stands its Drone
     /// down and frees the slot, because a person's review must cost no fleet
     /// time — so by the time they answer, the slot is very often another Job's.
-    /// The approved Job goes back in the queue and arrives here when one is
-    /// free, which is why approving is not a resume.
+    /// The Job goes back in the queue and arrives here when one is free, which
+    /// is why neither answer that keeps it is a resume.
     ///
-    /// **Both step moves already happened**, under `awaiting_review` where the
-    /// inner machine is still live: `crate::reviewing` advances the gate's step
-    /// and enters the next one before it re-queues, because the machine freezes
-    /// the moment the Job leaves the gate. So what is left is the Job's own
-    /// move and a Drone.
+    /// **Every step move already happened**, under `awaiting_review` where the
+    /// inner machine is still live: an approval advances the gate's step and
+    /// enters the next one before it re-queues, and `request_changes` moves
+    /// nothing at all. So what is left is the Job's own move and a Drone.
     ///
-    /// **`Cleared::reviewed` and not `checked`**, and it is not inferred from
-    /// anything fragile: the only edge into `queued` that carries a branch is
-    /// the one `approve_review` takes, so a Job arriving here was cleared by a
-    /// person by construction.
+    /// **The two cross differently, and the waiting note tells them apart.**
+    /// An approval advanced, so `step` is the *next* one and the part before it
+    /// is what the person just took: `Cleared::reviewed`. `request_changes` did
+    /// not, so `step` is the *same* one and the part before it is a step nobody
+    /// just acted on — its gate may have been auto — and "read by a person and
+    /// accepted" over it is a sentence the record does not support. Nothing is
+    /// crossed there, as on a restart. The test is exact: only
+    /// `request_changes` writes a note, and `crate::spawning` clears it at the
+    /// spawn this call is on its way to.
     async fn readmitted(&self, job: Job, working: &mut Option<Working>) -> Result<(), Adrift> {
         let job_id = job.id().clone();
         let Some(step) = job.current_step_id().cloned() else {
@@ -265,13 +269,19 @@ where
             .await
             .step_evidence(&job_id)
             .map_err(Adrift::Reading)?;
+        let sent_back = job.redirect_waiting().is_some();
         let passed = the_part_before(job.workflow(), &step).cloned();
         let job = self.move_job(&job, Target::Running, Actor::Fleet).await?;
         let mut crossed =
             Crossed::nothing().and_produced(Produced::before(job.workflow(), &step, &recorded));
-        if let Some(passed) = &passed {
+        if let (Some(passed), false) = (&passed, sent_back) {
             crossed = crossed.and_cleared(Cleared::reviewed(passed));
         }
+        // **`fresh` and not `resuming`, on both paths.** `Stopped` is read off
+        // `last_verdict` and the Judge's answers, and a step sent back across a
+        // human gate stopped at none of them: it passed everything a machine
+        // asks. What says why this Drone is here is the person's own note,
+        // which `put_a_drone_on` folds in.
         self.put_a_drone_on(
             &job,
             &step,
@@ -384,11 +394,11 @@ where
             // minutes doing nothing while a person read it. The slot is freed
             // in this turn and `admit_next` may give it to the next Job.
             //
-            // **The cost is that `request_changes` refuses until `#207`.**
-            // There is no Drone to give the note to and nowhere for it to wait.
-            // That is a chosen interval, written down on the ruling and on
-            // `job-statuses.toml`'s `awaiting_review` row; nothing here softens
-            // it, because a fallback that kept one Drone alive for that path
+            // **The cost is that `request_changes` cannot inject anything.**
+            // There is no Drone to give the note to, so `#207` gives it
+            // somewhere to wait: the note goes onto the Job and the Drone
+            // re-admission puts back on the step opens with it. Nothing here
+            // softens the ending, because a Drone kept alive for that one path
             // would keep the slot for it too.
             //
             // The Job moves first, so the departure is published over a record

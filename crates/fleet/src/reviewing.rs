@@ -3,9 +3,9 @@
 //! # Every one of them is a transition, and none writes a status
 //!
 //! Approving advances the step on the inner machine and then moves the Job on
-//! the outer one; requesting changes moves it back to `running`; rejecting ends
-//! it. All three go through `Job::transition`, so a review is a row in the same
-//! log as everything else and the actor on it is **human**.
+//! the outer one; requesting changes re-queues it at the same step; rejecting
+//! ends it. All three go through `Job::transition`, so a review is a row in the
+//! same log as everything else and the actor on it is **human**.
 //!
 //! # All three refuse anywhere but `awaiting_review`
 //!
@@ -34,18 +34,21 @@
 //! way *in* to `awaiting_review` buys nothing for it: the base moves while a
 //! person reads, and a conflict would put markers into the diff being judged.
 //!
-//! The rebase is inside [`put_a_drone_on`](Fleet::put_a_drone_on), which every
-//! advance reaches.
+//! The rebase is inside [`put_a_drone_on`](Fleet::put_a_drone_on).
 //!
 //! # The gate holds no Drone and no slot
 //!
-//! A person's review costs no fleet time: the Drone ends when the machine
-//! gates pass, and the slot goes to the next Job. So approving **re-queues**
-//! rather than resuming, and `request_changes` refuses until `#207` gives its
-//! note somewhere to wait. Both are on `job-statuses.toml`'s `awaiting_review`
-//! row for whoever reads the registry instead of this file.
+//! A person's review costs no fleet time: the Drone ends when the machine gates
+//! pass, and the slot goes to the next Job. So **both** answers that keep the
+//! Job re-queue rather than resume, and differ in one move and one note — an
+//! approval advances the step, `request_changes` writes the words onto the Job
+//! and does not. `job-statuses.toml`'s `awaiting_review` row says the same for
+//! whoever reads the registry instead of this file.
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
-use core_model::{Actor, Job, JobId, JobStatus, StepId, StepTarget, Target};
+use core_model::{
+    Actor, Component, Envelope, Job, JobId, JobStatus, Level, RedirectWaiting, StepId, StepTarget,
+    Target,
+};
 use std::path::Path;
 use verification::OutcomeTurn;
 
@@ -53,6 +56,7 @@ use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::resume::Redirection;
 use crate::session::LiveSession;
+use crate::transcript;
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -122,39 +126,117 @@ where
     }
 
     /// Send the work back with a note. **The worktree and every step so far
-    /// survive**: the Job returns to `running` at the same step, and the note
-    /// is what the step is worked again against.
+    /// survive**: the Job is worked again at the same step, and the note is
+    /// what it is worked against.
     ///
     /// The step does not move, which is the whole difference between this and an
     /// approval — the work is being done again rather than accepted.
     ///
-    /// **It refuses, at every gate, until `#207`.** That is not a defect and it
-    /// is not to be worked around. A Drone ends when its step's work passes the
-    /// machine gates, so the gate holds none — there is nobody to tell, and a
-    /// Job put back to `running` with no process on it escalates as
-    /// `interrupted` a moment later having lost the note. `#207` gives a
-    /// boundary something to carry the note in, at which point it opens the
-    /// next Drone's brief; until it lands, approve or reject.
+    /// # Two paths, and exactly one of them runs
     ///
-    /// Keeping one Drone alive for this path would keep the working slot for it
-    /// too, which is the whole of what ending a Drone at a gate buys — see
-    /// `job-statuses.toml`'s `awaiting_review` row, which carries the same
-    /// interval for whoever reads the registry instead of the code.
+    /// **A Drone that is there is told, and nothing waits.** That is the act as
+    /// it has always been: a turn injected into a live session, the Job back to
+    /// `running`, no record of the words. It is the branch a gate does not
+    /// reach today and it is kept anyway, because "there is a process" is a
+    /// question about the slot rather than about where the Job stands.
     ///
-    /// It is checked before anything moves, so a refused request leaves the Job
-    /// at the gate rather than half-answered.
+    /// **A gate with no Drone writes the note down and re-queues.** The note
+    /// goes onto the Job, the Job takes `awaiting_review -> queued`, and
+    /// `crate::dispatch`'s re-admission puts a fresh Drone on the same step
+    /// with the note in its opening brief — `crate::spawning` delivers it and
+    /// clears it. **Not `running`**, which is what this used to refuse over: a
+    /// Job put straight back to `running` with no process on it escalates as
+    /// `interrupted` a moment later. The slot the gate freed is very often
+    /// another Job's by the time a person answers, which is exactly
+    /// [`approve_review`](Fleet::approve_review)'s situation and why the two
+    /// take the same edge.
+    ///
+    /// **Whichever runs, the other must not.** A note both injected and written
+    /// down is a note a Drone reads twice.
+    ///
+    /// It refuses before anything moves where a Job has no worktree left to put
+    /// a Drone on, because there is then genuinely nowhere for the note to go —
+    /// [`Adrift::NoDroneToTell`], narrowed from "no process right now" to "no
+    /// process, and none possible".
     pub async fn request_changes(&self, job_id: &JobId, note: &Redirection) -> Result<Job, Adrift> {
-        let working = self.slot().lock().await;
+        let mut working = self.slot().lock().await;
         let job = self.load(job_id).await?;
         self.at_the_gate(&job)?;
-        if !working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
+        if working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
+            let job = self.move_job(&job, Target::Running, Actor::Human).await?;
+            self.said(job_id, note, &working).await?;
+            return Ok(job);
+        }
+        // Before anything moves, so a refusal leaves the Job at the gate rather
+        // than half-answered — the property this method had when it refused
+        // every time.
+        if self.surviving_worktree(&job).is_err() {
             return Err(Adrift::NoDroneToTell {
                 job: job_id.clone(),
             });
         }
-        let job = self.move_job(&job, Target::Running, Actor::Human).await?;
-        self.said(job_id, note, &working).await?;
-        Ok(job)
+        // The note is written before the Job moves and never after. A move that
+        // landed with the write still to come would put the Job in the queue
+        // with the person's words nowhere, which is the failure the whole
+        // refusal existed to prevent, arriving one line later.
+        //
+        // `redirect_waits` refuses a second note over an undelivered first.
+        // Nothing reaches that here: the Job leaves `awaiting_review` in this
+        // same call, under the slot lock, and `at_the_gate` refuses every act
+        // that follows.
+        let waiting =
+            job.redirect_waits(waiting_note(note))
+                .map_err(|held| Adrift::NoteAlreadyWaiting {
+                    job: job_id.clone(),
+                    held,
+                })?;
+        self.store()
+            .lock()
+            .await
+            .record_redirect_waiting(&waiting)
+            .map_err(Adrift::Writing)?;
+        self.noted_waiting(job_id, &waiting);
+        // The actor is **human**, for `approve_review`'s reason: a person took
+        // the Job out of the gate, and Fleet only decides which turn it gets a
+        // process back.
+        self.move_job(&waiting, Target::Queued, Actor::Human)
+            .await?;
+        // Inline, exactly as an approval re-admits inline — so a fleet with
+        // nothing else to do starts the step again now rather than on the next
+        // tick.
+        self.admit_next(&mut working).await?;
+        self.load(job_id).await
+    }
+
+    /// Write into the Job's own log that a person spoke and nobody was there.
+    ///
+    /// **The first of the pair, and `crate::spawning` writes the second.** The
+    /// owner's ruling is that the record says a redirect was *delivered* rather
+    /// than merely written — which needs both lines, because one of them alone
+    /// cannot tell "you were told" from "nobody was there".
+    ///
+    /// It carries the words. They are the person's own and they are already on
+    /// the record; a log line that said only that a note existed would send a
+    /// reader to the column to find out what it was.
+    fn noted_waiting(&self, job: &JobId, waiting: &Job) {
+        let said = waiting
+            .redirect_waiting()
+            .map(|note| note.text())
+            .unwrap_or_default();
+        let envelope = Envelope::new(
+            self.now(),
+            Level::Info,
+            Component::Fleet,
+            self.run().clone(),
+            format!(
+                "changes were asked for at the gate with no Drone there to hear it, and the \
+                 note is waiting for the next one: \"{said}\""
+            ),
+        )
+        .in_job(job.as_ulid().clone());
+        // A log line that will not write does not undo the write that matters,
+        // for `resume::noted_roused`'s reason: the column is the record.
+        let _ = transcript::note(&self.host().repo_root, job, &envelope);
     }
 
     /// A verdict on the work: the Job is over and its Drone is ended.
@@ -281,4 +363,15 @@ where
             .unwrap_or_else(|| spec.branch());
         Ok(Some(Worktree::at(spec.worktree_path(), branch)))
     }
+}
+
+/// The person's words, as the record holds them.
+///
+/// **Two types for one string, and the conversion is total.** `Redirection` is
+/// what the wire decoded and refuses a blank; `RedirectWaiting` is what the
+/// `jobs` row holds and refuses one too. Neither can be constructed empty, so
+/// this cannot fail — and the `expect` is unreachable rather than unchecked.
+fn waiting_note(note: &Redirection) -> RedirectWaiting {
+    RedirectWaiting::saying(note.text())
+        .expect("a Redirection is never blank, so neither is the note it becomes")
 }

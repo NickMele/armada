@@ -800,12 +800,12 @@ where
             // The Job is not at a human gate. A 409 like the conflicts above,
             // and never a 500: the machine was never asked, so there is no edge
             // for a caller to go looking for.
-            Adrift::NotUnderReview { job, .. } | Adrift::NoDroneToTell { job } => {
-                Refusal::IllegalMove(
-                    WireError::raised(NOT_UNDER_REVIEW, said, self.run_id())
-                        .about_job(ipc::JobId::from(job)),
-                )
-            }
+            Adrift::NotUnderReview { job, .. }
+            | Adrift::NoDroneToTell { job }
+            | Adrift::NoteAlreadyWaiting { job, .. } => Refusal::IllegalMove(
+                WireError::raised(NOT_UNDER_REVIEW, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
             // A forget on a Job that is not yet terminal. The machine was
             // never asked — there is no move to refuse, only a row that is
             // still live.
