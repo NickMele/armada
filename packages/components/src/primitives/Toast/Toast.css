@@ -63,11 +63,16 @@
 }
 
 /* Where a toast actually sits. The stories draw it in flow so several can be
- * read at once; the app pins it. */
+ * read at once; the app pins it.
+ *
+ * Bottom inset is the status bar's height plus the inset, not the inset alone.
+ * The bar states Fleet's liveness out loud and is the one thing still true
+ * while everything else fails, so a toast clears it rather than covering it —
+ * the error treatment's rule, and this region predates it. */
 .armada-toast-region {
   position: fixed;
   right: var(--space-6);
-  bottom: var(--space-6);
+  bottom: calc(var(--h-status-bar) + var(--space-6));
   z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
