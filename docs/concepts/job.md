@@ -155,12 +155,24 @@ one a judgement about the work, one a claim about the evidence, and
 `last_verdict.trigger` is what tells an overruled flag from an overruled
 refusal afterwards. `gate_undecided` stays refused because the gate never
 weighed the work at all, so there is no decision to disagree with; whether that
-wants an act of its own is open. A failed mechanical Check ends the Job at
-`completed_failed` — terminal and out of reach, and the step it failed is
-stopped carrying `failed(gate_failure)` before the Job gets there, which is what
-`running -> completed_failed`'s guard holds it to. `build` failing is not a
-matter of opinion, and a step left `running` beneath a terminal Job was one
-nothing could read a verdict off (#179).
+wants an act of its own is open. **A failed mechanical Check is handed back to the Drone that
+produced the work**, with the Check's own output, and the step retries under its
+gate-failure retry limit. `build` failing is not a matter of opinion — which is
+why it cannot be overruled, and not a reason to end the Job over it. A failing
+test is work, and the Drone that wrote the code is the thing that should fix it.
+
+**Where a spent budget lands is open** — `[retries-exhausted-destination]`. It
+ends the Job at `completed_failed` today, which is what `crates/fleet/src/gate.rs`
+says it makes askable rather than answers: the module made the budget spendable
+and left the destination to a person.
+
+What is settled is only that `completed_failed` is the reading under question,
+because it says the Job failed when the work is merely unfinished. The Drone keeps its session and
+its worktree, so a redirect costs no respawn and consumes no attempt, which is
+the act a person actually wants at that moment and was unreachable while the Job
+went terminal first. A step left `running` beneath a terminal Job was one nothing
+could read a verdict off (#179), and that guard is unaffected: the step is
+stopped carrying `failed(gate_failure)` either way.
 
 **An escalated Job usually keeps its Drone, and a redirect does not depend on
 it.** `job-statuses.toml` records `drone_process = "Alive, idle. Gone only on

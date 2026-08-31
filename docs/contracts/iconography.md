@@ -280,8 +280,8 @@ it deliberately takes none, is an open question.
 ## Navigation
 
 16px, `--fg-muted` at rest, `--fg-default` when active. Never
-status-coloured. The full mapping (Job Board, Active Jobs, Alerts, Reviews,
-Doctor, Activity Feed, Manifest, Helm) is `packages/icons/icons.toml`, group
+status-coloured. The full mapping (Job Board, Alerts, Doctor, Manifest,
+Helm) is `packages/icons/icons.toml`, group
 `Navigation` — `eye` and `file-cog` are shared assignments, carried under
 their own primary groups with a `Navigation` usage entry.
 

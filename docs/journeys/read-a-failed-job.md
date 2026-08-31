@@ -34,7 +34,20 @@ What this journey mostly owes is **legibility of a dead end**. The screen's job 
 
 **Milestone design file:** `M1 - Dogfood.dc.html`, block `1f`. Drawn 2026-08-23. The screen states four things in order — what failed, that the job is over, where the branch is, and where the log is — and the sentence saying nothing happens automatically is written out rather than left to be inferred from an absence of buttons. All three controls take you to the work; none offers to act on it.
 
-Two decisions came out of drawing it. **A failed step gained an activity value**, `--step-failed` with a `--step-failed-bg` surface and a bare `x` glyph: it was drawn neutral first, on the grounds that a Check result is measured and measured facts render flatly, and that was reversed — at M1 a failed Check ends the Job, so that row is the entire reason a person opened the screen, and making them find it by weight in a rail of muted rows is the frustration this journey exists to prevent. The gate row beneath stays neutral: the step's state is hued, the Check's exit code is measured. **The per-job log gained a surface**, the first place in Armada that points at a log sink.
+Two decisions came out of drawing it. **A failed step gained an activity value**, `--step-failed` with a `--step-failed-bg` surface and a bare `x` glyph: it was drawn neutral first, on the grounds that a Check result is measured and measured facts render flatly, and that was reversed — the row that ended the Job is the entire reason a person opened the screen, and making them find it by weight in a rail of muted rows is the frustration this journey exists to prevent. The gate row beneath stays neutral: the step's state is hued, the Check's exit code is measured. **The per-job log gained a surface**, the first place in Armada that points at a log sink.
+
+**A failed Check no longer reaches this screen.** A mechanical Check that fails
+is handed back to the Drone to fix, and a Job only arrives here once the work
+cannot be repaired and a person has ended it. What reaches a dead end is
+narrower than it was: a Job killed, a Job rejected at a gate, or one whose
+attempts were spent and which a person then stopped.
+
+The screen's four things are unchanged, because each still has an answer — what
+failed, that the Job is over, where the branch is, where the log is. What
+changes is the sentence about nothing happening automatically: it is now true
+because a person made it true, rather than because a Check exited non-zero. See
+[Monitor Active Work](4-monitor-active-work.md), Job detail, and the
+contradiction it names with [Job](../concepts/job.md).
 
 ## Related
 

@@ -45,7 +45,7 @@ Run and edit a Manifest reads a project's Checks and Commands, runs any one of t
 
 **Redirect, Kill and Pause are all available on a healthy Drone.** A redirect is recorded on the Job.
 
-**Watching a healthy Drone work is [Observe](observe.md)**, opened on one Job and read-only. It is not on the Board and not on Active Jobs, which stay scanning surfaces.
+**Watching a healthy Drone work is [Observe](observe.md)**, opened on one Job and read-only. It is not on the Board, which stays a scanning surface.
 
 [Job Board](job-board.md) itself is a distinct concept with its own document, surfaced inside Bridge rather than a Bridge sub-page.
 
@@ -53,7 +53,11 @@ Run and edit a Manifest reads a project's Checks and Commands, runs any one of t
 
 Bridge's shell is a **left resizable rail** for navigation, a **full-width panel** to its right where the journeys mount, and a **status bar fixed to the bottom**. Finer layout treatment within each journey remains UI/UX design phase work.
 
-The rail carries Job Board, Active Jobs, Alerts, Reviews, Activity Feed, Doctor and Manifest. Helm sits below them.
+The rail carries Job Board, Alerts, Doctor and Manifest. Helm sits below them.
+
+**Active Jobs, Reviews and the Activity Feed are not on it.** All three were lists of Jobs standing beside the Board, and the Board now holds every Job with state as a filter — see [Job Board](job-board.md). Each is that list under one filter: running, `awaiting_review`, and over. Four lists of Jobs gave four surfaces four chances to disagree about what a Job row looks like, and a person had to learn which one held which state.
+
+**Alerts is the one that stays.** An alert is a condition on a Job rather than a status a Job holds — thrashing, fan-out abuse and evidence-suspect are none of them Job states — so it is a different population with its own level and trigger structure, not a filter of this one.
 
 **The status bar reports Fleet and Doctor health continuously.** The Manifest surface's Doctor strip can therefore disappear when every module passes, without its absence being ambiguous.
 

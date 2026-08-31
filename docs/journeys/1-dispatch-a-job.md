@@ -58,10 +58,11 @@ A handful of questions this journey once carried are now settled, recorded here 
 
 ## Open questions
 
-- **[origin-tag-filterable-or-display]** Is the Job Board origin tag filterable, or display-only?
-  Not yet decided. The origin tag names how a Job came to exist — dispatched by you, found by Fleet, drafted in Helm — and whether the Job Board can filter or sort on it, versus it being read-only labelling, is unspecified.
-
-The Board's graph view is tracked at `[job-board-graph-view]` on [Job Board](../concepts/job-board.md), which owns the Board's layout, and its default sort order at `[job-board-sort-order]` in `../contracts/configuration.md`. Neither is duplicated here.
+None. Both this journey carried were answered by the Board drawing on
+2026-08-31 and now live as facts on [Job Board](../concepts/job-board.md):
+origin is display-only rather than a filter axis, and the default sort is
+Critical first. The Board's graph view is tracked at `[job-board-graph-view]`
+there, which owns the Board's layout, and is not duplicated here.
 
 ## Related
 

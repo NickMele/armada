@@ -10,11 +10,19 @@ Defines the Job Board — the engineer-facing surface for browsing and understan
 
 ## What it's for
 
-Your primary lens on **"what's queued and why"** — two equally weighted purposes: browsing/picking work to dispatch, and understanding dependencies (why something hasn't started).
+Your lens on **every Job and what it is doing** — picking work to dispatch, watching what is running, reading what finished, and understanding why something has not started.
 
 ## Scope
 
-**Not-yet-started Jobs only** — queued, blocked, waiting-on-resources, or waiting-on-approval. Once a Drone picks a Job up, it moves to Active Jobs and comes off the Board. The Board is not a full-lifecycle view; Activity Feed and Active Jobs cover running/completed state.
+**Every Job, at every status, with state as a filter.** A Job does not leave the Board when a Drone picks it up; the filter is what narrows the list, and the filter is a control rather than a routing decision.
+
+**Reviews is a filter here, and a fast one.** A Job at `awaiting_review` is a Job, and a queue of them is this list filtered to that status. It is not a destination of its own: it was one, and folding it in is what makes "what needs me" a single gesture rather than a second place to check.
+
+**A filter changes a row's field set, and that is not the row dropping a field.** A Job at review is at its last step with its cost settled, so a step bar and a spend figure say nothing there — the Reviews field run was drawn without them. Field sets already vary by status; the rule that no field is dropped is about width, never about state.
+
+**One list rather than four surfaces.** Splitting not-yet-started, running, awaiting-review and finished across separate destinations divided one population four ways, made a person learn which surface held which state, and gave four lists of Jobs four chances to disagree about what a Job row looks like. What used to be Active Jobs is this list filtered to what is running, what used to be Reviews is it filtered to `awaiting_review`, and there is no Activity Feed: finished Jobs are this list filtered to what is over.
+
+Why it matters that this is a filter: the state a Job is in changes constantly and is not where a person's attention lives. Scoping by Manifest is a place; scoping by state is a question, and a question belongs in a control.
 
 ### One Board per Manifest
 
@@ -34,24 +42,22 @@ Approving such a Job is refused at that moment, naming the missing Manifest — 
 
 Still uncovered: what a freeze does to a Convoy already running, since freeze is enforced live rather than only at dispatch — see [Convoy](convoy.md).
 
-### A sub-dispatched Job is usually already running
+### A sub-dispatched Job is here like any other
 
-**Sub-dispatched Jobs are almost never here.** A Job carrying `dispatched_by` is created and dispatched inside an already-approved Job — it does not queue and never needs approval, so it is running before anything could render it.
+**A Job carrying `dispatched_by` appears on the Board the same as one you dispatched.** It is created and dispatched inside an already-approved Job — it does not queue and never needs approval — so it is usually running by the time anything renders it, and running is a filter rather than an absence.
 
-The one exception is `waiting_on_resources`, a not-started reason unrelated to approval: a sub-dispatched Job with no headroom sits in exactly the state this Board is scoped to show. It is rendered, **read-only** — see Dispatch flow.
+**Its row is read-only, and that is the only thing different about it.** No Approve and no Dispatch: the approval happened at its parent, so those controls would offer a decision with no content. Kill stays. See Dispatch flow.
 
-### `blocked_by_dependency` is not a second exception
-
-`blocked_by_dependency` is narrower than a second exception rather than being one: sub-dispatch **by itself** creates no `depends_on`, because `dispatched_by` is provenance, not a `dependencies` link. A sub-dispatched Job may still carry a `depends_on` of its own — one step spawning two sub-Jobs where the second depends on the first is ordinary — and where it does, it is blocked like any other Job and belongs on the Board. See [Job](job.md).
+`dispatched_by` is provenance rather than a `dependencies` link, so sub-dispatch **by itself** creates no `depends_on`. A sub-dispatched Job may still carry one — one step spawning two sub-Jobs where the second depends on the first is ordinary — and where it does it is blocked like any other Job. See [Job](job.md).
 
 ## Layout
 
 | View | Role |
 | --- | --- |
-| Flat list | Default landing view — sortable/filterable |
-| DAG / graph view | Opt-in toggle, for inspecting dependencies — not the default |
+| Flat list | The Board. Sorted and filtered, state among the filters |
+| DAG / graph view | Opt-in toggle, for inspecting dependencies — not the default, and not scheduled |
 
-Default view (list vs. graph) is user-configurable, not fixed — see Configuration below.
+Default view (list vs. graph) is user-configurable, not fixed — see Configuration below. The graph view is unscheduled: the graph a person asked for is a Job's own workflow, which is drawn on job detail — see [Monitor Active Work](../journeys/4-monitor-active-work.md).
 
 **The graph view has no Convoy case (see Open questions).** The graph view renders `dependencies`. A [Convoy](convoy.md) has none of its own by construction, but it **may be a peer node** in someone else's, and the Job proposer may emit a graph containing one.
 
@@ -59,7 +65,20 @@ A Convoy in the graph is expected rather than exceptional, and whether it render
 
 ## Job status on the Board
 
-A not-yet-running Job is in one of two statuses, and only `queued` carries a reason.
+### The default sort is Critical first
+
+**Critical first: the needs-you cluster, then oldest within every group.**
+Drawn 2026-08-31, answering `[job-board-sort-order]`, which had carried no body
+since it was filed. Oldest-first remains in the control as the other option.
+
+The sort agrees with the filter rather than cutting across it: the tab that
+groups the statuses which stop until a person reads them is the same set the
+default sort lifts to the top, so changing the tab reorders nothing a person had
+learned. The setting's key is `job_board.default_sort`.
+
+## Job status on the Board
+
+**Every status a Job can hold appears here**, and the filter decides which are on screen. Two of them carry the Board's own reading, and only `queued` carries a reason.
 
 | Status | Reason | Meaning |
 | --- | --- | --- |
@@ -76,7 +95,9 @@ A not-yet-running Job is in one of two statuses, and only `queued` carries a rea
 
 The `snake_case` forms are the stored values defined by [Job](job.md); Title Case is the rendered label.
 
-Blocked Jobs are shown (not hidden), rendered in a visually distinct state (e.g. greyed out).
+Blocked Jobs are shown rather than hidden, stepped down to `--border-subtle` and `--fg-subtle` — dimming is a token step, never an alpha.
+
+**A filter that empties the list says which filter did it.** A Board with nothing on it under a filter is not the same as a Manifest with no Jobs, and the empty state has to tell those apart — see [Bridge](bridge.md).
 
 ## Origin tagging
 
@@ -100,7 +121,20 @@ It carries no `dispatched_by`, linking back through `subject` instead, which is 
 
 ### A sub-dispatched Job is approved with its parent
 
-**A sub-dispatched Job is already approved as part of its parent.** It is created at `queued` rather than `awaiting_approval`, and its reason determines whether it renders here: it appears only while `waiting_on_resources`, and read-only. See Job status on the Board above.
+**A sub-dispatched Job is already approved as part of its parent.** It is created at `queued` rather than `awaiting_approval`, never at a status that would put it in front of you for a decision, and it renders here at whatever status it holds. See Job status on the Board above.
+
+### Origin is display-only
+
+**A label on the row, never a filter axis.** Drawn 2026-08-31 as a filter and
+rejected on the drawing, answering `[origin-tag-filterable-or-display]`. Both
+readings were drawn side by side; the filter earned no question a person
+actually asks. *What needs me*, *what is running* and *why has that not started*
+are all state, and the Board's scope is already the Manifest — so an origin axis
+adds a control that narrows by a fact nobody is narrowing on.
+
+It stays on the row because it answers a different question, asked after a row
+is already found: where did this come from. A sub-dispatched row names its
+parent Job there rather than only its origin.
 
 ### Stored value and rendered label
 
@@ -118,7 +152,9 @@ How a Convoy renders in the graph view is separate and unsettled — see Open qu
 
 ## Dispatch flow
 
-**Selecting a ready Job opens a Job detail view first.** Approval is a deliberate, separate action from there, not an immediate action on click. Why: this keeps the one-by-one approval discipline intact even when browsing quickly — see the Armada brief on Drone dispatch control.
+**Selecting a ready Job opens a Job detail view first.** Approval is a deliberate, separate action from there, not an immediate action on click.
+
+**So no row's control approves anything. A Job awaiting approval carries Review.** The built row shipped an Approve control, which contradicted this rule the whole time it was on screen; settled 2026-08-31 in favour of the rule. Review is the same word the `awaiting_review` row already carries, and it means the same thing in both places — *go read this* — because in both places the act itself happens on detail. The Board's keyboard model loses its Approve key entirely rather than moving it. Why: this keeps the one-by-one approval discipline intact even when browsing quickly — see the Armada brief on Drone dispatch control.
 
 ### Write-scope overlap on the card
 
@@ -128,7 +164,7 @@ Approving anyway is allowed and is the ordinary case — the overlap is a fact, 
 
 ### Controls on a sub-dispatched row
 
-**A sub-dispatched Job's row is read-only.** No Approve, no Dispatch — the approval already happened at its parent, so the controls would offer a decision that has no content. It is rendered visually distinct, the same treatment blocked Jobs get.
+**A sub-dispatched Job's row is read-only.** No Approve, no Dispatch — the approval already happened at its parent, so the controls would offer a decision that has no content. Its origin tag is what says so; it takes no dimming of its own, because being sub-dispatched is not a reason a Job is not moving.
 
 **Kill stays available.** Why: killing a sub-dispatched Job has a defined effect on the dispatching step, and a human who can see it stalled on resources should be able to stop it without first finding the parent.
 

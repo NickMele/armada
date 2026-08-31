@@ -153,7 +153,7 @@ An eviction there is not a lost row. It is a `Missed` count and a full resync of
 
 **Observe takes a per-Job channel, subscribed to only while somebody is watching.** The rule it departs from — one global stream, a client subscribes to nothing — was made because the Board renders every Job, so a subscription would put state on a connection whose value is being cheap to drop. Neither half holds here: a viewer is opened on one Job deliberately, and dropping the connection ends the watching rather than corrupting a view.
 
-**Bridge stays a scanning surface.** Observe is not on the Board and not on Active Jobs; it is opened on one Job and closed, the same shape the turn-level detail rule already has.
+**Bridge stays a scanning surface.** Observe is not on the Board; it is opened on one Job and closed, the same shape the turn-level detail rule already has.
 
 ## Secrets
 
