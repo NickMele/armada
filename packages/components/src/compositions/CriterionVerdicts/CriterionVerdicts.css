@@ -155,3 +155,28 @@
   color: var(--fg-default);
   font-weight: var(--weight-medium);
 }
+
+/* Where the brief this verdict answered was written. Mono and subtle, at the
+   end of the head line — it is a machine-derived reference rather than
+   anything the Judge said, so it never competes with the criterion's words,
+   and it holds the row to one line on a met verdict. The rail's own output
+   path is styled the same way, and for the same reason. */
+.armada-verdicts__brief {
+  flex: none;
+  max-width: 40%;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-verdicts__brief[data-copies="true"] {
+  cursor: pointer;
+}
+
+.armada-verdicts__brief[data-copies="true"]:hover {
+  color: var(--accent);
+}

@@ -96,7 +96,7 @@ impl Store {
         let rows = self
             .collect(
                 "SELECT step_id, attempt, judged_at, criterion, verdict, expected, produced,
-                        consequence
+                        consequence, brief_path
                  FROM job_step_judgments WHERE job_id = ?1 ORDER BY step_id, attempt, ordinal",
                 job_id,
                 "reading judgments",
@@ -241,6 +241,7 @@ fn judgment(row: &Row<'_>) -> Result<Judgment, RowError> {
         expected: maybe(row, "expected")?,
         produced: maybe(row, "produced")?,
         consequence: maybe(row, "consequence")?,
+        brief_path: maybe(row, "brief_path")?,
     })
 }
 

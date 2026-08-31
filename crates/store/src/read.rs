@@ -418,7 +418,8 @@ impl Store {
     ) -> Result<Vec<(StepId, Vec<Judgment>)>, LoadJobError> {
         let rows = self
             .collect(
-                "SELECT step_id, criterion, verdict, expected, produced, consequence
+                "SELECT step_id, criterion, verdict, expected, produced, consequence,
+                        brief_path
                  FROM job_step_judgments AS j WHERE job_id = ?1
                    AND attempt = (SELECT max(attempt) FROM job_step_judgments
                                   WHERE job_id = j.job_id AND step_id = j.step_id)
@@ -440,6 +441,7 @@ impl Store {
                             expected: maybe(row, "expected")?,
                             produced: maybe(row, "produced")?,
                             consequence: maybe(row, "consequence")?,
+                            brief_path: maybe(row, "brief_path")?,
                         },
                     ))
                 },

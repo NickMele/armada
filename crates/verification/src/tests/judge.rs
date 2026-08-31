@@ -123,6 +123,7 @@ fn refusal(id: &str) -> Judgment {
         expected: Some("the loop stops at n".into()),
         produced: Some("the loop stops at n - 1".into()),
         consequence: Some("the last row is dropped".into()),
+        brief_path: None,
     }
 }
 
@@ -133,6 +134,7 @@ fn met(id: &str) -> Judgment {
         expected: None,
         produced: None,
         consequence: None,
+        brief_path: None,
     }
 }
 

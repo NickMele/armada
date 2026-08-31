@@ -404,7 +404,10 @@ export function WorkflowRail({ steps, pulsing = false, onCopied }: WorkflowRailP
             )}
             {step.verdicts === undefined || step.verdicts.length === 0 ? null : (
               <div className="armada-rail__verdicts">
-                <CriterionVerdicts rows={step.verdicts} />
+                {/* The rail's own copy handler is passed down rather than
+                    duplicated: a brief path and a Check's output path are the
+                    same affordance, and two toasts spelled apart drift. */}
+                <CriterionVerdicts rows={step.verdicts} onCopied={onCopied} />
               </div>
             )}
           </li>

@@ -572,6 +572,13 @@ export type Judged = {
   produced?: string;
   /** What that difference does to whoever consumes it. The triage line. */
   consequence?: string;
+  /**
+   * Where the whole brief this verdict answers was written, relative to the
+   * repository root. **The path, never the question** — a brief is the request,
+   * the deliverable and the whole branch diff, and Bridge does not read the
+   * filesystem. Absent where Fleet kept no brief.
+   */
+  brief_path?: string;
 };
 
 /**

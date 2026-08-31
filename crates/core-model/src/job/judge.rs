@@ -170,4 +170,18 @@ pub struct Judgment {
     /// What that difference does to whoever consumes it. **The field a person
     /// triages on**, and the one field a live Drone is never shown.
     pub consequence: Option<String>,
+    /// Where the whole brief this verdict answers was written, relative to the
+    /// repository root.
+    ///
+    /// **A reference, never the question**, exactly as `StepCheck::output_path`
+    /// is a reference and never the output: a brief carries the request, the
+    /// diff and the deliverable, and a column holding it would put a hundred
+    /// kilobytes on every row of every panel.
+    ///
+    /// **Absent means the brief was not kept**, which is not the same as an
+    /// empty one — a gate driven with nowhere to write, a step id or a
+    /// criterion id that is not a single path component, a disk that refused.
+    /// A verdict is still a verdict without it; what is lost is the ability to
+    /// re-read it against what it was answering.
+    pub brief_path: Option<String>,
 }

@@ -120,3 +120,29 @@ impl ModelClient for FakeJudge {
         JudgeCall::rendered(ask, "/bin/sh", args)
     }
 }
+
+/// One refusal, as the record holds it.
+///
+/// **Written out once here rather than once per test file**, for
+/// [`asked_for`](crate::asked_for)'s reason one level along: a `Judgment` is
+/// seven fields with no `Default`, four of which are `Option`s that mean
+/// different things, and a test that wants "the Judge refused c1" should not
+/// have to say so in eight lines.
+///
+/// `brief_path` is `None`: where a brief was kept is a fact about a filesystem
+/// and a fixture has none. The test that cares asserts on it directly.
+pub fn refusal(
+    criterion: &str,
+    expected: &str,
+    produced: &str,
+    consequence: &str,
+) -> core_model::Judgment {
+    core_model::Judgment {
+        criterion_id: core_model::CriterionId::new(criterion),
+        verdict: core_model::JudgeVerdict::NotMet,
+        expected: Some(expected.to_string()),
+        produced: Some(produced.to_string()),
+        consequence: Some(consequence.to_string()),
+        brief_path: None,
+    }
+}

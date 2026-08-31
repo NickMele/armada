@@ -62,6 +62,8 @@ mod fold;
 mod footprint;
 mod forget;
 mod gaming;
+/// Where a verdict's own question was kept, and the column that points at it.
+mod judged;
 /// The note a boundary is holding, and the column it waits in.
 mod note;
 mod open;

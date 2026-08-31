@@ -637,6 +637,18 @@ pub struct Judged {
     /// triages on.**
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub consequence: Option<String>,
+    /// Where the whole brief this verdict answers was written, relative to the
+    /// repository root.
+    ///
+    /// **A reference, never the question**, the way [`CheckRun::output_path`]
+    /// is one: a brief carries the request, the deliverable and the whole
+    /// branch diff, and Bridge does not read the filesystem. **Absent where the
+    /// brief was not kept**, which is a verdict nobody can re-read against its
+    /// input rather than one with an empty question.
+    ///
+    /// [`CheckRun::output_path`]: crate::CheckRun::output_path
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub brief_path: Option<String>,
 }
 
 impl From<&core_model::Judgment> for Judged {
@@ -647,6 +659,7 @@ impl From<&core_model::Judgment> for Judged {
             expected: judgment.expected.clone(),
             produced: judgment.produced.clone(),
             consequence: judgment.consequence.clone(),
+            brief_path: judgment.brief_path.clone(),
         }
     }
 }

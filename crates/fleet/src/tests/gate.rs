@@ -24,6 +24,7 @@ use verification::{
     CheckFailed, Claimed, NeverRan, NotASubmission, NotClaimed, Request, ShownBy, Submission,
 };
 
+use crate::asked::Asked;
 use crate::at_step::AtStep;
 use crate::clock::Clock;
 use crate::evidence::{Call, EvidenceInbox, EvidenceTool};
@@ -206,6 +207,7 @@ pub(super) fn judged_by_shared(client: Arc<FakeJudge>) -> Judging {
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: Marking::detached(),
+        asked: Asked::nowhere(),
     }
 }
 

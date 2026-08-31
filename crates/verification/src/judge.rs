@@ -146,6 +146,11 @@ impl Brief {
     /// prose, timed out or returned nothing has not verified anything, and
     /// turning that into either verdict would be inventing one — see
     /// [`Unreadable`].
+    ///
+    /// **`brief_path` comes back `None`, and this crate is the wrong one to
+    /// fill it.** Where the question was kept is a fact about a filesystem and
+    /// this crate has none; `fleet::asked` writes the file and stamps the path
+    /// on, which is why it is the caller and not this.
     pub fn read(&self, answer: &str) -> Result<Judgment, Unreadable> {
         let verdict = field(answer, "verdict")
             .and_then(|found| JudgeVerdict::from_wire(&found))
@@ -157,6 +162,7 @@ impl Brief {
                 expected: None,
                 produced: None,
                 consequence: None,
+                brief_path: None,
             });
         }
         // Constitutional rule 4: a refusal must cite. An uncited one is
@@ -182,6 +188,7 @@ impl Brief {
             expected: Some(expected),
             produced: Some(produced),
             consequence: Some(consequence),
+            brief_path: None,
         })
     }
 }

@@ -18,6 +18,7 @@ use ipc::{JobDetail, RunId};
 use testkit::{FakeJudge, FakeWorkProduct, Gaming, Sketch};
 use verification::Request;
 
+use crate::asked::Asked;
 use crate::at_step::AtStep;
 use crate::gate::{apply, rule_on, Ruling};
 use crate::judging::{JudgeBudget, Judging, Marking};
@@ -77,6 +78,7 @@ fn judging() -> Judging {
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: Marking::detached(),
+        asked: Asked::nowhere(),
     }
 }
 
@@ -280,6 +282,7 @@ async fn a_flagged_step_keeps_what_the_judge_said_about_its_criteria() {
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: Marking::detached(),
+        asked: Asked::nowhere(),
     };
     let ruling = rule_on(
         at,

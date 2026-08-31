@@ -312,6 +312,7 @@ fn what_the_judge_said_survives_the_process_that_asked() {
                     expected: Some("the reader stopping before `end`".to_string()),
                     produced: Some("the bound widened to match the reader".to_string()),
                     consequence: Some("every caller reads one row too many".to_string()),
+                    brief_path: Some(".armada/briefs/01JDG/fix.1.c1.txt".to_string()),
                 },
                 Judgment {
                     criterion_id: CriterionId::new("c2"),
@@ -319,6 +320,10 @@ fn what_the_judge_said_survives_the_process_that_asked() {
                     expected: None,
                     produced: None,
                     consequence: None,
+                    // A panel of one, and no file was kept for it. The read has
+                    // to tell that from the row above rather than filling in a
+                    // path the writer never had.
+                    brief_path: None,
                 },
             ],
             &created_at(),
@@ -337,7 +342,16 @@ fn what_the_judge_said_survives_the_process_that_asked() {
         Some("every caller reads one row too many"),
         "the field a person triages on"
     );
+    assert_eq!(
+        read[0].1[0].brief_path.as_deref(),
+        Some(".armada/briefs/01JDG/fix.1.c1.txt"),
+        "the verdict comes back beside the call that produced it"
+    );
     assert_eq!(read[0].1[1].verdict, JudgeVerdict::Met);
+    assert!(
+        read[0].1[1].brief_path.is_none(),
+        "a brief nothing kept is absent rather than guessed"
+    );
     assert!(
         read[0].1[1].expected.is_none(),
         "there is nothing a no-objection is refusing on"

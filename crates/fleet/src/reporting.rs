@@ -346,6 +346,13 @@ where
                 out.detail("expected", judgment.expected.as_deref());
                 out.detail("produced", judgment.produced.as_deref());
                 out.detail("consequence", judgment.consequence.as_deref());
+                // The path and not the brief. Everything else on this page is
+                // a line or two; a brief is the whole branch diff, and a report
+                // that inlined nine of them would be unreadable at exactly the
+                // moment somebody opened it. `.armada/briefs/` outlives the
+                // clean that takes these rows away, which is what makes the
+                // reference worth carrying — see `fleet::asked`.
+                out.detail("brief", judgment.brief_path.as_deref());
             }
         }
         if judged.is_empty() {

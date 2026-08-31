@@ -258,13 +258,22 @@ fn writable(repo_root: &str, job: &JobId) -> Option<PathBuf> {
 /// The output is then not kept and the row says so by having no path.
 fn file_name(step: &StepId, attempt: Attempt, ordinal: usize, infix: &str) -> Option<String> {
     let id = step.as_str();
-    let plain = !id.is_empty()
+    one_component(id).then(|| format!("{id}.{attempt}.{infix}{ordinal}.log"))
+}
+
+/// Whether an id can stand as one path component.
+///
+/// **One predicate, two callers.** `crate::asked` names files after a step id
+/// and a criterion id under the same rule and for the same reason; a second
+/// spelling of it here and there is how the two would come to disagree about
+/// which id is safe.
+pub(crate) fn one_component(id: &str) -> bool {
+    !id.is_empty()
         && id != "."
         && id != ".."
         && !id.contains('/')
         && !id.contains('\\')
-        && !id.contains('\0');
-    plain.then(|| format!("{id}.{attempt}.{infix}{ordinal}.log"))
+        && !id.contains('\0')
 }
 
 /// Both streams in one file, each behind a marker line.

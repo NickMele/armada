@@ -56,7 +56,7 @@ mod workflow;
 
 pub use harness::{FakeHarness, FakeHarnessRefused};
 pub use job::{asked_for, asking};
-pub use judge::FakeJudge;
+pub use judge::{refusal, FakeJudge};
 pub use vcs::{Delivered, Delivering, FakeCommit, FakeVcs, FakeVcsError};
 pub use work_product::{FakeDiffRefused, FakeWorkProduct, Holding};
 pub use workflow::{frozen, modelled, resolved, retried, Gaming, Gate, Scoped, Sketch};

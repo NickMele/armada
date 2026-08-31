@@ -289,6 +289,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
                     expected: Some("the caller's bound narrowed".to_string()),
                     produced: Some("the reader's bound widened".to_string()),
                     consequence: Some("every other caller reads one row too many".to_string()),
+                    brief_path: Some(".armada/briefs/01JOB/repro.1.c1.txt".to_string()),
                 },
                 Judged {
                     criterion_id: crate::CriterionId::carried("c2"),
@@ -296,6 +297,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
                     expected: None,
                     produced: None,
                     consequence: None,
+                    brief_path: None,
                 },
             ],
             flagged: Vec::new(),
