@@ -1,42 +1,27 @@
 //! What a Job's Drones have cost it: one row per Drone, summed per Job.
 //!
-//! # Why the record exists at all
+//! A Drone belongs to a step, so a four-step Job is four Drones that never
+//! meet, and nothing added up what they spent. The Job is what a cap is set
+//! against — `docs/concepts/machine.md`, Budget — so the sum has to outlive
+//! every Drone of it, which means the record.
 //!
-//! `DroneEvent::Ended` carries `cost_micros` and a turn count, and until this
-//! module nothing added them up. A Drone belongs to a step, so a four-step Job
-//! is four Drones that do not know about each other — and the thing a person
-//! approved, and the thing a cap is set against, is the Job. The join has to
-//! be somewhere outside the process that spends, and the only place that
-//! outlives every Drone of a Job is the record.
+//! # The key is the Drone, and that is the whole of the idempotence
 //!
-//! # A row per Drone, keyed on the Drone, and that is the whole idempotence
-//!
-//! A Drone's exit is observed twice on some paths — `dispatch::reap` folds a
-//! stream that ended on its own, and `boundary::stood_down` folds one Fleet
-//! ended at a step boundary. A per-Job counter incremented at both would
-//! double-count, and getting that right would be a convention every future
+//! A Drone's exit is folded at two sites in `fleet`, and a per-Job counter
+//! incremented at both would bill one Drone twice.
+//! [`Store::record_drone_spend`] is an upsert on `(job_id, drone_id)`, so
+//! recording the same Drone twice writes the same row twice. There is no
+//! arrangement of calls that inflates the figure, and no convention a future
 //! caller has to know.
 //!
-//! **So the key is the Drone.** [`Store::record_drone_spend`] is an upsert on
-//! `(job_id, drone_id)`, so calling it twice about one Drone writes the same
-//! row twice and the Job's total is unchanged. Recording too often is free;
-//! there is no arrangement of calls that inflates the figure.
+//! # Cost and turns fold differently from one event, and it is measured
 //!
-//! # `total_cost_usd` is the session's total, not the turn's — measured
-//!
-//! A Drone's stream can carry more than one terminating line, because an
-//! injected turn ends the one it answered. `docs/spikes/004-transcript-idle-session.ndjson`
-//! is the captured case: two result lines, `num_turns` **3 then 2**, and
-//! `modelUsage` on the second holding the sum of both — input 10 = 6 + 4,
-//! output 444 = 271 + 173, cache read 196,205 = 108,897 + 87,308. Its
-//! `total_cost_usd` of 0.121961 reconstructs exactly from those cumulative
-//! figures at spike 5's published rates.
-//!
-//! So the two numbers fold differently from the same event, and
-//! `fleet::allowance` is where that is done: **cost is the last one seen and
-//! turns are the sum.** Summing the costs would bill the first invocation
-//! twice; taking the last turn count would report a two-turn Drone that took
-//! five.
+//! `docs/spikes/004-transcript-idle-session.ndjson` is one session with two
+//! terminating lines: `num_turns` reads 3 then 2, while the second line's
+//! `modelUsage` holds the sum of both and its `total_cost_usd` reconstructs
+//! from that sum exactly. So the cost is the session's running total and the
+//! turns are per invocation. `fleet::allowance::spent` does the fold: last
+//! cost, summed turns.
 
 use crate::error::{fault, LoadJobError, RowError, WriteError};
 use crate::open::Store;

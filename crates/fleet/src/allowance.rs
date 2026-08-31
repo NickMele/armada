@@ -1,50 +1,20 @@
 //! What a Job is allowed to spend, and the one predicate that says it has.
 //!
-//! # It is per Job, because the Job is what a person approved
+//! `docs/concepts/machine.md`, Budget, is where this is argued: why the cap is
+//! per Job, why it is two numbers rather than one, and why it refuses the next
+//! dispatch rather than stopping a Drone. `docs/spikes/005-what-does-a-job-cost.md`
+//! is the measurement under all three.
 //!
-//! A Drone belongs to a workflow step, so a four-step Job is four Drones. A
-//! per-Drone ceiling on that Job is four times the number anybody thought they
-//! set, and it bounds nothing about the thing that was approved. So the cap is
-//! held against the Job, and the sum lives in `store::job_drone_spend` because
-//! it has to be spent down across Drones that never meet.
+//! Two things the concept page cannot say, because they are about this code:
 //!
-//! # It refuses the next dispatch. It does not stop a Drone that is spending
+//! **Wall clock is the spike's third signal and is not here.**
+//! `settings.drone-job-timeout` already bounds a Job's wall clock at
+//! Kit-to-Manifest scope, so a second ceiling would be two answers to one
+//! question. `store::DroneSpend::ran_ms` is recorded anyway, so that row has a
+//! figure when somebody enforces it.
 //!
-//! `cost_micros` arrives on the final result line of a Drone's session and
-//! nowhere else — there is no mid-session figure on the stream — so a cap can
-//! decline to start the next thing and cannot interrupt the current one.
-//!
-//! **That is the whole of what it does, and every place a person sets it says
-//! so.** A ceiling that reads as "spending stops here" and means "nothing new
-//! starts after here" is worse than no ceiling, because it is believed. The
-//! case it does catch is the one that matters: a runaway is a sequence of Jobs
-//! rather than a single Drone, and the sequence is exactly what admission sees.
-//!
-//! # Two signals, because dollars alone cannot be set to a useful number
-//!
-//! `docs/spikes/005-what-does-a-job-cost.md` measured three identical,
-//! identically successful runs of one Job at $0.063, $0.087 and $0.146 — a
-//! 2.31x spread on cache warmth alone, with almost none of it attributable to
-//! the work. A dollar ceiling tight enough to catch a runaway kills a healthy
-//! Job that started cold. The same three runs turned 7, 7 and 4 times.
-//!
-//! So the dollar cap is deliberately wide and the turn cap is what catches what
-//! a wide ceiling misses. [`Overspent`] says which of the two it was, because
-//! "over budget" and "took four times as many turns as any other run" are
-//! different findings and a person acts differently on each.
-//!
-//! **Wall clock is the third signal the spike names and it is not here**, for
-//! the reason a second vocabulary is a defect: `settings.drone-job-timeout`
-//! already bounds a Job's wall clock, at Kit-to-Manifest scope. It is
-//! unenforced today, and enforcing it is that row's work rather than this one's
-//! — `store::DroneSpend::ran_ms` is recorded against every Drone so the figure
-//! is there when somebody does it.
-//!
-//! # Quota is not a fourth signal
-//!
-//! Spike 5 settled it and the owner's call stands: the rate-limit event on a
-//! Drone's stream carries a window and a status and no quantity, so there is no
-//! number to hold a Job back against.
+//! **Quota is not a fourth.** Spike 5 settled it: the rate-limit event carries
+//! a window and a status and no quantity.
 
 use adapter_traits::{AgentHarness, Delivery, DroneEvent, Vcs, WorkProduct};
 use core_model::{DroneId, Job, JobId, JobStatus};

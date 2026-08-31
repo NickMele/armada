@@ -64,7 +64,9 @@ This is also what makes *"why did this Job behave that way"* answerable after th
 
 **An unknown key in `armada.yml` hard-fails, and the file is namespaced by owner.** Each owner gets a top-level section, strict inside its own parser and opaque to every other, so a Fleet-owned key in a Manifest file is *somebody else's section* rather than an unknown one.
 
-The decisive argument is tier moves. If unknown keys were ignored, a `budget:` key written today would do nothing — and the day **Budget: $ cost cap per Job/Drone** moves from `Machine` to `Kit → Manifest`, it would wake up and change behaviour on a repo nobody had touched. Under hard fail that key could never have been written, so the tier move is safe by construction.
+The decisive argument is tier moves. If unknown keys were ignored, a key written today for a `Machine` setting would do nothing — and the day that setting moves to `Kit → Manifest`, it would wake up and change behaviour on a repo nobody had touched. Under hard fail that key could never have been written, so the tier move is safe by construction.
+
+**The example this argument was worked through no longer describes anything, and the argument survives without it.** It was budget moving from `Machine` to `Kit → Manifest`. Budget is Machine and stays there — a Manifest has no budget cap, which is what the Kit/Machine split is for — so that particular move cannot happen. Any Machine row that could move serves as well; what the argument rests on is that a tier move is possible at all, not on which row makes it.
 
 The cost is the collision this project has already paid once: a file written by one module and parsed by another with `deny_unknown_fields`. That is precisely why the answer is namespacing per owner rather than handing the file a single parser.
 
@@ -138,18 +140,6 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
   cosmetic; if it gates, a project's own convention can block its own
   Drones.
 
-- **[manifest-budget-soft-warning]** Does Manifest-level budget need a
-  soft-warning threshold like Helm's?
-  Helm's budget has a soft-warning threshold and no hard cap, deliberately,
-  because talking to Helm is a choice made in real time, while a Drone
-  burning budget unattended is a risk. Manifest-level budget currently has
-  only a hard cap. For: a dispatch blocked at the cap is a surprise, and a
-  warning at 80% is a chance to raise the cap deliberately rather than
-  discovering it mid-session. Against: the budget number is already visible
-  in every Job row and the status bar, so a threshold just makes it louder.
-  The Manifest cap fully overrides the tier above it rather than stacking,
-  so any warning threshold would carry the same override semantics.
-
 - **[helm-budget-warning-threshold]** What is Helm's budget soft-warning
   threshold value?
   Helm has a soft-warning threshold and deliberately no hard cap — it is a
@@ -168,32 +158,6 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
   leaves the app permanently once written. A parallel question — whether a
   Voice setting can widen or narrow the same lint — is tracked separately in
   Notion.
-
-- **[budget-cap-per-job-or-per-drone]** Does **Budget: $ cost cap per
-  Job/Drone** cap a Job or cap a Drone?
-  The slash joined two spellings of one span: a Drone belonged to a Job, so
-  the two readings named the same number. A Drone belongs to a workflow step
-  now, so a four-step Job has four Drones and the readings differ by the step
-  count — a per-Drone cap on a long workflow bounds nothing about the Job, and
-  a per-Job cap has to be spent down across Drones that do not know about each
-  other. The same slash is in `Manifest budget cap ($ / quota)` beside it, and
-  whichever answer is given has to be given for both. Separate from
-  `[budget-exhaustion-gate-or-transition]` below, which asks *what happens*
-  when the cap is hit rather than *what it counts*, and neither answers the
-  other.
-
-- **[budget-exhaustion-gate-or-transition]** Is budget exhaustion a gate
-  verdict, or a Job state transition?
-  Raised by the config review, deciding whether verification reads the
-  budget cap at all. If it is a gate verdict, verification reads the
-  per-Job or per-Drone cost cap, and a budget failure counts against the
-  gate-failure retry limit — producing drift already recorded between the
-  retry limit, the clarification-round cap and the Drone/Job timeout, since
-  a Job killed for spending would be recorded as a step that failed three
-  times. If it is a Job state transition, Fleet checks the cap around
-  verification rather than inside it, verification never reads it, and the
-  settings row naming verification as a consumer of budget is wrong. The
-  settings column cannot settle this; the answer decides the column.
 
 - **[judge-prompt-assembly]** Does verification assemble the Judge prompt,
   or does Fleet assemble it and verification return structured verdicts
@@ -254,9 +218,9 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
   non-participant that never appears in the record is the crux. The
   tier-moves argument for hard-failing unknown keys was worked through
   Budget moving from one tier to a two-tier scope; Budget is Machine, and
-  Machine has no second tier, so that move is not possible and the example
-  no longer describes anything — the argument may survive on a different
-  example. The registry-key golden test checks keys against the serde field
+  Machine has no second tier, so that move is not possible. The example has
+  since been replaced, and the argument survives without it — see "An
+  unknown key in `armada.yml` hard-fails" above. The registry-key golden test checks keys against the serde field
   names of `KitConfig` and `ManifestConfig` under `deny_unknown_fields`; a
   Machine setting has no corresponding half, so an orphan on the Machine
   side goes uncaught.

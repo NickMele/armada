@@ -13,20 +13,13 @@
 //!
 //! # One predicate per question, and every reason to refuse belongs inside one
 //!
-//! [`Room`] is the whole answer to "may another Drone start **at all**", which
-//! is a question about the machine and the roster and about no Job in
-//! particular. `admit_next` opens with it and `queued_reason` labels a Board
-//! row from it, so a Board cannot say a Job is blocked while Fleet is starting
-//! it. A new machine-wide reason to refuse is a variant there and a branch in
-//! [`Fleet::room_for_another`] — never a second check beside the call.
-//!
-//! **A reason that belongs to one Job is a predicate of its own**, and there
-//! are two: [`clear_to_run`], which asks whether its dependencies are met, and
-//! `Fleet::overspent`, which asks whether it has already spent what it was
-//! allowed. Both are shared with `serving`'s `queued_reason` under the same
-//! rule, and both live where a Job is chosen rather than inside `Room` —
-//! `room_for_another` is asked once per admission and these are asked once per
-//! Job, so folding them together would be one question with two subjects.
+//! [`Room`] answers "may another Drone start **at all**" — the machine and the
+//! roster, about no Job in particular; a new machine-wide reason is a variant
+//! there. **A reason belonging to one Job is a predicate of its own**:
+//! [`clear_to_run`] for dependencies, `Fleet::overspent` for what it has spent,
+//! asked where a Job is chosen rather than once per admission. All three are
+//! shared with `serving`'s `queued_reason`, so a Board cannot say a Job is
+//! blocked while Fleet is starting it.
 //!
 //! [`Fleet::next_queued`]: crate::Fleet
 
