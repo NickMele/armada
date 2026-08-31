@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Check, CircleDot, Clock, Folder, GitBranch, OctagonAlert, Power, UserCheck, X } from "lucide-react";
+import { Check, CircleDot, Clock, Cpu, Folder, GitBranch, OctagonAlert, Power, UserCheck, X } from "lucide-react";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { StepBar } from "../StepBar/StepBar";
 import { JobRowStacked } from "./JobRowStacked";
@@ -12,6 +12,11 @@ import { JobRowStacked } from "./JobRowStacked";
  * **The labels come from the enum→verb map**, `crates/core-model/domain/
  * enum-verbs.toml`, sentence-cased. They are written here because that map is
  * not generated into TypeScript yet, and nowhere that ships.
+ *
+ * **Every row's field run now carries origin** — display-only, never a filter
+ * axis (`docs/concepts/job-board.md`, Origin tagging). The five values:
+ * dispatched by you, found by Fleet, drafted in Helm, workflow-triggered, and
+ * sub-dispatched, which additionally names the parent Job. See issue 218.
  */
 const meta: Meta<typeof JobRowStacked> = {
   title: "Compositions/Job row (stacked)",
@@ -34,6 +39,23 @@ const open = (
 );
 
 /**
+ * The track list a Job at the gate takes: no branch, step or elapsed reading
+ * yet, so a "created" timestamp and origin do the work the running row's
+ * time and spend tracks do. Composed from this component's own track custom
+ * properties, the same way `APPROVAL_TRACKS` in `TheListSixStatesOneRowShape`
+ * composes its own — duplicated here rather than imported, because a
+ * composition's story cannot reach into a screen, and because
+ * `APPROVAL_TRACKS` sits outside this change's write scope. Reported.
+ */
+const GATE_TRACKS = [
+  "var(--armada-track-origin)",
+  "var(--armada-track-bar)",
+  "var(--armada-track-step)",
+  "var(--armada-track-time)",
+  "var(--armada-track-provenance)",
+].join(" ");
+
+/**
  * A Job that has not run. `needs approval` is the verb the enum→verb map
  * carries — the badge means a person must act, not that time is passing.
  *
@@ -48,6 +70,7 @@ export const NeedsApproval: Story = {
     statusLabel: "Needs approval",
     headline: "Coalesce concurrent token refreshes",
     jobId: "job_7c31",
+    tracks: GATE_TRACKS,
     fields: [
       { label: "Workflow", value: "bug, 4 steps", quiet: true },
       { value: <StepBar total={4} current={0} label="Not started, 4 steps" /> },
@@ -75,6 +98,7 @@ export const Queued: Story = {
     statusLabel: "Queued",
     headline: "Retire the legacy poke path",
     jobId: "job_8b42",
+    tracks: GATE_TRACKS,
     fields: [
       { label: "Workflow", value: "bug, 4 steps", quiet: true },
       { value: <StepBar total={4} current={0} label="Not started, 4 steps" /> },
@@ -105,6 +129,7 @@ export const Running: Story = {
       { value: "Implement", emphasis: true },
       { value: "11m 03s", mono: true },
       { value: "~$1.80", mono: true },
+      { value: "Dispatched by you" },
     ],
     action: open,
   },
@@ -150,6 +175,7 @@ export const EscalatedStalled: Story = {
       { value: "3 pokes", emphasis: true },
       { value: "12m", mono: true },
       { value: "~$1.80", mono: true },
+      { value: "Found by Fleet" },
     ],
     action: (
       <SplitButton ground="card" items={[{ label: "Kill", danger: true }]}>
@@ -188,6 +214,7 @@ export const Failed: Story = {
       { value: "Run tests", emphasis: true },
       { value: "22m 41s", mono: true },
       { value: "~$2.10", mono: true },
+      { value: "Found by Fleet" },
     ],
     action: open,
   },
@@ -211,6 +238,7 @@ export const Killed: Story = {
       { value: "Implement", emphasis: true },
       { value: "4m 09s", mono: true },
       { value: "~$0.60", mono: true },
+      { value: "Workflow-triggered" },
     ],
     action: open,
   },
@@ -230,6 +258,7 @@ export const Done: Story = {
       { value: "Summarise" },
       { value: "18m 22s", mono: true },
       { value: "~$2.40", mono: true },
+      { value: "Drafted in Helm" },
     ],
     action: open,
   },
@@ -249,6 +278,7 @@ export const SpendAsQuota: Story = {
       { value: "Implement", emphasis: true },
       { value: "11m 03s", mono: true },
       { value: "68% quota", mono: true },
+      { value: "Dispatched by you" },
     ],
   } as never,
 };
@@ -274,6 +304,7 @@ export const AtTheWidthFloor: StoryObj = {
           { value: "Implement", emphasis: true },
           { value: "11m 03s", mono: true },
           { value: "~$1.80", mono: true },
+          { value: "Dispatched by you" },
         ]}
         action={open}
       />
@@ -302,6 +333,47 @@ export const Convoy: Story = {
       { value: "Implement", emphasis: true },
       { value: "11m 03s", mono: true },
       { value: "~$4.20", mono: true },
+      { value: "Workflow-triggered" },
     ],
   } as never,
+};
+
+/**
+ * **The one exception on the Board: a sub-dispatched Job that is out of
+ * headroom.** Almost every sub-dispatched Job is already running before
+ * anything could render it — this is the single reason one appears here,
+ * `waiting_on_resources`, still `queued` (`docs/concepts/job-board.md`,
+ * "A sub-dispatched Job is usually already running").
+ *
+ * **No Approve, no Dispatch** — the approval already happened at the parent
+ * Job named in the origin field, so a decision control here would offer a
+ * choice that has no content. **Kill stays available**, and the row is
+ * dimmed, the same visually-distinct treatment a blocked Job gets. Without
+ * the origin field naming `job_2d90bb` — the parent, running in the
+ * `Running` story above — a read-only row with no primary action would look
+ * arbitrary; that is the whole reason this issue put origin on the row
+ * rather than only on job detail.
+ */
+export const SubDispatchedWaitingOnResources: Story = {
+  args: {
+    status: "not-started",
+    statusIcon: Cpu,
+    statusLabel: "Waiting on resources",
+    headline: "Precompute embeddings for the batch import step",
+    jobId: "job_9f21",
+    dimmed: true,
+    tracks: GATE_TRACKS,
+    fields: [
+      { label: "Workflow", value: "chore, 3 steps", quiet: true },
+      { value: <StepBar total={3} current={1} label="Step 2 of 3, waiting" /> },
+      { value: "Held for CPU headroom", emphasis: true },
+      { value: "queued 09:41", quiet: true },
+      { value: "Sub-dispatched by job_2d90bb" },
+    ],
+    action: (
+      <SplitButton ground="card" variant="destructive" items={[]}>
+        Kill
+      </SplitButton>
+    ),
+  },
 };

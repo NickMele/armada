@@ -1,7 +1,7 @@
 /* Job row (stacked) — one shape at every width.
 
-   TRACK WIDTHS WITH NO TOKEN. The badge column and the five field tracks are
-   sized by the M1 drawing and no token spells any of them. They are composed
+   TRACK WIDTHS WITH NO TOKEN. The badge column and the six field tracks are
+   sized by the drawing and no token spells any of them. They are composed
    from the spacing scale here, so the drawn value is reproduced exactly and
    there is one place to change when the tokens land. Reported. */
 .armada-job-row,
@@ -22,6 +22,17 @@
   /* 68px: spend. Sized for both billing modes — `68% quota` and `~$2.40` — not
      for whichever appears first, because neither mode is the default. */
   --armada-track-spend: calc(var(--space-12) + var(--space-4) + var(--space-1));
+  /* 128px: origin — where the Job came from: dispatched by you, found by
+     Fleet, drafted in Helm, workflow-triggered, or sub-dispatched, which
+     names its parent Job here. Display-only, never a filter axis (see
+     docs/concepts/job-board.md, Origin tagging). Sixth track, added after the
+     built row's five — see issue 218.
+
+     Named `--armada-track-provenance` rather than `--armada-track-origin`:
+     that name was already spent above, on the branch-or-workflow track,
+     before the Board's own "origin" field existed. Reported rather than
+     resolved by renaming the older track out from under it. */
+  --armada-track-provenance: calc(var(--space-12) * 2 + var(--space-8));
 
   /* The whole row, for a list that spreads its tracks across every row at
      once. The drawn width is each track's FLOOR and `auto` is its ceiling, so
@@ -35,6 +46,7 @@
     minmax(var(--armada-track-step), auto)
     minmax(var(--armada-track-time), auto)
     minmax(var(--armada-track-spend), auto)
+    minmax(var(--armada-track-provenance), auto)
     minmax(0, 1fr)
     max-content;
 }
