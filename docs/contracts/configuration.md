@@ -150,9 +150,6 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
   The Manifest cap fully overrides the tier above it rather than stacking,
   so any warning threshold would carry the same override semantics.
 
-- **[job-board-sort-order]** What is the Job Board's default sort order?
-  Not recorded — the question has no body beyond its own title.
-
 - **[helm-budget-warning-threshold]** What is Helm's budget soft-warning
   threshold value?
   Helm has a soft-warning threshold and deliberately no hard cap — it is a

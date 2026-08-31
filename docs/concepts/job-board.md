@@ -65,6 +65,19 @@ A Convoy in the graph is expected rather than exceptional, and whether it render
 
 ## Job status on the Board
 
+### The default sort is Critical first
+
+**Critical first: the needs-you cluster, then oldest within every group.**
+Drawn 2026-08-31, answering `[job-board-sort-order]`, which had carried no body
+since it was filed. Oldest-first remains in the control as the other option.
+
+The sort agrees with the filter rather than cutting across it: the tab that
+groups the statuses which stop until a person reads them is the same set the
+default sort lifts to the top, so changing the tab reorders nothing a person had
+learned. The setting's key is `job_board.default_sort`.
+
+## Job status on the Board
+
 **Every status a Job can hold appears here**, and the filter decides which are on screen. Two of them carry the Board's own reading, and only `queued` carries a reason.
 
 | Status | Reason | Meaning |
@@ -109,6 +122,19 @@ It carries no `dispatched_by`, linking back through `subject` instead, which is 
 ### A sub-dispatched Job is approved with its parent
 
 **A sub-dispatched Job is already approved as part of its parent.** It is created at `queued` rather than `awaiting_approval`, never at a status that would put it in front of you for a decision, and it renders here at whatever status it holds. See Job status on the Board above.
+
+### Origin is display-only
+
+**A label on the row, never a filter axis.** Drawn 2026-08-31 as a filter and
+rejected on the drawing, answering `[origin-tag-filterable-or-display]`. Both
+readings were drawn side by side; the filter earned no question a person
+actually asks. *What needs me*, *what is running* and *why has that not started*
+are all state, and the Board's scope is already the Manifest — so an origin axis
+adds a control that narrows by a fact nobody is narrowing on.
+
+It stays on the row because it answers a different question, asked after a row
+is already found: where did this come from. A sub-dispatched row names its
+parent Job there rather than only its origin.
 
 ### Stored value and rendered label
 
