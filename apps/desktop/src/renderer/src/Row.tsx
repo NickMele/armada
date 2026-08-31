@@ -28,11 +28,11 @@
 // `Screens/The list — six states, one row shape` is what they are measured
 // against. Nothing here draws a cell, a column or a border.
 //
-// # The field run is four of the drawing's five, and the fifth is left out
-// rather than drawn empty
+// # The field run is four of the drawing's six, and the two missing are left
+// out rather than drawn empty
 //
 // The drawing's row is the branch or the workflow, the step bar, the step,
-// elapsed, spend. Four of those reach here now.
+// elapsed, spend, origin. Four of those reach here.
 //
 // **Track one switches from the workflow to the branch the moment a worktree
 // exists**, which is the drawing's own rule and was unreachable while `branch`
@@ -57,6 +57,13 @@
 // **Spend stays out of the row entirely.** Nothing measures it — not on the
 // wire, not in the store, not computed — and a labelled gap on every row reads
 // as a value that failed to load rather than one nothing serves.
+//
+// **Origin stays out too, and for a nearer miss.** `origin` is on `JobSummary`
+// and its five values are real; what is missing is the word. `enum-verbs.toml`
+// has no `origin` entry, so there is nothing mapping `auto_detected` to `Found
+// by Fleet` — and writing the five sentences here would be a second place they
+// live and the one nothing checks. The screen stories draw them as literals, so
+// **the track is drawn there and empty here**. Issue #234.
 //
 // **The step reads its name**, since `StepDetail` carries a label Fleet fills
 // from the frozen workflow. A list row holds `JobSummary` and not the steps, so

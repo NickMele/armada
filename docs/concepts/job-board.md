@@ -85,13 +85,27 @@ with nothing behind it renders no count rather than a `0`.
 
 **The four state tabs partition every status**, which is what makes the counts
 add up and what makes `All` a sum rather than a sixth reading. The partition is
-derived from `job-statuses.toml` — `terminal` and `mode` — rather than listed
-anywhere a surface can retype it.
+derived from `job-statuses.toml` — `terminal`, `mode` and `who_is_acting` —
+rather than listed anywhere a surface can retype it.
 
-**`who_is_acting` is the field `Needs you` is actually about**, and it names
-exactly those four statuses. It is not on the wire, so Bridge reaches the same
-set by subtraction. Carrying it would also let `piloted` be told apart from
-`running` by the registry rather than by a comment.
+| Tab | Rule |
+| --- | --- |
+| Finished | `terminal` |
+| Running | `mode = "Working"` |
+| Needs you | `who_is_acting = "Person"` |
+| Queued | `who_is_acting = "Drone"` |
+
+**Every tab is a positive rule and none is a leftover.** `Needs you` is
+`who_is_acting = "Person"` and nothing else — the field the tab has always been
+described by. Reaching the same four by subtracting the ones that could be named
+would make its membership depend on the absence of a rule, so the next status
+added anywhere would join it silently.
+
+**`Working` is asked before the actor.** `piloted` is `Working` with a person
+acting, and a Job somebody has taken over is still moving.
+
+A status matching none of the four is drawn under `All` and under no state tab,
+so the counts visibly stop summing rather than it falling quietly into one.
 
 ### Search reads every job whatever tab is set
 

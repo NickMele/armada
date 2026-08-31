@@ -34,6 +34,14 @@ import { APPROVAL_TRACKS, TheListSixStatesOneRowShape } from "./TheListSixStates
  * five-track list — a Job with no worktree has a timestamp where a running row
  * has elapsed, and no spend at all — and both lists compose the same named
  * properties rather than repeating widths.
+ *
+ * **The five origin sentences here are literals, and Bridge draws nothing in
+ * that track on a real row.** `origin` is on `JobSummary`, but
+ * `enum-verbs.toml` has no entry for it, so there is no source mapping the
+ * stored value to the rendered word — these fixtures are the drawing, not proof
+ * the track is filled. Issue #234, which also has to decide `sub_dispatched`,
+ * since that one renders as a form with the parent Job's id in it rather than
+ * as a word.
  */
 const meta: Meta<typeof TheListSixStatesOneRowShape> = {
   title: "Screens/The list — six states, one row shape",

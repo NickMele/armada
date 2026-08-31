@@ -17,21 +17,29 @@
 // and the four state tabs are read off those two fields plus the one status the
 // `Queued` tab is named after:
 //
-// | Tab | What it is |
+// | Tab | Rule |
 // |---|---|
-// | Needs you | Not over, not working, and not queued — the statuses that stop until a person reads them |
-// | Running | `mode` is `Working`, which is `running` and `piloted` — a job somebody has taken over is still moving |
-// | Queued | The `queued` status itself. The tab is named after it, so naming it is the definition rather than a second copy of one |
 // | Finished | `terminal` |
+// | Running | `mode` is `Working` — `running` and `piloted`, because a job somebody has taken over is still moving |
+// | Needs you | `who_is_acting` is `Person` — `awaiting_approval`, `awaiting_attestation`, `awaiting_review`, `escalated` |
+// | Queued | `who_is_acting` is `Drone` — `queued` |
 //
-// **`Needs you` is defined by subtraction and would rather not be.**
-// `job-statuses.toml` carries `who_is_acting = "Person"` on exactly the four
-// statuses that belong there, and it is the field this tab is actually about —
-// but the codegen emits `terminal` and `mode` only, and the generator sits
-// outside this change's write scope. Carrying `who_is_acting` onto
-// `JOB_LIFECYCLE` would make the tab a lookup rather than a subtraction, and
-// would let `piloted` be told apart from `running` by the registry instead of by
-// this comment. Reported, not done here.
+// **Every tab is a positive rule and none is a leftover.** `Needs you` was
+// reached by subtraction until `who_is_acting` was emitted: not over, not
+// working, not queued. That made its membership depend on the absence of a rule
+// rather than on the rule, so the first status added anywhere would have joined
+// it silently. The registry has said `who_is_acting = "Person"` on exactly those
+// four all along; the codegen just was not carrying it.
+//
+// **The order of the two mode-and-actor tests is the one thing to read
+// carefully.** `piloted` is `Working` and its actor is a `Person`, so `Working`
+// has to be asked first or a job somebody is piloting lands under `Needs you`
+// while they are the one working it.
+//
+// **A status matching none of the four is unplaceable**, which is now something
+// that can happen and be seen rather than a case that silently fell into
+// `Queued` — a non-terminal, non-working status with `who_is_acting = "None"`
+// would be exactly that.
 //
 // # Search reads every job whatever tab is set, and the tab is suspended
 //
@@ -97,22 +105,26 @@ export const FIRST_TAB: BoardTab = "all";
  * Which state tab a job is in, or `null` where this build's registry has no
  * lifecycle row for its status.
  *
- * **`null` is a real answer and it is not a fifth tab.** The codegen refuses a
- * status that is in one registry and not the other, so a job reaching here with
- * no lifecycle row also has no verb and no glyph, and the list already draws it
- * as a named line beneath the rows rather than as a row. It counts under `All`
- * and under no state tab, which makes the counts stop summing — visibly, which
- * is the point.
+ * **`null` is a real answer and it is not a fifth tab.** Two things reach it: a
+ * status this build's registry has never heard of, and one whose `terminal`,
+ * `mode` and `who_is_acting` match none of the four rules. The first also has no
+ * verb and no glyph, so the list already draws it as a named line beneath the
+ * rows rather than as a row.
+ *
+ * Either way it counts under `All` and under no state tab, which makes the
+ * counts stop summing — visibly, which is the point. A residual tab that
+ * swallowed both would make a registry change look like nothing happened.
  */
 export function tabOf(job: JobSummary): StateTab | null {
   const life = JOB_LIFECYCLE[job.status];
   if (life === undefined) return null;
   if (life.terminal) return "finished";
+  // Before the actor, and not after it: `piloted` is `Working` with a person
+  // acting, and a job somebody has taken over is still moving.
   if (life.mode === "Working") return "running";
-  // The tab is named after the status, so the status is what it holds. Every
-  // other non-terminal status that is not working is one that stops until a
-  // person reads it.
-  return job.status === "queued" ? "queued" : "needs-you";
+  if (life.whoIsActing === "Person") return "needs-you";
+  if (life.whoIsActing === "Drone") return "queued";
+  return null;
 }
 
 /** Whether a job is one of the ones waiting on a person. */
