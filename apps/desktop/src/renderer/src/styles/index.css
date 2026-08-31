@@ -29,6 +29,7 @@ html,
 body,
 #root {
   height: 100%;
+  overflow: hidden;
 }
 
 /* The region that scrolls is the shell's panel now, and `min-height: 0` on it
