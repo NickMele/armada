@@ -132,6 +132,11 @@ actually asks. *What needs me*, *what is running* and *why has that not started*
 are all state, and the Board's scope is already the Manifest — so an origin axis
 adds a control that narrows by a fact nobody is narrowing on.
 
+**And it names the condition that would reverse this.** One machine dispatches
+almost everything on it, so origin is nearly constant today, and the one value
+worth finding — sub-dispatched — is already legible because those rows name
+their parent. It becomes an axis when agents draft Jobs in numbers.
+
 It stays on the row because it answers a different question, asked after a row
 is already found: where did this come from. A sub-dispatched row names its
 parent Job there rather than only its origin.
