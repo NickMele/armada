@@ -64,7 +64,13 @@ merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Fleet"
 read_by = "fleet"
-notes = "Informational per brief, still per-machine."
+notes = """
+**Enforced.** It bounds how many Drones Fleet runs at once: `fleet::slots::Slots::room` is the predicate, `admit_next` opens with it, and a Job approved past it stays `queued` with `waiting_on_resources` as its reason — the same predicate, so a Board cannot say a Job is blocked while Fleet is starting it. It read "informational per brief" until Throughput, when the working slot stopped being one.
+
+**It bounds Drones and never approvals.** Every Job-level dispatch is still approved explicitly and one by one; this decides how many approved Jobs run together.
+
+It has no value here for the reason none of Fleet's other dials does — `crates/armada/src/serve.rs` resolves it, as `PROVISIONAL_CONCURRENCY`, and carries the argument for the number. It ships at two: the attribution beneath it was measured at five, and what is unbuilt is everything else about running five — write-scope reservation, and any reading of the machine's headroom.
+"""
 
 [settings.budget-cost-cap-per-job-drone]
 name = "Budget: $ cost cap per Job/Drone"

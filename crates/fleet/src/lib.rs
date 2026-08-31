@@ -55,9 +55,12 @@
 //! property is a value a test can read rather than a process a test must run.
 //!
 //! And the loop that joins them: [`daemon`](mod@daemon) is what Fleet is —
-//! one working slot, the seams it is assembled from, and the five operations
-//! `api::Daemon` names — and [`dispatch`](mod@dispatch) is what happens to a
-//! Job while it is in that slot. `landing` is the end of that: a Job whose last
+//! a roster of working slots, the seams it is assembled from, and the five
+//! operations `api::Daemon` names — and [`dispatch`](mod@dispatch) is what
+//! happens to a Job while it is in one. [`slots`](mod@slots) is how many there
+//! may be and the two locks that make them independent, and
+//! [`peer`](mod@peer) is how Fleet knows which Drone is calling once there is
+//! more than one to tell apart. `landing` is the end of that: a Job whose last
 //! step advances has its work committed onto its own branch before it is
 //! recorded complete, because a Drone is denied `git` and a verified change
 //! nobody can merge is not a finished Job. [`delivery`](mod@delivery) is what
@@ -92,8 +95,8 @@
 //! [`turning`](mod@turning) calls [`Fleet::turn`], which is why a Job approved
 //! from Bridge advances rather than sitting dispatched: the router and the loop
 //! hold one `Arc` each, so serving a Fleet and driving it stopped being two
-//! claims on one owner. The Job-shape classifier and a second working slot are
-//! later milestones, and neither is stubbed here.
+//! claims on one owner. The Job-shape classifier is a later milestone and is
+//! not stubbed here.
 //!
 //! [`Fleet::turn`]: crate::Fleet::turn
 
@@ -162,7 +165,7 @@ pub use at_step::AtStep;
 pub use clock::{Clock, SystemClock};
 pub use converging::{ReportNow, Stage, StepNorms, Tripwire, Wandering};
 pub use crossing::{Cleared, Crossed, Produced, Reconciling, Redirected};
-pub use daemon::{Fittings, Fleet, Host, Reconciled, Turned, Worked};
+pub use daemon::{Fittings, Fleet, Host, Reconciled};
 pub use delivery::Delivered;
 pub use detach::Detached;
 pub use drone::{
@@ -192,5 +195,5 @@ pub use peer::{NotACaller, PeerOf};
 pub use silence::{Liveness, Poke, Quiet, Vigil};
 pub use slots::Concurrency;
 pub use transcript::{history, log_of, transcript_of, Live, Recording, Spine, Tap, Taps};
-pub use turning::{keep_turning, Turning};
+pub use turning::{keep_turning, Turned, Turning, Worked};
 pub use watch::{Progress, Watching};

@@ -457,8 +457,7 @@ pub(super) fn a_diff_call<'a>() -> Call<'a> {
 ///
 /// The fake Drone is `/bin/cat`, so a turn Fleet sends comes back as a line of
 /// transcript — which is the only way to read an injected turn from outside the
-/// process that sent it. It comes back on the reader's own task, so this waits
-/// for `turns` of them rather than reading once and hoping.
+/// process that sent it, read off the one slot a fixture works.
 pub(crate) async fn turns_sent(
     fleet: &Fleet<FakeHarness, FakeVcs, FakeWorkProduct>,
     turns: usize,
@@ -466,7 +465,7 @@ pub(crate) async fn turns_sent(
     for _ in 0..600 {
         let echoed: Vec<String> = {
             let held = fleet.the_only_slot().await;
-    let slot = held.lock().await;
+            let slot = held.lock().await;
             slot.as_ref()
                 .map(|at_work| {
                     at_work

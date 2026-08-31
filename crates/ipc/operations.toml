@@ -657,13 +657,15 @@ It carries the whole summary, so a Board inserts the row rather than fetching th
 kind = "event"
 transport = "WebSocket"
 helm_access = "Bridge only"
-description = "The files the working Drone has changed in its worktree, as of one reading"
+description = "The files one working Drone has changed in its worktree, as of one reading"
 notes = """
 Names and change kind, never the diff. What changed inside a file is the patch, which adapter-traits keeps as a second and more expensive read for exactly one caller — a Judge that fires — and putting it on a stream would pay for it continuously so that somebody might look.
 
 Fleet already took this reading and threw it away. The live scope check read the footprint on every turn of a step that watched its scope, kept the paths outside the declared plan and discarded the rest; this carries the whole list, and marks the rows that check already found outside the plan rather than deciding anything new.
 
-It is not read on every turn. A reading happens only while a Drone holds the working slot, only while some client is subscribed to the stream, and at most once in a fixed interval — so an idle Fleet, a Fleet nobody is watching, and the seven turns out of eight between readings all open no repository. The event is published only when the list has moved since the last one, except on the first reading after a client connects, which republishes so a Bridge that joined mid-Job is not left with an empty list until the Drone next writes.
+It is not read on every turn. A reading happens only for a Job that has a Drone on it, only while some client is subscribed to the stream, and at most once in a fixed interval — so an idle Fleet, a Fleet nobody is watching, and the seven turns out of eight between readings all open no repository. The event is published only when the list has moved since the last one, except on the first reading after a client connects, which republishes so a Bridge that joined mid-Job is not left with an empty list until the Drone next writes.
+
+**Fleet works several Jobs at once, so several of these are in flight.** The message shape did not change for it and did not have to: it carries `job_id`, `step_id` and `drone_id` already, the throttle and the memo that decide whether to read at all are per Drone, and Bridge keeps only the open Job's reading and drops the rest. What changed is the sentence above, which said "only while a Drone holds the working slot" and named an invariant Throughput removed.
 
 The footprint is the whole list rather than a delta, so a reverted file leaves the view by being absent from the next reading. There is no message that removes one.
 """

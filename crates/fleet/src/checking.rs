@@ -35,9 +35,15 @@ use verification::{Artifact, Exit, NeverRan, Observed};
 /// How many of a step's Checks may run at once.
 ///
 /// **Four, and the number is about the machine rather than about the step.**
-/// Fleet works one Job at a time, so this is the whole of Armada's concurrency
-/// rather than a per-Job share of it, and what it shares the machine with is a
-/// live Drone.
+/// It was measured when Fleet worked one Job at a time, so it was the whole of
+/// Armada's concurrency; `#50` made it a share of it, bounded by
+/// `Concurrency` — with the cap at two, two gates running at once is eight
+/// Checks and two Drones on one machine.
+///
+/// **Nothing has re-measured it under two**, and the number is left where the
+/// measurement put it rather than halved on an argument. `#44` is where a
+/// machine's headroom becomes something Fleet reads instead of assumes, and
+/// this is one of the constants it will have to answer for.
 ///
 /// Measured on this repository's own six Checks, ten cores, warm target
 /// directory: 28.5s one at a time against 16.5s at four. Bounds of two, three,

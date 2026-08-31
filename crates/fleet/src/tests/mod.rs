@@ -118,6 +118,13 @@
 //! `superseded` that was meant to be the graceful one — plus the refusal that
 //! makes a cycle unstatable rather than merely undetected.
 //!
+//! `concurrency` is `#50`'s own claim and the twenty-fifth: two approved Jobs
+//! worked at the same moment, each in its own worktree, and each Drone's tool
+//! call landing on the step that made it. Its last two cases are the ones that
+//! matter — the declarations follow the *connection* rather than the admission
+//! order, and a caller nothing holds reaches neither Job — because without them
+//! every assertion in the file would also pass against the single slot.
+//!
 //! `peer` is the twenty-fourth, and it is the only thing here that asserts
 //! against the kernel's own idea of who holds a socket. Its first case is the
 //! one that matters: it opens a second connection from the same process to
@@ -137,6 +144,7 @@ mod boundary;
 mod briefing;
 mod checking;
 mod checks;
+mod concurrency;
 mod converging;
 mod coupling;
 mod crossing;

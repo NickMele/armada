@@ -9,10 +9,15 @@
 //! is in scope.
 
 use ipc::mcp::NotRecorded;
-use ipc::{DeclaredCheck, DeclaredJudge, StepId, Submitted, WorkflowStep};
+use core_model::Job;
+use ipc::{
+    CheckRun, DeclaredCheck, DeclaredJudge, Flagged, Judged, StepFacts, StepId, Submitted,
+    WorkflowStep,
+};
 use store::{LoadJobError, Moved, RecordedEvent};
 
 use crate::adrift::{Adrift, NotSubmitted};
+use crate::judging::Aloft;
 
 /// The wire shape of one declared Check.
 ///
@@ -206,4 +211,69 @@ fn unreadable(column: &'static str, value: &str) -> Adrift {
             value: value.to_string(),
         },
     ))
+}
+
+/// What Fleet knows about a Job's steps beyond the `job_steps` rows.
+///
+/// **The declaration comes from the Job's own frozen workflow**, which is
+/// also what the gate runs — so what a person is shown and what actually
+/// gates the step are one value rather than two that can drift.
+///
+/// `declares` stays an `Option` and is now absent only where the frozen
+/// workflow does not declare the step at all. That cannot happen through
+/// this crate, since the `job_steps` rows are seeded from those steps; it is
+/// kept because "Fleet cannot say" and "the step declares nothing" are
+/// different sentences on the wire and a row written by something else
+/// should not read as the second.
+/// `judged` and `flagged` are read from the store beside `ran` and never
+/// off the Job: the `job_steps` row carries the trigger the gate stopped on
+/// and nothing else, so a refusal's citation and a gaming finding's pattern
+/// — the whole of what an escalated Job has to say — live in their own
+/// tables and arrive here.
+///
+/// **A free function taking the mark rather than a method taking Fleet.** The
+/// one thing here that is not a row is the Judge call in flight, and that is a
+/// read of one shared value — so the only thing this needs of Fleet is
+/// [`Aloft`], and asking for that rather than for the daemon is what keeps it
+/// in this file. `serving.rs` is the trait impl; its helpers live here.
+pub(crate) fn step_facts(
+aloft: &Aloft,
+job: &Job,
+ran: Vec<(core_model::StepId, Vec<core_model::StepCheck>)>,
+judged: Vec<(core_model::StepId, Vec<core_model::Judgment>)>,
+flagged: Vec<(core_model::StepId, Vec<core_model::GamingFlag>)>,
+) -> Vec<StepFacts> {
+    job.steps()
+        .iter()
+        .map(|step| StepFacts {
+            step_id: StepId::from(step.step_id()),
+            label: job
+                .workflow()
+                .step(step.step_id())
+                .map(|declared| declared.label().to_string()),
+            declares: job
+                .workflow()
+                .step(step.step_id())
+                .map(|declared| declared.checks().iter().map(declared_check).collect()),
+            ran: ran
+                .iter()
+                .find(|(at, _)| at == step.step_id())
+                .map(|(_, checks)| checks.iter().map(CheckRun::from).collect())
+                .unwrap_or_default(),
+            judged: judged
+                .iter()
+                .find(|(at, _)| at == step.step_id())
+                .map(|(_, answers)| answers.iter().map(Judged::from).collect())
+                .unwrap_or_default(),
+            flagged: flagged
+                .iter()
+                .find(|(at, _)| at == step.step_id())
+                .map(|(_, found)| found.iter().map(Flagged::from).collect())
+                .unwrap_or_default(),
+            // The one fact here that is not a row. Read from the live slot
+            // as the answer is assembled, because nothing writes it down.
+            judging: aloft
+                .on(&ipc::JobId::from(job.id()), &StepId::from(step.step_id())),
+        })
+        .collect()
 }

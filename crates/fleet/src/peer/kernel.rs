@@ -29,6 +29,28 @@
 //! Every call here answers `false` on any error. `crate::peer` says why that is
 //! the only direction this may fail in: a caller Fleet cannot place is refused,
 //! and a caller it places wrongly is one Job's work credited to another.
+//!
+//! # SAFETY: what makes the three blocks sound
+//!
+//! Three `unsafe` blocks and one argument covering all of them: **the kernel
+//! writes into a buffer this side owns, and never more of it than it was
+//! told.** Each call is handed a pointer to a live local — a `Vec` sized before
+//! the call, or a fixed byte array — together with that allocation's own size
+//! in bytes, computed with `size_of` rather than written down. Neither call
+//! retains the pointer past its return, neither takes ownership of it, and both
+//! answer how many bytes they wrote, which is checked against the size of the
+//! record being read before anything is read out of it.
+//!
+//! `proc_pidinfo` and `proc_pidfdinfo` are safe to call with a pid or a
+//! descriptor that has ceased to exist; that is an error return, which is the
+//! silence above. There is no lifetime here to get wrong: nothing borrows, and
+//! every value read out is a `u16` copied by value.
+//!
+//! The `read_unaligned` is sound because the layout is `#[repr(C)]` and matches
+//! `struct socket_fdinfo`'s prefix — asserted at compile time on each piece's
+//! size — and because the read is guarded on the kernel having written at least
+//! that many bytes. `read_unaligned` rather than a cast-and-deref precisely
+//! because the byte array carries no alignment promise.
 
 use std::mem::size_of;
 

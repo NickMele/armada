@@ -66,6 +66,7 @@
 
 use std::fmt;
 use std::process::Stdio;
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -169,25 +170,31 @@ impl Look {
     }
 }
 
-/// The one Judge call that is out, if any. Shared with Fleet, which reads it to
-/// answer `get_job`.
+/// The Judge calls that are out, keyed by Job. Shared with Fleet, which reads
+/// it to answer `get_job`.
 ///
-/// **One slot, because Fleet asks one question at a time.** The gate is awaited
-/// inside the turn that reached it and the convergence look inside the turn
-/// that tripped it, so there is no arrangement of this crate in which two Judge
-/// calls are out at once. A map keyed by Job would be an index over a
-/// collection that cannot exceed one, and it would suggest the invariant is not
-/// there.
+/// **A map, which this type's own comment used to argue against.** It read "one
+/// slot, because Fleet asks one question at a time… a map keyed by Job would be
+/// an index over a collection that cannot exceed one" — true while there was one
+/// working slot, and `#50` is the change that made it false. Two Jobs are worked
+/// at once, a person may press *rerun the gate* on one while a turn is at the
+/// other's, and one slot for both would have the second call's mark erase the
+/// first's while it was still out.
+///
+/// **One call per Job and no more.** The gate is awaited inside the turn that
+/// reached it and the convergence look inside the turn that tripped it, and a
+/// turn walks one slot at a time — so the invariant that survives is per Job,
+/// which is exactly what the key says.
 ///
 /// A `std::sync::Mutex` rather than tokio's: it is never held across an
-/// `.await`, and what it guards is one small struct written twice per call.
+/// `.await`, and what it guards is a small map written twice per call.
 #[derive(Clone, Default)]
-pub struct Aloft(Arc<Mutex<Option<Asking>>>);
+pub struct Aloft(Arc<Mutex<BTreeMap<ipc::JobId, Asking>>>);
 
-/// What is out — whose, where, and what.
+/// What is out on one Job — where, and what. **Whose is the key**, so a value
+/// that named its own Job could disagree with the map holding it.
 #[derive(Clone)]
 struct Asking {
-    job: ipc::JobId,
     step: ipc::StepId,
     call: ipc::JudgeInFlight,
 }
@@ -201,8 +208,8 @@ impl Aloft {
     /// wait.
     pub(crate) fn on(&self, job: &ipc::JobId, step: &ipc::StepId) -> Option<ipc::JudgeInFlight> {
         let held = self.0.lock().ok()?;
-        let asking = held.as_ref()?;
-        (&asking.job == job && &asking.step == step).then(|| asking.call.clone())
+        let asking = held.get(job)?;
+        (&asking.step == step).then(|| asking.call.clone())
     }
 }
 
@@ -280,11 +287,13 @@ impl Marking {
             budget_ms: bound.budget.duration().as_millis() as u64,
         };
         if let Ok(mut held) = bound.aloft.0.lock() {
-            *held = Some(Asking {
-                job: bound.job.clone(),
-                step: step.clone(),
-                call: flight.clone(),
-            });
+            held.insert(
+                bound.job.clone(),
+                Asking {
+                    step: step.clone(),
+                    call: flight.clone(),
+                },
+            );
         }
         published(bound, step, Some(flight), &at);
         Out { marking: self }
@@ -294,7 +303,15 @@ impl Marking {
     /// nothing here can leave the mark standing.
     fn back(&self) {
         let Some(bound) = self.0.as_ref() else { return };
-        let was = bound.aloft.0.lock().ok().and_then(|mut held| held.take());
+        // **This Job's mark and no other's.** It used to take whatever was in
+        // the one slot, which under two working Jobs would lower a mark that
+        // belongs to a call still out.
+        let was = bound
+            .aloft
+            .0
+            .lock()
+            .ok()
+            .and_then(|mut held| held.remove(&bound.job));
         if let Some(asking) = was {
             published(bound, asking.step, None, &bound.clock.now());
         }

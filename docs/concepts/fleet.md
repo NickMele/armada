@@ -71,7 +71,11 @@ Process-group semantics differ across platforms, and where that difference belon
 
 A Job marked `urgency: incident` has its approval surfaced sooner — it interrupts rather than queues and takes the scheduling tiebreak — and is approved exactly like any other. The Production Support Incident variant varies thresholds, not the approval path.
 
-A configurable concurrency cap exists but is **informational and display-only**, never auto-enforced. Sub-dispatches inside an already-approved Job need no separate approval — see [Workflow](workflow.md), Dispatch Approval, Two Levels. Away-from-desk pre-authorized batches are supported.
+**The configurable concurrency cap bounds how many Drones run at once**, and admission refuses past it: a Job approved while the cap is spent stays `queued` and the Board says `waiting_on_resources`. It was informational and display-only until Throughput, when the second working slot arrived and a number that bounded nothing became the number that bounds this.
+
+**It bounds Drones and never approvals**, which is the whole of how the two sit together. The cap decides how many *approved* Jobs run at the same time; it never decides that a Job is approved, never batches approvals, and is not a way to approve several at once. The gate above is untouched by it.
+
+Sub-dispatches inside an already-approved Job need no separate approval — see [Workflow](workflow.md), Dispatch Approval, Two Levels. Away-from-desk pre-authorized batches are supported.
 
 ### Concurrency gating (resources)
 

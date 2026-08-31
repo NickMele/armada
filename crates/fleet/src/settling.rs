@@ -30,7 +30,8 @@ use verification::Request;
 
 use crate::adrift::Adrift;
 use crate::at_step::AtStep;
-use crate::daemon::{Fleet, Turned, Worked};
+use crate::daemon::Fleet;
+use crate::turning::{Turned, Worked};
 use crate::drone_moves::steps_holding_a_drone;
 use crate::evidence::{Decline, Standing};
 use crate::gate::{rule_on, Ruling};

@@ -33,10 +33,9 @@ use core_model::{
 };
 use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    ChangesRequested, CheckRun, Flagged, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory,
-    JobId, JobList, JobSummary, Judged, ManifestId, ManifestSummary, ModelChoices, Overruled,
-    ProposeJob, Redirection, Redispatched, RunId, StepFacts, StepId, WireError, WireValue, Work,
-    WorkflowId, WorkflowSummary,
+    ChangesRequested, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory, JobId, JobList,
+    JobSummary, ManifestId, ManifestSummary, ModelChoices, Overruled, ProposeJob, Redirection,
+    Redispatched, RunId, WireError, WireValue, Work, WorkflowId, WorkflowSummary,
 };
 use store::{LoadJobError, WriteError};
 
@@ -50,7 +49,9 @@ use crate::footprint::kept;
 use crate::overruling::Overruling;
 use crate::reporting::Filed;
 use crate::resume::Redirection as Instruction;
-use crate::wire::{canonical, declared, declared_check, recorded, reported, submitted, told};
+use crate::wire::{
+    canonical, declared, recorded, reported, step_facts, submitted, told,
+};
 
 /// The codes this boundary raises, declared beside the thing that raises them.
 ///
@@ -188,7 +189,7 @@ where
             &job,
             reason.as_ref(),
             queued,
-            &self.step_facts(&job, ran, judged, flagged),
+            &step_facts(self.aloft(), &job, ran, judged, flagged),
             recorded
                 .as_ref()
                 .map(|(footprint, plans)| kept(footprint, plans)),
@@ -742,66 +743,6 @@ where
         // roster. A second answer here is how a Board comes to say a Job is
         // blocked while Fleet is starting it.
         Ok((!self.slots().lock().await.room()).then_some(CoreQueuedReason::WaitingOnResources))
-    }
-
-    /// What Fleet knows about a Job's steps beyond the `job_steps` rows.
-    ///
-    /// **The declaration comes from the Job's own frozen workflow**, which is
-    /// also what the gate runs — so what a person is shown and what actually
-    /// gates the step are one value rather than two that can drift.
-    ///
-    /// `declares` stays an `Option` and is now absent only where the frozen
-    /// workflow does not declare the step at all. That cannot happen through
-    /// this crate, since the `job_steps` rows are seeded from those steps; it is
-    /// kept because "Fleet cannot say" and "the step declares nothing" are
-    /// different sentences on the wire and a row written by something else
-    /// should not read as the second.
-    /// `judged` and `flagged` are read from the store beside `ran` and never
-    /// off the Job: the `job_steps` row carries the trigger the gate stopped on
-    /// and nothing else, so a refusal's citation and a gaming finding's pattern
-    /// — the whole of what an escalated Job has to say — live in their own
-    /// tables and arrive here.
-    fn step_facts(
-        &self,
-        job: &Job,
-        ran: Vec<(core_model::StepId, Vec<core_model::StepCheck>)>,
-        judged: Vec<(core_model::StepId, Vec<core_model::Judgment>)>,
-        flagged: Vec<(core_model::StepId, Vec<core_model::GamingFlag>)>,
-    ) -> Vec<StepFacts> {
-        job.steps()
-            .iter()
-            .map(|step| StepFacts {
-                step_id: StepId::from(step.step_id()),
-                label: job
-                    .workflow()
-                    .step(step.step_id())
-                    .map(|declared| declared.label().to_string()),
-                declares: job
-                    .workflow()
-                    .step(step.step_id())
-                    .map(|declared| declared.checks().iter().map(declared_check).collect()),
-                ran: ran
-                    .iter()
-                    .find(|(at, _)| at == step.step_id())
-                    .map(|(_, checks)| checks.iter().map(CheckRun::from).collect())
-                    .unwrap_or_default(),
-                judged: judged
-                    .iter()
-                    .find(|(at, _)| at == step.step_id())
-                    .map(|(_, answers)| answers.iter().map(Judged::from).collect())
-                    .unwrap_or_default(),
-                flagged: flagged
-                    .iter()
-                    .find(|(at, _)| at == step.step_id())
-                    .map(|(_, found)| found.iter().map(Flagged::from).collect())
-                    .unwrap_or_default(),
-                // The one fact here that is not a row. Read from the live slot
-                // as the answer is assembled, because nothing writes it down.
-                judging: self
-                    .aloft()
-                    .on(&ipc::JobId::from(job.id()), &StepId::from(step.step_id())),
-            })
-            .collect()
     }
 
     /// Which of the three refusals a failure is, decided from its type.

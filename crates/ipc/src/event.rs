@@ -380,7 +380,13 @@ pub struct ChangedFile {
     pub outside_plan: bool,
 }
 
-/// What the working Drone has changed in its worktree, as of one reading.
+/// What one working Drone has changed in its worktree, as of one reading.
+///
+/// **One of several.** Fleet works more than one Job at a time, so more than
+/// one of these is in flight — which is why [`JobFilesChanged::job_id`] was
+/// always on it and why nothing about the shape had to move. A reader that
+/// holds one Job's list keys on that field; one that holds every Job's is
+/// paying for a detail nobody has open.
 ///
 /// **The whole footprint, not a delta.** A client replaces the list it holds
 /// rather than folding this into one, so a file that stopped being changed —
