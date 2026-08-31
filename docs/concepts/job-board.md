@@ -16,7 +16,11 @@ Your lens on **every Job and what it is doing** — picking work to dispatch, wa
 
 **Every Job, at every status, with state as a filter.** A Job does not leave the Board when a Drone picks it up; the filter is what narrows the list, and the filter is a control rather than a routing decision.
 
-**One list rather than three surfaces.** Splitting not-yet-started, running and finished across separate destinations divided one population three ways, made a person learn which surface held which state, and gave three lists of Jobs three chances to disagree about what a Job row looks like. What used to be Active Jobs is this list filtered to what is running, and there is no Activity Feed: finished Jobs are this list filtered to what is over.
+**Reviews is a filter here, and a fast one.** A Job at `awaiting_review` is a Job, and a queue of them is this list filtered to that status. It is not a destination of its own: it was one, and folding it in is what makes "what needs me" a single gesture rather than a second place to check.
+
+**A filter changes a row's field set, and that is not the row dropping a field.** A Job at review is at its last step with its cost settled, so a step bar and a spend figure say nothing there — the Reviews field run was drawn without them. Field sets already vary by status; the rule that no field is dropped is about width, never about state.
+
+**One list rather than four surfaces.** Splitting not-yet-started, running, awaiting-review and finished across separate destinations divided one population four ways, made a person learn which surface held which state, and gave four lists of Jobs four chances to disagree about what a Job row looks like. What used to be Active Jobs is this list filtered to what is running, what used to be Reviews is it filtered to `awaiting_review`, and there is no Activity Feed: finished Jobs are this list filtered to what is over.
 
 Why it matters that this is a filter: the state a Job is in changes constantly and is not where a person's attention lives. Scoping by Manifest is a place; scoping by state is a question, and a question belongs in a control.
 

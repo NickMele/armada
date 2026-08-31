@@ -8,7 +8,7 @@ Design fidelity: not set. Analysis: Complete. UI/UX design: In progress.
 
 **Trigger:** You're starting a work session and want to clear the decks before diving in.
 
-**Concepts touched:** Bridge (Alerts, Reviews).
+**Concepts touched:** Bridge (Alerts), Job Board.
 
 **Milestone:** Board.
 
@@ -16,14 +16,14 @@ Design fidelity: not set. Analysis: Complete. UI/UX design: In progress.
 
 ## Flow
 
-Covers two Bridge surfaces together, since a genuine "what's waiting" check touches both:
+Covers one surface and one filter, since a genuine "what's waiting" check touches both:
 
-| Surface | Purpose | Structure |
+| Where | Purpose | Structure |
 | --- | --- | --- |
-| Reviews | Calm, evaluative — Job Review flow, human-gated advance per workflow settings | Simple oldest-first list |
+| Job Board, filtered to `awaiting_review` | Calm, evaluative — Job Review flow, human-gated advance per workflow settings | Simple oldest-first list. **The filter has to be one gesture**, because this is the half of a triage pass a person is most often here for |
 | Alerts | Interventional — escalations needing a decision, browsed proactively rather than pushed | Alert Level (Blocked on top, Waiting below) → sub-grouped by trigger type → oldest-first. State (in-progress/waiting/resolved) is a filter toggle, not primary structure. Noted items never appear here — they are recorded on the Job. |
 
-**The Activity Feed was a third surface here and is gone.** Passive visibility of finished work is the [Job Board](../concepts/job-board.md) filtered to what is over, which is what retiring it means. Nothing in this journey depended on it: a chronological stream with no actions is the one surface a triage pass never acts on.
+**Two surfaces this journey used to name are gone.** The Activity Feed and Reviews were both lists of Jobs standing beside the [Job Board](../concepts/job-board.md), which now holds every Job with state as a filter. Nothing in the triage pass depended on the feed — a chronological stream with no actions is the one surface a triage pass never acts on. Reviews is the reversal below.
 
 ## Alert Levels and this surface
 
@@ -31,7 +31,11 @@ Covers two Bridge surfaces together, since a genuine "what's waiting" check touc
 
 Two consequences for this journey:
 
-- **Gate failures, dispatch approvals and Job Reviews are all Waiting.** They were three surfaces holding the same kind of item — something halted or finished, with a decision queued. **Settled 2026-08-21:** Reviews stays its own surface. Every item in it is Waiting, so it could have been a filter, but evaluating a diff and rescuing a stalled Job are different modes of attention, and a queue that mixes them makes the evaluative work feel urgent. Drawing it proved the point — the Reviews field run carries no step bar and no spend, because a Job at review is at its last step with its cost settled.
+- **Gate failures, dispatch approvals and Job Reviews are all Waiting.** They were three surfaces holding the same kind of item — something halted or finished, with a decision queued. **~~Settled 2026-08-21: Reviews stays its own surface.~~ Reversed 2026-08-30.** Reviews is a filter on the Job Board.
+
+  The 2026-08-21 argument was that evaluating a diff and rescuing a stalled Job are different modes of attention, and a queue mixing them makes the evaluative work feel urgent. That argument was against folding Reviews into **Alerts**, which is an urgent queue. The Board is not: it holds running and finished work too, so nothing about landing there makes a review read as urgent. Reviews standing alone cost a second place to check for the same question, and the point of the Board's rescope is that "what needs me" is one gesture.
+
+  **What the 2026-08-21 drawing found still holds.** The Reviews field run carries no step bar and no spend, because a Job at review is at its last step with its cost settled. That is a filter changing a row's field set, which field sets already do by status — the rule that no field is dropped is about width, never about state. See [Job Board](../concepts/job-board.md).
 - **~~Doctor module failures now reach Alerts at Waiting.~~ Reversed 2026-08-21.** A health check is a standing condition, not a queued decision: a failing module has no workspace, no spend, no step and no Job id, and nothing about it is *waiting* in the sense every Alerts row is. Drawn first as a queue row with three fields faked, which is what made the mismatch obvious. **Doctor never enters Alerts.** It renders as a one-line neutral strip above the tabs, naming which modules are failing and whether work is stopped, with a way into Doctor. Alerts stays a list of Jobs.
 
 ## Distinction from Respond to a Push Alert

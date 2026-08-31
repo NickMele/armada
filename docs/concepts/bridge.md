@@ -53,9 +53,11 @@ Run and edit a Manifest reads a project's Checks and Commands, runs any one of t
 
 Bridge's shell is a **left resizable rail** for navigation, a **full-width panel** to its right where the journeys mount, and a **status bar fixed to the bottom**. Finer layout treatment within each journey remains UI/UX design phase work.
 
-The rail carries Job Board, Alerts, Reviews, Doctor and Manifest. Helm sits below them.
+The rail carries Job Board, Alerts, Doctor and Manifest. Helm sits below them.
 
-**Active Jobs and the Activity Feed are not on it.** Both were lists of Jobs standing beside the Board, and the Board now holds every Job with state as a filter — see [Job Board](job-board.md). What was Active Jobs is the Board filtered to what is running; what was the Activity Feed is the Board filtered to what is over. Three lists of Jobs gave three surfaces three chances to disagree about what a Job row looks like, and a person had to learn which one held which state.
+**Active Jobs, Reviews and the Activity Feed are not on it.** All three were lists of Jobs standing beside the Board, and the Board now holds every Job with state as a filter — see [Job Board](job-board.md). Each is that list under one filter: running, `awaiting_review`, and over. Four lists of Jobs gave four surfaces four chances to disagree about what a Job row looks like, and a person had to learn which one held which state.
+
+**Alerts is the one that stays.** An alert is a condition on a Job rather than a status a Job holds — thrashing, fan-out abuse and evidence-suspect are none of them Job states — so it is a different population with its own level and trigger structure, not a filter of this one.
 
 **The status bar reports Fleet and Doctor health continuously.** The Manifest surface's Doctor strip can therefore disappear when every module passes, without its absence being ambiguous.
 

@@ -10,7 +10,7 @@ Read the journey that covers what you are about to design or build, before you b
 | --- | --- |
 | [1 — Dispatch a Job](1-dispatch-a-job.md) | Design or build the approval flow — Job Board, the approval card, or any surface (Triage, Alerts, Helm, the pre-approved queue) that reuses its pattern |
 | [2 — Check System Health](2-check-system-health.md) | Design or build Doctor's health grid, or add a module to it |
-| [3 — Triage Queue](3-triage-queue.md) | Design or build the proactive, self-initiated scan across Reviews and Alerts |
+| [3 — Triage Queue](3-triage-queue.md) | Design or build the proactive, self-initiated scan across Alerts and the Job Board's review filter |
 | [3.5 — Respond to a Push Alert](3.5-respond-to-a-push-alert.md) | Design or build the reactive single-item Debug view, the Intervention Ladder, or the Alert Levels a push notification carries |
 | [4 — Monitor Active Work](4-monitor-active-work.md) | Design or build the Active Jobs list or the job detail rail — the M1 monitoring subset, and what the full surface defers |
 | [9 — Run and edit a Manifest](9-run-and-edit-a-manifest.md) | Design or build Bridge's Manifest surface — running a Check or Command on demand, editing a manifest, or Verify's drift-plus-dry-run |
