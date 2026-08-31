@@ -79,10 +79,11 @@
 #
 # The same three, and `format` with them, are named on every other step that
 # produces a diff and gates on anything -- `feature`'s `implement` and `tests`,
-# `refactor`'s `implement`, `revert`'s `revert`. They are **not** on `plan` or `handoff`,
-# which produce a `facts_note` and cannot fail a Check at all, and not on
-# `prototype`'s `build`, which carries no mechanical tier by decision rather
-# than by omission.
+# `refactor`'s `implement`, `revert`'s `revert`. They are **not** on `plan` or
+# `handoff`, which produce a `facts_note` and could not fail a compile or a test
+# run, and not on `prototype`'s `build`, which carries no mechanical tier by
+# decision rather than by omission. `plan` does carry a mechanical Check now,
+# and it is the one kind a written step can fail: `artifact_exists`, below.
 #
 # **A Drone still runs none of them.** The allowlist denies `pnpm` as it denies
 # `cargo`; Fleet runs Checks. What a Drone can do is ask, and `run_checks`
@@ -98,10 +99,15 @@
 # would find it, so absent means none and this file says what it wants.
 #
 # A step with no `mechanical_checks` and no `scope_diff_check` cannot produce a
-# mechanical failure at all, so a budget on `plan` or `handoff` would be a
-# number nothing could spend. Those steps stop on a Judge refusal or a person,
-# and neither is a retry: a refusal is the work not being what was asked for and
-# goes to a person, and `handoff` is a person by construction.
+# mechanical failure at all, so a budget on `handoff` would be a number nothing
+# could spend. It stops on a person, and that is not a retry.
+#
+# **`plan` can now fail mechanically and still declares no `retry_limit`**, so
+# it gets none. That is deliberate. The failure it can produce is "you did not
+# write the file you were told to write at the path you were told to write it",
+# which a Drone answers by writing it -- and a Drone that did not is a Drone
+# that did not read its brief, which a second attempt does not fix. Give it a
+# budget when one is observed being spent well.
 #
 # Two is a guess, and it is the registry's guess rather than this file's. What
 # it is bounding is a Drone handed a failure it cannot understand burning turns
@@ -142,6 +148,44 @@
 # `reference_docs` is read now too, so a later step names what an earlier step
 # established and the Judge is shown it, labelled as the standard rather than
 # the target.
+#
+# **`plan` writes a file, and `artifact_exists` is why that is true.** The step
+# produces a `facts_note` and touches nothing else, so before this its entire
+# product was three prose strings -- and `verification::submission` says of two
+# of them that nothing routes on them. A step whose product a later step depends
+# on now writes the deliverable at a path the definition names, and Fleet looks
+# for it. `implement` still reads `plan.evidence` as a `reference_doc`; what
+# changed is that the note points at a file that is checked to be there rather
+# than at a claim about one.
+#
+# **The Judge is shown the file, and `target` is why that is safe.** Fleet opens
+# this exact path at the gate and puts what it holds in the brief as the
+# document the step produced. The path is authored here and frozen onto the Job
+# at creation, so no Drone chose it and none can move it -- which is the whole
+# difference between this and Fleet opening whatever a submission's `shown_by`
+# happened to name. The three strings are still shown, beside the file and
+# labelled as the summary that came with it.
+#
+# On 2026-08-29 a Drone wrote a seven-kilobyte plan under `.armada/<job-id>/`,
+# which is what the opening brief offers for files a Drone writes for itself.
+# The Judge was handed the summary, refused the step for not naming a root cause
+# that was on page one of the file, and a person had to overrule it. Nothing
+# read that file because nothing was looking for a path. `.armada/artifacts/` is
+# a second directory rather than a second use of the first, so a deliverable and
+# a scratch note are never the same thing, and the brief names it outright.
+#
+# **The check proves the file is there and not that it is any good.** It reads
+# the file's size and never its bytes -- an empty file fails, a bad plan does
+# not. What catches a bad plan is the two criteria below, which are now shown
+# the plan itself. On a step with no Judge at all this check is the whole gate,
+# and that is a real limit rather than a hidden one.
+#
+# **Nothing about this touches git.** The file is ignored like everything else
+# under `.armada/`, it never enters a diff, and it is reclaimed with the
+# worktree. An artifact that landed in the default branch would be inherited by
+# the next Job's worktree and would satisfy its `artifact_exists` with no Drone
+# having written anything, which would make the check vacuous from the second
+# Job onward.
 #
 # **The Judge is shown the request now**, which is what `judge.md` rule 2 said
 # all along and what #169 built: the Job's title, its facts and its acceptance
@@ -186,6 +230,12 @@
       "id": "plan",
       "label": "Plan the change",
       "evidence_type": "facts_note",
+      "mechanical_checks": [
+        {
+          "type": "artifact_exists",
+          "target": ".armada/artifacts/plan.md"
+        }
+      ],
       "evidence_scope": {
         "context_source": "drone_declared",
         "exclude_paths": [

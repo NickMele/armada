@@ -90,6 +90,6 @@ pub use transition::{
     CriteriaOwed, Edge, IllegalTransition, PilotReason, Target, TransitionReason, EDGES,
 };
 pub use workflow::{
-    AdvanceGate, EvidenceType, FrozenWorkflow, ResolvedCheck, ResolvedStep, DIFF_NONEMPTY,
-    MANIFEST_CHECK,
+    AdvanceGate, EvidenceType, FrozenWorkflow, ResolvedCheck, ResolvedStep, ARTIFACT_EXISTS,
+    DIFF_NONEMPTY, MANIFEST_CHECK,
 };

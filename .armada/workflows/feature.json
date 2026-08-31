@@ -48,7 +48,16 @@
 #
 # `reference_docs` is read now too, so a later step names what an earlier step
 # established and the Judge is shown it, labelled as the standard rather than
-# the target.
+# the target.#
+# **A step whose product a later step reads writes a file.** `artifact_exists`
+# is carried now, and `bug.json` carries the reasoning: a written step used to
+# hand the next one three prose strings, two of which `verification::submission`
+# says nothing routes on. Fleet opens the path this step declares and puts the
+# file's contents in the Judge's brief as the document the step produced; the
+# three strings are shown beside it, labelled as the summary. The mechanical
+# check reads only the file's size, so an empty file stops the step and whether
+# what is in it is any good stays the Judge's question.
+#
 #
 # **The Judge is shown the request now**, which is what `judge.md` rule 2 said
 # all along and what #169 built: the Job's title, its facts and its acceptance
@@ -111,6 +120,12 @@
       "id": "scope",
       "label": "Scope the change",
       "evidence_type": "facts_note",
+      "mechanical_checks": [
+        {
+          "type": "artifact_exists",
+          "target": ".armada/artifacts/scope.md"
+        }
+      ],
       "evidence_scope": {
         "context_source": "drone_declared",
         "exclude_paths": [

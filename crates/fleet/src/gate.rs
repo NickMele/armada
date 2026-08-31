@@ -59,6 +59,8 @@
 //! every case below be tested with no database.
 
 use std::error::Error;
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 use std::time::Duration;
 
@@ -66,12 +68,12 @@ use adapter_traits::{Changed, Footprint, WorkProduct};
 use checks_runner::Output;
 use core_model::{
     Actor, AdvanceGate, DeclaredPaths, EscalationTrigger, IllegalTransition, Job, Judgment,
-    ResolvedCheck, StepCheck, StepEvidence, StepId, StepLevelTrigger, Target, Timestamp,
-    Transitioned,
+    ResolvedCheck, ResolvedStep, StepCheck, StepEvidence, StepId, StepLevelTrigger, Target,
+    Timestamp, Transitioned,
 };
 use verification::{
-    decide, Accepted, Baseline, CheckFailed, InScope, OutcomeTurn, OutsideScope, Printed, Ran,
-    Request, Submission, Verdict, Verified,
+    decide, Accepted, Baseline, CheckFailed, Delivered, InScope, OutcomeTurn, OutsideScope,
+    Printed, Ran, Request, Submission, Verdict, Verified, A_DELIVERABLE,
 };
 
 use crate::at_step::AtStep;
@@ -314,8 +316,38 @@ where
                     }
                 }
             };
+            // **Read here rather than with the Checks**, so a step whose Judge
+            // is never asked never opens the file. The mechanical tier already
+            // established it is there; this is the only place its bytes are
+            // wanted.
+            let read = match deliverable(step, Path::new(at.worktree().path())) {
+                None => None,
+                Some(Ok(bytes)) => Some(bytes),
+                Some(Err(cause)) => {
+                    return Ruling::CouldNotDecide {
+                        artifact: "the step's deliverable",
+                        cause: Box::new(cause),
+                        checks,
+                        output,
+                    }
+                }
+            };
+            let delivered = match step.deliverable().zip(read.as_deref()) {
+                None => None,
+                Some((target, bytes)) => match Delivered::read(target, bytes) {
+                    Ok(delivered) => Some(delivered),
+                    Err(cause) => {
+                        return Ruling::CouldNotDecide {
+                            artifact: "the step's deliverable",
+                            cause: Box::new(cause),
+                            checks,
+                            output,
+                        }
+                    }
+                },
+            };
             match judging::judged(
-                at, request, accepted, &patch, &checks, &off_plan, recorded, judging,
+                at, request, accepted, &patch, delivered, &checks, &off_plan, recorded, judging,
             )
             .await
             {
@@ -397,6 +429,40 @@ where
             judged,
         },
     }
+}
+
+/// The bytes of the file the step was asked to write.
+///
+/// `None` where the step declares no deliverable, which is every step whose
+/// product is the diff. `Some(Err(..))` where it declares one and the file
+/// could not be read — **not `None`**, because the two mean opposite things and
+/// folding them would hand the Judge a step's summary in place of the document
+/// it summarises, which is the substitution this whole capability removes.
+///
+/// **The path is the frozen workflow's.** `ResolvedStep::deliverable` reads it
+/// off a `mechanical_checks[].target` authored in the definition and frozen at
+/// Job creation, and `config` refused a target that globs, that is absolute or
+/// that holds `..` where the definition was parsed. So no Drone chose this path
+/// and none can move it, which is the whole difference between reading it and
+/// opening whatever a submission's `shown_by` happened to name.
+///
+/// Read to one byte past the bound rather than whole: a Drone that wrote five
+/// megabytes must not cost five megabytes of Fleet's memory to refuse.
+/// [`Delivered::read`] is what does the refusing, so the bound is stated once.
+///
+/// **A symlink at the path is followed, and that grants nothing.** A Drone can
+/// already read whatever it can read and copy the bytes into the file, so a
+/// link is a shorter way to do what `cat` does. What a link could otherwise
+/// smuggle in — something enormous, something that is not text — is what the
+/// bound and this function's error arm already answer.
+fn deliverable(step: &ResolvedStep, worktree: &Path) -> Option<Result<String, std::io::Error>> {
+    let target = step.deliverable()?;
+    Some(File::open(worktree.join(target)).and_then(|file| {
+        let mut held = String::new();
+        file.take(A_DELIVERABLE as u64 + 1)
+            .read_to_string(&mut held)
+            .map(|_| held)
+    }))
 }
 
 /// The turn that hands a mechanical failure back, where all three conditions

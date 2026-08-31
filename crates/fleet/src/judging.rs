@@ -77,8 +77,8 @@ use core_model::{
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use verification::{
-    Accepted, Baseline, Brief, Convergence, ConvergenceBrief, Flagged, GamingBrief, NothingToJudge,
-    Product, Reference, Refusals, Request, Unreadable,
+    Accepted, Baseline, Brief, Convergence, ConvergenceBrief, Delivered, Flagged, GamingBrief,
+    NothingToJudge, Product, Reference, Refusals, Request, Unreadable,
 };
 
 use crate::at_step::AtStep;
@@ -373,13 +373,15 @@ pub(crate) async fn judged(
     request: Request<'_>,
     accepted: Accepted<'_>,
     patch: &Patch,
+    delivered: Option<Delivered<'_>>,
     checks: &[StepCheck],
     off_plan: &[RepoPath],
     recorded: &[(StepId, StepEvidence)],
     judging: &Judging,
 ) -> Result<(Vec<Judgment>, Option<Refusals>), CallFailed> {
     let step = at.step();
-    let product = Product::of(step, patch, accepted).map_err(CallFailed::NothingToJudge)?;
+    let product =
+        Product::of(step, patch, accepted, delivered).map_err(CallFailed::NothingToJudge)?;
     let against = measured_against(at, recorded);
     let references: Vec<Reference<'_>> = against
         .iter()

@@ -18,10 +18,10 @@
 //! `job_steps` columns and `current_step_id` are caches of that fold in exactly
 //! the sense `status` is, and this file does not read them back.
 //!
-//! `assigned_drone` folds too, now that a Drone arriving is a row in the same
-//! log. It was refused here until it was — the refusal `current_step_id` had
-//! before a step move became a row — because a rebuild that cannot put a value
-//! back must say so rather than drop it.
+//! `assigned_drone` folds too, now that a Drone arriving on a step is a row in
+//! the same log — the refusal `current_step_id` had before a step move became
+//! a row, because a rebuild that cannot put a value back must say so rather
+//! than drop it. It is a `job_steps` column this file does not read back.
 //!
 //! Every other column on the Job row is the authority for its own field,
 //! because nothing in the log describes it. `workflow` is the newest of them

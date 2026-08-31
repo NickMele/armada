@@ -732,3 +732,93 @@ fn a_catch_up_that_would_not_replay_tells_the_drone_to_carry_on() {
     assert!(said.contains("Nothing here is yours to fix"), "{said}");
     assert!(!said.contains("conflict markers"), "{said}");
 }
+
+/// A step that declares an artifact, and the turn its Drone is given.
+fn turn_delivering(target: &str) -> String {
+    let workflow = testkit::frozen(&[Sketch {
+        id: "implement",
+        label: "Implement",
+        evidence_type: Some("facts_note"),
+        gates: &[Gate::ArtifactExists { target }],
+        judged_on: &[],
+        scope: None,
+        gaming: None,
+    }]);
+    first_turn(&a_job(), &workflow, &StepId::new("implement"))
+        .expect("a prompt")
+        .as_str()
+        .to_string()
+}
+
+/// **The path is named, because a check nobody was told about fails every
+/// time.** The step's product is a file now; a Drone that is not told which
+/// file does the work and loses it.
+#[test]
+fn a_step_that_must_write_a_file_is_told_which_file() {
+    let said = turn_delivering(".armada/artifacts/plan.md");
+    assert!(said.contains(".armada/artifacts/plan.md"), "{said}");
+    assert!(said.contains("WHAT THIS PART DELIVERS"), "{said}");
+}
+
+/// **The deliverable and the scratch directory are two things and the turn
+/// says which.** This is the Job measured on 2026-08-29: the Drone put its
+/// plan under `.armada/<job-id>/`, which this repository ignores, so the file
+/// never entered the diff and the Judge refused the step for a root cause
+/// written on page one of it.
+#[test]
+fn the_deliverable_is_not_offered_the_scratch_directory() {
+    let said = turn_delivering(".armada/artifacts/plan.md");
+    let scratch = format!(".armada/{}/", a_job().id().as_str());
+    let delivers = said
+        .split("WHAT THIS PART DELIVERS")
+        .nth(1)
+        .expect("the block");
+
+    assert!(
+        !delivers.contains(&scratch),
+        "the deliverable block points at the scratch path: {delivers}"
+    );
+    assert!(
+        said.contains("not one of them"),
+        "the scratch block does not say a deliverable is excluded: {said}"
+    );
+    // A plan is no longer one of the scratch examples, because on a `plan` step
+    // it read as an instruction to file the deliverable out of the Judge's
+    // sight.
+    assert!(
+        !said.contains("A plan, a checklist"),
+        "a plan is still offered as scratch: {said}"
+    );
+}
+
+/// A step that declares no artifact gets no block. **An empty block reads as an
+/// answered one**, and every step whose product is the diff would otherwise be
+/// asked for a file nothing looks for.
+#[test]
+fn a_step_that_declares_no_artifact_is_not_asked_for_one() {
+    for step in ["implement", "summarise"] {
+        let said = turn_at(step);
+        assert!(!said.contains("WHAT THIS PART DELIVERS"), "{step}: {said}");
+    }
+}
+
+/// **The block says the path is the one that is read**, which is the fact a
+/// Drone acts on. Fleet opens exactly this path, so nothing goes looking for a
+/// file written well somewhere else — "write it here" is not a filing
+/// convention and the wording must not read as one.
+#[test]
+fn the_deliverable_block_says_this_path_is_the_one_that_is_read() {
+    let said = turn_delivering(".armada/artifacts/plan.md");
+    assert!(
+        said.contains("This exact path is the one that is read"),
+        "{said}"
+    );
+    assert!(
+        said.contains("an empty file or no file stops this part"),
+        "{said}"
+    );
+    assert!(
+        said.contains("a file somewhere else is not this part's work"),
+        "{said}"
+    );
+}

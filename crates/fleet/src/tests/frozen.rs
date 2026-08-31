@@ -9,7 +9,8 @@
 //! Fleet restarted holding a different definition" are one event.
 
 use core_model::{
-    Actor, DroneId, IllegalDroneMove, JobStatus, ResolvedCheck, StepId, StepState, Timestamp, Ulid,
+    Actor, DroneId, IllegalDroneMove, JobStatus, JobStep, ResolvedCheck, StepId, StepState,
+    Timestamp, Ulid,
 };
 use testkit::{FakeWorkProduct, Gate, Sketch};
 
@@ -234,16 +235,19 @@ async fn a_job_folds_its_drone_out_of_the_log() {
     );
 }
 
-/// A second spawn is refused rather than overwriting the id, which is the only
-/// thing naming the first Drone's transcript.
+/// A second spawn onto **the same step** is refused rather than overwriting the
+/// id, which is the only thing naming the first Drone's transcript. That is the
+/// case `restart_step` reaches, so the refusal is still load-bearing.
 #[test]
-fn a_second_drone_cannot_be_put_on_a_job_that_already_has_one() {
+fn a_second_drone_cannot_be_put_on_a_step_that_already_has_one() {
     let at = |instant: &str| Timestamp::from_rfc3339(instant);
     let drone = |id: &str| DroneId::carried(Ulid::carried(id));
     let job = crate::tests::gate::running_job();
+    let implement = StepId::new("implement");
 
     let first = job
         .drone_spawned(
+            &implement,
             drone("01DRONEONE"),
             Actor::Fleet,
             at("2026-08-26T09:00:00Z"),
@@ -251,6 +255,7 @@ fn a_second_drone_cannot_be_put_on_a_job_that_already_has_one() {
         .expect("the first arrives");
     assert!(matches!(
         first.job.drone_spawned(
+            &implement,
             drone("01DRONETWO"),
             Actor::Fleet,
             at("2026-08-26T09:01:00Z")
@@ -260,16 +265,81 @@ fn a_second_drone_cannot_be_put_on_a_job_that_already_has_one() {
     assert!(
         first
             .job
-            .drone_exited(Actor::Fleet, at("2026-08-26T09:02:00Z"))
+            .drone_exited(&implement, Actor::Fleet, at("2026-08-26T09:02:00Z"))
             .is_ok(),
         "and the one that is there can leave"
     );
     assert!(
         matches!(
-            job.drone_exited(Actor::Fleet, at("2026-08-26T09:02:00Z")),
-            Err(IllegalDroneMove::NoneAssigned)
+            job.drone_exited(&implement, Actor::Fleet, at("2026-08-26T09:02:00Z")),
+            Err(IllegalDroneMove::NoneAssigned { .. })
         ),
-        "a Job that never had one cannot lose one"
+        "a step that never had one cannot lose one"
+    );
+    assert!(
+        matches!(
+            job.drone_exited(
+                &StepId::new("no-such-step"),
+                Actor::Fleet,
+                at("2026-08-26T09:02:00Z")
+            ),
+            Err(IllegalDroneMove::NoSuchStep { .. })
+        ),
+        "and a step the Job does not have is its own refusal, not a move that \
+         changed nothing"
+    );
+}
+
+/// **The refusal narrowed with the pointer; it did not go away.** A Drone on
+/// the second step is admitted while the first step's row still names the one
+/// that worked it — which is the whole reason the column moved, because that
+/// name is the only thing that finds the first Drone's transcript afterwards.
+#[test]
+fn the_step_that_finished_keeps_naming_the_drone_that_worked_it() {
+    let at = |instant: &str| Timestamp::from_rfc3339(instant);
+    let drone = |id: &str| DroneId::carried(Ulid::carried(id));
+    let job = crate::tests::gate::running_job();
+    let implement = StepId::new("implement");
+    let summarise = StepId::new("summarise");
+
+    let first = drone("01DRONEONE");
+    let worked = job
+        .drone_spawned(
+            &implement,
+            first.clone(),
+            Actor::Fleet,
+            at("2026-08-26T09:00:00Z"),
+        )
+        .expect("the first arrives")
+        .job;
+    let left = worked
+        .drone_exited(&implement, Actor::Fleet, at("2026-08-26T09:05:00Z"))
+        .expect("it goes when its step's work is done")
+        .job;
+    assert_eq!(
+        left.assigned_drone(),
+        None,
+        "no process is on the Job between one step and the next"
+    );
+
+    let second = drone("01DRONETWO");
+    let next = left
+        .drone_spawned(
+            &summarise,
+            second.clone(),
+            Actor::Fleet,
+            at("2026-08-26T09:06:00Z"),
+        )
+        .expect("a second step gets a second Drone")
+        .job;
+    assert_eq!(
+        next.assigned_drone(),
+        Some(&second),
+        "the Job holds the Drone of the step being worked"
+    );
+    assert_eq!(
+        next.step(&summarise).and_then(JobStep::assigned_drone),
+        Some(&second)
     );
 }
 

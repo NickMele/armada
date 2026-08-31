@@ -106,7 +106,7 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
         .flat_map(|step| step.checks())
         .filter_map(|check| match check {
             ResolvedCheck::ManifestCheck { name, run, .. } => Some((name.as_str(), run.as_str())),
-            ResolvedCheck::DiffNonempty => None,
+            ResolvedCheck::DiffNonempty | ResolvedCheck::ArtifactExists { .. } => None,
         })
         .collect();
 

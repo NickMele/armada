@@ -56,6 +56,6 @@ pub use job::{
     ScopeRevision, ScopeRevisionOutcome, Standing, StepCheck, StepEdge, StepEvent, StepEvidence,
     StepId, StepLevelTrigger, StepSeed, StepState, StepTarget, StepTransitioned, StepVerdict,
     Stuck, Subject, Target, Title, TopLevelOrigin, TransitionReason, Transitioned, TriggerKind,
-    TriggerLevel, Urgency, WorkflowId, WriteTargets, ADVANCING_STATUSES, DIFF_NONEMPTY, EDGES,
-    MANIFEST_CHECK, STEP_EDGES,
+    TriggerLevel, Urgency, WorkflowId, WriteTargets, ADVANCING_STATUSES, ARTIFACT_EXISTS,
+    DIFF_NONEMPTY, EDGES, MANIFEST_CHECK, STEP_EDGES,
 };

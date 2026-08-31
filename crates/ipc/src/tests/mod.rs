@@ -371,13 +371,15 @@ fn a_transition_becomes_an_event_with_its_reason() {
 #[test]
 fn the_drone_lifecycle_pair_travels_under_the_names_the_inventory_declares() {
     let job = job();
+    let step = core_model::StepId::new("repro");
     let arrived = job
         .drone_spawned(
+            &step,
             core_model::DroneId::carried(Ulid::carried("01DRONE")),
             Actor::Fleet,
             at("2026-08-26T09:05:00.000Z"),
         )
-        .expect("nothing is on it yet");
+        .expect("nothing is on that step yet");
 
     let spawned = StreamMessage::Event(crate::Delivered {
         cursor: crate::Cursor::at(9),
@@ -390,6 +392,10 @@ fn the_drone_lifecycle_pair_travels_under_the_names_the_inventory_declares() {
     let json = encode(&spawned).expect("plain data");
     assert!(json.contains("\"kind\":\"drone.spawned\""), "{json}");
     assert!(json.contains("\"drone_id\":\"01DRONE\""), "{json}");
+    assert!(
+        json.contains("\"step_id\":\"repro\""),
+        "a Drone arrives on a step, and the event says which: {json}"
+    );
     assert!(json.contains("\"branch\":\"armada/01JOB\""), "{json}");
     assert_eq!(
         decode::<StreamMessage>("stream message", json.as_bytes()).expect("it round-trips"),
@@ -398,8 +404,8 @@ fn the_drone_lifecycle_pair_travels_under_the_names_the_inventory_declares() {
 
     let left = arrived
         .job
-        .drone_exited(Actor::Fleet, at("2026-08-26T09:06:00.000Z"))
-        .expect("one is on it");
+        .drone_exited(&step, Actor::Fleet, at("2026-08-26T09:06:00.000Z"))
+        .expect("one is on that step");
     let exited = crate::Event::DroneExited(crate::DroneExited::of(
         &left.event,
         JobSummary::from(&left.job),
@@ -639,6 +645,7 @@ fn a_history_carries_all_three_shapes_and_names_each_one() {
                 seq: 2,
                 status: crate::JobStatus::from_wire("running").expect("a status"),
                 moved: Movement::Drone(DroneMoved {
+                    step_id: crate::StepId::carried("repro"),
                     drone_id: crate::DroneId::carried("01DRONE"),
                     presence: crate::DronePresence::from_wire("drone_spawned").expect("a presence"),
                 }),

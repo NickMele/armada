@@ -77,6 +77,15 @@ export type StepMoved = {
  * a pointer that is set or null and has no states of its own.
  */
 export type DroneMoved = {
+  /**
+   * Which step it arrived on, or left.
+   *
+   * **A Drone belongs to a workflow step**, so a Job has one of these pointers
+   * per step rather than one for the Job. Without the step a history could not
+   * tell one boundary's pair of rows from the next one's — every spawn and
+   * every exit would read the same.
+   */
+  step_id: string;
   drone_id: string;
   /** `drone_spawned` or `drone_exited`. */
   presence: string;

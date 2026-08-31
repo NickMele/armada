@@ -109,6 +109,10 @@ pub enum Observed {
     /// nothing passed `diff_nonempty` on its predecessor's files. A count
     /// cannot express "not since this step began", so it is not a count.
     Diff { moved: bool },
+    /// What the gate found at the path the step's `artifact_exists` names, as
+    /// Fleet read the worktree. Fleet's own reading, never a path the Drone
+    /// reported having written.
+    Artifact(Artifact),
     /// The check declares which paths it covers and the step changed none of
     /// them, so it was not run.
     ///
@@ -125,9 +129,37 @@ impl Observed {
         match self {
             Observed::Command(_) => "a command run",
             Observed::Diff { .. } => "a diff",
+            Observed::Artifact(_) => "a look for a file",
             Observed::Skipped { .. } => "a skipped check",
         }
     }
+}
+
+/// What is at the path a step's `artifact_exists` names.
+///
+/// **Four answers rather than a bool**, because three of them are different
+/// mistakes and a Drone told "it is not there" about a file it can see would
+/// spend its retries writing it again.
+///
+/// **[`Artifact::Empty`] is a fail.** A zero-byte deliverable is the vacuous
+/// pass this module exists to refuse, arriving in file form — and on Design
+/// Plan's `draft`, which carries no Judge at all, this check is the whole gate,
+/// so nothing downstream would ever open it.
+///
+/// The reading is `std::fs::metadata` and nothing else. No bytes are read, so
+/// nothing here can grow into parsing what the Drone wrote: whether what is
+/// written is any good is the Judge's question.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Artifact {
+    /// A file, with bytes in it. The only answer that passes.
+    Written,
+    /// A file, and it holds nothing. **A fail** — see the module header.
+    Empty,
+    /// Something is at the path and it is not a file. A directory of that name
+    /// is the case that actually happens, and it is not the deliverable.
+    NotAFile,
+    /// Nothing is at the path.
+    Missing,
 }
 
 /// Why one check did not pass. Never constructed for a check that passed.
@@ -151,6 +183,14 @@ pub enum CheckFailed {
     /// **Not "the worktree is empty."** The worktree can be full of an earlier
     /// step's work; what this says is that *this* step added nothing to it.
     DiffEmpty,
+    /// The step declares `artifact_exists` and the worktree does not hold the
+    /// file it named, or holds something that is not one.
+    ///
+    /// **Carries the path**, because the whole point of the check is that the
+    /// next step is handed a file rather than a claim, and a Drone told its
+    /// artifact is missing without being told where it was looked for cannot
+    /// act on it.
+    ArtifactNotThere { target: String, found: Artifact },
     /// The declaration itself was not one the step could be measured against —
     /// none arrived, or it named a path the step's own denylist refuses.
     ///
@@ -172,6 +212,7 @@ impl CheckFailed {
         match self {
             CheckFailed::WrongExitCode { .. }
             | CheckFailed::DiffEmpty
+            | CheckFailed::ArtifactNotThere { .. }
             | CheckFailed::OutOfScope(_) => CheckOutcome::Failed,
             CheckFailed::Signalled { .. } => CheckOutcome::Signalled,
             CheckFailed::TimedOut { .. } => CheckOutcome::TimedOut,
@@ -190,6 +231,9 @@ impl CheckFailed {
             }
             CheckFailed::NeverRan { check, .. } => format!("`{check}` can be run"),
             CheckFailed::DiffEmpty => "the step changes at least one file".to_string(),
+            CheckFailed::ArtifactNotThere { target, .. } => {
+                format!("the step writes `{target}`")
+            }
             CheckFailed::OutOfScope(OutsideScope::NothingDeclared) => {
                 "the step declares which paths its work is in".to_string()
             }
@@ -222,6 +266,12 @@ impl CheckFailed {
                 }
             },
             CheckFailed::DiffEmpty => "nothing moved while this step ran".to_string(),
+            CheckFailed::ArtifactNotThere { target, found } => match found {
+                Artifact::Written => "it is there".to_string(),
+                Artifact::Empty => format!("`{target}` is there and holds nothing"),
+                Artifact::NotAFile => format!("`{target}` is not a file"),
+                Artifact::Missing => format!("nothing is at `{target}`"),
+            },
             CheckFailed::OutOfScope(outside) => outside.to_string(),
         }
     }
@@ -462,6 +512,14 @@ fn verdict(
         (ResolvedCheck::DiffNonempty, Observed::Diff { moved }) => {
             Ok(answered((!*moved).then_some(CheckFailed::DiffEmpty)))
         }
+        (ResolvedCheck::ArtifactExists { target }, Observed::Artifact(found)) => {
+            Ok(answered((*found != Artifact::Written).then(|| {
+                CheckFailed::ArtifactNotThere {
+                    target: target.clone(),
+                    found: *found,
+                }
+            })))
+        }
         (ResolvedCheck::ManifestCheck { .. }, other) => Err(ChecksOutstanding::WrongKind {
             at,
             check: "a Manifest Check",
@@ -470,6 +528,11 @@ fn verdict(
         (ResolvedCheck::DiffNonempty, other) => Err(ChecksOutstanding::WrongKind {
             at,
             check: "diff_nonempty",
+            observed: other.kind(),
+        }),
+        (ResolvedCheck::ArtifactExists { .. }, other) => Err(ChecksOutstanding::WrongKind {
+            at,
+            check: "artifact_exists",
             observed: other.kind(),
         }),
     }

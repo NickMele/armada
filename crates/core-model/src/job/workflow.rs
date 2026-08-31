@@ -105,6 +105,15 @@ pub enum ResolvedCheck {
     },
     /// The step produced a non-empty diff.
     DiffNonempty,
+    /// The step wrote the file it was asked to write, at the path the
+    /// definition names.
+    ///
+    /// **`target` is worktree-relative and literal.** No glob, no `..`, no
+    /// leading `/` — `config` refuses each where the definition is parsed, so
+    /// nothing downstream has to decide what a pattern matched. The path is
+    /// one path because Fleet has to be able to name it to the next step's
+    /// Drone, and "whichever file matched" is not a name.
+    ArtifactExists { target: String },
 }
 
 /// The schema's `type` value for a named Check. **Spelled once**, here, so the
@@ -113,6 +122,8 @@ pub enum ResolvedCheck {
 pub const MANIFEST_CHECK: &str = "manifest_check";
 /// The schema's `type` value for the built-in diff assertion.
 pub const DIFF_NONEMPTY: &str = "diff_nonempty";
+/// The schema's `type` value for the built-in artifact assertion.
+pub const ARTIFACT_EXISTS: &str = "artifact_exists";
 
 impl ResolvedCheck {
     /// The WorkflowDef schema's `type` value for this check.
@@ -120,14 +131,22 @@ impl ResolvedCheck {
         match self {
             ResolvedCheck::ManifestCheck { .. } => MANIFEST_CHECK,
             ResolvedCheck::DiffNonempty => DIFF_NONEMPTY,
+            ResolvedCheck::ArtifactExists { .. } => ARTIFACT_EXISTS,
         }
     }
 
-    /// The Manifest Check's name. **`None` on a built-in**, which names none —
-    /// and that is why it is an `Option` rather than the kind repeated.
+    /// What identifies this check to a person: the Manifest Check's name, or
+    /// the path the artifact check names.
+    ///
+    /// **`None` only on `diff_nonempty`**, which identifies nothing beyond its
+    /// kind — and that is why it is an `Option` rather than the kind repeated.
+    /// An artifact check answers with its target because two of them on one
+    /// step are two different assertions, and a recorded row reading
+    /// `artifact_exists` twice says which neither failed.
     pub fn name(&self) -> Option<&str> {
         match self {
             ResolvedCheck::ManifestCheck { name, .. } => Some(name),
+            ResolvedCheck::ArtifactExists { target } => Some(target),
             ResolvedCheck::DiffNonempty => None,
         }
     }
@@ -137,7 +156,7 @@ impl ResolvedCheck {
     pub fn run(&self) -> Option<&str> {
         match self {
             ResolvedCheck::ManifestCheck { run, .. } => Some(run),
-            ResolvedCheck::DiffNonempty => None,
+            ResolvedCheck::DiffNonempty | ResolvedCheck::ArtifactExists { .. } => None,
         }
     }
 
@@ -153,7 +172,7 @@ impl ResolvedCheck {
     pub fn when(&self) -> Option<&Covers> {
         match self {
             ResolvedCheck::ManifestCheck { when, .. } => when.as_ref(),
-            ResolvedCheck::DiffNonempty => None,
+            ResolvedCheck::DiffNonempty | ResolvedCheck::ArtifactExists { .. } => None,
         }
     }
 
@@ -183,7 +202,7 @@ impl ResolvedCheck {
             ResolvedCheck::ManifestCheck {
                 expect_exit_code, ..
             } => Some(*expect_exit_code),
-            ResolvedCheck::DiffNonempty => None,
+            ResolvedCheck::DiffNonempty | ResolvedCheck::ArtifactExists { .. } => None,
         }
     }
 }
@@ -246,6 +265,26 @@ impl ResolvedStep {
     /// Display only. **Nothing routes on it.**
     pub fn label(&self) -> &str {
         &self.label
+    }
+
+    /// The path of the file this step was asked to write, where it declares
+    /// one.
+    ///
+    /// **One place answers it**, because three surfaces ask: the gate reads the
+    /// file to put in the Judge's brief, the opening brief tells the Drone the
+    /// path, and the mechanical tier looks for it. A second derivation of
+    /// "which check names the deliverable" is a second thing that can be wrong
+    /// about it.
+    ///
+    /// **At most one, and the parser is what makes that true.** A step
+    /// declaring two `artifact_exists` checks is refused where it is written —
+    /// otherwise this would answer with one of them and the Judge would be
+    /// shown one of two documents with nothing saying which.
+    pub fn deliverable(&self) -> Option<&str> {
+        self.checks.iter().find_map(|check| match check {
+            ResolvedCheck::ArtifactExists { target } => Some(target.as_str()),
+            _ => None,
+        })
     }
 
     pub fn evidence_type(&self) -> Option<EvidenceType> {

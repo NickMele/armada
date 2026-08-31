@@ -85,10 +85,16 @@ pub enum Moved {
         /// is the same one a Job row's reason uses.
         why: Option<StepLevelTrigger>,
     },
-    /// A Drone arrived on the Job or left it, and the Job did not move either.
-    /// The pointer this folds to is `assigned_drone`, which has no states of
-    /// its own — hence a presence rather than a `from` and a `to`.
+    /// A Drone arrived on a step of the Job or left it, and neither the Job
+    /// nor the step moved. The pointer this folds to is the step's
+    /// `assigned_drone`, which has no states of its own — hence a presence
+    /// rather than a `from` and a `to`.
+    ///
+    /// **The step is what the fold keys by.** A drone row without one could be
+    /// applied to any step, and a Job that ran four Drones would fold to one
+    /// pointer naming the last of them.
     Drone {
+        step_id: StepId,
         drone_id: DroneId,
         presence: DronePresence,
     },
@@ -159,7 +165,11 @@ pub(crate) fn replay(created: Job, events: &[RecordedEvent]) -> Result<Job, RowE
                 to,
                 why,
             } => step(&job, event, step_id, *from, *to, *why)?,
-            Moved::Drone { drone_id, presence } => drone(&job, event, drone_id, *presence)?,
+            Moved::Drone {
+                step_id,
+                drone_id,
+                presence,
+            } => drone(&job, event, step_id, drone_id, *presence)?,
         };
     }
     Ok(job)
@@ -208,20 +218,22 @@ fn step(
 
 /// One drone row, put back through the mutator that wrote it.
 ///
-/// A spawn onto a Job that already holds a Drone, or an exit from one holding
-/// none, is refused here rather than applied — the same continuity the step
-/// fold checks, over a pointer instead of a state.
+/// A spawn onto a step that already holds a Drone, an exit from one holding
+/// none, or either naming a step the Job does not have, is refused here rather
+/// than applied — the same continuity the step fold checks, over a pointer
+/// instead of a state.
 fn drone(
     job: &Job,
     event: &RecordedEvent,
+    step_id: &StepId,
     drone_id: &DroneId,
     presence: DronePresence,
 ) -> Result<Job, RowError> {
     let moved = match presence {
         DronePresence::Spawned => {
-            job.drone_spawned(drone_id.clone(), event.actor, event.at.clone())
+            job.drone_spawned(step_id, drone_id.clone(), event.actor, event.at.clone())
         }
-        DronePresence::Exited => job.drone_exited(event.actor, event.at.clone()),
+        DronePresence::Exited => job.drone_exited(step_id, event.actor, event.at.clone()),
     };
     Ok(moved
         .map_err(|cause| RowError::IllegalRecordedDroneMove {
@@ -454,6 +466,7 @@ fn moved(row: &Row<'_>) -> Result<Moved, RowError> {
         // The `kind` column is the presence, spelled by the domain enum itself,
         // so the trigger's `IN` list and this arm cannot drift apart.
         other if DronePresence::from_wire(other).is_some() => Ok(Moved::Drone {
+            step_id: StepId::new(present(row, "step_id")?),
             drone_id: DroneId::carried(Ulid::carried(present(row, "drone_id")?)),
             presence: DronePresence::from_wire(other).expect("just read as a presence"),
         }),

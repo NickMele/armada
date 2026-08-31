@@ -25,7 +25,7 @@ use alloc::vec::Vec;
 
 use crate::envelope::Timestamp;
 use crate::job::escalation::StepLevelTrigger;
-use crate::job::ids::{JobId, StepId};
+use crate::job::ids::{DroneId, JobId, StepId};
 use crate::job::status::StepState;
 use crate::job::step_machine::StepTarget;
 use crate::job::workflow::EvidenceType;
@@ -88,6 +88,15 @@ pub struct StepSeed {
 /// `pub(crate)` and is called from one place —
 /// [`Job::transition_step`](crate::Job::transition_step), after
 /// `admits_step` has ruled on the move.
+///
+/// # The third writer, and why it is as narrow as the other two
+///
+/// [`drone_now`](JobStep::drone_now) writes `assigned_drone` and touches
+/// nothing else. It is `pub(crate)` and is called from one place —
+/// `Job::drone_moved`, after `drone_spawned` or `drone_exited` has ruled on
+/// the move — so the same property holds for the pointer that holds for the
+/// state: a caller cannot put a Drone on a step, only ask the Job to, and the
+/// Job refuses where the step already holds one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct JobStep {
     job_id: JobId,
@@ -95,6 +104,15 @@ pub struct JobStep {
     ordinal: u32,
     state: StepState,
     last_verdict: Option<StepVerdict>,
+    /// The Drone working this step, null between one and the next.
+    ///
+    /// **A pointer per step, where it used to be a pointer per Job.** A Drone
+    /// belongs to a workflow step, so a Job of four steps has four of these and
+    /// every Drone that ever worked it is still named on the row of the step it
+    /// worked — which the single pointer could not do, because it went null
+    /// when the last Drone exited and took the only name of its transcript with
+    /// it.
+    assigned_drone: Option<DroneId>,
     entered_at: Timestamp,
     updated_at: Timestamp,
 }
@@ -112,6 +130,7 @@ impl JobStep {
             ordinal: seed.ordinal,
             state: StepState::NotStarted,
             last_verdict: None,
+            assigned_drone: None,
             entered_at: at.clone(),
             updated_at: at,
         }
@@ -139,6 +158,11 @@ impl JobStep {
             step_id: self.step_id.clone(),
             ordinal: self.ordinal,
             state: to.state(),
+            // Untouched by a step move. A Drone arriving and a step advancing
+            // are two events, and one of them ending the other by a side
+            // effect is how the record comes to disagree with the process
+            // list.
+            assigned_drone: self.assigned_drone.clone(),
             last_verdict: match to {
                 StepTarget::Running => self.last_verdict,
                 StepTarget::Advanced => Some(StepVerdict::Passed),
@@ -176,6 +200,20 @@ impl JobStep {
         }
     }
 
+    /// The row with the pointer the Drone move leaves. **Never called except
+    /// by `Job::drone_moved`**, which is what asks whether the move is
+    /// admitted; this only writes down the answer.
+    ///
+    /// It writes `assigned_drone` and no other field — not `updated_at`, which
+    /// is the inner machine's stamp and would otherwise say a step moved when
+    /// only a process did.
+    pub(crate) fn drone_now(&self, drone: Option<DroneId>) -> JobStep {
+        JobStep {
+            assigned_drone: drone,
+            ..self.clone()
+        }
+    }
+
     pub fn job_id(&self) -> &JobId {
         &self.job_id
     }
@@ -194,6 +232,12 @@ impl JobStep {
     /// is kept because it renders.
     pub fn last_verdict(&self) -> Option<StepVerdict> {
         self.last_verdict
+    }
+    /// The Drone on this step, or `None` between one and the next. Presence,
+    /// not state — and a null here suspends the liveness clock the way the
+    /// Job-level pointer used to.
+    pub fn assigned_drone(&self) -> Option<&DroneId> {
+        self.assigned_drone.as_ref()
     }
     pub fn entered_at(&self) -> &Timestamp {
         &self.entered_at

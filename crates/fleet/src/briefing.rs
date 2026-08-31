@@ -22,11 +22,11 @@
 //! block that was answered. The scope block is written **only** where the step
 //! declares one — the only step where the call exists.
 //!
-//! One block is assembled that the rendering does not show: [`notekeeping`],
-//! which names the one path a Drone's own files belong under. Its wording is
-//! **drafted**, like the gaming half of [`Stopped`] and the whole of
-//! [`Redeclaring`] — the contract has no sanctioned copy for it, and sanctioned
-//! copy is the contract's to write.
+//! Two blocks are assembled that the rendering does not show: [`notekeeping`],
+//! which names where a Drone's own files go, and [`Delivering`], which names
+//! the file the step must produce. Both are **drafted**, like the gaming half
+//! of [`Stopped`] and the whole of [`Redeclaring`] — the contract has no
+//! sanctioned copy for either, and sanctioned copy is the contract's to write.
 //!
 //! # A Drone is not told what the Checks are. It is told it can run them
 //!
@@ -373,6 +373,10 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId) -> String {
     if let Some(step) = workflow.steps().iter().find(|step| step.id() == at) {
         text.push_str("\n\n");
         text.push_str(&step_block(step));
+        if let Some(delivers) = Delivering::at(step) {
+            text.push_str("\n\n");
+            text.push_str(delivers.text());
+        }
         if let Some(asked) = Declaring::at(step) {
             text.push_str("\n\n");
             text.push_str(asked.text());
@@ -383,6 +387,60 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId) -> String {
         }
     }
     text
+}
+
+/// The file a step is asked to write, where it declares one.
+///
+/// **The path is the step's, not the Drone's.** A step whose product is written
+/// used to hand the next step three prose strings, one of which named a file
+/// nothing opened — `verification::submission` says outright that nothing routes
+/// on `shown_by`. The `artifact_exists` check makes the file the product, and
+/// this block is the half of that a Drone can act on: a check nobody was told
+/// about is a step that fails on its first attempt every time.
+///
+/// **It is an instruction, unlike [`Checking`], and it says why.** A Drone that
+/// writes its finding somewhere else has done the work and lost it — measured
+/// on 2026-08-29, when a Drone wrote a seven-kilobyte plan under
+/// `.armada/<job-id>/` and the Judge was handed the summary instead, refusing
+/// the step for not naming a root cause that was on page one of a file nothing
+/// had opened. **The path is the whole of the fix**, because Fleet reads the
+/// file at exactly this path and puts its contents in the Judge's brief. A
+/// Drone that writes it anywhere else is not delivering it, and the block says
+/// so where [`notekeeping`] could otherwise be read as offering an alternative.
+///
+/// **It is written from the check's target and from nothing else.** The
+/// narrowing this module keeps is that no block is written from a
+/// `ResolvedCheck`'s `run` string; a target is a path in the Drone's own
+/// worktree, which it can already list.
+///
+/// **Drafted wording**, like [`Checking`] and [`Redeclaring`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Delivering(String);
+
+impl Delivering {
+    /// The file this step must write, or `None` where it declares none — which
+    /// is every step whose product is the diff.
+    ///
+    /// **One file, and `ResolvedStep::deliverable` is what says so.** A step
+    /// declaring two is refused where it is written, so there is no list here
+    /// and no "the first one" to be wrong about.
+    pub fn at(step: &ResolvedStep) -> Option<Delivering> {
+        let target = step.deliverable()?;
+        Some(Delivering(format!(
+            "WHAT THIS PART DELIVERS\n\nWrite this part's finding to a file, \
+             at this exact path in your worktree:\n\n  {target}\n\nThis is the \
+             work product, not a note to yourself, so it does not go in the \
+             directory named above. This exact path is the one that is read: an \
+             empty file or no file stops this part, and a file somewhere else \
+             is not this part's work however good it is. What you submit \
+             summarises it and does not replace it."
+        )))
+    }
+
+    /// The block, exactly as it reaches a Drone.
+    pub fn text(&self) -> &str {
+        &self.0
+    }
 }
 
 /// What a step tells its Drone about the dry run, where it has Checks to run.
@@ -612,19 +670,25 @@ impl Redeclaring {
 /// **"Plan" already means something else here.** [`Declaring`] calls the
 /// declared scope "the plan you declared", and a second meaning in the same
 /// turn is the second-vocabulary defect in prose. So this block leads with what
-/// a Drone is actually holding — a file it wrote for itself — and a plan is one
-/// kind of it rather than the subject.
+/// a Drone is actually holding — a file it wrote for itself.
+///
+/// **A plan is no longer one of the examples.** It was, and on a `plan` step
+/// that made this block read as an instruction to put the step's deliverable in
+/// the one directory the Judge cannot see. [`Delivering`] names that file, and
+/// the closing sentence here points at it rather than competing with it.
 ///
 /// A private function rather than one of the three types above: it is rendered
 /// where the turn is assembled and nowhere else, and does not outlive it.
 fn notekeeping(job: &JobId) -> String {
     format!(
-        "FILES YOU WRITE FOR YOURSELF\n\nA plan, a checklist, notes you want \
-         to keep between turns — anything you write for yourself rather than \
-         for the work goes under .armada/{}/, which is this task's alone. \
-         None of it belongs at the repository root, where a file outlives the \
-         task that wrote it with nothing to say that task is over. Nothing \
-         here is asking you to write any of it.",
+        "FILES YOU WRITE FOR YOURSELF\n\nA checklist, notes you want to keep \
+         between turns — anything you write for yourself rather than for the \
+         work goes under .armada/{}/, which is this task's alone. None of it \
+         belongs at the repository root, where a file outlives the task that \
+         wrote it with nothing to say that task is over. Nothing here is \
+         asking you to write any of it, and a file this part is asked to \
+         deliver is not one of them — that one is named where it is asked \
+         for, at the path that is read, and it does not go here.",
         job.as_str()
     )
 }
