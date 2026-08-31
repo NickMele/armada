@@ -17,7 +17,10 @@ const REFUSED: DebugPayload = {
   step_id: "verify",
   fields: [
     { key: "criterion", value: "2" },
-    { key: "judge_model", value: "claude-sonnet-4-5" },
+    // The tier, not the vendor's id for it. Every other story in this package
+    // says `sonnet` for the same reason the vendor-literal rule refuses the
+    // other spelling: a model name typed into a sample is a second roster.
+    { key: "judge_model", value: "sonnet" },
     { key: "response_bytes", value: "1184" },
   ],
   chain: [

@@ -261,12 +261,7 @@ export function ErrorNotice(props: ErrorNoticeProps) {
       {payload !== undefined || actions !== undefined ? (
         <div className="armada-error__actions">
           {payload === undefined ? null : (
-            <Button
-              variant="ghost"
-              size="sm"
-              ground={placement === "inline" ? "card" : "sunken"}
-              onClick={copy}
-            >
+            <Button variant="ghost" size="sm" onClick={copy}>
               {COPY_LABEL}
             </Button>
           )}
@@ -274,13 +269,7 @@ export function ErrorNotice(props: ErrorNoticeProps) {
               expanded view and a toast is gone before it would be read, so
               neither offers a control that would open one. */}
           {payload !== undefined && disclosure === "disclosed" ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              ground="sunken"
-              aria-expanded={open}
-              onClick={() => setOpen((was) => !was)}
-            >
+            <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => setOpen((was) => !was)}>
               Details
             </Button>
           ) : null}
