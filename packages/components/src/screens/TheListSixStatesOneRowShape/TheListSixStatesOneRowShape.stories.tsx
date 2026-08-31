@@ -19,9 +19,12 @@ import { APPROVAL_TRACKS, TheListSixStatesOneRowShape } from "./TheListSixStates
  * status label is never written by hand, so the registry wins on the word and
  * the drawing wins on everything else. Reported.
  *
- * The queued row's glyph is `cpu`, not `clock`: the registry's own rule is that
- * a reason's glyph replaces `clock` where one is present, and M1's only queued
- * reason is `waiting_on_resources`.
+ * The queued row's glyph is `cpu`, not `clock`, **and its verb is the reason's
+ * too**: the registry's rule replaces both where a reason is present, and this
+ * row's reason is `waiting_on_resources`. It read "Queued" beside the cpu
+ * glyph until the resource became a real one — Fleet bounds how many drones it
+ * runs at once, and a Job past the bound is held at `queued` for that reason
+ * and no other.
  */
 const meta: Meta<typeof TheListSixStatesOneRowShape> = {
   title: "Screens/The list — six states, one row shape",
@@ -72,13 +75,17 @@ const awaitingApproval: JobRowStackedProps = {
 const queued: JobRowStackedProps = {
   status: "not-started",
   statusIcon: Cpu,
-  statusLabel: "Queued",
+  // The reason supplies the verb as well as the glyph. This carried cpu with
+  // "Queued" beside it, which is half the registry's rule, and the field
+  // beneath said "Waiting on a drone" — the reason a second time, and named
+  // for the one drone Fleet used to run. The resource is the concurrency cap.
+  statusLabel: "Waiting on resources",
   headline: "Retire the legacy poke path",
   jobId: "job_8b42",
   fields: [
     { value: workflow },
     { value: <StepBar total={4} current={0} label="Not started, 4 steps" /> },
-    { value: "Waiting on a drone", emphasis: true },
+    { value: "Not started", quiet: true },
     { value: "approved 09:20", quiet: true },
     { value: "Dispatched by you" },
   ],
