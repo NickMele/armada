@@ -168,8 +168,14 @@ pub fn two_steps_gated_on_a_person(
     };
     let judge = match question {
         None => String::new(),
+        // **The check names no model**, and does not need to: what is under
+        // test is what a human gate does with a verdict, not which model
+        // produced it. It named one until `judge_checks[].model` came under
+        // the roster — a vendor's alias in a fixture here, where the roster
+        // offers nothing, and a spelling in `fleet` that gate rule six keeps
+        // inside `adapters`.
         Some(question) => format!(
-            "    judge_checks:\n      - model: haiku\n        criteria:\n          - \
+            "    judge_checks:\n      - criteria:\n          - \
              criterion_id: c1\n            question: {question}\n"
         ),
     };

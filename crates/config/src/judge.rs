@@ -21,10 +21,11 @@
 //! is refused rather than dropped: a silently ignored entry is a gate the
 //! author believes is watching and nothing is.
 
-use core_model::{EvidenceRef, GamingCheck, GamingPattern, JudgeCheck, JudgeCriterion, ModelName};
+use core_model::{EvidenceRef, GamingCheck, GamingPattern, JudgeCheck, JudgeCriterion};
 use serde_yaml_ng::Value;
 
 use crate::error::{Fault, Refusal};
+use crate::roster::{self, Roster};
 use crate::yaml::{self, Table};
 
 /// The keys read inside one `judge_checks` entry.
@@ -50,38 +51,41 @@ const PATTERNS: &[&str] = &[
 ///
 /// A `judge_checks: []` and an absent key are the same empty list, which is the
 /// registry's own reading of an absent check and `enabled: false`.
-pub(crate) fn checks(table: &mut Table<'_>, out: &mut Vec<Refusal>) -> Vec<JudgeCheck> {
+pub(crate) fn checks(
+    table: &mut Table<'_>,
+    roster: &Roster,
+    out: &mut Vec<Refusal>,
+) -> Vec<JudgeCheck> {
     table
         .optional("judge_checks")
         .and_then(|value| yaml::list(&table.at("judge_checks"), value, out))
         .map(|items| {
             items
                 .iter()
-                .filter_map(|(at, item)| check(at, item, out))
+                .filter_map(|(at, item)| check(at, item, roster, out))
                 .collect()
         })
         .unwrap_or_default()
 }
 
-fn check(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<JudgeCheck> {
+fn check(at: &str, value: &Value, roster: &Roster, out: &mut Vec<Refusal>) -> Option<JudgeCheck> {
     let mut table = Table::open(at, value, out)?;
 
     let enabled = table
         .optional("enabled")
         .and_then(|value| yaml::flag(&table.at("enabled"), value, out))
         .unwrap_or(true);
+    let model_key = table.at("model");
+    // **Refused unless the roster offers it**, where it used to be refused only
+    // for being blank. A typo parsed, froze onto the Job and reached the Judge
+    // adapter — a gate that cannot rule, asked for after the Drone has run and
+    // the work is done, so it costs the step rather than the spawn. It is not
+    // the step's `model` and does not fall back to it; `crate::roster::offered`
+    // reads both and says why one roster covers them.
     let model = table
         .optional("model")
-        .and_then(|value| yaml::text(&table.at("model"), value, out))
-        .map(|named| ModelName::new(&named));
-    let model = match model {
-        Some(Ok(model)) => Some(model),
-        Some(Err(_)) => {
-            out.push(Refusal::new(table.at("model"), Fault::Empty));
-            None
-        }
-        None => None,
-    };
+        .and_then(|value| yaml::text(&model_key, value, out))
+        .and_then(|named| roster::offered(&model_key, named, roster, out));
     let panel_size = table
         .optional("panel_size")
         .and_then(|value| yaml::positive(&table.at("panel_size"), value, out))

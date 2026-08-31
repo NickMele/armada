@@ -1,4 +1,5 @@
-//! `model` on a step: what a definition may name, and what it may not.
+//! `model`, on a step and on a judge check: what a definition may name, and
+//! what it may not.
 //!
 //! Its own file rather than a section of [`super::workflow`], for the reason
 //! that one is split by subject: the interesting thing about this key is not
@@ -107,13 +108,11 @@ fn a_blank_model_is_empty_rather_than_unknown() {
     assert_eq!(fault_at(&refusals, "steps[1].model"), &Fault::Empty);
 }
 
-/// The step's `model` and a judge check's `model` are two dials with one
-/// spelling. **Only the step's is checked against the roster** — the Judge's is
-/// read by `crate::judge` and refused only for being blank, which is what it
-/// did before this key existed and is not changed here.
-#[test]
-fn a_judge_checks_model_is_a_different_key_and_is_not_checked_against_the_roster() {
-    let text = [
+/// A step declaring one judge check whose `model` is `model`, on a step that
+/// names no model of its own — so the two keys are never both set and a test
+/// that reads one cannot be reading the other.
+fn judged(model: &str) -> String {
+    [
         "version: 1",
         "workflow_id: judged",
         "name: judged",
@@ -124,19 +123,129 @@ fn a_judge_checks_model_is_a_different_key_and_is_not_checked_against_the_roster
         "    evidence_type: diff",
         "    advance_gate: auto_if_judge_passes",
         "    judge_checks:",
-        "      - model: a-model-no-roster-has",
+        &format!("      - model: {model}"),
+        "        criteria:",
+        "          - criterion_id: c1",
+        "            question: Does it?",
+        "",
+    ]
+    .join("\n")
+}
+
+#[test]
+fn a_judge_check_names_the_model_that_reads_the_work() {
+    let def = parse(&judged("the-reporting-model"), &roster()).expect("a legal model");
+    assert_eq!(
+        def.steps()[0].judge_checks()[0].model(),
+        Some(&ModelName::new("the-reporting-model").expect("a model name"))
+    );
+}
+
+/// **The one that matters, and the reason this key came under the roster.** A
+/// typo here used to parse, freeze onto the Job and reach the Judge adapter —
+/// which is a gate that cannot rule, asked for after the Drone has run and the
+/// work is done. A step's typo costs the spawn; this one costs the step that
+/// already happened.
+#[test]
+fn a_judge_model_the_machine_does_not_offer_is_refused_at_load() {
+    let refusals = refusals(parse(&judged("the-repoting-model"), &roster()));
+    let Fault::NoSuchModel { value, roster } =
+        fault_at(&refusals, "steps[0].judge_checks[0].model")
+    else {
+        panic!("expected a model refusal, got {refusals:?}");
+    };
+    assert_eq!(
+        value, "the-repoting-model",
+        "the message names the value that was written, so the typo is visible \
+         without opening the file"
+    );
+    assert_eq!(
+        roster,
+        &vec![
+            "the-deciding-model".to_string(),
+            "the-reporting-model".to_string()
+        ]
+    );
+}
+
+/// `judge_checks[].model: ""` stays [`Fault::Empty`], and is refused once.
+///
+/// The blank refusal was written out a second time inside `crate::judge` back
+/// when that reader made its own `ModelName`; `yaml::text` had already refused
+/// the key. Narrowing to the roster removed the copy rather than adding a
+/// third — [`fault_at`] fails if two refusals name one key.
+#[test]
+fn a_blank_judge_model_is_empty_rather_than_unknown() {
+    let refusals = refusals(parse(&judged("\"\""), &roster()));
+    assert_eq!(
+        fault_at(&refusals, "steps[0].judge_checks[0].model"),
+        &Fault::Empty
+    );
+}
+
+/// **Two dials with one spelling, and one legal set.** The step's `model` is
+/// what a Drone is spawned as and the check's is what a Judge call is read by;
+/// they default apart in `adapters` and neither falls back to the other. What
+/// they share is the roster, because `HeadlessAgent::judge_model` is an entry
+/// of that same roster rather than a constant of its own — so a Judge model
+/// outside it is a name the binary would not take either.
+#[test]
+fn the_two_model_keys_are_separate_and_neither_fills_in_for_the_other() {
+    let text = [
+        "version: 1",
+        "workflow_id: judged",
+        "name: judged",
+        "structure: linear",
+        "steps:",
+        "  - id: review",
+        "    label: Review",
+        "    evidence_type: diff",
+        "    model: the-deciding-model",
+        "    advance_gate: auto_if_judge_passes",
+        "    judge_checks:",
+        "      - model: the-reporting-model",
         "        criteria:",
         "          - criterion_id: c1",
         "            question: Does it?",
         "",
     ]
     .join("\n");
-    let def = parse(&text, &roster()).expect("the judge's model is not this roster's business");
-    assert_eq!(def.steps()[0].model(), None);
+    let def = parse(&text, &roster()).expect("both models are on the roster");
+    let step = &def.steps()[0];
     assert_eq!(
-        def.steps()[0].judge_checks()[0]
-            .model()
-            .map(ModelName::as_str),
-        Some("a-model-no-roster-has")
+        step.model(),
+        Some(&ModelName::new("the-deciding-model").expect("a model name"))
     );
+    assert_eq!(
+        step.judge_checks()[0].model(),
+        Some(&ModelName::new("the-reporting-model").expect("a model name")),
+        "the check keeps its own model rather than taking the step's"
+    );
+}
+
+/// A step naming a model with no judge check of its own leaves the check's
+/// absent. **Absent is the adapter's default and not the step's model**, and a
+/// parser copying one into the other would put the fallback in a second place.
+#[test]
+fn a_judge_check_that_names_no_model_carries_none() {
+    let text = [
+        "version: 1",
+        "workflow_id: judged",
+        "name: judged",
+        "structure: linear",
+        "steps:",
+        "  - id: review",
+        "    label: Review",
+        "    evidence_type: diff",
+        "    model: the-deciding-model",
+        "    advance_gate: auto_if_judge_passes",
+        "    judge_checks:",
+        "      - criteria:",
+        "          - criterion_id: c1",
+        "            question: Does it?",
+        "",
+    ]
+    .join("\n");
+    let def = parse(&text, &roster()).expect("a legal model");
+    assert_eq!(def.steps()[0].judge_checks()[0].model(), None);
 }

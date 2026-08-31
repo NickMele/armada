@@ -23,6 +23,8 @@
 
 use core_model::ModelName;
 
+use crate::error::{Fault, Refusal};
+
 /// What the caller says this machine can run a Drone as.
 ///
 /// **Empty refuses everything**, and that is deliberate rather than an
@@ -76,4 +78,43 @@ impl Roster {
             .map(|model| model.as_str().to_string())
             .collect()
     }
+}
+
+/// The model named at `at`, refused unless the roster offers it.
+///
+/// **One reader for both keys.** A step's `model` names what a Drone is spawned
+/// as and a `judge_checks[].model` names what a Judge call is read by; they
+/// default apart in `adapters` and neither falls back to the other. The legal
+/// set is shared because it is one vocabulary — the aliases the vendor's binary
+/// takes on `--model`, of which `HeadlessAgent::judge_model` is an entry rather
+/// than a constant of its own. Two readers would be two spellings of one rule,
+/// and the second is the one that goes stale. The fault names the key it was
+/// given, so a reader is pointed at the line they wrote.
+///
+/// What differs is what a typo costs. A step's buys a worktree and every step
+/// before the bad one; a check's buys the whole step, because the Drone has run
+/// and the gate that was to rule on the work cannot be called.
+///
+/// **A blank never reaches here.** `yaml::text` refuses an empty string at the
+/// key first, so `model: ""` is [`Fault::Empty`] — a different mistake with a
+/// different fix. That refusal stays where it is rather than being restated
+/// here; a second would report one blank twice under two names.
+pub(crate) fn offered(
+    at: &str,
+    named: String,
+    roster: &Roster,
+    out: &mut Vec<Refusal>,
+) -> Option<ModelName> {
+    let model = ModelName::new(&named).ok()?;
+    if roster.offers(&model) {
+        return Some(model);
+    }
+    out.push(Refusal::new(
+        at,
+        Fault::NoSuchModel {
+            value: named,
+            roster: roster.names(),
+        },
+    ));
+    None
 }

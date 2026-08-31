@@ -72,7 +72,10 @@ fn judged(gate: &str, panel_size: u32, enabled: bool) -> String {
         format!("    advance_gate: {gate}"),
         "    judge_checks:".to_string(),
         format!("      - enabled: {enabled}"),
-        "        model: haiku".to_string(),
+        // The fixture roster's spelling, not a vendor's: a check's `model` is
+        // refused against the same roster a step's is. `super::model` owns
+        // that, and this fixture only has to be legal.
+        "        model: the-reporting-model".to_string(),
         format!("        panel_size: {panel_size}"),
         "        criteria:".to_string(),
         "          - criterion_id: c1".to_string(),

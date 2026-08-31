@@ -75,7 +75,7 @@ use serde_yaml_ng::Value;
 
 use crate::error::{BadTarget, Fault, LoadError, Refusal};
 use crate::judge;
-use crate::roster::Roster;
+use crate::roster::{self, Roster};
 use crate::scope;
 use crate::yaml::{self, Table};
 
@@ -473,7 +473,7 @@ fn step(
             checks
         })
         .unwrap_or_default();
-    let judge_checks = judge::checks(&mut table, out);
+    let judge_checks = judge::checks(&mut table, roster, out);
     let evidence_scope = scope::evidence_scope(&mut table, out);
     // **Absent is none, and a malformed one is a refusal rather than none.**
     // A file that writes `retry_limit: "three"` meant to buy retries, and
@@ -491,7 +491,7 @@ fn step(
     let model = table
         .optional("model")
         .and_then(|value| yaml::text(&model_key, value, out))
-        .and_then(|named| model(&model_key, named, roster, out));
+        .and_then(|named| roster::offered(&model_key, named, roster, out));
     let gate_key = table.at("advance_gate");
     let advance_gate = table
         .required("advance_gate", out)
@@ -565,31 +565,6 @@ fn step(
         retry_limit: retry_limit?,
         model,
     })
-}
-
-/// The model a step names, checked against what the caller says this machine
-/// offers.
-///
-/// **A name outside the roster is refused here and not at spawn.** By spawn the
-/// Job has a worktree, an approval and every earlier step's work behind it, and
-/// `fleet::spawning` reports the failure as an interrupt — which names the
-/// wrong cause. `crate::roster` carries the rest of the reasoning.
-///
-/// Blank never reaches this: `yaml::text` refuses an empty string first, so a
-/// `model: ""` is `Fault::Empty` at the key rather than a name nothing offers.
-fn model(at: &str, named: String, roster: &Roster, out: &mut Vec<Refusal>) -> Option<ModelName> {
-    let model = ModelName::new(&named).ok()?;
-    if roster.offers(&model) {
-        return Some(model);
-    }
-    out.push(Refusal::new(
-        at,
-        Fault::NoSuchModel {
-            value: named,
-            roster: roster.names(),
-        },
-    ));
-    None
 }
 
 /// `advance_gate` has its own reader because one of the schema's four values is
