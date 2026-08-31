@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { Button } from "../../primitives/Button/Button";
 import type { ErrorClass } from "../ErrorCode/ErrorCode";
 import { ErrorCode } from "../ErrorCode/ErrorCode";
-import { debugInfo } from "./payload";
+import { COPY_DEBUG_INFO, copyDebugInfo, debugInfo } from "./payload";
 import type { DebugPayload } from "./payload";
 
 // The payload module is re-exported through the notice it belongs to. It is
@@ -12,7 +12,7 @@ import type { DebugPayload } from "./payload";
 // payload, and the placement decides only whether it is shown, offered or
 // expandable.
 export type { DebugField, DebugPayload } from "./payload";
-export { debugInfo } from "./payload";
+export { COPIED, COPY_DEBUG_INFO, copyDebugInfo, debugInfo } from "./payload";
 
 /**
  * An error, in one of the four places an error may appear.
@@ -107,12 +107,6 @@ type Common = {
   onCopied?: (what: string) => void;
 };
 
-/** What the toast says was copied. A noun, because the artifact is a block. */
-const COPIED = "The debug info";
-
-/** What the control is called, everywhere it appears. */
-const COPY_LABEL = "Copy debug info";
-
 /**
  * Why the payload is safe to copy, in the expanded view only.
  *
@@ -195,17 +189,15 @@ export function ErrorNotice(props: ErrorNoticeProps) {
   const text = payload === undefined ? null : debugInfo(payload);
 
   const copy = useCallback(() => {
-    if (text === null) return;
-    void navigator.clipboard.writeText(text).then(
-      () => onCopied?.(COPIED),
-      // A failed clipboard write is otherwise indistinguishable from a dead
-      // control, so the surface is told either way.
-      () => onCopied?.(COPIED),
-    );
+    if (payload === undefined) return;
+    // The act is `payload.ts`'s, not this component's. `c` in the contextual
+    // key map runs the same function, and a control that wrote its own copy
+    // would be the half that drifts.
+    copyDebugInfo(payload, onCopied);
     // The toast is often the only sighting, so its one action finishes the
     // job rather than leaving a dismissed-or-not toast behind the copy.
     dismiss?.();
-  }, [text, onCopied, dismiss]);
+  }, [payload, onCopied, dismiss]);
 
   return (
     <section
@@ -262,7 +254,7 @@ export function ErrorNotice(props: ErrorNoticeProps) {
         <div className="armada-error__actions">
           {payload === undefined ? null : (
             <Button variant="ghost" size="sm" onClick={copy}>
-              {COPY_LABEL}
+              {COPY_DEBUG_INFO}
             </Button>
           )}
           {/* Only where the payload is disclosed. Inline has no room for an

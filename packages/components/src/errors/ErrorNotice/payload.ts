@@ -178,3 +178,39 @@ export function debugInfo(payload: DebugPayload): string {
 
   return blocks.map((block) => block.join("\n")).join("\n\n");
 }
+
+/**
+ * Put a payload on the clipboard, and say so either way.
+ *
+ * **The one implementation of the act**, so the control and the keyboard do the
+ * same thing rather than two things that agree today. `c` is `copy debug info`
+ * in the contextual key map, and a binding that reimplemented the write would
+ * be a second artifact the moment either side changed.
+ *
+ * It copies `debugInfo(payload)` — the exact string the expanded view renders,
+ * with the same instant in its tail. What is read on screen is what arrives in
+ * the issue body, including when it was taken.
+ *
+ * `onCopied` is called on failure as well as on success, and is given the name
+ * of what was copied rather than the fifteen lines of it. **A clipboard write
+ * is silent by nature**, and a failed one is indistinguishable from a dead
+ * control, so the surface is told either way and raises the same toast.
+ */
+export function copyDebugInfo(payload: DebugPayload, onCopied?: (what: string) => void): void {
+  const said = () => onCopied?.(COPIED);
+  void navigator.clipboard.writeText(debugInfo(payload)).then(said, said);
+}
+
+/** What the toast says was copied. A noun: the artifact is a block, not a value. */
+export const COPIED = "The debug info";
+
+/**
+ * What the act is called, wherever it appears — the control, the palette and
+ * the tooltip beside its binding.
+ *
+ * **Taken from the contextual key map verbatim**, in sentence case. The map
+ * binds `c` to `copy debug info`, and an action carries one verb: a control
+ * that says something else is a second name for one act, and the palette
+ * displays the map's.
+ */
+export const COPY_DEBUG_INFO = "Copy debug info";
