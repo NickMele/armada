@@ -11,13 +11,22 @@
 //! could lose or that could disagree with the log, so [`Fleet::next_queued`]
 //! reads the board and sorts by the sequence of the approving event.
 //!
-//! # One predicate, and every reason to refuse belongs inside it
+//! # One predicate per question, and every reason to refuse belongs inside one
 //!
-//! [`Room`] is the whole answer to "may another Drone start". `admit_next`
-//! opens with it and `queued_reason` labels a Board row from it, so a Board
-//! cannot say a Job is blocked while Fleet is starting it. A new reason to
-//! refuse a dispatch is a variant here and a branch in
+//! [`Room`] is the whole answer to "may another Drone start **at all**", which
+//! is a question about the machine and the roster and about no Job in
+//! particular. `admit_next` opens with it and `queued_reason` labels a Board
+//! row from it, so a Board cannot say a Job is blocked while Fleet is starting
+//! it. A new machine-wide reason to refuse is a variant there and a branch in
 //! [`Fleet::room_for_another`] — never a second check beside the call.
+//!
+//! **A reason that belongs to one Job is a predicate of its own**, and there
+//! are two: [`clear_to_run`], which asks whether its dependencies are met, and
+//! `Fleet::overspent`, which asks whether it has already spent what it was
+//! allowed. Both are shared with `serving`'s `queued_reason` under the same
+//! rule, and both live where a Job is chosen rather than inside `Room` —
+//! `room_for_another` is asked once per admission and these are asked once per
+//! Job, so folding them together would be one question with two subjects.
 //!
 //! [`Fleet::next_queued`]: crate::Fleet
 
@@ -225,6 +234,20 @@ where
             // reordered — the queue is by approval and this is not a Job's turn
             // being taken, it is a Job that has nothing to work against yet.
             if !clear_to_run(&job, &standing) {
+                continue;
+            }
+            // Approved and already past what it may spend. **Skipped and not
+            // escalated**: nothing has gone wrong with the work, and what
+            // clears this is a person raising the cap rather than a person
+            // ruling on the Job. It stays `queued`, and the Board says
+            // `over_budget` from this same call — see `crate::allowance`, and
+            // `QueuedReason::OverBudget` for why a reason that only a person
+            // can clear is still a reason to wait.
+            //
+            // It is asked after `clear_to_run` because a Job blocked on an
+            // upstream has not spent anything yet on this attempt, and the
+            // dependency is the older fact.
+            if self.overspent(&job).await?.is_some() {
                 continue;
             }
             waiting.push((self.approved_at(job.id()).await?, job));

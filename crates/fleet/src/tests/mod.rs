@@ -138,6 +138,7 @@
 //! Two of its three cases are a pair: gone after it is stood down, still there
 //! after the slot is merely dropped.
 
+mod allowance;
 mod attachments;
 mod attribution;
 mod boundary;

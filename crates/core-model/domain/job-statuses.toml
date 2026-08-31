@@ -183,11 +183,11 @@ drone_process = "None"
 step_machine = "Initialised at creation. Frozen where it stood on a re-approval"
 step_states = ["advanced", "not_started", "running", "stopped"]
 reason_storage = "Derived"
-reason_vocabulary = "blocked_by_dependency / waiting_on_resources / none"
+reason_vocabulary = "blocked_by_dependency / over_budget / waiting_on_resources / none"
 transitions_in = ["awaiting_approval -> queued", "awaiting_review -> queued"]
 transitions_out = ["queued -> running", "queued -> awaiting_approval", "queued -> escalated", "queued -> killed"]
 in_code = "Not yet"
-notes = "Approved, waiting for a Drone — on headroom, or on a dependency. The reason is computed from `dependencies` and live headroom at read time rather than stored: CPU, memory and disk all free without anything moving the Job, so a stored value would be wrong from the moment it was written. This is the one status where the recomputed-label rule is applied literally. `fleet::admitting::Room` is the predicate both admission and the label read."
+notes = "Approved, waiting for a Drone — on headroom, on a dependency, or on what the Job has already spent. The reason is computed from `dependencies`, from the Job's recorded spend and from live headroom at read time rather than stored: CPU, memory and disk all free without anything moving the Job, so a stored value would be wrong from the moment it was written. This is the one status where the recomputed-label rule is applied literally. `fleet::admitting::Room` is the predicate both admission and the label read for headroom, and `fleet::allowance::Fleet::overspent` is the one they share for the budget. `over_budget` is the only one of the three that does not clear on its own: it clears when a person raises the cap, which is why the Job waits here rather than escalating — nothing has gone wrong with the work."
 
 [statuses.rejected]
 terminal = true

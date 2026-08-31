@@ -398,8 +398,15 @@ where
         }
         // The step the Drone was **put on**, which is where its pointer is —
         // not the step the slot has advanced to beneath it.
-        let (job_id, spawned_on, _) = at_work.drone();
+        let (job_id, spawned_on, drone_id) = at_work.drone();
         let heard = at_work.heard();
+        // **Before anything moves the Job**, because the slot is what holds the
+        // events and the arms below take it. Recording twice is harmless — the
+        // spend row is keyed on the Drone — so `boundary::stood_down` folding
+        // the same run again costs nothing and neither of the two has to know
+        // about the other. See `crate::allowance`.
+        self.record_spend(&job_id, &drone_id, &at_work.spent(&self.now()))
+            .await?;
         // The status is read before the ending is folded, because an escalated
         // Job keeps its Drone: a process that is gone no longer proves the Job
         // was working, and asking one that already stopped to stop again is the

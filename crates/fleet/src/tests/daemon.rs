@@ -39,6 +39,7 @@ use crate::daemon::{Fittings, Fleet, Host};
 use crate::dry_run::DryRuns;
 use crate::evidence::Call;
 use crate::gate::{CheckBudget, Ruling};
+use crate::allowance::{Allowance, Micros};
 use crate::headroom::{Bytes, Headroom, Polling, Spare};
 use crate::judging::JudgeBudget;
 use crate::silence::Liveness;
@@ -233,6 +234,14 @@ pub fn fittings(
     fitted_with(home, work, FakeHarness::that_listens())
 }
 
+/// A budget no fixture can reach.
+///
+/// **The opposite call to `headroom`'s**, which plants the production
+/// threshold: a cap that ships is worth tripping in a fixture, and a budget
+/// that ships is not, because the fakes report no cost at all. Every case about
+/// the budget plants its own — see `crate::tests::allowance`.
+const UNSPENDABLE: Allowance = Allowance::of(Micros::dollars(1_000_000), u64::MAX);
+
 pub fn fitted_with(
     home: &TempDir,
     work: FakeWorkProduct,
@@ -284,6 +293,11 @@ pub fn fitted_with(
         // No interval, so a fixture that moves the machine sees it move. The
         // one case about the interval sets its own.
         polling: Polling::every(Duration::ZERO),
+        // **Far more than any fixture spends**, so no test but `allowance`'s
+        // own is ever held back by the budget. The fakes report a `cost_micros`
+        // of zero, and a cap set at the shipped number would still be reached
+        // by a fixture that turned three hundred times.
+        allowance: UNSPENDABLE,
         budget: CheckBudget::of(Duration::from_secs(5)),
         norms: UNTRIPPABLE,
         liveness: NEVER_QUIET,
