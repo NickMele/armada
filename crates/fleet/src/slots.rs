@@ -90,11 +90,6 @@ impl Slots {
         }
     }
 
-    /// The bound, for the reason a Board is owed it.
-    pub(crate) fn cap(&self) -> Concurrency {
-        self.cap
-    }
-
     /// Forget every slot whose Drone has gone.
     ///
     /// A slot is emptied by the code holding it — `end_the_drone`, `reap`,

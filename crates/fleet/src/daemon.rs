@@ -565,12 +565,13 @@ where
         self.slots.lock().await.working_on()
     }
 
-    /// How many Jobs may be worked at once.
-    pub async fn concurrency(&self) -> Concurrency {
-        self.slots.lock().await.cap()
-    }
-
     /// Every Drone this Fleet is holding, as pid and Job.
+    ///
+    /// **Its only reader today is `crate::tests::concurrency`**, which needs
+    /// the pids to say which Drone is calling from which port. Said out loud
+    /// rather than left to be discovered: nothing on the wire carries this, and
+    /// a Doctor probe that wanted "which process is working which Job" is the
+    /// reader it is waiting for.
     pub fn drones_at_work(&self) -> Vec<(JobId, u32)> {
         self.held_drones().each()
     }
