@@ -1035,7 +1035,17 @@ const LABELLED = {
 function refusalsFirst(rows) {
   return [...rows].sort((a, b) => Number(b.named === "not_met") - Number(a.named === "not_met"));
 }
-function CriterionVerdicts({ rows, label: label2 }) {
+function CriterionVerdicts({ rows, label: label2, onCopied }) {
+  const copy = useCallback(
+    (event, value) => {
+      event.stopPropagation();
+      void navigator.clipboard.writeText(value).then(
+        () => onCopied?.(value),
+        () => onCopied?.(value)
+      );
+    },
+    [onCopied]
+  );
   return /* @__PURE__ */ jsxs("div", { className: "armada-verdicts", children: [
     label2 ? /* @__PURE__ */ jsx("span", { className: "armada-verdicts__label", children: label2 }) : null,
     /* @__PURE__ */ jsx("ul", { className: "armada-verdicts__list", children: refusalsFirst(rows).map((row) => {
@@ -1045,7 +1055,23 @@ function CriterionVerdicts({ rows, label: label2 }) {
           /* @__PURE__ */ jsx("span", { className: "armada-verdicts__mark", children: row.icon ? /* @__PURE__ */ jsx(row.icon, { size: VERDICT_ICON, strokeWidth: VERDICT_STROKE, "aria-hidden": true }) : null }),
           row.ordinal === void 0 ? null : /* @__PURE__ */ jsx("span", { className: "armada-verdicts__ordinal", children: `${row.ordinal}.` }),
           row.text === void 0 ? /* @__PURE__ */ jsx("span", { className: "armada-verdicts__id", children: row.criterionId }) : /* @__PURE__ */ jsx("span", { className: "armada-verdicts__text", children: row.text }),
-          row.verdict ? /* @__PURE__ */ jsx("span", { className: "armada-verdicts__verb", children: row.verdict }) : null
+          row.verdict ? /* @__PURE__ */ jsx("span", { className: "armada-verdicts__verb", children: row.verdict }) : null,
+          row.briefPath === void 0 ? null : (
+            // The whole path is on the clipboard and in the title however
+            // narrow the row gets, the way the rail's output path is: a
+            // copy truncated with the display would be worse than the
+            // overflow it fixed.
+            /* @__PURE__ */ jsx(
+              "span",
+              {
+                className: "armada-verdicts__brief",
+                title: row.briefPath,
+                "data-copies": "true",
+                onClick: (e) => copy(e, row.briefPath),
+                children: row.briefPath
+              }
+            )
+          )
         ] }),
         cited.length === 0 ? null : (
           // A refusal's citation, in the Judge record's own field names.
@@ -1308,7 +1334,7 @@ function WorkflowRail({ steps: steps2, pulsing = false, onCopied }) {
         ] }) })
       ),
       flags.length === 0 ? null : /* @__PURE__ */ jsx("div", { className: "armada-rail__flags", children: /* @__PURE__ */ jsx(GamingFlags, { flags, said: FLAGGED, citation: "clipped" }) }),
-      step.verdicts === void 0 || step.verdicts.length === 0 ? null : /* @__PURE__ */ jsx("div", { className: "armada-rail__verdicts", children: /* @__PURE__ */ jsx(CriterionVerdicts, { rows: step.verdicts }) })
+      step.verdicts === void 0 || step.verdicts.length === 0 ? null : /* @__PURE__ */ jsx("div", { className: "armada-rail__verdicts", children: /* @__PURE__ */ jsx(CriterionVerdicts, { rows: step.verdicts, onCopied }) })
     ] }, step.id);
   }) });
 }
@@ -1382,6 +1408,15 @@ const TheRegistryHasNoWordForIt = {
     ]
   }
 };
+const WhereTheBriefWasKept = {
+  args: {
+    label: "What the judge answered",
+    rows: [
+      { ...met, briefPath: ".armada/briefs/01JOB/implement.1.c1.txt" },
+      { ...refused, briefPath: ".armada/briefs/01JOB/implement.1.c2.txt" }
+    ]
+  }
+};
 const BeneathTheStepItJudged = {
   render: () => /* @__PURE__ */ jsx(
     WorkflowRail,
@@ -1417,6 +1452,7 @@ const __vite_glob_0_4 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   RefusalsSortFirst,
   TheCriterionIsNotOnScreen,
   TheRegistryHasNoWordForIt,
+  WhereTheBriefWasKept,
   default: meta$X
 }, Symbol.toStringTag, { value: "Module" }));
 function DroneTurns({ turns: turns2, emptyNote, live = false }) {
