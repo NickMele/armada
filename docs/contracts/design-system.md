@@ -1082,6 +1082,28 @@ bounds those. A claim over the whole artifact would be a promise the type
 system does not make, and it makes none about the wider context — see the
 file-an-issue flow, which is not bounded this way.
 
+### Filing, which is a second act with a review
+
+**Copying stays on the machine. Filing leaves it.** So `Copy debug info` acts on
+one press and **File an issue** opens a dialog first, naming every item that
+would go, showing its text, and offering a control to take it out. **Send is
+never one press from an error.**
+
+**It appears on the full-surface state and in the expanded view, and nowhere
+else.** A review needs the artifact legible in full; an inline error has no room
+for one and a toast is gone before it would be read.
+
+**Armada makes no scrub claim, and the dialog says what it does not do.** Every
+row carries a sentence naming what is unbounded about that item — which is the
+read-this mark, made specific — and the row that cannot be removed carries the
+payload's own safety sentence rather than a claim written for the dialog. A
+promise Armada cannot keep is worse than the work of reading.
+
+**The confirm copies.** Nothing in Armada opens anything in a tracker, and the
+dialog states that in those words. What the artifact holds, and what the drawing
+asked for that follows from having no transport, is the [Error
+Contract](error-contract.md).
+
 ---
 
 ## Voice & Copy
