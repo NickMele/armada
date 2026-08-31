@@ -41,9 +41,9 @@ use verification::{Artifact, Exit, NeverRan, Observed};
 /// Checks and two Drones on one machine.
 ///
 /// **Nothing has re-measured it under two**, and the number is left where the
-/// measurement put it rather than halved on an argument. `#44` is where a
-/// machine's headroom becomes something Fleet reads instead of assumes, and
-/// this is one of the constants it will have to answer for.
+/// measurement put it rather than halved on an argument. **`#44` landed and
+/// did not answer it**: the headroom read is pre-spawn, and two gates already
+/// running are past the point anything is asked.
 ///
 /// Measured on this repository's own six Checks, ten cores, warm target
 /// directory: 28.5s one at a time against 16.5s at four. Bounds of two, three,
