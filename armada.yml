@@ -1,122 +1,37 @@
-# Armada's own Manifest — the real one, read by a running Fleet.
+# Armada's own Manifest, read by a running Fleet. A Job dispatched here runs
+# these commands verbatim.
 #
-# This is the file `armada serve` loads when it is pointed at this repository,
-# and the file `armada check` and `armada run` read to resolve a name. It
-# is not a sample and not a fixture: the six Checks below are the commands this
-# workspace is actually built and tested with, and a Job dispatched here runs
-# them verbatim.
-#
-# Six keys, and no others. `version`, `id`, `base`, `checks.<name>.run`,
-# `commands.<name>.run` and `commands.<name>.destructive` are the whole of what
-# `crates/config` reads at M1; every other section the Manifest concept page
-# describes — permissions, secrets, ports, skills, budget, dispatch freeze,
-# setup requirements, auto-merge policy — is refused by name. A key nothing
-# reads is a promise this file would be making that the system does not keep,
-# so each section arrives with the code that honours it.
+# Every section the Manifest concept page describes but this file omits is
+# refused by name: a key nothing reads is a promise the system does not keep.
 
 version: 1
 
-# The project's name, and its identity. A Job stores this on
-# `owner_manifest_id`, Bridge shows it on every row, and both want a word rather
-# than a number — the workflow beside it is `bug` for the same reason.
-#
-# Stable, and stable by being written here: moving or renaming the directory
-# does not touch it, so the Jobs that ran against this project keep pointing at
-# it. What it cannot survive is being edited, which is the trade a readable key
-# makes and a minted one does not.
+# Written rather than minted, so renaming the directory does not orphan a Job.
 id: armada
 
-# The branch a Job's work merges into.
-#
-# Three things read it: the rebase Fleet runs at each step boundary, the pull
-# request a finished Job opens, and `armada clean`, which keeps any branch whose
-# commits this one cannot reach.
-#
-# **Optional, and leaving it out is not the same as writing it.** With no `base`,
-# Armada infers one — what `origin/HEAD` names, then `main`, then `master` — and
-# says in the pull request that it inferred it. Written here it is an answer, and
-# a name no branch answers to is refused rather than quietly replaced by a guess.
+# Optional. Absent, Armada infers one and says so in the pull request.
 base: main
 
-# Checks gate advancement. A step's `mechanical_checks` names one of these by
-# name; a name a step asks for and this file does not declare is refused before
-# anything is dispatched.
-#
-# **`format` is the sixth and it is not about a half.** It is here because PR
-# #199 merged nine unformatted files past every gate — the same shape as the
-# three below, one lint smaller. Its own entry says why there is no `clippy`
-# beside it.
-#
-# **This repository has two halves and every Check used to compile one of
-# them.** `build` and `test` say nothing at all about `apps/` or `packages/`,
-# so a Job that changed only the Bridge was verified entirely on the code it
-# had not touched. #200 is what that cost: PR #199 merged a branch whose
-# renderer would not compile, having passed every gate and been read by two
-# Judges, because the switch it broke was in TypeScript and nothing here
-# compiled TypeScript. The three below are the other half.
-#
-# **Three commands rather than one, because none of them subsumes another.**
-# `tsc -b` checks types and emits nothing anyone runs; `electron-vite build`
-# bundles through esbuild, which strips types without reading them; and the
-# Storybook build is the only thing that compiles `packages/components` at all,
-# since that package has no `typecheck` script and `apps/desktop`'s tsconfig
-# does not reference it. Folding them into one name would report one exit code
-# for three different questions, which is `test`'s `--exclude acceptance`
-# argument pointed the other way.
-#
-# There is no `lint` in this workspace. The designed `revert.json` names one
-# and this file has never declared it — see that file's header.
+# Checks gate advancement. A step naming one not declared here is refused.
 checks:
   build:
-    # `--locked`, because a Check that quietly updates the lockfile is a Check
-    # that changed the thing it was measuring.
+    # `--locked`: a Check that updates the lockfile changed what it measured.
     run: cargo build --workspace --locked
 
   test:
-    # **`--exclude acceptance` is not a convenience.** The acceptance test is
-    # a milestone's own claim rather than a unit test, and it is worth reading
-    # on its own — a Drone that folded it into this run would report one number
-    # covering two different questions. It passes; it is excluded because of
-    # what it is, not because of how it exits.
-    # See `docs/practices/acceptance-tests.md`.
-    #
-    # `nextest` rather than `cargo test`: measured at 3x on v1, 83 seconds
-    # against 27 for the same 2,034 tests, because `cargo test` runs each test
-    # binary to completion before starting the next.
+    # `--exclude acceptance`: a milestone's claim is read on its own. See
+    # docs/practices/acceptance-tests.md. `nextest` measured 3x `cargo test`.
     run: cargo nextest run --workspace --exclude acceptance
 
-  # **A Job's worktree has no `node_modules`, and these pass there anyway.**
-  # Nothing in Fleet installs anything: `adapters::worktree` creates a branch
-  # and a checkout and stops, and `.armada/worktrees/` was measured empty of
-  # `node_modules` at every level. pnpm 11 installs what a script needs before
-  # running it, so the first of these to run in a fresh worktree pays about two
-  # seconds against the global store and the rest are warm. `packageManager:
-  # pnpm@11.6.0` in the root `package.json` is what pins that behaviour, so it
-  # is a fact about this repository rather than about whoever's machine.
-  #
-  # It leaves the worktree clean — `node_modules/`, `out/` and
-  # `storybook-static/` are all ignored, and the lockfile is untouched — so a
-  # Check here does not appear in the diff a Judge reads.
-  #
-  # **`checks-runner` has no shell**, so none of these can chain an install of
-  # its own with `&&`. That is what makes the paragraph above load-bearing
-  # rather than a convenience: if pnpm stopped installing on demand, the fix is
-  # a script in the repository that this file names, not a longer `run` string.
-  #
-  # Measured on a cold worktree with a warm store: 4.3s, 2.2s, 10.8s. Warm:
-  # 2.8s, 3.1s, 11.8s. Eighteen seconds for all three, against `build`'s
-  # seventeen for one.
+  # The Bridge half — `build` and `test` say nothing about `apps/` or
+  # `packages/`. Three, because none subsumes another. All need `node_modules`,
+  # which a fresh worktree has none of — #227.
   typecheck:
-    # `tsc -b`, because `apps/desktop/tsconfig.json` owns no files: it is two
-    # referenced projects, one with Node and no DOM and one with the DOM and no
-    # Node, and a plain `tsc --noEmit` here checks neither of them. `--force`
-    # because the build info a previous step left behind would let this skip
-    # the project the Drone just edited.
+    # `-b --force`: the tsconfig owns only referenced projects, and stale
+    # build info would skip the one just edited.
     run: pnpm -C apps/desktop typecheck
-    # `crates/core-model/domain/**` and `protocol-version.toml` are here
-    # because `apps/desktop/codegen` reads them and emits TypeScript from
-    # them. A change there is a change to code `tsc` compiles, made in a file
-    # that does not look like it.
+    # `domain/**` and `protocol-version.toml`: codegen emits TypeScript from
+    # them, so a change there is a change to compiled code.
     when:
       - "apps/**"
       - "packages/**"
@@ -127,13 +42,9 @@ checks:
       - "pnpm-workspace.yaml"
 
   bridge_build:
-    # Named for whose build it is, since `build` beside it is the Rust one.
-    # Distinct from `typecheck` and not covered by it: this is the Check that
-    # fails on a missing module or an import that resolves in the editor and
-    # not in the bundle.
+    # Catches what `typecheck` cannot: an import that resolves in the editor
+    # and not in the bundle.
     run: pnpm -C apps/desktop build
-    # The same list as `typecheck`: the same sources, bundled rather than
-    # type-checked.
     when:
       - "apps/**"
       - "packages/**"
@@ -144,56 +55,25 @@ checks:
       - "pnpm-workspace.yaml"
 
   storybook:
-    # **The only Check that compiles `packages/components`.** It is a Vite
-    # build, so it reports broken imports and broken syntax rather than broken
-    # types — worth having as that package's sole compiler, and worth knowing
-    # is not a typecheck.
     run: pnpm -C packages/components build-storybook
-    # Shorter than the two above: this builds `packages/components` and
-    # nothing under `apps/`, so a change to the desktop app alone does not
-    # concern it.
+    # Shorter than the two above: nothing under `apps/` concerns it.
     when:
       - "packages/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
 
-  # **Named `format` and not `fmt`, because `fmt` is a Command below and a name
-  # in both registries is refused.** The two are not the same thing wearing one
-  # name: the Command writes and is what a Drone is given, this reads and is
-  # what advances a step. A Drone that fails this runs `fmt` and submits again.
-  #
-  # PR #199 is why it exists. Nine unformatted files merged past both gates and
-  # both Judges, for #200's reason one lint over: `cargo fmt --check` was not a
-  # Check, so nothing in this repository ever ran it.
-  #
-  # **No `when`, deliberately.** It is about a second, so scoping it would save
-  # nothing and add a way to be wrong — `when` earns its place on `storybook`,
-  # which is eleven.
-  #
-  # There is no `clippy` beside it. `cargo clippy --workspace --all-targets`
-  # reports **19 warnings on `main` today across 8 lints**, so a bare run exits
-  # 0 and gates nothing, and `-D warnings` makes every step red from its first
-  # run. Eleven of the nineteen are mechanical; the other eight are
-  # `too_many_arguments`, `large_enum_variant` and `result_large_err`, which is
-  # clippy disagreeing with decisions this repository took on purpose —
-  # `rule_on` takes nine parameters because none of them is optional, and that
-  # is the type-system-first pattern rather than an oversight. Which of the
-  # eight Armada agrees with is a person's answer, and a Check cannot be written
-  # before it. `[clippy-as-a-check]` in `docs/OPEN.md` is that question, with
-  # the eight lints and what each one is actually asking.
+  # `format`, not `fmt`: that name is a Command below and both registries
+  # refuse a collision — the Command writes, this reads. No `clippy` beside it;
+  # `[clippy-as-a-check]` in docs/OPEN.md is why.
   format:
     run: cargo fmt --all --check
 
-# Commands gate nothing. They are what a Drone is given to run, distinct from
-# the Checks that decide whether it advances — which is why they are a second
-# registry rather than one list with a flag. A name in both is refused.
+# Commands gate nothing — they are what a Drone is given to run.
 commands:
   fmt:
     run: cargo fmt --all
 
   gate:
-    # **Expected to exit non-zero**, and that is not a fault. The gate is red on
-    # purpose until a milestone is finished, so this is a command rather than a
-    # Check: nothing advances or fails on its exit code.
+    # Exits non-zero on purpose, which is why it is not a Check.
     run: cargo xtask verify-foundations
