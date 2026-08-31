@@ -463,7 +463,9 @@ The third answer at a human gate, between taking the work and ending the Job. Th
 
 **There is no Drone at the gate to take the note.** A Drone ends when its step's work passes the machine gates, so the step standing at a human gate has none — `docs/concepts/drone.md` has the rule. This act is therefore what `redirect_drone` is at a step boundary: words that open the next Drone's brief, not a turn injected into a session.
 
-**It still refuses with a 409 where the Drone is gone**, which is now every time. The refusal was written against a Job put back to `running` with no process on it, which escalates as `interrupted` a moment later having lost the note; it stands until a note has somewhere to wait. #207.
+**The note waits on the Job and is delivered once.** It goes onto the record, the Job takes `awaiting_review -> queued` rather than straight to `running` — a Job put back to `running` with no process on it escalates as `interrupted` a moment later — and the Drone re-admission puts back on the same step opens with it. Delivered into that one brief and cleared there, whether or not the Drone acts on it: a note surfacing two steps later is advice about finished work. Where a Drone is somehow live, it is injected as a redirect is and nothing waits; whichever path runs, the other does not.
+
+**409 where the Job's worktree has been reclaimed.** There is then no Drone to put the note on and none possible, which is the only case left where it has nowhere to go. What is being asked for there is a redispatch.
 
 The body carries the person's own words and is a type of its own rather than a redirect's — a redirect steers a Drone whose step stopped, and this answers a gate. Blank is refused.
 """

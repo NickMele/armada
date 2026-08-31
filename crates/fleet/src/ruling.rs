@@ -67,10 +67,9 @@ pub enum Ruling {
     /// so `crate::dispatch` stands it down and the slot goes to the next Job. A
     /// person's review costs no fleet time.
     ///
-    /// **`request_changes` therefore refuses until `#207`**, which is a chosen
-    /// interval and is written down on that method and on `job-statuses.toml`'s
-    /// `awaiting_review` row. Approving re-queues rather than resuming, because
-    /// the slot this gave up is very often somebody else's by then.
+    /// **So `request_changes` writes its note down rather than injecting it**
+    /// (`#207`), and re-queues as an approval does: the slot this gave up is
+    /// very often somebody else's by the time a person answers.
     ///
     /// The step stays `running` while the Job stands at the gate.
     /// `ADVANCING_STATUSES` admits `awaiting_review`, so the inner machine is

@@ -5,9 +5,9 @@
 //! A Drone belongs to a step, so the one starting part two never saw part one
 //! worked. Everything the process that is gone would have held has to be handed
 //! over in the next Drone's opening brief, and that list is not closed:
-//! [`Crossed`] carries two, and `#207` adds a redirect that arrived while no
-//! Drone was there to take it. A third item adds a field and a method, and no
-//! caller carrying the first two is touched.
+//! [`Crossed`] carries three, and the third — [`Redirected`], a person's note
+//! written where no Drone was there — arrived as `#139` said it would: a field,
+//! a method, no caller of the first two touched. A fourth costs the same.
 //!
 //! # An injected turn does not survive being moved into an opening brief
 //!
@@ -22,8 +22,8 @@
 //!
 //! **Drafted wording**, which `docs/contracts/agent-prompt.md` section 4a says.
 //! The product block is not — the contract draws it, and [`Produced::text`]
-//! follows what is drawn.
-use core_model::{FrozenWorkflow, ResolvedStep, StepEvidence, StepId};
+//! follows it.
+use core_model::{FrozenWorkflow, RedirectWaiting, ResolvedStep, StepEvidence, StepId};
 use verification::TheBaseMoved;
 
 /// What a Drone that was not there has to be handed, because the process that
@@ -38,6 +38,7 @@ use verification::TheBaseMoved;
 pub struct Crossed {
     produced: Option<Produced>,
     cleared: Option<Cleared>,
+    redirect: Option<Redirected>,
 }
 
 impl Crossed {
@@ -64,12 +65,86 @@ impl Crossed {
         }
     }
 
+    /// A person's note, written at a boundary where there was no Drone to
+    /// take it.
+    ///
+    /// Takes the `Option` the record answers with, like
+    /// [`and_produced`](Crossed::and_produced) — "nobody has said anything to
+    /// this Job" is the ordinary case and not one a caller should have to
+    /// spell.
+    ///
+    /// **Not built by the caller that crosses the boundary.**
+    /// `fleet::spawning` folds it in, because it is the one funnel every spawn
+    /// goes through and the note is owed to *the next Drone* rather than to the
+    /// next Drone of one act. A caller that had to remember it is a caller that
+    /// could forget.
+    pub fn and_redirect(self, redirect: Option<Redirected>) -> Crossed {
+        Crossed { redirect, ..self }
+    }
+
     pub(crate) fn produced(&self) -> Option<&Produced> {
         self.produced.as_ref()
     }
 
     pub(crate) fn cleared(&self) -> Option<&Cleared> {
         self.cleared.as_ref()
+    }
+
+    pub(crate) fn redirect(&self) -> Option<&Redirected> {
+        self.redirect.as_ref()
+    }
+}
+
+/// What a person said while nobody was there to hear it.
+///
+/// # Why this is a type and not the string on the record
+///
+/// The string is a person's own words and passes through untouched — the Agent
+/// Prompt Contract's table says outright that `redirect_drone`'s content comes
+/// from a person rather than from a verdict. What this adds is the frame the
+/// words need in an *opening* turn and did not need in an injected one, which
+/// is the same re-tensing [`Cleared`] and [`Reconciling`] exist for: injected,
+/// the words arrive in the middle of a conversation the Drone remembers; here
+/// they arrive at the top of a brief, addressed to a process that has never
+/// worked this part and would otherwise read them as part of the task.
+///
+/// **It says who wrote them.** "A person read the work and asked for this" is
+/// the difference between an instruction and the step's own definition, and a
+/// fresh Drone has nothing else to tell the two apart.
+///
+/// **Drafted wording**, like [`Cleared`] and [`Reconciling`].
+/// `docs/contracts/agent-prompt.md` sanctions no copy for it — section 4a's
+/// table gives `redirect_drone` no Fleet wording at all, which is a statement
+/// about the note and not about the frame around it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Redirected(String);
+
+impl Redirected {
+    /// The note the record is holding.
+    pub fn of(waiting: &RedirectWaiting) -> Redirected {
+        Redirected(waiting.text().to_string())
+    }
+
+    /// The block, as it reaches a Drone.
+    ///
+    /// **The words are quoted and never paraphrased**, for the reason
+    /// `fleet::resume::redirect` gives about the Judge's citation: the person
+    /// read the work and wrote this from it, and Fleet summarising it would be
+    /// Fleet deciding what they meant.
+    ///
+    /// **It is framed as work and not as context**, which is the whole of the
+    /// difference between it and [`Produced`]'s `not_claimed` block. That one
+    /// says outright that it is not work this part owes; this one is the
+    /// reason this part is being worked at all.
+    pub(crate) fn text(&self) -> String {
+        let said = &self.0;
+        format!(
+            "WHAT A PERSON ASKED FOR\n\nA person read this work and wrote this before you \
+             started. It is not part of the step's definition and it is not something an \
+             earlier part claimed — it is an instruction, and it is why this part is being \
+             worked:\n\n  \"{said}\"\n\nDo what it asks. Where it and the step below disagree \
+             about what to do first, this comes first."
+        )
     }
 }
 

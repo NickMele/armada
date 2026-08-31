@@ -31,7 +31,7 @@ use std::io;
 use adapter_traits::{NotDelivered, SpawnConfigRefused, WorktreeSpecRefused};
 use core_model::{
     EscalationTrigger, IllegalDroneMove, IllegalStepTransition, IllegalTransition, JobId,
-    JobStatus, StepId,
+    JobStatus, RedirectAlreadyWaiting, StepId,
 };
 use store::{LoadAllError, LoadJobError, WriteError};
 
@@ -187,14 +187,32 @@ pub enum Adrift {
     /// so the machine would take them and the record would say a person
     /// reviewed work nobody was ever shown.
     NotUnderReview { job: JobId, status: JobStatus },
-    /// Changes were asked for on a Job whose Drone is gone.
+    /// Changes were asked for on a Job with no Drone and nowhere to put one.
     ///
-    /// **The note has nowhere to go.** A Job put back to `running` with no
-    /// process on it escalates as `interrupted` a moment later, having lost
-    /// what the person wrote — so it is refused while the Job is still at the
-    /// gate. A Drone that dies at a gate escalates on its own, and a restart is
-    /// the act from there.
+    /// **Narrowed by `#207`, not deleted.** It used to mean "no process right
+    /// now", which after `#140` was every gate: a Drone ends when its step
+    /// passes the machine gates, so `awaiting_review` holds none and every
+    /// request refused. A note has somewhere to wait now — the Job's own record
+    /// — so the absence of a process is no longer a refusal.
+    ///
+    /// **What is left is the absence of a Job to put one on.** A worktree that
+    /// has been reclaimed is a Job no Drone can be started against, so a note
+    /// written for the next one would wait for a Drone that is never coming.
+    /// That is the case where there is genuinely nowhere for the words to go,
+    /// and it is refused while the Job is still at the gate rather than
+    /// discovered a move later.
     NoDroneToTell { job: JobId },
+    /// A second note arrived for a Job already holding an undelivered one.
+    ///
+    /// **The record refuses it and this carries the refusal out.** Overwriting
+    /// drops the first note silently and queueing brings back the expiry the
+    /// waiting rule was chosen to avoid — `core_model::RedirectAlreadyWaiting`
+    /// has the reasoning. What the person gets back is their own words and the
+    /// words already waiting, which is the one answer that loses neither.
+    NoteAlreadyWaiting {
+        job: JobId,
+        held: RedirectAlreadyWaiting,
+    },
     /// A Job's work product could not be read out of its worktree.
     ///
     /// **Never an empty diff.** A repository that will not open and a Drone
@@ -512,8 +530,14 @@ impl fmt::Display for Adrift {
             ),
             Adrift::NoDroneToTell { job } => write!(
                 out,
-                "{} has no Drone to tell — it is gone, so there is nobody to act on the note. \
-                 The Job will escalate as interrupted, and a restart is what answers that",
+                "{} has no Drone to tell and no worktree to put one on, so there is nowhere \
+                 for the note to wait. What is being asked for is a redispatch",
+                job.as_str()
+            ),
+            Adrift::NoteAlreadyWaiting { job, held } => write!(
+                out,
+                "{} is already holding a note for the next Drone, and a second would lose \
+                 one of the two: {held}",
                 job.as_str()
             ),
             Adrift::WorkUnreadable { job, cause } => write!(
@@ -694,6 +718,7 @@ impl Adrift {
             | Adrift::NoDroneToRedirect { job }
             | Adrift::NotUnderReview { job, .. }
             | Adrift::NoDroneToTell { job }
+            | Adrift::NoteAlreadyWaiting { job, .. }
             | Adrift::WorkUnreadable { job, .. }
             | Adrift::NotTheJudges { job, .. }
             | Adrift::CheckDidNotPass { job, .. }
@@ -764,6 +789,7 @@ impl Error for Adrift {
             // has nothing underneath saying why, only the state it is in.
             | Adrift::NotUnderReview { .. }
             | Adrift::NoDroneToTell { .. }
+            | Adrift::NoteAlreadyWaiting { .. }
             // And the two an override makes, which say what the record holds
             // rather than wrapping something that failed.
             | Adrift::NotTheJudges { .. }

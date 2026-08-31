@@ -329,9 +329,14 @@ which is an assembled prompt and therefore governed here.
 | **The hatch-unavailable answer** | A Drone pulled the hatch on a Job Fleet had not marked | Drafted, not sanctioned |
 | **The gate's outcome** | A step passed its gate and its Drone is still there | Drafted, not sanctioned |
 | **The part-before block** | The same fact, where the Drone that would have read it has ended | Drafted, not sanctioned |
+| **The waiting-instruction block** | `redirect_drone` or `request_changes` arrived where no Drone was there to take it | The person writes the words; the frame around them is drafted |
 
 **Every turn Fleet authors now has wording.** `redirect_drone` carries a
 person's words rather than Fleet's, so it has none of its own to specify.
+Its waiting form carries the same words and adds a frame, which is Fleet's and
+is drafted: an opening brief has to say who wrote the instruction and that it
+is not part of the step's definition, where an injected turn arrives in the
+middle of a conversation and does not.
 The gate's outcome was the one exception — the mechanism was decided and the
 wording never written — and its last two rows close that.
 
@@ -348,8 +353,15 @@ brief.
 > it as an instruction about work it cannot remember doing.
 
 The base-moved note already worked this way and had no row: a rebase runs at
-every spawn, and where there is no session it rides the brief. Both are
-`fleet::crossing`, which holds every re-tensing of a live-session turn.
+every spawn, and where there is no session it rides the brief. So does a
+person's instruction that arrived at a boundary, which is the last row. All
+three are `fleet::crossing`, which holds every re-tensing of a live-session
+turn.
+
+**A block that rides the brief lasts exactly one brief.** The instruction block
+is cleared when it is delivered, whether or not the Drone acts on it: it is
+addressed to the part being worked now, and a Drone two parts later reading it
+has been handed advice about finished work.
 
 **One Fleet-authored turn is specified and the rest are drafted.** A draft
 is wording somebody can argue with; it is not wording Armada has agreed to

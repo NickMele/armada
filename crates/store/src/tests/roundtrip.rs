@@ -6,8 +6,8 @@
 use core_model::{
     Actor, AdvanceGate, Attachment, CheckOutcome, ContextSource, Covers, CriterionId,
     DeclarePlanAt, DroneId, EvidenceRef, EvidenceType, GamingPattern, Job, JobStatus, JobStep,
-    JudgeVerdict, Judgment, ModelName, PathPattern, RepoPath, ResolvedCheck, StepCheck,
-    StepEvidence, StepId, Target, Ulid, WriteTargets,
+    JudgeVerdict, Judgment, ModelName, PathPattern, RedirectWaiting, RepoPath, ResolvedCheck,
+    StepCheck, StepEvidence, StepId, Target, Ulid, WriteTargets,
 };
 
 use crate::tests::{created_at, job_id, open, sub_dispatched, top_level, TempDir};
@@ -732,4 +732,105 @@ fn a_blank_model_in_the_column_is_malformed_rather_than_read_as_none() {
     let stored = WITHOUT_WHEN.replace(r#""retry_limit": 0"#, r#""retry_limit": 0, "model": " ""#);
     let refused = crate::columns::read_workflow(&stored).expect_err("a blank model");
     assert!(refused.contains("model"), "{refused}");
+}
+
+/// A note with nowhere to go survives the process that took it.
+///
+/// **The column is the field's authority**, in the sense `branch` is: no event
+/// carries a person's words, so the rebuild reads this straight back rather
+/// than folding it. A Fleet that restarts between a person writing a note and a
+/// Drone opening with it is the ordinary case, not an exotic one — a person may
+/// take a day over a review.
+#[test]
+fn a_note_waiting_for_the_next_drone_survives_a_reopen() {
+    let dir = TempDir::new();
+    let stored = top_level("01NOTE");
+    let mut store = open(&dir);
+    store.insert_job(&stored, &created_at()).expect("stored");
+
+    let waiting = stored
+        .redirect_waits(RedirectWaiting::saying("name the cause, not the symptom").expect("a note"))
+        .expect("nothing was waiting");
+    store
+        .record_redirect_waiting(&waiting)
+        .expect("the note is written down");
+    drop(store);
+
+    let mut reopened = open(&dir);
+    let loaded = reopened.load_job(&job_id("01NOTE")).expect("loads");
+    assert_eq!(
+        loaded.redirect_waiting().map(RedirectWaiting::text),
+        Some("name the cause, not the symptom")
+    );
+    assert_eq!(loaded, waiting, "and nothing else about the Job moved");
+
+    // Delivering it is the same write with nothing in it, which is why there is
+    // one method rather than a setter and a clearer.
+    reopened
+        .record_redirect_waiting(&loaded.redirect_delivered())
+        .expect("the note is cleared");
+    drop(reopened);
+
+    let after = open(&dir);
+    assert_eq!(
+        after.load_job(&job_id("01NOTE")).expect("loads"),
+        stored,
+        "cleared on delivery, and the record is back where it started"
+    );
+}
+
+/// A Job holding an undelivered note, reinserted, still holds it. `insert_job`
+/// binds every column for this reason — a rebuild that dropped one would lose
+/// what a person typed.
+#[test]
+fn a_reinserted_job_does_not_lose_the_note_it_was_holding() {
+    let dir = TempDir::new();
+    let waiting = top_level("01REINSERT")
+        .redirect_waits(RedirectWaiting::saying("do the writer too").expect("a note"))
+        .expect("nothing was waiting");
+    let mut store = open(&dir);
+    store.insert_job(&waiting, &created_at()).expect("stored");
+    drop(store);
+
+    assert_eq!(
+        open(&dir)
+            .load_job(&job_id("01REINSERT"))
+            .expect("loads")
+            .redirect_waiting()
+            .map(RedirectWaiting::text),
+        Some("do the writer too")
+    );
+}
+
+/// A note nobody could act on is refused on the way out, not carried into a
+/// brief. `RedirectWaiting::saying` is what makes the blank unrepresentable, so
+/// a row holding one was written by something that did not share the type.
+#[test]
+fn a_blank_note_in_the_column_is_refused_rather_than_rendered() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    store
+        .insert_job(&top_level("01BLANKNOTE"), &created_at())
+        .expect("stored");
+    store
+        .conn
+        .execute(
+            "UPDATE jobs SET redirect_waiting = '   ' WHERE job_id = ?1",
+            (job_id("01BLANKNOTE").as_str(),),
+        )
+        .expect("the column is written past the type");
+
+    let refused = store.load_job(&job_id("01BLANKNOTE"));
+    assert!(
+        matches!(
+            refused,
+            Err(crate::LoadJobError::Unreadable(
+                crate::RowError::MalformedColumn {
+                    column: "redirect_waiting",
+                    ..
+                }
+            ))
+        ),
+        "a blank note is a malformed column, not an empty block in a brief: {refused:?}"
+    );
 }

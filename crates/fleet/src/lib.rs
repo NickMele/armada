@@ -149,7 +149,7 @@ pub use adrift::{Adrift, NotDeclared, NotSubmitted};
 pub use at_step::AtStep;
 pub use clock::{Clock, SystemClock};
 pub use converging::{ReportNow, Stage, StepNorms, Tripwire, Wandering};
-pub use crossing::{Cleared, Crossed, Produced, Reconciling};
+pub use crossing::{Cleared, Crossed, Produced, Reconciling, Redirected};
 pub use daemon::{Fittings, Fleet, Host, Reconciled, Turned};
 pub use delivery::Delivered;
 pub use detach::Detached;
