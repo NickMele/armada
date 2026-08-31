@@ -2,7 +2,7 @@
 
 use crate::error::Fault;
 use crate::manifest::Manifest;
-use crate::tests::{fault_at, named, refused as refused_at, refusals};
+use crate::tests::{fault_at, named, refusals, refused as refused_at};
 
 /// The whole of what M1 reads, in one file.
 const WHOLE: &str = r#"
@@ -381,7 +381,10 @@ fn a_name_declared_as_a_check_is_a_different_refusal_from_a_name_declared_nowher
     ));
     assert!(matches!(
         fault_at(&refused, "setup.requires[0]"),
-        Fault::NotADeclaredCommand { is_a_check: true, .. }
+        Fault::NotADeclaredCommand {
+            is_a_check: true,
+            ..
+        }
     ));
 }
 
