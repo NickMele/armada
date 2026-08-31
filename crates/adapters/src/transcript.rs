@@ -193,9 +193,9 @@ fn blocks(message: MessageLine) -> Vec<DroneEvent> {
 /// What the call was on, in the words a person would use — a path, a command,
 /// a pattern.
 ///
-/// The keys are this stream's tools' and the order is first-present-wins rather
-/// than one arm per tool: a tool the list does not name still shows its path or
-/// its command, and a tool that grows an argument does not need an arm here.
+/// The keys are the tools' own and the order is first-present-wins rather than
+/// one arm per tool: a tool the list does not name still shows its path or its
+/// command, and a tool that grows an argument does not need an arm here.
 ///
 /// **What is deliberately not read is content.** `Write`'s `content` is not a
 /// field on [`ToolInput`] at all, so the largest argument in the stream has
@@ -217,7 +217,10 @@ fn detail(input: &ToolInput) -> CallDetail {
             None => CallDetail::of(pattern),
         };
     }
-    match [&input.query, &input.url, &input.description]
+    if let Some(declared) = &input.context_paths {
+        return CallDetail::of(&declared_as(declared));
+    }
+    match [&input.query, &input.url, &input.description, &input.claimed]
         .into_iter()
         .flatten()
         .next()
@@ -225,6 +228,28 @@ fn detail(input: &ToolInput) -> CallDetail {
         Some(text) => CallDetail::of(text),
         None => CallDetail::none(),
     }
+}
+
+/// A declared scope on one line.
+///
+/// **An empty declaration reads as `[]`, not as nothing.** A step that will
+/// change nothing has declared that, and it is a different fact from a step
+/// that never called — which is what a blank detail looks like. Each path goes
+/// through [`under_home`] even though the tool asks for repository-relative
+/// ones: what a Drone types is what a Drone types, and a row is read by people.
+///
+/// The join is assembled before it is bounded, unlike a command. A path list
+/// is many short strings rather than one that could be the size of a file, so
+/// what [`CallDetail`] throws away here is bytes serde already materialised.
+fn declared_as(paths: &[String]) -> String {
+    if paths.is_empty() {
+        return String::from("[]");
+    }
+    paths
+        .iter()
+        .map(|path| under_home(path))
+        .collect::<Vec<String>>()
+        .join(", ")
 }
 
 /// An edit's size, the way a diff states it.
@@ -401,12 +426,22 @@ enum Block {
     Unnamed,
 }
 
-/// The argument keys this stream's tools use, and no others.
+/// The argument keys the tools a Drone can reach use, and no others.
 ///
 /// **A struct rather than a map**, so what a row can carry is the list below
 /// rather than whatever the tool was given — a `Write` argument is a whole file
-/// and `content` is deliberately not a field here. Every key is one vendor's,
-/// which is why the shape is in this crate.
+/// and `content` is deliberately not a field here.
+///
+/// **Most keys are one vendor's and the last two are `ipc::mcp`'s.** Leaving
+/// those out is the whole of why every `mcp__armada__*` call recorded an empty
+/// detail: a key with no field is a key serde drops, so Armada's own surface
+/// was the one place a call said nothing about itself. A fall-through rather
+/// than a missing mechanism — `fleet::transcript::row` already carries
+/// `detail` and `truncated`, and would have written whatever arrived. The two
+/// names are asserted against [`ipc::mcp::SCOPE_FIELDS`] and
+/// [`ipc::mcp::EVIDENCE_FIELDS`] in this crate's tests, so a rename there fails
+/// here rather than emptying a row again. `run_checks` is absent and stays
+/// absent: it takes no arguments, so its empty detail is already the truth.
 #[derive(Deserialize, Default)]
 struct ToolInput {
     /// Read, Write, Edit.
@@ -427,6 +462,17 @@ struct ToolInput {
     old_string: Option<String>,
     /// Edit. Read for its line count and never carried.
     new_string: Option<String>,
+    /// `declare_scope`. **The one argument in the stream that is recoverable
+    /// nowhere else** — no route, no log line and no store field holds what a
+    /// step declared, so a drift refusal could not be read against the claim it
+    /// refused.
+    context_paths: Option<Vec<String>>,
+    /// `submit_evidence`, and the only one of its three carried.
+    ///
+    /// `shown_by` and `not_claimed` are recorded in full as `StepEvidence`, so
+    /// what the row is for is saying which submission this call was; three
+    /// prose fields joined would be one truncated field and two elisions.
+    claimed: Option<String>,
 }
 
 #[derive(Deserialize)]

@@ -436,3 +436,106 @@ fn a_quota_window_moving_is_read_and_is_not_about_this_job() {
         }]
     );
 }
+
+/// Issue #225: every `mcp__armada__*` call recorded `"detail": ""`, and the
+/// blind spot was exactly on Armada's own surface. The cause was here — the
+/// argument keys of Armada's own tools were not fields on `ToolInput`, so serde
+/// dropped them and every branch of `detail` fell through to nothing.
+#[test]
+fn a_call_of_armada_s_own_tools_carries_its_argument() {
+    let read = read(
+        r#"{"type":"assistant","message":{"content":[
+             {"type":"tool_use","id":"a","name":"mcp__armada__declare_scope",
+              "input":{"context_paths":["crates/fleet/src/transcript","docs/concepts/observe.md"]}},
+             {"type":"tool_use","id":"b","name":"mcp__armada__submit_evidence",
+              "input":{"claimed":"the transcript names what was declared",
+                       "shown_by":"cargo nextest run -p adapters, 41 pass",
+                       "not_claimed":"the response body is still not carried"}},
+             {"type":"tool_use","id":"c","name":"mcp__armada__run_checks","input":{}}]}}"#,
+    );
+    let shown: Vec<&str> = read
+        .iter()
+        .map(|event| match event {
+            DroneEvent::Called { detail, .. } => detail.text(),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        shown,
+        vec![
+            "crates/fleet/src/transcript, docs/concepts/observe.md",
+            "the transcript names what was declared",
+            "",
+        ],
+        "run_checks takes no arguments, so its empty detail is the truth"
+    );
+}
+
+/// A step that will change nothing has declared that. A blank detail is what a
+/// tool nobody called looks like, so the two must not read the same.
+#[test]
+fn declaring_nothing_is_not_the_same_row_as_never_declaring() {
+    let read = read(
+        r#"{"type":"assistant","message":{"content":[
+             {"type":"tool_use","id":"a","name":"mcp__armada__declare_scope",
+              "input":{"context_paths":[]}}]}}"#,
+    );
+    let DroneEvent::Called { detail, .. } = &read[0] else {
+        panic!("{read:?}")
+    };
+    assert_eq!(detail.text(), "[]");
+    assert_ne!(detail, &CallDetail::none());
+}
+
+/// The bound is `CallDetail`'s and is reached here the same way a `Bash`
+/// command reaches it — a second bound for this case would be a second
+/// mechanism where one already works.
+#[test]
+fn a_declaration_longer_than_a_row_is_cut_and_says_so() {
+    let paths: Vec<String> = (0..200).map(|n| format!("\"crates/c{n}/src\"")).collect();
+    let read = read(&format!(
+        r#"{{"type":"assistant","message":{{"content":[
+             {{"type":"tool_use","id":"a","name":"mcp__armada__declare_scope",
+              "input":{{"context_paths":[{}]}}}}]}}}}"#,
+        paths.join(",")
+    ));
+    let DroneEvent::Called { detail, .. } = &read[0] else {
+        panic!("{read:?}")
+    };
+    assert!(detail.truncated(), "a cut row says it was cut");
+    assert!(detail.text().starts_with("crates/c0/src,"));
+    assert!(detail.text().chars().count() <= 200);
+}
+
+/// A Drone can type an absolute path into a field asking for a relative one,
+/// and the row is written to a file a person reads.
+#[test]
+fn a_declared_path_under_a_home_directory_does_not_carry_the_operator_s_name() {
+    let read = read(
+        r#"{"type":"assistant","message":{"content":[
+             {"type":"tool_use","id":"a","name":"mcp__armada__declare_scope",
+              "input":{"context_paths":["/Users/user/Development/armada/crates/fleet"]}}]}}"#,
+    );
+    let DroneEvent::Called { detail, .. } = &read[0] else {
+        panic!("{read:?}")
+    };
+    assert_eq!(detail.text(), "~/Development/armada/crates/fleet");
+}
+
+/// **The drift alarm for the fix, not for the stream.** The keys above are
+/// `ipc::mcp`'s, and the way this blind spot reopens is a field being renamed
+/// there while the decoder keeps the old spelling — which serde answers with
+/// an empty detail and no failure anywhere. So the spellings are asserted
+/// against the lists the tools are actually declared with.
+#[test]
+fn the_armada_keys_read_here_are_the_keys_the_tools_take() {
+    assert!(
+        ipc::mcp::SCOPE_FIELDS.contains(&"context_paths"),
+        "declare_scope's argument is what nothing else in Armada records"
+    );
+    assert!(ipc::mcp::EVIDENCE_FIELDS.contains(&"claimed"));
+    assert!(
+        ipc::mcp::CHECKS_FIELDS.is_empty(),
+        "run_checks growing an argument is a field this decoder would drop"
+    );
+}

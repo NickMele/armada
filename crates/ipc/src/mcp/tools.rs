@@ -39,11 +39,19 @@ pub const SCOPE_TOOL: &str = "declare_scope";
 pub const CHECKS_TOOL: &str = "run_checks";
 
 /// The three prose fields, and a refusal for anything else.
-const EVIDENCE_FIELDS: &[&str] = &["claimed", "shown_by", "not_claimed"];
-/// The one field the scope tool takes.
-const SCOPE_FIELDS: &[&str] = &["context_paths"];
+///
+/// **Public because a second reader needs the same spelling.** The transcript
+/// decoder names these keys to put a call's argument on a row, and it was
+/// blind to all three for as long as it carried its own copy of the list — a
+/// rename here has to break that reader rather than silently empty it.
+pub const EVIDENCE_FIELDS: &[&str] = &["claimed", "shown_by", "not_claimed"];
+/// The one field the scope tool takes. Public for [`EVIDENCE_FIELDS`]' reason.
+pub const SCOPE_FIELDS: &[&str] = &["context_paths"];
 /// The Checks tool takes none. See this module's comment.
-const CHECKS_FIELDS: &[&str] = &[];
+///
+/// Public for the same reason and carrying the opposite fact: a `run_checks`
+/// row with an empty detail is **accurate**, because there was no argument.
+pub const CHECKS_FIELDS: &[&str] = &[];
 
 /// What a Drone hands over. **The Agent Copy Contract's Work submission
 /// fields, spelled as the Drone is asked for them**, and nothing else.
