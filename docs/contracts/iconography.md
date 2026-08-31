@@ -85,7 +85,7 @@ a blob.
 `circle-minus`, below. `--fg-subtle` was `#5D6B7C` on `--bg-raised`, ~3.2:1,
 which a 1px stroke does not survive, so `--fg-muted` was the minimum for
 chrome and for badges alike. The 20 Aug legibility lift raised `--fg-subtle`
-to `#7E8CA0`, 4.58:1 on `--bg-overlay` (`packages/tokens/tokens.css`), which
+to `#7E8CA0`, 4.58:1 on `--bg-overlay` (`packages/tokens/src/colors.css`), which
 clears the floor the earlier value could not. `circle-minus` is the one
 glyph drawn against it, because `gate_undecided` reads as unjudged rather
 than judged, and a verdict hue would say the wrong thing — see Judge
