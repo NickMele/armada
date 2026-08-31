@@ -50,6 +50,13 @@
   flex: none;
 }
 
+/* Where the surface's filter set sits: under the heading, over the frame. It
+   draws no edge of its own — the frame beneath it is the boundary, and a
+   second box around the controls would read as a second list. */
+.armada-active-jobs__controls {
+  min-width: 0;
+}
+
 /* The frame owns the edge and the radius, so a row inside it draws neither.
    The rows' own rules separate them, and the last row's is suppressed. */
 .armada-active-jobs__frame {

@@ -103,6 +103,12 @@ function Badge({ status, icon: Icon, children, pulsing = false }) {
     }
   );
 }
+function Kbd({ className, ...rest }) {
+  return /* @__PURE__ */ jsx("kbd", { className: className ? `armada-kbd ${className}` : "armada-kbd", ...rest });
+}
+function KbdChord({ className, ...rest }) {
+  return /* @__PURE__ */ jsx("span", { className: className ? `armada-kbd-chord ${className}` : "armada-kbd-chord", ...rest });
+}
 const RovingOption = createContext(null);
 const FIELD_ICON = 12;
 const FIELD_STROKE = 2;
@@ -136,6 +142,7 @@ function JobRowStacked({
   fields,
   tracks,
   action,
+  actionKey,
   pulsing = false,
   focused,
   selected,
@@ -217,7 +224,10 @@ function JobRowStacked({
         action ? (
           // The control stops the row's own open, so clicking Approve does not
           // also navigate.
-          /* @__PURE__ */ jsx("div", { className: "armada-job-row__action", onClick: (e) => e.stopPropagation(), children: action })
+          /* @__PURE__ */ jsxs("div", { className: "armada-job-row__action", onClick: (e) => e.stopPropagation(), children: [
+            action,
+            actionKey === void 0 ? null : /* @__PURE__ */ jsx(Kbd, { className: "armada-job-row__key", "aria-hidden": true, children: actionKey })
+          ] })
         ) : null
       ]
     }
@@ -300,6 +310,7 @@ function ActiveJobsList({
   heading: heading2,
   summary,
   action,
+  controls,
   children,
   empty,
   selectable = false,
@@ -344,6 +355,7 @@ function ActiveJobsList({
       ] }),
       action ? /* @__PURE__ */ jsx("div", { className: "armada-active-jobs__action", children: action }) : null
     ] }) : null,
+    controls ? /* @__PURE__ */ jsx("div", { className: "armada-active-jobs__controls", children: controls }) : null,
     /* @__PURE__ */ jsx(
       "div",
       {
@@ -573,12 +585,6 @@ function Input({ label: label2, invalid = false, message, mono = false, id, ...r
     ),
     showMessage && /* @__PURE__ */ jsx("span", { className: "armada-input-field__message", id: messageId, children: message })
   ] });
-}
-function Kbd({ className, ...rest }) {
-  return /* @__PURE__ */ jsx("kbd", { className: className ? `armada-kbd ${className}` : "armada-kbd", ...rest });
-}
-function KbdChord({ className, ...rest }) {
-  return /* @__PURE__ */ jsx("span", { className: className ? `armada-kbd-chord ${className}` : "armada-kbd-chord", ...rest });
 }
 function Select({ label: label2, invalid = false, message, id, children, ...rest }) {
   const generated = useId();
@@ -3281,6 +3287,12 @@ const Running$5 = {
 const RunningFocused = {
   args: { ...Running$5.args, focused: true }
 };
+const FocusedWithItsKey = {
+  args: { ...Running$5.args, focused: true, actionKey: "o" }
+};
+const UnfocusedWithItsKey = {
+  args: { ...Running$5.args, actionKey: "o" }
+};
 const Selected = {
   args: { ...Running$5.args, selected: true }
 };
@@ -3441,6 +3453,7 @@ const __vite_glob_0_16 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   EscalatedSecondTime,
   EscalatedStalled,
   Failed: Failed$4,
+  FocusedWithItsKey,
   Killed: Killed$6,
   NeedsApproval,
   Queued: Queued$2,
@@ -3449,6 +3462,7 @@ const __vite_glob_0_16 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Selected,
   SpendAsQuota,
   SubDispatchedWaitingOnResources,
+  UnfocusedWithItsKey,
   default: meta$K
 }, Symbol.toStringTag, { value: "Module" }));
 function Separator({
@@ -6715,7 +6729,7 @@ const Zero = {
     ]
   }
 };
-const TheBoard = {
+const TheBoard$1 = {
   args: {
     defaultValue: "all",
     items: [
@@ -6730,7 +6744,7 @@ const TheBoard = {
 const __vite_glob_0_50 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Queues,
-  TheBoard,
+  TheBoard: TheBoard$1,
   Zero,
   default: meta$c
 }, Symbol.toStringTag, { value: "Module" }));
@@ -8374,6 +8388,7 @@ function TheListSixStatesOneRowShape({
   heading: heading2,
   summary,
   action,
+  controls,
   rows,
   empty,
   selectable,
@@ -8386,6 +8401,7 @@ function TheListSixStatesOneRowShape({
       heading: heading2,
       summary,
       action,
+      controls,
       empty,
       selectable,
       label: label2,
@@ -8427,7 +8443,13 @@ const awaitingApproval = {
     { value: "created 09:12", quiet: true },
     { value: "Dispatched by you" }
   ],
-  action: /* @__PURE__ */ jsx(SplitButton, { ground: "card", items: [{ label: "Reject", danger: true }], children: "Approve" })
+  // **Review, not Approve.** The drawing gave this row an Approve control and
+  // flagged it as a departure from the settled rule that approval is a second
+  // act from detail; it was settled 2026-08-31 in favour of the rule. Review is
+  // the word an `awaiting_review` row already carries and means the same thing
+  // in both places — go read this — because in both places the act is on
+  // detail. Nothing on the Board approves.
+  action: /* @__PURE__ */ jsx(SplitButton, { ground: "card", items: menu, children: "Review" })
 };
 const queued = {
   status: "not-started",
@@ -8547,6 +8569,48 @@ const TheList = {
     }
   ) })
 };
+const TheBoard = {
+  render: () => /* @__PURE__ */ jsx("div", { className: "armada-screen", children: /* @__PURE__ */ jsx(
+    TheListSixStatesOneRowShape,
+    {
+      heading: "Active jobs",
+      summary: "1 job needs you. 6 on the Board.",
+      action: /* @__PURE__ */ jsx(Button, { variant: "primary", children: "New job" }),
+      controls: /* @__PURE__ */ jsx(
+        BoardControls,
+        {
+          query: "",
+          onQuery: () => {
+          },
+          searchKey: "/",
+          sorts: [
+            { id: "critical_first", label: "Critical first" },
+            { id: "oldest_first", label: "Oldest first" }
+          ],
+          sort: "critical_first",
+          onSort: () => {
+          },
+          tabs: [
+            { id: "all", label: "All", count: 6, shortcut: "1" },
+            { id: "needs-you", label: "Needs you", count: 1, shortcut: "2" },
+            { id: "running", label: "Running", count: 1, shortcut: "3" },
+            { id: "queued", label: "Queued", count: 1, shortcut: "4" },
+            { id: "finished", label: "Finished", count: 3, shortcut: "5" }
+          ],
+          tab: "all",
+          onTab: () => {
+          }
+        }
+      ),
+      rows: SIX.map((row, i) => ({
+        ...row,
+        actionKey: KEYS[i],
+        focused: i === 0 || void 0
+      }))
+    }
+  ) })
+};
+const KEYS = ["r", "o", "o", "o", "o", "o"];
 const AwaitingApproval = { render: () => one(awaitingApproval) };
 const Queued = { render: () => one(queued) };
 const Running = { render: () => one(running) };
@@ -8585,6 +8649,7 @@ const __vite_glob_0_60 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Killed,
   Queued,
   Running,
+  TheBoard,
   TheList,
   WhatTheWireServes,
   default: meta$2

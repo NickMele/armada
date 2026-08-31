@@ -273,6 +273,27 @@
   flex: none;
 }
 
+/* The key that fires the control, on the focused row and nowhere else. A key
+   captioned down fourteen rows says the same thing fourteen times about a
+   control only one cursor can reach.
+
+   `visibility`, not `display`: the chip holds its width on every row, so the
+   run does not reflow as the cursor moves down it. A list whose rows shift
+   under a keystroke is the failure recorded against v1, and it costs one
+   chip's width on every row to not have it.
+
+   Both selectors, for the reason the left edge takes both: `data-focused` is
+   the caller saying where the cursor is and `:focus-visible` is the browser
+   saying it, and they mean one thing to whoever is looking. */
+.armada-job-row__key {
+  visibility: hidden;
+}
+
+.armada-job-row[data-focused] .armada-job-row__key,
+.armada-job-row:focus-visible .armada-job-row__key {
+  visibility: visible;
+}
+
 /* ---- the list's tracks, spread across every row -------------------------
 
    Fixed tracks make a column line up down the list, and are also why a row

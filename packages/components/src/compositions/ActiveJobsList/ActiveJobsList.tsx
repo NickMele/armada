@@ -33,6 +33,17 @@ export type ActiveJobsListProps = {
    * frame. A list row never takes one; the surface may.
    */
   action?: ReactNode;
+  /**
+   * Where a surface's filter set mounts — `Board controls` on the Job Board.
+   *
+   * **Between the heading and the frame, and never inside it.** A control that
+   * changes which rows exist has to sit above the rows it changes; put inside,
+   * it would be the first thing `j` reaches and the first thing a listbox
+   * announces as an option. This composition places it and owns none of it:
+   * what the axes are is the surface's, and a list with no filter set passes
+   * nothing.
+   */
+  controls?: ReactNode;
   /** `Job row (stacked)` rows, in the order Fleet supplied. */
   children?: ReactNode;
   /** Where `Board empty state` mounts when there are no rows. */
@@ -54,6 +65,7 @@ export function ActiveJobsList({
   heading,
   summary,
   action,
+  controls,
   children,
   empty,
   selectable = false,
@@ -122,6 +134,7 @@ export function ActiveJobsList({
           {action ? <div className="armada-active-jobs__action">{action}</div> : null}
         </header>
       ) : null}
+      {controls ? <div className="armada-active-jobs__controls">{controls}</div> : null}
       {/* The frame carries the row tracks, so a field column sizes to the
           widest value in the whole list rather than in one row. An empty
           listbox has no options to select from, so it stays a plain list. */}

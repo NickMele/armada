@@ -158,6 +158,36 @@ export const RunningFocused: Story = {
   args: { ...Running.args, focused: true } as never,
 };
 
+/**
+ * The cursor's row, with the key that fires its control.
+ *
+ * **One key per verb, and one control per row**, so at most one key ever
+ * applies to the row under the cursor: `o` opens, `r` reviews, `t` attests,
+ * `d` redirects. Every other verb key no-ops rather than acting on the wrong
+ * one. Each key is the verb's own initial except Redirect, because `r` is
+ * spent on Review.
+ *
+ * **The chip is drawn on every row and hidden until the cursor lands.** It
+ * holds its width either way, so the run does not reflow as the cursor moves —
+ * and the cost of that is a chip's width on rows that are not showing one.
+ *
+ * The row does not bind the key. A row cannot know whether a text input
+ * elsewhere on the screen holds focus, and the contract suppresses every
+ * single-key action while one does.
+ */
+export const FocusedWithItsKey: Story = {
+  args: { ...Running.args, focused: true, actionKey: "o" } as never,
+};
+
+/**
+ * The same key on a row nothing has the cursor on. It renders as a reserved
+ * gap rather than a chip: the width is what keeps the list from moving, and
+ * the caption is what would say the same thing fourteen times.
+ */
+export const UnfocusedWithItsKey: Story = {
+  args: { ...Running.args, actionKey: "o" } as never,
+};
+
 /** `--accent-muted` fill. Selected and focused are different states and coexist. */
 export const Selected: Story = {
   args: { ...Running.args, selected: true } as never,

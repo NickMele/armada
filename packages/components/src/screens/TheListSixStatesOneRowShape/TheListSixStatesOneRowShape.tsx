@@ -24,6 +24,8 @@ export type TheListSixStatesOneRowShapeProps = {
   summary?: ReactNode;
   /** The surface's one primary action, outside the frame. */
   action?: ReactNode;
+  /** Where `Board controls` mounts: under the heading, over the frame. */
+  controls?: ReactNode;
   /** The rows, in the order they are to be drawn. */
   rows: JobRowStackedProps[];
   /** Where `Board empty state` mounts when there are none. */
@@ -65,6 +67,7 @@ export function TheListSixStatesOneRowShape({
   heading,
   summary,
   action,
+  controls,
   rows,
   empty,
   selectable,
@@ -76,6 +79,7 @@ export function TheListSixStatesOneRowShape({
       heading={heading}
       summary={summary}
       action={action}
+      controls={controls}
       empty={empty}
       selectable={selectable}
       label={label}

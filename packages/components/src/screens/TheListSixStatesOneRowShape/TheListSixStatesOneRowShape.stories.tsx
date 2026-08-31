@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Check, CircleDot, Cpu, GitBranch, Power, UserCheck, X } from "lucide-react";
+import { BoardControls } from "../../compositions/BoardControls/BoardControls";
 import { Button } from "../../primitives/Button/Button";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { StepBar } from "../../compositions/StepBar/StepBar";
@@ -73,11 +74,13 @@ const awaitingApproval: JobRowStackedProps = {
     { value: "created 09:12", quiet: true },
     { value: "Dispatched by you" },
   ],
-  action: (
-    <SplitButton ground="card" items={[{ label: "Reject", danger: true }]}>
-      Approve
-    </SplitButton>
-  ),
+  // **Review, not Approve.** The drawing gave this row an Approve control and
+  // flagged it as a departure from the settled rule that approval is a second
+  // act from detail; it was settled 2026-08-31 in favour of the rule. Review is
+  // the word an `awaiting_review` row already carries and means the same thing
+  // in both places — go read this — because in both places the act is on
+  // detail. Nothing on the Board approves.
+  action: <SplitButton ground="card" items={menu}>Review</SplitButton>,
 };
 
 const queued: JobRowStackedProps = {
@@ -217,6 +220,92 @@ export const TheList: Story = {
     </div>
   ),
 };
+
+/**
+ * The Board with its controls and its keyboard model — sections 1 and 3 of the
+ * drawing, which the six rows above were reproduced without.
+ *
+ * **The count states both numbers.** `1 job needs you. 6 on the Board.` The
+ * first is the number a person is deciding whether to act on and the second is
+ * what it is a fraction of; either alone is a number with nothing to compare
+ * it against. The drawing's own fixture reads `4 jobs need you. 15 on the
+ * Board.` — the shape is the sentence, not the numerals.
+ *
+ * **Five tabs, and their counts are of what the search matched.** With no
+ * search that is the whole board, which is why they read as the board here.
+ *
+ * **The cursor's row carries its key and no other row does.** The chip holds
+ * its width on every row, so nothing moves as the cursor travels; what changes
+ * is whether it is drawn.
+ *
+ * The keys, and the one departure worth naming:
+ *
+ * | Key | Does |
+ * |---|---|
+ * | `/` | Focus the search. `Esc` clears it and returns to the list |
+ * | `j` `k` | Move the cursor; the accent left edge follows it |
+ * | `Enter` | Open the focused job's detail |
+ * | `r` `t` `d` `o` | Review, Attest, Redirect, Open — the row's own verb only |
+ * | `1`–`5` | Set the state filter |
+ * | `n` | New job, the one key that acts on nothing on screen |
+ *
+ * **There is no Approve key and no Approve control.** The row at the gate
+ * carries Review, settled 2026-08-31 — see `docs/concepts/job-board.md`.
+ * Nothing on the Board approves, so the held-key repeat problem never arises
+ * here; it moves to the dispatch card, where `a` does approve.
+ */
+export const TheBoard: Story = {
+  render: () => (
+    <div className="armada-screen">
+      <TheListSixStatesOneRowShape
+        heading="Active jobs"
+        summary="1 job needs you. 6 on the Board."
+        action={<Button variant="primary">New job</Button>}
+        controls={
+          <BoardControls
+            query=""
+            onQuery={() => {}}
+            searchKey="/"
+            sorts={[
+              { id: "critical_first", label: "Critical first" },
+              { id: "oldest_first", label: "Oldest first" },
+            ]}
+            sort="critical_first"
+            onSort={() => {}}
+            tabs={[
+              { id: "all", label: "All", count: 6, shortcut: "1" },
+              { id: "needs-you", label: "Needs you", count: 1, shortcut: "2" },
+              { id: "running", label: "Running", count: 1, shortcut: "3" },
+              { id: "queued", label: "Queued", count: 1, shortcut: "4" },
+              { id: "finished", label: "Finished", count: 3, shortcut: "5" },
+            ]}
+            tab="all"
+            onTab={() => {}}
+          />
+        }
+        rows={SIX.map((row, i) => ({
+          ...row,
+          actionKey: KEYS[i],
+          focused: i === 0 || undefined,
+        }))}
+      />
+    </div>
+  ),
+};
+
+/**
+ * Which key each of the six rows answers to, in the order they are drawn.
+ *
+ * **One control per row, so at most one key ever applies.** The gate row
+ * carries Review and answers `r`; the other five carry Open and answer `o`.
+ * Every other verb key no-ops on every one of these rows rather than acting on
+ * the wrong verb.
+ *
+ * `t` and `d` reach nothing here, and that is the fixture rather than the map:
+ * none of the six is at `awaiting_attestation` and none is being piloted, so
+ * neither Attest nor Redirect is a control any of these rows carries.
+ */
+const KEYS = ["r", "o", "o", "o", "o", "o"];
 
 /**
  * The gate. **No branch, because no worktree exists** — track one is the
