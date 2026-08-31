@@ -1,12 +1,12 @@
 //! `armada.yml`, in the slice M1 reads.
 //!
-//! # Six keys, and nothing else
+//! # Seven keys, and nothing else
 //!
-//! `version`, `id`, `base`, `checks.<name>.run`, `commands.<name>.run` and
-//! `commands.<name>.destructive`. The Manifest concept page describes eight
-//! sections — permissions, secrets, ports, skills, budget, dispatch freeze,
-//! setup requirements, auto-merge policy — and every one of them is a key this
-//! parser refuses, on purpose.
+//! `version`, `id`, `base`, `checks.<name>.run`, `checks.<name>.when`,
+//! `commands.<name>.run`, `commands.<name>.destructive` and `setup.requires`.
+//! Every other section the Manifest concept page describes — permissions,
+//! secrets, ports, skills, budget, dispatch freeze, auto-merge policy — is a
+//! key this parser refuses, on purpose.
 //!
 //! **A key nothing reads is worse than a key that is not there.** A file
 //! carrying `budget: 40` that no code consumes reads to its author as a budget
@@ -14,10 +14,19 @@
 //! honours it, and every deferred section stays additive rather than becoming
 //! a migration.
 //!
-//! `checks.<name>.when` is the sixth key: a list of path patterns, in
+//! `checks.<name>.when` is a list of path patterns, in
 //! `core_model::PathPattern`'s dialect, checked at load. A pattern this parser
 //! cannot read is a refusal beside every other refusal in the file rather than
 //! a Check that quietly stops running. **Absent means always.**
+//!
+//! `setup.requires` names Commands the same file declares, each resolved to its
+//! `run` string **at load** — so a name nothing declares is a refusal here
+//! rather than a worktree nothing prepares and a Check that fails for a reason
+//! nobody can connect to it.
+//!
+//! **Its code word is *preparation*.** `armada::setup` runs nothing and means
+//! something else, and one word over two meanings is the second vocabulary this
+//! workspace refuses elsewhere.
 //!
 //! # Two registries, sharing no names
 //!
@@ -44,11 +53,13 @@ use crate::error::{Fault, LoadError, Refusal};
 use crate::yaml::{self, Table};
 
 /// The keys M1 reads at the top level of an `armada.yml`.
-const TOP_LEVEL: &[&str] = &["version", "id", "base", "checks", "commands"];
+const TOP_LEVEL: &[&str] = &["version", "id", "base", "checks", "commands", "setup"];
 /// The keys M1 reads inside `checks.<name>`.
 const CHECK_KEYS: &[&str] = &["run", "when"];
 /// The keys M1 reads inside `commands.<name>`.
 const COMMAND_KEYS: &[&str] = &["run", "destructive"];
+/// The keys M1 reads inside `setup`.
+const SETUP_KEYS: &[&str] = &["requires"];
 
 /// A command a change must pass to land or to advance a step.
 ///
@@ -102,6 +113,35 @@ impl Command {
     }
 }
 
+/// A Command that has to run in a worktree before any step does, resolved.
+///
+/// **Name and command line together, because the two answer different
+/// questions and a failure needs both.** The name is what the file wrote and
+/// what a person edits; the `run` string is what was executed. A failure
+/// reporting only the second reads as an install that broke on its own, which
+/// is the mystery this whole key exists to end.
+///
+/// There is no way to build one but by resolving a `setup.requires` entry
+/// against a declared Command, so a caller holding one is holding a name the
+/// Manifest declared.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Preparation {
+    name: String,
+    run: String,
+}
+
+impl Preparation {
+    /// The Command's name, as `setup.requires` wrote it.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// The command line, taken from `commands.<name>.run` at load.
+    pub fn run(&self) -> &str {
+        &self.run
+    }
+}
+
 /// One workspace's `armada.yml`, parsed and validated.
 ///
 /// Carries the path it was read from, so a refusal downstream — a workflow step
@@ -115,6 +155,7 @@ pub struct Manifest {
     base: Option<String>,
     checks: BTreeMap<String, Check>,
     commands: BTreeMap<String, Command>,
+    prepared_by: Vec<Preparation>,
 }
 
 impl Manifest {
@@ -195,6 +236,21 @@ impl Manifest {
     pub fn command_names(&self) -> Vec<String> {
         self.commands.keys().cloned().collect()
     }
+
+    /// The Commands that have to run in a fresh worktree before the first
+    /// Drone, **in the order `setup.requires` names them**.
+    ///
+    /// Order is the file's and is kept: `[install, generate]` is a sequence
+    /// somebody wrote, and sorting it would run the second before what it
+    /// depends on.
+    ///
+    /// **Already resolved, so there is nothing to look up and nothing to
+    /// miss.** Empty where the file requires none; `setup.requires: []` is
+    /// refused rather than read as none, for `when`'s reason — a list with
+    /// nothing in it is a key to delete.
+    pub fn prepared_by(&self) -> &[Preparation] {
+        &self.prepared_by
+    }
 }
 
 /// The walk. Returns [`None`] only where nothing could be assembled at all;
@@ -222,6 +278,13 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         Some(value) => registry(value, "commands", COMMAND_KEYS, out, command_entry),
         None => BTreeMap::new(),
     };
+    // After `commands`, because every entry is resolved against it. Nothing
+    // about the order of the file matters — `Table` reads by name — only that
+    // the registry is built before it is consulted.
+    let prepared_by = match top.optional("setup") {
+        Some(value) => preparation(value, &checks, &commands, out),
+        None => Vec::new(),
+    };
     top.close(TOP_LEVEL, out);
 
     // Sibling maps sharing no keys. Reported against `commands`, because the
@@ -242,7 +305,76 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         base,
         checks,
         commands,
+        prepared_by,
     })
+}
+
+/// `setup.requires`, resolved against the Commands the same file declares.
+///
+/// **The refusal that had to come with the key.** `crates/config/tests/shipped.rs`
+/// asks the same question of a step naming an undeclared Check, and it exists
+/// because one such step passed every test and failed at dispatch with a Drone
+/// already spawned. A `setup.requires` naming nothing would fail later still:
+/// the worktree is never prepared, and what a person sees is whichever Check
+/// needed what was not installed.
+///
+/// Every entry is refused on its own and the walk continues, so a file with two
+/// bad names is one edit.
+fn preparation(
+    value: &Value,
+    checks: &BTreeMap<String, Check>,
+    commands: &BTreeMap<String, Command>,
+    out: &mut Vec<Refusal>,
+) -> Vec<Preparation> {
+    let Some(mut table) = Table::open("setup", value, out) else {
+        return Vec::new();
+    };
+    // `requires` is required, because `setup:` with nothing under it says
+    // nothing and `close` would report no fault for it.
+    let items = table
+        .required("requires", out)
+        .and_then(|value| yaml::list(&table.at("requires"), value, out));
+    table.close(SETUP_KEYS, out);
+    let Some(items) = items else {
+        return Vec::new();
+    };
+
+    let mut built: Vec<Preparation> = Vec::with_capacity(items.len());
+    for (key, item) in items {
+        let Some(name) = yaml::text(&key, item, out) else {
+            continue;
+        };
+        if let Some(first_at) = built.iter().position(|had| had.name == name) {
+            out.push(Refusal::new(key, Fault::RequiredTwice { first_at }));
+            continue;
+        }
+        match commands.get(&name) {
+            // A destructive Command is withheld from a Drone by
+            // `fleet::spawning`, for the reason that makes this a refusal:
+            // the flag means *somebody approves before this runs*, and
+            // preparation runs before any Drone exists with nobody to ask.
+            Some(command) if command.is_destructive() => out.push(Refusal::new(
+                key,
+                Fault::PreparedBySomethingDestructive { value: name },
+            )),
+            Some(command) => built.push(Preparation {
+                name,
+                run: command.run().to_string(),
+            }),
+            None => {
+                let is_a_check = checks.contains_key(&name);
+                out.push(Refusal::new(
+                    key,
+                    Fault::NotADeclaredCommand {
+                        value: name,
+                        is_a_check,
+                        declared: commands.keys().cloned().collect(),
+                    },
+                ));
+            }
+        }
+    }
+    built
 }
 
 /// An open-ended map of author-chosen names to entries of one shape.

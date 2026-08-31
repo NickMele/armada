@@ -189,6 +189,13 @@ where
             }
         };
 
+        // **What the repository says has to be true of a worktree before work
+        // starts in one.** Here and nowhere else because this is the only
+        // `create_worktree` in the workspace, which is what makes "once per
+        // worktree" a property of the call site rather than of a record Fleet
+        // would have to keep. `crate::preparing` holds the rest.
+        self.prepared(&job, &worktree).await?;
+
         // Every attachment the Job carries, copied again into this fresh
         // worktree — under `.armada/attachments/`, where `job_brief` names it
         // and a Drone's own tools can open it. Before the first-turn prompt is

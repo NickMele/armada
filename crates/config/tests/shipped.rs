@@ -122,6 +122,43 @@ fn the_manifest_declares_a_check_for_each_half_of_the_repository() {
     }
 }
 
+/// **This repository says what has to run in a worktree before work starts in
+/// one**, and it names a Command it declares.
+///
+/// The pair to the test above, and the thing that test could not see. #200 put
+/// three Checks in `armada.yml` that compile the TypeScript half; #227 was that
+/// a worktree they run in has no `node_modules`, git tracks none and copies
+/// none, and nothing in the file could say one should be made. Both halves were
+/// internally consistent again.
+///
+/// **Not a restatement of the file.** `Manifest::prepared_by` is already
+/// resolved, so a name no Command declares would have been refused at load and
+/// never reached here. What this asserts is the property neither key can assert
+/// about itself: that a repository gating on a compiler declares how the thing
+/// it compiles gets there.
+#[test]
+fn the_manifest_says_what_has_to_run_before_work_starts_in_a_worktree() {
+    let manifest_path = root().join("armada.yml");
+    let manifest = config::Manifest::load(&manifest_path).expect("the shipped manifest");
+
+    let prepared = manifest.prepared_by();
+    assert!(
+        !prepared.is_empty(),
+        "{} gates on the Bridge and requires nothing before a step runs, so \
+         every Job touching `apps/` or `packages/` fails on something that is \
+         not its own work",
+        manifest_path.display()
+    );
+    for required in prepared {
+        assert!(
+            manifest.command(required.name()).is_some(),
+            "`{}` is required and is not a declared Command; the file declares {:?}",
+            required.name(),
+            manifest.command_names()
+        );
+    }
+}
+
 /// Every step that produces a diff and gates on anything gates on the Bridge
 /// and on formatting too.
 ///

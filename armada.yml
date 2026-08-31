@@ -25,7 +25,9 @@ checks:
 
   # The Bridge half — `build` and `test` say nothing about `apps/` or
   # `packages/`. Three, because none subsumes another. All need `node_modules`,
-  # which a fresh worktree has none of — #227.
+  # which `bootstrap` below puts in the worktree before any of them run. Left
+  # to install on demand, the three race each other into one empty tree and
+  # whichever loses reports a missing module — #227.
   typecheck:
     # `-b --force`: the tsconfig owns only referenced projects, and stale
     # build info would skip the one just edited.
@@ -71,9 +73,22 @@ checks:
 
 # Commands gate nothing — they are what a Drone is given to run.
 commands:
+  # `setup.requires` names this; a Drone is never given it. `--frozen-lockfile`
+  # so preparation writes nothing the Drone's diff would carry.
+  bootstrap:
+    run: pnpm install --frozen-lockfile
+
   fmt:
     run: cargo fmt --all
 
   gate:
     # Exits non-zero on purpose, which is why it is not a Check.
     run: cargo xtask verify-foundations
+
+# What has to have run before any step starts in a fresh worktree. Names a
+# Command above; a name nothing declares is refused at load. Fleet runs it once
+# where the worktree is cut, not once per Drone, and has no opinion about what
+# it runs. A failure here is not a step failure — no step has started.
+setup:
+  requires:
+    - bootstrap

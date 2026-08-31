@@ -67,6 +67,12 @@
 //! anything a Drone said. [`serving`](mod@serving) is the trait implementation,
 //! so the operations answer from a real Fleet.
 //!
+//! [`preparing`](mod@preparing) is what makes a worktree workable before the
+//! first Drone is on it: the Commands a repository names under
+//! `setup.requires`, run once where the worktree is cut. **Not a Check** — it
+//! gates nothing and re-runs at no gate, and a failed install must never read
+//! as failed work.
+//!
 //! **Two things enter the process here and nowhere else.** [`clock`](mod@clock)
 //! is the one place a clock is read, and [`mint`](mod@mint) the one place an id
 //! is invented — every other crate in the workspace refuses both, and the
@@ -118,6 +124,7 @@ pub mod judging;
 mod landing;
 pub mod mint;
 pub mod overruling;
+pub mod preparing;
 pub mod process;
 pub mod proposal;
 pub mod proposing;
