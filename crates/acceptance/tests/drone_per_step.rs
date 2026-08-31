@@ -214,6 +214,15 @@ async fn a_drone_belongs_to_the_step_it_was_given() {
             .contains("The reader's bound is inclusive where the caller expects exclusive."),
         "and told it from the record, not from a summary of the record"
     );
+    // Including what part one decided not to claim, which is the one thing the
+    // deliverable cannot supply: the claim summarises a file this Drone can
+    // open, and this exists in the submission and nowhere else.
+    assert!(
+        brief
+            .as_str()
+            .contains("The writer has the same bound and is untouched."),
+        "and told what part one looked at and left alone, so it does not go and do it"
+    );
     // And the verdict that advanced the step, which `fleet::dispatch` delivers
     // into a live session there is no longer one of. It is re-tensed rather
     // than moved: "Go on to Implement" is a continuation, and this Drone is not

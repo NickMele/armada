@@ -14,28 +14,40 @@
 //!
 //! The wording is not pinned line by line — `crate::tests::briefing` says why.
 //! What is pinned is which facts reach a Drone and which do not.
+//!
+//! The last group drives a real step boundary and reads the brief off the
+//! transcript. What is in doubt there is not the rendering, which the cases
+//! above cover, but that the record survives a process ending and reaches the
+//! Drone that starts the next part.
 
+use crate::evidence::Call;
 use core_model::{EvidenceType, FrozenWorkflow, StepEvidence, StepId};
 use testkit::{Gate, Sketch};
+use verification::NotClaimed;
 
 use crate::briefing::first_turn;
 use crate::crossing::{Cleared, Crossed, Produced};
 use crate::tests::briefing::a_job;
+use crate::tests::briefing::{a_diff_call, told_across_the_boundary};
+use crate::tests::tmp::TempDir;
 
 const CLAIMED: &str = "The reader's bound is inclusive where the caller expects exclusive.";
+const LEFT_ALONE: &str = "The writer has the same bound and is untouched.";
 
-/// Two parts, and the first one writes a file. The Bug workflow's shape after
-/// `#138`: a step another step reads from declares an `artifact_exists` naming
-/// what it wrote.
-fn note_then_fix() -> FrozenWorkflow {
+/// Two parts, the second of which is the one every case below stands on.
+///
+/// **`writes` is the only difference between the two shapes**, and it is a
+/// parameter rather than a second literal so that the difference is the thing a
+/// reader sees. A first part declaring an `artifact_exists` is the Bug
+/// workflow's shape after `#138`; a first part declaring none is most steps,
+/// whose product is the diff.
+fn two_parts(writes: &[Gate]) -> FrozenWorkflow {
     testkit::frozen(&[
         Sketch {
             id: "root_cause",
             label: "Find the cause",
             evidence_type: Some("facts_note"),
-            gates: &[Gate::ArtifactExists {
-                target: ".armada/artifacts/root_cause.md",
-            }],
+            gates: writes,
             judged_on: &[],
             scope: None,
             gaming: None,
@@ -52,39 +64,33 @@ fn note_then_fix() -> FrozenWorkflow {
     ])
 }
 
-/// The same two parts, where the first one's product is the diff and it writes
-/// no file of its own. Most steps are this shape.
+fn note_then_fix() -> FrozenWorkflow {
+    two_parts(&[Gate::ArtifactExists {
+        target: ".armada/artifacts/root_cause.md",
+    }])
+}
+
 fn fix_then_summarise() -> FrozenWorkflow {
-    testkit::frozen(&[
-        Sketch {
-            id: "root_cause",
-            label: "Find the cause",
-            evidence_type: Some("facts_note"),
-            gates: &[],
-            judged_on: &[],
-            scope: None,
-            gaming: None,
-        },
-        Sketch {
-            id: "fix",
-            label: "Implement",
-            evidence_type: Some("diff"),
-            gates: &[],
-            judged_on: &[],
-            scope: None,
-            gaming: None,
-        },
-    ])
+    two_parts(&[])
 }
 
 fn recorded(step: &str) -> Vec<(StepId, StepEvidence)> {
+    recorded_leaving(step, LEFT_ALONE)
+}
+
+/// The same record, with what the earlier part said its claim does not cover.
+///
+/// **A parameter because empty is a case and not an oversight.** A Drone that
+/// left nothing behind writes nothing here, which `docs/contracts/agent-copy.md`
+/// makes legal, and the two are rendered differently.
+fn recorded_leaving(step: &str, left_alone: &str) -> Vec<(StepId, StepEvidence)> {
     vec![(
         StepId::new(step),
         StepEvidence {
             evidence_type: EvidenceType::FactsNote,
             claimed: String::from(CLAIMED),
             shown_by: String::from("`read_to` stops at `end` rather than before it — read.rs:41"),
-            not_claimed: String::from("The writer has the same bound and is untouched."),
+            not_claimed: String::from(left_alone),
         },
     )]
 }
@@ -174,6 +180,97 @@ fn what_the_part_before_said_about_its_own_artifact_does_not_cross() {
     );
 
     assert!(!said.contains("read.rs:41"), "{said}");
+}
+
+// -------------------------------------------- and what it deliberately did not
+
+/// **The one field the deliverable cannot supply, which is why it crosses.**
+/// The owner ruled on 31 Aug 2026. `claimed` summarises a file sitting in this
+/// worktree and the block names the path, so a Drone that wants the whole of it
+/// opens it. `not_claimed` is nowhere but here.
+#[test]
+fn what_the_part_before_left_alone_crosses_because_nothing_else_holds_it() {
+    let workflow = note_then_fix();
+    let said = turn(
+        &workflow,
+        "fix",
+        crossing(&workflow, "fix", &recorded("root_cause")),
+    );
+
+    assert!(said.contains("What part 1 did not claim"), "{said}");
+    assert!(said.contains(LEFT_ALONE), "{said}");
+}
+
+/// **It must not read as a to-do list**, which is the whole risk of carrying
+/// it. A gap the earlier part left on purpose is the thing a later part is
+/// likeliest to go and close unasked — and a part doing the next part's work is
+/// what the field exists to prevent, arriving by the back door.
+#[test]
+fn what_was_left_alone_is_framed_as_context_and_never_as_work() {
+    let workflow = note_then_fix();
+    let said = turn(
+        &workflow,
+        "fix",
+        crossing(&workflow, "fix", &recorded("root_cause")),
+    );
+
+    assert!(said.contains("not a list of work this part owes"), "{said}");
+    assert!(
+        said.contains("a gap it left on purpose, or something it changed that nobody asked for"),
+        "both kinds of thing the field holds, so neither is read as the other: {said}"
+    );
+}
+
+/// **The quotation follows the file it is about**, so that "what is quoted
+/// above summarises it" can only mean the claim. A second quotation between the
+/// two would make that sentence ambiguous about which one it refers to.
+#[test]
+fn what_was_left_alone_comes_after_the_file_the_claim_summarises() {
+    let workflow = note_then_fix();
+    let said = turn(
+        &workflow,
+        "fix",
+        crossing(&workflow, "fix", &recorded("root_cause")),
+    );
+
+    assert!(
+        said.find("summarises it and does not replace it") < said.find("What part 1 did not claim"),
+        "{said}"
+    );
+}
+
+/// **Empty is legal and absent is not** — `docs/contracts/agent-copy.md` says
+/// so of the field itself, and this is the same rule one level down. A label
+/// with nothing under it turns a part that left nothing behind into a part that
+/// declined to answer.
+#[test]
+fn a_part_that_left_nothing_behind_gets_no_label_with_nothing_under_it() {
+    let workflow = note_then_fix();
+    for left_alone in ["", "   \n  "] {
+        let said = turn(
+            &workflow,
+            "fix",
+            crossing(
+                &workflow,
+                "fix",
+                &recorded_leaving("root_cause", left_alone),
+            ),
+        );
+
+        assert!(said.contains(CLAIMED), "the claim still crosses: {said}");
+        assert!(!said.contains("did not claim"), "{said}");
+        assert!(!said.contains("not a list of work"), "{said}");
+    }
+}
+
+/// A part whose evidence is not on the record at all has no claim and nothing
+/// left alone, and neither is invented for it.
+#[test]
+fn a_part_before_that_recorded_nothing_left_nothing_alone_either() {
+    let workflow = note_then_fix();
+    let said = turn(&workflow, "fix", crossing(&workflow, "fix", &[]));
+
+    assert!(!said.contains("did not claim"), "{said}");
 }
 
 // ------------------------------------------------- the two different silences
@@ -321,5 +418,75 @@ fn a_step_the_workflow_does_not_declare_produces_no_block() {
     assert_eq!(
         Produced::before(&workflow, &StepId::new("nowhere"), &recorded("root_cause")),
         None,
+    );
+}
+
+// ------------------------------------ and the same thing across a real boundary
+
+/// The same submission by a Drone that left something behind and said so.
+///
+/// **A second fixture rather than a parameter on the first**, because an empty
+/// `not_claimed` is a case the boundary has to render differently rather than a
+/// value a caller happens to pass. `docs/contracts/agent-copy.md` makes empty
+/// legal, and the two fixtures are the two states.
+fn a_diff_call_leaving<'a>(left_alone: &'a str) -> Call<'a> {
+    Call {
+        not_claimed: NotClaimed(left_alone),
+        ..a_diff_call()
+    }
+}
+
+/// **The one field a fresh Drone cannot get any other way, across a real
+/// boundary.** Part one wrote a file and the brief names it, so everything
+/// `claimed` summarises is a `cat` away. What part one decided to leave alone
+/// is not in that file and is not in the diff — it exists in the submission and
+/// nowhere else, and the process that held it has ended.
+///
+/// Read off the transcript rather than off the assembled block. What is in
+/// doubt is not that `crossing` renders it — `crate::tests::crossing` asserts
+/// that — but that the record survives the boundary and reaches the far end of
+/// the pipe.
+#[tokio::test]
+async fn a_step_boundary_carries_what_the_part_before_deliberately_left_alone() {
+    let home = TempDir::new();
+    let left_alone = "The writer has the same bound and is untouched.";
+    let (_fleet, sent) =
+        told_across_the_boundary(&home, true, a_diff_call_leaving(left_alone)).await;
+
+    assert!(
+        sent[0].contains("What part 1 did not claim"),
+        "the Drone on part 2 was not told what part 1 left alone: {}",
+        sent[0]
+    );
+    assert!(
+        sent[0].contains(left_alone),
+        "and not told it in part 1's own words: {}",
+        sent[0]
+    );
+    assert!(
+        sent[0].contains("not a list of work this part owes"),
+        "a Drone that reads it as a to-do list does the next part's work: {}",
+        sent[0]
+    );
+}
+
+/// **And a part that left nothing behind is not a part that declined to
+/// answer.** `a_diff_call` submits an empty `not_claimed`, which
+/// `docs/contracts/agent-copy.md` makes legal, and a label with nothing under
+/// it would report the first of those as the second.
+#[tokio::test]
+async fn a_step_boundary_carrying_nothing_left_alone_renders_no_label_for_it() {
+    let home = TempDir::new();
+    let (_fleet, sent) = told_across_the_boundary(&home, true, a_diff_call()).await;
+
+    assert!(
+        sent[0].contains("What part 1 produced"),
+        "the claim still crosses: {}",
+        sent[0]
+    );
+    assert!(
+        !sent[0].contains("did not claim"),
+        "and nothing is opened that has nothing under it: {}",
+        sent[0]
     );
 }

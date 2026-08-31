@@ -731,7 +731,7 @@ examples is unmeasured.
 ## The M1 renderings
 
 **The Kit and Manifest layers are absent, because M1 has neither.** The
-six-layer order in section 3 is unchanged. Six decisions fell out of
+six-layer order in section 3 is unchanged. Seven decisions fell out of
 writing these, and each is visible in the text.
 
 **The reporting clause is load-bearing, not a reminder.** Given one MCP
@@ -765,6 +765,20 @@ stalls on every step. Measured in
   absence could be read as answering. On a later part the rail *does* mark
   the earlier one done, so silence there reads as a block that was
   answered, and it is spoken instead.
+- **What the earlier part did not claim crosses too, and it is the only
+  field that had to.** `claimed` summarises a document that is a real file
+  in the same worktree, and the block names the path, so a Drone that wants
+  the whole of it opens the file. `not_claimed` is nowhere else. It is also
+  the field bearing most directly on what this part must not spend its turn
+  on — a gap the earlier part left on purpose is the thing a later part is
+  likeliest to go and close unasked. So it is framed as context and never
+  as work, in the sentence under it, and a Drone that read it as a to-do
+  list would do the exact thing the field exists to prevent.
+  **An empty one renders nothing at all** — `agent-copy.md` makes empty
+  legal and absent illegal, and a label with nothing under it turns a part
+  that left nothing behind into a part that declined to answer. The Code
+  Review rendering below draws that case; the Bug rendering above draws the
+  other.
 
 The rule they all serve — that a Drone is never told what the Checks are —
 is on [Drone](../concepts/drone.md), since it governs every Drone-facing
@@ -817,6 +831,15 @@ surface rather than only these samples.
 │ .armada/artifacts/plan.md, in the worktree you are
 │ in. Read it before you start. What is quoted above
 │ summarises it and does not replace it.
+│
+│ What part 1 did not claim:
+│   "The sweeper matches on repo name too, and this
+│    plan does not change it."
+│
+│ That is everything its claim does not cover — a gap it
+│ left on purpose, or something it changed that nobody
+│ asked for. It is context for this part and not a list
+│ of work this part owes.
 │
 │ Parts 3 and 4 happen after you submit, and doing them
 │ yourself does not move this task forward. Leave the
