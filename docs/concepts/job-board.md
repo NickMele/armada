@@ -63,7 +63,50 @@ Default view (list vs. graph) is user-configurable, not fixed — see Configurat
 
 A Convoy in the graph is expected rather than exceptional, and whether it renders as an ordinary node, is visually distinguished, or expands its declared Workspaces is unstated.
 
-## Job status on the Board
+## The controls
+
+**Two axes: state, plus one text match.** The Manifest is already the scope, so
+it is not an axis, and origin is a label rather than an axis — drawn as a filter
+and rejected, see Origin tagging below. What is left is a state filter, a text
+match and a sort.
+
+### Five state tabs, each carrying its own count
+
+All, Needs you, Running, Queued, Finished. The count is mono and trailing; a tab
+with nothing behind it renders no count rather than a `0`.
+
+| Tab | What it holds |
+| --- | --- |
+| All | Every Job on the Board |
+| Needs you | The statuses that stop until a person reads them — `awaiting_approval`, `awaiting_attestation`, `awaiting_review`, `escalated` |
+| Running | Everything in flight, `piloted` included: a Job a person has taken over is still moving |
+| Queued | `queued`, whatever its reason |
+| Finished | Every terminal status |
+
+**The four state tabs partition every status**, which is what makes the counts
+add up and what makes `All` a sum rather than a sixth reading. The partition is
+derived from `job-statuses.toml` — `terminal` and `mode` — rather than listed
+anywhere a surface can retype it.
+
+**`who_is_acting` is the field `Needs you` is actually about**, and it names
+exactly those four statuses. It is not on the wire, so Bridge reaches the same
+set by subtraction. Carrying it would also let `piloted` be told apart from
+`running` by the registry rather than by a comment.
+
+### Search reads every job whatever tab is set
+
+A text match is not a state, so it sits with sort, above the tabs. **Beginning a
+search returns the tab to `All`** — on that transition and not on every
+keystroke, so refining a query does not fight the tab a person then chose. Each
+tab's count is a count of what the search matched, so the strip says where the
+matches are as well as how many there are.
+
+### The count states both numbers
+
+`4 jobs need you. 15 on the Board.` Neither number says anything alone: the
+first is what a person is deciding whether to act on, and the second is what it
+is a fraction of. Both move with the filter, so the sentence sits beside the
+controls rather than in the surface's own head.
 
 ### The default sort is Critical first
 
@@ -75,6 +118,19 @@ The sort agrees with the filter rather than cutting across it: the tab that
 groups the statuses which stop until a person reads them is the same set the
 default sort lifts to the top, so changing the tab reorders nothing a person had
 learned. The setting's key is `job_board.default_sort`.
+
+### The keyboard is the contract's contextual tier
+
+**The Board decides no binding.** `docs/contracts/design-system.md`, Keyboard and
+command palette, is the map; the Board answers the contextual keys that reach
+something here and leaves the rest alone. `1`–`5` are the state filter above, in
+tab order, and are the one part of that tier which is this surface's only.
+
+**A row's one control names the verb its state calls for, and opens the Job.**
+Review, Attest and Redirect all mean *go read this*, because none of the three
+acts happens on a board — see Dispatch flow. `o` and `Enter` open unconditionally;
+`r`, `t` and `d` open only where the row carries that verb, and no-op otherwise
+rather than acting on the wrong one.
 
 ## Job status on the Board
 

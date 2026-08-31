@@ -519,11 +519,6 @@ export function App() {
                   // holds initial focus" a rule with one implementation.
                   onKill={(jobId) => setConfirming({ act: "kill_job", jobId })}
                   onCompose={() => setComposing(true)}
-                  // `onCopyDebug` is deliberately not passed. `c` is the
-                  // contract's copy-debug-info key and the act belongs to #221,
-                  // which owns `copy.ts` and is building it in parallel. The
-                  // binding exists on the Board; the press is dropped until
-                  // there is a function to hand it.
                   onClearTerminal={(jobIds) => void clearTerminal(jobIds)}
                   onCopied={setCopied}
                 />

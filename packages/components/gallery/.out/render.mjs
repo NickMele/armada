@@ -161,7 +161,9 @@ function JobRowStacked({
   );
   const opens = onOpen !== void 0;
   const roving = useContext(RovingOption);
-  const tabIndex = !opens ? void 0 : roving === null || roving.index === roving.active ? 0 : -1;
+  const onCursor = roving === null || roving.index === roving.active;
+  const tabIndex = !opens ? void 0 : onCursor ? 0 : -1;
+  const pulses = pulsing && onCursor;
   return /* @__PURE__ */ jsxs(
     "div",
     {
@@ -176,7 +178,7 @@ function JobRowStacked({
       onClick: onOpen,
       onKeyDown: opens ? handleKeyDown : void 0,
       children: [
-        /* @__PURE__ */ jsx("div", { className: "armada-job-row__badge", children: /* @__PURE__ */ jsx(Badge, { status, icon: statusIcon, pulsing, children: statusLabel }) }),
+        /* @__PURE__ */ jsx("div", { className: "armada-job-row__badge", children: /* @__PURE__ */ jsx(Badge, { status, icon: statusIcon, pulsing: pulses, children: statusLabel }) }),
         /* @__PURE__ */ jsxs("div", { className: "armada-job-row__body", children: [
           /* @__PURE__ */ jsxs("div", { className: "armada-job-row__headline", children: [
             /* @__PURE__ */ jsx("span", { className: "armada-job-row__title", children: headline }),
@@ -422,13 +424,17 @@ const SixStates = {
         {
           status: "not-started",
           statusIcon: Cpu,
-          statusLabel: "Queued",
+          statusLabel: "Waiting on resources",
           headline: "Retire the legacy poke path",
           jobId: "job_8b42",
           fields: [
             { value: WORKFLOW },
             { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 0, label: "Not started, 4 steps" }) },
-            { value: "Waiting on a drone", emphasis: true },
+            // The step, like every other row's third field. It read "Waiting on a
+            // drone", which said the reason a second time and said it wrong: the
+            // Job is behind the cap rather than behind the one drone there used
+            // to be. The badge carries the reason; a field does not repeat it.
+            { value: "Not started", quiet: true },
             { value: "approved 09:20", quiet: true },
             { value: "Dispatched by you" }
           ],
@@ -541,6 +547,81 @@ const Selectable = {
     )
   }
 };
+const TwoRunning = {
+  args: {
+    heading: "Active jobs",
+    summary: "3 jobs.",
+    selectable: true,
+    label: "Active jobs",
+    children: [
+      /* @__PURE__ */ jsx(
+        JobRowStacked,
+        {
+          status: "running",
+          statusIcon: CircleDot,
+          statusLabel: "Running",
+          headline: "Split the settings reducer",
+          jobId: "job_2d90bb",
+          pulsing: true,
+          onOpen: () => {
+          },
+          fields: [
+            { value: "fix/settings-split", mono: true, icon: GitBranch, copyValue: "fix/settings-split" },
+            { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 2, activity: "running", label: "Step 2 of 4" }) },
+            { value: "Implement", emphasis: true },
+            { value: "11m 03s", mono: true },
+            { value: "~$1.80", mono: true }
+          ],
+          action: /* @__PURE__ */ jsx(SplitButton, { ground: "card", items: menu$1, children: "Open" })
+        },
+        "a"
+      ),
+      /* @__PURE__ */ jsx(
+        JobRowStacked,
+        {
+          status: "running",
+          statusIcon: CircleDot,
+          statusLabel: "Running",
+          headline: "Coalesce concurrent token refreshes",
+          jobId: "job_7c31",
+          pulsing: true,
+          onOpen: () => {
+          },
+          fields: [
+            { value: "bug/token-refresh", mono: true, icon: GitBranch, copyValue: "bug/token-refresh" },
+            { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 1, activity: "running", label: "Step 1 of 4" }) },
+            { value: "Plan", emphasis: true },
+            { value: "2m 47s", mono: true },
+            { value: "~$0.30", mono: true }
+          ],
+          action: /* @__PURE__ */ jsx(SplitButton, { ground: "card", items: menu$1, children: "Open" })
+        },
+        "b"
+      ),
+      /* @__PURE__ */ jsx(
+        JobRowStacked,
+        {
+          status: "not-started",
+          statusIcon: Cpu,
+          statusLabel: "Waiting on resources",
+          headline: "Retire the legacy poke path",
+          jobId: "job_8b42",
+          onOpen: () => {
+          },
+          fields: [
+            { value: WORKFLOW },
+            { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 0, label: "Not started, 4 steps" }) },
+            { value: "Not started", quiet: true },
+            { value: "approved 09:20", quiet: true },
+            { value: "Dispatched by you" }
+          ],
+          action: /* @__PURE__ */ jsx(SplitButton, { ground: "card", items: menu$1, children: "Open" })
+        },
+        "c"
+      )
+    ]
+  }
+};
 const OneOption = {
   args: {
     heading: "Active jobs",
@@ -563,6 +644,7 @@ const __vite_glob_0_0 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   OneOption,
   Selectable,
   SixStates,
+  TwoRunning,
   default: meta$_
 }, Symbol.toStringTag, { value: "Module" }));
 function Input({ label: label2, invalid = false, message, mono = false, id, ...rest }) {
@@ -3258,7 +3340,7 @@ const Queued$2 = {
     fields: [
       { label: "Workflow", value: "bug, 4 steps", quiet: true },
       { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 0, label: "Not started, 4 steps" }) },
-      { value: "Waiting on a drone", emphasis: true },
+      { value: "Not started", quiet: true },
       { value: "approved 09:20", quiet: true },
       { value: "Dispatched by you" }
     ],
@@ -4790,9 +4872,76 @@ const __vite_glob_0_25 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Fault,
   default: meta$B
 }, Symbol.toStringTag, { value: "Module" }));
+const GAP = 3;
+const INDENT = "  ";
+const NO_CODE = "none";
+function aligned(rows, indent) {
+  const width = Math.max(...rows.map(([label2]) => label2.length)) + GAP;
+  return rows.map(([label2, value]) => {
+    const pad = " ".repeat(indent.length + width);
+    const [head, ...rest] = value.split("\n");
+    const first = `${indent}${label2}${" ".repeat(width - label2.length)}${head ?? ""}`;
+    return [first, ...rest.map((line) => `${pad}${line}`)].join("\n");
+  });
+}
+function ordered(chain) {
+  const width = String(chain.length).length;
+  return chain.map((entry, at) => `${INDENT}${String(at + 1).padStart(width)}  ${entry}`);
+}
+function debugInfo(payload) {
+  const guaranteed = [
+    ["code", payload.code ?? NO_CODE],
+    ["message", payload.message]
+  ];
+  if (payload.run_id !== void 0) guaranteed.push(["run_id", payload.run_id]);
+  if (payload.job_id !== void 0) guaranteed.push(["job_id", payload.job_id]);
+  if (payload.drone_id !== void 0) guaranteed.push(["drone_id", payload.drone_id]);
+  if (payload.step_id !== void 0) guaranteed.push(["step_id", payload.step_id]);
+  const blocks = [["armada error"], aligned(guaranteed, "")];
+  const fields = payload.fields ?? [];
+  if (fields.length > 0) {
+    blocks.push([
+      "fields",
+      ...aligned(
+        fields.map((field) => [field.key, field.value]),
+        INDENT
+      )
+    ]);
+  }
+  const chain = payload.chain ?? [];
+  if (chain.length > 0) blocks.push(["chain", ...ordered(chain)]);
+  const tail2 = [`bridge protocol ${payload.bridgeProtocol}`];
+  if (payload.fleetProtocol !== void 0) tail2.push(`fleet protocol ${payload.fleetProtocol}`);
+  tail2.push(`taken ${payload.at}`);
+  blocks.push([tail2.join("  ")]);
+  return blocks.map((block) => block.join("\n")).join("\n\n");
+}
+function copyDebugInfo(payload, onCopied) {
+  const said = () => onCopied?.(COPIED);
+  void navigator.clipboard.writeText(debugInfo(payload)).then(said, said);
+}
+const COPIED = "The debug info";
+const COPY_DEBUG_INFO = "Copy debug info";
+const SAFETY = "Structured fields carry primitives only, and a credential does not compile into one. Nothing bounds the message or the chain, which are prose an error wrote — read them before you send this.";
+const EXPANDABLE = {
+  inline: "never",
+  toast: "never",
+  banner: "disclosed",
+  surface: "always"
+};
 function ErrorNotice(props) {
-  const { kind, code, message, fields, actions, placement } = props;
+  const { kind, code, message, fields, actions, placement, payload, onCopied } = props;
   const act = props.act;
+  const dismiss = props.placement === "toast" ? props.onDismiss : void 0;
+  const [open2, setOpen] = useState(false);
+  const disclosure = EXPANDABLE[placement];
+  const expanded = payload !== void 0 && (disclosure === "always" || open2);
+  const text = payload === void 0 ? null : debugInfo(payload);
+  const copy = useCallback(() => {
+    if (payload === void 0) return;
+    copyDebugInfo(payload, onCopied);
+    dismiss?.();
+  }, [payload, onCopied, dismiss]);
   return /* @__PURE__ */ jsxs(
     "section",
     {
@@ -4813,11 +4962,43 @@ function ErrorNotice(props) {
             /* @__PURE__ */ jsx("dd", { className: "armada-error__value", children: field.value })
           ] }, at)) }) : null
         ] }),
-        actions !== void 0 ? /* @__PURE__ */ jsx("div", { className: "armada-error__actions", children: actions }) : null
+        expanded && text !== null ? /* @__PURE__ */ jsxs("div", { className: "armada-error__payload", children: [
+          /* @__PURE__ */ jsx("pre", { className: "armada-error__debug", children: text }),
+          /* @__PURE__ */ jsx("p", { className: "armada-error__safety", children: SAFETY })
+        ] }) : null,
+        payload !== void 0 || actions !== void 0 ? /* @__PURE__ */ jsxs("div", { className: "armada-error__actions", children: [
+          payload === void 0 ? null : /* @__PURE__ */ jsx(Button, { variant: "ghost", size: "sm", onClick: copy, children: COPY_DEBUG_INFO }),
+          payload !== void 0 && disclosure === "disclosed" ? /* @__PURE__ */ jsx(Button, { variant: "ghost", size: "sm", "aria-expanded": open2, onClick: () => setOpen((was) => !was), children: "Details" }) : null,
+          actions
+        ] }) : null
       ]
     }
   );
 }
+const REFUSED = {
+  code: "judge.undecided",
+  message: "judge returned prose for criterion 2",
+  run_id: "01JQ8ZC4M2WYVK7T3RQN8H",
+  job_id: "job_31c7",
+  drone_id: "drn_4c8",
+  step_id: "verify",
+  fields: [
+    { key: "criterion", value: "2" },
+    // The tier, not the vendor's id for it. Every other story in this package
+    // says `sonnet` for the same reason the vendor-literal rule refuses the
+    // other spelling: a model name typed into a sample is a second roster.
+    { key: "judge_model", value: "sonnet" },
+    { key: "response_bytes", value: "1184" }
+  ],
+  chain: [
+    "judge: no verdict parsed from response",
+    "gate verify: undecided",
+    "job_31c7: escalated"
+  ],
+  bridgeProtocol: "5.2",
+  fleetProtocol: "5.2",
+  at: "2026-08-30T09:16:40Z"
+};
 const meta$A = {
   title: "Errors/Error notice",
   component: ErrorNotice
@@ -4890,13 +5071,69 @@ const FullSurface = {
     actions: /* @__PURE__ */ jsx(Button, { variant: "secondary", size: "sm", children: "Check again" })
   }
 };
+const InlineWithPayload = {
+  args: { ...Inline.args, payload: REFUSED }
+};
+const ToastWithPayload = {
+  render: (args) => /* @__PURE__ */ jsx("div", { className: "armada-error-toast-region", children: /* @__PURE__ */ jsx(ErrorNotice, { ...args }) }),
+  args: {
+    kind: "fault",
+    placement: "toast",
+    code: "judge.undecided",
+    message: "Job 31c7 escalated. The judge returned prose for criterion 2.",
+    payload: REFUSED
+  }
+};
+const BannerWithPayload = {
+  args: { ...Banner.args, payload: REFUSED }
+};
+const FullSurfaceWithPayload = {
+  render: (args) => /* @__PURE__ */ jsx("div", { className: "armada-error-surface-region", children: /* @__PURE__ */ jsx(ErrorNotice, { ...args }) }),
+  args: {
+    kind: "fault",
+    placement: "surface",
+    code: "judge.undecided",
+    message: "Job 31c7 escalated. The judge returned prose for criterion 2.",
+    act: "Read the judge's response, then overrule the verdict or redispatch the job.",
+    payload: REFUSED
+  }
+};
+const CodelessPayload = {
+  render: (args) => /* @__PURE__ */ jsx("div", { className: "armada-error-surface-region", children: /* @__PURE__ */ jsx(ErrorNotice, { ...args }) }),
+  args: {
+    kind: "fault",
+    placement: "surface",
+    code: "bridge.render.threw",
+    message: "Bridge could not draw the job board.",
+    act: "Reload Bridge. Fleet keeps running and jobs keep progressing.",
+    payload: {
+      message: "Cannot read properties of undefined (reading 'status')",
+      fields: [
+        { key: "region", value: "the job board" },
+        { key: "component", value: "JobRowStacked" }
+      ],
+      chain: [
+        "at JobRowStacked (JobRowStacked.tsx:88:19)",
+        "at JobBoard (JobBoard.tsx:142:7)",
+        "at Shell (Shell.tsx:61:5)"
+      ],
+      bridgeProtocol: "5.2",
+      at: "2026-08-30T09:16:40Z"
+    }
+  }
+};
 const __vite_glob_0_26 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Banner,
   BannerFault,
+  BannerWithPayload,
+  CodelessPayload,
   FullSurface,
+  FullSurfaceWithPayload,
   Inline,
+  InlineWithPayload,
   Toast: Toast$1,
+  ToastWithPayload,
   default: meta$A
 }, Symbol.toStringTag, { value: "Module" }));
 function Alert({ tone = "escalated", title, children, icon, action }) {
@@ -8454,14 +8691,18 @@ const awaitingApproval = {
 const queued = {
   status: "not-started",
   statusIcon: Cpu,
-  statusLabel: "Queued",
+  // The reason supplies the verb as well as the glyph. This carried cpu with
+  // "Queued" beside it, which is half the registry's rule, and the field
+  // beneath said "Waiting on a drone" — the reason a second time, and named
+  // for the one drone Fleet used to run. The resource is the concurrency cap.
+  statusLabel: "Waiting on resources",
   headline: "Retire the legacy poke path",
   jobId: "job_8b42",
   tracks: APPROVAL_TRACKS,
   fields: [
     { value: workflow },
     { value: /* @__PURE__ */ jsx(StepBar, { total: 4, current: 0, label: "Not started, 4 steps" }) },
-    { value: "Waiting on a drone", emphasis: true },
+    { value: "Not started", quiet: true },
     { value: "approved 09:20", quiet: true },
     { value: "Dispatched by you" }
   ],

@@ -136,17 +136,6 @@ export type JobsProps = {
    */
   onCompose: () => void;
   /**
-   * Copy debug info for the Job under the cursor — `c`.
-   *
-   * **Optional, and unwired on purpose.** The act belongs to #221, which is
-   * building it in `copy.ts` and `CopiedToast.tsx` at the same time as this and
-   * owns those files. The binding is here so the key exists where the map says
-   * it does; the press is dropped until #221 supplies the function. What it
-   * needs is one call taking a job id and putting a debug block on the
-   * clipboard, reported rather than reached for.
-   */
-  onCopyDebug?: (jobId: string) => void;
-  /**
    * Clear every terminal Job at once. Confirmed here, before it is called —
    * there is no undo on the other side of this, and unlike a kill there is no
    * record left afterward to check the confirmation against.
@@ -166,7 +155,6 @@ export function Jobs({
   onOpen,
   onKill,
   onCompose,
-  onCopyDebug,
   onClearTerminal,
   onCopied,
 }: JobsProps) {
@@ -298,10 +286,16 @@ export function Jobs({
         onKill(job.id);
         break;
       case "copy":
-        // Dropped where nothing supplies the act. #221 owns it.
-        if (job === undefined || onCopyDebug === undefined) return;
-        onCopyDebug(job.id);
-        break;
+        // **`c` reaches nothing on a Job row, and that is the answer rather
+        // than a gap.** `copyDebugInfoFor` in `FailureSurface.tsx` is the act,
+        // and it takes a `Failure` — a healthy Job has none. The payload opens
+        // `armada error` with a required `message`, so a job-identity payload
+        // would be a different artifact under one key. It follows the same rule
+        // the verb keys follow: a key that does not apply no-ops rather than
+        // acting on the wrong verb. The binding is claimed here so the key is
+        // where the map says it is; the press does nothing and is not
+        // swallowed.
+        return;
       case "tab":
         setTab(read.tab);
         break;

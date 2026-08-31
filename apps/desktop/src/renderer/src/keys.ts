@@ -7,6 +7,13 @@
 // a palette that cannot be drawn. Nothing here decides a binding; this file
 // reads the contextual tier and says which of its keys the Board can answer.
 //
+// **It is read off prose, because the artifact the same section describes does
+// not exist.** "Every action carries a verb, an icon and a shortcut, generated
+// from one source with a test asserting no entry is missing any of the three" —
+// there is no such source in `crates/core-model/domain/` and no such test, so
+// this file is a hand transcription of a table and the codegen will replace it.
+// Issue #232.
+//
 // # The contextual tier, and what the Board does with each key
 //
 // | Key | Contract | On the Board |
@@ -20,7 +27,7 @@
 // | `d` | redirect | here, where it is Redirect |
 // | `s` | restart step | detail only, per the contract. Absent |
 // | `p` | pilot | **not built.** Bridge has no pilot act at all, so this binds to nothing rather than to something invented |
-// | `c` | copy debug info | bound here; the act itself is #221's |
+// | `c` | copy debug info | bound here, and reaches nothing on a Job row. `copyDebugInfoFor` takes a `Failure` and a healthy Job has none |
 // | `x` | kill, confirms | here, through the confirmation every destructive act already takes |
 // | `n` | new job | here — the one key that acts on nothing on screen |
 // | `/` | search the current list | here |
@@ -115,7 +122,14 @@ export type BoardPress =
   | { act: "verb"; verb: Exclude<RowVerb, "open"> }
   /** `x` — kill the job under the cursor. Confirms; this is only the press. */
   | { act: "kill" }
-  /** `c` — copy debug info for the job under the cursor. #221 owns the act. */
+  /**
+   * `c` — copy debug info.
+   *
+   * Returned so the key is claimed where the map says it is. It reaches nothing
+   * on a Job row: `copyDebugInfoFor` takes a `Failure`, a healthy Job has none,
+   * and the payload opens `armada error` with a required `message` — so a
+   * job-identity payload under the same key would be a different artifact.
+   */
   | { act: "copy" }
   /** `1`–`5` — set the state filter. */
   | { act: "tab"; tab: BoardTab }
