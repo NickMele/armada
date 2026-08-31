@@ -26,11 +26,11 @@
 //!
 //! # The other mutators, and what each may touch
 //!
-//! [`on_branch`](Job::on_branch) writes `branch` alone and mints no event,
-//! because no event carries a worktree.
-//! [`drone_spawned`](Job::drone_spawned) and
-//! [`drone_exited`](Job::drone_exited) write one step's `assigned_drone` and
-//! mint one, because presence has to fold. **No method takes `&mut self`.**
+//! [`on_branch`](Job::on_branch), [`redirect_waits`](Job::redirect_waits) and
+//! [`redirect_delivered`](Job::redirect_delivered) write one field and mint
+//! nothing: no event carries a worktree or a person's note.
+//! [`drone_spawned`](Job::drone_spawned) and [`drone_exited`](Job::drone_exited)
+//! do mint one, because presence has to fold. **No `&mut self` anywhere.**
 
 use alloc::vec::Vec;
 
@@ -43,6 +43,7 @@ use crate::job::fields::{
     Origin, ScopeRevision, Subject, TopLevelOrigin, Urgency, WriteTargets,
 };
 use crate::job::ids::{DroneId, JobId, ManifestId, ModelName, StepId, Title, WorkflowId};
+use crate::job::note::{RedirectAlreadyWaiting, RedirectWaiting};
 use crate::job::status::{JobStatus, StepState};
 use crate::job::step::{rows_at_creation, JobStep, StepSeed, StepVerdict};
 use crate::job::step_machine::{admits_step, IllegalStepTransition, StepTarget};
@@ -149,6 +150,11 @@ pub struct Job {
     /// has never been dispatched, and is absent rather than a name it does not
     /// yet have.
     branch: Option<Branch>,
+    /// A person's note written where there was no Drone to take it, waiting
+    /// for the next one. `None` on every Job that has never been sent back
+    /// across a gate, and on every Job whose note has been delivered — see
+    /// [`note`](mod@crate::job::note) for why those two are one value.
+    redirect_waiting: Option<RedirectWaiting>,
     subject: Option<Subject>,
     facts: Facts,
     scope_revisions: Vec<ScopeRevision>,
@@ -208,6 +214,8 @@ impl Job {
             redispatched_from: new.redispatched_from,
             // No worktree exists yet. `on_branch` is what fills this in.
             branch: None,
+            // Nothing has been said to a Job that does not exist yet.
+            redirect_waiting: None,
             subject: new.subject,
             facts: new.facts,
             scope_revisions: new.scope_revisions,
@@ -260,6 +268,38 @@ impl Job {
     pub fn on_branch(&self, branch: Branch) -> Job {
         let mut job = self.clone();
         job.branch = Some(branch);
+        job
+    }
+
+    /// Hold a person's note until the next Drone opens with it.
+    ///
+    /// **The fourth mutator, and the second the log does not describe.** It
+    /// takes `&self` and returns a new `Job` like the other three, so the
+    /// no-setter property is unchanged.
+    ///
+    /// **It does not overwrite, which is the whole of the decision.** A second
+    /// note arriving over an undelivered first is
+    /// [`RedirectAlreadyWaiting`] — see that type for why the other two
+    /// answers were rejected.
+    pub fn redirect_waits(&self, note: RedirectWaiting) -> Result<Job, RedirectAlreadyWaiting> {
+        if let Some(held) = &self.redirect_waiting {
+            return Err(RedirectAlreadyWaiting { held: held.clone() });
+        }
+        let mut job = self.clone();
+        job.redirect_waiting = Some(note);
+        Ok(job)
+    }
+
+    /// The note went into a Drone's opening brief, so nothing is waiting.
+    ///
+    /// **Cleared on delivery and not on being acted on**, which is the ruling:
+    /// a note that outlived one boundary would reach a Drone working a part it
+    /// was never about. Answering the same `Job` where nothing was waiting is
+    /// correct rather than a fault — every spawn asks, and almost none of them
+    /// is carrying anything.
+    pub fn redirect_delivered(&self) -> Job {
+        let mut job = self.clone();
+        job.redirect_waiting = None;
         job
     }
 
@@ -499,6 +539,14 @@ impl Job {
     /// The branch the Job's worktree is on. `None` until one is made.
     pub fn branch(&self) -> Option<&Branch> {
         self.branch.as_ref()
+    }
+    /// The note the next Drone will open with, where a person left one.
+    ///
+    /// **Presence is "a person spoke and nobody was there to hear it"**, and
+    /// it is not a status: the Job stands wherever the act that carried the
+    /// note left it.
+    pub fn redirect_waiting(&self) -> Option<&RedirectWaiting> {
+        self.redirect_waiting.as_ref()
     }
     pub fn subject(&self) -> Option<&Subject> {
         self.subject.as_ref()

@@ -31,8 +31,8 @@
 use core_model::{
     Attachment, Branch, CheckOutcome, CriterionId, DispatchOrigin, EvidenceType, Facts,
     GateManifest, GateOutcome, Job, JobId, JobStatus, JudgeVerdict, Judgment, ManifestId,
-    ModelName, NewJob, Origin, RepoPath, StepCheck, StepEvidence, StepId, StepSeed, StepState,
-    Subject, Timestamp, Title, Ulid, Urgency, WriteTargets,
+    ModelName, NewJob, Origin, RedirectWaiting, RepoPath, StepCheck, StepEvidence, StepId,
+    StepSeed, StepState, Subject, Timestamp, Title, Ulid, Urgency, WriteTargets,
 };
 use rusqlite::Row;
 
@@ -282,6 +282,29 @@ impl Store {
                     detail: blank.to_string(),
                 }
             })?),
+            None => created,
+        };
+
+        // Read back for the same reason `branch` is: no event describes a
+        // person's note, so this column is its own authority and the fold has
+        // nothing to say about it. A blank is refused rather than carried —
+        // `RedirectWaiting::saying` is what makes the empty note
+        // unrepresentable, and a row holding one came from outside this crate.
+        let created = match maybe(row, "redirect_waiting")? {
+            Some(note) => {
+                let waiting = RedirectWaiting::saying(&note).ok_or(RowError::MalformedColumn {
+                    table: "jobs",
+                    column: "redirect_waiting",
+                    detail: String::from("a note waiting for the next Drone says nothing"),
+                })?;
+                created
+                    .redirect_waits(waiting)
+                    .map_err(|held| RowError::MalformedColumn {
+                        table: "jobs",
+                        column: "redirect_waiting",
+                        detail: held.to_string(),
+                    })?
+            }
             None => created,
         };
 

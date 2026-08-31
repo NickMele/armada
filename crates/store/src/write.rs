@@ -56,10 +56,10 @@ impl Store {
                      atomic, model, acceptance_criteria, current_step_id,
                      dependencies, dispatched_by_job_id, dispatched_by_step_id,
                      redispatched_from, subject_kind, subject_ref, facts, scope_revisions,
-                     write_targets_known, created_at, branch, workflow
+                     write_targets_known, created_at, branch, workflow, redirect_waiting
                  ) VALUES (
                      ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
-                     ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23
+                     ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24
                  )",
                 rusqlite::params![
                     job.id().as_str(),
@@ -93,6 +93,11 @@ impl Store {
                     // does not lose it.
                     job.branch().map(|branch| branch.as_str()),
                     columns::write_workflow(job.workflow()),
+                    // Ordinarily null, and for `branch`'s reason: a Job is
+                    // created long before anybody has anything to say to it.
+                    // Bound anyway, so a Job rebuilt and reinserted does not
+                    // lose a note that was still waiting.
+                    job.redirect_waiting().map(|note| note.text()),
                 ],
             )
             .map_err(fault("writing the job row"))

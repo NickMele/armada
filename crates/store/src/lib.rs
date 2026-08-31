@@ -61,6 +61,8 @@ mod fold;
 mod footprint;
 mod forget;
 mod gaming;
+/// The note a boundary is holding, and the column it waits in.
+mod note;
 mod open;
 /// What a step said its work would be, kept after the slot that held it is
 /// gone.

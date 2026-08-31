@@ -47,6 +47,7 @@ mod gaming;
 mod guard;
 mod ids;
 mod judge;
+mod note;
 mod record;
 mod scope;
 mod status;
@@ -78,6 +79,7 @@ pub use ids::{
     Title, WorkflowId,
 };
 pub use judge::{JudgeCheck, JudgeCriterion, JudgeVerdict, Judgment};
+pub use note::{RedirectAlreadyWaiting, RedirectWaiting};
 pub use record::{Job, NewJob, StepTransitioned, Transitioned};
 pub use scope::{under, ContextSource, DeclarePlanAt, DeclaredPaths, EvidenceScope};
 pub use status::{JobStatus, StepState};

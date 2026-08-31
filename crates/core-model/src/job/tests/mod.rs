@@ -259,6 +259,7 @@ fn reach(status: JobStatus) -> Job {
 mod covers;
 mod machine;
 mod models;
+mod note;
 mod record;
 mod step_machine;
 mod stuck;
