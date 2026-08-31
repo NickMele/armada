@@ -1,64 +1,40 @@
-// The list. **Not the Job Board** — that is the Surface milestone's, with its
-// own journey and its own component inventory. This is every Job, what it is
-// called, its state, the step it is on, and the one decision a person can make
-// from here.
+// The Job Board: every Job, what it is called, its state, the step it is on,
+// the one decision a person can make from here — and the controls that narrow
+// it.
 //
-// # A row is a control, not a div that happens to answer a click
+// **It said it was not the Job Board.** It was written before the Board had a
+// journey of its own, and the sentence held while the surface was a bare list.
+// It is the Board now: the filter set is here, the sort is here, and the
+// contract's contextual keys are answered here.
 //
-// Every drawn row opens that Job's detail, so the frame is a listbox and its
-// rows are options: Tab reaches the list once, Up and Down rove within it,
-// Enter and Space open a row, and the open one carries `aria-selected` as well
-// as the accent fill. A listitem with an `onClick` looks identical and is
-// reachable by the mouse alone.
+// # The controls, and the two axes there are
 //
-// # It was a table, and the table is the thing the row shape replaced
+// **State, plus one text match.** The Board is already scoped to one Manifest,
+// so scope is not a control; origin was drawn as a filter and rejected, because
+// *what needs me*, *what is running* and *why has that not started* are all
+// state. `board.ts` owns the arithmetic — which tab a Job is in, what a search
+// matches, what order the two sorts produce, and the sentence over the top.
 //
-// This file built an eight-column `Table` because the Bridge shell was written
-// before the compositions existed and nothing went back. That is the shape
-// `Job row (stacked)` exists to have retired: the design contract is explicit
-// that the Job row is **one shape at every width** — a badge leading, the
-// headline beside it, a labelled field run beneath — and that it replaced an
-// eight-column table because the Board and Alerts disagreed about what a job
-// looks like. Bridge had re-created the thing that was replaced.
+// **The count sentence moved here from the panel head.** It states both numbers
+// — `4 jobs need you. 15 on the Board.` — and both change with the filter, so
+// it belongs beside the control that changes them rather than in a head that
+// also serves the composer and the reports view. The head kept it while there
+// was no filter for it to disagree with.
 //
-// So the rows are `JobRowStacked` inside `ActiveJobsList`, and the screen story
-// `Screens/The list — six states, one row shape` is what they are measured
-// against. Nothing here draws a cell, a column or a border.
+// # The keyboard
 //
-// # The field run is four of the drawing's five, and the fifth is left out
-// rather than drawn empty
+// `keys.ts` owns the map, read off `docs/contracts/design-system.md`. Nothing
+// here decides a binding; this file decides what each press reaches. Two things
+// worth knowing at this level:
 //
-// The drawing's row is the branch or the workflow, the step bar, the step,
-// elapsed, spend. Four of those reach here now.
+// **The listener is on `window` and the cursor is DOM focus.** `j` and `k` move
+// focus; `Active jobs list` already roves on the arrows and follows focus, so
+// both paths land on one cursor rather than two that drift.
 //
-// **Track one switches from the workflow to the branch the moment a worktree
-// exists**, which is the drawing's own rule and was unreachable while `branch`
-// was a `JobDetail` field: reading it per row would have been one request per
-// row, the failure `docs/practices/bridge.md` names first. It is on
-// `JobSummary` now, so the switch is a field the row already holds. A Job at
-// the approval gate has no worktree and keeps the workflow.
+// **`x` reaches the same confirmation the detail's kill reaches.** It returns a
+// press and never a kill — `App` owns the dialog, which owns the rule that
+// Cancel holds initial focus.
 //
-// **Elapsed is measured from `created_at`**, also on the summary now. It is the
-// track that answers "is this stuck" without opening the Job, which was the
-// whole reason it was drawn. It runs to now while the Job is working and stops
-// at the Job's own last movement once it is over — a terminal Job whose elapsed
-// kept climbing would read as still running.
-//
-// **The same track carries when a Job was created, not just how long.** While
-// working, elapsed stays the drawn value and the creation time rides along as
-// a hover title — the glance-value people scan for stays "is this stuck," and
-// the exact instant is a hover away. Once terminal, elapsed has nothing left
-// to answer, and that slot — blank until now — draws the creation time itself
-// rather than staying empty.
-//
-// **Spend stays out of the row entirely.** Nothing measures it — not on the
-// wire, not in the store, not computed — and a labelled gap on every row reads
-// as a value that failed to load rather than one nothing serves.
-//
-// **The step reads its name**, since `StepDetail` carries a label Fleet fills
-// from the frozen workflow. A list row holds `JobSummary` and not the steps, so
-// what it has is `current_step_id` — the id, in mono. The name is on the detail
-// one click away, where the rail draws it.
 //
 // # One state the row shape cannot draw, said out loud
 //
@@ -94,18 +70,32 @@
 // nothing else, and the row shape carries one secondary control which a queued
 // replacement already spends on `Approve dispatch`.
 
-import { ActiveJobsList, BoardEmptyState, Button, Dialog, JobRowStacked, StepBar } from "@armada/components";
-import type { JobRowField } from "@armada/components";
-import { GitBranch, Layers } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ActiveJobsList, BoardControls, BoardEmptyState, Button } from "@armada/components";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
 import type { JobSummary } from "../../shared/protocol";
 import type { WorkflowSummary } from "../../shared/setup";
-import { absoluteOf, instant, span } from "./duration";
-import { activityFor } from "./frozen";
+import {
+  BOARD_SORTS,
+  BOARD_TABS,
+  countSentence,
+  DEFAULT_SORT,
+  emptiedBy,
+  FIRST_TAB,
+  inTab,
+  matches,
+  needsYou,
+  sorted,
+  tabOf,
+  type BoardSort,
+  type BoardTab,
+} from "./board";
+import { ClearTerminalControl } from "./ClearTerminal";
+import { pressOf, SEARCH_KEY, verbOf } from "./keys";
 import { foldedNote, foldLineages, headlineOf } from "./lineage";
 import { readingOf } from "./reading";
+import { isTerminal, Row } from "./Row";
 
 /**
  * How many rows are drawn. Nothing renders an unbounded list directly, and no
@@ -117,28 +107,8 @@ const DRAWN = 200;
 /** What the fold sentence says once the fold has been undone. */
 const EARLIER_SHOWN = "Every dispatch is drawn, including the ones that are over.";
 
-/**
- * Newest first. A created Job is folded onto whichever end the caller put it
- * — the store's own order is an implementation detail, not a promise — so the
- * list orders itself rather than trusting arrival order to stay right.
- *
- * A Job whose `created_at` will not parse sorts last, not first: a corrupt
- * date must not shove real Jobs off the bounded window above.
- */
-export function newestFirst(jobs: readonly JobSummary[]): JobSummary[] {
-  return [...jobs].sort((a, b) => {
-    const left = instant(a.created_at);
-    const right = instant(b.created_at);
-    if (left === null) return right === null ? 0 : 1;
-    if (right === null) return -1;
-    return right - left;
-  });
-}
-
 export type JobsProps = {
   jobs: readonly JobSummary[];
-  /** Jobs with an approval in flight. A second click on one does not dispatch twice. */
-  approving: readonly string[];
   /** True while what is shown is not live. Every row reads as de-emphasised. */
   stale: boolean;
   /** Now, injected. Elapsed on a working Job runs to it, so it has to move. */
@@ -151,7 +121,31 @@ export type JobsProps = {
   selected: string | null;
   /** Open a Job. Every row is a control, so every row calls this. */
   onOpen: (jobId: string) => void;
-  onApprove: (jobId: string) => void;
+  /**
+   * Ask to kill the Job under the cursor — `x`, and the row's own control on a
+   * job that has one. **It asks; it never kills.** The confirmation is `App`'s,
+   * which is the dialog the detail's kill already goes through, and which owns
+   * the rule that Cancel holds initial focus. A board with its own dialog would
+   * be a second place that rule could be got wrong.
+   */
+  onKill: (jobId: string) => void;
+  /**
+   * Open the composer — `n`, the one key in the contextual tier that acts on
+   * nothing on screen. The Board holds the binding because the Board is where
+   * the cursor is; what it opens is `App`'s.
+   */
+  onCompose: () => void;
+  /**
+   * Copy debug info for the Job under the cursor — `c`.
+   *
+   * **Optional, and unwired on purpose.** The act belongs to #221, which is
+   * building it in `copy.ts` and `CopiedToast.tsx` at the same time as this and
+   * owns those files. The binding is here so the key exists where the map says
+   * it does; the press is dropped until #221 supplies the function. What it
+   * needs is one call taking a job id and putting a debug block on the
+   * clipboard, reported rather than reached for.
+   */
+  onCopyDebug?: (jobId: string) => void;
   /**
    * Clear every terminal Job at once. Confirmed here, before it is called —
    * there is no undo on the other side of this, and unlike a kill there is no
@@ -164,14 +158,15 @@ export type JobsProps = {
 
 export function Jobs({
   jobs,
-  approving,
   stale,
   now,
   workflows,
   disconnected,
   selected,
   onOpen,
-  onApprove,
+  onKill,
+  onCompose,
+  onCopyDebug,
   onClearTerminal,
   onCopied,
 }: JobsProps) {
@@ -183,8 +178,23 @@ export function Jobs({
   // list is a scanning surface, and an expansion is a question asked of one
   // moment rather than a preference.
   const [unfolded, setUnfolded] = useState(false);
+  // The filter set. Not lifted into `App`: it is what this surface is for, and
+  // nothing above the list reads it now that the count sentence is here.
+  const [tab, setTab] = useState<BoardTab>(FIRST_TAB);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<BoardSort>(DEFAULT_SORT);
+  // Where the cursor is, as a job id. It is set from DOM focus rather than kept
+  // beside it, so `j`, the arrows, Tab and the mouse all move one cursor.
+  const [cursor, setCursor] = useState<string | null>(null);
+  const search = useRef<HTMLInputElement>(null);
+
   const showing = unfolded ? [...board.shown, ...board.folded] : board.shown;
-  const bounded = newestFirst(showing).slice(0, DRAWN);
+  // The search first and the tab second, which is the order they are drawn in
+  // and the order they narrow in. The tab counts below are counts of `matched`,
+  // so the strip says where the matches are rather than what the board holds.
+  const matched = showing.filter((job) => matches(job, query, workflows));
+  const narrowed = matched.filter((job) => inTab(job, tab));
+  const bounded = sorted(narrowed, sort).slice(0, DRAWN);
   const drawn = bounded.filter((job) => readingOf(job).as === "badge");
   const undrawable = bounded.filter((job) => readingOf(job).as !== "badge");
   // Every Job Bridge holds, not just the bounded window drawn below — a Job
@@ -194,31 +204,210 @@ export function Jobs({
     .filter((job) => JOB_LIFECYCLE[job.status]?.terminal === true)
     .map((job) => job.id);
 
+  const tabs = BOARD_TABS.map((row) => ({
+    id: row.id,
+    label: row.label,
+    shortcut: row.shortcut,
+    // Zero renders as no count, never as `0`: an empty queue is the resting
+    // state of a healthy fleet, and a row of zeros trains the eye to skip the
+    // number. `TabsWithCounts` applies that; this only has to not lie.
+    count: row.id === "all" ? matched.length : matched.filter((job) => tabOf(job) === row.id).length,
+  }));
+
+  /**
+   * Start a search and the tab goes back to `All`.
+   *
+   * **On the transition into a search and never again.** A text match is not a
+   * state, so beginning one asks a question across every state and the state
+   * control returns to the state that means "every" — which is what makes
+   * "search reads every job whatever tab is set" true rather than a claim. It
+   * does not fire on every keystroke, because a control that snapped back while
+   * you refined a query would be fighting you.
+   */
+  function typed(next: string): void {
+    if (query.trim() === "" && next.trim() !== "") setTab("all");
+    setQuery(next);
+  }
+
+  /** The rows, as the DOM has them — the only place their drawn order is. */
+  function rowsOnScreen(): HTMLElement[] {
+    return Array.from(document.querySelectorAll<HTMLElement>("[data-job-id]"));
+  }
+
+  /**
+   * Move the cursor. Focus is what moves; `cursor` follows it through the
+   * wrapper's own focus handler, so this never has to keep two things in step.
+   *
+   * Clamped rather than wrapped, which is `Active jobs list`'s rule for the
+   * arrows and is the same rule here: a list that jumps from the last row to
+   * the first loses the reader's place, and a Board is scanned rather than
+   * cycled.
+   */
+  function move(by: 1 | -1): void {
+    const rows = rowsOnScreen();
+    if (rows.length === 0) return;
+    const at = rows.findIndex((row) => row.dataset.jobId === cursor);
+    const to = at < 0 ? (by === 1 ? 0 : rows.length - 1) : Math.min(Math.max(at + by, 0), rows.length - 1);
+    rows[to]?.focus();
+  }
+
+  /**
+   * Put the cursor back on the list without moving it — what `Esc` in the
+   * search field hands back to. The row it was on where that row is still
+   * drawn, and the first row where the search took it off screen.
+   */
+  function restoreCursor(): void {
+    const rows = rowsOnScreen();
+    const at = rows.findIndex((row) => row.dataset.jobId === cursor);
+    (at >= 0 ? rows[at] : rows[0])?.focus();
+  }
+
+  /** The job the cursor is on, where the cursor is on one that is drawn. */
+  function under(): JobSummary | undefined {
+    return drawn.find((job) => job.id === cursor);
+  }
+
+  function press(event: KeyboardEvent): void {
+    const read = pressOf(event);
+    if (read === null) return;
+    const job = under();
+    switch (read.act) {
+      case "search":
+        search.current?.focus();
+        search.current?.select();
+        break;
+      case "move":
+        move(read.by);
+        break;
+      case "open":
+        if (job === undefined) return;
+        onOpen(job.id);
+        break;
+      case "verb":
+        // The row carries one control, so at most one verb key applies. The
+        // rest no-op rather than acting on the wrong verb — which is what makes
+        // a rehearsed keystroke safe when the list reorders under you.
+        if (job === undefined) return;
+        if (verbOf(job, isTerminal(job)) !== read.verb) return;
+        onOpen(job.id);
+        break;
+      case "kill":
+        // A terminal job has nothing to kill, so the key reaches nothing there
+        // rather than opening a dialog about a job that is already over.
+        if (job === undefined || isTerminal(job)) return;
+        onKill(job.id);
+        break;
+      case "copy":
+        // Dropped where nothing supplies the act. #221 owns it.
+        if (job === undefined || onCopyDebug === undefined) return;
+        onCopyDebug(job.id);
+        break;
+      case "tab":
+        setTab(read.tab);
+        break;
+      case "compose":
+        onCompose();
+        break;
+    }
+    // Only a press this surface answered is swallowed. A key it returned `null`
+    // for reaches whatever else is listening, which is how the global tier
+    // keeps working while the cursor is on a row.
+    event.preventDefault();
+  }
+
+  // The listener is registered once and reads the current handler out of a ref.
+  // Re-registering per render is what the deps array would ask for, and `now`
+  // moves once a second — so the whole board re-renders on a clock and the
+  // subscription would churn with it for no reason.
+  const latest = useRef(press);
+  useEffect(() => {
+    latest.current = press;
+  });
+  useEffect(() => {
+    const listen = (event: KeyboardEvent): void => latest.current(event);
+    window.addEventListener("keydown", listen);
+    return () => window.removeEventListener("keydown", listen);
+  }, []);
+
+  const why = emptiedBy(tab, query);
+
   return (
-    <div className="flex flex-col gap-2">
+    <div
+      className="flex flex-col gap-2"
+      // The cursor is DOM focus. Capturing here rather than on the list means a
+      // row reached by mouse, by Tab, by the listbox's own arrows or by `j` all
+      // set the same value — two cursors that drift is the alternative.
+      onFocusCapture={(event) => {
+        const row = (event.target as HTMLElement).closest<HTMLElement>("[data-job-id]");
+        if (row?.dataset.jobId !== undefined) setCursor(row.dataset.jobId);
+      }}
+    >
       {terminalIds.length === 0 ? null : (
         <div className="flex justify-end">
           <ClearTerminalControl count={terminalIds.length} stale={stale} onConfirm={() => onClearTerminal(terminalIds)} />
         </div>
       )}
       <ActiveJobsList
-        // No heading and no summary: the panel head above the list carries
-        // both, and the same sentence in two places is two chances to disagree.
+        // The count sentence is here rather than in the panel head, because both
+        // its numbers move with the filter directly below it and the head serves
+        // three other views. No heading: the head still names the surface, and
+        // the same name in two places is two chances to disagree.
+        //
         // Every drawn row opens a Job, so the frame is a listbox and its rows
         // are options — which is what lets "this one is open" be a state a
         // screen reader can read rather than a fill only a sighted eye catches.
+        summary={countSentence({
+          total: jobs.length,
+          matched: matched.length,
+          needsYou: narrowed.filter(needsYou).length,
+          query,
+        })}
         selectable
         label="Active jobs"
+        controls={
+          <BoardControls
+            query={query}
+            onQuery={typed}
+            searchRef={search}
+            searchKey={SEARCH_KEY}
+            onLeaveSearch={restoreCursor}
+            sorts={BOARD_SORTS}
+            sort={sort}
+            onSort={(next) => setSort(next as BoardSort)}
+            tabs={tabs}
+            tab={tab}
+            onTab={(next) => setTab(next as BoardTab)}
+          />
+        }
         empty={
-          disconnected === null ? (
-            <BoardEmptyState quiet>No jobs. Propose one above.</BoardEmptyState>
-          ) : (
-            // The two empty states differ because the two situations do: a
-            // Fleet that is up with no work is a null result, and one that is
-            // not running is a fault Bridge cannot fix.
+          disconnected !== null ? (
+            // The three empty states differ because the three situations do: a
+            // Fleet that is up with no work is a null result, one that is not
+            // running is a fault Bridge cannot fix, and a filter that emptied
+            // the list is neither — it is a control saying so.
             <BoardEmptyState command="armada fleet start" note={disconnected}>
               Fleet is not connected, so there is nothing to show.
             </BoardEmptyState>
+          ) : why !== null ? (
+            <BoardEmptyState
+              quiet
+              action={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setQuery("");
+                    setTab("all");
+                  }}
+                >
+                  Show every job
+                </Button>
+              }
+            >
+              {why}
+            </BoardEmptyState>
+          ) : (
+            <BoardEmptyState quiet>No jobs. Propose one above.</BoardEmptyState>
           )
         }
       >
@@ -227,13 +416,13 @@ export function Jobs({
             key={job.id}
             job={job}
             headline={headlineOf(job, board.dispatch.get(job.id))}
-            approving={approving.includes(job.id)}
             stale={stale}
             now={now}
             workflows={workflows}
             selected={job.id === selected}
+            focused={job.id === cursor}
             onOpen={onOpen}
-            onApprove={onApprove}
+            onKill={onKill}
             onCopied={onCopied}
           />
         ))}
@@ -250,9 +439,13 @@ export function Jobs({
         </p>
       )}
 
-      {showing.length > bounded.length ? (
+      {/* Counted against what the filter left, not against the board: the
+          window bounds what is drawn, and what is drawn is what the controls
+          admitted. Saying "200 of 900" under a filter holding 210 would name a
+          number no control on screen produced. */}
+      {narrowed.length > bounded.length ? (
         <p className="text-fg-muted">
-          {`${bounded.length} of ${showing.length} rows drawn. The rest are on Fleet and not on screen.`}
+          {`${bounded.length} of ${narrowed.length} rows drawn. The rest are on Fleet and not on screen.`}
         </p>
       ) : null}
 
@@ -271,228 +464,4 @@ export function Jobs({
       })}
     </div>
   );
-}
-
-/**
- * The bulk clear. **Its own dialog is the confirmation**, the pattern
- * `Acts.tsx`'s redirect and override controls use — there is nothing to
- * confirm a second time after it, only to send. Unlike a kill this leaves no
- * record afterward, which is why it confirms at all where the row-level acts
- * mostly do too but for a milder reason.
- *
- * Not rendered by the caller unless `count > 0`, so this never has to draw its
- * own empty state.
- */
-function ClearTerminalControl({
-  count,
-  stale,
-  onConfirm,
-}: {
-  count: number;
-  stale: boolean;
-  onConfirm: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const noun = count === 1 ? "job" : "jobs";
-
-  return (
-    <>
-      <Button variant="secondary" size="sm" disabled={stale} onClick={() => setOpen(true)}>
-        {`Clear ${count} finished ${noun}`}
-      </Button>
-      <Dialog
-        open={open}
-        tone="destructive"
-        title={`Clear ${count} finished ${noun}?`}
-        confirmLabel="Clear"
-        onCancel={() => setOpen(false)}
-        onConfirm={() => {
-          setOpen(false);
-          onConfirm();
-        }}
-      >
-        <p>
-          {`Every job that is done, failed, killed, rejected or superseded — ${count} right now — is `}
-          removed from the board along with its whole record. There is no undo, and a cleared job
-          cannot be opened again.
-        </p>
-        <p>Its worktree and branch are left as its drone left them — armada clean owns those, on its own schedule.</p>
-      </Dialog>
-    </>
-  );
-}
-
-/**
- * "6 jobs. 1 awaiting approval." Lowercase anything countable.
- *
- * The panel head above the list draws this, and the status bar draws the count
- * on its own — so both read the one function rather than two spellings of the
- * same plural.
- */
-export function summaryOf(total: number, atTheGate: number): string {
-  const jobs = `${jobCount(total)}.`;
-  return atTheGate === 0 ? jobs : `${jobs} ${atTheGate} awaiting approval.`;
-}
-
-/** "6 jobs", on its own. */
-export function jobCount(total: number): string {
-  return `${total} ${total === 1 ? "job" : "jobs"}`;
-}
-
-/** How many Jobs are at the approval gate. What the sentence above counts. */
-export function atTheGate(jobs: readonly JobSummary[]): number {
-  return jobs.filter((job) => job.status === "awaiting_approval").length;
-}
-
-function Row({
-  job,
-  headline,
-  approving,
-  stale,
-  now,
-  workflows,
-  selected,
-  onOpen,
-  onApprove,
-  onCopied,
-}: {
-  job: JobSummary;
-  /** The title, plus which dispatch of the work this is where there is more than one. */
-  headline: string;
-  approving: boolean;
-  stale: boolean;
-  now: number;
-  workflows: readonly WorkflowSummary[];
-  selected: boolean;
-  onOpen: (jobId: string) => void;
-  onApprove: (jobId: string) => void;
-  onCopied: (value: string) => void;
-}) {
-  const reading = readingOf(job);
-  // Every row reaching here is renderable — the list filtered the rest out and
-  // names them, rather than this picking a glyph the registry does not have.
-  if (reading.as !== "badge") return null;
-  // The gate is the status, not the button. A Job that has moved off
-  // `awaiting_approval` has no approve control at all, so the second click has
-  // nothing to hit even before the guard in the main process refuses it.
-  const waiting = job.status === "awaiting_approval";
-  const workflow = workflows.find((held) => held.id === job.workflow_id);
-  const steps = workflow?.steps ?? [];
-  // Matched on `step_id`, because a workflow's steps are objects carrying their
-  // Checks since protocol 3. Compared against the whole step this silently
-  // never matched, and every bar drew its first segment as the current one.
-  const at = steps.findIndex((step) => step.step_id === job.current_step_id);
-
-  const fields: JobRowField[] = [
-    // Track one, the drawing's switch: the branch the moment a worktree exists,
-    // and the workflow until then. Two glyphs because they are two different
-    // facts — a branch is where the work is and a workflow is what it will do —
-    // and the row never draws both, so the track stays one column wide.
-    job.branch === undefined
-      ? {
-          // The workflow's name where Fleet holds it, the id where it does not,
-          // which after the refusal at creation means a Job older than the check.
-          icon: Layers,
-          value:
-            workflow === undefined ? job.workflow_id : `${workflow.name}, ${steps.length} steps`,
-          mono: workflow === undefined,
-          copyValue: job.workflow_id,
-        }
-      : { icon: GitBranch, value: job.branch, mono: true, copyValue: job.branch },
-    {
-      // An empty bar, never no bar. A Job at the gate has its ordinals and no
-      // progress, and a row that dropped the bar there would read as a workflow
-      // with no steps rather than as one that has not started.
-      value: (
-        <StepBar
-          total={Math.max(steps.length, 1)}
-          current={at + 1}
-          // The Job's status, one level down. The rail reads the same mapping
-          // for a terminal Job — a row and a rail saying different things about
-          // one step is the drift keeping it in two files would produce.
-          // Anything the mapping does not name leaves the bar unhued, which is
-          // what the component does for `killed` and `retrying` everywhere else.
-          activity={activityFor(job.status)}
-          label={
-            job.current_step_id === undefined
-              ? `Not started, ${steps.length} steps`
-              : `Step ${at + 1} of ${steps.length}`
-          }
-        />
-      ),
-    },
-    // The step's id, because nothing serves its name (#109). `Not started` is
-    // the same sentence at the gate and in the queue: the queued row's reason
-    // is already the badge's verb, and the status grammar puts it there rather
-    // than in the run — so repeating it here would say one thing twice.
-    job.current_step_id === undefined
-      ? { value: "Not started", quiet: true }
-      : { value: job.current_step_id, mono: true, emphasis: true },
-  ];
-
-  // Track four, appended rather than always drawn: a Job with neither an
-  // elapsed reading nor a readable `created_at` loses the field, for the
-  // reason spend is not on the row at all. An empty slot in a shared column
-  // reads as a value that failed to load.
-  //
-  // While working, the track keeps answering "is this stuck" — elapsed stays
-  // the value — with the Job's actual creation time on hover, since that is
-  // the one instant elapsed cannot show. Once terminal there is no more
-  // elapsed to climb, and the slot that left blank now carries the same
-  // creation time outright rather than nothing.
-  const elapsed = elapsedOf(job, now);
-  const created = absoluteOf(job.created_at) ?? undefined;
-  if (elapsed !== undefined) {
-    fields.push({
-      value: <span title={created ? `Created ${created}` : undefined}>{elapsed}</span>,
-      mono: true,
-      quiet: true,
-    });
-  } else if (created !== undefined) {
-    fields.push({ value: created, mono: true, quiet: true });
-  }
-
-  return (
-    <JobRowStacked
-      onCopied={onCopied}
-      onOpen={() => onOpen(job.id)}
-      selected={selected}
-      status={reading.status}
-      statusIcon={reading.icon}
-      statusLabel={reading.verb}
-      headline={headline}
-      jobId={job.id}
-      fields={fields}
-      // **Every running row, and the row applies the ceiling.** Two Jobs run
-      // at once now, so this alone would breathe twice on one board — which
-      // Motion forbids and then names: the pulse rides the focused row. The
-      // row knows where the cursor is and this does not, so the rule is its.
-      pulsing={job.status === "running" && !stale}
-      dimmed={stale}
-      action={
-        waiting ? (
-          // Secondary, and one. **A list row never takes a primary action** —
-          // fourteen rows offering a decision would be fourteen accent blocks.
-          <Button size="sm" onClick={() => onApprove(job.id)} disabled={approving || stale}>
-            {approving ? "Approving" : "Approve dispatch"}
-          </Button>
-        ) : null
-      }
-    />
-  );
-}
-
-/**
- * How long this Job has been alive.
- *
- * **A working Job runs to now; a Job that is over stops.** `JobSummary` carries
- * no ended-at, so a terminal Job would otherwise keep counting and read as
- * still running. There is nothing on the row to stop it against, so a terminal
- * Job shows no elapsed at all rather than a figure that is wrong every second
- * after it is drawn. Reported: the row wants the instant the Job stopped.
- */
-function elapsedOf(job: JobSummary, now: number): string | undefined {
-  return JOB_LIFECYCLE[job.status]?.terminal === false
-    ? (span(job.created_at, now) ?? undefined)
-    : undefined;
 }

@@ -238,21 +238,24 @@ export const TheList: Story = {
  * its width on every row, so nothing moves as the cursor travels; what changes
  * is whether it is drawn.
  *
- * The keys, and the one departure worth naming:
+ * The keys are the contract's contextual tier — `docs/contracts/design-system.md`,
+ * Keyboard and command palette — and none of them is decided here. What the
+ * Board answers of it:
  *
  * | Key | Does |
  * |---|---|
- * | `/` | Focus the search. `Esc` clears it and returns to the list |
- * | `j` `k` | Move the cursor; the accent left edge follows it |
- * | `Enter` | Open the focused job's detail |
- * | `r` `t` `d` `o` | Review, Attest, Redirect, Open — the row's own verb only |
- * | `1`–`5` | Set the state filter |
+ * | `/` | Search the list. `Esc` clears it and hands the cursor back |
+ * | `j` `k` `↓` `↑` | Move the cursor; the accent left edge follows it |
+ * | `Enter` `o` | Open the focused job's detail. One act, two names |
+ * | `r` `t` `d` | Review, Attest, Redirect — only where the row carries that verb |
+ * | `x` | Kill, and it confirms |
+ * | `1`–`5` | Set the state filter, in tab order |
  * | `n` | New job, the one key that acts on nothing on screen |
  *
- * **There is no Approve key and no Approve control.** The row at the gate
- * carries Review, settled 2026-08-31 — see `docs/concepts/job-board.md`.
- * Nothing on the Board approves, so the held-key repeat problem never arises
- * here; it moves to the dispatch card, where `a` does approve.
+ * **There is no Approve key and no Approve control**, and `a` was deleted from
+ * the map on 2026-08-31 for the reason this row shows: nothing on a list
+ * approves. The row at the gate carries Review — see
+ * `docs/concepts/job-board.md`.
  */
 export const TheBoard: Story = {
   render: () => (

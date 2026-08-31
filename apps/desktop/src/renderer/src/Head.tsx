@@ -8,6 +8,13 @@
 // **`Back to the list` and `Cancel` live here rather than in the body.** A
 // control that leaves a view belongs beside the view's name, not scrolled into
 // it.
+//
+// **The count sentence is not here any more.** It used to say how many Jobs
+// there were and how many were at the gate, on every view this serves. Both its
+// numbers move with the Board's filter now, so it went to the Board — beside
+// the control that changes it, rather than in a head that also serves the
+// composer, the reports and one Job read whole. The composer keeps a summary of
+// its own, which is a standing sentence rather than a count.
 
 import type { ReactNode } from "react";
 import { Button, Kbd } from "@armada/components";
@@ -29,8 +36,6 @@ export type HeadProps = {
    * Job would lose exactly the reports that most need reading together.
    */
   auditing: boolean;
-  /** How many Jobs, and how many at the gate. The list's own sentence. */
-  summary: string;
   /** A live connection. What stops a new Job being proposed into nothing. */
   live: boolean;
   /** A re-read in flight, so a second press does not send a second one. */
@@ -52,7 +57,6 @@ export function headOf({
   reading,
   composing,
   auditing,
-  summary,
   live,
   refreshing,
   onCloseTurns,
@@ -81,7 +85,6 @@ export function headOf({
   if (watching) {
     return {
       title: "Active jobs",
-      summary,
       actions: (
         <>
           {/* Leaves the pane. **Never an act on the Drone** — closing this ends
@@ -98,7 +101,6 @@ export function headOf({
   if (reading) {
     return {
       title: "Active jobs",
-      summary,
       actions: (
         <>
           <Button variant="ghost" size="sm" onClick={onCloseJob}>
@@ -122,7 +124,6 @@ export function headOf({
   }
   return {
     title: "Active jobs",
-    summary,
     actions: (
       <>
         {/* Re-reads over the connection Bridge already holds. It does not
