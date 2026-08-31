@@ -16,7 +16,7 @@ import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
-import type { Absence, FleetIdentity, RuntimeFault } from "../shared/bridge";
+import type { Absence, BridgeIdentity, FleetIdentity, RuntimeFault } from "../shared/bridge";
 import { versionOf } from "../shared/version";
 
 /** Not `fleet.pid`: it carries four fields, and something would eventually `cat` it. */
@@ -55,6 +55,18 @@ export function machinePath(home: string | undefined): string | null {
 export function auditPath(home: string | undefined): string | null {
   const dir = machineDir(home);
   return dir === null ? null : join(dir, AUDIT_NAME);
+}
+
+/**
+ * The identity a window starts from: its own log path, and no Fleet.
+ *
+ * Fleet's protocol version is the other half of what every failure's payload
+ * carries, and there is none until a runtime file has been read and believed —
+ * which is what this module does next. `identifying` keeps it current from
+ * there on.
+ */
+export function startingIdentity(home: string | undefined): BridgeIdentity {
+  return { auditPath: auditPath(home), fleetProtocol: null };
 }
 
 function machineDir(home: string | undefined): string | null {
