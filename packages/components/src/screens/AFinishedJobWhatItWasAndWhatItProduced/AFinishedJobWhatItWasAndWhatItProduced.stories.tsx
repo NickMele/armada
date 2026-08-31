@@ -45,7 +45,7 @@ const brief = {
 };
 
 const NOTE =
-  "The branch is unpushed and unmerged. Armada does not push and has no merge action — read the diff in your own tools and land it yourself.";
+  "The branch is pushed and a review is open. Armada has no merge action — read the diff in your own tools and land it yourself.";
 
 /** Where the work is, folded into the record: where to go looking, not what to take away. */
 const paths = (
@@ -118,13 +118,14 @@ export const AsBridgeDrawsItToday: Story = {
               name: "Commit",
               icon: GitCommitHorizontal,
               iconLabel: "Commit",
-              absent: "Fleet does not commit at the last step yet, so there is nothing to name.",
+              value: "5375d705cb7713a21a91681c1028166b98a0d6de",
+              meta: "origin/armada/01M1CNPKTV0018H2M1CXDNBK06",
             },
             {
               name: "Pull request",
               icon: GitPullRequest,
               iconLabel: "Pull request",
-              absent: "Fleet does not open one yet, so there is nothing to open.",
+              value: "https://example.invalid/armada/pull/229",
             },
             {
               /* No glyph: `file` is reserved to the log row and `file-check` to

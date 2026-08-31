@@ -24,7 +24,9 @@
 //! of that has happened, and the worktree is untouched. Delivery is held the
 //! same way; see [`crate::delivery`].
 
-use adapter_traits::{AgentHarness, CommitTime, Committed, Delivery, Vcs, WorkProduct, Worktree};
+use adapter_traits::{
+    AgentHarness, CommitTime, Committed, Delivery, Opened, Pushed, Vcs, WorkProduct, Worktree,
+};
 use core_model::{Job, JobId, StepId, StepTarget};
 use verification::OutcomeTurn;
 
@@ -100,11 +102,25 @@ where
             Ok(_) => self.delivered(job, working).await,
             Err(_) => Ok(Delivered::default()),
         };
+        // **Written down before it is handed to the turn.** `left_delivered`
+        // leaves this where `take_delivered` *drains* it, so the Drone's
+        // closing turn was the only thing that ever read it — and a person
+        // opening the Job afterwards was told Fleet does not open a pull
+        // request, which had not been true for some time. The record is what
+        // that surface reads, so it is written here and not left in a map.
+        //
+        // **Held, not raised**, like everything else in this method: a Job
+        // whose delivery cannot be written down still finished, and the write
+        // failing must not cost the slot.
+        let noted = self
+            .note_delivery(job, landed.as_ref().ok(), delivered.as_ref().ok())
+            .await;
         if let Ok(delivered) = &delivered {
             self.left_delivered(job.id(), delivered.clone()).await;
         }
         landed?;
         delivered?;
+        noted?;
         Ok(())
     }
 
@@ -117,6 +133,49 @@ where
             return Ok(Delivered::default());
         };
         self.deliver(job, &worktree).await
+    }
+
+    /// Write what the branch came to onto the Job's record.
+    ///
+    /// **Three independent fields, and absent is a fact on each.** A commit
+    /// with no push is a repository with no remote; a push with no pull request
+    /// is a machine with nothing that can open one. Both are ordinary, and a
+    /// surface that could not tell them apart would have to say "unknown" to a
+    /// person whose branch is sitting on a remote.
+    ///
+    /// `NothingToCommit` writes no commit: the record says what happened, and
+    /// "the worktree held nothing new" is not an id.
+    async fn note_delivery(
+        &self,
+        job: &Job,
+        committed: Option<&Committed>,
+        delivered: Option<&Delivered>,
+    ) -> Result<(), Adrift> {
+        let delivery = store::Delivery {
+            commit: match committed {
+                Some(Committed::Made { commit }) => Some(commit.clone()),
+                _ => None,
+            },
+            pushed: match delivered.and_then(|it| it.pushed.as_ref()) {
+                Some(Pushed::ToTheRemote { remote, branch }) => Some(format!("{remote}/{branch}")),
+                Some(Pushed::NoRemote) => Some("no remote".to_string()),
+                None => None,
+            },
+            pull_request: match delivered.and_then(|it| it.opened.as_ref()) {
+                Some(Opened::PullRequest { url } | Opened::AlreadyOpen { url }) => {
+                    Some(url.clone())
+                }
+                _ => None,
+            },
+        };
+        if delivery.is_empty() {
+            return Ok(());
+        }
+        self.store()
+            .lock()
+            .await
+            .record_delivery(job.id(), &delivery)
+            .map_err(Adrift::Writing)
     }
 
     /// Put the Job's work on its branch.

@@ -16,6 +16,7 @@
 pub(crate) mod attempt;
 mod corrupt;
 mod cursor;
+mod delivery;
 mod footprint;
 mod forget;
 mod gaming;

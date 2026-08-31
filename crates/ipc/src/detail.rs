@@ -129,6 +129,15 @@ pub struct JobDetail {
     /// Present with no files is a worktree that was read and held no change.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub footprint: Option<JobFootprint>,
+    /// What the Job's branch came to: the commit, the push, the pull request.
+    ///
+    /// **Absent is three different facts and the surface must say which.** A
+    /// Job still running has none of it. A Job that finished before Fleet wrote
+    /// it down has none of it either — and that is most of the Jobs on this
+    /// machine, because the result was assembled and dropped for a long time
+    /// before it was ever stored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delivery: Option<JobDelivery>,
     /// The redirect this Job's Drone has been sent and has not answered yet.
     ///
     /// **Absent is the ordinary case**, and on this field absent is the whole
@@ -270,11 +279,13 @@ impl JobDetail {
         redirecting: Option<RedirectInFlight>,
         stuck: Option<&core_model::Stuck>,
         write_scope_overlaps: Option<Vec<ScopeOverlap>>,
+        delivery: Option<JobDelivery>,
     ) -> JobDetail {
         JobDetail {
             job: JobSummary::of(job, reason, queued_reason),
             created_at: job.created_at().into(),
             branch: job.branch().map(|branch| branch.as_str().to_string()),
+            delivery,
             steps: job
                 .steps()
                 .iter()
@@ -739,4 +750,25 @@ impl From<&core_model::DependencyEdge> for Dependency {
             peer: (&edge.peer).into(),
         }
     }
+}
+
+/// What a finished Job's branch came to.
+///
+/// **Three independent absences.** A commit with no push is a repository that
+/// names no remote; a push with no pull request is a machine with nothing that
+/// can open one, or a repository with no base to open it against. Neither is a
+/// failure, and a client that folded them together would have to say "unknown"
+/// about a branch that is sitting on a remote right now.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobDelivery {
+    /// The commit Fleet wrote over the Job's work, by its id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit: Option<String>,
+    /// Where the branch was pushed, as `remote/branch`, or that there was no
+    /// remote to push to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pushed: Option<String>,
+    /// The address a person clicks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pull_request: Option<String>,
 }

@@ -107,6 +107,16 @@ export type JobDetail = {
    */
   footprint?: JobFootprint;
   /**
+   * What the job's branch came to: the commit, the push, the pull request.
+   * Since protocol 5.3.
+   *
+   * **Absent is two different facts.** A job still running has nothing here.
+   * So does a job that finished before Fleet wrote this down — which is most of
+   * the jobs on any machine that has been running Armada a while, because the
+   * result was assembled and dropped for a long time before it was stored.
+   */
+  delivery?: JobDelivery;
+  /**
    * The redirect this job's drone has been sent and has not answered yet.
    * Since protocol 4.14.
    *
@@ -233,6 +243,24 @@ export type RedirectWaiting = {
    * note with nothing in it, so a present value always has words in it.
    */
   note: string;
+};
+
+/**
+ * What a finished job's branch came to.
+ *
+ * **Three independent absences, and a surface must not fold them.** A commit
+ * with no push is a repository that names no remote; a push with no pull
+ * request is a machine with nothing that can open one. Neither is a failure,
+ * and a row that treated them as one would say "unknown" about a branch that is
+ * sitting on a remote right now.
+ */
+export type JobDelivery = {
+  /** The commit Fleet wrote over the job's work, by its id. */
+  commit?: string;
+  /** Where it was pushed, as `remote/branch`, or that there was no remote. */
+  pushed?: string;
+  /** The address a person clicks. */
+  pull_request?: string;
 };
 
 /**

@@ -38,6 +38,7 @@ import { FileCheck, GitBranch, GitCommitHorizontal, GitPullRequest } from "lucid
 import type { Diff, Evidence, History, Observed, Watched } from "../../shared/bridge";
 import type {
   JobDetail as JobWhole,
+  JobDelivery,
   JobFootprint,
   JobSummary,
 } from "../../shared/protocol";
@@ -176,13 +177,14 @@ export function Finished({
   // stopped and says the same thing to everybody, so the prop is gone rather
   // than kept as a fallback that would bring the accident back.
   const touched = whole?.footprint;
+  const delivery = whole?.delivery;
 
   return (
     <AFinishedJobWhatItWasAndWhatItProduced
       heading={heading}
       brief={whole === null ? undefined : briefOf(whole)}
       briefAbsent={whyNotRead(watched, job.id, "acceptance criteria")}
-      outcome={{ parts: producedOf(job, touched), note: HANDOVER_NOTE }}
+      outcome={{ parts: producedOf(job, touched, delivery), note: HANDOVER_NOTE }}
       record={recordOf({
         job,
         whole,
@@ -207,11 +209,22 @@ export function Finished({
 /**
  * What the Job produced, one row per part.
  *
- * **Two rows are served and three are not.** The branch comes off the row, and
- * the file count is the record Fleet wrote when the Job stopped. The other three
- * each name what would have to serve them rather than reading as coming soon.
+ * **Four rows are served and one is not.** The branch comes off the row, the
+ * file count is the record Fleet wrote when the Job stopped, and the commit and
+ * the pull request are what `JobDetail.delivery` carries since protocol 5.3.
+ *
+ * **The two sentences this used to say were wrong for months.** "Fleet does not
+ * commit at the last step yet" and "Fleet does not open one yet" were true when
+ * they were written and stopped being true when `fleet::landing` and
+ * `fleet::delivery` shipped — so a person whose pull request was open and
+ * waiting was told by this screen that none existed. Absent is now said in
+ * terms of this Job rather than in terms of what Fleet can do.
  */
-function producedOf(job: JobSummary, touched: JobFootprint | undefined): JobOutcomePart[] {
+function producedOf(
+  job: JobSummary,
+  touched: JobFootprint | undefined,
+  delivery: JobDelivery | undefined,
+): JobOutcomePart[] {
   return [
     {
       name: "Branch",
@@ -224,13 +237,18 @@ function producedOf(job: JobSummary, touched: JobFootprint | undefined): JobOutc
       name: "Commit",
       icon: GitCommitHorizontal,
       iconLabel: "Commit",
-      absent: NOT_SERVED.commit,
+      value: delivery?.commit,
+      // The push beside the commit, because the two answer one question: is
+      // this anywhere but my disk. `no remote` is an answer and not a gap.
+      meta: delivery?.commit === undefined ? undefined : delivery.pushed,
+      absent: delivery?.commit === undefined ? NOT_SERVED.commit : undefined,
     },
     {
       name: "Pull request",
       icon: GitPullRequest,
       iconLabel: "Pull request",
-      absent: NOT_SERVED.pullRequest,
+      value: delivery?.pull_request,
+      absent: delivery?.pull_request === undefined ? NOT_SERVED.pullRequest : undefined,
     },
     // No glyph. `file` is reserved to the log row and `file-check` to a
     // submission that landed, so a changed-file row has nothing in the registry
@@ -389,8 +407,13 @@ function recordOf({
  */
 const NOT_SERVED = {
   branch: "This job has no worktree, so it has no branch.",
-  commit: "Fleet does not commit at the last step yet, so there is nothing to name.",
-  pullRequest: "Fleet does not open one yet, so there is nothing to open.",
+  // **About this job, not about Fleet.** Both of these used to say Fleet could
+  // not do the thing, which stopped being true and left the sentence asserting
+  // it. A job reaches these having finished, so the honest reading is that its
+  // own delivery did not get this far, or that it finished before Fleet wrote
+  // any of it down.
+  commit: "Nothing was committed for this job, or it finished before Fleet recorded one.",
+  pullRequest: "None was opened for this job — no remote, no base, or nothing here can open one.",
   filesChanged: NO_FOOTPRINT_RECORDED,
   // Served since protocol 4.6, and read when the record's own section is
   // opened rather than here: the row would otherwise make every finished Job
@@ -399,11 +422,11 @@ const NOT_SERVED = {
 } as const;
 
 /**
- * What is still owed after a Job finishes. **Armada does not push and does not
- * merge**, so the region that hands over a branch says what is left to do
- * rather than implying the work has landed.
+ * What is still owed after a Job finishes. **Armada pushes and opens, and does
+ * not merge** — so the region says what is left rather than implying the work
+ * has landed, and no longer denies the two things it does.
  */
-const HANDOVER_NOTE = "Armada does not push and does not merge. The branch is yours to take.";
+const HANDOVER_NOTE = "Armada does not merge. The branch is pushed and the review is yours to take.";
 
 /** Why a region has nothing yet, which is never the same sentence twice. */
 function whyNotRead(watched: Watched, jobId: string, what: string): string {

@@ -55,6 +55,7 @@
 mod attempt;
 mod columns;
 /// The Drone pointer, where it now lives: one column per step.
+mod delivery;
 mod drone;
 mod error;
 mod fold;
@@ -80,6 +81,7 @@ mod write;
 mod tests;
 
 pub use attempt::Attempted;
+pub use delivery::Delivery;
 pub use error::{DatabaseFault, LoadAllError, LoadJobError, OpenError, RowError, WriteError};
 pub use fold::{Moved, RecordedEvent};
 pub use footprint::Footprinted;

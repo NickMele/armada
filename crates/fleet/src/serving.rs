@@ -33,9 +33,9 @@ use core_model::{
 };
 use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    ChangesRequested, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory, JobId, JobList,
-    JobSummary, ManifestId, ManifestSummary, ModelChoices, Overruled, ProposeJob, Redirection,
-    Redispatched, RunId, WireError, WireValue, Work, WorkflowId, WorkflowSummary,
+    ChangesRequested, JobDelivery, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory,
+    JobId, JobList, JobSummary, ManifestId, ManifestSummary, ModelChoices, Overruled, ProposeJob,
+    Redirection, Redispatched, RunId, WireError, WireValue, Work, WorkflowId, WorkflowSummary,
 };
 use store::{LoadJobError, WriteError};
 
@@ -178,6 +178,31 @@ where
                 kept.map(|footprint| (footprint, plans))
             }
         };
+        // Read on the same terms as the footprint and for the same reason: a
+        // Job that has not finished has nothing here, and a read spent on every
+        // running Job would buy three nulls.
+        let delivery = match job.status().is_terminal() {
+            false => None,
+            true => {
+                let came_to = self
+                    .store()
+                    .lock()
+                    .await
+                    .delivery_for(job.id())
+                    .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+                // Absent rather than three nulls: a Job that finished before
+                // Fleet wrote this down is not a Job whose branch came to
+                // nothing, and the surface says different sentences for the two.
+                match came_to.is_empty() {
+                    true => None,
+                    false => Some(JobDelivery {
+                        commit: came_to.commit,
+                        pushed: came_to.pushed,
+                        pull_request: came_to.pull_request,
+                    }),
+                }
+            }
+        };
         let queued = self.queued_reason(&job).await?;
         // Before `step_facts`, which consumes the Check runs: the
         // classification reads them to answer whether an override is available,
@@ -200,6 +225,7 @@ where
             self.redirect_awaited(job.id()).await,
             stuck.as_ref(),
             overlaps,
+            delivery,
         ))
     }
 

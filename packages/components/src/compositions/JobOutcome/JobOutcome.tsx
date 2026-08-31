@@ -52,8 +52,9 @@ export type JobOutcomeProps = {
   /** Every part of what was produced, in the order a reader asks for them. */
   parts: JobOutcomePart[];
   /**
-   * What the person still owes. **Armada does not push and does not merge**, so
-   * this region says what is left to do rather than implying the work landed.
+   * What the person still owes. **Armada pushes and opens a review, and does
+   * not merge**, so this region says what is left rather than implying the work
+   * landed — and rather than denying the two things it does.
    */
   note?: ReactNode;
   /** A clipboard write is silent, so the surface confirms it with a toast. */
