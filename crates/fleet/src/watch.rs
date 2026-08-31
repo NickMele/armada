@@ -219,6 +219,30 @@ impl Watching {
             })
     }
 
+    /// Read to the end of the pipe, and only then let the reader go.
+    ///
+    /// **The half of a step boundary that [`Drop`] cannot do.** Dropping a
+    /// `Watching` aborts the reader where it stands, so whatever the operating
+    /// system had already buffered on the Drone's stdout is thrown away — and
+    /// what is buffered at an exit is the last thing the Drone said, which is
+    /// the interesting part. Every sink is fed from that task, so an aborted
+    /// reader is also a transcript file missing its own final rows.
+    ///
+    /// **Call it after the process is gone, never before.** This returns when
+    /// the pipe closes, and the pipe closes when the last writer to it does. A
+    /// Drone that is still running is still a writer, so awaiting this over a
+    /// live process waits for the whole rest of the run.
+    ///
+    /// Awaited by `&mut` rather than by value so that the events stay readable
+    /// afterwards: what the drain was for is the fold that comes next.
+    pub async fn drained(&mut self) {
+        // The task holds a pipe and a lock it never carries across an await, so
+        // the only `Err` here is a panic inside it — in which case whatever had
+        // been read is already in `heard` and there is nothing further to wait
+        // for.
+        let _ = (&mut self.reader).await;
+    }
+
     /// Every event so far, in the order the Drone emitted them. What
     /// `Ending::of` folds.
     pub fn events(&self) -> Vec<DroneEvent> {
@@ -233,9 +257,17 @@ impl Watching {
 impl Drop for Watching {
     /// Stop reading when the Job that was being read is over.
     ///
-    /// The task holds a pipe and nothing else, so aborting it loses nothing:
-    /// whatever had been read is already in `heard`, and a Job whose Drone has
-    /// been terminated has no further lines coming.
+    /// **The backstop, and not the ordinary path.** It used to be the whole of
+    /// how a reader ended, on the argument that whatever had been read was
+    /// already in `heard` — which is true of what had been *read* and says
+    /// nothing about what was sitting in the pipe unread. A Drone's last lines
+    /// arrive in the moments around its exit, so aborting there loses precisely
+    /// the ones a person opens the transcript for.
+    ///
+    /// [`drained`](Watching::drained) is what a deliberate ending calls first,
+    /// and this is then a no-op over a task that has already finished. What is
+    /// left for this to catch is a slot dropped without one — a Fleet shutting
+    /// down, or a test walking away.
     fn drop(&mut self) {
         self.reader.abort();
     }

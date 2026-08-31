@@ -493,56 +493,77 @@ async fn told_across_the_boundary(
         "the first step advanced: {:?}",
         turned.ruled
     );
-    let sent = turns_sent(&fleet, 2).await;
+    // **The slot holds a different Drone now.** The boundary ended the one that
+    // worked part one and put a fresh one on part two, so what part two's Drone
+    // was told is its *opening* turn rather than a second turn injected into a
+    // session — and its transcript starts empty. One echo, not two.
+    let sent = turns_sent(&fleet, 1).await;
     (fleet, sent)
 }
 
 /// **The one that cost twenty-two minutes of correct work.**
 ///
-/// `Working::now_on` clears the declaration at the boundary, which is right: a
-/// plan inherited from the step before is not a plan. Nothing said so. The
-/// Drone declared once, on the step that asked at spawn, worked the next step
-/// for sixty-eight turns and failed `evidence_scope` on a call nobody had
-/// requested. The ask belongs on every boundary that clears one.
+/// A declaration is about one part, so it does not cross a boundary. Nothing
+/// said so: the Drone declared once, on the part that asked at spawn, worked
+/// the next part for sixty-eight turns and failed `evidence_scope` on a call
+/// nobody had requested. The ask belongs on every boundary.
+///
+/// **It is answered differently now, and the claim is unchanged.** It used to
+/// be an injected turn, because the process carried on and the declaration it
+/// was holding had just been cleared underneath it. The process does not carry
+/// on: the ask is in the opening brief of the Drone that starts part two, which
+/// is where every other thing a Drone is told before it starts already was.
 #[tokio::test]
 async fn a_step_boundary_asks_again_for_the_declaration_it_just_cleared() {
     let home = TempDir::new();
     let (_fleet, sent) = told_across_the_boundary(&home, true).await;
 
     assert!(
-        sent[1].contains("BEFORE YOU START"),
-        "the boundary turn asks for the next part's plan: {}",
-        sent[1]
+        sent[0].contains("BEFORE YOU START"),
+        "the next part's Drone is asked for its plan: {}",
+        sent[0]
     );
     assert!(
-        sent[1].contains("scope tool"),
+        sent[0].contains("scope tool"),
         "described rather than named, as the first turn describes it: {}",
-        sent[1]
+        sent[0]
     );
     assert!(
-        sent[1].contains("does not carry over"),
+        sent[0].contains("does not carry over"),
         "and says why it is being asked again: {}",
-        sent[1]
+        sent[0]
+    );
+    // And it is a Drone that was not there for part one, so the two blocks
+    // `crate::crossing` builds are what it knows about it.
+    assert!(
+        sent[0].contains("What part 1 produced"),
+        "it is told what the part before it produced: {}",
+        sent[0]
+    );
+    assert!(
+        sent[0].contains("THE PART BEFORE THIS ONE"),
+        "and that the part is closed: {}",
+        sent[0]
     );
 }
 
-/// **The cold switch, at the boundary this time.** A step with no evidence
+/// **The cold switch, at the boundary this time.** A part with no evidence
 /// scope is told exactly what it was told before any of this existed, so the
-/// turn that moves a Drone on to one is the outcome and nothing else.
+/// brief the next part's Drone opens with puts no tool in front of it.
 #[tokio::test]
 async fn a_step_boundary_says_nothing_where_the_next_step_wants_no_plan() {
     let home = TempDir::new();
     let (_fleet, sent) = told_across_the_boundary(&home, false).await;
 
     assert!(
-        !sent[1].contains("BEFORE YOU START"),
+        !sent[0].contains("BEFORE YOU START"),
         "no tool is put in front of a Drone that has nothing to declare: {}",
-        sent[1]
+        sent[0]
     );
     assert!(
-        sent[1].contains("Implement"),
+        sent[0].contains("Implement"),
         "it is still told where it is going: {}",
-        sent[1]
+        sent[0]
     );
 }
 

@@ -6,13 +6,20 @@
 //! [`caught_up_onto`](Fleet::caught_up_onto) is the only place a boundary
 //! rebases, and every path that starts, resumes or advances a step reaches it.
 //!
-//! # Three moments, and they are not the same moment
+//! # Two moments, and they used to be three
 //!
-//! At a boundary that is not the last, the Drone is told in the turn it gets
-//! for the next step — it is alive there, and a conflict is work it can do. At
-//! the last step the branch is pushed and opened for review, and there is no
-//! Drone to hand anything to. At a **spawn** the rebase runs before the process
-//! exists and what moved rides the opening brief: see `crate::spawning`.
+//! At a **spawn** the rebase runs before the process exists and what moved
+//! rides the opening brief: see `crate::spawning`. At the last step the branch
+//! is pushed and opened for review, and there is no Drone to hand anything to.
+//!
+//! The third was a boundary that is not the last, where the Drone was alive and
+//! was told what moved in the turn it got for the next step. There is no such
+//! moment now: a Drone belongs to a step, so every boundary that is not the
+//! last is a spawn — `crate::boundary` — and the conflict a Drone is asked to
+//! resolve reaches it in the brief it opens with rather than a turn it is sent.
+//! [`Fleet::caught_up`] was the method for that moment and it is gone with it.
+//!
+//! [`Fleet::caught_up`]: Fleet::caught_up_onto
 //!
 //! # A boundary is asked, never the Drone
 //!
@@ -34,7 +41,6 @@ use verification::TheBaseMoved;
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::review::review_of;
-use crate::working::Working;
 
 /// What happened to a Job's branch this turn.
 ///
@@ -65,29 +71,6 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// Bring the working Job's branch up to its base at a step boundary.
-    ///
-    /// `None` is a branch that had nothing to catch up to, and it is the
-    /// ordinary answer. A caller turns it straight into the turn it was already
-    /// going to send, so nothing is announced when nothing happened.
-    ///
-    /// **The worktree comes from the slot, which is what makes this the
-    /// live-Drone half.** An empty slot rebases nothing: the three acts that
-    /// call it are advancing a step under a Drone that is standing there, and
-    /// a Drone that has gone is [`put_a_drone_on`](Fleet::put_a_drone_on)'s
-    /// case, where the same rebase runs against a worktree that was found
-    /// rather than held.
-    pub(crate) async fn caught_up(
-        &self,
-        working: &Option<Working>,
-    ) -> Result<Option<TheBaseMoved>, Adrift> {
-        let Some(at_work) = working.as_ref() else {
-            return Ok(None);
-        };
-        let (job_id, _, worktree) = at_work.standing();
-        self.caught_up_onto(&job_id, &worktree).await
-    }
-
     /// Bring this branch up to its base, in the worktree it is checked out in.
     ///
     /// **The one call.** `#150` found two paths that advanced a step without

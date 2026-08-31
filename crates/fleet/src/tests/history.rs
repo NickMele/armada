@@ -147,7 +147,11 @@ async fn a_finished_job_can_say_every_move_it_made() {
             )),
             Movement::Drone(drone) => {
                 assert!(!drone.drone_id.as_str().is_empty());
-                drones.push(drone.presence.as_wire().to_string());
+                drones.push((
+                    drone.presence.as_wire().to_string(),
+                    drone.step_id.as_str().to_string(),
+                    drone.drone_id.as_str().to_string(),
+                ));
             }
         }
     }
@@ -168,10 +172,32 @@ async fn a_finished_job_can_say_every_move_it_made() {
             && steps.iter().any(|(id, _, _)| id == "summarise"),
         "both steps moved and both are here: {steps:?}"
     );
+    // **Two Drones, one per step, and the log is what says so.** A Drone
+    // belongs to a workflow step: the one that worked `implement` is ended at
+    // the boundary and a fresh one takes `summarise`. The step's own
+    // `assigned_drone` is null once its Drone has gone, so these four rows are
+    // the only durable record of which Drone worked which step — which is the
+    // whole reason `drone_exited` names a step and a Drone.
+    let presence: Vec<&str> = drones.iter().map(|(what, _, _)| what.as_str()).collect();
     assert_eq!(
-        drones,
-        vec!["drone_spawned".to_string(), "drone_exited".to_string()],
-        "the Drone arrived and left, in that order"
+        presence,
+        vec![
+            "drone_spawned",
+            "drone_exited",
+            "drone_spawned",
+            "drone_exited"
+        ],
+        "each step's Drone arrived and left before the next one arrived: {drones:?}"
+    );
+    let steps_worked: Vec<&str> = drones.iter().map(|(_, step, _)| step.as_str()).collect();
+    assert_eq!(
+        steps_worked,
+        vec!["implement", "implement", "summarise", "summarise"],
+        "and each pair names the step that Drone was put on: {drones:?}"
+    );
+    assert_ne!(
+        drones[0].2, drones[2].2,
+        "a step boundary is a fresh process, not the same one told to carry on"
     );
 }
 

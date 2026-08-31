@@ -33,17 +33,28 @@
 //! way *in* to `awaiting_review` buys nothing for it: the base moves while a
 //! person reads, and a conflict would put markers into the diff being judged.
 //!
-//! **The gate holds no Drone** — one ends when its step's work passes the
-//! machine gates, not when the step advances (`docs/concepts/drone.md`). An
-//! empty slot has no worktree, so nothing is rebased, as on every other path
-//! onto a worktree whose Drone ended. `#140` is what ends it.
+//! The rebase is inside [`put_a_drone_on`](Fleet::put_a_drone_on), which the
+//! approval reaches through `crate::boundary` like every other advance: the
+//! next step's Drone is a fresh process, so what the catch-up came to rides its
+//! opening brief rather than being injected into a session.
+//!
+//! # The Drone that did the work does not cross the gate
+//!
+//! An approval ends it and starts a fresh one on the next step, the same as a
+//! mechanical advance — a Drone belongs to a step and a person taking the work
+//! is that step ending. What is **not** changed here is *when*: the process is
+//! still standing while the Job waits at `awaiting_review`, and it ends when
+//! the person answers rather than when the machine tiers held.
+//! `job-statuses.toml` says the gate should hold no session at all; freeing the
+//! working slot for a wait a person may take a day over is a scheduling
+//! question nothing has answered, so this file does not answer it either.
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{Actor, Job, JobId, JobStatus, StepId, StepTarget, Target};
 use std::path::Path;
 use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
-use crate::briefing::Declaring;
+use crate::crossing::{Cleared, Crossed, Produced};
 use crate::daemon::Fleet;
 use crate::resume::Redirection;
 use crate::session::LiveSession;
@@ -94,29 +105,30 @@ where
         };
         let job = self.move_job(&job, Target::Running, Actor::Human).await?;
         let job = self.move_step(&job, next.id(), StepTarget::Running).await?;
-        if let Some(at_work) = working.as_mut() {
-            at_work.now_on(next.id().clone(), self.now());
-        }
-        // The catch-up a mechanical advance runs, for the module doc's reason.
-        // An empty slot has no worktree, so a Drone that has gone rebases
-        // nothing.
-        let caught_up = self.caught_up(&working).await;
-        // The approved step's work is what the next step inherits, read at the
-        // boundary for `crate::dispatch`'s reason and **after the rebase** for
-        // [`marked`](Fleet::marked)'s: a baseline read before it credits this
-        // step with git's output. #131 is that ordering and it holds here too.
-        self.marked(&mut working);
-        // The ask the approved step's successor makes, sent with the
-        // acceptance: `now_on` above has just cleared whatever the step being
-        // left had declared, and an unasked Drone declares nothing. What the
-        // base did rides along, because a Drone going on against a tree that
-        // moved underneath it — or one holding conflict markers it has to
-        // resolve — is being told the same thing a mechanical advance tells it.
-        let told = told.and(caught_up.as_ref().ok().cloned().flatten());
-        self.tell(job_id, &told, Declaring::at(&next).as_ref(), &working)
+        // Every step's evidence as the record holds it, for the block naming
+        // what the approved part produced.
+        let recorded = self
+            .store()
+            .lock()
+            .await
+            .step_evidence(job_id)
+            .map_err(Adrift::Reading)?;
+        // **A person cleared it, so that is what the next Drone is told.**
+        // `Cleared::reviewed` and not `checked`: the two say the same thing
+        // about the part being closed and a different thing about who closed
+        // it, which is the one fact a fresh Drone can act on differently.
+        //
+        // The `told` above is still built, and it still goes to the Drone on
+        // the path where there is no next step — a Job that finished tells the
+        // process that finished it. Across a boundary there is no process to
+        // tell: `crate::boundary` ends this step's Drone and the acceptance
+        // crosses as a block in the next one's opening brief.
+        let crossed = Crossed::nothing()
+            .and_produced(Produced::before(job.workflow(), next.id(), &recorded))
+            .and_cleared(Cleared::reviewed(&passed));
+        self.crossed_onto(&job, next.id(), crossed, &mut working)
             .await?;
-        caught_up?;
-        Ok(job)
+        self.load(job_id).await
     }
 
     /// Send the work back with a note. **The worktree and every step so far

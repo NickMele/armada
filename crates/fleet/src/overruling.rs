@@ -17,18 +17,19 @@
 //! [`overridable`](Fleet::overridable) reads the recorded Check runs rather than
 //! resting on the tier ordering that makes a failed Check unreachable — a guard
 //! that holds by an argument about ordering stops holding the day the ordering
-//! moves. And whether a Drone is there decides only *how* the Job carries on,
-//! never whether the act applies, which is the whole of what separates this from
-//! `crate::resume`.
+//! moves. And whether a Drone is there decides nothing at all any more: the act
+//! applies either way and the Job carries on the same way either way, because
+//! the overridden part's Drone is ended and a fresh one takes the next part.
+//! That a live session exists is still what separates `crate::resume`'s two
+//! acts from each other; it stopped separating anything here.
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
-    Actor, Component, Envelope, FieldValue, Job, JobId, JobStatus, Level, ResolvedStep, StepId,
-    StepLevelTrigger, StepTarget, Target,
+    Actor, Component, Envelope, FieldValue, Job, JobId, JobStatus, Level, StepId, StepLevelTrigger,
+    StepTarget, Target,
 };
 use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
-use crate::briefing::{Declaring, Opening};
 use crate::crossing::{Cleared, Crossed, Produced};
 use crate::daemon::Fleet;
 use crate::transcript;
@@ -87,18 +88,20 @@ where
         let mut working = self.slot().lock().await;
         let job = self.load(job_id).await?;
         let (step, overruled) = self.overridable(&job).await?;
-        // Read before anything moves. A worktree that is gone is a Job whose
-        // earlier steps' work is not on disk, and what is being asked for there
-        // is a redispatch — the same refusal `restart_step` makes, made before
-        // the Job has been half-moved rather than after.
-        let onwards = self.surviving_worktree(&job)?;
+        // Read before anything moves, and discarded. A worktree that is gone
+        // is a Job whose earlier steps' work is not on disk, and what is being
+        // asked for there is a redispatch — the same refusal `restart_step`
+        // makes, made before the Job has been half-moved rather than after.
+        // `crossed_onto` reaches the same directory again once the Drone that
+        // was on it has been stood down, because until then the slot is holding
+        // the reading that answers for free.
+        self.surviving_worktree(&job)?;
         let passed = self.declared_step(&job, &step)?.clone();
         let next = job.workflow().after(&step).cloned();
-        // **Read before anything moves, and read on both arms.** Only the
-        // arm that spawns uses it, and reading it there would mean a record
-        // that would not open escalating an override that had already moved
-        // the Job and the step. One query on the common path buys a refusal
-        // that leaves the Job exactly where the person found it.
+        // **Read before anything moves.** A record that would not open would
+        // otherwise escalate an override that had already moved the Job and
+        // the step. One query buys a refusal that leaves the Job exactly where
+        // the person found it.
         let recorded = self
             .store()
             .lock()
@@ -119,76 +122,23 @@ where
             return self.completed(&job, &told, job_id, &mut working).await;
         };
         let job = self.move_step(&job, next.id(), StepTarget::Running).await?;
-        match working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
-            // The session is still there, holding its context. An escalated Job
-            // keeps its Drone, so this is the ordinary case and it costs a turn
-            // rather than a respawn — which is the whole of what makes this
-            // cheaper than the restart it replaces.
-            true => self.carried_on(job_id, &next, &told, &mut working).await?,
-            // The Drone has gone: the Fleet that held it restarted, or the
-            // process ended on its own. A fresh one takes the *next* step on
-            // the worktree the last one left, which is `restart_step`'s
-            // machinery pointed one step further along. Doing nothing here
-            // would leave a `running` Job with no process on it, which the
-            // reaper escalates as `interrupted` a moment later.
-            //
-            // **This arm had `restart_step`'s hole too**, and nothing had named
-            // it: `carried_on` above rebases and this did not, so the same
-            // override advanced onto a current branch or a stale one depending
-            // on whether a process happened to still be alive. It is closed the
-            // same way — the catch-up is inside `put_a_drone_on` and this arm
-            // reaches it rather than calling it.
-            false => {
-                // The one path today that puts a Drone on a step it did not
-                // begin the Job on, so it is the one that has to hand over
-                // what the missing process would have held: what the
-                // overridden part produced, and that a person settled it.
-                // `#140` makes every step boundary this path.
-                let crossed = Crossed::nothing()
-                    .and_produced(Produced::before(job.workflow(), next.id(), &recorded))
-                    .and_cleared(Cleared::reviewed(&passed));
-                self.put_a_drone_on(
-                    &job,
-                    next.id(),
-                    onwards,
-                    Opening::fresh().carrying(crossed),
-                    &mut working,
-                )
-                .await?;
-            }
-        }
-        self.load(job_id).await
-    }
-
-    /// Tell the Drone that is there, and move the slot on to the next step.
-    ///
-    /// The same four things `approve_review` does at a human gate, in the same
-    /// order and for the same reasons: `now_on` clears what the step being left
-    /// had declared, `caught_up` puts the branch on top of the base the way
-    /// every other step boundary does, `marked` reads the baseline the next
-    /// step's `diff_nonempty` is decided against — after the rebase, never
-    /// before it — and the ask goes out with the acceptance because an unasked
-    /// Drone declares nothing.
-    ///
-    /// **An override is a step boundary and it had the approval one's hole.**
-    /// `crate::reviewing`'s module doc argues why the rebase belongs on this
-    /// side of a person's decision rather than before they read anything.
-    async fn carried_on(
-        &self,
-        job_id: &JobId,
-        next: &ResolvedStep,
-        told: &OutcomeTurn,
-        working: &mut Option<crate::working::Working>,
-    ) -> Result<(), Adrift> {
-        if let Some(at_work) = working.as_mut() {
-            at_work.now_on(next.id().clone(), self.now());
-        }
-        let caught_up = self.caught_up(working).await;
-        self.marked(working);
-        let told = told.clone().and(caught_up.as_ref().ok().cloned().flatten());
-        self.tell(job_id, &told, Declaring::at(next).as_ref(), working)
+        // **One arm, because the two used to differ over a fact that no longer
+        // decides anything.** It asked whether a process happened to be there:
+        // where one was it was told and carried on, and where one was not a
+        // fresh Drone was put on the next step. A Drone belongs to a step now,
+        // so the second is what happens either way — the Drone that worked the
+        // overridden part is ended whether it was standing or already gone, and
+        // `crate::boundary` is the one place that order is written.
+        //
+        // The two facts a fresh Drone is owed are the ones the missing process
+        // would have held: what the overridden part produced, and that a person
+        // settled it.
+        let crossed = Crossed::nothing()
+            .and_produced(Produced::before(job.workflow(), next.id(), &recorded))
+            .and_cleared(Cleared::reviewed(&passed));
+        self.crossed_onto(&job, next.id(), crossed, &mut working)
             .await?;
-        caught_up.map(|_| ())
+        self.load(job_id).await
     }
 
     /// The step a person may overrule, and the verdict they are overruling.

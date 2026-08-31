@@ -93,6 +93,7 @@
 
 pub mod adrift;
 pub mod at_step;
+mod boundary;
 pub mod briefing;
 mod check_output;
 mod checking;

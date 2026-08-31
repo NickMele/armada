@@ -270,6 +270,16 @@ where
             });
         }
         let worktree = self.surviving_worktree(&job)?;
+        // **Before the spawn, and this used to be missing.** The slot is empty
+        // — the guard above says so — and the record can still name a Drone on
+        // the step being restarted: a Fleet that died holding one leaves
+        // exactly that, and `reconcile` clears it only for the Jobs it read at
+        // boot. `drone_spawned` refuses over a live pointer, so a restart onto
+        // a step whose pointer nobody cleared is a restart that cannot happen.
+        // `#137` left whose this was open; it is the boundary's, and this is
+        // the boundary's rule applied to the act reaching the same spawn from
+        // the other direction.
+        self.every_exit_recorded(job_id).await?;
         let stopped = self.what_stopped(&job, &step).await?;
         // **A restarted Drone is as new as a fresh one.** It knows what
         // stopped *this* part, which is `stopped`, and nothing at all about

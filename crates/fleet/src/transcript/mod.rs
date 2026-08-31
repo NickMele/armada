@@ -30,7 +30,7 @@ mod row;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use adapter_traits::DroneEvent;
 use core_model::{Component, DroneId, Envelope, FieldValue, JobId, Level, StepId, Timestamp, Ulid};
@@ -72,53 +72,39 @@ pub trait Tap: Send + Sync {
 pub struct Spine {
     pub job: JobId,
     pub drone: DroneId,
-    /// The step the Drone was spawned on. **Where a row's step starts and not
-    /// what a row is stamped with** — that is [`StepLabel`], which this seeds.
+    /// The step the Drone was spawned on, which is every row's step: a Drone
+    /// belongs to one step and its transcript is that step's. [`StepLabel`] is
+    /// what the sinks read, and this seeds it.
     pub step: StepId,
     /// Fleet's own instance. A restart is this value changing.
     pub run: Ulid,
 }
 
-/// Which step a row written now belongs to.
+/// Which step the rows of this transcript belong to.
 ///
-/// **Shared, not copied.** The sinks are held by the reader task pumping the
-/// Drone's stdout, so a step moved in a copy they do not hold would look right
-/// in the slot and change nothing in the file — which is the defect this type
-/// exists for.
+/// **It does not move, and there is no method that would move it.** It was an
+/// `Arc<Mutex<StepId>>` for as long as one process spanned a step boundary: the
+/// sinks live on the far side of the reader task, so advancing the step in the
+/// slot alone left every row after a Job's first advance claiming the first
+/// step. A Drone belongs to a step now — the boundary ends the process, and the
+/// next step's rows are the next Drone's transcript, in a file of its own — so
+/// there is no moment at which one transcript's rows change step and no lock
+/// left to take.
 ///
-/// It is read as a row is built rather than as it is written or read back, so
-/// a step that advances while the Drone is mid-turn labels the rows that arrive
-/// after it and not the ones already taken.
-///
-/// **The reader cannot move it and the mover cannot read it.** [`now`] is
-/// private to this module, which is where rows are built, and [`now_on`] has
-/// exactly one caller: `Working::now_on`.
-///
-/// [`now`]: StepLabel::now
-/// [`now_on`]: StepLabel::now_on
+/// Still a type rather than a bare [`StepId`], because what it names is not
+/// "some step" but the step every row of this file carries, and the sinks are
+/// handed it rather than each keeping a copy of the spine.
 #[derive(Clone, Debug)]
-pub struct StepLabel(Arc<Mutex<StepId>>);
+pub struct StepLabel(StepId);
 
 impl StepLabel {
     fn starting_at(step: StepId) -> StepLabel {
-        StepLabel(Arc::new(Mutex::new(step)))
+        StepLabel(step)
     }
 
-    /// The step running now.
-    ///
-    /// **A clone under the lock and nothing else.** A `Tap` may not block, and
-    /// the only other holder of this lock writes one `StepId` into it.
+    /// The step these rows belong to.
     fn now(&self) -> StepId {
-        self.locked().clone()
-    }
-
-    /// The slot has moved to another step, from this instant.
-    pub(crate) fn now_on(&self, step: StepId) {
-        *self.locked() = step;
-    }
-
-    fn locked(&self) -> std::sync::MutexGuard<'_, StepId> {
-        self.0.lock().expect("the step is not held across a panic")
+        self.0.clone()
     }
 }
 
@@ -193,10 +179,8 @@ impl Recording {
         })
     }
 
-    /// The label this recording stamps rows with, for whoever moves the step.
-    ///
-    /// Handed out rather than set: the recording is opened before the Drone
-    /// exists, and the slot that will advance the step is made from it.
+    /// The label this recording stamps rows with, so the live view and the
+    /// file agree on which step a row belongs to.
     pub fn label(&self) -> StepLabel {
         self.step.clone()
     }
@@ -244,10 +228,6 @@ impl Tap for Live {
 /// one failure to handle and cannot start a Drone with half of it.
 pub struct Taps {
     each: Vec<Arc<dyn Tap>>,
-    /// Shared by every sink behind it. **On `Taps` rather than passed beside
-    /// it**, so the one act that opens the sinks is also the one act that hands
-    /// out the label they read.
-    step: StepLabel,
 }
 
 impl Taps {
@@ -266,24 +246,8 @@ impl Taps {
         let recording = Recording::of(repo_root, spine, Arc::clone(&clock))?;
         let step = recording.label();
         Ok(Taps {
-            each: vec![
-                Arc::new(recording),
-                Arc::new(Live {
-                    feed,
-                    clock,
-                    step: step.clone(),
-                }),
-            ],
-            step,
+            each: vec![Arc::new(recording), Arc::new(Live { feed, clock, step })],
         })
-    }
-
-    /// The label every sink here reads, for the slot that moves the step.
-    ///
-    /// Taken before [`each`](Taps::each), which consumes: the slot is built
-    /// from both, and only the label outlives the reader task.
-    pub(crate) fn label(&self) -> StepLabel {
-        self.step.clone()
     }
 
     pub(crate) fn each(self) -> Vec<Arc<dyn Tap>> {
