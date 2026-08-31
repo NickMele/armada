@@ -1,56 +1,39 @@
 //! Making a fresh worktree workable, before the first Drone is put on it.
 //!
 //! A worktree is a branch and a checkout and nothing else. What a repository's
-//! Checks need beyond that — installed dependencies, a generated file, a
-//! workspace's symlinks — is the repository's to say, and `setup.requires` in
-//! its `armada.yml` is where it says it. This runs what it named.
+//! Checks need beyond that is the repository's to say, and `setup.requires` in
+//! its `armada.yml` is where it says it. This runs what it named, in order,
+//! stopping at the first failure — `[install, generate]` is a sequence, and
+//! carrying on past the first would produce the second's error about the
+//! first's job.
 //!
 //! # Not a Check, and the distinction is the whole design
 //!
-//! A Check gates a step and is re-run at every gate. Preparation gates nothing
-//! and runs once, before any step exists. Sharing one mechanism would make a
-//! failed `pnpm install` read as failing work — a Job marked `completed_failed`
-//! on a Drone's diff that was never the problem, which is #227 arriving a
-//! second time wearing a better disguise.
-//!
+//! A Check gates a step and re-runs at the gate. Preparation gates nothing and
+//! runs before any step exists. Sharing one mechanism would make a failed
+//! `pnpm install` read as failing work, which is #227 arriving a second time.
 //! So the two share only [`checks_runner::run`], which is a process and a
-//! budget and holds no opinion about what it is running. Nothing here produces
-//! an [`Observed`](verification::Observed), nothing reaches a gate, and the
-//! failure below is not a `StepLevelTrigger`.
+//! budget with no opinion about what it runs.
+//!
+//! Nothing but zero passes. A Check may declare `expect_exit_code`; there is
+//! no reading of *the install failed and that was expected* that leaves a
+//! worktree a Job can work in. `CheckBudget`
+//! bounds it, because a cold install and a cold workspace build are the same
+//! minutes and a second dial would be a second number nobody could find.
 //!
 //! # Once per worktree, by where it is called rather than by a record
 //!
-//! `crate::dispatch` calls this immediately after `Vcs::create_worktree`, which
-//! is the only call to it in the workspace: every other spawn path —
-//! `readmitted`, `restart_step`, a redirect, a resume — goes through
-//! `resume::surviving_worktree` and finds one already on disk. So "runs when the
-//! worktree is new" needs no per-worktree record to be true, and a Job whose
-//! three steps mean three Drones pays for one install rather than three.
+//! `crate::dispatch` calls this immediately after `Vcs::create_worktree`, the
+//! only call to it in the workspace: every other spawn path goes through
+//! `resume::surviving_worktree` and finds one already on disk. So a Job whose
+//! three steps mean three Drones pays for one install, and a record saying so
+//! would be a second statement of a fact the call site already makes.
 //!
-//! **A table would have been the worse answer**, not merely a larger one. It
-//! would be a second statement of a fact the call site already makes, and the
-//! two could disagree.
-//!
-//! # It runs in order, and stops at the first failure
-//!
-//! `requires: [install, generate]` is a sequence somebody wrote. Running them
-//! at once would reorder it, and carrying on past a failed install would run
-//! the second against a tree the first did not finish making — so what a person
-//! then reads is the second command's error about the first command's job.
-//!
-//! # Zero, and no other code
-//!
-//! A Check may declare `expect_exit_code`, because a linter that reports
-//! findings as a non-zero code is a real thing to gate on. Preparation has no
-//! such key and will not grow one: there is no reading of "the install failed
-//! and that was expected" that leaves a worktree a Job can work in.
-//!
-//! # What bounds it
-//!
-//! `CheckBudget`, the same one a Check gets, passed by the caller. A cold
-//! `pnpm install` is minutes and so is a cold workspace build, which is what
-//! that budget was already sized against — a second dial would be a second
-//! number nobody could find, set from the same measurement.
+//! **Half of what `docs/concepts/manifest.md` asks for**, which also re-runs on
+//! drift in the lockfile a Scan traced the command from. That is Verify's
+//! detection at dispatch time and there is no Scan yet — and a worktree lives
+//! for one Job, so nothing here can reach one prepared against a lockfile that
+//! has since moved.
 
 use std::fmt;
 use std::path::Path;
