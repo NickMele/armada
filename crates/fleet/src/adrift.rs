@@ -35,6 +35,7 @@ use core_model::{
 };
 use store::{LoadAllError, LoadJobError, WriteError};
 
+use crate::preparing::NotPrepared;
 use crate::proposing::{NotProposed, Unresolved};
 use crate::reporting::NotFiled;
 
@@ -68,6 +69,18 @@ pub enum Adrift {
         job: JobId,
         cause: Box<dyn Error + Send + Sync>,
     },
+    /// The worktree was cut and what the Manifest requires in one would not
+    /// run. **Nothing was spawned, and no step was entered** — the Job is
+    /// escalated before the first step moves, so this can never be read as a
+    /// step that failed.
+    ///
+    /// **Boxed, and for the size rather than for the seam.** The leaf is this
+    /// crate's own and could be inlined the way its neighbours are; what stops
+    /// it is that it carries a command's captured output, which is 136 bytes
+    /// against this enum's 104 and would grow every `Result<_, Adrift>` in the
+    /// crate — which is to say every signature in it — to pay for the rarest
+    /// variant in it.
+    NotPrepared { job: JobId, cause: Box<NotPrepared> },
     /// The Job's own values would not make a confined spawn — a blank model, an
     /// unusable MCP config path, an environment variable that is not a name.
     NotConfigurable {
@@ -437,6 +450,11 @@ impl fmt::Display for Adrift {
                 "{} has no worktree and nothing was spawned: {cause}",
                 job.as_str()
             ),
+            Adrift::NotPrepared { job, cause } => write!(
+                out,
+                "{} has a worktree and no step ran in it: {cause}",
+                job.as_str()
+            ),
             Adrift::NotConfigurable { job, cause } => write!(
                 out,
                 "{} could not be turned into a confined spawn: {}",
@@ -716,6 +734,7 @@ impl Adrift {
         match self {
             Adrift::Unworkable { job, .. }
             | Adrift::NoWorktree { job, .. }
+            | Adrift::NotPrepared { job, .. }
             | Adrift::NotConfigurable { job, .. }
             | Adrift::NoDrone { job, .. }
             | Adrift::NoTranscript { job, .. }
@@ -780,6 +799,7 @@ impl Error for Adrift {
             Adrift::NoWorktree { cause, .. }
             | Adrift::NoDrone { cause, .. }
             | Adrift::NotCommitted { cause, .. } => Some(cause.as_ref()),
+            Adrift::NotPrepared { cause, .. } => Some(cause),
             Adrift::NotTold { cause, .. }
             | Adrift::NotReaped { cause, .. }
             | Adrift::NoTranscript { cause, .. }
