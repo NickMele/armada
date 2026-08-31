@@ -130,6 +130,30 @@ unnecessary caveats, tables over paragraphs for anything comparative, label ever
 finding and table row with who acts on it, and surface any question as a single
 `**QUESTION:**` line at the end rather than burying it in prose.
 
+## Give the worktree back
+
+**The merge is the moment.** A branch that is in `main` has a worktree holding
+nothing `main` does not, and nothing reclaims it on its own — `armada clean`
+gives back a *Job's* worktrees, not an *agent's*.
+
+```
+git worktree remove --force <path>
+git branch -D <branch>
+```
+
+**Whoever merges does this**, in the same breath as the merge. Left undone it is
+invisible until a disk fills: seventy-four worktrees and 220 GB, three agents
+killed mid-run at zero bytes free, each with uncommitted work.
+
+**Never remove one without checking it is clean.** An agent that has written
+files and not committed sits on a branch with no commits ahead of `main` — so it
+reads as merged, and removing it destroys the only copy. `git status --porcelain`
+is the check that catches it.
+
+`agent-worktrees` has the rest: what to keep, how to sweep safely when it has
+already got away, and why sharing one build directory between worktrees was tried
+and is not the answer.
+
 ## What this skill does not do
 
 **It does not replace dispatching a Job.** When Fleet can run the work, run the

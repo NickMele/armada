@@ -182,3 +182,4 @@ can find them.
 | Starting, checking or cleaning up a local Fleet | `armada-local` |
 | Reporting something Armada got wrong | `armada-bug` |
 | Working one issue end to end — worktree, plan, implement, test, commit, merge | `work-issue` |
+| Cutting an agent worktree, and giving it back when its branch merges | `agent-worktrees` |

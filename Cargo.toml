@@ -13,3 +13,21 @@ license = "MIT"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+
+# **Backtraces, not variable inspection.** The default dev profile is
+# `debug = true`, which embeds full DWARF — every type and every local — into
+# every artifact. Rust links statically, so each of this workspace's thousand-odd
+# test binaries carries its own copy of that for the whole dependency graph, and
+# nothing is shared between them. Measured before this line: 32G in
+# `target/debug`, 30G of it in `deps/`.
+#
+# `line-tables-only` keeps what a failing test actually gives you — a backtrace
+# naming a file and a line — and drops what a debugger would use to inspect a
+# local. Nothing in this repository's loop reads the second: tests report, and
+# `dbg!` prints.
+#
+# It is not the whole fix and was never meant to be. One build is normal; the
+# problem was seventy-four of them, one per agent worktree, and that is answered
+# by removing a worktree when its branch merges rather than by shrinking each.
+[profile.dev]
+debug = "line-tables-only"
