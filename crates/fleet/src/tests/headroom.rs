@@ -9,6 +9,12 @@
 //! **The board and admission are asserted together, never apart.** Each of them
 //! alone can pass while the two disagree, which is the drift one predicate
 //! exists to prevent.
+//!
+//! **Over 500 lines, and left as one file.** The parsers, the threshold and the
+//! Fleet cases are one claim proved at three depths — a split would put the
+//! proof that `df` is read correctly in a different file from the proof that a
+//! full disk holds a Job, and it is the pairing that catches a change to
+//! either.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
