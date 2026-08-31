@@ -11,7 +11,9 @@ use config::ResolvedWorkflow;
 use core_model::Job;
 use testkit::Sketch;
 
-use crate::{Accepted, Brief, Claimed, NotClaimed, Product, Request, ShownBy, Submission};
+use crate::{
+    Accepted, Answered, Brief, Claimed, NotClaimed, Product, Request, ShownBy, Submission,
+};
 
 /// Feature's opening step, reduced: a scope note, judged on whether it answers
 /// the request.
@@ -66,7 +68,7 @@ fn brief_of(workflow: &ResolvedWorkflow, job: &Job) -> String {
         Request::of(job),
         &product,
         &[],
-        &[],
+        Answered::of(&[], &[]),
     )
     .question()
     .to_string()

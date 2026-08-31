@@ -72,8 +72,8 @@ use core_model::{
     Timestamp, Transitioned,
 };
 use verification::{
-    decide, Accepted, Baseline, CheckFailed, Delivered, InScope, OutcomeTurn, OutsideScope,
-    Printed, Ran, Request, Submission, Verdict, Verified, A_DELIVERABLE,
+    decide, Accepted, Answered, Baseline, CheckFailed, Delivered, InScope, OutcomeTurn,
+    OutsideScope, Printed, Ran, Request, Submission, Verdict, Verified, A_DELIVERABLE,
 };
 
 use crate::at_step::AtStep;
@@ -235,6 +235,31 @@ where
         }
     }
 
+    // **Both streams, joined, in the order a terminal shows them.** A check
+    // says why on stderr and what it was doing on stdout, and neither reader —
+    // the Drone a failure goes back to, the Judge asked what a suite observed —
+    // is owed a guess about which of the two mattered.
+    //
+    // **Built here, once, rather than in each of the two branches that wants
+    // it.** They are disjoint, so this is a copy the common path does not use;
+    // it is bounded by what `checks_runner` captured and it is a memcpy after a
+    // gate that just spent seconds in subprocesses. The alternative is two
+    // spellings of what a Check said, which is how the turn and the brief drift
+    // apart. `Printed` is borrowed, so `said` has to outlive both.
+    let said: Vec<(String, String)> = output
+        .iter()
+        .map(|kept| {
+            (
+                kept.check.clone(),
+                format!("{}\n{}", kept.output.stdout, kept.output.stderr),
+            )
+        })
+        .collect();
+    let printed: Vec<Printed<'_>> = said
+        .iter()
+        .map(|(check, said)| Printed { check, said })
+        .collect();
+
     let ran = match Ran::of(step, &observed) {
         Ok(ran) => ran,
         // Unreachable while `checking::ran` answers one observation per check,
@@ -346,8 +371,9 @@ where
                     }
                 },
             };
+            let answered = Answered::of(&checks, &printed);
             match judging::judged(
-                at, request, accepted, &patch, delivered, &checks, &off_plan, recorded, judging,
+                at, request, accepted, &patch, delivered, answered, &off_plan, recorded, judging,
             )
             .await
             {
@@ -408,7 +434,7 @@ where
                 },
             },
         },
-        Verdict::Failed(failures) => match handed_back(step, at.attempt(), &failures, &output) {
+        Verdict::Failed(failures) => match handed_back(step, at.attempt(), &failures, &printed) {
             Some((tell, retrying)) => Ruling::HandedBack {
                 failures,
                 checks,
@@ -487,7 +513,7 @@ fn handed_back(
     step: &config::ResolvedStep,
     attempt: core_model::Attempt,
     failures: &[CheckFailed],
-    output: &[CheckOutput],
+    printed: &[Printed<'_>],
 ) -> Option<(OutcomeTurn, StepLevelTrigger)> {
     if !failures.iter().all(CheckFailed::the_drone_can_answer) {
         return None;
@@ -501,23 +527,7 @@ fn handed_back(
     // reattempted for a reason no step row could hold — and falling through to
     // a failure that a person sees is the safe direction to be wrong in.
     let retrying = StepLevelTrigger::of(EscalationTrigger::GateFailure)?;
-    // Both streams, in the order a terminal shows them. A check that failed
-    // usually says why on stderr and what it was doing on stdout, and the
-    // Drone is owed the pair rather than a guess about which mattered.
-    let said: Vec<(String, String)> = output
-        .iter()
-        .map(|kept| {
-            (
-                kept.check.clone(),
-                format!("{}\n{}", kept.output.stdout, kept.output.stderr),
-            )
-        })
-        .collect();
-    let printed: Vec<Printed<'_>> = said
-        .iter()
-        .map(|(check, said)| Printed { check, said })
-        .collect();
-    Some((OutcomeTurn::handed_back(step, failures, &printed), retrying))
+    Some((OutcomeTurn::handed_back(step, failures, printed), retrying))
 }
 
 /// The gaming look, where the step declares one. `None` is nothing flagged.

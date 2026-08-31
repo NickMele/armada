@@ -12,7 +12,10 @@
 //! mid-step look, which gates nothing and holds the same two rules anyway.
 //! [`quoted`] is the reading under a citation — whether the words a refusal
 //! puts in quotation marks are in what the call was shown, or in nothing.
+//! [`answered`] is the Check tier of a brief — the two outcomes a Judge can
+//! actually be shown, and the bound on how much of a run travels with them.
 
+mod answered;
 mod converging;
 mod gaming;
 mod gate;

@@ -24,8 +24,9 @@
 //! call this assembles that shows the Judge nothing.
 
 use config::ResolvedStep;
-use core_model::{CriterionId, JudgeCriterion, JudgeVerdict, Judgment, StepCheck};
+use core_model::{CriterionId, JudgeCriterion, JudgeVerdict, Judgment};
 
+use crate::answered::Answered;
 use crate::product::{Product, Reference};
 use crate::request::Request;
 
@@ -93,7 +94,7 @@ impl Brief {
         request: Request<'_>,
         product: &Product<'_>,
         references: &[Reference<'_>],
-        checks: &[StepCheck],
+        answered: Answered<'_>,
     ) -> Brief {
         let mut question = String::new();
         question.push_str(
@@ -106,14 +107,13 @@ impl Brief {
         // too — so it is read before anything it is the standard for, which is
         // the ordering `Reference::all` already argues for one level down.
         question.push_str(&request.told());
-        question.push_str("Checks that already ran, and what they answered:\n");
-        if checks.is_empty() {
-            question.push_str("  (the step declared none)\n");
-        }
-        for check in checks {
-            question.push_str(&format!("  {} — {}\n", check.name, check.outcome.as_wire()));
-        }
-        question.push('\n');
+        // **The deterministic facts, and the whole of them.** A name and an
+        // outcome word is what this rendered until #205, which dropped the two
+        // parts a criterion is actually answered from: why a Check that did not
+        // run did not, and what a Check that ran observed. A Judge asked
+        // whether a suite covers a case was answering off the diff while the
+        // suite's own output sat unread.
+        question.push_str(&answered.told());
         // The yardstick before the product, the way the gaming brief puts its
         // baseline first: what the work is measured against is context for
         // reading it, and it is labelled as not being the thing under judgment.

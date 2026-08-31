@@ -35,19 +35,8 @@
 
 use config::ResolvedStep;
 
+use crate::answered::Printed;
 use crate::mechanical::CheckFailed;
-
-/// How much of one Check's output goes into the turn.
-///
-/// `checks_runner` captures 64KB per stream and keeps the tail, which is the
-/// right amount to keep on disk for a person and far too much to inject into a
-/// session — the whole of it would cost more context than the work. This is the
-/// tail of the tail, and it is a tail rather than a head because a failing
-/// command says why at the end.
-///
-/// A number with no measurement behind it, which is why it is spelled once
-/// here rather than at the call site.
-const KEPT_FOR_THE_TURN: usize = 2_000;
 
 /// What the mechanical tier did on a step that advanced.
 ///
@@ -235,49 +224,6 @@ impl OutcomeTurn {
     pub fn text(&self) -> &str {
         &self.text
     }
-}
-
-/// What one named Check put on its streams, for the turn that hands it back.
-///
-/// Borrowed rather than owned, and `&str` rather than any runner type: this
-/// crate does not depend on `checks-runner` and adding a dependency so that a
-/// turn could be built would put the thing that runs commands underneath the
-/// thing that decides verdicts.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Printed<'a> {
-    pub check: &'a str,
-    pub said: &'a str,
-}
-
-impl Printed<'_> {
-    /// The block that goes into the turn: the tail of what was printed, fenced,
-    /// with a line saying it was cut where it was.
-    fn quoted(&self) -> String {
-        let said = self.said.trim();
-        if said.is_empty() {
-            return String::new();
-        }
-        let (cut, kept) = tail(said);
-        let opening = match cut {
-            false => format!("What `{}` printed:", self.check),
-            true => format!("The last of what `{}` printed:", self.check),
-        };
-        format!("{opening}\n\n```\n{kept}\n```\n\n")
-    }
-}
-
-/// The last [`KEPT_FOR_THE_TURN`] bytes, cut at a line boundary so the quote
-/// does not begin mid-word, and whether anything was dropped.
-fn tail(said: &str) -> (bool, &str) {
-    if said.len() <= KEPT_FOR_THE_TURN {
-        return (false, said);
-    }
-    let from = said.len() - KEPT_FOR_THE_TURN;
-    let kept = said
-        .get(from..)
-        .and_then(|tail| tail.find('\n').map(|at| &tail[at + 1..]))
-        .unwrap_or(said);
-    (true, kept)
 }
 
 /// What happened to the branch a Drone is working on while it worked.

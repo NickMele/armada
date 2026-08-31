@@ -14,12 +14,12 @@ use testkit::{Gate, Sketch};
 
 use crate::mechanical::CheckFailed;
 use crate::{
-    Accepted, Brief, Claimed, NotClaimed, Product, Reference, Refusals, Request, ShownBy,
+    Accepted, Answered, Brief, Claimed, NotClaimed, Product, Reference, Refusals, Request, ShownBy,
     Submission, Unreadable, Verdict,
 };
 
 /// A step that asks one question, and one that asks none.
-fn workflow() -> ResolvedWorkflow {
+pub(super) fn workflow() -> ResolvedWorkflow {
     testkit::resolved(&[
         Sketch {
             id: "fix",
@@ -77,6 +77,17 @@ fn brief(workflow: &ResolvedWorkflow) -> Brief {
 /// The same brief with an earlier step's note in front of it — the shape of the
 /// Job the quotation check was written for, where a scope note is the yardstick.
 fn brief_measured_against(workflow: &ResolvedWorkflow, references: &[Reference<'_>]) -> Brief {
+    brief_told(workflow, references, Answered::of(&checks(), &[]))
+}
+
+/// The brief with the Check tier chosen by the caller. The two cases that
+/// actually reach a Judge — a Check that was skipped, a Check that passed and
+/// printed — differ only in this argument.
+pub(super) fn brief_told(
+    workflow: &ResolvedWorkflow,
+    references: &[Reference<'_>],
+    answered: Answered<'_>,
+) -> Brief {
     let step = &workflow.steps()[0];
     let submitted = submitted();
     let patch = patch();
@@ -88,7 +99,7 @@ fn brief_measured_against(workflow: &ResolvedWorkflow, references: &[Reference<'
         Request::of(testkit::asked_for()),
         &product,
         references,
-        &checks(),
+        answered,
     )
 }
 
