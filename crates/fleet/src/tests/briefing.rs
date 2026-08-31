@@ -128,6 +128,33 @@ fn every_turn_carries_the_reporting_clause() {
     assert!(BASELINE.contains("recorded"));
 }
 
+/// **The promise is conditional, and the condition is the ruling that carries
+/// a message.** `Ruling::HandedBack` has a `tell`; `Refused`, `Suspect` and
+/// `CouldNotDecide` have no message field, and an advancing step ends its
+/// Drone too. Promised unconditionally, a refused Drone waits for a turn
+/// nothing sends — nineteen hours on one Job, twice.
+///
+/// **Both halves are asserted**, because "you may not hear back" satisfies the
+/// second alone and still leaves a Drone unable to tell waiting from stalling.
+/// The last assertion holds the promise to an attempt it does not number: a
+/// Drone shown the arithmetic has reason to satisfy it rather than work.
+#[test]
+fn the_baseline_promises_a_turn_only_where_the_part_comes_back() {
+    assert!(!BASELINE.contains("Wait for that turn"), "{BASELINE}");
+    assert!(
+        BASELINE.contains("A later turn comes only where the part is coming back to you"),
+        "the outcome that does send one"
+    );
+    assert!(
+        BASELINE.contains("Every other outcome ends your part where it stands"),
+        "the outcomes that do not"
+    );
+    for counted in ["attempts left", "attempt of", "last try", "retry"] {
+        let said = BASELINE.to_lowercase();
+        assert!(!said.contains(counted), "the baseline counts: {counted}");
+    }
+}
+
 /// The tool is **described, not named**: the MCP tool's own description carries
 /// its name, so the prompt and the tool cannot drift apart.
 #[test]

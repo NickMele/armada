@@ -323,7 +323,7 @@ which is an assembled prompt and therefore governed here.
 | **The poke** | Liveness nudge, bounded by `poke_limit` | Drafted, not sanctioned |
 | **The clarification reprompt** | Evidence arrived but was insufficient | Drafted, not sanctioned |
 | **The force-interrupt directive** | A thrashing verdict | Drafted, not sanctioned |
-| **The refusal reprompt** | A Judge refused a criterion after a mechanical check passed | Specified |
+| **The refusal reprompt** | A Judge refused a criterion after a mechanical check passed. **It rides a brief and is injected into nothing** — the refusal ends the step, and its Drone with it | Specified |
 | **`redirect_drone`** | A structured instruction from a human, or from Helm at rung 1 | A person writes it |
 | **The Pilot handoff instruction** | Fleet tells the Drone to call `escape_hatch` after a human confirms Pilot | Drafted, not sanctioned |
 | **The hatch-unavailable answer** | A Drone pulled the hatch on a Job Fleet had not marked | Drafted, not sanctioned |
@@ -498,16 +498,29 @@ other counter does.
 
 ## The refusal reprompt
 
-Carries the Judge record's `expected` and `produced` back to the Drone.
+Carries the Judge record's `expected` and `produced` back to a Drone.
 Never `consequence`, which is written for a person deciding whether to
 care, and never a counter.
 
 The closing line is where `what_changed` on the next work submission comes
 from — [Agent Copy Contract](agent-copy.md).
 
+**It reaches no Drone in the middle of a session, and none of the fields
+change for that.** A refusal stops the step, so the Drone that submitted the
+work has ended by the time the verdict exists, and no path injects this.
+Where it does arrive is the opening brief of a Drone a person restarts the
+step with, under the rule above: the frame is re-tensed for a reader with no
+memory of submitting anything, and the two rows are unchanged.
+
+**So the baseline promises a later turn only where the part is coming back**
+— section 5. A refusal is not that, and a Drone told to wait for a turn no
+path sends waits, holding a session, until a person notices.
+
 ```
-┌─ TURN ─────────────────────────────────────────
-│ Part 2 did not pass.
+┌─ WHY THIS PART IS BEING DONE AGAIN ────────────
+│ An earlier attempt at this part was checked and
+│ did not pass. Its work is on the branch you are
+│ in.
 │
 │   Expected   Suite red when a work machine's row
 │              shows 68% quota left
@@ -515,7 +528,7 @@ from — [Agent Copy Contract](agent-copy.md).
 │              spend at all
 │
 │ Address this and submit again. Say what changed
-│ since your last submission.
+│ since the last submission.
 └────────────────────────────────────────────────
 ```
 
@@ -743,7 +756,7 @@ examples is unmeasured.
 ## The M1 renderings
 
 **The Kit and Manifest layers are absent, because M1 has neither.** The
-six-layer order in section 3 is unchanged. Seven decisions fell out of
+six-layer order in section 3 is unchanged. Eight decisions fell out of
 writing these, and each is visible in the text.
 
 **The reporting clause is load-bearing, not a reminder.** Given one MCP
@@ -791,6 +804,15 @@ stalls on every step. Measured in
   that left nothing behind into a part that declined to answer. The Code
   Review rendering below draws that case; the Bug rendering above draws the
   other.
+- **The receipt paragraph says which outcome comes back and which does not.**
+  It used to promise a later turn with the reason whenever the work did not
+  pass, and one outcome sends one: a Check that failed with an attempt left.
+  A refusal, a gaming flag and a gate that could not decide each stop the step
+  and go to a person, and none of them carries a message; a step that passes
+  ends its Drone as well. Written only about refusals it would leave a Drone
+  whose work passed reading its own silence as one, so the promise is stated
+  positively — a turn where the part is coming back, and every other ending
+  named as an ending.
 
 The rule they all serve — that a Drone is never told what the Checks are —
 is on [Drone](../concepts/drone.md), since it governs every Drone-facing
@@ -811,9 +833,14 @@ surface rather than only these samples.
 │ will not move on.
 │
 │ Submitting returns "recorded". That is a receipt, not
-│ a verdict — your work is checked after you submit. If
-│ it does not pass you will be told in a later turn,
-│ with the reason. Wait for that turn.
+│ a verdict — your work is checked after you submit. A
+│ later turn comes only where the part is coming back to
+│ you: a check failed and there is another attempt, or
+│ what you submitted could not be read. Wait for it
+│ rather than submitting again. Every other outcome ends
+│ your part where it stands and sends you nothing — work
+│ that runs and is refused for what it is goes to a
+│ person, and you are not asked about it again.
 └──────────────────────────────────────────────
 ┌─ JOB BRIEF ───────────────────────────────────
 │ Repository: armada
@@ -1033,7 +1060,7 @@ below.
 | --- | --- |
 | **Tool documentation.** How a Drone is shown its Commands and MCP tools, and with what descriptions. Commands, MCP and Sub agents are frozen for the Job and this contract names no wording for any of them. Tracked separately | 2, 3 |
 | **No token budget** for the assembled prompt. Six layers plus a corpus, unbounded | 3 |
-| **Wording for the injected turns.** Every turn Fleet authors is drafted rather than sanctioned, save the refusal reprompt | 4a |
+| **Wording for the injected turns.** Every turn Fleet authors and injects is drafted rather than sanctioned. The one entry with sanctioned wording, the refusal reprompt, is injected into nothing — it rides a brief | 4a |
 | **The `Commit/PR message template` collision.** A Manifest template is layer-3 prompt content and it is a shape rule. Section 5 forbids shape rules in the baseline and says nothing about layers 2 to 6. Precedence against the copy lint is undecided | 3, 5 |
 | **Prior-iteration context on loop workflows.** Evidence Scope appends it, which is a further source of prompt content — and for the Judge it sits oddly against "stateless, one-shot, no memory between calls" | 2, 3 |
 | **Helm has no frozen/live story.** Sessions are persistent and per-Manifest; Voice and authority are configurable; Helm has no respawn path. What happens to a live session when the Kit or Machine config changes is unstated | 4 |

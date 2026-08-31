@@ -68,6 +68,37 @@ use crate::crossing::{Crossed, Produced, Reconciling, Redirected};
 ///
 /// **Mechanics, never task content**, and identical on every step of every Job
 /// — which is what makes it a constant rather than something assembled.
+///
+/// # The third paragraph names which outcome comes back and which does not
+///
+/// It used to promise a later turn carrying the reason whenever the work did
+/// not pass, and exactly one outcome keeps that promise:
+/// [`Ruling::HandedBack`] carries a `tell`, built from what each Check
+/// expected and produced. [`Ruling::Refused`], [`Ruling::Suspect`] and
+/// [`Ruling::CouldNotDecide`] have no message field at all — the step stops,
+/// the Job escalates, and `crate::dispatch` terminates without a turn. So a
+/// Drone that had been told to wait waited, holding a live session, until a
+/// person noticed. Twice on one Job, nineteen hours, almost all of it that
+/// wait.
+///
+/// **The promise narrowed rather than the system gaining a message.** Telling
+/// a refused Drone changes nothing it can act on — a refusal says the work
+/// runs and is not what was asked for, which resubmitting under the same
+/// instructions cannot answer — and `#140` ends a Drone when its step's work
+/// clears the machine gates, so by the time the verdict exists the process is
+/// ending either way. What was left to fix was the sentence.
+///
+/// **It is stated positively, over both halves.** "You may not hear back" is
+/// true and tells a Drone nothing, and a rule written only about refusals
+/// would leave a Drone whose work *passed* reading its own silence as one: a
+/// step that advances ends its Drone too, and sends nothing. So the turn is
+/// promised where the part is coming back, and every other ending is named as
+/// an ending.
+///
+/// [`Ruling::HandedBack`]: crate::Ruling::HandedBack
+/// [`Ruling::Refused`]: crate::Ruling::Refused
+/// [`Ruling::Suspect`]: crate::Ruling::Suspect
+/// [`Ruling::CouldNotDecide`]: crate::Ruling::CouldNotDecide
 pub const BASELINE: &str = "\
 You are working in a git worktree on a branch of your own. You cannot push, \
 open a pull request, or run commands this repository has not declared.
@@ -77,8 +108,12 @@ evidence submission tool you have been given. It is the only way to report. \
 Work you do not submit is work no one sees, and the task will not move on.
 
 Submitting returns \"recorded\". That is a receipt, not a verdict — your work \
-is checked after you submit. If it does not pass you will be told in a later \
-turn, with the reason. Wait for that turn.";
+is checked after you submit. A later turn comes only where the part is coming \
+back to you: a check failed and there is another attempt, or what you \
+submitted could not be read. Wait for it rather than submitting again. Every \
+other outcome ends your part where it stands and sends you nothing — work \
+that runs and is refused for what it is goes to a person, and you are not \
+asked about it again.";
 
 /// What a Drone being put on a worktree is opening with.
 ///
