@@ -32,6 +32,7 @@ use crate::enums::{
 };
 use crate::ids::{CriterionId, Instant, JobId, StepId};
 use crate::job::{JobSummary, Subject};
+use crate::overlap::ScopeOverlap;
 use crate::work::JobFootprint;
 
 /// What Fleet knows about one step beyond its `job_steps` row.
@@ -147,6 +148,21 @@ pub struct JobDetail {
     /// waiting. Nothing here can go stale, because nothing here is remembered.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub redirect_waiting: Option<RedirectWaiting>,
+    /// Other Jobs claiming to write where this one says it will.
+    ///
+    /// **A fact, never a verdict.** `docs/concepts/fleet.md` — "Surfaced,
+    /// never serialised." Nothing here refuses a dispatch, and there is no
+    /// field a Bridge could read as one; a person approving anyway is the
+    /// ordinary case.
+    ///
+    /// **Absent is not empty**, the same pair `write_targets` draws. Absent
+    /// is a Job that has claimed nothing yet — every Job the proposer drafted,
+    /// until its first scope step declares — so there was no comparison to
+    /// make. Present and empty is a comparison that ran and found nobody. A
+    /// card that showed those two the same way would say "no overlap" about a
+    /// Job nothing had looked at.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub write_scope_overlaps: Option<Vec<ScopeOverlap>>,
     /// What kind of stuck this Job is, and what moves it.
     ///
     /// **Absent is "this Job did not stop"**, and it is the whole of the
@@ -253,6 +269,7 @@ impl JobDetail {
         footprint: Option<JobFootprint>,
         redirecting: Option<RedirectInFlight>,
         stuck: Option<&core_model::Stuck>,
+        write_scope_overlaps: Option<Vec<ScopeOverlap>>,
     ) -> JobDetail {
         JobDetail {
             job: JobSummary::of(job, reason, queued_reason),
@@ -293,6 +310,10 @@ impl JobDetail {
             // not carry, and this one is a column on `jobs`. A caller asked to
             // hand it in could hand in a note the record had already cleared.
             redirect_waiting: job.redirect_waiting().map(RedirectWaiting::of),
+            // An argument like the six above it, and for their reason: which
+            // other Jobs claim these paths is not a field of this Job, and
+            // working it out needs every other Job's record.
+            write_scope_overlaps,
             stuck: stuck.map(Stuck::of),
         }
     }

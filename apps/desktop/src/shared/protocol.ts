@@ -83,6 +83,20 @@ export type JobDetail = {
   /** The DAG edges this Job sits on. Empty until something writes one. */
   dependencies: Dependency[];
   /**
+   * Other unfinished Jobs claiming to write where this one says it will. Since
+   * protocol 5.3.
+   *
+   * **A fact, never a verdict.** Nothing here refuses a dispatch and no surface
+   * may read it as one — `docs/concepts/fleet.md`, "Surfaced, never serialised".
+   *
+   * **Absent is not empty.** Absent is a Job that has claimed nothing yet, so
+   * no comparison was made; that is every Job at its approval gate, because
+   * the proposer does not fill `write_targets` in. An empty array is a
+   * comparison that ran and found nobody. Drawing them the same way would say
+   * "no overlap" about a Job nothing had looked at.
+   */
+  write_scope_overlaps?: ScopeOverlap[];
+  /**
    * What the worktree held when the job stopped. Since protocol 4.12.
    *
    * **Absent on every job that is still going**, which is not a gap — a job
@@ -647,6 +661,34 @@ export type ProposeJob = {
   attachments?: AttachmentRef[];
 };
 
+/**
+ * One other Job claiming paths this one claims. `crates/ipc/src/overlap.rs`.
+ *
+ * One entry per Job rather than per path: a person decides about the other Job,
+ * so the Job is the row and the paths are its detail.
+ */
+export type ScopeOverlap = {
+  job_id: string;
+  /** What the other Job is called. Carried, so a card names it rather than an id. */
+  title: string;
+  /** Where the other Job is. `running` and `awaiting_review` are weighed differently. */
+  status: string;
+  /** Never empty. The entry exists because a path is shared. */
+  paths: SharedPath[];
+};
+
+/**
+ * One place both Jobs claim, and who claimed it on each side. A step id is a
+ * Drone's own declaration; absent is the Job's `write_targets`, which the
+ * requester stated before anything ran.
+ */
+export type SharedPath = {
+  /** The narrower of the two claims — where the collision is, not what contains it. */
+  path: string;
+  this_step?: string;
+  other_step?: string;
+};
+
 export type ProposedCriterion = { text: string; source: string };
 
 /**
@@ -656,150 +698,6 @@ export type ProposedCriterion = { text: string; source: string };
  * never sends a payload over this channel.
  */
 export type AttachmentRef = { staged_path: string; filename: string; mime_type: string };
-
-/** One message from Fleet to a connected client. `crates/ipc/src/event.rs`. */
-export type StreamMessage =
-  | ({ message: "resync" } & Resync)
-  | ({ message: "event" } & Delivered)
-  | ({ message: "missed" } & Missed);
-
-export type Resync = {
-  protocol_version: ProtocolVersion;
-  cursor: number;
-  jobs: JobList;
-};
-
-export type Delivered = {
-  cursor: number;
-  event: Event;
-};
-
-/** The bound was reached and the oldest were dropped. Always followed by a resync. */
-export type Missed = { dropped: number };
-
-export type Event =
-  | ({ kind: "job.created" } & JobCreated)
-  | ({ kind: "job.state_changed" } & JobStateChanged)
-  | ({ kind: "job.step_advanced" } & JobStepAdvanced)
-  | ({ kind: "job.files_changed" } & JobFilesChanged)
-  | ({ kind: "job.judging" } & JobJudging)
-  | ({ kind: "job.forgotten" } & JobForgotten);
-
-/**
- * A Job exists that did not before, carrying the row whole.
- *
- * **Not a state change.** A created Job has no status it moved from, so a
- * `job.state_changed` here would name a transition the edge table does not
- * have. The summary travels with it, so the list inserts the row rather than
- * re-reading everything to learn one.
- */
-export type JobCreated = {
-  job: JobSummary;
-  actor: string;
-  at: string;
-};
-
-export type JobStateChanged = {
-  job_id: string;
-  from: string;
-  to: string;
-  reason?: Reason;
-  actor: string;
-  at: string;
-};
-
-/**
- * A step of the frozen WorkflowDef moved. **The Job did not.**
- *
- * `from` and `to` are `job_steps.state`; `status` is the status the move
- * happened *beneath* and is unchanged by this event. A client that folded it as
- * a status change would draw a transition that never happened.
- *
- * The whole row travels, because `current_step_id` has already moved — which is
- * the reload this event exists to stop.
- */
-export type JobStepAdvanced = {
-  /** The Job as it now stands. Replaces the row whole; never patched into it. */
-  job: JobSummary;
-  step_id: string;
-  from: string;
-  to: string;
-  /** The status the step moved beneath. Not a status change. */
-  status: string;
-  actor: string;
-  at: string;
-};
-
-/**
- * What the working Drone has changed in its worktree, as of one reading.
- * `crates/ipc/src/event.rs`.
- *
- * **The whole footprint, not a delta.** A client replaces the list it holds
- * rather than folding this into one, so a file that stopped being changed — a
- * revert, a checkout — leaves the view by not being in the next reading.
- *
- * It names no `JobSummary`, unlike the kinds that move a row: nothing on the
- * Board changes when a file does, and this is read by a detail view somebody
- * opened on one Job.
- */
-export type JobFilesChanged = {
-  job_id: string;
-  /** Which step's Drone did it. The footprint is the Job's whole work. */
-  step_id: string;
-  drone_id: string;
-  /**
-   * Whether the step has a declared plan for `outside_plan` to mean anything.
-   * **False is "there is no plan", not "nothing drifted"**, and a surface that
-   * drew the two the same way would report every unscoped step as on plan.
-   */
-  plan_declared: boolean;
-  /** Every file, in the order the reading found them. Empty is a real answer. */
-  files: ChangedFile[];
-  actor: string;
-  at: string;
-};
-
-/**
- * A Judge call went out on a step, or the one that was out came back.
- * `crates/ipc/src/event.rs`.
- *
- * **Two messages per call and never a third.** The one going out carries
- * `judging`; the one coming back carries nothing, and that absence is the
- * message rather than the stream going quiet. Elapsed is subtracted from
- * `since` here, so a call that takes the whole two-minute budget costs the
- * channel two messages rather than one a second.
- *
- * It names no `JobSummary`: nothing on the Board's row changes when a call goes
- * out, and this is read by a detail view somebody has open on one Job — the
- * same terms as `job.files_changed`.
- */
-export type JobJudging = {
-  job_id: string;
-  step_id: string;
-  /** The call that went out, or absent because it came back. */
-  judging?: JudgeInFlight;
-  actor: string;
-  at: string;
-};
-
-/**
- * One file in the Drone's footprint. **A name and a kind, never bytes** — what
- * changed inside a file is the patch, which is read only when a Judge fires and
- * is deliberately not on this seam.
- */
-export type ChangedFile = {
-  /** Repository-relative, exactly as git spells it. */
-  path: string;
-  /** `added`, `modified`, `deleted`, `renamed`, `copied`, `type_changed`,
-   * `conflicted`, `unreadable`. Left as `string` like every other closed set. */
-  change: string;
-  /**
-   * Not covered by the plan the step declared. **A mark, not a judgement** —
-   * it restates a comparison already made and decides nothing. Always false
-   * where the step declared no plan, which is what `plan_declared` is for.
-   */
-  outside_plan?: boolean;
-};
 
 /**
  * What a person sends to say a Job failed in error. `crates/ipc/src/report.rs`.
@@ -882,6 +780,24 @@ export type Calibration = {
  * too rather than declared twice for one fact.
  */
 export type JobForgotten = { job_id: string };
+
+// Every event shape, re-exported so `protocol.ts` stays the one import for the
+// wire vocabulary. They live in `events.ts` because this file reached the 900
+// lines the gate refuses; the cut is the socket seam `crates/ipc/src/event.rs`
+// already draws.
+export type {
+  ChangedFile,
+  Delivered,
+  Event,
+  JobCreated,
+  JobFilesChanged,
+  JobJudging,
+  JobStateChanged,
+  JobStepAdvanced,
+  Missed,
+  Resync,
+  StreamMessage,
+} from "./events";
 
 /** A failure, flattened for the wire. `docs/contracts/error-contract.md`. */
 export type WireError = {

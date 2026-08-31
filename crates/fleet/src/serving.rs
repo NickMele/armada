@@ -183,6 +183,12 @@ where
         // classification reads them to answer whether an override is available,
         // and reading them twice would be a second answer to one question.
         let stuck = self.why_stuck(&job, reason.as_ref(), &ran).await;
+        // A read, and only ever a read — `crate::overlap` says why it is
+        // reachable from here and from nothing on the dispatch path.
+        let overlaps = self
+            .write_scope_overlaps(&job)
+            .await
+            .map_err(|why| self.refusal(why))?;
         Ok(JobDetail::of(
             &job,
             reason.as_ref(),
@@ -193,6 +199,7 @@ where
                 .map(|(footprint, plans)| kept(footprint, plans)),
             self.redirect_awaited(job.id()).await,
             stuck.as_ref(),
+            overlaps,
         ))
     }
 

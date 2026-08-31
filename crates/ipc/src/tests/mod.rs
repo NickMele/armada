@@ -148,6 +148,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
         None,
         None,
         None,
+        None,
     );
     let json = encode(&ungated).expect("a detail is plain data");
     assert!(json.contains("\"checks\":[]"), "declares none: {json}");
@@ -165,6 +166,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             flagged: Vec::new(),
             judging: None,
         }],
+        None,
         None,
         None,
         None,
@@ -201,10 +203,11 @@ fn a_step_with_no_label_reads_as_its_id() {
         None,
         None,
         None,
+        None,
     );
     assert_eq!(detail.steps[0].label, "repro");
 
-    let unanswerable = JobDetail::of(&job(), None, None, &[], None, None, None);
+    let unanswerable = JobDetail::of(&job(), None, None, &[], None, None, None, None);
     assert_eq!(unanswerable.steps[0].label, "repro");
 }
 
@@ -236,6 +239,7 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
             flagged: Vec::new(),
             judging: None,
         }],
+        None,
         None,
         None,
         None,
@@ -295,6 +299,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
         None,
         None,
         None,
+        None,
     );
     let json = encode(&detail).expect("a detail is plain data");
 
@@ -317,7 +322,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
 /// ungated step says so about its Checks.
 #[test]
 fn a_step_the_judge_was_never_asked_about_carries_an_empty_list() {
-    let detail = JobDetail::of(&job(), None, None, &[], None, None, None);
+    let detail = JobDetail::of(&job(), None, None, &[], None, None, None, None);
     let json = encode(&detail).expect("a detail is plain data");
     assert!(json.contains("\"judged\":[]"), "{json}");
 }
@@ -338,7 +343,7 @@ fn a_note_waiting_for_the_next_drone_crosses_until_it_is_delivered() {
         )
         .expect("nothing was waiting");
 
-    let held = JobDetail::of(&waiting, None, None, &[], None, None, None);
+    let held = JobDetail::of(&waiting, None, None, &[], None, None, None, None);
     let json = encode(&held).expect("a detail is plain data");
     assert_eq!(
         held.redirect_waiting
@@ -363,6 +368,7 @@ fn a_note_waiting_for_the_next_drone_crosses_until_it_is_delivered() {
         None,
         None,
         &[],
+        None,
         None,
         None,
         None,

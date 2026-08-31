@@ -127,6 +127,9 @@ mod gate;
 pub mod judging;
 mod landing;
 pub mod mint;
+/// Where two Jobs claim the same paths, worked out at read time. **A
+/// warning and nothing else** — no dispatch path reaches it.
+pub mod overlap;
 pub mod overruling;
 pub mod peer;
 pub mod preparing;

@@ -113,15 +113,25 @@ Known cost: permissions intersect across the declared set, so a respawned Drone 
 
 **Fleet makes the [Job proposer](job-proposer.md) call on every dispatch path**, single-Workspace repos included, and surfaces what comes back at the dispatch approval gate above rather than acting on it. What it proposes, and why it runs uniformly, are on that document.
 
-What Fleet takes from it: every Job arrives carrying `write_targets`, which is what the overlap warning below compares.
+What Fleet takes from it: a workflow, a title, and how many Jobs the request is. **Not `write_targets`** — the proposer does not propose them, so a Job reaches the gate with `write_targets` null, and null is not empty. Which paths the work touches is the first step's, declared by a Drone that has read the code.
+
+This sentence used to say the opposite, and the overlap warning below was written on it. It was wrong from the day the proposer shipped.
 
 ### Write-scope overlap
 
-**Surfaced, never serialised.** Fleet compares a Job's `write_targets` against those of every Job already running under the same root and, where they intersect, says so on the approval card — naming the Job and offering to make this one `depends_on` it instead. Approving anyway is allowed and is the common case.
+**Surfaced, never serialised.** Where two unfinished Jobs claim the same paths, Fleet says so on each one's detail — naming the other Job, its status, and the paths both reach. Nothing is held back and nothing is refused: approving anyway is allowed and is the common case.
 
 **It is deliberately not a lease.** Why: `write_targets` is a declaration and a Drone's worktree is a whole-repo checkout, so a hold over declared paths would serialise the Jobs that declared honestly and miss the one that wrote somewhere it never named — which is the collision nobody saw coming.
 
-The remedy needs no new state: `depends_on` already sequences Jobs and already parks the waiting one at `blocked_by_dependency`.
+**It compares what two Jobs claimed, and a claim is not a write.** The Job that never names a path and writes there anyway produces nothing here, and cannot: that is the same whole-repo checkout the paragraph above turns on. The check that reads a real diff is the per-step drift check, and it measures one step against its own plan.
+
+**A Job's claim has two possible authors, and the warning says which.** `write_targets` is what the requester stated before anything ran, and it is null on every Job the proposer drafted. A step's declared plan is what the Drone working it said, having read the code, and it is what a running Job actually has. Both are compared; each named path says which author it came from on each side. The latest run of a step replaces its earlier runs, because calling the scope tool again is how a Drone corrects its plan.
+
+**A Job that has claimed nothing is not compared at all**, and that answer is distinct from "compared and found nobody". Every proposer-drafted Job is in the first state at its approval gate, so **the overlap is ordinarily first visible once both Jobs are running** rather than on the card of the second one to be approved. Naming an overlap before the second Job's paths are known would need the proposer to guess them, which was measured and rejected — see [Job proposer](job-proposer.md).
+
+**Every unfinished Job, not only the running ones.** The pair is one fact and it has to read the same from either side; naming only the running peers would have made two Jobs' detail views disagree about whether there is a collision. The other Job's status travels with the warning, so a person can see which of the two is already writing.
+
+The remedy needs no new state: `depends_on` already sequences Jobs and already parks the waiting one at `blocked_by_dependency`. **Taking it is not built** — there is no operation that writes an edge onto a Job that already exists, and this page says above that a Job's edges are written once, at creation. What a person has today is the two gate answers they already had.
 
 ### Catching a branch up
 

@@ -46,7 +46,9 @@ A revision can change the shape itself: dropping to one `write_target`, or clear
 
 **How a Convoy renders in the Board's graph view is open, and is the Board's question rather than this one** — see [Job Board](job-board.md), Open questions.
 
-**A Convoy overlaps more concurrent work than a single-workspace Job, by construction.** Its declared scope is wider, so its `write_targets` intersect more of what else is running, and the approval card will name a collision more often for one.
+**A Convoy overlaps more concurrent work than a single-workspace Job, by construction.** Its declared scope is wider, so its `write_targets` intersect more of what else is running, and the overlap warning will name a collision more often for one.
+
+A Convoy is also one of the few Jobs the warning can speak about *at its gate*: the shape is derived from `write_targets`, so a Job that is a Convoy is by definition one whose scope was stated before it ran. Every proposer-drafted Job reaches its gate with that field null and is not compared until a Drone declares.
 
 The alternative to one Job spanning coupled Workspaces is several Jobs touching the same set, which collides identically and lands in pieces. Overlap is surfaced and never serialised; see [Fleet](fleet.md), Scheduling and gating.
 

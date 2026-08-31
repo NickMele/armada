@@ -63,6 +63,9 @@ mod job;
 /// Fleet to Bridge — so it is a module rather than a flat re-export and none of
 /// its types are in `operations.toml`.
 pub mod mcp;
+/// Where two Jobs claim the same paths. **A fact on the card, never a
+/// verdict** — nothing in it is readable as a refusal.
+mod overlap;
 /// What a person says went wrong, with the Job's own record attached.
 mod report;
 mod setup;
@@ -99,6 +102,7 @@ pub use job::{
     AttachmentRef, DependencyEdge, JobForgotten, JobList, JobRequest, JobSummary, ProposeJob,
     ProposedCriterion, ProposedPlan, Redirection, Redispatched, Subject, UnreadableJob,
 };
+pub use overlap::{ScopeOverlap, SharedPath};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
 pub use turn::{Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage, Withheld};

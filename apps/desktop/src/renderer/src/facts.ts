@@ -60,6 +60,7 @@ export function factsOf(
       ? []
       : [{ label: "Drone", value: job.assigned_drone, mono: true, copyValue: job.assigned_drone }]),
     ...scopeFacts(whole),
+    ...overlapFacts(whole),
     ...(whole?.subject === undefined
       ? []
       : [
@@ -151,6 +152,33 @@ function scopeFacts(whole: JobWhole | null): JobDetailField[] {
       copyValue: whole.write_targets.join(" "),
     },
   ];
+}
+
+/**
+ * Who else claims these paths. **A fact in the run, not a warning banner** —
+ * `docs/concepts/fleet.md` says the overlap is surfaced and never serialised,
+ * and a fact beside `Writes` is what that looks like on screen. Nothing here
+ * is red, nothing here disables anything, and approving anyway is the ordinary
+ * case.
+ *
+ * Absent and empty are both silent, and for the same reason: neither is
+ * something to tell a person. Their difference is on the wire and is what stops
+ * a future surface saying "no overlap" about a Job nothing compared.
+ */
+function overlapFacts(whole: JobWhole | null): JobDetailField[] {
+  return (whole?.write_scope_overlaps ?? []).flatMap((other) => {
+    const paths = other.paths.map((shared) => shared.path);
+    return [
+      { label: "Overlaps", value: other.title, copyValue: other.job_id },
+      {
+        label: "on",
+        value: paths.join(", "),
+        mono: true,
+        copyValue: paths.join(" "),
+        continues: true,
+      },
+    ];
+  });
 }
 
 /** The steps in the order they were frozen. `ordinal` is the order, not the array. */

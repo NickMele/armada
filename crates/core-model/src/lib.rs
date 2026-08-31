@@ -42,10 +42,10 @@ mod job;
 pub use envelope::{
     env_keys, Actor, AuditLine, Component, Envelope, FieldValue, Level, Timestamp, Ulid,
 };
-pub use job::under;
+pub use job::{collisions, under};
 pub use job::{
     AcceptanceCriterion, AdvanceGate, Attachment, Attempt, BadPattern, BlankBranch, BlankModel,
-    BlankTitle, Branch, CheckOutcome, ContextSource, Covers, CriteriaOwed, CriterionId,
+    BlankTitle, Branch, CheckOutcome, Collision, ContextSource, Covers, CriteriaOwed, CriterionId,
     CriterionSource, DecidedBy, DeclarePlanAt, DeclaredPaths, DependencyDirection, DependencyEdge,
     DispatchOrigin, DroneAssigned, DroneId, DroneMoved, DronePresence, Edge, EscalationTrigger,
     EvidenceRef, EvidenceScope, EvidenceType, Facts, FrozenWorkflow, GamingCheck, GamingFlag,
@@ -53,9 +53,10 @@ pub use job::{
     IllegalTransition, Job, JobEvent, JobId, JobStatus, JobStep, JudgeCheck, JudgeCriterion,
     JudgeVerdict, Judgment, ManifestId, ModelName, NewJob, NotRunDisposition, NotRunReason, Origin,
     PathPattern, PilotReason, QueuedReason, Recourse, RedirectAlreadyWaiting, RedirectWaiting,
-    RepoPath, ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome, Standing,
-    StepCheck, StepEdge, StepEvent, StepEvidence, StepId, StepLevelTrigger, StepSeed, StepState,
-    StepTarget, StepTransitioned, StepVerdict, Stuck, Subject, Target, Title, TopLevelOrigin,
-    TransitionReason, Transitioned, TriggerKind, TriggerLevel, Urgency, WorkflowId, WriteTargets,
-    ADVANCING_STATUSES, ARTIFACT_EXISTS, DIFF_NONEMPTY, EDGES, MANIFEST_CHECK, STEP_EDGES,
+    RepoPath, ResolvedCheck, ResolvedStep, ScopeClaim, ScopeRevision, ScopeRevisionOutcome,
+    Standing, StepCheck, StepEdge, StepEvent, StepEvidence, StepId, StepLevelTrigger, StepSeed,
+    StepState, StepTarget, StepTransitioned, StepVerdict, Stuck, Subject, Target, Title,
+    TopLevelOrigin, TransitionReason, Transitioned, TriggerKind, TriggerLevel, Urgency, WorkflowId,
+    WriteTargets, ADVANCING_STATUSES, ARTIFACT_EXISTS, DIFF_NONEMPTY, EDGES, MANIFEST_CHECK,
+    STEP_EDGES,
 };

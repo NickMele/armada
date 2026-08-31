@@ -31,15 +31,15 @@ use crate::tests::planning::A_PLAN;
 use crate::tests::proposing::a_catalogue;
 use crate::tests::tmp::TempDir;
 
-type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
+pub(crate) type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
 /// The port Fleet is listening on in these fixtures — the far half of every
 /// pair below, and the same number `daemon::fittings` puts on the `Host`.
-const SERVED_ON: u16 = 47821;
+pub(crate) const SERVED_ON: u16 = 47821;
 
 /// One step that declares a scope, so a Drone has something to say that lands
 /// on its own step and nowhere else.
-fn one_scoped_step() -> config::ResolvedWorkflow {
+pub(crate) fn one_scoped_step() -> config::ResolvedWorkflow {
     testkit::resolved(&[Sketch {
         id: "implement",
         label: "Implement",
@@ -57,7 +57,7 @@ fn one_scoped_step() -> config::ResolvedWorkflow {
 }
 
 /// A Fleet bounded at two, whose callers are placed by a plant the test holds.
-fn two_at_once(home: &TempDir) -> (Fixture, Arc<Placing>) {
+pub(crate) fn two_at_once(home: &TempDir) -> (Fixture, Arc<Placing>) {
     let peers = Placing::nothing();
     let mut fittings: Fittings<FakeHarness, FakeVcs, FakeWorkProduct> =
         fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
@@ -68,7 +68,7 @@ fn two_at_once(home: &TempDir) -> (Fixture, Arc<Placing>) {
 }
 
 /// Propose and approve a Job, with the worktree its dispatch will want.
-async fn approved(fleet: &Fixture, home: &TempDir, title: &str) -> JobId {
+pub(crate) async fn approved(fleet: &Fixture, home: &TempDir, title: &str) -> JobId {
     let job = fleet
         .propose(a_proposal(title))
         .await
@@ -97,7 +97,7 @@ async fn declared_on(fleet: &Fixture, job: &JobId) -> Option<Vec<String>> {
 /// Say which Drone is calling from which port, by asking Fleet for the pids it
 /// is holding. **The plant is the seam and the pids are real** — the mapping a
 /// live Fleet reads out of the kernel is the mapping this writes down.
-fn calling_from(peers: &Placing, drones: &[(JobId, u32)], job: &JobId, port: u16) {
+pub(crate) fn calling_from(peers: &Placing, drones: &[(JobId, u32)], job: &JobId, port: u16) {
     let pid = drones
         .iter()
         .find(|(held, _)| held == job)

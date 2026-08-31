@@ -179,11 +179,17 @@ How a Convoy renders in the graph view is separate and unsettled — see Open qu
 
 **So no row's control approves anything. A Job awaiting approval carries Review.** The built row shipped an Approve control, which contradicted this rule the whole time it was on screen; settled 2026-08-31 in favour of the rule. Review is the same word the `awaiting_review` row already carries, and it means the same thing in both places — *go read this* — because in both places the act itself happens on detail. The Board's keyboard model loses its Approve key entirely rather than moving it. Why: this keeps the one-by-one approval discipline intact even when browsing quickly — see the Armada brief on Drone dispatch control.
 
-### Write-scope overlap on the card
+### Write-scope overlap on the detail
 
-**The card names a write-scope overlap.** Where this Job's `write_targets` intersect those of a Job already running under the same root, the detail view says so, names the other Job, and offers to make this one `depends_on` it rather than run alongside.
+**The detail view names a write-scope overlap.** Where this Job claims paths another unfinished Job also claims, it says so, names the other Job, gives its status, and lists the paths both reach.
 
-Approving anyway is allowed and is the ordinary case — the overlap is a fact, not a verdict, and two Jobs touching one package usually merge fine. Taking the offer creates an ordinary dependency edge, so the Job returns here at `queued` with `blocked_by_dependency` and no new reason exists for this. See [Fleet](fleet.md), Scheduling and gating.
+Approving anyway is allowed and is the ordinary case — the overlap is a fact, not a verdict, and two Jobs touching one package usually merge fine. Nothing on this screen is greyed out or refused by it.
+
+**It is not always on the approval card, and usually is not.** A Job's paths come from its `write_targets`, which the proposer does not fill in, or from a Drone's own declaration, which arrives after dispatch. So the ordinary place this appears is on two *running* Jobs, not on the second one's gate — [Fleet](fleet.md), Write-scope overlap, says why the alternative was rejected.
+
+**Absent is not empty.** A Job that has claimed nothing yet is one nothing has compared, and the screen must not read as "no overlap" for it. That is every Job at its approval gate today.
+
+**The offer to make this Job `depends_on` the other is not built.** It is the sanctioned remedy and it stays described here, but there is no operation that adds an edge to an existing Job. See [Fleet](fleet.md), Scheduling and gating.
 
 ### Controls on a sub-dispatched row
 
