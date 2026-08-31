@@ -96,14 +96,27 @@ where
     ) -> Result<(), Adrift> {
         let job_id = job.id().clone();
         let owed = self.owed(&job)?;
-        // Before the Job moves. A worktree that has been reclaimed is a Job
-        // whose earlier steps' work is not on disk, and there is nothing to put
-        // a Drone back onto — the same refusal `restart_step` makes, made
-        // before the status has moved rather than after.
+        // Read before the Job moves. A worktree that has been reclaimed is a
+        // Job whose earlier steps' work is not on disk, and there is nothing to
+        // put a Drone back onto — the same refusal `restart_step` makes, asked
+        // before anything else is done rather than after.
         let worktree = match self.surviving_worktree(&job) {
             Ok(worktree) => worktree,
             Err(cause) => {
-                self.interrupt(&job).await?;
+                // **Admitted, then stopped, and the record says both.** The Job
+                // is `queued` here — `admit_next` reads no other kind — and
+                // `queued -> escalated` is the edge `dependency_failed` owns,
+                // which by the edge table's own rule accepts that trigger and
+                // no other. So this arm could not escalate at all: until
+                // 2026-08-31 it asked for `interrupted`, got the machine's
+                // `WrongTrigger` back, returned *that* in place of the missing
+                // worktree, and left the Job `queued` for admission to fail on
+                // again every turn. Moving through `running` is what makes an
+                // escalation reachable from here, and it is true — Fleet took
+                // the slot and then found nothing in it to work in.
+                let job = self.move_job(&job, Target::Running, Actor::Fleet).await?;
+                self.stopped_before_a_drone(&job, core_model::EscalationTrigger::NoWorktree)
+                    .await?;
                 return Err(cause);
             }
         };

@@ -18,6 +18,12 @@
 # A trigger with none fires `running -> escalated`, which that edge's own row
 # in job-transitions.toml names as the default.
 #
+# A row that names one names a *second* edge and not its only one: the default
+# admits every trigger, so what a declared edge adds is a `from` no other
+# trigger may reach `escalated` from. Read as the only one it made
+# `interrupted`'s meaning unreachable, which is what [interrupted-transition-set]
+# asked about until 2026-08-31.
+#
 # Fields:
 #   kind            - Trigger | Sub-kind
 #   level           - Step | Job. Empty on a sub-kind, which takes its parent's.
@@ -164,7 +170,9 @@ in_code = "Not yet"
 notes = """
 Set by Fleet's restart reconciliation. Behaviourally identical to any other escalation — the Job is paused and surfaced for a human decision; the distinction is in what happened, not in what the system does about it.
 
-It owns `awaiting_review -> escalated` and no other trigger does: the liveness clock is suspended at a human gate, so `stalled` cannot fire there and reconciliation is the only thing left that reads the gate. The edge was written for a Drone dying while a person read, and the gate holds no Drone now — one ends when its step's work passes the machine gates, so an ordinary wait has no process to be missing. The edge stands; what still reaches it is not settled in this row.
+**A process that was there and is not, and nothing else.** Two sites in Fleet raise it, both from `running` and both on that fact: a Drone that ended without reporting, and a submission arriving for a Job the slot no longer holds. Nine other failures borrowed it until 2026-08-31 — every one of them upstream of a spawn that had not happened — and they are `not_prepared`, `no_worktree`, `not_configurable` and `would_not_start` now. The verb is the whole reason it mattered: it sends a person hunting for a dead Drone, which is the right instruction only when there was one.
+
+The declared edge is a *second* edge, not the only one. `running -> escalated` is the default and admits every trigger, which is how the meaning above is reached and what both live sites use. `awaiting_review -> escalated` is the one this trigger owns and no other may take: the liveness clock is suspended at a human gate, so `stalled` cannot fire there and reconciliation is the only thing left that reads the gate. The edge was written for a Drone dying while a person read, and the gate holds no Drone now — one ends when its step's work passes the machine gates, so an ordinary wait has no process to be missing. What reaches it is the restart reconciliation, which is the Recovery milestone's to build; see [orphaned-drone-on-restart].
 """
 
 [triggers.loop_cap]
@@ -179,6 +187,52 @@ Nothing failed — the loop simply did not converge, which is why the count that
 Because `retry_count` resets on each loop return, a looping step can burn `retry_limit × iteration_cap` attempts before this fires, and `completed_failed` is unreachable on such a step — `loop_cap` always gets there first. The aggregate attempt cap in `default_gate_policy` bounds that.
 """
 
+[triggers.no_worktree]
+kind = "Trigger"
+level = "Job"
+meaning = "Git or the filesystem could not put the Job in a worktree work could start in. Nothing was spawned and no process is missing."
+in_code = ""
+notes = """
+Four paths and one state. `create_worktree` failed; the Job's attachments would not copy into the worktree that was made; the worktree an earlier step used has been reclaimed and a readmitted Job has nothing to go back onto; the branch would not come up to its base, so a Drone put on the tree would start from a state nobody has read. The meaning names the state rather than any one of them, which is `gate_failure`'s lesson: a verb naming the act stops being true the moment a second act produces it. Which one it was is in the `Adrift` on the Job's log — `NoWorktree`, `AttachmentUnreadable`, `WorktreeGone`, or a delivery failure.
+
+They are one trigger because **the same person fixes all four**, and that is what a trigger is for. The disk is full, the repository is in a state git will not work from, or somebody reclaimed a worktree a Job still needed. None of it is answered by reading a Drone's transcript, because there is no Drone.
+
+Told apart from `not_prepared` by the same question. There the checkout is real and a command the *Manifest* names failed inside it, so the answer is a line in `armada.yml`; here git never produced a checkout to run anything in. The two verbs were made to say so — "the worktree was unusable" against "a required command did not succeed" — after the first draft gave them both the word *worktree* and made them a pair a reader could not separate at a glance.
+
+Job-level. No step is the reason: the worktree is a fact about the Job, and on the readmit path no step has been re-entered at all. Nothing was weighed, so there is nothing for `last_verdict` to hold.
+
+Fires the default edge from `running`, and on one path it cannot: a readmitted Job is `queued`, and `queued -> escalated` belongs to `dependency_failed` alone. `crates/fleet/src/dispatch.rs` says what it does about that and why.
+
+`in_code` is empty rather than "Not yet" for `gate_undecided`'s reason — the row was authored here and has no source value to carry.
+"""
+why = """
+It was raised as `interrupted` from the day dispatch shipped until 2026-08-31. `interrupted` means a Job marked running has no matching OS process, so the badge sent whoever read it looking for a dead Drone, and there had never been a Drone — the failure is upstream of the spawn on every one of the four paths.
+
+Not folded into `not_prepared`, which is the nearest existing row and would have been the cheap answer. Preparation runs *inside* a worktree that exists; this is the worktree not existing. One trigger over both would have made the badge unable to say whether to look at `armada.yml` or at the disk, which is the only thing the badge is for.
+"""
+
+[triggers.not_configurable]
+kind = "Trigger"
+level = "Job"
+meaning = "The values a Drone's spawn is built from would not resolve, so no process was ever asked to start."
+in_code = ""
+notes = """
+Two paths. The opening brief would not render, or `DroneSpawnConfig` refused what it was given — a model name no roster row carries, an MCP config path that is not usable, an environment variable that is not a name. `crates/adapters`' `SpawnConfigRefused` carries which, and `crates/config/src/roster.rs` names the model typo as the case it expects most.
+
+**The remedy is a line somebody wrote**: the Manifest, or the model roster. That is what separates it from `would_not_start`, where the values were all good and the machine refused anyway. The order is the order of the code — configure, then start — and the two triggers keep it, so a reader knows which half to look at.
+
+Job-level. The step is `running` by the time a spawn is attempted, but no step is the *reason* and nothing about the work was weighed; the same is true of `interrupted` at a Drone that vanished, which is Job-level for the same reason.
+
+Fires the default edge, `running -> escalated`.
+
+`in_code` is empty rather than "Not yet" for `gate_undecided`'s reason — the row was authored here and has no source value to carry.
+"""
+why = """
+It was raised as `interrupted`, and `crates/config/src/roster.rs` had written the defect into its own module doc: a model typo "fails at the spawn — where `fleet::spawning` turns a `SpawnConfigRefused` into an interrupt… and reports the Job as `Interrupted`, which names the wrong cause". A typo in `armada.yml` presented as a crashed process.
+
+A payload on `interrupted` is refused for the reason `silent` is a sub-kind rather than a field: what a person reads first is the trigger, and a distinction carried only in a payload is a distinction the badge does not make.
+"""
+
 [triggers.not_prepared]
 kind = "Trigger"
 level = "Job"
@@ -186,6 +240,8 @@ meaning = "A command the Manifest's setup.requires names did not succeed, so the
 in_code = ""
 notes = """
 Job-level, and it could not be anything else: preparation runs immediately after the worktree is made and before the first step is entered, so there is no step for the trigger to attach to and nothing for `last_verdict` to hold. That is the same reason `dependency_failed` is Job-level, arriving from the other end of the Job.
+
+Not `no_worktree`, which is the row a reader reaches for once both exist and is the pair this file most has to keep apart. Preparation runs *inside* a worktree that is a real checkout; `no_worktree` is git or the disk never producing one. The question that separates them is who fixes it: a line in `armada.yml` here, the disk or the repository there. Both verbs said *worktree* on the day the second one was minted and were changed in the same breath — this row's is "a required command did not succeed", which is the first clause of the meaning above.
 
 Not `gate_failure` and not `check_timeout`, which are the two rows a reader reaches for. Both are about a step: one is work that was submitted and did not clear the bar, the other is a Check that gates a step and did not finish. Preparation gates nothing. `crates/fleet/src/preparing.rs` shares only the process runner with the Checks, and the module says why.
 
@@ -240,4 +296,26 @@ A mid-step Judge pass runs only once a mechanical trigger fires, never on a sche
 Step-level: it is measured against a step's turn count and a step's wall-clock, and the mid-step Judge look judges that step's work product.
 
 Judge owns the routing.
+"""
+
+[triggers.would_not_start]
+kind = "Trigger"
+level = "Job"
+meaning = "Everything the spawn needed resolved and the machine still would not start it. No Drone ever ran."
+in_code = ""
+notes = """
+Two paths, both the environment the daemon is running in rather than anything anybody wrote: the transcript would not open on disk, or the harness refused to launch the process. The transcript is opened *before* the Drone deliberately — `crates/fleet/src/spawning.rs` says why — so a disk that will not hold a record stops the spawn instead of losing the record quietly behind a process already producing one.
+
+**The opposite end of `interrupted`, and the pair is worth reading together.** `interrupted` is a process that was there and is not; this is a process that never was. They were one trigger until 2026-08-31 and the verb belonged to the other one.
+
+Not `not_configurable`: there the values were wrong and nothing was asked to start. Here everything resolved and the answer came back no. Configure, then start — the two triggers keep the order the code has, so a reader knows which half to look at.
+
+Job-level, for `not_configurable`'s reason: a step is `running`, and no step is the reason.
+
+Fires the default edge, `running -> escalated`.
+
+`in_code` is empty rather than "Not yet" for `gate_undecided`'s reason — the row was authored here and has no source value to carry.
+"""
+why = """
+`interrupted` sent a person to look for a Drone. There was no Drone, and the two things that produce this — a full or unwritable disk, and a harness that will not launch — are both answered on the machine rather than in the record. A person who trusted the badge would have gone through a transcript that was never opened.
 """

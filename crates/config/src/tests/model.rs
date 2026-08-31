@@ -8,9 +8,10 @@
 //!
 //! **The refusal is the half worth testing.** A model name that parses and is
 //! wrong does not fail until spawn, where `fleet::spawning` turns a
-//! `SpawnConfigRefused` into an interrupt and escalates the Job — by which time
-//! there is a worktree, an approval and every earlier step's work behind it,
-//! and the Job is reported as `Interrupted`, which names the wrong cause.
+//! `SpawnConfigRefused` into an escalation — by which time there is a worktree,
+//! an approval and every earlier step's work behind it. The Job reports as
+//! `not_configurable` since 2026-08-31 and points back here; it said
+//! `Interrupted` before that, which named a process that had never started.
 
 use core_model::ModelName;
 

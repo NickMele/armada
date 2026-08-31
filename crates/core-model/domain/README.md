@@ -150,9 +150,3 @@ corrects the data.
   Review workflow, is not among `evidence_type`'s legal values.
   What decides it: the source flags this against itself. Either the value set
   grows or Code Review submits evidence under an existing type.
-- **[interrupted-transition-set]** `interrupted` is defined as a `running` Job
-  whose process is gone, but the only edge naming it is
-  `awaiting_review -> escalated`.
-  What decides it: the definition and the edge disagree about which status a
-  Job is in when it is interrupted. A definition nothing can reach is a state
-  that never occurs.

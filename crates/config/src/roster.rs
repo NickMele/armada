@@ -16,10 +16,13 @@
 //! # Why the refusal is at load and not at spawn
 //!
 //! `Model::named` refuses only a blank, so a typo travels: it parses, it is
-//! frozen onto the Job, the Job is approved, and it fails at the spawn — where
-//! `fleet::spawning` turns a `SpawnConfigRefused` into an interrupt. That costs
-//! a worktree and every step that ran before the bad one, and reports the Job
-//! as `Interrupted`, which names the wrong cause.
+//! frozen onto the Job, the Job is approved, and it fails at the spawn, where
+//! `fleet::spawning` turns a `SpawnConfigRefused` into an escalation — costing
+//! a worktree and every step before the bad one, which is the whole argument.
+//!
+//! **What the Job is reported as is no longer part of that argument.** It was
+//! `Interrupted` until 2026-08-31 — a process that had never started — and is
+//! `not_configurable` now, which points back at this file.
 
 use core_model::ModelName;
 

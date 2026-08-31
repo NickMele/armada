@@ -399,10 +399,13 @@ impl Stopped {
             | EscalationTrigger::FanOut
             | EscalationTrigger::HatchUnbidden
             | EscalationTrigger::Interrupted
+            | EscalationTrigger::NoWorktree
+            | EscalationTrigger::NotConfigurable
             | EscalationTrigger::NotPrepared
             | EscalationTrigger::ResourceExhausted
             | EscalationTrigger::Silent
-            | EscalationTrigger::Stalled => {
+            | EscalationTrigger::Stalled
+            | EscalationTrigger::WouldNotStart => {
                 "An earlier attempt at this part stopped. The record holds no verdict \
                  against its work."
             }
