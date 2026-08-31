@@ -9,13 +9,14 @@
 use core_model::{ContextSource, DeclarePlanAt, EvidenceRef};
 
 use crate::error::Fault;
-use crate::tests::{fault_at, named, refusals};
+use crate::tests::{fault_at, named, refusals, roster};
 use crate::workflow::WorkflowDef;
 
 fn parsed(steps: &str) -> Result<WorkflowDef, crate::error::LoadError> {
     WorkflowDef::parse(
         &named("scope.yml"),
         &format!("version: 1\nworkflow_id: scoped\nname: scoped\nstructure: linear\nsteps:{steps}"),
+        &roster(),
     )
 }
 

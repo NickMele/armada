@@ -54,6 +54,7 @@ pub struct FakeHarness {
     refusing: Option<&'static str>,
     scripted: BTreeMap<String, Vec<DroneEvent>>,
     rendered: Mutex<Vec<Launch>>,
+    configured: Mutex<Vec<DroneSpawnConfig>>,
 }
 
 impl FakeHarness {
@@ -114,6 +115,7 @@ impl FakeHarness {
             refusing: None,
             scripted: BTreeMap::new(),
             rendered: Mutex::new(Vec::new()),
+            configured: Mutex::new(Vec::new()),
         }
     }
 
@@ -138,6 +140,17 @@ impl FakeHarness {
     pub fn rendered(&self) -> Vec<Launch> {
         self.rendered.lock().expect("not poisoned").clone()
     }
+
+    /// Every config this harness was handed, in order.
+    ///
+    /// **Kept beside [`FakeHarness::rendered`] rather than derived from it**: a
+    /// [`Launch`] carries the directory and the environment and nothing else,
+    /// so the model, the toolbelt and the MCP file — everything a real harness
+    /// spells into argv — are unreachable from one. A test asking which model a
+    /// step's Drone was started as has nowhere else to look.
+    pub fn configured(&self) -> Vec<DroneSpawnConfig> {
+        self.configured.lock().expect("not poisoned").clone()
+    }
 }
 
 impl AgentHarness for FakeHarness {
@@ -147,6 +160,10 @@ impl AgentHarness for FakeHarness {
         if let Some(standing_in_for) = self.refusing {
             return Err(FakeHarnessRefused { standing_in_for });
         }
+        self.configured
+            .lock()
+            .expect("not poisoned")
+            .push(config.clone());
         let launch = Launch::rendered(config, &self.program, self.args.clone());
         self.rendered
             .lock()

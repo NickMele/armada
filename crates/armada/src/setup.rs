@@ -41,7 +41,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use config::{LoadError, Manifest, ResolveError, ResolvedWorkflow, WorkflowDef};
+use config::{LoadError, Manifest, ResolveError, ResolvedWorkflow, Roster, WorkflowDef};
 
 /// The Manifest's name at a repository root. Not configurable: a repository
 /// that could name its own Manifest is one where finding the Manifest requires
@@ -75,7 +75,13 @@ impl Setup {
     /// looking for an `armada.yml` in a parent: a daemon that quietly adopted
     /// an ancestor's Manifest would run a Job against a repository nobody
     /// pointed it at, and the failure would read as a workflow problem.
-    pub fn at(root: &Path) -> Result<Setup, SetupRefused> {
+    ///
+    /// `roster` is what this machine can run a Drone as, resolved by
+    /// [`crate::model_choices`] before this is called. A workflow step naming
+    /// something outside it is refused here — before the port and before the
+    /// runtime file — for the reason every other refusal in this function is:
+    /// the alternative is finding out with a Drone already on a worktree.
+    pub fn at(root: &Path, roster: &Roster) -> Result<Setup, SetupRefused> {
         let manifest_path = root.join(MANIFEST);
         let manifest = Manifest::load(&manifest_path).map_err(|why| match &why {
             // Absent is its own answer. The fix is "this directory is not a
@@ -92,7 +98,8 @@ impl Setup {
         let mut workflows: BTreeMap<core_model::WorkflowId, ResolvedWorkflow> = BTreeMap::new();
         let mut paths: BTreeMap<core_model::WorkflowId, PathBuf> = BTreeMap::new();
         for workflow_path in definitions(root)? {
-            let def = WorkflowDef::load(&workflow_path).map_err(SetupRefused::WorkflowRefused)?;
+            let def =
+                WorkflowDef::load(&workflow_path, roster).map_err(SetupRefused::WorkflowRefused)?;
             let resolved = ResolvedWorkflow::resolve(&def, &manifest)
                 .map_err(SetupRefused::ChecksNotDeclared)?;
             let id = resolved.id().clone();

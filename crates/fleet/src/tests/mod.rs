@@ -143,6 +143,7 @@ mod host;
 mod http;
 mod judging;
 mod landing;
+mod modelling;
 mod overruling;
 mod planning;
 mod process;

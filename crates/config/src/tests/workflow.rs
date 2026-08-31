@@ -6,7 +6,7 @@ use core_model::{AdvanceGate, EvidenceRef, EvidenceType, GamingPattern, Resolved
 use crate::error::{BadTarget, Fault, LoadError, ResolveError};
 use crate::manifest::Manifest;
 use crate::resolve::ResolvedWorkflow;
-use crate::tests::{fault_at, named, refusals, refused};
+use crate::tests::{fault_at, named, refusals, refused, roster};
 use crate::workflow::{MechanicalCheck, Structure, WorkflowDef};
 
 /// The `bug` workflow as the milestone step writes it, verbatim.
@@ -48,7 +48,7 @@ commands:
 "#;
 
 fn parse(text: &str) -> Result<WorkflowDef, LoadError> {
-    WorkflowDef::parse(&named("workflows/bug.yml"), text)
+    WorkflowDef::parse(&named("workflows/bug.yml"), text, &roster())
 }
 
 fn manifest() -> Manifest {

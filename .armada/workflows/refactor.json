@@ -74,6 +74,12 @@
 # three strings are shown beside it, labelled as the summary. The mechanical
 # check reads only the file's size, so an empty file stops the step and whether
 # what is in it is any good stays the Judge's question.
+#
+# **`model: haiku` on `handoff`, and nowhere else.** `bug.json` carries the
+# reasoning and the cache cost. `plan` decides what may move and what may not --
+# which is the whole of what a refactor is -- and `implement` produces the diff
+# the Checks and the Judge read; neither names a model, so both are run as the
+# Job was proposed. `handoff` reports.
 {
   "version": 1,
   "workflow_id": "refactor",
@@ -192,6 +198,7 @@
       "id": "handoff",
       "label": "Summarise",
       "evidence_type": "facts_note",
+      "model": "haiku",
       "advance_gate": "human_always"
     }
   ]

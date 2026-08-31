@@ -18,3 +18,13 @@ store = { path = "../store" }
 # struct — see `yaml.rs` for why a `#[derive(Deserialize)]` could not carry the
 # refusals this crate has to produce.
 serde_yaml_ng = "0.10"
+
+[dev-dependencies]
+# `tests/shipped.rs` only, and only for the model roster. Its subject is the
+# definitions under `.armada/workflows/` **as this machine would load them**,
+# and which models a machine offers is the adapter's knowledge — a list written
+# out in the test would let a shipped step name something no Drone could be
+# spawned as, which is the failure the roster exists to catch. Nothing in
+# `src/` reaches for this, and the parser still takes the roster as a
+# parameter: see `src/roster.rs`.
+adapters = { path = "../adapters" }

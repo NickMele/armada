@@ -255,6 +255,9 @@ async fn a_step_after_a_human_boundary_does_not_advance_on_a_rebase_it_did_not_r
          mechanical_checks:\n      - type: diff_nonempty\n    advance_gate: human_always\n  - \
          id: verify\n    label: \"Verify\"\n    evidence_type: diff\n    \
          mechanical_checks:\n      - type: diff_nonempty\n    advance_gate: auto\n",
+        // The fixture names no model, so there is nothing for a roster to
+        // offer. See `config::Roster`.
+        &config::Roster::offering_nothing(),
     )
     .expect("the fixture workflow parses");
     let workflow = config::ResolvedWorkflow::resolve(&def, &fittings.manifest)

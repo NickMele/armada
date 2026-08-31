@@ -48,6 +48,7 @@ fn workflow() -> FrozenWorkflow {
             Vec::new(),
             None,
             0,
+            None,
         )],
     )
 }

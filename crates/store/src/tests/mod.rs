@@ -85,6 +85,7 @@ pub fn workflow() -> FrozenWorkflow {
                 Vec::new(),
                 None,
                 0,
+                None,
             ),
             ResolvedStep::frozen(
                 StepId::new("fix"),
@@ -137,6 +138,13 @@ pub fn workflow() -> FrozenWorkflow {
                     Some(DeclarePlanAt::StepStart),
                 )),
                 0,
+                // Carried on the shared fixture for `when`'s reason: one step
+                // names a model and one names none, so every round trip in
+                // this crate walks both the value and its absence. They are not
+                // the same sentence — absent is the step deferring to the Job's
+                // — and a column that lost the difference would silently spawn
+                // every step on the Job's model again.
+                Some(ModelName::new("the-steps-own-model").expect("a model name")),
             ),
         ],
     )

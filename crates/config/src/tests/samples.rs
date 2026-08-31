@@ -53,7 +53,7 @@ fn sample(name: &str) -> PathBuf {
 }
 
 fn load(name: &str) -> Vec<Refusal> {
-    match WorkflowDef::load(&sample(name)) {
+    match WorkflowDef::load(&sample(name), &crate::tests::roster()) {
         Ok(def) => panic!("{name} loaded as an M1 WorkflowDef: {def:?}"),
         Err(LoadError::Refused { refusals, .. }) => refusals,
         Err(other) => panic!("{name}: {other}"),

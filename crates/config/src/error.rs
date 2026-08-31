@@ -147,6 +147,14 @@ pub enum Fault {
     /// make both of those a choice nothing records, so the second is refused
     /// where it is written rather than silently dropped at the gate.
     TwoDeliverables { first: String },
+    /// **A step naming a model this machine does not offer.** Its own variant
+    /// rather than [`Fault::NotInTheSchema`], because the legal set is not the
+    /// schema's: it is whatever roster the caller resolved, so the same file is
+    /// right on one machine and wrong on another and the message has to name
+    /// the machine's list rather than a constant.
+    ///
+    /// The list is owned rather than borrowed for the same reason.
+    NoSuchModel { value: String, roster: Vec<String> },
 }
 
 /// Why a step's `artifact_exists` target cannot name the one file the next step
@@ -233,6 +241,15 @@ impl fmt::Display for Fault {
                 "is a second `artifact_exists` on one step, which already \
                  delivers `{first}`"
             ),
+            Fault::NoSuchModel { value, roster } => {
+                let offered: Vec<&str> = roster.iter().map(String::as_str).collect();
+                write!(
+                    f,
+                    "is `{value}`, which is not a model this machine offers. It \
+                     offers {}",
+                    Listed(&offered, "none")
+                )
+            }
             Fault::NotAnArtifactPath { value, why } => write!(
                 f,
                 "is `{value}`, which cannot name the file this step writes: {why}"

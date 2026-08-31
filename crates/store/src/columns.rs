@@ -293,6 +293,12 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
             "evidence_type": step.evidence_type().map(|kind| kind.as_wire()),
             "advance_gate": step.advance_gate().as_wire(),
             "retry_limit": step.retry_limit(),
+            // Null where the step named none, which is the ordinary shape and
+            // the shape of every row written before a step could name one. It
+            // is not backfilled with the Job's: absent is the step deferring,
+            // and a row that recorded the deferral as a decision would keep
+            // answering with a model the workflow never asked for.
+            "model": step.model().map(|model| model.as_str()),
             "evidence_scope": step.evidence_scope().map(|scope| json!({
                 "context_source": scope.context_source().as_wire(),
                 "exclude_paths": scope.exclude_paths().iter()
@@ -377,7 +383,25 @@ fn read_step(entry: &Map<String, Value>) -> Result<ResolvedStep, Malformed> {
         read_judge_checks(entry)?,
         read_evidence_scope(entry)?,
         read_retry_limit(entry)?,
+        read_step_model(entry)?,
     ))
+}
+
+/// What the step asked to be run as. **Absent and null both read as none**,
+/// which is the backfill every row frozen before a step could name a model
+/// needs, and is also what a step that names none means today.
+///
+/// A value that is there and blank is a refusal rather than a none: `""` in
+/// this column is a workflow that meant to say something, and a Drone spawned
+/// on the Job's model instead would be the dial silently not applying.
+fn read_step_model(entry: &Map<String, Value>) -> Result<Option<ModelName>, Malformed> {
+    match entry.get("model") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(named)) => Ok(Some(
+            ModelName::new(named).map_err(|blank| format!("`model` {blank}"))?,
+        )),
+        Some(other) => Err(format!("`model` is {}", kind(other))),
+    }
 }
 
 /// How many hand-backs the step declared. **Absent reads as none**, the same

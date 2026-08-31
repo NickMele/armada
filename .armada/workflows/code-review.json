@@ -62,6 +62,14 @@
 # anywhere else: `assess` has no Judge and cannot have one until the diff it
 # reviews is somewhere Armada can read, so a `read` step that produced nothing
 # would otherwise reach `assess` and `deliver` unnoticed.
+#
+# **`model: haiku` on `deliver`, and nowhere else.** `bug.json` carries the
+# reasoning and the cache cost. `read` and `assess` are the workflow -- one
+# writes the note the other is checked against, the other is the judgement this
+# workflow exists to produce, and `assess` has no Judge over it, so the model
+# reading the diff is the only thing standing between a real review and prose.
+# Both name none. `deliver` is the hand-off, which is what the paragraph above
+# already calls it.
 {
   "version": 1,
   "workflow_id": "code_review",
@@ -104,6 +112,7 @@
       "id": "deliver",
       "label": "Deliver the review",
       "evidence_type": "bundle",
+      "model": "haiku",
       "advance_gate": "auto"
     }
   ]

@@ -44,6 +44,7 @@ mod error;
 mod judge;
 mod manifest;
 mod resolve;
+mod roster;
 mod scope;
 mod workflow;
 mod yaml;
@@ -54,6 +55,7 @@ mod tests;
 pub use error::{Fault, LoadError, Refusal, ResolveError, UnknownCheck};
 pub use manifest::{Check, Command, Manifest};
 pub use resolve::ResolvedWorkflow;
+pub use roster::Roster;
 pub use workflow::{MechanicalCheck, Step, Structure, WorkflowDef};
 
 // Re-exported, not re-declared. A Job carries its resolved workflow, so these

@@ -32,6 +32,7 @@ fn gated_workflow() -> FrozenWorkflow {
             judge,
             None,
             0,
+            None,
         )
     };
     FrozenWorkflow::frozen(

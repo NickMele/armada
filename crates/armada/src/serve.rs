@@ -75,6 +75,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use adapters::{GitVcs, HeadlessAgent};
+use config::Roster;
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
     CheckBudget, DryRuns, Fittings, Fleet, Host, JudgeBudget, Liveness, Mint, StepNorms,
@@ -252,7 +253,11 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
         Some(given) => given,
         None => std::env::current_dir()?,
     };
-    let setup = Setup::at(&repository)?;
+    // The roster the workflows are checked against is the one the picker
+    // offers, resolved just above. Two lists would be two answers to "is this a
+    // model this machine has", and a workflow could name something no Job could
+    // be proposed with.
+    let setup = Setup::at(&repository, &Roster::of(&machine_facts.models.models))?;
     println!(
         "{} — Checks {} — model {}",
         setup.root().display(),

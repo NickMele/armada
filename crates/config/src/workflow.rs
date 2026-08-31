@@ -3,7 +3,8 @@
 //! # Six fields, of nine
 //!
 //! `version`, `name`, `structure`, `steps[]`, and within a step `id`, `label`,
-//! `evidence_type`, `mechanical_checks[]`, `judge_checks[]` and `advance_gate`.
+//! `evidence_type`, `mechanical_checks[]`, `judge_checks[]`, `model` and
+//! `advance_gate`.
 //! The rest of the schema — `verdict_routing`, `iteration_cap`,
 //! `hard_prerequisite`, `default_gate_policy`, `on_fail`, `on_gaming_flag` — is
 //! refused, because there is no loop. A field nothing reads is a promise the
@@ -25,6 +26,15 @@
 //! nobody looking at a workflow would find it. The workflows under
 //! `.armada/workflows/` declare their own, in the file, where an author reading
 //! the step can see what it costs.
+//!
+//! # `model` is read, and absent means the Job's
+//!
+//! A step names the model its own work needs; a step that names none is run as
+//! the Job was proposed. **The refusal is the load-bearing half** — an unknown
+//! name is refused against the roster the caller resolved rather than carried
+//! to the spawn, where it would kill a Job that already has a worktree and
+//! report the wrong cause. [`crate::Roster`] holds that reasoning and says why
+//! the legal set is a parameter.
 //!
 //! # Three closed sets, each narrowed
 //!
@@ -58,13 +68,14 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use core_model::{
-    AdvanceGate, EvidenceScope, EvidenceType, JudgeCheck, StepId, Ulid, WorkflowId,
+    AdvanceGate, EvidenceScope, EvidenceType, JudgeCheck, ModelName, StepId, Ulid, WorkflowId,
     ARTIFACT_EXISTS, DIFF_NONEMPTY, MANIFEST_CHECK,
 };
 use serde_yaml_ng::Value;
 
 use crate::error::{BadTarget, Fault, LoadError, Refusal};
 use crate::judge;
+use crate::roster::Roster;
 use crate::scope;
 use crate::yaml::{self, Table};
 
@@ -81,6 +92,7 @@ const STEP_KEYS: &[&str] = &[
     "evidence_scope",
     "declare_plan_at",
     "retry_limit",
+    "model",
 ];
 
 /// How the steps are wired. **One variant, of two.**
@@ -176,6 +188,7 @@ pub struct Step {
     advance_gate: AdvanceGate,
     evidence_scope: Option<EvidenceScope>,
     retry_limit: u32,
+    model: Option<ModelName>,
 }
 
 impl Step {
@@ -223,6 +236,13 @@ impl Step {
     pub fn evidence_scope(&self) -> Option<&EvidenceScope> {
         self.evidence_scope.as_ref()
     }
+
+    /// What this step asks its Drone to be spawned as. **`None` on most
+    /// steps**, and none means the Job's — the fallback is spelled on the
+    /// record, at `Job::model_at`, and never re-derived here.
+    pub fn model(&self) -> Option<&ModelName> {
+        self.model.as_ref()
+    }
 }
 
 /// A workflow definition, parsed and validated against nothing but itself.
@@ -243,22 +263,26 @@ pub struct WorkflowDef {
 
 impl WorkflowDef {
     /// Read and validate a workflow definition.
-    pub fn load(path: &Path) -> Result<WorkflowDef, LoadError> {
+    ///
+    /// `roster` is what this machine can run a Drone as. See
+    /// [`crate::Roster`] for why the list is a parameter rather than something
+    /// this crate knows.
+    pub fn load(path: &Path, roster: &Roster) -> Result<WorkflowDef, LoadError> {
         let text = std::fs::read_to_string(path).map_err(|cause| LoadError::Unreadable {
             path: path.to_path_buf(),
             cause,
         })?;
-        WorkflowDef::parse(path, &text)
+        WorkflowDef::parse(path, &text, roster)
     }
 
     /// Validate a definition already in hand. See [`crate::Manifest::parse`].
-    pub fn parse(path: &Path, text: &str) -> Result<WorkflowDef, LoadError> {
+    pub fn parse(path: &Path, text: &str, roster: &Roster) -> Result<WorkflowDef, LoadError> {
         let root: Value = serde_yaml_ng::from_str(text).map_err(|cause| LoadError::NotYaml {
             path: path.to_path_buf(),
             cause,
         })?;
         let mut out = Vec::new();
-        let parsed = read(path, &root, &mut out);
+        let parsed = read(path, &root, roster, &mut out);
         match parsed {
             Some(def) if out.is_empty() => Ok(def),
             _ => Err(LoadError::Refused {
@@ -309,7 +333,7 @@ impl WorkflowDef {
     }
 }
 
-fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<WorkflowDef> {
+fn read(path: &Path, root: &Value, roster: &Roster, out: &mut Vec<Refusal>) -> Option<WorkflowDef> {
     let mut top = Table::open("", root, out)?;
 
     let version = top
@@ -342,7 +366,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<WorkflowDef
             items
                 .iter()
                 .enumerate()
-                .filter_map(|(n, (at, item))| Some((n, step(at, item, structure, out)?)))
+                .filter_map(|(n, (at, item))| Some((n, step(at, item, structure, roster, out)?)))
                 .collect()
         })
         .unwrap_or_default();
@@ -381,6 +405,7 @@ fn step(
     at: &str,
     value: &Value,
     structure: Option<Structure>,
+    roster: &Roster,
     out: &mut Vec<Refusal>,
 ) -> Option<Step> {
     let mut table = Table::open(at, value, out)?;
@@ -458,6 +483,15 @@ fn step(
         None => Some(0),
         Some(value) => yaml::counted(&retry_key, value, out),
     };
+    // **Absent is the Job's, and a name the machine does not have is a
+    // refusal.** Absent has to stay absent all the way to the record — see
+    // `ResolvedStep::model` — and the refusal has to be here rather than at
+    // spawn, which is what `crate::roster` exists to say.
+    let model_key = table.at("model");
+    let model = table
+        .optional("model")
+        .and_then(|value| yaml::text(&model_key, value, out))
+        .and_then(|named| model(&model_key, named, roster, out));
     let gate_key = table.at("advance_gate");
     let advance_gate = table
         .required("advance_gate", out)
@@ -529,7 +563,33 @@ fn step(
         advance_gate: advance_gate?,
         evidence_scope,
         retry_limit: retry_limit?,
+        model,
     })
+}
+
+/// The model a step names, checked against what the caller says this machine
+/// offers.
+///
+/// **A name outside the roster is refused here and not at spawn.** By spawn the
+/// Job has a worktree, an approval and every earlier step's work behind it, and
+/// `fleet::spawning` reports the failure as an interrupt — which names the
+/// wrong cause. `crate::roster` carries the rest of the reasoning.
+///
+/// Blank never reaches this: `yaml::text` refuses an empty string first, so a
+/// `model: ""` is `Fault::Empty` at the key rather than a name nothing offers.
+fn model(at: &str, named: String, roster: &Roster, out: &mut Vec<Refusal>) -> Option<ModelName> {
+    let model = ModelName::new(&named).ok()?;
+    if roster.offers(&model) {
+        return Some(model);
+    }
+    out.push(Refusal::new(
+        at,
+        Fault::NoSuchModel {
+            value: named,
+            roster: roster.names(),
+        },
+    ));
+    None
 }
 
 /// `advance_gate` has its own reader because one of the schema's four values is

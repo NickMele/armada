@@ -24,7 +24,7 @@ use alloc::vec::Vec;
 use crate::job::attempt::Attempt;
 use crate::job::covers::Covers;
 use crate::job::gaming::GamingCheck;
-use crate::job::ids::{StepId, WorkflowId};
+use crate::job::ids::{ModelName, StepId, WorkflowId};
 use crate::job::judge::JudgeCheck;
 use crate::job::scope::EvidenceScope;
 
@@ -227,6 +227,16 @@ pub struct ResolvedStep {
     /// field is a count rather than an `Option`: absent and `0` are the same
     /// sentence, and two spellings of it could drift.
     retry_limit: u32,
+    /// What this step's Drone is spawned as. **`None` leaves the Job's
+    /// standing**, which is what every step did while one process spanned a
+    /// whole Job and could not change model mid-session.
+    ///
+    /// An `Option` and not a `ModelName` because absent has to stay absent: a
+    /// step that recorded the Job's model at freeze time would answer the
+    /// question "what did this step ask for" with the Job's answer, and a
+    /// workflow whose steps all restated the fallback would be a second place
+    /// the fallback is written down.
+    model: Option<ModelName>,
 }
 
 impl ResolvedStep {
@@ -245,6 +255,7 @@ impl ResolvedStep {
         judge_checks: Vec<JudgeCheck>,
         evidence_scope: Option<EvidenceScope>,
         retry_limit: u32,
+        model: Option<ModelName>,
     ) -> ResolvedStep {
         ResolvedStep {
             id,
@@ -255,6 +266,7 @@ impl ResolvedStep {
             judge_checks,
             evidence_scope,
             retry_limit,
+            model,
         }
     }
 
@@ -349,6 +361,14 @@ impl ResolvedStep {
     /// history.
     pub fn may_hand_back(&self, spent: Attempt) -> bool {
         spent.number() <= self.retry_limit
+    }
+
+    /// What this step asked to be run as. **`None` on most steps**, and on
+    /// every step written before a step could name one — see
+    /// [`Job::model_at`](crate::Job::model_at), which is the only place the
+    /// fallback to the Job's is spelled.
+    pub fn model(&self) -> Option<&ModelName> {
+        self.model.as_ref()
     }
 
     /// How many model calls one pass over this step makes. Latency rather than

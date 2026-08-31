@@ -47,7 +47,7 @@ use crate::job::status::{JobStatus, StepState};
 use crate::job::step::{rows_at_creation, JobStep, StepSeed, StepVerdict};
 use crate::job::step_machine::{admits_step, IllegalStepTransition, StepTarget};
 use crate::job::transition::{admits, IllegalTransition, Target};
-use crate::job::workflow::FrozenWorkflow;
+use crate::job::workflow::{FrozenWorkflow, ResolvedStep};
 
 /// Everything creation decides, and nothing it does not.
 ///
@@ -442,6 +442,26 @@ impl Job {
     }
     pub fn model(&self) -> &ModelName {
         &self.model
+    }
+    /// What the Drone on `step` is spawned as: the step's own, or the Job's
+    /// where the step named none.
+    ///
+    /// **The fallback is spelled here and nowhere else.** It used to be spelled
+    /// nowhere at all — one process spanned the whole Job, so `job.model()` was
+    /// the answer at every step by construction. Now that a step is its own
+    /// process the two can differ, and a second call site deciding what absent
+    /// means is a second place a step could quietly stop getting the model its
+    /// workflow asked for.
+    ///
+    /// A [`StepId`] this workflow does not declare answers with the Job's. That
+    /// is not a silent miss to be worried about: `FrozenWorkflow::step` is the
+    /// same lookup every caller already does, and a Drone put on a step the
+    /// workflow has never heard of has a larger problem than which model it is.
+    pub fn model_at(&self, step: &StepId) -> &ModelName {
+        self.workflow
+            .step(step)
+            .and_then(ResolvedStep::model)
+            .unwrap_or(&self.model)
     }
     pub fn acceptance_criteria(&self) -> &[AcceptanceCriterion] {
         &self.acceptance_criteria

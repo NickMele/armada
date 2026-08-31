@@ -26,9 +26,25 @@
 
 use std::path::{Path, PathBuf};
 
+use config::Roster;
+
 /// The repository root, from this crate's manifest directory.
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// What this machine can run a Drone as, read from the adapter rather than
+/// written out here.
+///
+/// **A list typed into this file would defeat the test it is part of.** A
+/// shipped step naming a model the adapter does not offer would keep parsing
+/// against the local copy and fail at spawn, where the Job already has a
+/// worktree — which is the whole failure `config::Roster` exists to move
+/// earlier. So the roster the parse is checked against is the roster the
+/// running daemon resolves, and `adapters` is a dev-dependency for this one
+/// call.
+fn roster() -> Roster {
+    Roster::of(adapters::HeadlessAgent::models())
 }
 
 /// Every shipped definition, as `(path, text)`, sorted so a failure names the
@@ -53,7 +69,7 @@ fn shipped() -> Vec<(PathBuf, String)> {
 fn every_shipped_workflow_definition_parses() {
     let mut seen = 0;
     for (path, text) in shipped() {
-        if let Err(why) = config::WorkflowDef::parse(&path, &text) {
+        if let Err(why) = config::WorkflowDef::parse(&path, &text, &roster()) {
             panic!("{} is refused:\n{why}", path.display());
         }
         seen += 1;
@@ -68,7 +84,7 @@ fn every_shipped_workflow_resolves_against_this_repositorys_manifest() {
         .unwrap_or_else(|why| panic!("{} is refused:\n{why}", manifest_path.display()));
 
     for (path, text) in shipped() {
-        let def = config::WorkflowDef::parse(&path, &text)
+        let def = config::WorkflowDef::parse(&path, &text, &roster())
             .unwrap_or_else(|why| panic!("{} is refused:\n{why}", path.display()));
         if let Err(why) = config::ResolvedWorkflow::resolve(&def, &manifest) {
             panic!("{} does not resolve:\n{why}", path.display());
@@ -131,7 +147,8 @@ fn a_step_that_compiles_the_rust_half_compiles_the_bridge_half() {
 
     let mut guarded = 0;
     for (path, text) in shipped() {
-        let def = config::WorkflowDef::parse(&path, &text).expect("a shipped definition");
+        let def =
+            config::WorkflowDef::parse(&path, &text, &roster()).expect("a shipped definition");
         for step in def.steps() {
             let named: Vec<&str> = step
                 .mechanical_checks()
@@ -182,7 +199,8 @@ fn a_step_that_compiles_the_rust_half_compiles_the_bridge_half() {
 fn a_step_another_step_reads_from_produces_a_file() {
     let mut checked = 0;
     for (path, text) in shipped() {
-        let def = config::WorkflowDef::parse(&path, &text).expect("a shipped definition");
+        let def =
+            config::WorkflowDef::parse(&path, &text, &roster()).expect("a shipped definition");
         let writes: Vec<&config::Step> = def
             .steps()
             .iter()
@@ -227,7 +245,8 @@ fn a_step_another_step_reads_from_produces_a_file() {
 fn every_shipped_artifact_target_is_one_path_in_the_worktree() {
     let mut seen = 0;
     for (path, text) in shipped() {
-        let def = config::WorkflowDef::parse(&path, &text).expect("a shipped definition");
+        let def =
+            config::WorkflowDef::parse(&path, &text, &roster()).expect("a shipped definition");
         for step in def.steps() {
             for check in step.mechanical_checks() {
                 let config::MechanicalCheck::ArtifactExists { target } = check else {
@@ -250,5 +269,73 @@ fn every_shipped_artifact_target_is_one_path_in_the_worktree() {
     assert!(
         seen >= 6,
         "six steps declare an artifact, and {seen} were read"
+    );
+}
+
+/// **A shipped step names a model only where it wants a different one from the
+/// Job's**, and the step that produces a diff is never the one that wants
+/// less.
+///
+/// Two claims, and the second is why this is a test rather than a comment.
+///
+/// The first is that no step restates the fallback. A step naming no model is
+/// run as the Job was proposed, so a step naming the Job's default says nothing
+/// the absence did not — and it says it in a second place, which is a second
+/// place to keep in sync when the default moves. The default is
+/// `adapters::HeadlessAgent::default_model()`, read from the adapter here for
+/// [`roster`]'s reason.
+///
+/// The second is that the dial only ever moves *down*. Owner's decision, 31 Aug
+/// 2026: cheap where a step reports, the Job's model where a step decides. A
+/// step producing a diff is deciding — `docs/concepts/judge.md` calls model "a
+/// deliberate per-step dial" and #141 says outright that the dial exists so a
+/// mechanical step stops paying for judgement it does not use, not so a step
+/// that needs judgement gets less of it. Nothing in the parser can tell those
+/// apart; this can, because `evidence_type: diff` is what a step producing one
+/// declares.
+#[test]
+fn a_shipped_step_names_a_model_only_to_ask_for_less() {
+    let default = adapters::HeadlessAgent::default_model();
+    let mut named: Vec<String> = Vec::new();
+    for (path, text) in shipped() {
+        let def =
+            config::WorkflowDef::parse(&path, &text, &roster()).expect("a shipped definition");
+        for step in def.steps() {
+            let Some(model) = step.model() else {
+                continue;
+            };
+            let at = format!("{} step `{}`", path.display(), step.id().as_str());
+            assert_ne!(
+                model.as_str(),
+                default,
+                "{at} names `{default}`, which is what it would be run as \
+                 anyway — an absent key says the same thing in one place \
+                 instead of two"
+            );
+            assert_ne!(
+                step.evidence_type(),
+                Some(config::EvidenceType::Diff),
+                "{at} produces a diff and names `{}`. The dial is for a step \
+                 that reports, not for one that decides",
+                model.as_str()
+            );
+            named.push(format!("{}.{}", def.id().as_str(), step.id().as_str()));
+        }
+    }
+    named.sort();
+    assert_eq!(
+        named,
+        vec![
+            "bug.handoff",
+            "code_review.deliver",
+            "feature.handoff",
+            "prototype.write_up",
+            "refactor.handoff",
+            "revert.handoff",
+        ],
+        "the six steps whose work is reporting. Every other shipped step \
+         decides something or produces a diff, and is run as the Job was \
+         proposed — a step joining or leaving this list is a spend decision \
+         and belongs in the file's own header, not in a diff nobody reads"
     );
 }
