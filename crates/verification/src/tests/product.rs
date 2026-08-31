@@ -12,8 +12,8 @@ use core_model::StepEvidence;
 use testkit::{Gate, Scoped, Sketch};
 
 use crate::{
-    Accepted, Brief, Claimed, Delivered, NotClaimed, NothingToJudge, Product, Reference, Request,
-    ShownBy, Submission, A_DELIVERABLE,
+    Accepted, Answered, Brief, Claimed, Delivered, NotClaimed, NothingToJudge, Product, Reference,
+    Request, ShownBy, Submission, A_DELIVERABLE,
 };
 
 /// Feature's opening pair, reduced: a step that writes a scope note, and a step
@@ -102,7 +102,7 @@ fn a_step_whose_work_product_is_a_note_is_judged_against_the_note() {
         Request::of(testkit::asked_for()),
         &product,
         &[],
-        &[],
+        Answered::of(&[], &[]),
     );
     let question = brief.question();
     assert!(
@@ -146,7 +146,7 @@ fn a_step_whose_work_product_is_the_change_shows_the_judge_no_submission() {
         Request::of(testkit::asked_for()),
         &product,
         &[],
-        &[],
+        Answered::of(&[], &[]),
     );
     assert!(brief.question().contains("wait *= 2"));
     assert!(!brief.question().contains("Backoff doubles rather than"));
@@ -178,7 +178,7 @@ fn what_an_earlier_step_established_reaches_the_brief_labelled_as_the_yardstick(
         Request::of(testkit::asked_for()),
         &product,
         &[Reference::to("scope", &earlier)],
-        &[],
+        Answered::of(&[], &[]),
     );
     let question = brief.question();
     assert!(
@@ -246,7 +246,7 @@ fn a_written_step_that_also_changed_files_carries_both_and_labels_them() {
         Request::of(testkit::asked_for()),
         &product,
         &[],
-        &[],
+        Answered::of(&[], &[]),
     );
     let question = brief.question();
     assert!(
@@ -279,7 +279,7 @@ fn a_step_that_delivered_a_file_is_judged_against_the_file() {
         Request::of(testkit::asked_for()),
         &product,
         &[],
-        &[],
+        Answered::of(&[], &[]),
     );
     let question = brief.question();
     assert!(
@@ -315,7 +315,7 @@ fn the_file_is_labelled_as_the_document_and_the_submission_as_a_summary() {
         Request::of(testkit::asked_for()),
         &product,
         &[],
-        &[],
+        Answered::of(&[], &[]),
     );
     let question = brief.question();
     let document = question
@@ -356,7 +356,7 @@ fn a_step_with_no_artifact_still_reads_as_the_document_itself() {
         Request::of(testkit::asked_for()),
         &product,
         &[],
-        &[],
+        Answered::of(&[], &[]),
     );
     assert!(!brief.question().contains("The summary submitted with it"));
     assert!(brief

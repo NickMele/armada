@@ -59,6 +59,7 @@
 //! [`InScope::resolved`] at the gate, and [`drifted`] on every turn of a step
 //! that declared its plan up front.
 
+mod answered;
 mod converging;
 mod drift;
 mod gaming;
@@ -75,6 +76,7 @@ mod submission;
 #[cfg(test)]
 mod tests;
 
+pub use answered::{Answered, Printed};
 pub use converging::{Convergence, ConvergenceBrief, NotConverging, MID_STEP_CONVERGENCE};
 pub use drift::{drift_criterion, DECLARED_PLAN_DRIFT};
 pub use gaming::{in_the_diff, judged_patterns, Baseline, Flagged, GamingBrief};
@@ -83,7 +85,7 @@ pub use judge::{field, Brief, Refusals, Unreadable};
 pub use mechanical::{
     Artifact, CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran, EVIDENCE_SCOPE,
 };
-pub use outcome::{OutcomeTurn, Printed, TheBaseMoved, Verified};
+pub use outcome::{OutcomeTurn, TheBaseMoved, Verified};
 pub use product::{
     Delivered, NothingToJudge, Product, Reference, TooBigToJudge, Written, A_DELIVERABLE,
 };

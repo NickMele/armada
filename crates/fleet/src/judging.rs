@@ -71,14 +71,13 @@ use std::time::Duration;
 
 use adapter_traits::{Ask, Environment, Model, ModelClient, Patch};
 use core_model::{
-    DeclaredPaths, GamingFlag, JudgeCheck, Judgment, RepoPath, ResolvedStep, StepCheck,
-    StepEvidence, StepId,
+    DeclaredPaths, GamingFlag, JudgeCheck, Judgment, RepoPath, ResolvedStep, StepEvidence, StepId,
 };
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use verification::{
-    Accepted, Baseline, Brief, Convergence, ConvergenceBrief, Delivered, Flagged, GamingBrief,
-    NothingToJudge, Product, Reference, Refusals, Request, Unreadable,
+    Accepted, Answered, Baseline, Brief, Convergence, ConvergenceBrief, Delivered, Flagged,
+    GamingBrief, NothingToJudge, Product, Reference, Refusals, Request, Unreadable,
 };
 
 use crate::at_step::AtStep;
@@ -374,7 +373,7 @@ pub(crate) async fn judged(
     accepted: Accepted<'_>,
     patch: &Patch,
     delivered: Option<Delivered<'_>>,
-    checks: &[StepCheck],
+    answered: Answered<'_>,
     off_plan: &[RepoPath],
     recorded: &[(StepId, StepEvidence)],
     judging: &Judging,
@@ -397,7 +396,7 @@ pub(crate) async fn judged(
     for check in step.judge_checks() {
         let model = model_for(check, &judging.default_model)?;
         for criterion in check.criteria() {
-            let brief = Brief::about(step, criterion, request, &product, &references, checks);
+            let brief = Brief::about(step, criterion, request, &product, &references, answered);
             // Every member of a panel answers the same brief and none of them
             // sees another's verdict — there is nothing in this loop that
             // carries one answer into the next call.
@@ -429,7 +428,7 @@ pub(crate) async fn judged(
     // step's own rigour dial bill it for drift.
     if let Some(criterion) = verification::drift_criterion(off_plan) {
         let model = fleets_model(step, &judging.default_model)?;
-        let brief = Brief::about(step, &criterion, request, &product, &references, checks);
+        let brief = Brief::about(step, &criterion, request, &product, &references, answered);
         let ask = Ask::put(model.clone(), brief.question(), judging.environment.clone())
             .map_err(|_| CallFailed::NothingToAsk)?;
         let _out = judging.marking.out(
