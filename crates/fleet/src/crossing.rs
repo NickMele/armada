@@ -82,16 +82,20 @@ impl Crossed {
 /// and `config::scope` refuses it.
 ///
 /// **Both the quotation and the path, and neither alone.** Quoting the claim
-/// alone reproduces exactly what `#138` closed: the next Drone is handed a
-/// sentence a Drone typed about a file, rather than the file. Naming the path
-/// alone spends a tool call to read two lines, on every step of every Job, and
-/// says nothing at all on a step whose product is the diff. So the claim is
-/// quoted because it is free to read, and the path is named because the claim
-/// is a summary of something and the something is on disk beside it.
+/// alone reproduces what `#138` closed: the next Drone is handed a sentence a
+/// Drone typed about a file, rather than the file. Naming the path alone spends
+/// a tool call to read two lines, and says nothing on a step whose product is
+/// the diff.
 ///
-/// **`shown_by` is not carried.** `#138` is explicit that the brief points at a
-/// path Fleet resolved rather than at whatever the previous Drone typed, and
-/// `shown_by` is the string it was talking about.
+/// **Two of the three evidence strings cross, and which two follows from
+/// that.** `shown_by` does not: `#138` is explicit that the brief points at a
+/// path Fleet resolved rather than at whatever the previous Drone typed.
+/// `not_claimed` does, on the owner's ruling of 31 Aug 2026 — `claimed`
+/// summarises a file in this same worktree and the path is right there, so a
+/// Drone wanting the whole of it opens the file, and `not_claimed` is nowhere
+/// else. It also bears most directly on what this part must not spend its turn
+/// on: "the writer has the same bound and is untouched" is exactly what a fix
+/// step should not go and re-do.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Produced {
     /// One-based, and it is the part number the rail counts with — "part 1",
@@ -101,6 +105,14 @@ pub struct Produced {
     /// is on the record and its evidence is not, which an override advance
     /// leaves behind.
     claimed: Option<String>,
+    /// Everything that claim does not assert — the gap it left and the thing
+    /// it changed that nobody asked for.
+    ///
+    /// **`None` where the field is empty, and empty is legal.**
+    /// `docs/contracts/agent-copy.md` says so outright: a Drone reporting that
+    /// it left nothing behind is not a Drone declining to answer. A label with
+    /// nothing under it would turn the first of those into the second.
+    not_claimed: Option<String>,
     /// The file that part was asked to write, where it declared one. Resolved
     /// by Fleet from the frozen definition, so no Drone chose it.
     at: Option<String>,
@@ -129,18 +141,37 @@ impl Produced {
         let steps = workflow.steps();
         let here = steps.iter().position(|step| step.id() == at)?;
         let earlier = steps.get(here.checked_sub(1)?)?;
+        let evidence = recorded
+            .iter()
+            .find(|(step, _)| step == earlier.id())
+            .map(|(_, evidence)| evidence);
         Some(Produced {
             part: here,
-            claimed: recorded
-                .iter()
-                .find(|(step, _)| step == earlier.id())
-                .map(|(_, evidence)| evidence.claimed.clone()),
+            claimed: evidence.map(|evidence| evidence.claimed.clone()),
+            // **The filter is where "empty renders nothing" lives**, and it is
+            // here rather than in the rendering so that the value cannot reach
+            // a caller holding a blank it would have to check again.
+            not_claimed: evidence
+                .map(|evidence| evidence.not_claimed.clone())
+                .filter(|left_alone| !left_alone.trim().is_empty()),
             at: earlier.deliverable().map(str::to_string),
         })
     }
 
     /// The block, in the shape `docs/contracts/agent-prompt.md` draws it:
     /// a heading naming the part, and the claim indented under it.
+    ///
+    /// **The path sentence stays next to the claim it is about.** What was left
+    /// alone follows both, so "what is quoted above summarises it" can only be
+    /// read as the claim — a second quotation between the two would make that
+    /// sentence ambiguous about which quotation it means.
+    ///
+    /// **What was left alone is framed as context and never as work.** It is
+    /// the one block here a Drone could read as a to-do list, and doing so
+    /// would produce exactly the failure the field exists to prevent: a part
+    /// doing the next part's work, having been handed a list of it. So the
+    /// sentence under it says what the field is — everything the claim does not
+    /// cover — and says outright that it is not work this part owes.
     pub(crate) fn text(&self) -> String {
         let part = self.part;
         let mut block = match &self.claimed {
@@ -158,6 +189,14 @@ impl Produced {
             ),
             None => String::from("\n\nIts work is on the branch you are in."),
         });
+        if let Some(left_alone) = &self.not_claimed {
+            block.push_str(&format!(
+                "\n\nWhat part {part} did not claim:\n  \"{left_alone}\"\n\nThat is \
+                 everything its claim does not cover — a gap it left on purpose, \
+                 or something it changed that nobody asked for. It is context \
+                 for this part and not a list of work this part owes."
+            ));
+        }
         block
     }
 }

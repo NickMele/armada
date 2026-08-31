@@ -229,6 +229,15 @@ The samples below, the assembled wording, and the decisions visible in each are 
 │ in. Read it before you start. What is quoted above
 │ summarises it and does not replace it.
 │
+│ What part 1 did not claim:
+│   "The sweeper matches on repo name too, and this
+│    plan does not change it."
+│
+│ That is everything its claim does not cover — a gap it
+│ left on purpose, or something it changed that nobody
+│ asked for. It is context for this part and not a list
+│ of work this part owes.
+│
 │ Parts 3 and 4 happen after you submit, and doing them
 │ yourself does not move this task forward. Leave the
 │ branch in a state they can start from.

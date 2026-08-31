@@ -417,7 +417,7 @@ fn plan_then_do(second_is_scoped: bool) -> config::ResolvedWorkflow {
     ])
 }
 
-fn a_diff_call<'a>() -> Call<'a> {
+pub(super) fn a_diff_call<'a>() -> Call<'a> {
     Call {
         evidence_type: config::EvidenceType::Diff,
         claimed: Claimed("The plan is written."),
@@ -461,9 +461,14 @@ pub(crate) async fn turns_sent(
 }
 
 /// Drive a Job through its first step and answer with what its Drone was told.
-async fn told_across_the_boundary(
+///
+/// `submitted` is part one's evidence, because part two's opening brief is
+/// assembled from it: the boundary reads the record `crate::settling` wrote and
+/// hands what it finds to the Drone it starts.
+pub(super) async fn told_across_the_boundary(
     home: &TempDir,
     second_is_scoped: bool,
+    submitted: Call<'_>,
 ) -> (Fleet<FakeHarness, FakeVcs, FakeWorkProduct>, Vec<String>) {
     let fleet = a_fleet_holding(
         home,
@@ -484,7 +489,7 @@ async fn told_across_the_boundary(
         .await
         .expect("the first step's plan");
     fleet
-        .submit_evidence(a_diff_call())
+        .submit_evidence(submitted)
         .await
         .expect("evidence lands");
     let turned = fleet.turn().await.expect("a turn");
@@ -516,7 +521,7 @@ async fn told_across_the_boundary(
 #[tokio::test]
 async fn a_step_boundary_asks_again_for_the_declaration_it_just_cleared() {
     let home = TempDir::new();
-    let (_fleet, sent) = told_across_the_boundary(&home, true).await;
+    let (_fleet, sent) = told_across_the_boundary(&home, true, a_diff_call()).await;
 
     assert!(
         sent[0].contains("BEFORE YOU START"),
@@ -553,7 +558,7 @@ async fn a_step_boundary_asks_again_for_the_declaration_it_just_cleared() {
 #[tokio::test]
 async fn a_step_boundary_says_nothing_where_the_next_step_wants_no_plan() {
     let home = TempDir::new();
-    let (_fleet, sent) = told_across_the_boundary(&home, false).await;
+    let (_fleet, sent) = told_across_the_boundary(&home, false, a_diff_call()).await;
 
     assert!(
         !sent[0].contains("BEFORE YOU START"),
