@@ -111,6 +111,13 @@
 //! than moved — plus the one positive case, the event that tells a watching
 //! client which id to drop.
 //!
+//! `coupling` is the twenty-third: what an upstream's terminal status does to
+//! the Job waiting behind it. `planning` and `queued` already prove the
+//! ordering, so every case here is one of the two outcomes that used to leave a
+//! Job at `queued` for ever — the failure that never self-clears, and the
+//! `superseded` that was meant to be the graceful one — plus the refusal that
+//! makes a cycle unstatable rather than merely undetected.
+//!
 //! `boundary` is the twenty-second, and the only thing here that asks the
 //! operating system what happened to a Drone. Every other boundary test asserts
 //! bookkeeping, and would pass over a `setsid`-detached Drone still running.
@@ -124,6 +131,7 @@ mod briefing;
 mod checking;
 mod checks;
 mod converging;
+mod coupling;
 mod crossing;
 mod daemon;
 mod delivering;

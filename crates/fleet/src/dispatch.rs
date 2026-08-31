@@ -28,14 +28,15 @@ use std::collections::BTreeMap;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{
-    Actor, Branch, DependencyDirection, EscalationTrigger, Job, JobId, JobStatus, StepId,
-    StepLevelTrigger, StepTarget, Target, Transitioned,
+    Actor, Branch, EscalationTrigger, Job, JobId, JobStatus, StepId, StepLevelTrigger, StepTarget,
+    Target, Transitioned,
 };
 use store::Moved;
 use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
 use crate::briefing::{Declaring, Opening};
+use crate::coupling::{coupling, Coupling};
 use crate::crossing::{Cleared, Crossed, Produced};
 use crate::daemon::Fleet;
 use crate::drone::{aftermath, Aftermath, Ending, Left};
@@ -827,18 +828,17 @@ fn the_part_before<'a>(
 /// answer, not two** — a Board saying a Job is blocked while admission
 /// disagrees is worse than a Board saying nothing.
 ///
-/// **`completed_success` and nothing weaker.** A dependent admitted after a
-/// failed upstream would do its work against a base that never landed, which is
-/// the half-landed upstream the linked-DAG shape exists to prevent.
+/// **No terminal weaker than `completed_success` or `superseded`.** A dependent
+/// admitted after a failed upstream would do its work against a base that never
+/// landed, which is the half-landed upstream the linked-DAG shape exists to
+/// prevent. A superseded upstream is not that case: the work landed outside the
+/// Job, so the base is there and only the record has nothing to say.
 ///
-/// A peer that is not in the list at all counts as unfinished. An edge pointing
-/// at a Job that was retained out is a sequence nothing can establish, and of
-/// the two answers only "run it" cannot be taken back.
+/// The three-way weighing, and which peer failed, are
+/// [`coupling`](crate::coupling::coupling)'s — this is the yes-or-no admission
+/// reads, and it is the same call `serving` labels a Board row from.
 pub(crate) fn clear_to_run(job: &Job, standing: &BTreeMap<JobId, JobStatus>) -> bool {
-    job.dependencies()
-        .iter()
-        .filter(|edge| edge.direction == DependencyDirection::DependsOn)
-        .all(|edge| standing.get(&edge.peer) == Some(&JobStatus::CompletedSuccess))
+    matches!(coupling(job, standing), Coupling::Clear { .. })
 }
 
 /// Copy every attachment the Job carries into this worktree, under

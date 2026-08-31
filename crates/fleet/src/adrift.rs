@@ -324,6 +324,15 @@ pub enum Adrift {
     /// A proposal named a Manifest this Fleet does not hold. The same fault as
     /// [`Adrift::NoSuchWorkflow`], for the other id a proposal carries.
     NoSuchManifest { named: String, held: String },
+    /// A proposal named a peer Job this Fleet does not hold.
+    ///
+    /// The third of the same fault, for the ids on `dependencies` — and the one
+    /// that buys more than a good message. An edge may only point at a Job that
+    /// already exists, so every edge points backwards in time and a cycle is
+    /// unrepresentable rather than merely undetected. Unenforced, two Jobs each
+    /// naming the other were both permanently unadmittable behind a Board label
+    /// that reads as ordinary waiting.
+    NoSuchPeer { named: String },
     /// A proposal named no model and nothing configured supplies one.
     ///
     /// Refused **at creation**, which is the whole point: the same value used
@@ -648,6 +657,13 @@ impl fmt::Display for Adrift {
                     names.join(", ")
                 )
             }
+            Adrift::NoSuchPeer { named } => write!(
+                out,
+                "no Job is named `{named}`, and a dependency is a pointer rather than a \
+                 promise. A peer must already exist when the Job naming it is created, which \
+                 is what makes a plan creatable in dependency order and a cycle impossible \
+                 to state"
+            ),
             Adrift::NoSuchManifest { named, held } => write!(
                 out,
                 "no Manifest is named `{named}`. This Fleet holds `{held}`, the one declared by \
@@ -739,6 +755,7 @@ impl Adrift {
             | Adrift::Unnameable
             | Adrift::NoSuchWorkflow { .. }
             | Adrift::NoSuchManifest { .. }
+            | Adrift::NoSuchPeer { .. }
             | Adrift::Modelless
             | Adrift::NothingToPropose
             | Adrift::NoReadingWorktree(_)
@@ -779,6 +796,7 @@ impl Error for Adrift {
             | Adrift::Unnameable
             | Adrift::NoSuchWorkflow { .. }
             | Adrift::NoSuchManifest { .. }
+            | Adrift::NoSuchPeer { .. }
             // The five resume refusals are refusals rather than faults: a Job
             // that cannot be redirected has nothing underneath saying why, only
             // the state it is in.

@@ -211,6 +211,11 @@ pub struct Turned {
     /// a person redirected it. Empty on every turn no redirect is outstanding
     /// on, which is nearly all of them.
     pub roused: Option<Roused>,
+    /// Jobs escalated because an upstream they wait on ended badly. **A list
+    /// and not an `Option`**, unlike every field above it: one upstream ending
+    /// releases every dependent that named it, so the turn a Job fails is the
+    /// turn all of them move.
+    pub stranded: Vec<JobId>,
 }
 
 /// The daemon core: **the only writer of Job state.**
@@ -400,6 +405,10 @@ where
         let settled = self.settle(&mut working).await?;
         let delivered = self.delivered.lock().await.take();
         let after = self.reap(&mut working).await?;
+        // After everything that can end a Job this turn and before admission:
+        // a dependent whose upstream just failed must not be considered for the
+        // slot it can never use.
+        let stranded = self.strand_dependents().await?;
         let admitted = self.admit_next(&mut working).await?;
         Ok(Turned {
             ruled: settled.ruled,
@@ -411,6 +420,7 @@ where
             wandering,
             quiet,
             roused,
+            stranded,
         })
     }
 
@@ -441,6 +451,10 @@ where
         stated: StatedBy,
     ) -> Result<Job, Adrift> {
         let at = self.now();
+        // Before `drafted`, which is sync and cannot read the board: an edge is
+        // a pointer, and a peer that does not exist is the one shape a cycle
+        // needs. `coupling::peers_held` carries why.
+        self.peers_held(&proposal.dependencies).await?;
         let (new, origin) = self.drafted(proposal, stated, &at)?;
         let job = Job::create_top_level(new, origin, at.clone());
         self.store

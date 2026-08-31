@@ -99,6 +99,9 @@ mod check_output;
 mod checking;
 pub mod clock;
 pub mod converging;
+/// What an upstream's terminal status does to the Job waiting behind it — the
+/// one place a dependency edge is weighed, for both admission and the Board.
+mod coupling;
 pub mod crossing;
 pub mod daemon;
 pub mod delivery;

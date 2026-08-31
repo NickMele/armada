@@ -91,6 +91,10 @@ The dependency model itself is a property of a Job — see [Job](job.md). Only t
 
 An edge carries no strength of its own — every edge gates identically and the variation is in that terminal status.
 
+**A cycle is unstatable rather than detected.** An edge may only name a Job that already exists, and a Job's edges are written once, at creation — so every edge points at a strictly older Job and there is no acyclicity check to keep in step. A proposal naming a peer Fleet does not hold is refused where it enters, beside the workflow id and the Manifest id it is refused with.
+
+**Escalating stops at the first dependent.** Nothing below it is cancelled or moved: `escalated` is not terminal, so a Job waiting on the one that was just escalated is still waiting on a Job that may yet run.
+
 ### Scope revision mid-Job
 
 **Rescope-and-respawn.** Fleet terminates the Drone, re-resolves configuration against the new declared set, and spawns a fresh Drone **on the same worktree and branch** — work survives, session context does not, since Facts and Evidence live on the Job rather than on the Drone.
