@@ -4,19 +4,25 @@
 //! shape is transcribed from `sys/proc_info.h` below. Each piece is `#[repr(C)]`
 //! with a `const` assertion on its size, so a field transcribed wrongly is a
 //! build failure rather than an offset that reads four bytes of somebody else's
-//! port. `docs/spikes/012-peer-identity-under-concurrency.md` recovered these
-//! offsets at runtime because it was Python; a layout the compiler agrees with
-//! is the better guarantee.
+//! port. Spike 12 calibrated these offsets at runtime because it was Python; a
+//! layout the compiler agrees with is the better guarantee.
 //!
 //! Only as far as the two ports. `soi_proto` is a union of seven records and
 //! the two that are read — `SOCKINFO_IN` and `SOCKINFO_TCP` — both open with an
 //! `in_sockinfo`, so the rest is not transcribed: a wrong size in a part nobody
 //! reads is a wrong size all the same.
 //!
-//! Every call here answers `false` on any error, which is the only direction
-//! `crate::peer` may fail in. Each `unsafe` block carries its own note, and the
-//! gate's check for one is a file-wide substring — so the header does not spell
-//! the token, or a file that lost every note would still satisfy it.
+//! Every call here answers `false` on any error, the only direction
+//! `crate::peer` may fail in. Each `unsafe` block carries its own note; the
+//! header does not spell the token, because the gate's check for one is a
+//! file-wide substring and a file that lost every note would still pass.
+//!
+//! Darwin-only, at the call site, and **there is no `cfg(target_os)` here on
+//! purpose**: a guard would compile the lookup out and leave `PeerOf` answering
+//! `false`, which is attribution failing absent on a platform where it should
+//! fail to build. Whether a layer should own that is
+//! `[platform-differences-layer]` in `docs/contracts/adapters.md`, a person's
+//! question this is the third instance of.
 
 use std::mem::size_of;
 

@@ -230,6 +230,16 @@ still open are below. The other was the settings list, which is now
   decision notes that process-group semantics differ across platforms, that
   v1 was bitten by both a Linux-specific and a BSD-specific regression, and
   marks itself still open, though that gap appears only in its body, not in
-  its resolution. Armada is macOS single-user today; both dependencies are
-  cheap now and expensive to retrofit if Linux returns. The existing adapter
-  set is a boundary already widened once — see adapter-admission-test above.
+  its resolution. **Peer-process attribution is the third instance and the
+  largest.** `crates/fleet/src/peer/kernel.rs` calls darwin's `proc_pidinfo`
+  and `proc_pidfdinfo` through `unsafe` FFI, against a `struct socket_fdinfo`
+  transcribed from `sys/proc_info.h` — where the other two read a value, this
+  one depends on a kernel record's layout. It carries no `cfg(target_os)`
+  deliberately: a guard would compile the lookup out and make attribution fail
+  absent on a platform where it should fail to build, and absent is the answer
+  that credits a Job's work to nobody rather than to somebody. So the crate
+  stops building the day anything targets Linux, which is the honest signal and
+  is the cost of leaving it at the call site. Armada is macOS single-user
+  today; all three dependencies are cheap now and expensive to retrofit if
+  Linux returns. The existing adapter set is a boundary already widened once —
+  see adapter-admission-test above.
