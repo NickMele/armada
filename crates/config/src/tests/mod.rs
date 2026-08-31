@@ -11,6 +11,7 @@
 //! its own repository is not a validator.
 
 mod manifest;
+mod model;
 mod samples;
 mod scope;
 mod workflow;
@@ -18,6 +19,19 @@ mod workflow;
 use std::path::{Path, PathBuf};
 
 use crate::error::{Fault, LoadError, Refusal};
+use crate::roster::Roster;
+
+/// The models a fixture may name.
+///
+/// **Invented names, and that is the point.** The legal set is whatever the
+/// caller resolved rather than anything this crate knows — see
+/// [`crate::Roster`] — so a fixture roster spelled in a vendor's aliases would
+/// read as though the parser had a list of its own. Whether the *shipped*
+/// definitions name models this machine offers is `tests/shipped.rs`, against
+/// the adapter's real roster.
+pub(crate) fn roster() -> Roster {
+    Roster::of(["the-deciding-model", "the-reporting-model"])
+}
 
 /// A path for a document that is never written. Every refusal names the file it
 /// came from, and the tests exercise the parser rather than the filesystem.

@@ -26,9 +26,25 @@
 
 use std::path::{Path, PathBuf};
 
+use config::Roster;
+
 /// The repository root, from this crate's manifest directory.
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// What this machine can run a Drone as, read from the adapter rather than
+/// written out here.
+///
+/// **A list typed into this file would defeat the test it is part of.** A
+/// shipped step naming a model the adapter does not offer would keep parsing
+/// against the local copy and fail at spawn, where the Job already has a
+/// worktree — which is the whole failure `config::Roster` exists to move
+/// earlier. So the roster the parse is checked against is the roster the
+/// running daemon resolves, and `adapters` is a dev-dependency for this one
+/// call.
+fn roster() -> Roster {
+    Roster::of(adapters::HeadlessAgent::models())
 }
 
 /// Every shipped definition, as `(path, text)`, sorted so a failure names the
@@ -53,7 +69,7 @@ fn shipped() -> Vec<(PathBuf, String)> {
 fn every_shipped_workflow_definition_parses() {
     let mut seen = 0;
     for (path, text) in shipped() {
-        if let Err(why) = config::WorkflowDef::parse(&path, &text) {
+        if let Err(why) = config::WorkflowDef::parse(&path, &text, &roster()) {
             panic!("{} is refused:\n{why}", path.display());
         }
         seen += 1;
@@ -68,7 +84,7 @@ fn every_shipped_workflow_resolves_against_this_repositorys_manifest() {
         .unwrap_or_else(|why| panic!("{} is refused:\n{why}", manifest_path.display()));
 
     for (path, text) in shipped() {
-        let def = config::WorkflowDef::parse(&path, &text)
+        let def = config::WorkflowDef::parse(&path, &text, &roster())
             .unwrap_or_else(|why| panic!("{} is refused:\n{why}", path.display()));
         if let Err(why) = config::ResolvedWorkflow::resolve(&def, &manifest) {
             panic!("{} does not resolve:\n{why}", path.display());
@@ -131,7 +147,8 @@ fn a_step_that_compiles_the_rust_half_compiles_the_bridge_half() {
 
     let mut guarded = 0;
     for (path, text) in shipped() {
-        let def = config::WorkflowDef::parse(&path, &text).expect("a shipped definition");
+        let def =
+            config::WorkflowDef::parse(&path, &text, &roster()).expect("a shipped definition");
         for step in def.steps() {
             let named: Vec<&str> = step
                 .mechanical_checks()
@@ -182,7 +199,8 @@ fn a_step_that_compiles_the_rust_half_compiles_the_bridge_half() {
 fn a_step_another_step_reads_from_produces_a_file() {
     let mut checked = 0;
     for (path, text) in shipped() {
-        let def = config::WorkflowDef::parse(&path, &text).expect("a shipped definition");
+        let def =
+            config::WorkflowDef::parse(&path, &text, &roster()).expect("a shipped definition");
         let writes: Vec<&config::Step> = def
             .steps()
             .iter()
@@ -227,7 +245,8 @@ fn a_step_another_step_reads_from_produces_a_file() {
 fn every_shipped_artifact_target_is_one_path_in_the_worktree() {
     let mut seen = 0;
     for (path, text) in shipped() {
-        let def = config::WorkflowDef::parse(&path, &text).expect("a shipped definition");
+        let def =
+            config::WorkflowDef::parse(&path, &text, &roster()).expect("a shipped definition");
         for step in def.steps() {
             for check in step.mechanical_checks() {
                 let config::MechanicalCheck::ArtifactExists { target } = check else {

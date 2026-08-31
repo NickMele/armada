@@ -160,7 +160,7 @@ parent = "steps[]"
 purpose = "Semantic checks on whether the evidence satisfies the step's intent. A refusal from any entry fails the step."
 open_questions = ["How does a step with no mechanical check advance?", "Does the Judge see the Drone's transcript, or only task text, diff and deterministic facts?", "What caps criteria × panel_size?"]
 notes = """
-Each entry carries its own `model` and `panel_size`, so a step can run one strong Judge on one question and a panel of three cheap ones on another. `panel_size` is unanimity within a single question — a different dial from asking two questions, which is what the array is for.
+Each entry carries its own `model` and `panel_size`, so a step can run one strong Judge on one question and a panel of three cheap ones on another. `panel_size` is unanimity within a single question — a different dial from asking two questions, which is what the array is for. **That `model` is the Judge's and not the step's**: it says what answers a criterion, while `[fields.model]` says what the Drone doing the work is spawned as. The two share a spelling and nothing else, and until `[fields.model]` was written this row was the only place either was described.
 
 Judge owns the contract every call obeys — veto-only, blind to the Drone's transcript, a narrow yes/no question, unanimity within a panel, a refusal must cite what it refuses on, `model` a per-step dial rather than a fleet-wide constant — without exception, including the mid-step thrashing pass. This field states only what a `WorkflowDef` declares.
 
@@ -236,6 +236,22 @@ notes = "Bug's `repro` expects exit 1, a deliberately failing test"
 type = "pr_merged"
 asserts = "The pull request is merged"
 used_by = ["Bug", "Refactor"]
+
+[fields.model]
+type = "string"
+concern = "Structure"
+parent = "steps[]"
+purpose = "Which model this step's Drone is spawned as. Absent falls back to the Job's."
+notes = """
+Authored here on 31 Aug 2026 rather than carried across: no row existed, and the key survived only as prose on `[fields.judge_checks]`, which describes the *Judge's* per-entry `model` and not the step's. Two different dials with one spelling — `judge_checks[].model` is what a criterion is answered by, this is what the Drone is run as — and the absence of this row is why they read as one thing for as long as they did.
+
+Not readable before a step was its own process. One session spanned a whole Job and a session cannot change model partway, so `fleet::spawning` built every Drone with the Job's model and there was nothing to vary. Since #140 each step is its own process.
+
+Absent is the Job's, and absent is what most steps say. A step whose model would equal the fallback is left unannotated deliberately: a value restating the default is a second place to keep it in sync, and the shipped workflows under `.armada/workflows/` therefore carry the key only on the steps that want *less* than the default.
+
+The legal set is not the schema's. Which names a machine can run is the adapter's knowledge — `settings.toml`'s `kit-level-allowed-default-models-list` is the row that should own it and carries no value — so `crates/config` refuses an unknown name against a roster the composition root hands it rather than against a constant. The refusal is at config load and not at spawn: by spawn there is a worktree, an approval and every earlier step's work behind it, and `fleet::spawning` reports a `SpawnConfigRefused` as an interrupt, which names the wrong cause.
+"""
+why = "A step that runs a suite and reports the exit code was paying for the model the step that planned the change needed, because one process spanned both."
 
 [fields.on_complete]
 type = "workflow_id"
@@ -363,7 +379,7 @@ No sample carries one yet.
 [fields."steps[]"]
 type = "array[step]"
 concern = "Structure"
-sub_items = ["id", "label", "mechanical_checks", "judge_checks", "evidence_scope", "evidence_type", "advance_gate", "retry_limit", "verdict_routing", "iteration_cap", "hard_prerequisite", "on_fail", "on_gaming_flag", "declare_plan_at"]
+sub_items = ["id", "label", "model", "mechanical_checks", "judge_checks", "evidence_scope", "evidence_type", "advance_gate", "retry_limit", "verdict_routing", "iteration_cap", "hard_prerequisite", "on_fail", "on_gaming_flag", "declare_plan_at"]
 purpose = "The ordered set of steps. Everything nested under this row is a field of a step, not of the WorkflowDef."
 notes = """
 Ordered, and loop-capable: `structure: "loop"` means a step returns to an earlier one by `verdict_routing`, not that the array is unordered.

@@ -217,6 +217,7 @@ dependencies = [
 name = "config"
 version = "0.0.0"
 dependencies = [
+ "adapters",
  "core-model",
  "serde_yaml_ng",
  "store",

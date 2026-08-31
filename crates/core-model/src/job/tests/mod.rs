@@ -50,6 +50,7 @@ fn workflow() -> FrozenWorkflow {
                 Vec::new(),
                 None,
                 0,
+                None,
             ),
             ResolvedStep::frozen(
                 StepId::new("fix"),
@@ -60,6 +61,7 @@ fn workflow() -> FrozenWorkflow {
                 Vec::new(),
                 None,
                 0,
+                None,
             ),
         ],
     )
@@ -256,6 +258,7 @@ fn reach(status: JobStatus) -> Job {
 
 mod covers;
 mod machine;
+mod models;
 mod record;
 mod step_machine;
 mod stuck;

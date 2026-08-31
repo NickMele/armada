@@ -19,7 +19,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use config::{Manifest, ResolvedWorkflow, WorkflowDef};
+use config::{Manifest, ResolvedWorkflow, Roster, WorkflowDef};
 use core_model::FrozenWorkflow;
 
 /// One mechanical check on a fixture step.
@@ -110,7 +110,7 @@ pub struct Scoped<'a> {
 /// mistake in the test, and a test that has to unwrap its own fixture reads as
 /// though the parse were the subject.
 pub fn resolved(steps: &[Sketch<'_>]) -> ResolvedWorkflow {
-    retried(steps, 0)
+    built(steps, 0, &[])
 }
 
 /// The same fixture with every step declaring the same retry budget.
@@ -122,9 +122,32 @@ pub fn resolved(steps: &[Sketch<'_>]) -> ResolvedWorkflow {
 /// A test needing two steps with two different budgets does not exist, and
 /// would be the moment to make it a field.
 pub fn retried(steps: &[Sketch<'_>], retry_limit: u32) -> ResolvedWorkflow {
+    built(steps, retry_limit, &[])
+}
+
+/// The same fixture with some steps naming a model of their own, as
+/// `(step id, model)`.
+///
+/// **A whole-fixture argument rather than a ninth field on [`Sketch`]**, for
+/// [`retried`]'s reason: ninety-odd fixture literals would each have to state a
+/// `None` about a dial they do not use. A step absent from `models` declares
+/// none, which is what lets one fixture show the annotated step and the one
+/// falling back to the Job's side by side — the only thing worth asserting
+/// about the dial.
+///
+/// The roster the parser checks against is built from these pairs, so a fixture
+/// cannot name a model the machine would refuse. Whether an unknown one *is*
+/// refused is `config`'s own test, over the real parser and a real roster.
+pub fn modelled(steps: &[Sketch<'_>], models: &[(&str, &str)]) -> ResolvedWorkflow {
+    built(steps, 0, models)
+}
+
+fn built(steps: &[Sketch<'_>], retry_limit: u32, models: &[(&str, &str)]) -> ResolvedWorkflow {
+    let roster = Roster::of(models.iter().map(|(_, model)| *model));
     let def = WorkflowDef::parse(
         Path::new("fixture-workflow.yml"),
-        &workflow_text(steps, retry_limit),
+        &workflow_text(steps, retry_limit, models),
+        &roster,
     )
     .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
     let manifest = Manifest::parse(Path::new("fixture-armada.yml"), &manifest_text(steps))
@@ -141,7 +164,7 @@ pub fn frozen(steps: &[Sketch<'_>]) -> FrozenWorkflow {
     resolved(steps).frozen().clone()
 }
 
-fn workflow_text(steps: &[Sketch<'_>], retry_limit: u32) -> String {
+fn workflow_text(steps: &[Sketch<'_>], retry_limit: u32, models: &[(&str, &str)]) -> String {
     let mut text = String::from(
         "version: 1\nworkflow_id: fixture-workflow\nname: fixture\nstructure: linear\nsteps:\n",
     );
@@ -157,6 +180,9 @@ fn workflow_text(steps: &[Sketch<'_>], retry_limit: u32) -> String {
         ));
         if let Some(evidence) = step.evidence_type {
             text.push_str(&format!("    evidence_type: {evidence}\n"));
+        }
+        if let Some((_, model)) = models.iter().find(|(id, _)| *id == step.id) {
+            text.push_str(&format!("    model: {model}\n"));
         }
         if let Some(scope) = step.scope {
             if scope.at_step_start {

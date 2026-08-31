@@ -184,6 +184,9 @@ pub fn two_steps_gated_on_a_person(
             gate("implement"),
             gate("summarise"),
         ),
+        // The fixture names no model, so there is nothing for a roster to
+        // offer. See `config::Roster`.
+        &config::Roster::offering_nothing(),
     )
     .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
     config::ResolvedWorkflow::resolve(&def, &manifest())
@@ -228,6 +231,9 @@ fn workflow_named_and(id: &str, gated: bool) -> config::ResolvedWorkflow {
              {step_id}\n    label: \"{step_id}\"\n    evidence_type: diff\n{mechanical}    \
              advance_gate: auto\n"
         ),
+        // The fixture names no model, so there is nothing for a roster to
+        // offer. See `config::Roster`.
+        &config::Roster::offering_nothing(),
     )
     .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
     let armada_yml = Manifest::parse(

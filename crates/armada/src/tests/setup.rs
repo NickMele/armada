@@ -13,10 +13,20 @@
 //! one and not the other is a daemon that refuses to start, discovered by
 //! whoever next tried to start it.
 
-use config::{Fault, LoadError, ResolvedCheck, WorkflowDef};
+use config::{Fault, LoadError, ResolvedCheck, Roster, WorkflowDef};
 
 use crate::setup::{Setup, SetupRefused, MANIFEST, WORKFLOWS};
 use crate::tests::{repository, TempDir};
+
+/// What this machine can run a Drone as, resolved the way `serve` resolves it.
+///
+/// **Read through [`crate::model_choices`] rather than written out**, so these
+/// tests check the shipped definitions against the roster the daemon would
+/// actually use — a list typed here would go on passing after the adapter's
+/// changed.
+fn roster() -> Roster {
+    Roster::of(crate::model_choices(None).models)
+}
 
 /// A repository with an `armada.yml` that declares no Checks, so a workflow
 /// gated on nothing resolves against it without also having to write a Check.
@@ -51,7 +61,7 @@ fn bug(setup: &Setup) -> &config::ResolvedWorkflow {
 /// be dispatched.
 #[test]
 fn this_repositorys_own_setup_loads_and_resolves() {
-    let setup = match Setup::at(&repository()) {
+    let setup = match Setup::at(&repository(), &roster()) {
         Ok(setup) => setup,
         Err(refused) => panic!("{} and {WORKFLOWS} must load:\n{refused}", MANIFEST),
     };
@@ -99,7 +109,7 @@ fn this_repositorys_own_setup_loads_and_resolves() {
 /// in the other resolves to a command nobody meant.
 #[test]
 fn each_named_check_resolved_to_the_command_the_manifest_holds() {
-    let setup = Setup::at(&repository()).expect("a setup that loads");
+    let setup = Setup::at(&repository(), &roster()).expect("a setup that loads");
     let resolved: Vec<(&str, &str)> = bug(&setup)
         .steps()
         .iter()
@@ -134,7 +144,7 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
 /// and a `verify` step that can never pass.
 #[test]
 fn the_test_check_excludes_the_crate_that_must_not_compile() {
-    let setup = Setup::at(&repository()).expect("a setup that loads");
+    let setup = Setup::at(&repository(), &roster()).expect("a setup that loads");
     let test = setup.manifest().check("test").expect("a `test` Check");
     assert!(
         test.run().contains("--exclude acceptance"),
@@ -162,7 +172,8 @@ fn the_designed_bug_workflow_is_refused_for_a_reason_a_later_milestone_removes()
     let designed = repository()
         .join("crates/core-model/domain/workflow-samples")
         .join("bug.json");
-    let refused = WorkflowDef::load(&designed).expect_err("a loop, and M1 carries linear");
+    let refused =
+        WorkflowDef::load(&designed, &roster()).expect_err("a loop, and M1 carries linear");
     let LoadError::Refused { refusals, .. } = &refused else {
         panic!("a document that parsed and was refused, not {refused}");
     };
@@ -190,7 +201,7 @@ fn the_designed_bug_workflow_is_refused_for_a_reason_a_later_milestone_removes()
 /// length would mean one of them had been quietly rewritten into the other.
 #[test]
 fn the_designed_definition_and_m1s_reduced_form_are_not_the_same_workflow() {
-    let setup = Setup::at(&repository()).expect("a setup that loads");
+    let setup = Setup::at(&repository(), &roster()).expect("a setup that loads");
     assert_eq!(bug(&setup).steps().len(), 3);
 
     let designed = repository()
@@ -214,7 +225,7 @@ fn two_or_more_workflow_definitions_load_and_are_held_by_their_own_ids() {
     dir.write(".armada/workflows/alpha.yml", &a_workflow("alpha"));
     dir.write(".armada/workflows/beta.yml", &a_workflow("beta"));
 
-    let setup = Setup::at(dir.path()).expect("two definitions with distinct ids load");
+    let setup = Setup::at(dir.path(), &roster()).expect("two definitions with distinct ids load");
     let mut ids: Vec<&str> = setup.workflows().keys().map(|id| id.as_str()).collect();
     ids.sort();
     assert_eq!(ids, vec!["alpha", "beta"]);
@@ -229,7 +240,7 @@ fn a_duplicate_workflow_id_across_two_files_is_refused_naming_both() {
     dir.write(".armada/workflows/first.yml", &a_workflow("shared"));
     dir.write(".armada/workflows/second.yml", &a_workflow("shared"));
 
-    let refused = Setup::at(dir.path()).expect_err("two files agree on one id");
+    let refused = Setup::at(dir.path(), &roster()).expect_err("two files agree on one id");
     assert!(matches!(refused, SetupRefused::DuplicateWorkflowId { .. }));
     let said = refused.to_string();
     assert!(said.contains("first.yml"), "{said}");
@@ -244,6 +255,6 @@ fn zero_workflow_files_is_still_refused() {
     let dir = a_repository();
     std::fs::create_dir_all(dir.path().join(WORKFLOWS)).expect("the empty directory");
 
-    let refused = Setup::at(dir.path()).expect_err("no definition is in the directory");
+    let refused = Setup::at(dir.path(), &roster()).expect_err("no definition is in the directory");
     assert!(matches!(refused, SetupRefused::NoWorkflow { .. }));
 }

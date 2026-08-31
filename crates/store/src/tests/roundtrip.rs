@@ -679,3 +679,57 @@ fn a_stored_pattern_the_dialect_cannot_read_is_malformed_rather_than_dropped() {
     let refused = crate::columns::read_workflow(&stored).expect_err("an unreadable pattern");
     assert!(refused.contains("src/[ab].rs"), "{refused}");
 }
+
+/// **A step's own model survives the column, and so does its absence.**
+///
+/// The two are different sentences: a name is what this step asked to be run
+/// as, and none is the step deferring to the Job's. A writer and a reader that
+/// disagreed about the key would collapse the first into the second, and every
+/// step would quietly go back to being spawned on the Job's model — which is
+/// exactly the state this field was added to leave.
+#[test]
+fn a_steps_own_model_and_its_absence_both_survive_the_column() {
+    let workflow =
+        crate::columns::read_workflow(&crate::columns::write_workflow(&crate::tests::workflow()))
+            .expect("a workflow that was just written");
+    assert_eq!(
+        workflow
+            .step(&StepId::new("fix"))
+            .expect("the step")
+            .model()
+            .map(|model| model.as_str()),
+        Some("the-steps-own-model")
+    );
+    assert_eq!(
+        workflow
+            .step(&StepId::new("reproduce"))
+            .expect("the step")
+            .model(),
+        None
+    );
+}
+
+/// A row frozen before a step could name a model reads back as one that names
+/// none — which is what every such step meant, since one process spanned the
+/// whole Job and could not have changed model partway.
+#[test]
+fn a_workflow_frozen_before_a_step_could_name_a_model_reads_back_as_naming_none() {
+    let workflow = crate::columns::read_workflow(WITHOUT_WHEN).expect("a pre-`model` row");
+    assert_eq!(
+        workflow
+            .step(&StepId::new("fix"))
+            .expect("the step")
+            .model(),
+        None
+    );
+}
+
+/// A blank in the column is a refusal rather than a none. `""` is a workflow
+/// that meant to say something, and reading it as "use the Job's" would be the
+/// dial silently not applying.
+#[test]
+fn a_blank_model_in_the_column_is_malformed_rather_than_read_as_none() {
+    let stored = WITHOUT_WHEN.replace(r#""retry_limit": 0"#, r#""retry_limit": 0, "model": " ""#);
+    let refused = crate::columns::read_workflow(&stored).expect_err("a blank model");
+    assert!(refused.contains("model"), "{refused}");
+}

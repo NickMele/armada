@@ -89,7 +89,7 @@ where
                 return Err(Adrift::NotConfigurable { job: job_id, cause });
             }
         };
-        let config = match self.spawn_config(job, &worktree, brief) {
+        let config = match self.spawn_config(job, step, &worktree, brief) {
             Ok(config) => config,
             Err(cause) => {
                 self.interrupt(job).await?;
@@ -182,15 +182,22 @@ where
     /// The brief is a parameter rather than assembled here: a Drone starting a
     /// step and one taking a stopped step over are told different things, and
     /// only the caller knows which this is.
+    ///
+    /// **The model is the step's, not the Job's.** It could not be until a step
+    /// was its own process — one session cannot change model partway — and now
+    /// that it is, a step that only runs a suite and reports stops paying for
+    /// one that reasons. `Job::model_at` is where absent falls back to the
+    /// Job's, and this asks it rather than deciding for itself.
     fn spawn_config(
         &self,
         job: &Job,
+        step: &StepId,
         worktree: &Worktree,
         brief: Prompt,
     ) -> Result<DroneSpawnConfig, SpawnConfigRefused> {
         Ok(DroneSpawnConfig::spawn_in(
             worktree,
-            Model::named(job.model().as_str())?,
+            Model::named(job.model_at(step).as_str())?,
             brief,
             McpConfig::only_these(&self.host().mcp_config)?,
             self.toolbelt(),
