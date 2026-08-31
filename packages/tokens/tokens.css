@@ -315,6 +315,16 @@
   /* Fixed heights — elevation is surface, not shadow, so these are load-bearing */
   --h-row: 36px;          /* table body row */
   --h-row-header: 32px;   /* table header row */
+  /* A table row carrying a control. --h-row is 36px against --h-control-sm's
+     32px, which leaves two pixels above and below and reads as a button jammed
+     into its row. This is padding-driven for the same reason --h-row-stacked
+     is: the height is a floor that keeps rows level down a column, and what
+     sets it is --space-1 above and below the 36px row rather than a number
+     chosen for itself. Rows in the same grid carrying no control take the
+     floor too, or a grid alternates two heights depending on which rows happen
+     to have an action. Drawn on Doctor's module grid, where the Fleet row's
+     action sits beside rows that have none. */
+  --h-row-action: 44px;
   --h-row-stacked: 84px;  /* the Job row: FLOOR, not a cap. See --pad-row-stacked */
   --h-control: 36px;      /* default button, input, select */
   --h-control-sm: 32px;   /* sm — use inside table rows */

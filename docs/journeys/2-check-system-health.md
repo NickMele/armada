@@ -24,11 +24,21 @@ Design fidelity: not set. Analysis: Complete. UI/UX design: In progress.
 - **The denial rollup sits below the grid, not in it.** It is a suggestion about configuration, not a module that can be up or down — and the rule for earning a row is that Armada depends on it and it can fail.
 - **No accent fill anywhere on the surface.** Doctor reports; it does not ask.
 
+## Settled in design, 2026-08-31
+
+- **Rows hold position while the read is in flight and sort worst-first once the last one lands.** Sorting as answers arrive moves a row a person has already started reading, and the ordering only earns its keep when every result is in.
+- **A pending row states `reading` in `--fg-subtle`, in the result column.** No spinner, no shimmer, no skeleton — motion on a data surface is spent on the running mark. Row heights are fixed, so nothing reflows as results arrive.
+- **Arriving from an error marks the module with the row focus bar and scrolls to it.** Nothing is reordered and nothing takes a highlight hue: the grid a person arrives at is the grid they would have opened from the rail. A dismissible line above carries which error sent them and its code.
+- **The first-run gate lives in the onboarding footer, not in the grid.** The grid is identical to the one Doctor renders from the rail. The released Dispatch a job button is the one accent fill near the surface, and it belongs to the sequence rather than to Doctor, which still reports and asks nothing.
+- **The gate names the module holding the step open.** A blocked Continue with no reason beside it is the failure the gate exists to prevent.
+- **A threshold is stated in the probe text, and Machine is a link.** "Above the 2.34 minimum set on Machine" — thresholds are settings rather than constants, and the row that shows one says where it is changed. The action column stays for things that act.
+- **A row offers no control for an act Armada cannot perform.** Git below the minimum hands over `brew upgrade git` as a mono value that copies on click. SQLite keeps its Migrate button, because the migration is Armada's own.
+
 ## Corrections this journey found on Doctor
 
 - **The count is not a contract — the rule generates the list.** Doctor's pages have asserted eight, nine and ten module counts at different times, and every one of those was treated as a fact to reconcile. It is not: a module earns a row where Armada depends on it and it can be up or down, and the number is an output of that rule. It is whatever needs surfacing for a person to be confident the systems are in place and working. That is why SQLite and Keychain could simply be added, and why network reachability can join without anything being renegotiated. What the Doctor concept page should carry is the rule and the current list; a count stated in prose only ever goes stale and then gets copied — which is exactly how "nine" reached three different pages.
-- **The result-vocabulary block still names `circle-check` / `triangle-alert` / `circle-x`.** Needs rewriting to words-only, per Settled in design above.
-- **`triangle-alert` now has no user.** It was reserved to Doctor, `octagon-alert` was kept out of generic warnings specifically to protect it, and Doctor draws no glyphs. The reservation should be released.
+- **~~The result-vocabulary block still names `circle-check` / `triangle-alert` / `circle-x`.~~ Applied 2026-08-31.** The prose had already been words-only; what remained was a vestigial glyph table beneath it, which is the shape a correction takes when the sentence is fixed and the block under it is not.
+- **~~`triangle-alert` now has no user, so the reservation should be released.~~ Reversed 2026-08-31.** The premise is right and the conclusion was wrong. It was reserved to Doctor, `octagon-alert` was kept out of generic warnings specifically to protect it, and Doctor draws no glyphs — but a reservation with no current user is not a spare glyph. `triangle-alert` means a check warns, Doctor is the only surface that can say that, and releasing it would let another surface take the mark that has to be free the day Doctor needs it. `[doctor-warn-glyph]` is closed on Iconography on those grounds.
 - **The Doctor concept page still says a module fail queues in Alerts at Waiting.** Triage Queue reversed that: Doctor is a standing condition and reaches you as a strip above the Triage Queue tabs, never as an Alerts row. Both journey pages record it; the Doctor concept page needs the same amendment.
 
 ## Flow
@@ -41,27 +51,18 @@ Per-module status, each independently **pass, warn or fail**. No single blended 
 
 **Doctor owns no probe logic and no state.** It invokes the probes and renders what comes back. Probes live beside their subjects. **A module earns a row where Armada depends on it and it can be up or down** — Doctor reports service health, not Job-readiness, so Docker running with nothing using it is a true pass. The Doctor concept page is the citable source for the module list, the result vocabulary and the glyphs.
 
-| Module |
-| --- |
-| Fleet |
-| Armada API |
-| Kit |
-| Manifest |
-| SQLite |
-| Git |
-| Docker |
-| Claude |
-| Keychain |
-| System stats |
+**The list lives on [Doctor](../concepts/doctor.md) and is not copied here.** The copy that stood here omitted Machine, which is the failure a second roster always has: the rule generates the list, and a page that restates the output rather than pointing at the rule goes stale the next time the rule admits something.
 
 Fully passive — no push notifications on module failure, checked on demand only.
 
 ## Open questions
 
-- **[doctor-row-icon-and-word]** Does a Doctor health row carry both an icon and a status word, or the icon alone?
-  Doctor's health grid uses `circle-check`, `triangle-alert`, and `circle-x` at 16px, inheriting the cell's status colour — deliberately circle-wrapped rather than the bare `check` and `x` used in badges, so a Doctor result never reads as a Job state. Whether a health row carries both an icon and a status word, or the icon alone, is undecided; it depends on the Doctor layout, which is not yet designed. Icon-alone is denser and the three glyphs are unambiguous, but it encodes state in a single visual channel, which is the argument Iconography used to give all sixteen Job badges an icon rather than relying on hue alone. Nine or ten modules is a short list — the density saving may not be worth the redundancy loss.
-
-  This tension is already partly settled by "Settled in design, 2026-08-21" above, which chose a word with no icon at all for the result column. What remains open is scoped to the module grid's row treatment more broadly, not the result value specifically.
+Nothing. `[doctor-row-icon-and-word]` was a second copy of Doctor's own
+`[doctor-icon-and-word]`, and the Doctor drawing on 2026-08-31 answered it
+there: **the word alone, no icon**, holding at the current row count and while
+rows are still resolving — a pending row states `reading` in the same column, in
+`--fg-subtle`. See [Doctor](../concepts/doctor.md), Result vocabulary. It is not
+answered twice here.
 
 ## Related
 

@@ -103,6 +103,12 @@ Each row states what its probe reads and where the boundaries sit.
 
 **"Restart Fleet" means skip the throttle wait, not recover.** Under launchd, restart is automatic and uncapped. Where Fleet exited 0 deliberately, launchd leaves it down by design and Doctor must show the reason rather than a restart button.
 
+**The control lives in the Fleet row, secondary, and only on fail.** Drawn 2026-08-31. It is the row's own fact, so it belongs beside it rather than in a header a person has to associate back — and a passing Fleet needs no button at all.
+
+**Which control renders depends on what launchd intends, and they are two different acts under two names.** Throttled reads **Restart Fleet** and skips the interval. A deliberate exit 0 withholds it, states that reason in the row, and offers **Start Fleet** instead. One resumes something launchd is already trying to do; the other starts something it has been told not to. A single button spanning both would be lying in one of the two cases.
+
+**The probe cannot tell them apart today** — it reads a pidfile, which says whether Fleet is there and not what launchd means to do about it. Until `HealthReport` carries that intent, the row cannot render honestly.
+
 ### Graded and binary — deliberately
 
 **Fleet, Armada API, Docker and Keychain have no warn state and never will.** Each is reachable or it is not, and there is nothing between. Forcing a middle onto them would mean inventing a threshold nobody can justify.
@@ -117,7 +123,7 @@ Each row states what its probe reads and where the boundaries sit.
 
 **After N denials of the same command across Jobs, Doctor surfaces a rollup** with a suggested change to confirm or decline. It is never auto-applied.
 
-Where the rollup sits relative to the module grid is unspecified — see Open questions.
+**The rollup sits below the grid, not in it.** Drawn 2026-08-31. It is a suggestion about configuration rather than a module that can be up or down, so a row in the grid would put it under a pass/warn/fail vocabulary it cannot answer in.
 
 ## The first-run hard gate
 
@@ -154,18 +160,11 @@ On a Fleet crash, auto-restart is attempted first; if that fails, Doctor shows F
 
 The result words carry no glyphs. A result is the word `pass`, `warn` or `fail` in the status colour: `circle-check` and `circle-x` are reserved to Judge criterion verdicts, so Doctor cannot own them, and a column of words scans better than a column of glyphs and survives greyscale.
 
-The earlier circle-wrapped glyph set, which the wrap kept from reading as a Job badge:
+**`warn` draws no glyph either**, which is what makes the rule whole. `triangle-alert` is the one glyph Doctor could own, and the grid does not use it: the choice was a glyph on every row or none, since `pass` and `fail` have none available, and a grid where one row of three carries a mark is the inconsistency the wordless rule was avoiding.
 
-```
-pass   circle-check   / CircleCheck   --status-completed-success
-warn   triangle-alert / TriangleAlert --status-awaiting-review
-fail   circle-x       / CircleX       --status-completed-failed
-```
+**The reservation stands anyway.** `triangle-alert` means a check warns, Doctor is the only surface that can say that, and no other surface may adopt it as its own mark. `octagon-alert` stays reserved to `stalled`, and the bare `check` and `x` belong to the badge set.
 
-16px, inheriting the cell's status colour. Doctor is the one place `triangle-alert` lives; `octagon-alert` is reserved to `stalled` and kept out of generic warnings. The bare `check` and `x` belong to the badge set and are not used here.
+**A row states `reading` while its probe is in flight**, in the same column, in `--fg-subtle`. The word is the whole vocabulary — pass, warn, fail, and not-yet — so a row that has not answered is not a blank cell a person has to interpret.
 
 ## Open questions
-
-- **[doctor-icon-and-word]** Does a Doctor health row carry both an icon and a status word, or the icon alone? Blocked on the Doctor layout, which is not designed.
-- **[doctor-restart-fleet-placement]** Where does the "Restart Fleet" action render, and does it live in the Fleet module row?
-- **[doctor-denial-rollup-placement]** Where does the denial-frequency rollup sit relative to the module grid?
+Nothing. The three this page carried were all blocked on a layout that did not exist, and the drawing on 2026-08-31 answered all three — each is now a fact above, beside the subject it governs.
