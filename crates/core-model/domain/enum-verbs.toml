@@ -239,6 +239,14 @@ status_token = "--status-escalated"
 vocabulary = "Escalation reason"
 in_code = "Not yet"
 
+[verbs.escalation_reason.not_prepared]
+verb = "the worktree was not prepared"
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = "In code"
+notes = "The verb names the state every path into this trigger leaves behind rather than the one that happened to occur, which is `gate_failure`'s lesson taken before it had to be learned twice: a `setup.requires` command can exit non-zero, be signalled, run past its budget, or not be on the path at all, and a verb saying `the install failed` would be wrong on three of the four and wrong about the command on any repository whose setup is not an install. It is the same sentence `NotPrepared` opens with in the Job's log, where the command and the exit are, so the badge and the line beneath it are one claim. It says nothing failed a check, because nothing was checked — no step had been entered when this fired. No glyph: the shield-* family is reserved to gates and Checks and this is neither, and `folder` and `folder-git-2` are the Git and config family labelling a value in a detail view rather than a state. It stays owed beside `blocked_by_policy`, `check_timeout`, `dependency_failed`, `evidence_too_large`, `gate_undecided` and `resource_exhausted`."
+
 [verbs.escalation_reason.resource_exhausted]
 verb = "ran out of resources"
 icon = ""

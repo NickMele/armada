@@ -399,6 +399,7 @@ impl Stopped {
             | EscalationTrigger::FanOut
             | EscalationTrigger::HatchUnbidden
             | EscalationTrigger::Interrupted
+            | EscalationTrigger::NotPrepared
             | EscalationTrigger::ResourceExhausted
             | EscalationTrigger::Silent
             | EscalationTrigger::Stalled => {

@@ -72,6 +72,17 @@ pub enum EscalationTrigger {
     /// loop did not converge, which is why the count that tripped it is
     /// `iteration_count` and never the retry budget.
     LoopCap,
+    /// A command the Manifest's `setup.requires` names did not succeed, so the
+    /// worktree is not one work can be run in. Raised once, before any step is
+    /// entered, which is what makes it Job-level: there is no step for it to
+    /// attach to and nothing has been weighed.
+    ///
+    /// Not [`GateFailure`](Self::GateFailure) — no evidence was submitted and
+    /// no criterion was read. Not [`CheckTimeout`](Self::CheckTimeout) — a
+    /// Check gates a step, and this runs where no step exists. It was raised as
+    /// [`Interrupted`](Self::Interrupted) until 2026-08-31, which sent a person
+    /// looking for a process that had never started.
+    NotPrepared,
     /// A running Job exhausted CPU or memory. Belongs to the process, not to
     /// any step it happened to be on.
     ResourceExhausted,
@@ -172,6 +183,7 @@ impl StepLevelTrigger {
             | EscalationTrigger::FanOut
             | EscalationTrigger::HatchUnbidden
             | EscalationTrigger::Interrupted
+            | EscalationTrigger::NotPrepared
             | EscalationTrigger::ResourceExhausted
             | EscalationTrigger::Silent
             | EscalationTrigger::Stalled => false,
@@ -193,6 +205,7 @@ impl EscalationTrigger {
         EscalationTrigger::HatchUnbidden,
         EscalationTrigger::Interrupted,
         EscalationTrigger::LoopCap,
+        EscalationTrigger::NotPrepared,
         EscalationTrigger::ResourceExhausted,
         EscalationTrigger::Silent,
         EscalationTrigger::Stalled,
@@ -213,6 +226,7 @@ impl EscalationTrigger {
             EscalationTrigger::HatchUnbidden => "hatch_unbidden",
             EscalationTrigger::Interrupted => "interrupted",
             EscalationTrigger::LoopCap => "loop_cap",
+            EscalationTrigger::NotPrepared => "not_prepared",
             EscalationTrigger::ResourceExhausted => "resource_exhausted",
             EscalationTrigger::Silent => "silent",
             EscalationTrigger::Stalled => "stalled",
@@ -265,6 +279,7 @@ impl EscalationTrigger {
             | EscalationTrigger::FanOut
             | EscalationTrigger::HatchUnbidden
             | EscalationTrigger::Interrupted
+            | EscalationTrigger::NotPrepared
             | EscalationTrigger::ResourceExhausted
             | EscalationTrigger::Stalled => TriggerLevel::Job,
             // A sub-kind has no level of its own. It pauses the Job exactly as
