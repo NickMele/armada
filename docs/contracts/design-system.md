@@ -45,11 +45,12 @@ coding agents (Drones) against real Git repositories, monitors them, and
 escalates when they misbehave. Single user, local, always open on a
 second monitor across a working day.
 
-**Surfaces:** Bridge is the operational surface group — Job Board, Active
-Jobs, Alerts, Reviews, Activity Feed, Doctor, Manifest. Helm is a sibling
-conversational surface. The count is not a contract: a surface earns a
-place in the rail where a journey needs one, and the roster lives on
-Bridge.
+**Surfaces:** Bridge is the operational surface group — Job Board,
+Alerts, Reviews, Doctor, Manifest. Helm is a sibling conversational
+surface. The count is not a contract: a surface earns a place in the rail
+where a journey needs one, and the roster lives on Bridge. Active Jobs and
+the Activity Feed were retired into the Board, which holds every Job with
+state as a filter.
 
 **The screen's job:** at a glance, tell one person what is running, what
 needs them, and what broke.

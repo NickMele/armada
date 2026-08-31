@@ -8,21 +8,22 @@ Design fidelity: not set. Analysis: Complete. UI/UX design: In progress.
 
 **Trigger:** You're starting a work session and want to clear the decks before diving in.
 
-**Concepts touched:** Bridge (Alerts, Reviews, Activity Feed).
+**Concepts touched:** Bridge (Alerts, Reviews).
 
-**Milestone:** Surface.
+**Milestone:** Board.
 
 **Design file:** `Journey 3 - Triage queue.dc.html` in the Armada Mockups project. One file per journey; this document is the record, the file is the drawing.
 
 ## Flow
 
-Covers three Bridge surfaces together, since a genuine "what's waiting" check touches all of them:
+Covers two Bridge surfaces together, since a genuine "what's waiting" check touches both:
 
 | Surface | Purpose | Structure |
 | --- | --- | --- |
 | Reviews | Calm, evaluative — Job Review flow, human-gated advance per workflow settings | Simple oldest-first list |
-| Alerts | Interventional — escalations needing a decision, browsed proactively rather than pushed | Alert Level (Blocked on top, Waiting below) → sub-grouped by trigger type → oldest-first. State (in-progress/waiting/resolved) is a filter toggle, not primary structure. Noted items never appear here — they go to the Activity Feed. |
-| Activity Feed | Passive visibility — every completed Job streams in as it finishes, success or failure | Chronological stream, no actions |
+| Alerts | Interventional — escalations needing a decision, browsed proactively rather than pushed | Alert Level (Blocked on top, Waiting below) → sub-grouped by trigger type → oldest-first. State (in-progress/waiting/resolved) is a filter toggle, not primary structure. Noted items never appear here — they are recorded on the Job. |
+
+**The Activity Feed was a third surface here and is gone.** Passive visibility of finished work is the [Job Board](../concepts/job-board.md) filtered to what is over, which is what retiring it means. Nothing in this journey depended on it: a chronological stream with no actions is the one surface a triage pass never acts on.
 
 ## Alert Levels and this surface
 
