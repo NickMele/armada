@@ -3,11 +3,10 @@
 //! # Seven keys, and nothing else
 //!
 //! `version`, `id`, `base`, `checks.<name>.run`, `checks.<name>.when`,
-//! `commands.<name>.run` and `commands.<name>.destructive`, plus
-//! `setup.requires`. The Manifest concept page describes eight sections —
-//! permissions, secrets, ports, skills, budget, dispatch freeze, setup
-//! requirements, auto-merge policy — and every one of them but the seventh is
-//! a key this parser refuses, on purpose.
+//! `commands.<name>.run`, `commands.<name>.destructive` and `setup.requires`.
+//! Every other section the Manifest concept page describes — permissions,
+//! secrets, ports, skills, budget, dispatch freeze, auto-merge policy — is a
+//! key this parser refuses, on purpose.
 //!
 //! **A key nothing reads is worse than a key that is not there.** A file
 //! carrying `budget: 40` that no code consumes reads to its author as a budget
@@ -20,19 +19,14 @@
 //! cannot read is a refusal beside every other refusal in the file rather than
 //! a Check that quietly stops running. **Absent means always.**
 //!
-//! # `setup.requires` names Commands, and is resolved where it is written
+//! `setup.requires` names Commands the same file declares, each resolved to its
+//! `run` string **at load** — so a name nothing declares is a refusal here
+//! rather than a worktree nothing prepares and a Check that fails for a reason
+//! nobody can connect to it.
 //!
-//! The seventh key is the eighth section arriving with the code that honours
-//! it. It is a list of names the `commands` registry declares, and each one is
-//! resolved to its `run` string **at load** — so a name nothing declares is a
-//! refusal beside every other refusal in this file, rather than a worktree that
-//! is silently never prepared and a Check that fails for a reason nobody can
-//! connect to it.
-//!
-//! **The code word for it is *preparation*.** `armada::setup` is a different
-//! thing entirely — a repository's own `armada.yml` and workflows, found from
-//! its root, running nothing — and one word over two meanings is the second
-//! vocabulary this workspace refuses elsewhere.
+//! **Its code word is *preparation*.** `armada::setup` runs nothing and means
+//! something else, and one word over two meanings is the second vocabulary this
+//! workspace refuses elsewhere.
 //!
 //! # Two registries, sharing no names
 //!
