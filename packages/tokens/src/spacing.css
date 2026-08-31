@@ -101,6 +101,24 @@
      "you are here" in the vocabulary reserved for "your cursor is here". */
   --edge-active: 2px;
 
+  /* A fault's edge, and the one channel severity is allowed to move.
+     Placement carries blast radius and the hue is one value, so the edge is
+     what has to be spelled. It differs from --degraded-edge in width as well
+     as in colour, which is what keeps the two classes apart in a screenshot,
+     under deuteranopia and on a miscalibrated monitor. Off the four-unit grid,
+     as every border width here is: the grid measures space, and an edge is a
+     stroke.
+
+     Both are named for the class rather than joined to --edge-*, which is a
+     colour namespace — --edge-active already lands in it as --color-edge-active
+     carrying 2px. Reported, not fixed here. */
+  --error-edge: 3px;
+
+  /* A degraded edge, narrower than a fault's on purpose.
+     Armada is still showing what it has and only cannot refresh it, so the
+     mark is quieter rather than a different loudness of the same thing. */
+  --degraded-edge: 2px;
+
   /* The status dot. Off the 4px grid deliberately: a 4px dot disappears at
      desk distance and an 8px one reads as a badge that lost its label. */
   --dot: 6px;
