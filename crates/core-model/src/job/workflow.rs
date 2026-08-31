@@ -267,6 +267,26 @@ impl ResolvedStep {
         &self.label
     }
 
+    /// The path of the file this step was asked to write, where it declares
+    /// one.
+    ///
+    /// **One place answers it**, because three surfaces ask: the gate reads the
+    /// file to put in the Judge's brief, the opening brief tells the Drone the
+    /// path, and the mechanical tier looks for it. A second derivation of
+    /// "which check names the deliverable" is a second thing that can be wrong
+    /// about it.
+    ///
+    /// **At most one, and the parser is what makes that true.** A step
+    /// declaring two `artifact_exists` checks is refused where it is written —
+    /// otherwise this would answer with one of them and the Judge would be
+    /// shown one of two documents with nothing saying which.
+    pub fn deliverable(&self) -> Option<&str> {
+        self.checks.iter().find_map(|check| match check {
+            ResolvedCheck::ArtifactExists { target } => Some(target.as_str()),
+            _ => None,
+        })
+    }
+
     pub fn evidence_type(&self) -> Option<EvidenceType> {
         self.evidence_type
     }

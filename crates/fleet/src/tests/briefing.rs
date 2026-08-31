@@ -802,14 +802,23 @@ fn a_step_that_declares_no_artifact_is_not_asked_for_one() {
     }
 }
 
-/// The block says the file is checked and that the next part reads it, which
-/// are the two facts that make writing it worth the tokens.
+/// **The block says the path is the one that is read**, which is the fact a
+/// Drone acts on. Fleet opens exactly this path, so nothing goes looking for a
+/// file written well somewhere else — "write it here" is not a filing
+/// convention and the wording must not read as one.
 #[test]
-fn the_deliverable_block_says_it_is_checked_and_who_reads_it() {
+fn the_deliverable_block_says_this_path_is_the_one_that_is_read() {
     let said = turn_delivering(".armada/artifacts/plan.md");
+    assert!(
+        said.contains("This exact path is the one that is read"),
+        "{said}"
+    );
     assert!(
         said.contains("an empty file or no file stops this part"),
         "{said}"
     );
-    assert!(said.contains("The part after this one reads it"), "{said}");
+    assert!(
+        said.contains("a file somewhere else is not this part's work"),
+        "{said}"
+    );
 }

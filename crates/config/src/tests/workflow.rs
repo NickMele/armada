@@ -458,6 +458,24 @@ fn an_artifact_target_that_cannot_name_one_file_is_refused_where_it_is_written()
     }
 }
 
+/// **A step delivers one file.** Fleet reads the declared path into the Judge's
+/// brief as *the document this step produced*, and points the next step's Drone
+/// at it. Two targets would make both of those a choice nothing records, so the
+/// second is refused where it is written rather than resolved by whichever a
+/// reader reached first.
+#[test]
+fn a_step_declaring_two_artifacts_is_refused_because_it_has_one_deliverable() {
+    let refused = refusals(bug_with(
+        "  - id: close\n    label: Close\n    advance_gate: auto\n    mechanical_checks:\n      - { type: artifact_exists, target: a.md }\n      - { type: artifact_exists, target: b.md }\n",
+    ));
+    assert_eq!(
+        fault_at(&refused, "steps[3].mechanical_checks[1].target"),
+        &Fault::TwoDeliverables {
+            first: "a.md".to_string()
+        }
+    );
+}
+
 /// A target that names one file in the worktree loads, and the path is carried
 /// through resolution rather than reduced to the fact that a check was
 /// declared.
@@ -472,6 +490,19 @@ fn an_artifact_check_carries_its_path_onto_the_step() {
         [MechanicalCheck::ArtifactExists {
             target: ".armada/artifacts/close.md".to_string()
         }]
+    );
+    // One place answers "what does this step deliver", because the gate, the
+    // brief and the mechanical tier all ask.
+    let manifest = Manifest::parse(&named("armada.yml"), MANIFEST).expect("a manifest");
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest).expect("it resolves");
+    assert_eq!(
+        resolved.steps()[3].deliverable(),
+        Some(".armada/artifacts/close.md")
+    );
+    assert_eq!(
+        resolved.steps()[0].deliverable(),
+        None,
+        "a step declaring no artifact delivers no file"
     );
 }
 

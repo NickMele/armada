@@ -84,7 +84,9 @@ pub use mechanical::{
     Artifact, CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran, EVIDENCE_SCOPE,
 };
 pub use outcome::{OutcomeTurn, Printed, TheBaseMoved, Verified};
-pub use product::{NothingToJudge, Product, Reference, Written};
+pub use product::{
+    Delivered, NothingToJudge, Product, Reference, TooBigToJudge, Written, A_DELIVERABLE,
+};
 pub use request::Request;
 pub use scope::{drifted, InScope, OutsideScope};
 pub use submission::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};

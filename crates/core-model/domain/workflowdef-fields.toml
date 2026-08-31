@@ -219,7 +219,11 @@ notes = """
 
 **An empty file fails it.** The check reads the file's size and never its bytes. Design Plan's `draft` carries no Judge at all, so this is the whole of its gate, and a zero-byte deliverable that passed would be the vacuous pass the mechanical tier exists to refuse.
 
-This is what makes a step's product a file rather than a claim about one. A step whose output a later step reads used to hand it three prose strings, two of which nothing routes on — which inverts the rule that a Drone cannot be trusted to manage its own state.
+**The Judge is shown the file, and `target` is what makes that safe.** Fleet opens the declared path at the gate and puts its contents in the brief as the document the step produced, beside the submission's three strings and labelled apart from them. The standing objection to a gate opening a file is a Drone choosing which file; this path is authored in the definition and frozen onto the Job at creation, so no Drone chose it and none can move it. Fleet pre-loads the bytes, so the Judge still fetches nothing and a verdict stays reproducible. A deliverable over `verification::A_DELIVERABLE` is a call that could not be made rather than a refusal.
+
+**A step declares at most one.** Two would make "the document this step produced" a choice nothing records, so the second is refused where it is written.
+
+This is what makes a step's product a file rather than a claim about one. A step whose output a later step reads used to hand it three prose strings, two of which nothing routes on — which inverts the rule that a Drone cannot be trusted to manage its own state. Nothing about it involves git: the file is reclaimed with the worktree, and one that landed in the default branch would satisfy the next Job's check with no Drone having written anything.
 """
 
 [[fields.mechanical_checks.types]]

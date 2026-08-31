@@ -57,8 +57,8 @@
 
 use adapter_traits::{Prompt, SpawnConfigRefused};
 use core_model::{
-    EscalationTrigger, FrozenWorkflow, GamingFlag, Job, JobId, Judgment, RepoPath, ResolvedCheck,
-    ResolvedStep, StepId, StepVerdict,
+    EscalationTrigger, FrozenWorkflow, GamingFlag, Job, JobId, Judgment, RepoPath, ResolvedStep,
+    StepId, StepVerdict,
 };
 use verification::TheBaseMoved;
 
@@ -399,14 +399,14 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId) -> String {
 /// about is a step that fails on its first attempt every time.
 ///
 /// **It is an instruction, unlike [`Checking`], and it says why.** A Drone that
-/// writes the plan into its own scratch directory has done the work and lost
-/// it. Measured on 2026-08-29: a Drone wrote a seven-kilobyte plan under
-/// `.armada/<job-id>/`, which is what [`notekeeping`] offers and what this
-/// repository ignores, so it never entered the diff — the Judge refused the
-/// step for not naming a root cause that was on page one of a file it could not
-/// open, and a person had to overrule the verdict. So this block states the
-/// path, states that Fleet looks for it, and states that the next part reads
-/// it, and [`notekeeping`] now says which of the two it is talking about.
+/// writes its finding somewhere else has done the work and lost it — measured
+/// on 2026-08-29, when a Drone wrote a seven-kilobyte plan under
+/// `.armada/<job-id>/` and the Judge was handed the summary instead, refusing
+/// the step for not naming a root cause that was on page one of a file nothing
+/// had opened. **The path is the whole of the fix**, because Fleet reads the
+/// file at exactly this path and puts its contents in the Judge's brief. A
+/// Drone that writes it anywhere else is not delivering it, and the block says
+/// so where [`notekeeping`] could otherwise be read as offering an alternative.
 ///
 /// **It is written from the check's target and from nothing else.** The
 /// narrowing this module keeps is that no block is written from a
@@ -418,36 +418,23 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId) -> String {
 pub struct Delivering(String);
 
 impl Delivering {
-    /// The file or files this step must write, or `None` where it declares
-    /// none — which is every step whose product is the diff.
+    /// The file this step must write, or `None` where it declares none — which
+    /// is every step whose product is the diff.
+    ///
+    /// **One file, and `ResolvedStep::deliverable` is what says so.** A step
+    /// declaring two is refused where it is written, so there is no list here
+    /// and no "the first one" to be wrong about.
     pub fn at(step: &ResolvedStep) -> Option<Delivering> {
-        let targets: Vec<&str> = step
-            .checks()
-            .iter()
-            .filter_map(|check| match check {
-                ResolvedCheck::ArtifactExists { target } => Some(target.as_str()),
-                _ => None,
-            })
-            .collect();
-        if targets.is_empty() {
-            return None;
-        }
-        let mut block = String::from(
+        let target = step.deliverable()?;
+        Some(Delivering(format!(
             "WHAT THIS PART DELIVERS\n\nWrite this part's finding to a file, \
-             at this exact path in your worktree:",
-        );
-        for target in targets {
-            block.push_str("\n  - ");
-            block.push_str(target);
-        }
-        block.push_str(
-            "\n\nThis is the work product, not a note to yourself, so it does \
-             not go in the directory named above. It is checked: an empty file \
-             or no file stops this part, whatever you submit. The part after \
-             this one reads it, and the summary you submit points at it rather \
-             than replacing it.",
-        );
-        Some(Delivering(block))
+             at this exact path in your worktree:\n\n  {target}\n\nThis is the \
+             work product, not a note to yourself, so it does not go in the \
+             directory named above. This exact path is the one that is read: an \
+             empty file or no file stops this part, and a file somewhere else \
+             is not this part's work however good it is. What you submit \
+             summarises it and does not replace it."
+        )))
     }
 
     /// The block, exactly as it reaches a Drone.
@@ -701,7 +688,7 @@ fn notekeeping(job: &JobId) -> String {
          wrote it with nothing to say that task is over. Nothing here is \
          asking you to write any of it, and a file this part is asked to \
          deliver is not one of them — that one is named where it is asked \
-         for, and it does not go here.",
+         for, at the path that is read, and it does not go here.",
         job.as_str()
     )
 }

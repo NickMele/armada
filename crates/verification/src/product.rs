@@ -14,7 +14,8 @@
 //! [`Written::of`] answers `None` on every evidence type whose product is the
 //! change itself, so there is no route from a coding step's submission into a
 //! brief. It takes an [`Accepted`], so the type it reads the product as is the
-//! one the *definition* declared and never the one the Drone sent.
+//! one the *definition* declared and never the one the Drone sent. Where a
+//! step was asked for a file, [`Delivered`] is that file.
 //!
 //! # There is no empty product
 //!
@@ -87,6 +88,92 @@ impl<'a> Written<'a> {
     }
 }
 
+/// The most a step's deliverable may weigh before the call is refused.
+///
+/// **A judgement, not a measurement.** There is no calibration record to set it
+/// from. The plan this whole capability was built for is 7,093 bytes and the
+/// brief around it already carries the request, the earlier steps' evidence,
+/// the check results and often the entire patch — so the number is chosen to
+/// leave a normal deliverable thirty-odd times the room it needs while keeping
+/// one file from being most of a call.
+///
+/// **Over it is a call that could not be made, not a refusal.** A Drone that
+/// wrote five megabytes has produced something no criterion was written for,
+/// and answering `not_met` on that would be a verdict about the size. So the
+/// step stops and a person reads it, which is what every other unmakeable call
+/// does.
+pub const A_DELIVERABLE: usize = 256 * 1024;
+
+/// The file a step was asked to write, as the Judge is shown it.
+///
+/// **The path came from the frozen workflow.** `mechanical_checks[].target` is
+/// authored in the definition and frozen onto the Job at creation, so no Drone
+/// chose it and no Drone can move it. That is the whole difference between this
+/// and Fleet opening whatever a submission's `shown_by` happened to name, and
+/// it is why a gate reading a file here is not a gate trusting one.
+///
+/// **It does not displace the three strings and is not folded in with them.**
+/// [`Product::told`] labels this as the document and those as the summary that
+/// came with it, because a Judge that cannot tell them apart would answer "does
+/// this plan name a root cause" against whichever it read first. Keeping both
+/// also keeps `not_claimed`, which is the one field naming what the work does
+/// not cover.
+///
+/// Fleet pre-loads the bytes. The Judge fetches nothing, so a verdict stays
+/// reproducible from what the call carried.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Delivered<'a> {
+    target: &'a str,
+    contents: &'a str,
+}
+
+impl<'a> Delivered<'a> {
+    /// The file at `target`, or a refusal where it is too big to put in a call.
+    ///
+    /// **A `Result` rather than a truncation.** Half a plan reads as a whole
+    /// one: the Judge would answer a criterion against a document whose ending
+    /// it could not see and nothing in the answer would say so.
+    pub fn read(target: &'a str, contents: &'a str) -> Result<Delivered<'a>, TooBigToJudge> {
+        match contents.len() > A_DELIVERABLE {
+            true => Err(TooBigToJudge {
+                target: target.to_string(),
+                bytes: contents.len(),
+            }),
+            false => Ok(Delivered { target, contents }),
+        }
+    }
+
+    /// The path it was read from, which is the definition's.
+    pub fn target(&self) -> &'a str {
+        self.target
+    }
+
+    /// What is in it.
+    pub fn contents(&self) -> &'a str {
+        self.contents
+    }
+}
+
+/// A deliverable no call can carry.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TooBigToJudge {
+    target: String,
+    bytes: usize,
+}
+
+impl core::fmt::Display for TooBigToJudge {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "`{}` is {} bytes and a deliverable a Judge can be shown is at most \
+             {A_DELIVERABLE}",
+            self.target, self.bytes
+        )
+    }
+}
+
+impl std::error::Error for TooBigToJudge {}
+
 /// A step's work product, in the form the Judge is shown it.
 ///
 /// **There is no way to hold an empty one**, which is what stops a blind Judge
@@ -95,6 +182,7 @@ impl<'a> Written<'a> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Product<'a> {
     written: Option<Written<'a>>,
+    delivered: Option<Delivered<'a>>,
     changed: Option<&'a Patch>,
 }
 
@@ -109,11 +197,13 @@ impl<'a> Product<'a> {
         step: &ResolvedStep,
         patch: &'a Patch,
         accepted: Accepted<'a>,
+        delivered: Option<Delivered<'a>>,
     ) -> Result<Product<'a>, NothingToJudge> {
         let moved = (!patch.as_str().trim().is_empty()).then_some(patch);
         match Written::of(step, accepted) {
             Some(written) => Ok(Product {
                 written: Some(written),
+                delivered,
                 changed: moved,
             }),
             // A step whose product is the change, and no change. Not a refusal:
@@ -124,6 +214,7 @@ impl<'a> Product<'a> {
                 (Some(declared), None) => Err(NothingToJudge::NothingChanged { declared }),
                 (Some(_), Some(patch)) => Ok(Product {
                     written: None,
+                    delivered,
                     changed: Some(patch),
                 }),
             },
@@ -135,6 +226,11 @@ impl<'a> Product<'a> {
         self.written
     }
 
+    /// The file the step was asked to write, where it declared one.
+    pub fn delivered(&self) -> Option<Delivered<'a>> {
+        self.delivered
+    }
+
     /// The diff, where anything changed on disk.
     pub fn changed(&self) -> Option<&'a Patch> {
         self.changed
@@ -143,8 +239,28 @@ impl<'a> Product<'a> {
     /// The work product, laid out for one call.
     pub(crate) fn told(&self) -> String {
         let mut told = String::new();
+        // **The file first, and labelled as the document.** Where a step was
+        // asked for one, the criteria are about it and the three strings are a
+        // summary of it — so the summary is read second and says what it is.
+        // A Judge that could not tell them apart would answer "does this plan
+        // name a root cause" against whichever came first.
+        if let Some(delivered) = self.delivered {
+            told.push_str(&format!(
+                "What this step produced, which is the document it was asked \
+                 for. Fleet read it from {}:\n\n",
+                delivered.target
+            ));
+            told.push_str(delivered.contents);
+            told.push('\n');
+        }
         if let Some(written) = self.written {
-            told.push_str("What this step produced, which is the document it was asked for:\n\n");
+            told.push_str(match self.delivered.is_some() {
+                true => {
+                    "\nThe summary submitted with it. The document is above; \
+                     these three lines are not it:\n\n"
+                }
+                false => "What this step produced, which is the document it was asked for:\n\n",
+            });
             told.push_str(&format!(
                 "  it establishes: {}\n  shown by: {}\n  not claimed: {}\n",
                 written.claimed,
@@ -156,7 +272,7 @@ impl<'a> Product<'a> {
             ));
         }
         if let Some(patch) = self.changed {
-            told.push_str(match self.written.is_some() {
+            told.push_str(match self.written.is_some() || self.delivered.is_some() {
                 // Said plainly, so a Judge weighing a written deliverable does
                 // not read the files beside it as the thing it was asked about.
                 true => "\nThe step also changed these files:\n\n",

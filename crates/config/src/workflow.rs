@@ -419,10 +419,33 @@ fn step(
         .optional("mechanical_checks")
         .and_then(|value| yaml::list(&table.at("mechanical_checks"), value, out))
         .map(|items| {
-            items
-                .iter()
-                .filter_map(|(at, item)| mechanical_check(at, item, out))
-                .collect::<Vec<MechanicalCheck>>()
+            // **The second `artifact_exists` is refused, not dropped.** A step
+            // has one deliverable — Fleet reads it into the Judge's brief as
+            // the document the step produced — so two would be a choice made by
+            // whichever the reader happened to reach first.
+            let mut delivers: Option<String> = None;
+            let mut checks = Vec::with_capacity(items.len());
+            for (at, item) in items.iter() {
+                let Some(check) = mechanical_check(at, item, out) else {
+                    continue;
+                };
+                if let MechanicalCheck::ArtifactExists { target } = &check {
+                    match &delivers {
+                        None => delivers = Some(target.clone()),
+                        Some(first) => {
+                            out.push(Refusal::new(
+                                format!("{at}.target"),
+                                Fault::TwoDeliverables {
+                                    first: first.clone(),
+                                },
+                            ));
+                            continue;
+                        }
+                    }
+                }
+                checks.push(check);
+            }
+            checks
         })
         .unwrap_or_default();
     let judge_checks = judge::checks(&mut table, out);

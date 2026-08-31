@@ -118,6 +118,7 @@ mod checking;
 mod checks;
 mod converging;
 mod daemon;
+mod delivering;
 mod delivery;
 mod detach;
 mod detail;

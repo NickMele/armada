@@ -48,12 +48,11 @@
 # **A step whose product a later step reads writes a file.** `artifact_exists`
 # is carried now, and `bug.json` carries the reasoning: a written step used to
 # hand the next one three prose strings, two of which `verification::submission`
-# says nothing routes on. The deliverable goes under `.armada/artifacts/`, which
-# `.gitignore` un-ignores for exactly this -- Fleet reads the branch diff with
-# untracked files in and ignored files out, so a deliverable under an ignored
-# path is one no Judge can open. The check reads the file's size and never its
-# bytes: an empty file fails, and whether what is in it is any good is the
-# Judge's question.
+# says nothing routes on. Fleet opens the path this step declares and puts the
+# file's contents in the Judge's brief as the document the step produced; the
+# three strings are shown beside it, labelled as the summary. The mechanical
+# check reads only the file's size, so an empty file stops the step and whether
+# what is in it is any good stays the Judge's question.
 #
 # **The `artifact_exists` checks the designed file declares are restored.** The
 # paragraph above that said "every `artifact_exists` check" was dropped because

@@ -141,6 +141,12 @@ pub enum Fault {
     /// The path is also what Fleet has to be able to hand the next step's
     /// Drone, so "whichever file matched" is not an answer this can carry.
     NotAnArtifactPath { value: String, why: BadTarget },
+    /// **A step declaring two `artifact_exists` checks.** A step has one
+    /// deliverable: Fleet reads it into the Judge's brief as *the document this
+    /// step produced*, and the next step's Drone is pointed at it. Two would
+    /// make both of those a choice nothing records, so the second is refused
+    /// where it is written rather than silently dropped at the gate.
+    TwoDeliverables { first: String },
 }
 
 /// Why a step's `artifact_exists` target cannot name the one file the next step
@@ -222,6 +228,11 @@ impl fmt::Display for Fault {
             Fault::NotAPathPattern { value, why } => {
                 write!(f, "is `{value}`, which is not a path pattern: {why}")
             }
+            Fault::TwoDeliverables { first } => write!(
+                f,
+                "is a second `artifact_exists` on one step, which already \
+                 delivers `{first}`"
+            ),
             Fault::NotAnArtifactPath { value, why } => write!(
                 f,
                 "is `{value}`, which cannot name the file this step writes: {why}"

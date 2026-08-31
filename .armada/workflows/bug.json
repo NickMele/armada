@@ -158,20 +158,34 @@
 # changed is that the note points at a file that is checked to be there rather
 # than at a claim about one.
 #
-# **`.armada/artifacts/` rather than `.armada/<job-id>/`.** The second is what
-# the opening brief offers a Drone for files it writes for itself, and this
-# repository ignores it. On 2026-08-29 a Drone wrote a seven-kilobyte plan
-# there, the Judge was handed the summary instead, and it refused the step for
-# not naming a root cause that was on page one of the file. Fleet reads the
-# branch diff with untracked files included and ignored ones excluded, so the
-# deliverable has to sit somewhere git does not ignore or the Judge cannot open
-# it. `.gitignore` un-ignores exactly this directory and says why.
+# **The Judge is shown the file, and `target` is why that is safe.** Fleet opens
+# this exact path at the gate and puts what it holds in the brief as the
+# document the step produced. The path is authored here and frozen onto the Job
+# at creation, so no Drone chose it and none can move it -- which is the whole
+# difference between this and Fleet opening whatever a submission's `shown_by`
+# happened to name. The three strings are still shown, beside the file and
+# labelled as the summary that came with it.
+#
+# On 2026-08-29 a Drone wrote a seven-kilobyte plan under `.armada/<job-id>/`,
+# which is what the opening brief offers for files a Drone writes for itself.
+# The Judge was handed the summary, refused the step for not naming a root cause
+# that was on page one of the file, and a person had to overrule it. Nothing
+# read that file because nothing was looking for a path. `.armada/artifacts/` is
+# a second directory rather than a second use of the first, so a deliverable and
+# a scratch note are never the same thing, and the brief names it outright.
 #
 # **The check proves the file is there and not that it is any good.** It reads
 # the file's size and never its bytes -- an empty file fails, a bad plan does
-# not. What catches a bad plan is the two criteria below, which are shown the
-# file because it is in the diff. On a step with no Judge at all this check is
-# the whole gate, and that is a real limit rather than a hidden one.
+# not. What catches a bad plan is the two criteria below, which are now shown
+# the plan itself. On a step with no Judge at all this check is the whole gate,
+# and that is a real limit rather than a hidden one.
+#
+# **Nothing about this touches git.** The file is ignored like everything else
+# under `.armada/`, it never enters a diff, and it is reclaimed with the
+# worktree. An artifact that landed in the default branch would be inherited by
+# the next Job's worktree and would satisfy its `artifact_exists` with no Drone
+# having written anything, which would make the check vacuous from the second
+# Job onward.
 #
 # **The Judge is shown the request now**, which is what `judge.md` rule 2 said
 # all along and what #169 built: the Job's title, its facts and its acceptance
