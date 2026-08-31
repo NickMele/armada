@@ -222,6 +222,59 @@ placement — and not the colour either: there is one error red, and the
 [Design System](design-system.md) contract's error treatment says what
 separates a fault from a degraded condition.
 
+### What a person quotes
+
+**The payload is one artifact and one format.** Formatted text, aligned
+columns, no fences — it has to survive an issue body, a chat message and a
+terminal scrollback, and a fence helps in one of the three. The order is the
+order it is read: the guaranteed fields, then `fields`, then `chain` as an
+ordered list, then the versions and the instant. The chain is expanded and
+never folded, because it is the part that explains the code.
+
+**Absent fields are absent, not empty — with one exception.** A failure that
+precedes a Job shows no `job_id` row rather than a blank one. `code` is the
+exception and renders `none`: the treatment guarantees a code on every error
+and shows it always, so a reader meeting a payload without one cannot tell
+whether the failure carried none or whether the paste was cut short, and the
+payload is read away from the screen that would have answered that. `none` is a
+fact, not a minted code — a code's declaration lives beside the variant that
+raises it, so nothing in Bridge is allowed to invent one.
+
+**Three facts are appended that are not on the wire**, because both are the
+first thing anyone asks. Both protocol versions, written `bridge protocol 5.2`
+— **not an application version**, which Bridge holds nowhere — and when the
+payload was **taken**. The instant is labelled, because nothing on the wire
+carries when a failure happened and a bare instant appended to an error reads
+as the moment it broke.
+
+**Not every failure a person sees is a `WireError`.** Three shapes reach one.
+A `WireError` carries everything the table above guarantees. `UnreadableJob` is
+a row Fleet refused, sent as a job id and a sentence with no code, no run id
+and no chain. An exception caught inside Bridge never crossed a wire at all.
+**"Every error carries the payload" is a statement about the artifact, not a
+promise that every failure fills it** — and the guarantees in this contract are
+the wire's, so they bind exactly one of the three.
+
+**A stack is a chain.** Where the failure is a thrown exception, its frames are
+the chain, innermost first. It is the same thing the wire's `chain` is — an
+ordered list of causes flattened to strings — and it is the only place a
+forty-line value does not destroy a format built on aligned columns.
+
+### What the payload may claim about itself
+
+**Bounded to `fields`, and it says so.** `WireValue` is five primitive variants
+and `Secret<T>` implements no `Display` and no `Serialize`, so formatting a
+credential into a field does not compile; getting one in needs an explicit
+`expose()`, which is deliberate and greppable in one search.
+
+**That reaches nothing else in the payload.** `message` and `chain` are prose,
+written by whatever error's `Display` impl raised them, and no type bounds what
+an author put there. The sentence Bridge shows states both halves. Stating only
+the first would read as a claim about the whole artifact, which is a promise
+the mechanism does not make — and none of it says anything about a credential
+that was never a `Secret<T>` in the first place, sitting in a repository file
+or echoed by a subprocess.
+
 ---
 
 ## Deliberately outside this

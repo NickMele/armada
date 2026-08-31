@@ -1035,6 +1035,40 @@ exception, because it reports something already over.
 Fleet's liveness out loud, which is the one thing still true while everything
 else fails.
 
+### The debug payload, and what each placement does with it
+
+**Every error carries the payload. The four placements differ only in whether
+it is shown, offered or expandable** — which is the placement's blast radius
+again, not a second decision.
+
+| Placement | Form |
+| --- | --- |
+| Inline | Ghost control, copying directly. A row has no room for an expanded view |
+| Toast | Its one action. Copies and dismisses in one press, because a toast is often the only sighting |
+| Banner | Copy, plus **Details** opening the expanded view. A standing condition gets read, not only quoted |
+| Full-surface | Shown rather than offered. Nothing else is on the screen |
+
+**The act is called "Copy debug info" wherever it appears.** It names the
+artifact rather than what somebody is about to do with it, because the decision
+being taken is whether to paste a machine record into a public issue.
+
+**The expanded view renders the exact string the control copies.** One producer
+formats it, so what was read on screen is what arrives in the issue body — not
+two renderings agreeing about field order on the day they were written. What
+the artifact holds is the [Error Contract](error-contract.md).
+
+**A clipboard write is silent, so a toast confirms it — and the toast carries
+no status dot.** A leading dot carries a Job state and is never chosen, and a
+clipboard write is not a Job state.
+
+**One sentence about safety, in the expanded view only, stating the mechanism
+rather than promising an outcome.** It is bounded to what the mechanism
+reaches: structured fields carry primitives and a credential does not compile
+into one, while the message and the chain are prose an error wrote and nothing
+bounds those. A claim over the whole artifact would be a promise the type
+system does not make, and it makes none about the wider context — see the
+file-an-issue flow, which is not bounded this way.
+
 ---
 
 ## Voice & Copy

@@ -2,6 +2,36 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 
 import { Button } from "../../primitives/Button/Button";
 import { ErrorNotice } from "./ErrorNotice";
+import type { DebugPayload } from "./payload";
+
+/**
+ * The payload the issue drew, verbatim. A Fleet error, so every guaranteed
+ * field is there and the chain is three deep.
+ */
+const REFUSED: DebugPayload = {
+  code: "judge.undecided",
+  message: "judge returned prose for criterion 2",
+  run_id: "01JQ8ZC4M2WYVK7T3RQN8H",
+  job_id: "job_31c7",
+  drone_id: "drn_4c8",
+  step_id: "verify",
+  fields: [
+    { key: "criterion", value: "2" },
+    // The tier, not the vendor's id for it. Every other story in this package
+    // says `sonnet` for the same reason the vendor-literal rule refuses the
+    // other spelling: a model name typed into a sample is a second roster.
+    { key: "judge_model", value: "sonnet" },
+    { key: "response_bytes", value: "1184" },
+  ],
+  chain: [
+    "judge: no verdict parsed from response",
+    "gate verify: undecided",
+    "job_31c7: escalated",
+  ],
+  bridgeProtocol: "5.2",
+  fleetProtocol: "5.2",
+  at: "2026-08-30T09:16:40Z",
+};
 
 const meta: Meta<typeof ErrorNotice> = {
   title: "Errors/Error notice",
@@ -143,5 +173,119 @@ export const FullSurface: Story = {
         Check again
       </Button>
     ),
+  },
+};
+
+/**
+ * Inline, offered. A row has no room for an expanded view, so the control
+ * copies directly and there is no Details beside it — the payload never
+ * appears on this surface, it only leaves it.
+ */
+export const InlineWithPayload: Story = {
+  args: { ...(Inline.args as object), payload: REFUSED } as Story["args"],
+};
+
+/**
+ * A toast, and its one action. Copies and dismisses in the same press, because
+ * a toast is often the only sighting an error gets and a person reaching for a
+ * second control after the first is how it is missed.
+ */
+export const ToastWithPayload: Story = {
+  render: (args) => (
+    <div className="armada-error-toast-region">
+      <ErrorNotice {...args} />
+    </div>
+  ),
+  args: {
+    kind: "fault",
+    placement: "toast",
+    code: "judge.undecided",
+    message: "Job 31c7 escalated. The judge returned prose for criterion 2.",
+    payload: REFUSED,
+  },
+};
+
+/**
+ * A banner, folded. The one placement that offers both, because a standing
+ * condition gets read rather than only quoted — Details opens the payload in
+ * place and the surface keeps working beneath it.
+ */
+export const BannerWithPayload: Story = {
+  args: { ...(Banner.args as object), payload: REFUSED } as Story["args"],
+};
+
+/**
+ * Full-surface, and the payload shown rather than offered: nothing else is on
+ * the screen, so there is nothing for a disclosure to protect.
+ *
+ * **What is in the block is byte-for-byte what the control copies.** One
+ * producer formats it, and the expanded view renders that string in a `pre`
+ * rather than walking the fields a second time — which is what makes "the same
+ * order in the clipboard" a property of the code instead of something to keep
+ * in step.
+ *
+ * The sentence under it states the mechanism and stops there. Structured
+ * fields are five primitive variants and a credential does not compile into
+ * one; the message and the chain are prose an error wrote and nothing bounds
+ * those, so the claim does not reach them and does not pretend to.
+ */
+export const FullSurfaceWithPayload: Story = {
+  render: (args) => (
+    <div className="armada-error-surface-region">
+      <ErrorNotice {...args} />
+    </div>
+  ),
+  args: {
+    kind: "fault",
+    placement: "surface",
+    code: "judge.undecided",
+    message: "Job 31c7 escalated. The judge returned prose for criterion 2.",
+    act: "Read the judge's response, then overrule the verdict or redispatch the job.",
+    payload: REFUSED,
+  },
+};
+
+/**
+ * The payload of a failure that carries no code, which is the case the wire
+ * does not describe: a renderer exception never reached Fleet, so there is no
+ * `code` and no `run_id` to quote and no Fleet protocol version in the tail.
+ *
+ * **The `code` row is present and reads `none`.** Every other absent field is
+ * absent — that is the rule, and this is its one exception. The payload is
+ * read away from the screen it came from, and the treatment guarantees a code
+ * on every error, so a reader meeting one with no code row cannot tell whether
+ * the failure carried none or whether the paste was cut short. `none` is a
+ * fact; nothing here mints a code, because a code's declaration lives beside
+ * the variant that raises it.
+ *
+ * What renders a codeless fault on screen is a separate question and is open.
+ * This story is about the artifact, not the notice around it.
+ */
+export const CodelessPayload: Story = {
+  render: (args) => (
+    <div className="armada-error-surface-region">
+      <ErrorNotice {...args} />
+    </div>
+  ),
+  args: {
+    kind: "fault",
+    placement: "surface",
+    code: "bridge.render.threw",
+    message: "Bridge could not draw the job board.",
+    act: "Reload Bridge. Fleet keeps running and jobs keep progressing.",
+    payload: {
+      message: "Cannot read properties of undefined (reading 'status')",
+      fields: [
+        { key: "region", value: "the job board" },
+        { key: "component", value: "JobRowStacked" },
+      ],
+      chain: [
+        "at JobRowStacked (JobRowStacked.tsx:88:19)",
+        "at JobBoard (JobBoard.tsx:142:7)",
+        "at Shell (Shell.tsx:61:5)",
+      ],
+      bridgeProtocol: "5.2",
+      at: "2026-08-30T09:16:40Z",
+    },
   },
 };

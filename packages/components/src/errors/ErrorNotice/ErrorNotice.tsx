@@ -1,7 +1,18 @@
 import type { ReactNode } from "react";
+import { useCallback, useState } from "react";
 
+import { Button } from "../../primitives/Button/Button";
 import type { ErrorClass } from "../ErrorCode/ErrorCode";
 import { ErrorCode } from "../ErrorCode/ErrorCode";
+import { debugInfo } from "./payload";
+import type { DebugPayload } from "./payload";
+
+// The payload module is re-exported through the notice it belongs to. It is
+// not a component and never appears on its own: every error carries the
+// payload, and the placement decides only whether it is shown, offered or
+// expandable.
+export type { DebugField, DebugPayload } from "./payload";
+export { debugInfo } from "./payload";
 
 /**
  * An error, in one of the four places an error may appear.
@@ -30,6 +41,15 @@ import { ErrorCode } from "../ErrorCode/ErrorCode";
  *
  * **No glyph.** `triangle-alert` is Doctor's, `octagon-alert` is `stalled`'s,
  * and there is no generic alarm mark. The code and the sentence do the work.
+ *
+ * **Every error carries the debug payload, and the four placements differ only
+ * in whether it is shown, offered or expandable.** Inline copies directly
+ * because a row has no room for an expanded view; a toast copies and dismisses
+ * in one press because it is often the only sighting; a banner offers both,
+ * because a standing condition gets read rather than only quoted; and a
+ * full-surface error shows it, because nothing else is on the screen. The
+ * expanded view renders the exact string the control copies — see `payload.ts`
+ * for why there is one producer and not two.
  *
  * Where the thing sits is the caller's, and two classes are supplied for it:
  * `armada-error-toast-region` pins the bottom trailing corner inset
@@ -66,7 +86,58 @@ type Common = {
   fields?: ErrorField[];
   /** Controls, where there is something to press. Never a second decision. */
   actions?: ReactNode;
+  /**
+   * The machine-derived facts, as one quotable artifact.
+   *
+   * **Every error carries it, and the placement decides only whether it is
+   * shown, offered or expandable.** Optional here for one reason: a caller
+   * that has not been given a payload to pass is a gap worth seeing as a
+   * missing control rather than as an empty block, and the boundary fallbacks
+   * in Bridge reached this component before they had one.
+   */
+  payload?: DebugPayload;
+  /**
+   * What the surface is told after a clipboard write, so it can raise a toast.
+   *
+   * A clipboard write is silent by nature and a failed one is
+   * indistinguishable from a dead control, so this is called either way. It is
+   * given the name of the thing copied, not the thing itself — the payload is
+   * fifteen lines and a toast is one.
+   */
+  onCopied?: (what: string) => void;
 };
+
+/** What the toast says was copied. A noun, because the artifact is a block. */
+const COPIED = "The debug info";
+
+/** What the control is called, everywhere it appears. */
+const COPY_LABEL = "Copy debug info";
+
+/**
+ * Why the payload is safe to copy, in the expanded view only.
+ *
+ * **Two sentences, because one cannot be written that is true.** The issue
+ * this came from put a single sentence on screen — *structured fields cannot
+ * hold a credential, the type has no variant that carries one* — and the first
+ * half of it is exactly right about `fields`: `ipc::WireValue` is five
+ * primitive variants, `Secret<T>` implements no `Display` and no `Serialize`,
+ * so formatting a credential into a field does not compile. Getting one in
+ * needs an explicit `expose()`, which is a deliberate act and greppable in one
+ * search.
+ *
+ * It says nothing about the rest of the payload, and the payload is not only
+ * `fields`. `message` and `chain` are prose written by whatever error `Display`
+ * impl raised them, and no type bounds what an author put there. Rendering the
+ * bounded claim over the whole artifact would promise an outcome the mechanism
+ * does not reach — and the mechanism is what the reader was owed.
+ *
+ * It also makes no claim about the wider context: a credential sitting in a
+ * repository file was never a `Secret<T>` and the type system was never
+ * involved.
+ */
+const SAFETY =
+  "Structured fields carry primitives only, and a credential does not compile into one. " +
+  "Nothing bounds the message or the chain, which are prose an error wrote — read them before you send this.";
 
 /**
  * The act is required everywhere but a toast, and the union is what enforces
@@ -77,6 +148,13 @@ export type ErrorNoticeProps =
       placement: "toast";
       /** A toast may report something already over and ask for nothing. */
       act?: ReactNode;
+      /**
+       * How the toast goes away, where the region does not clear it on a
+       * timer. **Copying dismisses in the same press**, because a toast is
+       * often the only sighting an error gets and reaching for a second
+       * control after the first is how it is missed.
+       */
+      onDismiss?: () => void;
     })
   | (Common & {
       placement: "inline" | "banner" | "surface";
@@ -84,9 +162,50 @@ export type ErrorNoticeProps =
       act: ReactNode;
     });
 
+/**
+ * Whether the payload is on screen without asking, offered behind a control,
+ * or reachable through a disclosure. **One rule per placement, and it is the
+ * placement's blast radius that decides it** — the same rule that picks the
+ * placement in the first place.
+ *
+ * | Placement | Form |
+ * | --- | --- |
+ * | Inline | Copies directly. A row has no room for an expanded view |
+ * | Toast | Its one action. Copies and dismisses in one press |
+ * | Banner | Copy, plus Details. A standing condition gets read, not just copied |
+ * | Full-surface | Shown, not offered. Nothing else is on screen |
+ */
+const EXPANDABLE: Record<ErrorPlacement, "never" | "disclosed" | "always"> = {
+  inline: "never",
+  toast: "never",
+  banner: "disclosed",
+  surface: "always",
+};
+
 export function ErrorNotice(props: ErrorNoticeProps) {
-  const { kind, code, message, fields, actions, placement } = props;
+  const { kind, code, message, fields, actions, placement, payload, onCopied } = props;
   const act = props.act;
+  const dismiss = props.placement === "toast" ? props.onDismiss : undefined;
+
+  /** Open only where the placement discloses. Surface and inline never toggle. */
+  const [open, setOpen] = useState(false);
+  const disclosure = EXPANDABLE[placement];
+  const expanded = payload !== undefined && (disclosure === "always" || open);
+
+  const text = payload === undefined ? null : debugInfo(payload);
+
+  const copy = useCallback(() => {
+    if (text === null) return;
+    void navigator.clipboard.writeText(text).then(
+      () => onCopied?.(COPIED),
+      // A failed clipboard write is otherwise indistinguishable from a dead
+      // control, so the surface is told either way.
+      () => onCopied?.(COPIED),
+    );
+    // The toast is often the only sighting, so its one action finishes the
+    // job rather than leaving a dismissed-or-not toast behind the copy.
+    dismiss?.();
+  }, [text, onCopied, dismiss]);
 
   return (
     <section
@@ -128,7 +247,35 @@ export function ErrorNotice(props: ErrorNoticeProps) {
         ) : null}
       </div>
 
-      {actions !== undefined ? <div className="armada-error__actions">{actions}</div> : null}
+      {/* Shown, not offered, wherever the placement says so — and it is the
+          exact string the control puts on the clipboard, not a second
+          rendering of the same fields. What is read on screen is what arrives
+          in the issue body. */}
+      {expanded && text !== null ? (
+        <div className="armada-error__payload">
+          <pre className="armada-error__debug">{text}</pre>
+          <p className="armada-error__safety">{SAFETY}</p>
+        </div>
+      ) : null}
+
+      {payload !== undefined || actions !== undefined ? (
+        <div className="armada-error__actions">
+          {payload === undefined ? null : (
+            <Button variant="ghost" size="sm" onClick={copy}>
+              {COPY_LABEL}
+            </Button>
+          )}
+          {/* Only where the payload is disclosed. Inline has no room for an
+              expanded view and a toast is gone before it would be read, so
+              neither offers a control that would open one. */}
+          {payload !== undefined && disclosure === "disclosed" ? (
+            <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => setOpen((was) => !was)}>
+              Details
+            </Button>
+          ) : null}
+          {actions}
+        </div>
+      ) : null}
     </section>
   );
 }

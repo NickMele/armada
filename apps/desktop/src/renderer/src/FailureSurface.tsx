@@ -12,6 +12,12 @@ import { CopiedToast, useCopied } from "./CopiedToast";
 import type { Caught, Failure } from "./failures";
 import { rendererFailure, reportOf } from "./failures";
 
+/**
+ * What the toast says was copied. A noun, because the artifact is fifteen lines
+ * and the toast is one — `CopiedToast` reads the value it is given.
+ */
+const COPIED = "The debug info";
+
 export type FailureBlockProps = {
   failure: Failure;
   /** A clipboard write is silent, so the surface confirms it. */
@@ -30,8 +36,15 @@ export type FailureBlockProps = {
  * One failure, with something to do about it.
  *
  * Ghost controls, because none of them is a decision Armada participates in:
- * reloading redraws a window, and reporting puts what is on screen onto the
- * clipboard so nobody retypes a stack.
+ * reloading redraws a window, and copying puts the machine's own record of the
+ * failure onto the clipboard so nobody retypes a stack.
+ *
+ * **The label says what leaves the machine, not what the person is doing with
+ * it.** "Copy report" named an act somebody might be about to perform and left
+ * the artifact unnamed; "Copy debug info" names the artifact, which is the
+ * thing a person is deciding whether to paste into a public issue. The same
+ * words are on the control the error treatment draws, so it is one act with
+ * one name wherever it appears.
  */
 export function FailureBlock({
   failure,
@@ -39,13 +52,15 @@ export function FailureBlock({
   reloadable = true,
   onDismiss,
 }: FailureBlockProps) {
-  function report(): void {
+  function copyDebugInfo(): void {
+    // Taken now, not at render: the payload is rebuilt on every draw and the
+    // instant in it is a fact about this press.
     const text = reportOf(failure, new Date().toISOString());
     void navigator.clipboard.writeText(text).then(
-      () => onCopied("The report"),
+      () => onCopied(COPIED),
       // A failed clipboard write is otherwise indistinguishable from a dead
       // control, so the surface is told either way.
-      () => onCopied("The report"),
+      () => onCopied(COPIED),
     );
   }
 
@@ -72,8 +87,8 @@ export function FailureBlock({
               Reload Bridge
             </Button>
           ) : null}
-          <Button variant="ghost" size="sm" ground="sunken" onClick={report}>
-            Copy report
+          <Button variant="ghost" size="sm" ground="sunken" onClick={copyDebugInfo}>
+            Copy debug info
           </Button>
           {onDismiss === undefined ? null : (
             <Button variant="ghost" size="sm" ground="sunken" onClick={onDismiss}>
