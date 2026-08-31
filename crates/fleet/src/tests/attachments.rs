@@ -135,10 +135,15 @@ async fn dispatch_copies_the_attachment_and_the_brief_names_it() {
         .current_step_id()
         .cloned()
         .expect("dispatch moved the cursor onto the first step");
-    let prompt = briefing::first_turn(&approved, approved.workflow(), &step)
-        .expect("a Job with a brief assembles a prompt")
-        .as_str()
-        .to_string();
+    let prompt = briefing::first_turn(
+        &approved,
+        approved.workflow(),
+        &step,
+        &crate::crossing::Crossed::nothing(),
+    )
+    .expect("a Job with a brief assembles a prompt")
+    .as_str()
+    .to_string();
     assert!(
         prompt.contains(".armada/attachments/repro.png"),
         "the brief names the worktree-relative path: {prompt}"

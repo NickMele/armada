@@ -26,6 +26,7 @@ use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Gate, Scoped, Sketch};
 use verification::{Claimed, NotClaimed, ShownBy, TheBaseMoved};
 
 use crate::briefing::{first_turn, resuming_turn, Opening, Redeclaring, Stopped, BASELINE};
+use crate::crossing::Crossed;
 use crate::daemon::Fleet;
 use crate::evidence::Call;
 use crate::gate::Ruling;
@@ -103,10 +104,15 @@ fn a_workflow() -> core_model::FrozenWorkflow {
 }
 
 fn turn_at(step: &str) -> String {
-    first_turn(&a_job(), &a_workflow(), &StepId::new(step))
-        .expect("a prompt")
-        .as_str()
-        .to_string()
+    first_turn(
+        &a_job(),
+        &a_workflow(),
+        &StepId::new(step),
+        &Crossed::nothing(),
+    )
+    .expect("a prompt")
+    .as_str()
+    .to_string()
 }
 
 /// **The measured one.** Given a tool and a task and told nothing about
@@ -196,6 +202,7 @@ fn every_turn_says_where_a_drones_own_files_go() {
         &a_workflow(),
         &StepId::new("implement"),
         &Stopped::default(),
+        &Crossed::nothing(),
     )
     .expect("a prompt");
     assert!(resumed.as_str().contains(&keyed), "{}", resumed.as_str());
@@ -265,10 +272,15 @@ fn a_scoped_step_is_told_to_declare_before_it_starts() {
         }),
         gaming: None,
     }]);
-    let said = first_turn(&a_job(), &workflow, &StepId::new("implement"))
-        .expect("a prompt")
-        .as_str()
-        .to_string();
+    let said = first_turn(
+        &a_job(),
+        &workflow,
+        &StepId::new("implement"),
+        &Crossed::nothing(),
+    )
+    .expect("a prompt")
+    .as_str()
+    .to_string();
 
     assert!(said.contains("BEFORE YOU START"));
     assert!(
@@ -547,10 +559,16 @@ fn stopped_by(trigger: EscalationTrigger) -> Stopped {
 }
 
 fn restarted(stopped: &Stopped) -> String {
-    resuming_turn(&a_job(), &a_workflow(), &StepId::new("implement"), stopped)
-        .expect("a prompt")
-        .as_str()
-        .to_string()
+    resuming_turn(
+        &a_job(),
+        &a_workflow(),
+        &StepId::new("implement"),
+        stopped,
+        &Crossed::nothing(),
+    )
+    .expect("a prompt")
+    .as_str()
+    .to_string()
 }
 
 /// **The one that changes work that was right.** `gate_undecided` is the gate
@@ -669,7 +687,7 @@ fn opened(opening: &Opening, moved: Option<&TheBaseMoved>) -> String {
 /// tells it nothing.
 #[test]
 fn a_branch_that_did_not_move_is_not_mentioned_in_the_opening_turn() {
-    assert!(!opened(&Opening::Fresh, None).contains("THE BRANCH YOU ARE ON"));
+    assert!(!opened(&Opening::fresh(), None).contains("THE BRANCH YOU ARE ON"));
 }
 
 /// **The tense is the whole reason this block is not
@@ -680,7 +698,7 @@ fn a_branch_that_did_not_move_is_not_mentioned_in_the_opening_turn() {
 #[test]
 fn a_clean_catch_up_before_a_spawn_does_not_claim_the_drone_was_working() {
     let said = opened(
-        &Opening::Fresh,
+        &Opening::fresh(),
         Some(&TheBaseMoved::BroughtUpToDate {
             base: String::from("main"),
             commits: 4,
@@ -700,7 +718,7 @@ fn a_clean_catch_up_before_a_spawn_does_not_claim_the_drone_was_working() {
 #[test]
 fn a_conflicted_catch_up_before_a_spawn_is_named_as_the_first_piece_of_work() {
     let said = opened(
-        &Opening::Resuming(stopped_by(EscalationTrigger::GateFailure)),
+        &Opening::resuming(stopped_by(EscalationTrigger::GateFailure)),
         Some(&TheBaseMoved::Conflicted {
             base: String::from("main"),
             files: vec![String::from("src/log.rs"), String::from("src/parse.rs")],
@@ -722,7 +740,7 @@ fn a_conflicted_catch_up_before_a_spawn_is_named_as_the_first_piece_of_work() {
 #[test]
 fn a_catch_up_that_would_not_replay_tells_the_drone_to_carry_on() {
     let said = opened(
-        &Opening::Fresh,
+        &Opening::fresh(),
         Some(&TheBaseMoved::CouldNotFollow {
             base: String::from("main"),
         }),
@@ -744,10 +762,15 @@ fn turn_delivering(target: &str) -> String {
         scope: None,
         gaming: None,
     }]);
-    first_turn(&a_job(), &workflow, &StepId::new("implement"))
-        .expect("a prompt")
-        .as_str()
-        .to_string()
+    first_turn(
+        &a_job(),
+        &workflow,
+        &StepId::new("implement"),
+        &Crossed::nothing(),
+    )
+    .expect("a prompt")
+    .as_str()
+    .to_string()
 }
 
 /// **The path is named, because a check nobody was told about fails every

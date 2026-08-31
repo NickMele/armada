@@ -29,6 +29,7 @@ use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
 use crate::briefing::{Declaring, Opening};
+use crate::crossing::{Cleared, Crossed, Produced};
 use crate::daemon::Fleet;
 use crate::transcript;
 
@@ -93,6 +94,17 @@ where
         let onwards = self.surviving_worktree(&job)?;
         let passed = self.declared_step(&job, &step)?.clone();
         let next = job.workflow().after(&step).cloned();
+        // **Read before anything moves, and read on both arms.** Only the
+        // arm that spawns uses it, and reading it there would mean a record
+        // that would not open escalating an override that had already moved
+        // the Job and the step. One query on the common path buys a refusal
+        // that leaves the Job exactly where the person found it.
+        let recorded = self
+            .store()
+            .lock()
+            .await
+            .step_evidence(job_id)
+            .map_err(Adrift::Reading)?;
 
         let job = self.move_job(&job, Target::Running, Actor::Human).await?;
         let job = self
@@ -127,8 +139,22 @@ where
             // same way — the catch-up is inside `put_a_drone_on` and this arm
             // reaches it rather than calling it.
             false => {
-                self.put_a_drone_on(&job, next.id(), onwards, Opening::Fresh, &mut working)
-                    .await?;
+                // The one path today that puts a Drone on a step it did not
+                // begin the Job on, so it is the one that has to hand over
+                // what the missing process would have held: what the
+                // overridden part produced, and that a person settled it.
+                // `#140` makes every step boundary this path.
+                let crossed = Crossed::nothing()
+                    .and_produced(Produced::before(job.workflow(), next.id(), &recorded))
+                    .and_cleared(Cleared::reviewed(&passed));
+                self.put_a_drone_on(
+                    &job,
+                    next.id(),
+                    onwards,
+                    Opening::fresh().carrying(crossed),
+                    &mut working,
+                )
+                .await?;
             }
         }
         self.load(job_id).await

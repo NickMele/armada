@@ -202,7 +202,7 @@ where
         // funnel costs one `standing` call and announces nothing — and where
         // the repository's HEAD is not the base, a Drone that would otherwise
         // have started two commits back is told so on its first turn.
-        self.put_a_drone_on(&job, &step, worktree, Opening::Fresh, working)
+        self.put_a_drone_on(&job, &step, worktree, Opening::fresh(), working)
             .await
     }
 

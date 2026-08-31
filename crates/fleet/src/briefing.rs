@@ -16,11 +16,11 @@
 //! the contract's own M1 rendering says, so what is assembled here is baseline,
 //! job brief, where-you-are, step — the four blocks the rendering shows.
 //!
-//! What is not assembled: the exemplar corpus, the injected reference material
-//! a review step needs, and what the previous step produced. Each needs a
-//! record M1 has no type for, and a block rendered empty reads to a Drone as a
-//! block that was answered. The scope block is written **only** where the step
-//! declares one — the only step where the call exists.
+//! What is not assembled: the exemplar corpus, and the injected reference
+//! material a review step needs. Each needs a record M1 has no type for, and a
+//! block rendered empty reads to a Drone as a block that was answered. **What
+//! the previous step produced was on that list and is not** —
+//! [`crossing`](mod@crate::crossing) is what a boundary hands across.
 //!
 //! Two blocks are assembled that the rendering does not show: [`notekeeping`],
 //! which names where a Drone's own files go, and [`Delivering`], which names
@@ -62,6 +62,8 @@ use core_model::{
 };
 use verification::TheBaseMoved;
 
+use crate::crossing::{Crossed, Produced, Reconciling};
+
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering.
 ///
 /// **Mechanics, never task content**, and identical on every step of every Job
@@ -86,17 +88,59 @@ turn, with the reason. Wait for that turn.";
 /// itself would have had to be handed the catch-up back, which is the fourth
 /// call site `#180` exists to avoid.
 ///
+/// **A struct rather than the enum it was**, because what a boundary carries is
+/// orthogonal to whether the step has been attempted. A restarted Drone on part
+/// three needs to know what part two produced exactly as a fresh one does, and
+/// an enum would have had to carry [`Crossed`] in both arms. It is also what
+/// keeps [`put_a_drone_on`]'s signature closed: the carried items ride the
+/// `Opening` a caller already passes, so `#207` adds one without a spawn
+/// funnel changing shape.
+///
 /// [`put_a_drone_on`]: crate::daemon::Fleet::put_a_drone_on
 #[derive(Clone, Debug)]
-pub enum Opening {
+pub struct Opening {
+    attempted: Attempted,
+    crossed: Crossed,
+}
+
+/// Whether the step being opened has been worked before.
+#[derive(Clone, Debug)]
+enum Attempted {
     /// A step no Drone has attempted yet — a Job's first, or the one an
     /// override advanced to.
-    Fresh,
+    No,
     /// A step that stopped, and what the record says stopped it.
-    Resuming(Stopped),
+    Before(Stopped),
 }
 
 impl Opening {
+    /// A step no Drone has attempted yet, carrying nothing.
+    pub fn fresh() -> Opening {
+        Opening {
+            attempted: Attempted::No,
+            crossed: Crossed::nothing(),
+        }
+    }
+
+    /// A step that stopped, carrying nothing but what stopped it.
+    pub fn resuming(stopped: Stopped) -> Opening {
+        Opening {
+            attempted: Attempted::Before(stopped),
+            crossed: Crossed::nothing(),
+        }
+    }
+
+    /// The same opening, with what the boundary handed across.
+    ///
+    /// **Separate from both constructors on purpose.** A spawn that carries
+    /// nothing is a legitimate spawn — a Job's first step carries nothing — so
+    /// this cannot be a required argument, and a caller that has something to
+    /// carry says so in one call rather than picking between four
+    /// constructors.
+    pub fn carrying(self, crossed: Crossed) -> Opening {
+        Opening { crossed, ..self }
+    }
+
     /// The whole opening turn: the four blocks, what stopped the last attempt
     /// where there was one, and what the rebase came to where it came to
     /// anything.
@@ -111,9 +155,9 @@ impl Opening {
         at: &StepId,
         moved: Option<&TheBaseMoved>,
     ) -> Result<Prompt, SpawnConfigRefused> {
-        let brief = match self {
-            Opening::Fresh => first_turn(job, workflow, at)?,
-            Opening::Resuming(stopped) => resuming_turn(job, workflow, at, stopped)?,
+        let brief = match &self.attempted {
+            Attempted::No => first_turn(job, workflow, at, &self.crossed)?,
+            Attempted::Before(stopped) => resuming_turn(job, workflow, at, stopped, &self.crossed)?,
         };
         let Some(moved) = moved else {
             return Ok(brief);
@@ -126,60 +170,6 @@ impl Opening {
     }
 }
 
-/// What Fleet did to this branch before the Drone reading it existed.
-///
-/// **A different block from the one a live Drone gets**, and the difference is
-/// the tense. `verification::TheBaseMoved` renders "while you worked", which is
-/// true at a step boundary and false in an opening turn: this Drone did not
-/// work, and a first turn that opens by describing work it has no memory of is
-/// a first turn it has to reconcile before it can start.
-///
-/// **The conflicted variant is the reader `#180` had to find.** A rebase runs
-/// where there is no session to inject a turn into, so the conflict rides the
-/// brief and is the Drone's opening piece of work — which is the whole of what
-/// "the Drone is asked to resolve them before continuing" means on a path with
-/// no Drone yet.
-///
-/// **Drafted wording**, like [`Redeclaring`] and the gaming half of [`Stopped`].
-/// `docs/contracts/agent-prompt.md` has no sanctioned copy for it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Reconciling(String);
-
-impl Reconciling {
-    /// The block, from what the catch-up came to.
-    pub fn of(moved: &TheBaseMoved) -> Reconciling {
-        let said = match moved {
-            TheBaseMoved::BroughtUpToDate { base, commits } => format!(
-                "`{base}` moved on by {commits} commit(s) since this branch was cut, and the \
-                 branch has been brought up to it before you started. The worktree is current. \
-                 Work already on the branch may now sit on top of code that changed underneath \
-                 it — read a file before you edit it."
-            ),
-            TheBaseMoved::Conflicted { base, files } => format!(
-                "`{base}` moved on since this branch was cut, and the branch has been brought \
-                 up to it before you started. These files were left with conflict markers in \
-                 them, and resolving them is the first piece of your work:\n\n{}\n\nOpen each \
-                 one, keep what belongs, and remove every marker before you submit.",
-                files
-                    .iter()
-                    .map(|file| format!("- {file}"))
-                    .collect::<Vec<String>>()
-                    .join("\n")
-            ),
-            TheBaseMoved::CouldNotFollow { base } => format!(
-                "`{base}` moved on since this branch was cut, and the branch could not be put \
-                 on top of it. It is exactly where it was. Nothing here is yours to fix — do \
-                 the work described above, and somebody will reconcile the two."
-            ),
-        };
-        Reconciling(format!("THE BRANCH YOU ARE ON\n\n{said}"))
-    }
-
-    pub fn text(&self) -> &str {
-        &self.0
-    }
-}
-
 /// Assemble the first turn for a Job standing at one step of its workflow.
 ///
 /// **There is no argument through which arbitrary text reaches a Drone.** The
@@ -187,14 +177,18 @@ impl Reconciling {
 /// that wanted to say something else would have to add a block here — which is
 /// the same refusal `Turn` makes about a prepared string.
 ///
+/// `crossed` is what the boundary handed across — [`Crossed::nothing`] on a
+/// Job's first step, and on every spawn that has nothing to hand.
+///
 /// Refuses only where the assembled text is empty, which
 /// [`Prompt::assembled`] decides and this does not restate.
 pub fn first_turn(
     job: &Job,
     workflow: &FrozenWorkflow,
     at: &StepId,
+    crossed: &Crossed,
 ) -> Result<Prompt, SpawnConfigRefused> {
-    Prompt::assembled(&assemble(job, workflow, at))
+    Prompt::assembled(&assemble(job, workflow, at, crossed))
 }
 
 /// Assemble the first turn for a Drone taking over a step that stopped.
@@ -211,8 +205,9 @@ pub fn resuming_turn(
     workflow: &FrozenWorkflow,
     at: &StepId,
     stopped: &Stopped,
+    crossed: &Crossed,
 ) -> Result<Prompt, SpawnConfigRefused> {
-    let mut text = assemble(job, workflow, at);
+    let mut text = assemble(job, workflow, at, crossed);
     text.push_str("\n\n");
     text.push_str(&stopped.block());
     Prompt::assembled(&text)
@@ -362,14 +357,21 @@ impl Stopped {
     }
 }
 
-fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId) -> String {
+fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed) -> String {
     let mut text = String::from(BASELINE);
     text.push_str("\n\n");
     text.push_str(&notekeeping(job.id()));
     text.push_str("\n\n");
     text.push_str(&job_brief(job));
     text.push_str("\n\n");
-    text.push_str(&where_you_are(workflow, at));
+    text.push_str(&where_you_are(workflow, at, crossed.produced()));
+    // **After the rail and before the step.** The rail is what establishes
+    // that there is a part before this one at all, and this says that part is
+    // closed — which is only meaningful once a Drone knows it exists.
+    if let Some(cleared) = crossed.cleared() {
+        text.push_str("\n\n");
+        text.push_str(&cleared.text());
+    }
     if let Some(step) = workflow.steps().iter().find(|step| step.id() == at) {
         text.push_str("\n\n");
         text.push_str(&step_block(step));
@@ -737,7 +739,13 @@ fn job_brief(job: &Job) -> String {
 /// **The stop sits inside the list rather than after it**, because where the
 /// line falls is the boundary, and later parts carry the specific prohibition
 /// rather than a general one.
-fn where_you_are(workflow: &FrozenWorkflow, at: &StepId) -> String {
+///
+/// **`produced` goes between the rail and the closing paragraph**, which is
+/// where `docs/contracts/agent-prompt.md` draws it. It is inside this block
+/// rather than beside it because it is positional — "part 1" only means
+/// anything to a Drone that has just read the numbered list — and the contract
+/// draws it inside.
+fn where_you_are(workflow: &FrozenWorkflow, at: &StepId, produced: Option<&Produced>) -> String {
     let steps = workflow.steps();
     let position = steps.iter().position(|step| step.id() == at);
     let mut block = format!("WHERE YOU ARE\n\nThis task runs in {} parts.", steps.len());
@@ -756,6 +764,10 @@ fn where_you_are(workflow: &FrozenWorkflow, at: &StepId) -> String {
         if position == Some(index) {
             block.push_str("\n     STOP. Submit when this part is done, then wait.");
         }
+    }
+    if let Some(produced) = produced {
+        block.push_str("\n\n");
+        block.push_str(&produced.text());
     }
     block.push_str(
         "\n\nThe parts after this one happen after you submit, and doing them \

@@ -155,7 +155,11 @@ async fn until_reaped(fleet: &Fixture) {
 
 /// What the Drone said, once it has said anything. The transcript is written
 /// off a queue, so this waits for the row rather than assuming it landed.
-async fn until_spoken(home: &TempDir, drone: &DroneId) -> String {
+///
+/// **`pub(super)` so `overruling` can read a brief too.** An override onto a
+/// Job whose Drone has gone spawns exactly as a restart does, and a second
+/// copy of this poll is a second thing that can be wrong about the queue.
+pub(super) async fn until_spoken(home: &TempDir, drone: &DroneId) -> String {
     let path = transcript_of(&home.path().to_string_lossy(), drone);
     for _ in 0..400 {
         if let Ok(said) = std::fs::read_to_string(&path) {
@@ -169,7 +173,7 @@ async fn until_spoken(home: &TempDir, drone: &DroneId) -> String {
 }
 
 /// The Drone the record says is on the Job now.
-async fn on_it(fleet: &Fixture, job: &JobId) -> DroneId {
+pub(super) async fn on_it(fleet: &Fixture, job: &JobId) -> DroneId {
     fleet
         .load(job)
         .await
