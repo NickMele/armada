@@ -40,6 +40,24 @@ use crate::slots::Slots;
 /// **Every variant but the first folds to `waiting_on_resources`** on the
 /// Board, which is the only label `job-statuses.toml` gives a `queued` Job
 /// short of anything. The distinction between them is the operator's.
+///
+/// # Which one is short reaches nobody, and this is what it would take
+///
+/// Both callers reduce this to [`Room::granted`] and drop the rest, and
+/// **nothing else in the workspace knows the answer** — so a surface that
+/// wants it returns this value rather than taking a reading of its own. It
+/// needs `Room::Machine(Short)` unreduced, `Slots::count` (which exists) and a
+/// `cap()` accessor on `Slots` (one line). No fourth thing, and no new read.
+///
+/// **The order is the catch.** The bound is asked first so a Fleet at its cap
+/// pays nothing for a reading, which makes `Bound` and `Machine` exclusive:
+/// "the cap is spent *and* the disk is full" is not a state this can report
+/// without relaxing that or asking twice. The roster lock is held while this
+/// is called, so a status route takes it and then the poll lock — admission's
+/// order, and no new cycle.
+///
+/// Doctor's System stats panel, which `settings.toml`'s headroom row names as
+/// the other reader of these numbers, does not exist either.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Room {
     /// There is room.

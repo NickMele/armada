@@ -239,9 +239,11 @@ pub const PROVISIONAL_CONCURRENCY: Concurrency = Concurrency::of(2);
 
 /// How much of the machine has to be free before another Drone starts.
 ///
-/// **The `cpu-mem-headroom-threshold-for-spawning` row for the first number**,
-/// resolved here like every other dial on this page. The second is disk, and
-/// it is not a share: see [`Headroom::of`].
+/// **Two `settings.toml` rows in one value**:
+/// `cpu-mem-headroom-threshold-for-spawning` for the share and
+/// `disk-headroom-floor-for-spawning` for the bytes, resolved here like every
+/// other dial on this page. They are two rows because disk is not a share —
+/// see [`Headroom::of`].
 ///
 /// **A sixth of the machine, and it is a floor rather than a measurement.**
 /// Nothing has measured what a Drone costs in CPU or memory — a Drone spends

@@ -31,11 +31,29 @@ read_by = "fleet"
 notes = """
 **Enforced.** `fleet::headroom::Headroom` carries it and `Fleet::room_for_another` is the predicate: `admit_next` opens with it, and a Job approved onto a machine short of it stays `queued` with `waiting_on_resources` as its reason — the same predicate, so a Board cannot say a Job is blocked while Fleet is starting it. It read as unparsed until Throughput.
 
-**One share for CPU and memory, and disk is not held against it.** A fraction of the volume is the wrong unit for a cost that is absolute: a tenth of a 4 TB disk holds 400 GB in reserve against a worktree that needs three, and a tenth of a 60 GB disk leaves less than one build. The disk floor is a number of gibibytes, carried in `armada::serve::PROVISIONAL_HEADROOM` beside this one, and **it has no row here yet.**
+**One share, for CPU and memory only.** Disk is the third signal the same predicate reads and it is not held against a percentage — `disk-headroom-floor-for-spawning` below is its own row for that reason, and carries the argument.
 
 Machine constraint. Also sets Doctor's System stats warn boundary — below threshold is warn, since Drones queue rather than spawn. System stats is the one Doctor module whose warn is live degradation rather than "works now, will break later".
 
 It has no value here for the reason none of Fleet's other dials does — `crates/armada/src/serve.rs` resolves it, and carries the argument for the number. It ships at a sixth of the machine: nothing has measured what a Drone costs in CPU or memory, and what the number is for is refusing to start work on a machine that is already saturated.
+"""
+
+[settings.disk-headroom-floor-for-spawning]
+name = "Disk headroom floor for spawning"
+scope = "Machine"
+lifetime = "Daemon start"
+merge_strategy = "n/a — single layer"
+peer_polarity = "n/a — single layer"
+owner = "Fleet"
+read_by = "fleet"
+notes = """
+**Enforced**, through the same predicate as the row above — `Fleet::room_for_another`, which `admit_next` opens with and which the Board's `waiting_on_resources` label is answered from. The volume read is the repository root, because every worktree is cut beneath it.
+
+**Bytes, and not a share, which is why it is its own row.** The row above is a percentage and a percentage cannot carry this: a tenth of a 4 TB volume reserves 400 GB against a worktree that needs three, and a tenth of a 60 GB volume leaves less than one build. What a Job costs in disk is absolute — a cut worktree plus its build output — so it is held against a number of gigabytes.
+
+**It exists because of a measured failure, not for symmetry with CPU and memory.** On 31 Aug 2026 a volume filled during a parallel agent run: 220 GB across 74 worktrees, roughly three gigabytes each, and three agents died at zero bytes free holding uncommitted work. Nothing saw it coming, nothing reported it, and the first symptom was tool calls failing with `ENOSPC`.
+
+It has no value here for the reason none of Fleet's other dials does — `crates/armada/src/serve.rs` resolves it, as part of `PROVISIONAL_HEADROOM`, and carries the argument for the number. It ships at ten gibibytes, which is about three worktrees' worth: enough that the Job being started can finish and a person has warning before the next one.
 """
 
 [settings.fleet-health-check-resource-poll-interval]

@@ -412,3 +412,119 @@ async fn a_running_job_is_left_alone_when_the_machine_fills() {
     );
     assert_eq!(fleet.working_on().await, vec![job]);
 }
+
+// ----------------------------------------------- a person's act, and the queue
+
+/// A Drone that speaks once and leaves, so the slot empties and a restart is
+/// not refused for the reason `restarting` names — `DroneStillThere`.
+fn a_drone_that_leaves() -> testkit::FakeHarness {
+    testkit::FakeHarness::running("/bin/sh", &["-c", "echo BUSY"]).reading(
+        "BUSY",
+        vec![adapter_traits::DroneEvent::Called {
+            tool: String::from("Read"),
+            call: String::from("a-call"),
+            detail: adapter_traits::CallDetail::of("a file"),
+        }],
+    )
+}
+
+/// A Fleet whose Drone leaves on its own, reading a machine the test holds.
+fn watching_a_drone_that_leaves(home: &TempDir, plant: &Arc<Plant>) -> Fixture {
+    let mut fittings = crate::tests::daemon::fitted_with(
+        home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        a_drone_that_leaves(),
+    );
+    fittings.machine = Arc::clone(plant) as Arc<dyn Machine>;
+    fittings.headroom = SHIPPED;
+    fittings.polling = Polling::every(Duration::ZERO);
+    Fleet::assembled(fittings)
+}
+
+/// Drive the loop until the slot is empty, the way `restarting` does.
+async fn until_reaped(fleet: &Fixture) {
+    for _ in 0..400 {
+        fleet.turn().await.expect("a turn");
+        if fleet.the_only_slot().await.lock().await.is_none() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    panic!("the Drone never left");
+}
+
+/// **A person's act is accepted whatever the machine holds, and held after it.**
+///
+/// `restart_step` and `override_verdict` take `escalated -> queued` and re-admit
+/// inline, so they arrive at the same predicate an ordinary approval does. Two
+/// claims in one case, because they are two halves of one property: the act
+/// must not be *refused* for a reason the person cannot act on, and the Job it
+/// re-queued must be *held* exactly as any other queued Job is. A restart that
+/// spawned past short headroom would be the one door round the gate.
+#[tokio::test]
+async fn a_restart_is_accepted_and_then_held_by_short_headroom() {
+    let home = TempDir::new();
+    let plant = Plant::showing(PLENTY);
+    let fleet = watching_a_drone_that_leaves(&home, &plant);
+
+    let job = fleet
+        .propose(a_proposal("a step that will stop"))
+        .await
+        .expect("a Job at the approval gate");
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.expect("released to run");
+    let record = fleet.load(job.id()).await.expect("the Job reads");
+    let record = fleet
+        .move_step(
+            &record,
+            &core_model::StepId::new("implement"),
+            core_model::StepTarget::Stopped(
+                core_model::StepLevelTrigger::of(core_model::EscalationTrigger::GateFailure)
+                    .expect("a step-level trigger"),
+            ),
+        )
+        .await
+        .expect("the step stops");
+    fleet
+        .move_job(
+            &record,
+            core_model::Target::Escalated(core_model::EscalationTrigger::GateFailure),
+            core_model::Actor::Fleet,
+        )
+        .await
+        .expect("the Job escalates over it");
+    until_reaped(&fleet).await;
+
+    // The machine fills while the Job sits escalated, and a person restarts it.
+    plant.now_shows(Reading::of(
+        InUse::percent(10),
+        InUse::percent(20),
+        Bytes::gibibytes(1),
+    ));
+    fleet
+        .restart_step(job.id())
+        .await
+        .expect("the act is accepted: a person is never refused for a machine");
+
+    assert_eq!(
+        board(&fleet, job.id()).await,
+        (
+            "queued".to_string(),
+            Some("waiting_on_resources".to_string())
+        ),
+        "and it is held exactly as an ordinary approved Job would be"
+    );
+    assert!(
+        fleet.working_on().await.is_empty(),
+        "nothing was spawned past the gate the restart went through"
+    );
+
+    plant.now_shows(PLENTY);
+    fleet.turn().await.expect("the loop turns");
+
+    assert_eq!(
+        board(&fleet, job.id()).await,
+        ("running".to_string(), None),
+        "and the restart the person asked for happens once there is room"
+    );
+}

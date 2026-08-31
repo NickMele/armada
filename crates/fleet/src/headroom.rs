@@ -140,7 +140,8 @@ impl Reading {
 /// **Not a `QueuedReason`.** `job-statuses.toml` gives `queued` exactly three
 /// labels — `blocked_by_dependency`, `waiting_on_resources`, `none` — and every
 /// one of these folds to the second. This is the operator's distinction, not
-/// the Board's.
+/// the Board's, and nothing reads it yet: `crate::admitting::Room` says what a
+/// surface would have to take to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Short {
     Cpu,
@@ -172,11 +173,12 @@ pub struct Headroom {
 impl Headroom {
     /// One share for CPU and memory, and an absolute floor for disk.
     ///
-    /// **Disk is not a share, and that is the finding.** A fraction of the
+    /// **Two rows and not one, because disk is not a share.** A fraction of the
     /// volume is the wrong unit for a cost that is absolute: a tenth of a 4 TB
     /// disk holds 400 GB in reserve against a worktree that needs three, and a
     /// tenth of a 60 GB disk leaves less than one build. What a Job needs is a
-    /// number of gigabytes, so that is what it is held against.
+    /// number of gigabytes, so `settings.toml` gives it
+    /// `disk-headroom-floor-for-spawning` of its own.
     pub const fn of(spare: Spare, disk: Bytes) -> Headroom {
         Headroom { spare, disk }
     }
