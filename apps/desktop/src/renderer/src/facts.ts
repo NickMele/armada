@@ -164,6 +164,12 @@ function scopeFacts(whole: JobWhole | null): JobDetailField[] {
  * Absent and empty are both silent, and for the same reason: neither is
  * something to tell a person. Their difference is on the wire and is what stops
  * a future surface saying "no overlap" about a Job nothing compared.
+ *
+ * **It names the collision and offers nothing to do about it.** The
+ * `depends_on` edge `docs/concepts/job-board.md` promises beside this is
+ * `#231`: it needs an operation that adds an edge to an existing Job, and
+ * `crates/fleet/src/coupling.rs` is why that is not free. Until then the two
+ * answers are the ones the gate already had.
  */
 function overlapFacts(whole: JobWhole | null): JobDetailField[] {
   return (whole?.write_scope_overlaps ?? []).flatMap((other) => {

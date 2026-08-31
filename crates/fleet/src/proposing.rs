@@ -176,9 +176,14 @@ impl Brief {
     pub fn about(request: &str, workflows: &BTreeMap<WorkflowId, ResolvedWorkflow>) -> Brief {
         let mut question = String::new();
         question.push_str(
+            // **Not "what it will write".** It used to say so, and the answer
+            // format below tells the model the opposite in its last line. A
+            // proposer asked for paths it cannot see answers with paths it
+            // guessed, and `write_targets` is null at the gate precisely so
+            // nothing downstream reads a guess as a declaration.
             "You are deciding what a piece of work is: which workflow it runs \
-             under, what it will write, and whether it is one Job or several. \
-             Answer only the question at the end.\n\n",
+             under, and whether it is one Job or several. Answer only the \
+             question at the end.\n\n",
         );
         question.push_str("The request, as the person wrote it:\n\n");
         question.push_str(request);

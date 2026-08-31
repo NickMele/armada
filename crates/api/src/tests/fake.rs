@@ -225,9 +225,7 @@ impl Daemon for FakeDaemon {
             // Absent again: a waiting note is a column on `jobs`, and this
             // daemon's Jobs are wire summaries rather than records.
             redirect_waiting: None,
-            // Absent, and here absent is load-bearing rather than incidental:
-            // "no comparison was made" is what a daemon holding no other Job's
-            // record can honestly say, and an empty list would claim it looked.
+            // Absent, not empty: no other Job's record is held, so nothing looked.
             write_scope_overlaps: None,
             // Absent for the same reason again: a classification is read from
             // a slot, a filesystem and a store, and this daemon has none of the

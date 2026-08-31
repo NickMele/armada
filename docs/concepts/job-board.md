@@ -189,7 +189,7 @@ Approving anyway is allowed and is the ordinary case — the overlap is a fact, 
 
 **Absent is not empty.** A Job that has claimed nothing yet is one nothing has compared, and the screen must not read as "no overlap" for it. That is every Job at its approval gate today.
 
-**The offer to make this Job `depends_on` the other is not built.** It is the sanctioned remedy and it stays described here, but there is no operation that adds an edge to an existing Job. See [Fleet](fleet.md), Scheduling and gating.
+**The offer to make this Job `depends_on` the other is not built.** It is the sanctioned remedy and it stays described here, but there is no operation that adds an edge to an existing Job — `#231`, which has to settle what that does to the cycle argument first. Until it lands the answers on this screen are approve anyway or deny. See [Fleet](fleet.md), Scheduling and gating.
 
 ### Controls on a sub-dispatched row
 

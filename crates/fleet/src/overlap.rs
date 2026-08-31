@@ -8,6 +8,11 @@
 //! `write_targets` is null on every Job the proposer drafted, and what a
 //! running Job has instead is its Drones' per-step declarations.
 //!
+//! **It names a collision and offers nothing.** Taking the `depends_on` edge
+//! the concept pages promise needs an operation that writes an edge onto an
+//! existing Job, which is `#231` — and `crate::coupling` is why that is not a
+//! one-liner.
+//!
 //! `docs/concepts/fleet.md`, Write-scope overlap, holds the rest.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};

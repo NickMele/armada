@@ -14,18 +14,22 @@ use crate::tests::proposing::{a_catalogue, read};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 
+/// **No `writes:` line, because the proposer's own answer format forbids one**
+/// — "Do not work out which files are involved" — and `Brief::read` parses
+/// four keys, none of them that. A fixture carrying a key nothing reads is a
+/// fixture somebody believes, and this one was read as evidence that a Job
+/// reaches the gate with its scope named. It does not: `write_targets` is null
+/// there, which is what `#47` turned on.
 pub(crate) const A_PLAN: &str = "\
 job: 1
 workflow: feature
 title: Add the endpoint
 because: the consumer cannot be written against something that is not there
-writes: crates/api/src/routes.rs
 
 job: 2
 workflow: feature
 title: Update the consumer
 because: it reads the endpoint the first Job adds
-writes: apps/desktop/src/main/connection.ts
 after: 1
 ";
 

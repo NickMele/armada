@@ -1,28 +1,15 @@
 //! Another Job claiming to write where this one says it will.
 //!
-//! # It is a fact on the card, never a verdict
+//! **A fact, never a verdict** — no `blocked` flag, no severity, nothing a
+//! Bridge could grey the approve button from. No field for the remedy either:
+//! the offered `depends_on` edge is a command, and it is `#231`.
 //!
-//! `docs/concepts/fleet.md` — **"Surfaced, never serialised."** Nothing here
-//! carries a decision: there is no `blocked` flag, no severity, and no field a
-//! Bridge could read to grey out the approve button. A person is told and
-//! approves anyway, which `docs/concepts/job-board.md` calls the ordinary case.
+//! Both sides are declarations, so the Drone that writes where it never said is
+//! not here and could not be.
 //!
-//! # It says two Jobs *claimed* the same place, and no more than that
-//!
-//! Both sides are declarations. A Drone writing somewhere it never named is
-//! not here and could not be — its worktree is a whole-repo checkout, which is
-//! the same fact that makes a lease over the declaration pointless. The check
-//! that reads a real diff is the per-step drift check, and it compares one step
-//! against its own plan rather than against another Job.
-//!
-//! # Absent, not empty
-//!
-//! [`JobDetail::write_scope_overlaps`](crate::JobDetail) is skipped when there
-//! is nothing to say, on this crate's own rule: a client that receives an empty
-//! array cannot tell "nobody overlaps" from "this Fleet has not worked it out".
-//! Here the two really are different — a Job whose scope nothing has declared
-//! yet has no comparison to make, and saying "no overlap" about it would be a
-//! claim nothing supports.
+//! **Absent is not empty**, and on this field the difference is the whole
+//! point: absent is a Job nothing compared, empty is a comparison that found
+//! nobody. `docs/concepts/fleet.md`, Write-scope overlap, holds the rest.
 
 use serde::{Deserialize, Serialize};
 
