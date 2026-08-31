@@ -231,13 +231,23 @@ async fn a_decline_that_stands_writes_one_line_rather_than_one_a_turn() {
     );
 }
 
-/// **The `awaiting_review` guard is unchanged, and now it says so.** A Job at a
-/// human gate is a person's; a second submission must not re-rule the step out
-/// from under them, so it is dropped. What it must not be is silent — the
-/// person holding the gate is entitled to know a Drone submitted again and was
-/// not answered.
+/// **A Job at a human gate is a person's, and nothing can re-rule the step out
+/// from under them.** The guard that used to say so was a decline: the gate
+/// held an idle Drone, the Drone could submit again, and `not_running` dropped
+/// what it sent — silently at first, which is what the case was written for.
+///
+/// It is not a decline any more. The gate stands its Drone down and frees the
+/// slot, and a submission is bound to whatever the slot holds — so at a human
+/// gate there is nothing to submit through and the tool refuses. The stronger
+/// property replaces the weaker one, and the assertion moves with it: what is
+/// tested is that no submission can reach a gated Job at all.
+///
+/// **Nothing is written down, and that is the change.** There is no line about
+/// a dropped submission because there is no dropped submission; the refusal is
+/// to the caller. `not_running` still stands for `escalated`, where the slot
+/// does hold an idle Drone.
 #[tokio::test]
-async fn a_second_submission_at_a_human_gate_is_dropped_and_written_down() {
+async fn nothing_can_submit_to_a_job_a_person_is_holding_at_a_gate() {
     let home = TempDir::new();
     let fleet = a_fleet_gated_on_a_person(
         &home,
@@ -253,27 +263,30 @@ async fn a_second_submission_at_a_human_gate_is_dropped_and_written_down() {
     let turned = fleet.turn().await.unwrap();
     assert!(matches!(turned.ruled, Some(Ruling::HeldForReview { .. })));
 
-    // The idle Drone submits again while the person is still deciding.
-    fleet.submit_evidence(diff_evidence()).await.unwrap();
+    assert!(
+        fleet.slot().lock().await.is_none(),
+        "the gate stood its Drone down and freed the slot, which is what makes \
+         a person's review cost no fleet time"
+    );
+
+    // Refused rather than queued and dropped. A submission is bound to the Job
+    // in the slot, under the slot's own lock, so there is no arrangement of
+    // this call that could put evidence against a Job a person is reading.
+    assert!(
+        matches!(
+            fleet.submit_evidence(diff_evidence()).await,
+            Err(crate::NotSubmitted::NothingIsWorking)
+        ),
+        "the gate holds no Drone, so there is nothing to submit through"
+    );
+
     let turned = fleet.turn().await.unwrap();
     assert!(turned.ruled.is_none(), "nothing was re-ruled");
-    assert_eq!(
-        turned.declined,
-        Some(Decline::NotRunning {
-            status: JobStatus::AwaitingReview
-        })
-    );
+    assert_eq!(turned.declined, None, "and nothing was declined either");
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),
         JobStatus::AwaitingReview,
         "the step stayed where the person left it"
-    );
-
-    let written = logged(&home, job.id());
-    assert!(written.contains("not_running"), "{written}");
-    assert!(
-        written.contains("\"held\":false"),
-        "the line says the submission was dropped, which it was: {written}"
     );
 }
 

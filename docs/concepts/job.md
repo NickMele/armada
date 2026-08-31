@@ -102,7 +102,7 @@ flowchart LR
   Q -->|Drone spawns| R["running"]
 
   R -->|human gate| AR["awaiting_review"]
-  AR -->|"approve / request_changes"| R
+  AR -->|"approve, a step left"| Q
 
   R -->|criterion owed outside| AT["awaiting_attestation"]
   AR -->|"approve, criterion owed"| AT

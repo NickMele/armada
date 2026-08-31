@@ -24,6 +24,7 @@ use testkit::{Delivered, Delivering, FakeJudge, FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
 use crate::gate::Ruling;
+use crate::process::{holder_of, Holder};
 use crate::tests::daemon::{
     a_fleet_gated_on_a_person, a_fleet_judged_by, a_proposal, diff_evidence, fittings,
     note_evidence, one, two_steps_gated_on_a_person, worktree_directory,
@@ -33,6 +34,11 @@ use crate::tests::tmp::TempDir;
 use crate::Adrift;
 
 type Fixture = Fleet<testkit::FakeHarness, testkit::FakeVcs, FakeWorkProduct>;
+
+/// A Job's own id, cloned so no borrow of it outlives the read.
+fn job_id_of(job: &core_model::Job) -> JobId {
+    job.id().clone()
+}
 
 /// A Fleet whose first step is a person's to answer. Every case that needs a
 /// Job at the gate builds one of these.
@@ -497,20 +503,178 @@ async fn a_judge_under_a_human_gate_filters_what_reaches_the_person() {
     }
 }
 
-/// Changes go back to the Drone that is standing there, and nowhere else.
+/// **A person's review costs no fleet time**, which is the whole reason the
+/// gate ends its Drone — and the half of it worth asserting is the process,
+/// because everything else is bookkeeping that would read the same over a Drone
+/// still running.
+///
+/// The fake Drone is a real child, so `ps` can be asked. `crate::tests::boundary`
+/// is where that probe and its control live; this case is the same question put
+/// through a whole Fleet at the one boundary a person opens.
+///
+/// **The slot half is bookkeeping and is asserted as such.** That the slot is
+/// takeable is a fact about the slot, and the only honest way to show it is to
+/// take it: a second Job is approved while the first sits at the gate, and it
+/// runs. What that does not prove is that nothing else is holding a process
+/// somewhere — the case above does that, for the Drone this one ended.
 #[tokio::test]
-async fn requesting_changes_needs_a_drone_to_tell() {
+async fn a_job_a_person_is_reading_holds_no_process_and_no_slot() {
+    let home = TempDir::new();
+    let fleet = a_fleet_reviewing_the_first_step(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let job = fleet
+        .propose(a_proposal("fix the off-by-one"))
+        .await
+        .expect("a Job at the approval gate");
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.expect("it dispatches");
+
+    let pid = fleet
+        .slot()
+        .lock()
+        .await
+        .as_ref()
+        .expect("a Drone is working it")
+        .session()
+        .pid();
+    assert!(
+        matches!(holder_of(pid), Ok(Holder::Held(_))),
+        "the Drone is running before the gate opens, or the rest proves nothing"
+    );
+
+    fleet
+        .submit_evidence(diff_evidence())
+        .await
+        .expect("the Drone reports its diff");
+    let turned = fleet.turn().await.expect("the gate runs");
+    assert!(matches!(turned.ruled, Some(Ruling::HeldForReview { .. })));
+
+    assert!(
+        matches!(holder_of(pid), Ok(Holder::Vacant)),
+        "the Drone is gone from the process table, not merely unreferenced — a \
+         gate a person may leave open for a day cannot also be a Drone spending"
+    );
+    assert!(
+        fleet.slot().lock().await.is_none(),
+        "and the slot it held is free"
+    );
+
+    // Free, and taken. A Job approved while a person reads runs immediately.
+    let next = fleet
+        .propose(a_proposal("something else entirely"))
+        .await
+        .expect("a second Job");
+    worktree_directory(&home, next.id());
+    let next = fleet.approve(next.id()).await.expect("it dispatches");
+    assert_eq!(
+        next.status(),
+        JobStatus::Running,
+        "the next Job took the slot the gate gave up"
+    );
+    assert_eq!(
+        fleet
+            .load(&job_id_of(&job))
+            .await
+            .expect("the Job")
+            .status(),
+        JobStatus::AwaitingReview,
+        "and the Job at the gate is exactly where the person left it"
+    );
+}
+
+/// **Approving is not a resume: the Job goes back in the queue and waits its
+/// turn.** The slot the gate gave up is very often somebody else's by the time
+/// a person answers, and a Job that assumed one here would either fail or take
+/// it from underneath the Job in it.
+#[tokio::test]
+async fn a_job_approved_while_another_holds_the_slot_waits_its_turn() {
+    let home = TempDir::new();
+    let fleet = a_fleet_reviewing_the_first_step(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let job_id = at_the_gate(&fleet, &home).await;
+
+    // Somebody else takes the slot while the person reads.
+    let next = fleet
+        .propose(a_proposal("something else entirely"))
+        .await
+        .expect("a second Job");
+    worktree_directory(&home, next.id());
+    fleet.approve(next.id()).await.expect("it dispatches");
+
+    let approved = fleet
+        .approve_review(&job_id)
+        .await
+        .expect("a person takes the work");
+    assert_eq!(
+        approved.status(),
+        JobStatus::Queued,
+        "there is no slot, so it queues rather than failing or evicting"
+    );
+    assert!(
+        fleet
+            .slot()
+            .lock()
+            .await
+            .as_ref()
+            .is_some_and(|at_work| at_work.is(next.id())),
+        "the Job that was running is still the one running"
+    );
+
+    // The slot comes free and the queued Job takes it — on its second step,
+    // not its first, and on the worktree the gate's Drone left behind.
+    fleet.kill_job(next.id()).await.expect("it is killed");
+
+    let resumed = fleet.load(&job_id).await.expect("the Job");
+    assert_eq!(
+        resumed.status(),
+        JobStatus::Running,
+        "the queued Job was re-admitted the moment a slot existed"
+    );
+    assert_eq!(
+        resumed.current_step_id().map(|step| step.as_str()),
+        Some("summarise"),
+        "and it was put back on the step the person approved it onto, not the \
+         first step of its workflow"
+    );
+}
+
+/// **Sending work back across a human gate does not work, and this is the
+/// chosen interval rather than a defect.**
+///
+/// It used to reach the idle Drone standing at the gate. The gate holds none —
+/// a Drone ends when its step's work passes the machine gates, and keeping one
+/// alive for this one path would keep the working slot with it, which is the
+/// whole of what a person's review is not allowed to cost. So the note has
+/// nobody to go to and nowhere to wait until `#207` gives a boundary something
+/// to carry it in.
+///
+/// **The refusal is asserted, not worked around.** A fallback here — a Drone
+/// kept alive, a Job moved anyway, a softer error — is the thing the decision
+/// rules out, so this case exists to fail if one is added.
+#[tokio::test]
+async fn requesting_changes_at_a_gate_refuses_until_the_note_has_somewhere_to_wait() {
     let home = TempDir::new();
     let fleet = a_fleet_reviewing_the_first_step(&home, FakeWorkProduct::changed(&["src/log.rs"]));
     let job_id = at_the_gate(&fleet, &home).await;
     let said = crate::resume::Redirection::saying("the second case is untested")
         .expect("a note with something in it");
+    assert!(
+        fleet.slot().lock().await.is_none(),
+        "nothing had to be ended for this: the gate opened with no Drone"
+    );
 
-    let job = fleet
-        .request_changes(&job_id, &said)
-        .await
-        .expect("the Drone is there to be told");
-    assert_eq!(job.status(), JobStatus::Running);
+    let refused = fleet.request_changes(&job_id, &said).await;
+    assert!(
+        matches!(refused, Err(Adrift::NoDroneToTell { .. })),
+        "there is nobody to tell: {refused:?}"
+    );
+    assert_eq!(
+        fleet
+            .load(&job_id)
+            .await
+            .expect("the Job is there")
+            .status(),
+        JobStatus::AwaitingReview,
+        "and the Job is still at the gate, not running with a lost note"
+    );
     assert_eq!(
         fleet
             .load(&job_id)
@@ -519,13 +683,15 @@ async fn requesting_changes_needs_a_drone_to_tell() {
             .step(&core_model::StepId::new("implement".to_string()))
             .map(|step| step.state()),
         Some(StepState::Running),
-        "the step did not advance — the work is being done again, not accepted"
+        "the step did not move either — a refusal leaves the gate exactly as \
+         the person found it"
     );
 }
 
-/// The Drone gone, and the note with nowhere to go. **Refused at the gate**
-/// rather than half-answered: a Job put back to `running` with no process on it
-/// escalates as interrupted a moment later, having lost what the person wrote.
+/// The same refusal reached the other way round, over a Job whose slot has been
+/// taken by somebody else while a person read. **The gate is not special**: the
+/// note is refused because there is no session, not because of where the Job
+/// stands.
 #[tokio::test]
 async fn changes_asked_for_with_no_drone_leave_the_job_at_the_gate() {
     let home = TempDir::new();

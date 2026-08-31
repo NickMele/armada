@@ -13,21 +13,27 @@
 //! compiles rather than naming APIs that do not exist is
 //! `docs/practices/acceptance-tests.md`.
 //!
-//! **#137 and #139 have landed and every assertion below holds**, so the file
-//! is green before the milestone is: #140 ends a Drone, and nothing here
-//! observes a process. **The pointer is presence and the log is durable** — a
-//! step's `assigned_drone` is null once its Drone has gone, so which Drone
-//! worked which step is the `step_id` on each drone row. **The brief is
-//! assembled here rather than read off a spawn**, because nothing spawns at a
-//! boundary yet; what crosses is the `Crossed` built below.
+//! **All four steps have landed and every assertion below holds**, and the file
+//! was green before the milestone was, because nothing here observes a process.
+//! **The pointer is presence and the log is durable**: a step's
+//! `assigned_drone` is null once its Drone has gone, so which Drone worked
+//! which step is the `step_id` on each drone row. **The brief is assembled here
+//! rather than read off a spawn**: what a real boundary hands to
+//! `fleet::spawning` is the `Crossed` built below, by `fleet::boundary`.
 //!
 //! # What this does not prove
 //!
 //! **Not the loop, and not a process.** Nothing here spawns, opens a repository
 //! or reaches a network, so nothing here observes a `setsid`-detached child
-//! outliving the slot that held it — the assertion #140 says will pass while
-//! being wrong. The boundary is driven the way `bug_job.rs` drives a gate: by
+//! outliving the slot that held it — the assertion #140 said would pass while
+//! being wrong, and it would still pass here over a Drone that is still
+//! running. The boundary is driven the way `bug_job.rs` drives a gate: by
 //! calling what `fleet::dispatch` calls, in the order it calls it.
+//!
+//! **It is asserted, and not here.** `crates/fleet/src/tests/boundary.rs`
+//! starts a real detached child and asks `ps`, with the control beside it. It
+//! stayed out of this file because a hermetic run of a workflow is what this
+//! file is for.
 //!
 //! **Not a redirect that arrived at a boundary reaching the next Drone**, which
 //! is the second rule's one testable consequence. Nothing records a redirect on
@@ -120,8 +126,9 @@ async fn a_drone_belongs_to_the_step_it_was_given() {
     // The exit is recorded before the next spawn, and not because a pointer
     // demands it: a Drone that is still running while its replacement starts is
     // a Drone still spending, and it was started `setsid`-detached so nothing
-    // reaps it by accident. #140 owns the ordering; what is asserted here is
-    // that the record can tell the two apart.
+    // reaps it by accident. `fleet::boundary` owns the ordering — terminate,
+    // drain, record, spawn — and what is asserted here is that the record can
+    // tell the two apart.
     let left = run
         .job
         .drone_exited(&bench.step(0), Actor::Fleet, now(&bench))

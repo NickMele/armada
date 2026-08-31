@@ -511,6 +511,13 @@ where
         if working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
             self.end_the_drone(&mut working).await;
         }
+        // And every step the *record* still names one on, which the slot cannot
+        // answer for: a Fleet that died holding a Drone leaves the pointer set,
+        // and `redispatch` reaches this on a Job whose process this Fleet never
+        // held. Without it a killed Job reads on the Board as one with a Drone
+        // still on it. `drone_left` answers `Ok` for a step holding nothing, so
+        // the ordinary path pays one load.
+        self.every_exit_recorded(job_id).await?;
         let job = self.load(job_id).await?;
         let killed = self.move_job(&job, Target::Killed, Actor::Human).await?;
         self.admit_next(&mut working).await?;

@@ -6,23 +6,22 @@
 //! [`caught_up_onto`](Fleet::caught_up_onto) is the only place a boundary
 //! rebases, and every path that starts, resumes or advances a step reaches it.
 //!
-//! # Three moments, and they are not the same moment
+//! # Two moments, and they used to be three
 //!
-//! At a boundary that is not the last, the Drone is told in the turn it gets
-//! for the next step — it is alive there, and a conflict is work it can do. At
-//! the last step the branch is pushed and opened for review, and there is no
-//! Drone to hand anything to. At a **spawn** the rebase runs before the process
-//! exists and what moved rides the opening brief: see `crate::spawning`.
+//! At a **spawn** the rebase runs before the process exists and what moved
+//! rides the opening brief — `crate::spawning`. At the last step the branch is
+//! pushed and opened for review, with no Drone to hand anything to. The third
+//! was a boundary that is not the last, where the Drone was alive and heard
+//! what moved in the turn it got for the next step; a Drone belongs to a step
+//! now, so every boundary that is not the last is a spawn.
 //!
 //! # A boundary is asked, never the Drone
 //!
-//! The Drone has just submitted and nothing is in flight, so git can answer
-//! every question here on its own. Asking the Drone whether its branch is
-//! behind would be asking it to manage its own state, which
-//! `docs/concepts/drone.md` says outright it cannot be trusted to do. What the
+//! Asking the Drone whether its branch is behind would be asking it to manage
+//! its own state, which `docs/concepts/drone.md` says it cannot be trusted to
+//! do — and it has just submitted, so git can answer on its own. What the
 //! worktree is *holding* is not checked either: the rebase carries uncommitted
-//! work across and puts it back, and where it cannot the branch is. See
-//! `adapters`' delivery module.
+//! work across and puts it back. See `adapters`' delivery module.
 
 use adapter_traits::{
     AgentHarness, Base, BroughtUpToDate, Delivery, Opened, Pushed, Standing, Vcs, WorkProduct,
@@ -34,7 +33,6 @@ use verification::TheBaseMoved;
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::review::review_of;
-use crate::working::Working;
 
 /// What happened to a Job's branch this turn.
 ///
@@ -65,29 +63,6 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// Bring the working Job's branch up to its base at a step boundary.
-    ///
-    /// `None` is a branch that had nothing to catch up to, and it is the
-    /// ordinary answer. A caller turns it straight into the turn it was already
-    /// going to send, so nothing is announced when nothing happened.
-    ///
-    /// **The worktree comes from the slot, which is what makes this the
-    /// live-Drone half.** An empty slot rebases nothing: the three acts that
-    /// call it are advancing a step under a Drone that is standing there, and
-    /// a Drone that has gone is [`put_a_drone_on`](Fleet::put_a_drone_on)'s
-    /// case, where the same rebase runs against a worktree that was found
-    /// rather than held.
-    pub(crate) async fn caught_up(
-        &self,
-        working: &Option<Working>,
-    ) -> Result<Option<TheBaseMoved>, Adrift> {
-        let Some(at_work) = working.as_ref() else {
-            return Ok(None);
-        };
-        let (job_id, _, worktree) = at_work.standing();
-        self.caught_up_onto(&job_id, &worktree).await
-    }
-
     /// Bring this branch up to its base, in the worktree it is checked out in.
     ///
     /// **The one call.** `#150` found two paths that advanced a step without

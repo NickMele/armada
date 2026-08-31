@@ -110,9 +110,16 @@
 //! from a reload and from `get_job`, a Job still in flight is refused rather
 //! than moved — plus the one positive case, the event that tells a watching
 //! client which id to drop.
+//!
+//! `boundary` is the twenty-second, and the only thing here that asks the
+//! operating system what happened to a Drone. Every other boundary test asserts
+//! bookkeeping, and would pass over a `setsid`-detached Drone still running.
+//! Two of its three cases are a pair: gone after it is stood down, still there
+//! after the slot is merely dropped.
 
 mod attachments;
 mod attribution;
+mod boundary;
 mod briefing;
 mod checking;
 mod checks;

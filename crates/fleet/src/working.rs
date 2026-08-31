@@ -32,10 +32,10 @@ use core_model::{DeclaredPaths, DroneId, JobId, RepoPath, StepId, Timestamp};
 use tokio::process::ChildStderr;
 
 use crate::converging::{elapsed, Chain};
-use crate::drone::Started;
+use crate::drone::{Ending, Started};
 use crate::footprint::Publishing;
-use crate::session::DroneSession;
-use crate::transcript::{StepLabel, Taps};
+use crate::session::{DroneSession, LiveSession};
+use crate::transcript::Taps;
 use crate::watch::Watching;
 use verification::NotConverging;
 
@@ -49,27 +49,14 @@ pub(crate) struct Working {
     /// `step`'s `assigned_drone` holds while this slot is full.
     drone: DroneId,
     /// Which step of the frozen workflow the Drone was told to do.
+    ///
+    /// **It never moves**, and there is no method here that would move it. A
+    /// Drone belongs to a step, so a slot that outlived a step boundary would
+    /// be a process working one step under a record naming another — which is
+    /// what the second field beside this one used to hold apart. The boundary
+    /// ends the Drone and builds a new slot instead; see
+    /// [`stood_down`](Working::stood_down).
     step: StepId,
-    /// The step the Drone was **put on**, which [`now_on`](Working::now_on)
-    /// does not move.
-    ///
-    /// **Two fields because today they come apart.** A Drone's exit is recorded
-    /// against the step whose `assigned_drone` names it, and that is where it
-    /// was spawned — while `step` follows the workflow and advances beneath a
-    /// process that is still the same one. Ending a Drone against `step` after
-    /// an advance names a step that holds no pointer, and the departure is then
-    /// a no-op nothing reports.
-    ///
-    /// #140 collapses the distinction by ending the Drone at every boundary, at
-    /// which point the two are always equal. Until it does, this is which of
-    /// them the record means.
-    spawned_on: StepId,
-    /// The same answer as `step`, held where the transcript's sinks can read
-    /// it. **Two places rather than one because the sinks are on the far side
-    /// of the reader task**, and a step moved only here left every row after a
-    /// Job's first advance claiming the first step. [`Working::now_on`] is the
-    /// only writer of either.
-    labelling: StepLabel,
     worktree: Worktree,
     session: DroneSession,
     transcript: Watching,
@@ -193,6 +180,33 @@ struct Awaiting {
     sent_at: Timestamp,
 }
 
+/// A Drone that has been ended, and everything the slot that held it was
+/// holding.
+///
+/// **The slot is gone by the time this exists**, which is what makes it a
+/// value rather than three accessors: [`Working::stood_down`] consumes the
+/// slot, so there is no arrangement of these fields that could be read off a
+/// process still running.
+pub(crate) struct StoodDown {
+    pub(crate) job: JobId,
+    /// The step the Drone was on, which is the step whose `assigned_drone`
+    /// names it.
+    pub(crate) step: StepId,
+    pub(crate) drone: DroneId,
+    /// The worktree the Drone was working in. **It outlives the process**:
+    /// nothing in this workspace removes one, so the next step's Drone is put
+    /// on this same directory and the branch is what carries the work across.
+    pub(crate) worktree: Worktree,
+    /// What the whole run folded to, read after the pipe closed. The last lines
+    /// before an exit are in it because the drain waited for them.
+    pub(crate) ending: Ending,
+    /// What signalling the Drone came to. **An error is not a failure to
+    /// report**: it is a process already gone, or one the operating system
+    /// would not signal, and neither is anything a caller can do more about.
+    /// It is carried so the Job's log can say which.
+    pub(crate) terminated: Result<(), std::io::Error>,
+}
+
 impl Working {
     /// The taps are a constructor argument rather than something switched on
     /// later: a Job is worked with its transcript being written, or the
@@ -210,15 +224,10 @@ impl Working {
     where
         H: AgentHarness + Send + Sync + 'static,
     {
-        // Taken before `each`, which consumes the taps: the label is the one
-        // part of them that outlives the reader task.
-        let labelling = taps.label();
         Working {
             job,
             drone,
-            spawned_on: step.clone(),
             step,
-            labelling,
             worktree,
             session: started.session,
             transcript: Watching::reading(started.transcript, harness, taps.each()),
@@ -241,6 +250,34 @@ impl Working {
         }
     }
 
+    /// End the Drone in this slot, and read the rest of what it said.
+    ///
+    /// **It consumes the slot.** A `Working` whose process has been ended is a
+    /// slot that lies about a Drone — it would still answer `session()`,
+    /// `heard()` and `standing()` — so there is no version of this taking
+    /// `&mut self`. What the caller needs afterwards is [`StoodDown`], and
+    /// recording the exit is the caller's: this type reaches no store.
+    ///
+    /// The order of the three acts is `crate::boundary`'s subject and each of
+    /// them answers a failure the one before it causes. In one line each:
+    /// dropping a slot signals nothing and the child is `setsid`-detached;
+    /// [`Watching`]'s `Drop` aborts the reader over whatever the pipe still
+    /// held; and [`Ending::of`] over a stream still being read is a fold over
+    /// a prefix, missing the terminating event at the end of it.
+    pub(crate) async fn stood_down(mut self) -> StoodDown {
+        let terminated = self.session.terminate().await;
+        self.transcript.drained().await;
+        let ending = Ending::of(&self.transcript.events());
+        StoodDown {
+            job: self.job,
+            step: self.step,
+            drone: self.drone,
+            worktree: self.worktree,
+            ending,
+            terminated,
+        }
+    }
+
     /// Which Job, at which step, in which worktree. The three the gate needs,
     /// cloned together so no borrow of the slot outlives the read.
     pub(crate) fn standing(&self) -> (JobId, StepId, Worktree) {
@@ -255,62 +292,12 @@ impl Working {
     /// — a Drone belongs to a step, so the step is part of naming it — cloned
     /// together so no borrow of the slot outlives the read.
     ///
-    /// **[`spawned_on`](Working::spawned_on) and not `step`**, because the
-    /// pointer the exit clears is on the step the Drone was put on. The two
-    /// differ for exactly as long as one process spans a boundary.
+    /// **One step, not two.** The pointer an exit clears is on the step the
+    /// Drone was put on, and that is the step it is still on: a slot does not
+    /// outlive a boundary, so the step it was spawned on and the step it is
+    /// working cannot come apart.
     pub(crate) fn drone(&self) -> (JobId, StepId, DroneId) {
-        (
-            self.job.clone(),
-            self.spawned_on.clone(),
-            self.drone.clone(),
-        )
-    }
-
-    /// Move to the next step, **and forget the last one's plan**. A
-    /// declaration is about one step; carrying it forward would let step two's
-    /// footprint be measured against step one's promise.
-    ///
-    /// **What is cleared here has to be asked for again**, by the caller that
-    /// moved the step, in the turn the Drone gets for the new one — see
-    /// [`crate::briefing::Declaring`]. A Drone whose plan is cleared and who is
-    /// not asked has no reason to declare, and the gate then fails it for a
-    /// call nobody made.
-    ///
-    /// **The transcript is told here and nowhere else.** Its sinks stamp each
-    /// row with the step as they build it, so a row written after this call
-    /// carries the new step and one already built carries the old — which is
-    /// what the label is for, since a step can advance mid-turn.
-    pub(crate) fn now_on(&mut self, step: StepId, at: Timestamp) {
-        self.labelling.now_on(step.clone());
-        self.step = step;
-        self.declared = None;
-        self.drifted.clear();
-        // Cleared rather than replaced, because reading the worktree needs the
-        // seam and this type holds none. The caller that moved the step reads
-        // the new baseline and hands it back through `entering_with`; until it
-        // does, the step has no baseline and the gate fails closed.
-        self.entered_with = None;
-        self.step_began = at.clone();
-        self.calls_before = self.transcript.progress().calls;
-        self.chain = Chain::Working;
-        // **And the silence clock, which is the step's too.** The gate's Checks
-        // and its Judge calls run inside the turn that advances a step, and a
-        // Drone waiting behind them is quiet because Fleet has not given it
-        // anything to do — so a clock carried across this boundary would charge
-        // the Drone for the time Fleet spent ruling on its last submission.
-        self.listening(at);
-        // A new step is a new pen holder. Keeping the memo would let step two's
-        // first reading match step one's last and publish nothing, leaving a
-        // watcher reading a list attributed to the step before.
-        self.publishing = Publishing::default();
-        // **The dry-run budget is per step, and so is the time it cost.** A run
-        // still in flight across a step boundary is one whose answer is about
-        // the step that just ended; the caller finds the slot on a different
-        // step and leaves the clocks alone, so clearing it here is what stops
-        // the new step starting out suspended.
-        self.checking_since = None;
-        self.checked_for = Duration::ZERO;
-        self.dry_runs = 0;
+        (self.job.clone(), self.step.clone(), self.drone.clone())
     }
 
     /// The step this Drone is on has been resumed by a person.

@@ -99,12 +99,14 @@ where
         // produces, and the person's instruction would be answered by a verdict
         // on work done before they wrote it.
         //
-        // Two statuses reach here and the drop is right for both. Beneath
-        // `escalated` the inner machine is frozen and a second ruling has
-        // nowhere to be written. Beneath `awaiting_review` it is not frozen,
-        // and that is the sharper case: a Job at a human gate is a person's,
-        // and a second submission must not be able to re-rule the step out from
-        // under them.
+        // **One status reaches here now, and it is `escalated`**: the inner
+        // machine is frozen beneath it and a second ruling has nowhere to be
+        // written. `awaiting_review` used to be the sharper case — a Job at a
+        // human gate is a person's, and a second submission must not re-rule
+        // the step out from under them — and it no longer reaches this guard at
+        // all, because the gate holds no Drone and no slot. A submission that
+        // turns up for a gated Job anyway finds nothing in the slot and is
+        // dropped by `stranded`, which escalates only a `running` Job.
         //
         // Unchanged, and recorded. The person holding the gate is entitled to
         // know a Drone submitted again and was not answered.
