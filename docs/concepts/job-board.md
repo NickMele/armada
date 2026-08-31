@@ -105,13 +105,13 @@ Every Job shows a visible tag for where it came from.
 
 | Origin | Source |
 | --- | --- |
-| Auto-detected | Failure or issue report surfaced the Job automatically |
-| Manual | You created it directly |
-| Helm-drafted | Proposed by a Helm session |
+| Found by Fleet | Failure or issue report surfaced the Job automatically |
+| Dispatched by you | You created it directly |
+| Drafted in Helm | Proposed by a Helm session |
 | Workflow-triggered | Created by a finished Job's `on_complete` |
 | Sub-dispatched | Spawned by a step of another Job, carrying `dispatched_by` |
 
-A [Helm](helm.md)-drafted Job still requires your explicit approval, like any other Job dispatch.
+A Job drafted in Helm still requires your explicit approval, like any other Job dispatch — see [Helm](helm.md).
 
 ### A Workflow-triggered Job takes the ordinary gate
 
@@ -138,7 +138,25 @@ parent Job there rather than only its origin.
 
 ### Stored value and rendered label
 
-The `snake_case` form (`auto_detected`, `manual`, `helm_drafted`, `sub_dispatched`, `workflow_triggered`) is the stored value defined by [Job](job.md); the Title Case form above is the rendered label.
+The `snake_case` form is the stored value, defined with the rest of the Job
+schema in `crates/core-model/domain/job-fields.toml` — [Job](job.md) carries no
+origin field of its own. The label above is what a row renders.
+
+| Stored | Rendered |
+| --- | --- |
+| `auto_detected` | Found by Fleet |
+| `manual` | Dispatched by you |
+| `helm_drafted` | Drafted in Helm |
+| `workflow_triggered` | Workflow-triggered |
+| `sub_dispatched` | Sub-dispatched by `<parent job id>` |
+
+**Three of the five read as sentences rather than labels**, settled on the
+drawing and amended 2026-08-21 — see [Monitor active
+work](../journeys/4-monitor-active-work.md). *Auto-detected*, *Manual* and
+*Helm-drafted* were settings vocabulary naming modes the lexicon does not have;
+*Found by Fleet*, *Dispatched by you* and *Drafted in Helm* say who acted. The
+other two already named an act and are unchanged. Origin renders as plain sans
+in `--fg-muted` and never as a chip, because a chip is a status.
 
 ### A Convoy's row names its first write target
 

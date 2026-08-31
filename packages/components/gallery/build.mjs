@@ -36,9 +36,15 @@ mkdirSync(join(here, "dist"), { recursive: true });
    them. Primitives alone was the original list, written when primitives were
    the only tree; every composition rendered here unstyled and the gallery said
    nothing about it. A screen is an arrangement of compositions, so the same
-   omission would have made every screen unreadable. */
+   omission would have made every screen unreadable.
+
+   `errors` joined on the same terms and was omitted the same way. A tree left
+   off this list does not fail the build — it renders unstyled and the gallery
+   says nothing — which is why the list is stated beside the reason rather than
+   derived: the next tree has to be added here by hand, and the omission is
+   silent when it is not. */
 const css = [readFileSync(join(root, "../tokens/tokens.css"), "utf8")];
-for (const tree of ["primitives", "compositions"]) {
+for (const tree of ["primitives", "compositions", "errors"]) {
   for (const dir of readdirSync(join(root, "src", tree))) {
     const f = join(root, "src", tree, dir, `${dir}.css`);
     try { css.push(readFileSync(f, "utf8")); } catch {}

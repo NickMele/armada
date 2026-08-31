@@ -125,7 +125,6 @@
   --spacing-menu: var(--w-menu);
   --spacing-tooltip: var(--w-tooltip);
   --spacing-toast: var(--w-toast);
-  --color-edge-active: var(--edge-active);
   --spacing-dot: var(--dot);
   --ease-base: var(--ease);
   --color-surface-canvas: var(--surface-canvas);
@@ -161,6 +160,7 @@
    --z-modal — a stacking order, not a scale value
    --z-toast — a stacking order, not a scale value
    --z-palette — a stacking order, not a scale value
+   --edge-active — a border width read beside --edge-* colours
    --error-edge — a fault's edge width, read beside --error
    --degraded-edge — a degraded edge's width, read beside --degraded
    --duration-fast — v4 has no --duration-* namespace; read it in CSS
