@@ -48,7 +48,7 @@ Model selection and budget, which are per-step configuration.
 
 | Prompt | Assembled by | Fires when | Wording |
 | --- | --- | --- | --- |
-| **Drone** | `fleet` | At spawn, post-approval, re-assembled at every step boundary | Specified — section 5 |
+| **Drone** | `fleet` | At spawn, which is once per workflow step | Specified — section 5 |
 | **Helm** | `fleet` | Per session | Not specified |
 | **Judge** | `verification` | Per criterion, after a mechanical check passed | Not specified |
 | **Job-shape classifier** | `fleet` | At Job creation | Not specified |
@@ -176,9 +176,10 @@ and Sub agent definitions**, all of which are **Kit**. Layer 2 is
 therefore not one concept's layer, which the layer table below still
 implies. Both readings are recorded; neither is picked here.
 
-**Voice is frozen at spawn** for a Drone, alongside Skills, MCP, Agent
+**Voice is frozen for the Job** for a Drone, alongside Skills, MCP, Agent
 files, Sub agents and Commands — changing the setting mid-Job changes
-nothing for a running Drone.
+nothing for any Drone that Job spawns, not merely for the one running when
+the setting changed.
 
 **Settled: Voice cannot widen or narrow the agent-copy lint, in either
 direction.** The lint is fixed. They govern different things — Voice sets
@@ -201,11 +202,23 @@ This no longer blocks Phase 4 step 6.
 # 3. Layers
 
 **Revised Aug 2026** after adversarial review. A Drone's prompt is
-assembled from six sources, and **freeze time orders them.** Not
-preference — a mechanical constraint that already exists on Drone:
-injected MCP servers cannot be swapped and the system prompt cannot be
-rewritten mid-session without a kill and respawn. A block that cannot be
-rewritten mid-session must precede the block that is rewritten every step.
+assembled from six sources, and **freeze time orders them.**
+
+That ordering was derived from a mechanical constraint: injected MCP
+servers cannot be swapped and the system prompt cannot be rewritten
+mid-session without a kill and respawn, so a block that could not be
+rewritten mid-session had to precede the block that was rewritten every
+step. **The derivation is withdrawn and the ordering is not.** A Drone
+belongs to a workflow step and every step is a kill and respawn, so all
+six layers are assembled fresh at every boundary and none of them is
+constrained by another's freeze time.
+
+What holds the order up instead is that it is the one a reader can
+predict: earliest-frozen first, so reading down a prompt reads outward
+from what nothing can change to what changes every step. That is a
+convention, said plainly as one. **Do not reorder the layers** — the
+ordering was right for a reason that stopped applying, which is not the
+same as being wrong.
 
 | # | Layer | Source | Freezes at | Contains |
 | --- | --- | --- | --- | --- |
@@ -214,14 +227,20 @@ rewritten mid-session must precede the block that is rewritten every step.
 | 3 | **Manifest** | `armada.yml` | Spawn | Project conventions, repo-specific Skills, project Sub agents, the exemplar corpus (resolved here, injected at layer 6 — see section 6) |
 | 4 | **WorkflowDef** | The Job's type | Spawn | What this kind of work means and what finishing it looks like |
 | 5 | **Task** | The Job | **Job creation** — earlier than spawn | The request, plus `acceptance_criteria[]` with each entry's source (`ticket` / `helm_drafted` / `human`) |
-| 6 | **Step** | Current workflow step | **Never** — re-assembled at each step boundary | The step's criteria, the Evidence Scope **policy**, the exemplar corpus on steps that write prose |
+| 6 | **Step** | Current workflow step | **Never** — re-assembled at each step boundary, like every layer above it | The step's criteria, the Evidence Scope **policy**, the exemplar corpus on steps that write prose |
 
 **Task moved from last to fifth, Aug 2026.** It freezes at Job creation,
 earlier than everything above it, and sat last. Under one ordering
-principle it belongs ahead of the only re-assembled layer. Two
-consequences: the frozen block is now contiguous, and layer 6 is the only
+principle it belongs ahead of the layer that changes most often. One
+consequence survives: the block a reader can rely on is contiguous and
+comes first.
+
+The second consequence stated then does not survive. Layer 6 was "the only
 thing re-emitted at a step boundary — which is the cheapest place for
-re-assembly to sit.
+re-assembly to sit", and **all six re-emit now**, so re-assembly is not
+sitting anywhere cheap. What that costs is a prompt assembled per step
+rather than per Job, which is arithmetic on a string and is not the
+expensive part of a spawn.
 
 The alternative was to declare prompt order to be recency rather than
 freeze time. Rejected: a second organising principle means nothing
@@ -266,18 +285,29 @@ is measured against.
 The Drone spawn rule already distinguishes these. Stated here in prompt
 terms.
 
+**Frozen means frozen for the Job, and the snapshot is taken at Job
+creation.** Every step of a Job spawns its own Drone, so "frozen at spawn"
+would mean re-resolved at every boundary — which would let a Drone weaken
+its own yardstick between steps. Fleet snapshots what a Drone works under
+when the Job is created and hands the same snapshot to every step's Drone.
+See `../concepts/drone.md`.
+
 | Layer | State |
 | --- | --- |
 | 1 Baseline | **Frozen at build.** Compiled in, unreachable from config |
-| 2 Kit, 3 Manifest, 4 WorkflowDef | **Frozen at spawn.** Editing the Kit file mid-Job changes nothing for a running Drone |
+| 2 Kit, 3 Manifest, 4 WorkflowDef | **Frozen at Job creation.** Editing the Kit file mid-Job changes nothing for any Drone of that Job, including the ones it has not spawned yet |
 | 5 Task | **Frozen at Job creation** — `acceptance_criteria[]` especially, or the Judge grades against a list something invented later |
-| 6 Step | Re-assembled at each step boundary. The only layer that is |
+| 6 Step | Its content changes at each step boundary, because the step does. Its *sources* are frozen with the rest |
 | Allowlist, budget, freeze | **Live** — re-read at every gated checkpoint. Not prompt content; enforcement |
 
-**A scope revision is a respawn, not an edit.** Fleet terminates the
-Drone, re-resolves configuration against the new Manifest set, and spawns
-a fresh one. **There is no path that mutates a running Drone's system
-prompt** — layers 1 to 5 are fixed for the process lifetime.
+**A scope revision is a respawn, not an edit** — and it is the only
+respawn that re-resolves anything. A step boundary is a respawn too, and
+it re-assembles the same six layers from the same snapshot. On a scope
+revision Fleet terminates the Drone, re-resolves configuration against the
+new Manifest set, and spawns a fresh one, because a person approved the
+new set. **There is no path that mutates a running Drone's system prompt**
+— layers 1 to 6 are fixed for the process lifetime, and a process now
+lasts one step.
 
 ---
 
@@ -888,7 +918,7 @@ with the method recorded alongside it.
 | Any invocation | Secrets, **at assembly**. `Secret<T>` has no `Debug`, `Display` or `Serialize`, so a prompt Armada builds containing one does not compile | Type system — but only for text Armada assembles. A credential sitting in a repository file is a plain String in the Drone's context and the type system is not involved. The three-sink `Redactor` and worktree confinement cover what it cannot reach. **Neither is a guarantee that a Drone's context is secret-free** |
 | The Judge | The Drone's transcript or self-report — constitutional rule 2 | `verification` assembles the prompt; the Drone never touches it |
 | A Judge in a panel | The other judges' verdicts — rule 5. Independence is what makes unanimity mean anything | Dispatch |
-| A Drone | Another Job's context, evidence or transcript | One worktree per Drone; Fleet assembles per Job |
+| A Drone | Another Job's context, evidence or transcript | One worktree per **Job**, which every Drone of that Job and no other shares; Fleet assembles per step, from that Job's record |
 | Helm | Anything outside the selected Manifest | Fleet MCP scoping |
 | A Drone | The operator's own MCP servers. v1 spawned without `--strict-mcp-config` and got 103 tools | `DroneSpawnConfig`, non-optional |
 
@@ -923,7 +953,7 @@ below.
 
 | Gap | Section |
 | --- | --- |
-| **Tool documentation.** How a Drone is shown its Commands and MCP tools, and with what descriptions. Commands, MCP and Sub agents are frozen at spawn and this contract names no wording for any of them. Tracked separately | 2, 3 |
+| **Tool documentation.** How a Drone is shown its Commands and MCP tools, and with what descriptions. Commands, MCP and Sub agents are frozen for the Job and this contract names no wording for any of them. Tracked separately | 2, 3 |
 | **No token budget** for the assembled prompt. Six layers plus a corpus, unbounded | 3 |
 | **Wording for the injected turns.** Every turn Fleet authors is drafted rather than sanctioned, save the refusal reprompt | 4a |
 | **The `Commit/PR message template` collision.** A Manifest template is layer-3 prompt content and it is a shape rule. Section 5 forbids shape rules in the baseline and says nothing about layers 2 to 6. Precedence against the copy lint is undecided | 3, 5 |

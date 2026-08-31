@@ -57,17 +57,21 @@ What that gives up is a payload the vocabulary has no variant for: `Unrecognised
 | **What it contains** | One row per `DroneEvent`, in the order the Drone emitted them, each with the instant Fleet saw it and the step that was running then. Never the wire shape |
 | **Who writes it** | Fleet, and nothing else. It is opened before the Drone is spawned, so a disk that will not hold the record escalates the Job instead of losing a transcript quietly |
 | **What reads it** | Observe's backfill, and Debug's turn history. Nothing decodes it — the rows are already the vocabulary |
-| **What names it** | A line in the Job's log carrying `job_id`, `drone_id`, `step_id` and the path in `fields`. **The only record of the path**: `assigned_drone` on the Job record names the Drone while it is running, and is null again once it has exited |
+| **What names it** | A line in the Job's log carrying `job_id`, `drone_id`, `step_id` and the path in `fields`. **The only record of the path**: `assigned_drone` on the Job record names the Drone while it is running, and is null again once it has exited — which is now at every step boundary, so a Job of four steps has four transcripts and that pointer can name at most one of them |
 
 **Fleet going away does not corrupt it.** Each row is flushed as it is written, so what was taken is on disk; the writer goes with Fleet, and Fleet never puts a Drone back onto a Job it did not spawn. A closing line in the Job log says how many rows the file holds.
 
 ### The step a row was written under
 
-**Every row carries the step that was running when Fleet saw the line.** Why: one Drone works a Job's steps in turn, so a step read at the moment a row is read back is the wrong answer for every row but the last, and a step copied in when the Drone was spawned is the wrong answer for every row but the first — which is what shipped, and it made a four-step Job's transcript read as though all of it happened during the first step.
+**Every row carries the step that was running when Fleet saw the line.** The reason has changed and the rule has not.
+
+It used to be forced: one Drone worked a Job's steps in turn, so a step read at the moment a row is read back was the wrong answer for every row but the last, and a step copied in when the Drone was spawned was the wrong answer for every row but the first — which is what shipped, and it made a four-step Job's transcript read as though all of it happened during the first step.
+
+**A Drone belongs to a workflow step** ([Drone](drone.md)), so a transcript file no longer spans steps and copying the step in at spawn would now be right for every row. The label stays anyway, for two reasons that are about reading rather than about correctness: a row is self-describing, so nothing has to join it to the line that named the file to know where it came from; and the alternative is a fact stored once per file that every reader has to carry, which is the shape that produced the defect above.
 
 **It is a label on a row and never a range.** A step can be run more than once, so the same id may appear, stop appearing, and appear again; nothing may read a transcript as one contiguous span per step.
 
-**The record is told when the step moves rather than asked when a row is written.** Why: the row is built by the loop pumping the Drone's output, and a lookup back into Fleet on every line is a different design with a different cost. What moves the step in the slot moves it in the record, in one call.
+**The record is told the step rather than asked for it when a row is written.** Why: the row is built by the loop pumping the Drone's output, and a lookup back into Fleet on every line is a different design with a different cost. It is told once, when the Drone is put on its step — there is no move to record within one Drone's life, because the Drone ends when the step does.
 
 **A step that advances mid-turn labels what arrives after it.** The row belongs to the moment Fleet saw it, so the turn that was in flight stays with the step it was in flight under and the answer that comes back belongs to the new one.
 
@@ -117,7 +121,7 @@ What that gives up is a payload the vocabulary has no variant for: `Unrecognised
 
 **`Ended`'s cost and turn count were withheld here, because the Job's rail was said to state them.** It states a step's state and how long the step took, and no other row and no other shape on the wire carries a spend at all — so the one irreversible thing about a Drone was reachable from nowhere, and a Job that burned a dollar over forty turns read exactly like one that gave up in four. The row is shown.
 
-**A row is one Drone's run and never a Job's total.** A retry is a second Drone under one Job, so a Job that retried has a row apiece; what a Job cost is the sum, and where that sum is drawn — a scanned Board, or a finished Job's outcome — is the surface's question rather than this one's.
+**A row is one Drone's run and never a Job's total.** A Job has a Drone per step and a retry adds another, so an ordinary four-step Job has four rows before anything goes wrong; what a Job cost is the sum, and where that sum is drawn — a scanned Board, or a finished Job's outcome — is the surface's question rather than this one's.
 
 ## Observing is not a Job state
 

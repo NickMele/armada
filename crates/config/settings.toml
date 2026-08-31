@@ -12,6 +12,12 @@
 #
 # The rules these obey — the tiering test, how Kit and Manifest merge, what
 # peer polarity is for — are in docs/contracts/configuration.md.
+#
+# `lifetime = "Frozen for the Job"` was `"Frozen at spawn"` until Focus. A Drone
+# belongs to a workflow step, so a Job spawns one per step and "at spawn" would
+# mean re-resolved at every boundary — which is the thing the snapshot rule
+# forbids, because a step boundary has no person in it. The snapshot is taken
+# once, at Job creation, and every Drone of that Job boots from it.
 
 
 [settings.cpu-mem-headroom-threshold-for-spawning]
@@ -69,7 +75,9 @@ peer_polarity = "n/a — single layer"
 owner = "Fleet"
 read_by = "fleet, verification"
 notes = """
-Work-machine billing mode. Documented on Machine; enforced by Fleet at every gated checkpoint, which is why the owner is Fleet. The row previously recorded a collision: a Manifest could select an expensive model against a cap the tiering rule forbade it to raise, so every Job of that type halted mid-worktree and the fix was illegal. Aug 22 2026: the collision dissolves rather than reverses. The direction rule was withdrawn, so raising the cap is legal and the fix is available. Note this row and Manifest budget cap are two independent caps with no stated precedence, which is separately open — and budget is the one place the Kit/Machine test gives an unclear answer, since a Manifest cap demonstrably parses at project level.
+Work-machine billing mode. Documented on Machine; enforced by Fleet at every gated checkpoint, which is why the owner is Fleet.
+
+**The slash in the name used to join two spellings of one span and now joins two different ones.** A Drone belonged to a Job, so per Job and per Drone were the same cap counted twice. A Drone belongs to a workflow step, so a four-step Job has four Drones and the two readings differ by a factor of the step count. Which one this cap counts is undecided — `[budget-cap-per-job-or-per-drone]` in `docs/contracts/configuration.md`. The row previously recorded a collision: a Manifest could select an expensive model against a cap the tiering rule forbade it to raise, so every Job of that type halted mid-worktree and the fix was illegal. Aug 22 2026: the collision dissolves rather than reverses. The direction rule was withdrawn, so raising the cap is legal and the fix is available. Note this row and Manifest budget cap are two independent caps with no stated precedence, which is separately open — and budget is the one place the Kit/Machine test gives an unclear answer, since a Manifest cap demonstrably parses at project level.
 """
 
 [settings.budget-quota-floor-for-interactive-use]
@@ -111,7 +119,7 @@ Daemon/connectivity behaviour. Distinct from Fleet self-restart (crash recovery)
 [settings.voice-tone]
 name = "Voice/tone"
 scope = "Machine"
-lifetime = "Frozen at spawn"
+lifetime = "Frozen for the Job"
 merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Kit"
@@ -243,7 +251,7 @@ notes = "Cosmetic, teams customize."
 [settings.workflow-type-registry-requires-worktree-requires-checks-ref-source]
 name = "Workflow-type registry (requires_worktree, requires_checks, ref_source)"
 scope = "Kit → Manifest"
-lifetime = "Frozen at spawn"
+lifetime = "Frozen for the Job"
 merge_strategy = "APPEND_AND_REMOVE"
 peer_polarity = "Union (deny-shaped)"
 owner = "Workflow"
@@ -266,7 +274,7 @@ notes = "Explicit in brief, per-project."
 [settings.default-model-per-job-type]
 name = "Default model per Job type"
 scope = "Manifest only"
-lifetime = "Frozen at spawn"
+lifetime = "Frozen for the Job"
 merge_strategy = "n/a — single layer"
 peer_polarity = "Member of the Kit set"
 owner = "Manifest"
@@ -278,7 +286,7 @@ Feeds spike #3 (model-selection resolution). The one Manifest-only row still rel
 [settings.model-selection-heuristic-parameters]
 name = "Model-selection heuristic parameters"
 scope = "Manifest only"
-lifetime = "Frozen at spawn"
+lifetime = "Frozen for the Job"
 merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Manifest"
@@ -288,7 +296,7 @@ notes = "Only relevant if spike #3 lands as Fleet auto-selects."
 [settings.commit-pr-message-template]
 name = "Commit/PR message template"
 scope = "Manifest only"
-lifetime = "Frozen at spawn"
+lifetime = "Frozen for the Job"
 merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Manifest"
@@ -300,7 +308,7 @@ Project-specific convention. Open collision: a project template could mandate a 
 [settings.secrets-exposure-method-env-var-vs-file-injection-naming]
 name = "Secrets exposure method (env var vs file injection, naming)"
 scope = "Manifest only"
-lifetime = "Frozen at spawn"
+lifetime = "Frozen for the Job"
 merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Fleet"
@@ -312,7 +320,7 @@ Documented on Drone; owned by Fleet, because Fleet performs the injection and a 
 [settings.manifest-checks-init-commands-named-checks]
 name = "Manifest Checks (init commands + named checks)"
 scope = "Manifest only"
-lifetime = "Frozen at spawn"
+lifetime = "Frozen for the Job"
 merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Manifest"
@@ -324,7 +332,7 @@ Ported from the v1 prototype — this subsystem worked well and gates workflow a
 [settings.manifest-commands-registry]
 name = "Manifest Commands registry"
 scope = "Manifest only"
-lifetime = "Frozen at spawn"
+lifetime = "Frozen for the Job"
 merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Manifest"
@@ -342,7 +350,7 @@ peer_polarity = "n/a — single layer"
 owner = "Fleet"
 read_by = "fleet"
 notes = """
-Independent cap, not a sub-allocation of the Machine-level budget. Two independent caps with no stated precedence — see Budget: $ cost cap per Job/Drone. Owned by Fleet because Fleet is what stops the Job. Manifest's own page says this fully overrides the Machine-level cap, not additive and not a ceiling, which was recorded as a direction-rule inversion; the direction rule was withdrawn Aug 22 2026 so the full override is simply legal, and it was always the more recent and more specific statement. What stays open is narrower: precedence, and whether this row and the Machine cap are really one two-tier setting. Budget is the one place the Kit/Machine test gives an unclear answer, since this row proves a project-level version parses.
+Independent cap, not a sub-allocation of the Machine-level budget. Two independent caps with no stated precedence — see Budget: $ cost cap per Job/Drone, which also carries what a Drone per step does to the counting scope. Owned by Fleet because Fleet is what stops the Job. Manifest's own page says this fully overrides the Machine-level cap, not additive and not a ceiling, which was recorded as a direction-rule inversion; the direction rule was withdrawn Aug 22 2026 so the full override is simply legal, and it was always the more recent and more specific statement. What stays open is narrower: precedence, and whether this row and the Machine cap are really one two-tier setting. Budget is the one place the Kit/Machine test gives an unclear answer, since this row proves a project-level version parses.
 """
 
 [settings.manifest-dispatch-freeze]
@@ -437,7 +445,7 @@ Job Board is per-Manifest scoped; this defines what you land on when the app fir
 [settings.kit-level-allowed-default-models-list]
 name = "Kit-level allowed/default models list"
 scope = "Kit only"
-lifetime = "Frozen at spawn"
+lifetime = "Frozen for the Job"
 merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Kit"
@@ -593,7 +601,7 @@ Fleet's own operational events — startup, crashes, restart attempts, reconnect
 name = "Judge model"
 scope = "Kit → Manifest"
 default = "haiku"
-lifetime = "Frozen at spawn"
+lifetime = "Frozen for the Job"
 merge_strategy = "REPLACE"
 peer_polarity = "Member of the Kit set"
 owner = "Judge"
@@ -629,7 +637,7 @@ Added with the Job proposer. Its own row rather than a second reading of judge-m
 name = "Judge confidence threshold"
 scope = "Kit → Manifest"
 default = "n/a — superseded"
-lifetime = "Frozen at spawn"
+lifetime = "Frozen for the Job"
 merge_strategy = "REPLACE"
 peer_polarity = "Higher is stricter"
 owner = "Judge"
@@ -663,7 +671,7 @@ Judge is also not where verification's spend risk concentrates. Cost is not the 
 name = "Judge trigger set (which mechanical results fire a Judge Check)"
 scope = "Kit → Manifest"
 default = "mechanical triggers only"
-lifetime = "Frozen at spawn"
+lifetime = "Frozen for the Job"
 merge_strategy = "APPEND"
 peer_polarity = "Union (deny-shaped)"
 owner = "Judge"
@@ -753,7 +761,7 @@ Added by the Aug 2026 config review. Fleet-level worktree/branch/PR orchestratio
 [settings.manifest-secrets-section-which-secrets-and-providers-are-available]
 name = "Manifest Secrets section (which secrets and providers are available)"
 scope = "Manifest only"
-lifetime = "Frozen at spawn"
+lifetime = "Frozen for the Job"
 merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Manifest"
@@ -790,7 +798,7 @@ Added by the Aug 2026 config review. Fleet hosts the Evidence MCP server; what i
 name = "Verification max_context_size"
 scope = "Kit → Manifest"
 default = "undecided"
-lifetime = "Frozen at spawn"
+lifetime = "Frozen for the Job"
 merge_strategy = "REPLACE"
 peer_polarity = "Lower is stricter"
 read_by = "verification"

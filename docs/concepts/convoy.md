@@ -1,6 +1,6 @@
 # Convoy
 
-**What it is:** Atomic multi-workspace Job shape — one Job, one Drone, one worktree spanning declared Workspaces, landing as one PR.
+**What it is:** Atomic multi-workspace Job shape — one Job, one worktree spanning declared Workspaces, landing as one PR.
 
 ---
 
@@ -110,11 +110,11 @@ Allowlist, secrets, **MCP and Sub agents** all resolve most-restrictive-wins (in
 
 **Skills and the Agent file union.** They are instructions, not permissions, so they grant no authority for the direction rule to protect, and intersecting them would be near-vacuous since Skills are repo-specific, leaving a Convoy Drone *less* capable than one working either Workspace alone.
 
-**A Convoy Drone is spawnable because of these rules.** Four of the six items frozen at spawn had no rule governing them until this.
+**A Convoy Drone is spawnable because of these rules.** Four of the six items frozen for the Job had no rule governing them until this.
 
 ### One worktree, or one per Workspace with a coordinating layer
 
-**One worktree spanning every declared Workspace** — forced by the Drone model, not chosen. A Drone is 1:1 with a Job and has one worktree on one branch; one worktree per Workspace means either multiple Drones or one Drone straddling branches, and neither can produce a single commit.
+**One worktree spanning every declared Workspace** — forced by the Drone model, not chosen. A Job has one worktree on one branch, and every Drone it spawns works that one; one worktree per Workspace means either several Drones at once or one Drone straddling branches, and neither can produce a single commit.
 
 ### Approval as one gate, or per Workspace with a final join
 

@@ -422,7 +422,9 @@ description = "Structured instruction to a running Drone"
 notes = """
 Intervention Ladder rung 1. The one command Helm gets directly.
 
-**It needs a Drone that is there.** An escalated Job keeps its Drone alive and idle, and the instruction is a turn injected into that session — so what is kept is the session, the worktree and every step so far. Where the Drone is gone the answer is `restart_step`, and this refuses rather than respawning: a redirect that spawned would be a restart that lost the session for nothing. Which of the two applies is decided by the Drone rather than by the person, so a surface that offers both regardless is offering one that will fail.
+**What is kept is the worktree and every step so far.** A Drone belongs to a workflow step, so whether there is a session to speak to depends on where the Job stands. Mid-step there is one and the instruction is a turn injected into it, and the session is kept too. At a step boundary there is none: the instruction waits and opens the next step's Drone in its brief. **It never respawns to deliver itself** — a redirect that spawned would be a restart that lost the session for nothing, and it is `restart_step` that puts a second Drone on a step that stopped.
+
+**Which act applies is decided by where the Job stands, not by whether a process exists** — `docs/concepts/job.md` has the table. Keying a surface on liveness instead would offer `restart_step` at every ordinary step boundary, because a Drone's absence stopped being evidence that anything went wrong.
 
 The body carries the person's own words. It is the one string in the workspace that reaches a Drone without Fleet assembling it, and the Agent Prompt Contract gives the turn no wording of its own for that reason. Blank is refused.
 
@@ -457,9 +459,11 @@ transport = "HTTP"
 helm_access = "No"
 description = "Design Plan feedback loop"
 notes = """
-The third answer at a human gate, between taking the work and ending the Job. The Job goes back to `running` at the same step and the note is a turn injected into the session that was waiting — so the Drone, the worktree and every step so far survive, which is what separates this from a redispatch.
+The third answer at a human gate, between taking the work and ending the Job. The Job goes back to `running` at the same step and the note reaches the work that was waiting — so the worktree and every step so far survive, which is what separates this from a redispatch.
 
-**It needs the Drone that is there**, and refuses with a 409 where it is gone, for the reason `redirect_drone` does: there is nobody to tell, and a Job put back to `running` with no process on it is a Job that will escalate as `interrupted` a moment later having lost the note. A Drone that dies at the gate escalates on its own, and `restart_step` is the act from there.
+**It needs the Drone that is there**, and refuses with a 409 where it is gone: there is nobody to tell, and a Job put back to `running` with no process on it is a Job that will escalate as `interrupted` a moment later having lost the note. A Drone that dies at the gate escalates on its own, and `restart_step` is the act from there.
+
+**Whether there is a Drone at a human advance gate at all is open** — `[drone-at-a-human-advance-gate]` in `docs/concepts/drone.md`. A Drone belongs to a workflow step, and a step at `awaiting_review` has submitted and passed its machine gates without advancing, so whether its Drone was ended when the work finished or is held for the length of the wait is undecided. If it is ended, this act stops being a turn into a session and becomes what `redirect_drone` is at a boundary: words that open the next brief. The 409 above is written for the answer the code gives today and is the first thing that question changes.
 
 The body carries the person's own words and is a type of its own rather than a redirect's — a redirect steers a Drone whose step stopped, and this answers a gate the Drone is waiting at. Blank is refused.
 """
@@ -474,7 +478,9 @@ The second of the four acts that reach an escalated Job — `docs/concepts/job.m
 
 **Not a redispatch.** A redispatch mints a replacement Job and re-runs every step from the approval gate. This resumes the one step, on the branch the earlier steps' work is already on. Where the worktree has been reclaimed there is nothing to resume onto, and it refuses and says the act being asked for is a redispatch.
 
-**Not a redirect.** The toolset, the model and the environment are resolved again from scratch: permissions intersect on a respawn, so a widened scope can only produce a narrower toolset than the Drone that asked for it. A restart mints a second `drone_id` under one `job_id`, which the log envelope already anticipates.
+**Not a redirect.** A redirect keeps the work moving on what it already has; this ends an attempt and opens another. A restart mints a further `drone_id` under one `job_id`, which the log envelope already anticipates — and so does every step boundary, so the second id is no longer what tells a restart from an ordinary advance.
+
+**It resolves nothing again.** The toolset, the model and the environment come from the snapshot taken when the Job was created, and a restart reads that same snapshot — `docs/concepts/drone.md` has the rule and why it is a rule. A scope revision is the one act that re-resolves, because a person approved the new Manifest set; permissions intersect there, so a widened scope can only produce a narrower toolset than the Drone that asked for it.
 
 Helm does not reach it directly, because Helm access on a command is the ladder rung and this has none.
 """

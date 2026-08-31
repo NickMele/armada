@@ -125,19 +125,21 @@ The remedy needs no new state: `depends_on` already sequences Jobs and already p
 
 **Nothing is created and nothing is discarded.** A rebase is not a new worktree: `Vcs` has no removal at all, a Job's earlier steps' work lives on the worktree it is on, and a restart exists precisely so that work survives. "Bring the branch up to date" and "keep the worktree" are the same sentence, not two competing ones.
 
-**Every moment that starts, resumes or advances a step catches up first.** There are six and they divide by whether a Drone is there to be told:
+**Every moment that starts, resumes or advances a step catches up first.** There are seven, and **six of them are a spawn**:
 
 | | who is told, and how |
 |---|---|
-| A mechanical step boundary | the live Drone, in the turn carrying the verdict |
-| A boundary a person approved | the live Drone, in the turn carrying the acceptance |
-| A boundary a person overruled | the live Drone, in the same turn |
+| A mechanical step boundary | the Drone being spawned for the next step, in its opening brief |
+| A boundary a person approved | the same |
+| A boundary a person overruled | the same |
 | A first dispatch | the Drone being spawned, in its opening brief |
 | A restart of a stopped step | the Drone being spawned, in its opening brief |
-| An override where the Drone has gone | the Drone being spawned, in its opening brief |
+| An override where the step's Drone has gone | the Drone being spawned, in its opening brief |
 | A finished Job | nobody — the branch is caught up, and a conflicted one is not pushed and gets no pull request |
 
-**Where a spawn is what happens, the conflict is the new Drone's opening work.** There is no session to inject a turn into at the moment the rebase runs, so it rides the brief. Refusing the act instead would put a person at a merge conflict inside a Drone's worktree, which is the one job the Drone is already in the right place to do.
+**This table used to divide by whether a Drone was there to be told**, and the first three rows read "the live Drone, in the turn carrying the verdict". A Drone belongs to a workflow step ([Drone](drone.md)), so a step boundary ends one and starts another — there is no live session at a boundary and nothing to inject a turn into. The division collapsed, and what is left is one shape: **everything but a finished Job rides an opening brief.**
+
+**The conflict is therefore always the new Drone's opening work.** Refusing the act instead would put a person at a merge conflict inside a Drone's worktree, which is the one job the Drone is already in the right place to do.
 
 **The step's baseline is read after the rebase, never before.** A rebase writes content: a clean one replays the branch onto a base that itself moved, and a conflicted one leaves markers in the files it could not merge. A baseline taken before it credits the step with git's output, and a Drone that resolved nothing then passes `diff_nonempty` on what it was handed.
 
