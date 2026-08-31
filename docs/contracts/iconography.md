@@ -511,16 +511,16 @@ System](design-system.md) on 20 Aug 2026.
 
 ## Open questions
 
-- **[doctor-warn-glyph]** Does Doctor's `warn` row draw `triangle-alert`, or
-  does the grid stay wordless with the glyph merely reserved to it?
-  What decides it: the wordless grid rested on three arguments — the glyphs
-  were already taken, a column of words scans in one movement, and a word
-  survives greyscale. The first does not apply to `triangle-alert`, which no
-  other surface owns. The second and third still do, and a grid where one row
-  of three carries a mark is the inconsistency the rule was avoiding. So the
-  live choice is a glyph on every row or none, not a glyph on `warn` alone —
-  and `pass` and `fail` have no glyph available, because the Judge holds
-  `circle-check` and `circle-x`.
+Nothing Doctor-shaped. `[doctor-warn-glyph]` was answered by the Doctor drawing
+on 2026-08-31: **`warn` draws no glyph either.** The choice was a glyph on every
+row or none — `pass` and `fail` have none available, because the Judge holds
+`circle-check` and `circle-x` — and a grid where one row of three carries a mark
+is the inconsistency the wordless rule was avoiding.
+
+**The reservation stands.** `triangle-alert` means a check warns, Doctor is the
+only surface that can say that, and no other surface may adopt it as its own
+mark. A reservation with no current user is not a spare glyph; it is the reason
+`octagon-alert` was kept out of generic warnings.
 
 Step-level and criterion-verdict glyphs are settled as of 2026-08-21 — see
 Step activity above. `packages/icons/icons.toml` currently lists
