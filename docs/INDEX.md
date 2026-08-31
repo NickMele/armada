@@ -183,3 +183,4 @@ can find them.
 | Reporting something Armada got wrong | `armada-bug` |
 | Working one issue end to end — worktree, plan, implement, test, commit, merge | `work-issue` |
 | Cutting an agent worktree, and giving it back when its branch merges | `agent-worktrees` |
+| Running a whole milestone by dispatching agents at its issues | `orchestrate-milestone` |
