@@ -54,14 +54,30 @@ A Drone that does not know has two options today, and here neither one works.
 | Escalate | Stops the Job; the worktree and port span are held until a person moves it | Decomposition is decision-dense, so the first ambiguity ends the run |
 | Guess | Nothing prevents it | The output is Jobs that run and spend, not a bad verdict |
 
-**Ask does not exist.** A Drone has three tools — `submit_evidence`,
-`declare_scope` and `run_checks`, dispatched in `crates/api/src/mcp.rs`.
-`fleet_inbox` and `fleet_answer` are Helm's, and there is nothing like them for
-a Drone.
+**Ask is built, and it is not a status.** `ask_question` is the Drone's fourth
+tool and `answer_question` is the Bridge command that answers it; the question
+rides beside the state on the working slot, crosses on `get_job` as `asking`,
+and moves as `job.asking`. A step whose Drone is waiting is still `running`, for
+the reason `crates/ipc/operations.toml` gives about a Judge call in flight — a
+seventh step state or a twelfth Job status would be a variant the other side
+matches on, which is a major bump and Bridge falling back to the /v0 lifeboat.
 
-The delivery half is built: Redirect already injects a note into a live session.
-What is missing is the other direction, and a status meaning *waiting on an
-answer* rather than *stopped and needing a person to restart me*.
+**The answer is one of the labels the Drone itself offered.** Two to four of
+them, each saying what it commits to, and there is no field for prose anywhere
+on the path — which is what makes this an event on a Job rather than the
+conversation `scope.md` rejected. Redirect stays the one route a person's own
+words reach a Drone by.
+
+Neither vigil counts a waiting Drone as a stopped one: `crates/fleet/src/silence.rs`
+and `crates/fleet/src/converging.rs` decline on it exactly as they decline on
+evidence sitting at the gate.
+
+**What it still costs is a slot.** A waiting Drone occupies a place under
+`#50`'s bound and nothing gives it back, so a question left unanswered
+overnight is a fraction of the fleet idle. And a question does not reach the
+Board: `who_is_acting` is `Drone` on a `running` Job, so a Job waiting on an
+answer sits under Running rather than Needs you, and a question on a Job nobody
+has open is invisible.
 
 ## The tracker is an adapter for Bridge, and this workflow does not wait on it
 
