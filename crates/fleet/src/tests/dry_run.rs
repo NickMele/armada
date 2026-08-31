@@ -580,6 +580,7 @@ fn the_first_turn_offers_the_dry_run_and_says_it_is_not_a_pass() {
         &crate::tests::briefing::a_job(),
         workflow.frozen(),
         &StepId::new("implement"),
+        &crate::crossing::Crossed::nothing(),
     )
     .expect("a prompt")
     .as_str()

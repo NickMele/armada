@@ -33,6 +33,7 @@ use core_model::{
 
 use crate::adrift::Adrift;
 use crate::briefing::{Opening, Stopped};
+use crate::crossing::{Crossed, Produced};
 use crate::daemon::Fleet;
 use crate::session::LiveSession;
 use crate::transcript;
@@ -270,13 +271,30 @@ where
         }
         let worktree = self.surviving_worktree(&job)?;
         let stopped = self.what_stopped(&job, &step).await?;
+        // **A restarted Drone is as new as a fresh one.** It knows what
+        // stopped *this* part, which is `stopped`, and nothing at all about
+        // the part before it — a restart of part three is a process that never
+        // saw parts one or two. Read before the Job moves, for the reason
+        // `crate::overruling` reads it there.
+        //
+        // Nothing is carried about how the earlier part cleared: this step did
+        // not advance, so there is no gate outcome to hand over, and `stopped`
+        // is what says why this Drone is here.
+        let recorded = self
+            .store()
+            .lock()
+            .await
+            .step_evidence(job_id)
+            .map_err(Adrift::Reading)?;
 
         let job = self.resumed(&job, &step, Actor::Human).await?;
+        let crossed =
+            Crossed::nothing().and_produced(Produced::before(job.workflow(), &step, &recorded));
         self.put_a_drone_on(
             &job,
             &step,
             worktree,
-            Opening::Resuming(stopped),
+            Opening::resuming(stopped).carrying(crossed),
             &mut working,
         )
         .await?;

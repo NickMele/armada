@@ -327,9 +327,29 @@ which is an assembled prompt and therefore governed here.
 | **`redirect_drone`** | A structured instruction from a human, or from Helm at rung 1 | A person writes it |
 | **The Pilot handoff instruction** | Fleet tells the Drone to call `escape_hatch` after a human confirms Pilot | Drafted, not sanctioned |
 | **The hatch-unavailable answer** | A Drone pulled the hatch on a Job Fleet had not marked | Drafted, not sanctioned |
+| **The gate's outcome** | A step passed its gate and its Drone is still there | Drafted, not sanctioned |
+| **The part-before block** | The same fact, where the Drone that would have read it has ended | Drafted, not sanctioned |
 
 **Every turn Fleet authors now has wording.** `redirect_drone` carries a
 person's words rather than Fleet's, so it has none of its own to specify.
+The gate's outcome was the one exception — the mechanism was decided and the
+wording never written — and its last two rows close that.
+
+**The last row is not injected into anything, and that is the point.** A Drone
+belongs to a step, so at a step boundary the process that would have received
+the gate's outcome has ended before the next one starts. There is no session to
+inject into, and what was a turn becomes a block of the next Drone's opening
+brief.
+
+> **Rule.** A turn that has to cross a step boundary is rewritten for a reader
+> with no memory of what it refers to.
+> Why: the wording does not survive the move. "Go on to Implement" is a
+> continuation addressed to a Drone that was there, and one that was not reads
+> it as an instruction about work it cannot remember doing.
+
+The base-moved note already worked this way and had no row: a rebase runs at
+every spawn, and where there is no session it rides the brief. Both are
+`fleet::crossing`, which holds every re-tensing of a live-session turn.
 
 **One Fleet-authored turn is specified and the rest are drafted.** A draft
 is wording somebody can argue with; it is not wording Armada has agreed to
@@ -711,7 +731,7 @@ examples is unmeasured.
 ## The M1 renderings
 
 **The Kit and Manifest layers are absent, because M1 has neither.** The
-six-layer order in section 3 is unchanged. Four decisions fell out of
+six-layer order in section 3 is unchanged. Six decisions fell out of
 writing these, and each is visible in the text.
 
 **The reporting clause is load-bearing, not a reminder.** Given one MCP
@@ -733,6 +753,18 @@ stalls on every step. Measured in
   *is* the boundary. Later parts are marked not-yours with the specific
   prohibition, because "do not run it" prevents a concrete thing that
   "stop here" does not.
+- **The part before is quoted *and* its file is named.** Quoting alone
+  hands the next Drone a sentence a Drone typed about a document, which is
+  what a step's product being a real file exists to stop. Naming the path
+  alone spends a tool call to read two lines. Where the earlier part
+  declared no file — most steps, whose product is the diff — the block
+  points at the branch instead, and no path is invented.
+- **An earlier part with nothing recorded says so.** The two absences are
+  not the same absence: on part 1 the block is not rendered at all, because
+  the rail directly above marks nothing done and there is nothing an
+  absence could be read as answering. On a later part the rail *does* mark
+  the earlier one done, so silence there reads as a block that was
+  answered, and it is spoken instead.
 
 The rule they all serve — that a Drone is never told what the Checks are —
 is on [Drone](../concepts/drone.md), since it governs every Drone-facing
@@ -781,9 +813,20 @@ surface rather than only these samples.
 │    the job id. worktree.rs, add() — the path is built
 │    at line 40."
 │
+│ It wrote that part's finding to
+│ .armada/artifacts/plan.md, in the worktree you are
+│ in. Read it before you start. What is quoted above
+│ summarises it and does not replace it.
+│
 │ Parts 3 and 4 happen after you submit, and doing them
 │ yourself does not move this task forward. Leave the
 │ branch in a state they can start from.
+└──────────────────────────────────────────────
+┌─ THE PART BEFORE THIS ONE ─────────────────────
+│ Plan the change passed the checks that gate it, and
+│ its work is on the branch you are in. It is settled:
+│ it is not yours to do again, to review or to improve
+│ on. Start this part from it.
 └──────────────────────────────────────────────
 ┌─ STEP: Implement ────────────────────────────────
 │ Make the smallest change that addresses the cause

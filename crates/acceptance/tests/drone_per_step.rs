@@ -9,17 +9,17 @@
 //! And that the bar it is measured against is the one the Job was created with,
 //! not the one the Manifest holds when the boundary is crossed.
 //!
-//! Written before the code, so its assertions fail. Each is marked with the
-//! step of Focus that makes it hold, and they are in the order a Job meets them
-//! — which is the order the milestone is built in, so a step landing moves the
-//! failure down the file rather than clearing it. Why it compiles rather than
-//! naming APIs that do not exist is `docs/practices/acceptance-tests.md`.
+//! Written before the code, in the order a Job meets each assertion. Why it
+//! compiles rather than naming APIs that do not exist is
+//! `docs/practices/acceptance-tests.md`.
 //!
-//! **#137 has landed**, so its three assertions hold and the failure has moved
-//! down to #139's. **The pointer is presence and the log is what is durable**:
-//! a step's `assigned_drone` is null once its Drone has gone — it has to be, or
-//! `restart_step` could never put a second one on the same step — so which
-//! Drone worked which step, after the fact, is the `step_id` on each drone row.
+//! **#137 and #139 have landed and every assertion below holds**, so the file
+//! is green before the milestone is: #140 ends a Drone, and nothing here
+//! observes a process. **The pointer is presence and the log is durable** — a
+//! step's `assigned_drone` is null once its Drone has gone, so which Drone
+//! worked which step is the `step_id` on each drone row. **The brief is
+//! assembled here rather than read off a spawn**, because nothing spawns at a
+//! boundary yet; what crosses is the `Crossed` built below.
 //!
 //! # What this does not prove
 //!
@@ -51,10 +51,10 @@
 mod bench;
 
 use core_model::{Actor, FieldValue, JobStatus, JobStep, StepState};
-use fleet::{briefing, Ruling};
+use fleet::{briefing, Cleared, Crossed, Produced, Ruling};
 use testkit::{FakeJudge, FakeWorkProduct};
 
-use bench::focus::{drone, gate_against, now};
+use bench::focus::{drone, gate_against, now, recorded};
 use bench::{
     a_fix_diff, a_root_cause_note, bug_workflow_as_far_as_m1_expresses_it,
     bug_workflow_with_the_fix_judged, states, Bench,
@@ -180,12 +180,23 @@ async fn a_drone_belongs_to_the_step_it_was_given() {
 
     // ------------------------------------------------- what crossed with it
 
-    let brief = briefing::first_turn(&run.job, run.job.workflow(), &bench.step(1))
+    // #139. What the boundary hands across, because the process that held it
+    // is gone. `Crossed` is the parameter and not a widening argument list:
+    // #207 adds a redirect that arrived while no Drone was there to take it,
+    // and it adds a method rather than reshaping this call.
+    let crossed = Crossed::nothing()
+        .and_produced(Produced::before(
+            run.job.workflow(),
+            &bench.step(1),
+            &recorded(&bench),
+        ))
+        .and_cleared(Cleared::checked(&run.job.workflow().steps()[0]));
+    let brief = briefing::first_turn(&run.job, run.job.workflow(), &bench.step(1), &crossed)
         .expect("a Drone being put on a step is briefed");
 
-    // #139. The second Drone never saw the first one work. Everything it knows
-    // about part one is in this string, and `docs/contracts/agent-prompt.md`
-    // already sanctions the block: "What part 1 produced:".
+    // The second Drone never saw the first one work. Everything it knows about
+    // part one is in this string, and `docs/contracts/agent-prompt.md` already
+    // sanctions the block: "What part 1 produced:".
     assert!(
         brief.as_str().contains("What part 1 produced"),
         "a Drone that did not see the previous step is told what it produced"
@@ -195,6 +206,18 @@ async fn a_drone_belongs_to_the_step_it_was_given() {
             .as_str()
             .contains("The reader's bound is inclusive where the caller expects exclusive."),
         "and told it from the record, not from a summary of the record"
+    );
+    // And the verdict that advanced the step, which `fleet::dispatch` delivers
+    // into a live session there is no longer one of. It is re-tensed rather
+    // than moved: "Go on to Implement" is a continuation, and this Drone is not
+    // continuing.
+    assert!(
+        brief.as_str().contains("THE PART BEFORE THIS ONE"),
+        "a Drone that was not there for the verdict is told what it was"
+    );
+    assert!(
+        !brief.as_str().contains("Go on to"),
+        "and told it as a part that is closed, not as a step it is carrying on from"
     );
 
     // ------------------------------------------------------------- step two

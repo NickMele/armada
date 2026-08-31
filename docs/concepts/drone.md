@@ -222,9 +222,20 @@ The samples below, the assembled wording, and the decisions visible in each are 
 │    the job id. worktree.rs, add() — the path is built
 │    at line 40."
 │
+│ It wrote that part's finding to
+│ .armada/artifacts/plan.md, in the worktree you are
+│ in. Read it before you start. What is quoted above
+│ summarises it and does not replace it.
+│
 │ Parts 3 and 4 happen after you submit, and doing them
 │ yourself does not move this task forward. Leave the
 │ branch in a state they can start from.
+└──────────────────────────────────────────────
+┌─ THE PART BEFORE THIS ONE ─────────────────────
+│ Plan the change passed the checks that gate it, and
+│ its work is on the branch you are in. It is settled:
+│ it is not yours to do again, to review or to improve
+│ on. Start this part from it.
 └──────────────────────────────────────────────
 ┌─ STEP: Implement ────────────────────────────────
 │ Make the smallest change that addresses the cause

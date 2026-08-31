@@ -23,6 +23,7 @@ use crate::tests::daemon::{
     a_fleet_judged_by, a_proposal, diff_evidence, fittings, one, worktree_directory,
 };
 use crate::tests::http::call;
+use crate::tests::restarting::{on_it, until_spoken};
 use crate::tests::tmp::TempDir;
 use crate::Adrift;
 
@@ -616,5 +617,46 @@ async fn a_job_whose_drone_has_gone_gets_a_fresh_one_at_the_next_step() {
     assert!(
         job.assigned_drone().is_some(),
         "a running Job with no process on it escalates as interrupted a moment later"
+    );
+}
+
+/// **The first live path on which a Drone starts a step it did not begin the
+/// Job on**, and the whole of what `#139` is for. `#140` makes every step
+/// boundary this path; today it is reached only here, so it is asserted here.
+///
+/// It is read off the transcript rather than off the assembled block, for the
+/// reason `crate::tests::restarting` reads one: what is in doubt is not that
+/// `briefing` renders the block — `crate::tests::crossing` asserts that — but
+/// that the record reached it and it reached the far end of the pipe.
+#[tokio::test]
+async fn a_fresh_drone_at_the_next_step_is_told_what_the_overruled_one_produced() {
+    let home = TempDir::new();
+    let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    fittings.workflows = one(judged_then_summarised());
+    fittings.judge = Arc::new(a_judge_that_refuses());
+    // Echoes its opening brief and exits, which is how the brief becomes
+    // something a test can read at all.
+    fittings.harness = testkit::FakeHarness::that_echoes_its_first_turn();
+    let fleet = Fleet::assembled(fittings);
+
+    let job_id = refused(&fleet, &home).await;
+    fleet.kill_drone(&job_id).await.expect("the Drone ends");
+    fleet
+        .override_verdict(&job_id, &a_reason())
+        .await
+        .expect("the person overrules the verdict");
+
+    let said = until_spoken(&home, &on_it(&fleet, &job_id).await).await;
+    assert!(
+        said.contains("What part 1 produced"),
+        "the Drone on part 2 was told nothing about part 1: {said}"
+    );
+    assert!(
+        said.contains("The reader stops one line later."),
+        "and it was not told it from the record — this is `claimed`, verbatim: {said}"
+    );
+    assert!(
+        said.contains("was read by a person and accepted"),
+        "a person took that part, and a check did not: {said}"
     );
 }

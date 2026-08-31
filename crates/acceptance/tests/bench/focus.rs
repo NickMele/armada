@@ -13,7 +13,7 @@
 //! come to disagree about the same call.
 
 use adapter_traits::Footprint;
-use core_model::{DroneId, FrozenWorkflow, StepId, Timestamp, Ulid};
+use core_model::{DroneId, FrozenWorkflow, StepEvidence, StepId, Timestamp, Ulid};
 use fleet::{rule_on, AtStep, Clock, Ruling};
 use verification::{Request, Submission};
 
@@ -73,4 +73,14 @@ pub async fn gate_against(
     held.retain(|(id, _)| id != step);
     held.push((step.clone(), submitted.recorded()));
     ruling
+}
+
+/// Every step's latest evidence, the way `store::step_evidence` answers it.
+///
+/// **The bench holds it because the gate writes it**, one entry per step as
+/// each is ruled on. A test that assembled the list itself would be handing the
+/// briefing a record no gate had produced, which is the half of the claim that
+/// is actually in doubt.
+pub fn recorded(bench: &Bench) -> Vec<(StepId, StepEvidence)> {
+    bench.recorded.borrow().clone()
 }
