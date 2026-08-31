@@ -34,6 +34,7 @@ use crate::daemon::Fleet;
 use crate::drone_moves::steps_holding_a_drone;
 use crate::evidence::{Decline, Standing};
 use crate::gate::{rule_on, Ruling};
+use crate::keeping::Keeping;
 use crate::transcript;
 use crate::turning::{Turned, Worked};
 use crate::working::Working;
@@ -182,6 +183,7 @@ where
             self.work(),
             self.budget(),
             &judging,
+            &Keeping::of(&self.host().repo_root, &job_id),
         )
         .await;
         // Before the Job or the step moves. A recorded result the transition

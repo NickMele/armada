@@ -79,6 +79,7 @@ use verification::{
 use crate::at_step::AtStep;
 use crate::checking;
 use crate::judging::{self, Judging};
+use crate::keeping::Keeping;
 
 /// How long a Check may run before it is a failure.
 ///
@@ -130,6 +131,14 @@ pub use crate::ruling::Ruling;
 /// readers — the gaming check's baseline and a step's `reference_docs` — and
 /// both reach it through [`AtStep::baseline`], which will not answer with
 /// anything but a strictly earlier step's.
+/// `keeping` is where a copy of the step's deliverable goes, and it is a
+/// parameter rather than something derived here for the reason `request` is:
+/// the repository and the Job are the caller's to know, and a worktree path is
+/// not something to reverse-engineer either of them out of. **It is not an
+/// `Option`** — every caller of this function is gating a real Job in a real
+/// repository, and a gate that could rule without keeping what it read is the
+/// gate `#223` was filed against.
+///
 /// `entered_with` is what the worktree held when this step began — **after the
 /// boundary rebase that started it**, which is `crate::dispatch::Fleet::marked`'s
 /// to place and not this function's. `diff_nonempty` is decided by comparing it
@@ -146,6 +155,7 @@ pub async fn rule_on<W>(
     work: &W,
     budget: CheckBudget,
     judging: &Judging,
+    keeping: &Keeping,
 ) -> Ruling
 where
     W: WorkProduct,
@@ -360,7 +370,25 @@ where
             let delivered = match step.deliverable().zip(read.as_deref()) {
                 None => None,
                 Some((target, bytes)) => match Delivered::read(target, bytes) {
-                    Ok(delivered) => Some(delivered),
+                    Ok(delivered) => {
+                        // **The copy that outlives the worktree**, written from
+                        // the same bytes the Judge is about to be handed and in
+                        // the same expression, because that is the only instant
+                        // the file is known to exist and known to be the
+                        // version judged. `crate::keeping` holds the whole of
+                        // why it goes where it goes and what expires.
+                        //
+                        // Here rather than beside the read above, so nothing is
+                        // kept of a document too big for a call: those bytes
+                        // are truncated and no Judge weighed them.
+                        keeping.kept(
+                            step.id(),
+                            at.attempt(),
+                            delivered.target(),
+                            delivered.contents(),
+                        );
+                        Some(delivered)
+                    }
                     Err(cause) => {
                         return Ruling::CouldNotDecide {
                             artifact: "the step's deliverable",

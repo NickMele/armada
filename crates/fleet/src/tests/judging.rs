@@ -37,6 +37,7 @@ use crate::tests::detail::get;
 use crate::tests::gate::{
     budget, diff_evidence, judged_by_shared, marking, note_evidence, running_job, worktree,
 };
+use crate::tests::keeping::keeping_nowhere;
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 
@@ -87,6 +88,7 @@ async fn ruled(judge: FakeJudge, worktree: &Worktree) -> Ruling {
         &work,
         budget(),
         &judged_by(judge),
+        &keeping_nowhere(),
     )
     .await
 }
@@ -183,6 +185,7 @@ async fn a_failed_check_still_ends_the_job_where_a_refusal_does_not() {
         &work,
         budget(),
         &judged_by(FakeJudge::with_no_objection()),
+        &keeping_nowhere(),
     )
     .await;
 
@@ -382,6 +385,7 @@ async fn a_step_that_declares_no_criterion_never_asks() {
         &work,
         budget(),
         &judging,
+        &keeping_nowhere(),
     )
     .await;
 
@@ -431,6 +435,7 @@ async fn a_failing_check_never_reaches_the_judge() {
         &work,
         budget(),
         &judging,
+        &keeping_nowhere(),
     )
     .await;
 
@@ -471,6 +476,7 @@ async fn the_call_carries_the_patch_and_the_facts_and_nothing_the_drone_wrote() 
         &work,
         budget(),
         &judging,
+        &keeping_nowhere(),
     )
     .await;
 
@@ -548,6 +554,7 @@ async fn a_step_whose_work_product_is_a_note_is_judged_against_the_note() {
         &work,
         budget(),
         &judging,
+        &keeping_nowhere(),
     )
     .await;
 
@@ -598,6 +605,7 @@ async fn a_later_step_is_measured_against_what_an_earlier_one_established() {
         &work,
         budget(),
         &judging,
+        &keeping_nowhere(),
     )
     .await;
 
@@ -643,6 +651,7 @@ async fn a_step_with_nothing_to_show_costs_no_call_and_draws_no_verdict() {
         &FakeWorkProduct::untouched(),
         budget(),
         &judging,
+        &keeping_nowhere(),
     )
     .await;
 
@@ -697,6 +706,7 @@ async fn a_criterion_asking_what_was_requested_reaches_a_call_that_carries_it() 
         &FakeWorkProduct::untouched(),
         budget(),
         &judging,
+        &keeping_nowhere(),
     )
     .await;
 
@@ -747,6 +757,7 @@ async fn while_judging(judge: FakeJudge, worktree: &Worktree) -> (Vec<ipc::JobJu
         &work,
         budget(),
         &judging,
+        &keeping_nowhere(),
     )
     .await;
     drop(judging);

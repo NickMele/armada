@@ -137,6 +137,14 @@
 //! bookkeeping, and would pass over a `setsid`-detached Drone still running.
 //! Two of its three cases are a pair: gone after it is stood down, still there
 //! after the slot is merely dropped.
+//!
+//! `keeping` is the twenty-sixth, and the only one that deletes a worktree
+//! deliberately. `delivering` proves the Judge is shown the file a step was
+//! asked to write; this one proves that file is still readable after the Job it
+//! belongs to has been cleaned, which it was not — `#223`. Its other cases are
+//! all absences, because the risk in keeping a copy is keeping the wrong one:
+//! nothing is kept of a document too big to have been judged, nothing of a step
+//! the mechanical tier stopped, and no copy is ever written over.
 
 mod attachments;
 mod attribution;
@@ -167,6 +175,7 @@ mod history;
 mod host;
 mod http;
 mod judging;
+mod keeping;
 mod landing;
 mod modelling;
 mod overlap;

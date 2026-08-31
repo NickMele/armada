@@ -126,6 +126,7 @@ pub mod footprint;
 mod gate;
 pub mod headroom;
 pub mod judging;
+pub mod keeping;
 mod landing;
 pub mod mint;
 /// Where two Jobs claim the same paths, worked out at read time. **A
@@ -183,6 +184,7 @@ pub use evidence::{Call, Decline, EvidenceInbox, EvidenceTool, Landed, Recorded,
 pub use gate::{apply, rule_on, CheckBudget, CheckOutput, Ruling};
 pub use headroom::{Bytes, Headroom, InUse, Machine, Polling, Reading, Short, Spare, TheMachine};
 pub use judging::{Aloft, CallFailed, JudgeBudget, Judging, Look, Marking};
+pub use keeping::{deliverables_dir, Keeping};
 pub use mint::{Mint, UlidMint};
 pub use overruling::Overruling;
 pub use peer::{NotACaller, PeerOf};

@@ -47,7 +47,13 @@ storybook-static/
 # than Armada's.** A repository that wants its plans in history deletes the
 # first line and gets them, keyed by Job id and colliding with nothing. This one
 # is public and the workspace the plans would quote is not — the same reason
-# `.gnhf/` and `.lavish/` are above. The cost is that a plan is reclaimed with
-# the worktree it sits in, so it lives as long as the Job does and no longer.
+# `.gnhf/` and `.lavish/` are above.
+#
+# **It is not un-ignored to make a plan survive**, which #138 tried: committing
+# the artifact lets the next worktree cut from the default branch inherit it and
+# satisfy its own `artifact_exists` with nothing written, vacuous from the
+# second Job onward. What a Judge read is copied to `.armada/deliverables/`
+# instead — outside the worktree, so `armada clean` does not take it, and still
+# ignored, so no commit does either. `fleet::keeping` holds the reasoning.
 .armada/*
 !.armada/workflows/

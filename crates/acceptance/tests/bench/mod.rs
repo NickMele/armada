@@ -40,7 +40,8 @@ use core_model::{
 };
 use fleet::dispatch::stopping;
 use fleet::{
-    apply, rule_on, AtStep, CheckBudget, Clock, JudgeBudget, Judging, Marking, Mint, Ruling,
+    apply, rule_on, AtStep, CheckBudget, Clock, JudgeBudget, Judging, Keeping, Marking, Mint,
+    Ruling,
 };
 use testkit::{resolved, FakeJudge, FakeVcs, FakeWorkProduct, Gaming, Gate, Sketch};
 use verification::{Claimed, NotClaimed, Request, ShownBy, Submission};
@@ -418,6 +419,10 @@ impl Bench {
             &self.work,
             self.budget,
             &self.judging,
+            // Where a kept deliverable would go. **Nothing is written**: no
+            // step here declares an `artifact_exists`, so the gate never holds
+            // a deliverable's bytes and `REPO_ROOT` is never touched.
+            &Keeping::of(REPO_ROOT, run.job.id()),
         )
         .await;
         // What `fleet::dispatch` does with the store, done with a list: the
