@@ -58,11 +58,16 @@ pub enum Ruling {
     /// because they are the material a person opens rather than a record of a
     /// verdict.
     ///
-    /// **No turn.** The Drone is not told anything, and is not terminated
-    /// either — it waits, holding its context, and the person's answer is the
-    /// next turn its session gets: `approve_review` injects one,
-    /// `request_changes` injects the note, `reject` ends it. A turn here would
-    /// spend a Drone's remaining tool call to say "someone is looking at this".
+    /// **No turn, and no session to take one.** The Drone is not told
+    /// anything — a turn here would spend its remaining tool call to say
+    /// "someone is looking at this" — and its work is over, because a Drone
+    /// ends when its step's work passes the machine gates rather than when the
+    /// step advances. So the gate holds no Drone, and the person's answer opens
+    /// the next Drone's brief instead of reaching this one.
+    ///
+    /// **The ending is not wired here yet** — `#140` does it. This says what the
+    /// ruling means; `crate::dispatch` still leaves the process standing, which
+    /// is why `request_changes` can find one to tell.
     ///
     /// The step stays `running` while the Job stands at the gate.
     /// `ADVANCING_STATUSES` admits `awaiting_review`, so the inner machine is

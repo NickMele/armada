@@ -37,7 +37,6 @@ on purpose and makes the gate name what was waiting.
 
 ## docs/concepts/drone.md
 
-- **[drone-at-a-human-advance-gate]** Does a Drone end when its step clears its machine gates, or when the human advance gate closes behind it? A step at `awaiting_review` has submitted and passed its mechanical and Judge checks; it has not advanced. Ending the Drone there makes `awaiting_review` cost nothing to hold open, which is the point of a gate a person may leave open for a day. Keeping it alive holds a session for the length of that wait to no purpose, since the step's work is done and the next step gets a fresh Drone either way. The answer decides `drone_process` on `awaiting_review` in `crates/core-model/domain/job-statuses.toml`, and whether a person sending the step back across that gate is talking to a Drone or briefing a new one.
 - **[drone-builtin-tools-confinement]** How is a Drone's toolset actually confined, given that `--allowedTools` removes none of the built-in tools? `--strict-mcp-config` bounds MCP servers only, not the thirty built-in tools the CLI ships with.
 - **[drone-evidence-clarification-cap-scope]** What is the evidence clarification-round cap's field name, and what does it count against — per Job, per workflow step, or per loop iteration? Unlike its sibling `poke_limit`, it currently has neither a name nor a counting scope, and on a loop workflow a per-Job cap would exhaust inside the first iteration.
 

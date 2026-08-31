@@ -35,8 +35,9 @@ pub enum JobStatus {
     /// The work landed; a criterion needs an action outside Armada. The reason
     /// is the criterion ids owed — a reference, not an enum.
     AwaitingAttestation,
-    /// A human advance gate is open. The Drone keeps its PID, worktree and
-    /// session across it, and the liveness clock is suspended.
+    /// A human advance gate is open. The work passed the step's machine gates,
+    /// which is what ends a Drone, so the gate holds none — the worktree is
+    /// kept and the liveness clock is suspended.
     AwaitingReview,
     /// Terminal. Retries exhausted, a failed Check at M1, or a person accepting
     /// the failure as the outcome.

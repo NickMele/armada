@@ -33,10 +33,10 @@
 //! way *in* to `awaiting_review` buys nothing for it: the base moves while a
 //! person reads, and a conflict would put markers into the diff being judged.
 //!
-//! `HeldForReview` keeps the Drone alive, so a conflict has somebody to go to
-//! and rides the approval turn as it rides a mechanical advance. Where the
-//! Drone has gone the slot is empty and nothing is rebased, as on every other
-//! path onto a worktree whose Drone ended — a wider gap than this one.
+//! **The gate holds no Drone** — one ends when its step's work passes the
+//! machine gates, not when the step advances (`docs/concepts/drone.md`). An
+//! empty slot has no worktree, so nothing is rebased, as on every other path
+//! onto a worktree whose Drone ended. `#140` is what ends it.
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{Actor, Job, JobId, JobStatus, StepId, StepTarget, Target};
 use std::path::Path;
@@ -119,18 +119,26 @@ where
         Ok(job)
     }
 
-    /// Send the work back with a note. **Everything survives**: the Job returns
-    /// to `running` at the same step, and the note is a turn injected into the
-    /// session that was standing at the gate.
+    /// Send the work back with a note. **The worktree and every step so far
+    /// survive**: the Job returns to `running` at the same step, and the note
+    /// is what the step is worked again against.
     ///
     /// The step does not move, which is the whole difference between this and an
     /// approval — the work is being done again rather than accepted.
+    ///
+    /// **The note briefs the next Drone; it is not a turn into the one that did
+    /// the work.** A Drone ends when its step's work passes the machine gates,
+    /// so the gate holds none — the same position [`redirect`](Fleet::redirect)
+    /// is in at a step boundary, where the words wait and open the next brief.
     ///
     /// **Refused where the Drone is gone**, for [`redirect`](Fleet::redirect)'s
     /// reason: there is nobody to tell, and a Job put back to `running` with no
     /// process on it escalates as `interrupted` a moment later having lost the
     /// note. It is checked before anything moves, so a refused request leaves
-    /// the Job at the gate rather than half-answered.
+    /// the Job at the gate rather than half-answered. That refusal is written
+    /// against a note with nowhere to wait, and `#207` is where it narrows;
+    /// until then it stands, and `#140` ending the Drone at the gate makes it
+    /// the only answer this gives.
     pub async fn request_changes(&self, job_id: &JobId, note: &Redirection) -> Result<Job, Adrift> {
         let working = self.slot().lock().await;
         let job = self.load(job_id).await?;

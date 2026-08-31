@@ -82,7 +82,7 @@ why = "Every status variant owes a generated UI verb and icon, and `criterion_id
 terminal = false
 mode = "Waited on"
 who_is_acting = "Person"
-drone_process = "Open — see `[drone-at-a-human-advance-gate]`. Clock suspended either way"
+drone_process = "None. The work passed the step's machine gates, and that is what ends a Drone. Clock suspended"
 step_machine = "Live, current step awaiting_human"
 step_states = ["advanced", "awaiting_human", "not_started", "running", "stopped"]
 reason_storage = "None"
@@ -91,13 +91,13 @@ transitions_in = ["running -> awaiting_review"]
 transitions_out = ["awaiting_review -> running", "awaiting_review -> completed_success", "awaiting_review -> awaiting_attestation", "awaiting_review -> rejected", "awaiting_review -> escalated", "awaiting_review -> piloted", "awaiting_review -> killed"]
 in_code = "Not yet"
 notes = """
-A human advance gate is open. The step at the gate has submitted and cleared its machine gates; it has not advanced, so no step boundary has ended its Drone.
+A human advance gate is open. The step at the gate has submitted and cleared its machine gates; it has not advanced, and does not have to for its Drone to be over — a Drone ends when its step's work passes the machine gates, which Drone owns.
 
-**Whether the Drone is there is open** — `[drone-at-a-human-advance-gate]` in `docs/concepts/drone.md`. This row read "Alive, idle. Clock suspended", and the sentence beneath it read "the gate costs no session context", which held only because one Drone spanned a whole Job. A Drone belongs to a workflow step now, so the gate costs the session at the next boundary whatever the answer; what the answer decides is whether it costs it here instead.
+**The gate holds no session.** This row read "Alive, idle. Clock suspended", and the sentence beneath it read "the gate costs no session context", which held only because one Drone spanned a whole Job. A Drone belongs to a workflow step now, and a session kept for a wait a person may take a day over is a working slot held against every other Job with nothing left to do on this one. A person sending the step back across the gate briefs the next Drone rather than speaking to the one that did the work.
 
-The liveness clock suspends here and in `escalated`; a Drone that dies during the gate is still caught, as `interrupted`, by Fleet's restart reconciliation. What bounds an indefinitely-open gate is Drone/Job timeout and worktree cleanup policy, owned by Drone — not the liveness timer.
+The liveness clock suspends here and in `escalated`. What bounds an indefinitely-open gate is Drone/Job timeout and worktree cleanup policy, owned by Drone — not the liveness timer.
 """
-why = "A Drone waiting on a person has no activity by construction, so an unsuspended clock would escalate every gate that outlasts the timeout as stalled."
+why = "Nothing at the gate is working, so an unsuspended clock would escalate every gate that outlasts the timeout as stalled. It held before the Drone belonged to a step too, when one waited the gate out with no activity by construction."
 
 [statuses.completed_failed]
 terminal = true

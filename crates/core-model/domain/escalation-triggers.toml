@@ -164,7 +164,7 @@ in_code = "Not yet"
 notes = """
 Set by Fleet's restart reconciliation. Behaviourally identical to any other escalation — the Job is paused and surfaced for a human decision; the distinction is in what happened, not in what the system does about it.
 
-This is also what catches a Drone that dies while a Job sits at a human gate: the liveness clock is suspended there, so `stalled` cannot fire, but reconciliation still notices the missing process.
+It owns `awaiting_review -> escalated` and no other trigger does: the liveness clock is suspended at a human gate, so `stalled` cannot fire there and reconciliation is the only thing left that reads the gate. The edge was written for a Drone dying while a person read, and the gate holds no Drone now — one ends when its step's work passes the machine gates, so an ordinary wait has no process to be missing. The edge stands; what still reaches it is not settled in this row.
 """
 
 [triggers.loop_cap]

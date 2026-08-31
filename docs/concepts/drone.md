@@ -14,13 +14,13 @@ Companion to the main Armada brief, [Job](job.md), and [Workflow](workflow.md).
 
 ## Lifecycle
 
-**1:1 with a workflow step.** A Drone is spawned fresh when a step starts, and terminates when that step ends. A Job's first Drone is spawned at dispatch (post-approval); its last one goes when the Job reaches a terminal status (completed_success / completed_failed / rejected / killed / superseded). No reuse across steps, and none across Jobs.
+**1:1 with a workflow step.** A Drone is spawned fresh when a step starts, and terminates when that step's work is done — which is when the work passes the step's machine gates, not when the step advances. The two are the same moment on an automatic gate and are not on a human one. A Job's first Drone is spawned at dispatch (post-approval); its last one goes when the Job reaches a terminal status (completed_success / completed_failed / rejected / killed / superseded). No reuse across steps, and none across Jobs.
 
 **1:1 at any moment, 1:N over time.** A Job has at least as many Drones as its workflow has steps. Five causes end one, and **only the first is ordinary**:
 
 | What ends a Drone | Who does it | The Job stopped |
 | --- | --- | --- |
-| Its step advanced past its gate | Fleet, at every step boundary | No |
+| Its step's work passed the step's machine gates | Fleet, as soon as the work is done | No |
 | Redispatch | A person | Yes |
 | Debug's Kill & Redispatch | A person | Yes |
 | [Pilot](pilot.md)'s Restart Step | A person | Yes |
@@ -35,20 +35,20 @@ The bottom four are recovery from a Job that stopped. The first is what a Job do
 | Job status | Drone | Liveness clock | Worktree |
 | --- | --- | --- | --- |
 | `running` | Alive — except in the moment between one step's Drone ending and the next one's starting | **Runs** | Held |
-| `awaiting_review` | Open — see Open questions. The step at the gate has not advanced, so its Drone has not yet been ended by a boundary | Suspended | Held |
+| `awaiting_review` | Gone. The step at the gate passed its machine gates, which is what ends a Drone — it does not have to advance for the session to be over | Suspended | Held |
 | `escalated` | Alive where the step stopped mid-work, which is where escalation usually happens. Gone where the Job escalated at a boundary or with no step running | Suspended | Held |
 | `interrupted` | Gone. The process died; the Job did not | — | Held, and **never swept** |
 | Terminal | Gone | — | Held until past retention, then swept at Fleet start |
 
-**A human gate no longer costs nothing.** It used to be free — the PID, the worktree and the session all survived it — and that argument only ever held because one process spanned the whole Job. A gate that a step advances through costs the session like any other boundary. What it does not cost is work: the worktree is held and the record is the carrier.
+**A human gate holds no Drone.** It used to hold one, idle — the PID, the worktree and the session all survived the wait — and that argument only ever held because one process spanned the whole Job. A step standing at the gate has submitted and passed everything a machine can ask of it, so its Drone has nothing left to do, and a session kept for the length of a wait a person may take a day over is a working slot held against every other Job. So it ends when the work does. A person sending the step back across the gate is briefing the next Drone, not talking to the one that did the work. What the gate does not cost is work: the worktree is held and the record is the carrier.
 
 **Removal is driven by Job retention, never by process exit.** Deleting on merge would strand a retained Job, because Evidence references paths. A killed Job's worktree is held because it is the record of why the Job stopped: a redispatch mints a new Job, and the replacement works in a worktree of its own.
 
 **An `interrupted` worktree is never swept.** Why: it may hold uncommitted work. Fleet stops a Drone only at a cap, and even then the worktree survives — what a cap ends is the spending, never the work. A person decides what happens to it.
 
-**The liveness clock suspends at a human gate.** Why: a Drone waiting on a person has no activity by construction, so every gate that outlasted the heartbeat timeout escalated its own Job as `stalled`. Design Plan gates on a human every iteration, so the loop shape hit it first and hardest.
+**The liveness clock suspends at a human gate.** Why: there is nothing there to hear from. The rule was written when a Drone waited the gate out — it had no activity by construction, so every gate outlasting the heartbeat timeout escalated its own Job as `stalled`, and Design Plan, which gates on a person every iteration, hit that first and hardest. It now holds twice over, because `assigned_drone` is null at the gate and a null pointer suspends the clock on its own.
 
-While suspended, Fleet stops expecting heartbeats and `poke_limit` does not advance. **What bounds a Job sitting at a gate is Drone/Job timeout and worktree cleanup policy, not the liveness timer.** Fleet still reconciles dead processes against live Jobs on restart, which is how a Drone that dies during a gate is caught.
+While suspended, Fleet stops expecting heartbeats and `poke_limit` does not advance. **What bounds a Job sitting at a gate is Drone/Job timeout and worktree cleanup policy, not the liveness timer.** Fleet still reconciles dead processes against live Jobs on restart; a gate has no process to be missing, so what that reconciliation catches is a Drone that died on a step being worked.
 
 **A healthy Drone accepts Redirect, Kill and Pause.** All three are available on a non-escalated Drone rather than reserved for escalated ones.
 
@@ -378,6 +378,5 @@ The surfaces a Drone writes to are rows in the Copy registry under `Written by =
 
 ## Open questions
 
-- **[drone-at-a-human-advance-gate]** Does a Drone end when its step clears its machine gates, or when the human advance gate closes behind it? A step at `awaiting_review` has submitted and passed its mechanical and Judge checks; it has not advanced. Ending the Drone there makes `awaiting_review` cost nothing to hold open, which is the point of a gate a person may leave open for a day. Keeping it alive holds a session for the length of that wait to no purpose, since the step's work is done and the next step gets a fresh Drone either way. The answer decides `drone_process` on `awaiting_review` in `crates/core-model/domain/job-statuses.toml`, and whether a person sending the step back across that gate is talking to a Drone or briefing a new one.
 - **[drone-builtin-tools-confinement]** How is a Drone's toolset actually confined, given that `--allowedTools` removes none of the built-in tools? `--strict-mcp-config` bounds MCP servers only, not the thirty built-in tools the CLI ships with.
 - **[drone-evidence-clarification-cap-scope]** What is the evidence clarification-round cap's field name, and what does it count against — per Job, per workflow step, or per loop iteration? Unlike its sibling `poke_limit`, it currently has neither a name nor a counting scope, and on a loop workflow a per-Job cap would exhaust inside the first iteration.
