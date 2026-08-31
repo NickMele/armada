@@ -53,8 +53,22 @@ struct OnlyServer<'a> {
 #[derive(Serialize)]
 struct HttpServer<'a> {
     #[serde(rename = "type")]
-    transport: &'static str,
+    transport: Transport,
     url: &'a str,
+}
+
+/// The `type` the agent CLI's `--mcp-config` schema accepts for a server this
+/// crate ever constructs.
+///
+/// One variant, not the CLI's full vocabulary: see
+/// `docs/spikes/010-can-a-drone-be-identified.md` for the measured set and
+/// why the rest do not fit a Fleet-spawned Drone. A misspelling of this word
+/// used to be a string the compiler could not see; now it is a variant that
+/// does not exist.
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
+enum Transport {
+    Http,
 }
 
 /// Write the file, holding Armada's Evidence server and nothing else.
@@ -67,7 +81,7 @@ pub fn only_the_evidence_server(at: &Path, url: &str) -> Result<(), io::Error> {
     let document = ipc::encode(&StrictConfig {
         servers: OnlyServer {
             armada: HttpServer {
-                transport: "http",
+                transport: Transport::Http,
                 url,
             },
         },
