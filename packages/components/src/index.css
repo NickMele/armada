@@ -72,3 +72,7 @@
    rule is what keeps two people writing it at once from overwriting each
    other — not because the file has no groups. */
 @import "./compositions/BoardControls/BoardControls.css";
+
+/* File an issue — the review between an error and a tracker. Appended, per the
+   rule above: this list is append-only. */
+@import "./errors/FileAnIssue/FileAnIssue.css";

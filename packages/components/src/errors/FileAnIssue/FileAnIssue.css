@@ -1,0 +1,142 @@
+/* File an issue — the review that stands between an error and a tracker.
+
+   It lives inside the dialog, which owns the layer, the scroll and the two
+   controls. What is here is only the rows: what is going, what is not bounded
+   about it, and the fold that puts its exact text on screen.
+
+   No red anywhere. Nothing on this surface is failing — the failure is the
+   thing being reported — and the error treatment reserves its one red to the
+   notice and its code chip. */
+.armada-filing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* What Armada does not do, and what it will not open. Body measure rather than
+   the fine print the payload's safety line takes: a claim about scrubbing is
+   the thing to read, not the footnote under it. */
+.armada-filing__says {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-wrap: pretty;
+}
+
+.armada-filing__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* One item. A surface step in from the dialog, because each row is a separate
+   decision and a flat run of them reads as one paragraph. */
+.armada-filing__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+}
+
+.armada-filing__control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-filing__label {
+  color: var(--fg-default);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: 500;
+}
+
+/* The row that cannot be taken out says so in words rather than as a dead
+   control. Neutral: it is a fact about the artifact, not a warning and not a
+   reassurance. */
+.armada-filing__always {
+  color: var(--fg-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+/* What is not bounded about this item — the read-this mark, made specific.
+   Same measure as the payload's safety line, because it is the same kind of
+   sentence and one of them is that line. */
+.armada-filing__warning {
+  margin: 0;
+  color: var(--fg-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  text-wrap: pretty;
+}
+
+.armada-filing__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  cursor: pointer;
+  list-style: none;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-filing__summary::-webkit-details-marker {
+  display: none;
+}
+
+.armada-filing__summary:hover {
+  color: var(--fg-default);
+}
+
+.armada-filing__summary:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+/* Two glyphs rather than one rotated: the registry pairs chevron-right and
+   chevron-down for shut and open, and rotating one would be a third answer. */
+.armada-filing__caret--open,
+.armada-filing__read[open] .armada-filing__caret--shut {
+  display: none;
+}
+
+.armada-filing__read[open] .armada-filing__caret--open {
+  display: inline;
+}
+
+/* The exact text that goes into the body. Mono, and it scrolls rather than
+   wraps — the payload is a block of aligned columns and a reflowed one is a
+   different artifact from the one being agreed to. */
+.armada-filing__text {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  color: var(--fg-default);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.armada-filing__withheld {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}

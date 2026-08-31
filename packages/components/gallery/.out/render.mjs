@@ -376,7 +376,7 @@ function ActiveJobsList({
     )
   ] });
 }
-const meta$_ = {
+const meta$$ = {
   title: "Compositions/Active jobs list",
   component: ActiveJobsList
 };
@@ -645,7 +645,7 @@ const __vite_glob_0_0 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   Selectable,
   SixStates,
   TwoRunning,
-  default: meta$_
+  default: meta$$
 }, Symbol.toStringTag, { value: "Module" }));
 function Input({ label: label2, invalid = false, message, mono = false, id, ...rest }) {
   const generated = useId();
@@ -790,7 +790,7 @@ function BoardControls({
     /* @__PURE__ */ jsx(TabsWithCounts, { items: [...tabs], value: tab, onChange: onTab, suspended })
   ] });
 }
-const meta$Z = {
+const meta$_ = {
   title: "Compositions/Board controls",
   component: BoardControls
 };
@@ -866,7 +866,7 @@ const __vite_glob_0_1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   NothingNeedsYou,
   Resting: Resting$2,
   Searching,
-  default: meta$Z
+  default: meta$_
 }, Symbol.toStringTag, { value: "Module" }));
 function BoardEmptyState({
   children,
@@ -895,7 +895,7 @@ function BoardEmptyState({
     action
   ] });
 }
-const meta$Y = {
+const meta$Z = {
   title: "Compositions/Board empty state",
   component: BoardEmptyState
 };
@@ -917,7 +917,7 @@ const __vite_glob_0_2 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   __proto__: null,
   FleetIsNotRunning: FleetIsNotRunning$1,
   FleetRunningNoJobs,
-  default: meta$Y
+  default: meta$Z
 }, Symbol.toStringTag, { value: "Module" }));
 const OUTSIDE_PLAN$1 = "outside plan";
 function ChangedFiles({ files, emptyNote, note, onCopied }) {
@@ -956,7 +956,7 @@ function ChangedFiles({ files, emptyNote, note, onCopied }) {
     note === void 0 ? null : /* @__PURE__ */ jsx("p", { className: "armada-files__note", children: note })
   ] });
 }
-const meta$X = {
+const meta$Y = {
   title: "Compositions/Changed files",
   component: ChangedFiles
 };
@@ -1018,7 +1018,7 @@ const __vite_glob_0_3 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   TheKindsThatAreNotAnEdit,
   TwoPathsOutsideThePlan,
   WhatADroneHasTouched,
-  default: meta$X
+  default: meta$Y
 }, Symbol.toStringTag, { value: "Module" }));
 const VERDICT_ICON = 12;
 const VERDICT_STROKE = 2;
@@ -1312,7 +1312,7 @@ function WorkflowRail({ steps: steps2, pulsing = false, onCopied }) {
     ] }, step.id);
   }) });
 }
-const meta$W = {
+const meta$X = {
   title: "Compositions/Criterion verdicts",
   component: CriterionVerdicts
 };
@@ -1417,7 +1417,7 @@ const __vite_glob_0_4 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   RefusalsSortFirst,
   TheCriterionIsNotOnScreen,
   TheRegistryHasNoWordForIt,
-  default: meta$W
+  default: meta$X
 }, Symbol.toStringTag, { value: "Module" }));
 function DroneTurns({ turns: turns2, emptyNote, live = false }) {
   const [open2, setOpen] = useState(() => /* @__PURE__ */ new Set());
@@ -1582,7 +1582,7 @@ function rowId(turn) {
 function counted(rows) {
   return rows === 1 ? "1 turn" : `${rows} turns`;
 }
-const meta$V = {
+const meta$W = {
   title: "Compositions/Drone turns",
   component: DroneTurns
 };
@@ -1819,7 +1819,7 @@ const __vite_glob_0_5 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   TurnsUnderTheirSteps,
   WhatEachCallDid,
   WhatTheRunCost,
-  default: meta$V
+  default: meta$W
 }, Symbol.toStringTag, { value: "Module" }));
 const CARD_ICON = 12;
 const CARD_STROKE = 2;
@@ -1856,7 +1856,7 @@ function EvidenceCard({
     ] })
   ] });
 }
-const meta$U = {
+const meta$V = {
   title: "Compositions/Evidence card",
   component: EvidenceCard
 };
@@ -1898,7 +1898,7 @@ const __vite_glob_0_6 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   AnArtifactThatIsACommand,
   NotClaimedEmpty: NotClaimedEmpty$1,
   PlanTheChange,
-  default: meta$U
+  default: meta$V
 }, Symbol.toStringTag, { value: "Module" }));
 const ENTRY_ICON = 12;
 const ENTRY_STROKE = 2;
@@ -1928,7 +1928,7 @@ function EvidenceTrail({ entries: entries2, emptyNotClaimed = "Nothing" }) {
     ] })
   ] }, i)) });
 }
-const meta$T = {
+const meta$U = {
   title: "Compositions/Evidence trail",
   component: EvidenceTrail
 };
@@ -2009,7 +2009,7 @@ const __vite_glob_0_7 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   AFinishedJob: AFinishedJob$1,
   NotClaimedEmpty,
   OneEntry,
-  default: meta$T
+  default: meta$U
 }, Symbol.toStringTag, { value: "Module" }));
 const ROW_ICON$1 = 12;
 const ROW_STROKE$1 = 2;
@@ -2088,8 +2088,8 @@ function JobLogReference({ rows, children, actions, onCopied }) {
     ] }) : null
   ] });
 }
-const FOLD_ICON = 16;
-const FOLD_STROKE = 2;
+const FOLD_ICON$1 = 16;
+const FOLD_STROKE$1 = 2;
 function FailureNotice({
   headline,
   next,
@@ -2115,7 +2115,7 @@ function FailureNotice({
         onToggle: (event) => setOpen(event.currentTarget.open),
         children: [
           /* @__PURE__ */ jsxs("summary", { className: "armada-failure__summary", children: [
-            open2 ? /* @__PURE__ */ jsx(ChevronDown, { size: FOLD_ICON, strokeWidth: FOLD_STROKE, "aria-hidden": true }) : /* @__PURE__ */ jsx(ChevronRight, { size: FOLD_ICON, strokeWidth: FOLD_STROKE, "aria-hidden": true }),
+            open2 ? /* @__PURE__ */ jsx(ChevronDown, { size: FOLD_ICON$1, strokeWidth: FOLD_STROKE$1, "aria-hidden": true }) : /* @__PURE__ */ jsx(ChevronRight, { size: FOLD_ICON$1, strokeWidth: FOLD_STROKE$1, "aria-hidden": true }),
             detailsLabel
           ] }),
           /* @__PURE__ */ jsx("dl", { className: "armada-failure__list", children: details.map((detail, at) => /* @__PURE__ */ jsxs("div", { className: "armada-failure__pair", children: [
@@ -2128,7 +2128,7 @@ function FailureNotice({
     referenced ? /* @__PURE__ */ jsx(JobLogReference, { rows: values ?? [], actions, onCopied, children: note }) : null
   ] });
 }
-const meta$S = {
+const meta$T = {
   title: "Compositions/Failure notice",
   component: FailureNotice
 };
@@ -2301,7 +2301,7 @@ const __vite_glob_0_8 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   FleetRefusedTheCommand,
   NothingButTheSentence,
   TheRendererThrew,
-  default: meta$S
+  default: meta$T
 }, Symbol.toStringTag, { value: "Module" }));
 function ScrollArea({
   className,
@@ -2439,7 +2439,7 @@ function Textarea({
     showMessage && /* @__PURE__ */ jsx("span", { className: "armada-textarea-field__message", id: messageId, children: message })
   ] });
 }
-const meta$R = {
+const meta$S = {
   title: "Compositions/Gaming flags",
   component: GamingFlags
 };
@@ -2504,7 +2504,7 @@ const __vite_glob_0_9 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   OnTheRail,
   OverrulingTwoFlags,
   TwoFlagsReadInFull,
-  default: meta$R
+  default: meta$S
 }, Symbol.toStringTag, { value: "Module" }));
 function JobBrief({
   criteria: criteria2,
@@ -2536,7 +2536,7 @@ function JobBrief({
     ] })
   ] });
 }
-const meta$Q = {
+const meta$R = {
   title: "Compositions/Job brief",
   component: JobBrief
 };
@@ -2575,7 +2575,7 @@ const __vite_glob_0_10 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   FactsOnly,
   NoCriteria,
   NoFacts,
-  default: meta$Q
+  default: meta$R
 }, Symbol.toStringTag, { value: "Module" }));
 function joined$1(base, extra) {
   return extra ? `${base} ${extra}` : base;
@@ -2631,7 +2631,7 @@ function JobComposer({
     ] })
   ] });
 }
-const meta$P = {
+const meta$Q = {
   title: "Compositions/Job composer",
   component: JobComposer
 };
@@ -2665,7 +2665,7 @@ const __vite_glob_0_11 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   __proto__: null,
   NoChecksOnTheWorkflow,
   WhatM1Renders,
-  default: meta$P
+  default: meta$Q
 }, Symbol.toStringTag, { value: "Module" }));
 function JobDetailHeaderActions({
   status,
@@ -2727,7 +2727,7 @@ function JobDetailHeaderActions({
     actions ? /* @__PURE__ */ jsx("div", { className: "armada-job-head__actions", children: actions }) : null
   ] });
 }
-const meta$O = {
+const meta$P = {
   title: "Compositions/Job detail header actions",
   component: JobDetailHeaderActions
 };
@@ -2888,9 +2888,9 @@ const __vite_glob_0_12 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   BothKills,
   BothKillsMenuOpen,
   StoppedWithARedispatch,
-  default: meta$O
+  default: meta$P
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$N = {
+const meta$O = {
   title: "Compositions/Job log reference",
   component: JobLogReference
 };
@@ -3061,7 +3061,7 @@ const __vite_glob_0_13 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   WhatOpensAndWhatOnlyCopies,
   WhenThePathIsGone,
   WithErrors,
-  default: meta$N
+  default: meta$O
 }, Symbol.toStringTag, { value: "Module" }));
 const ROW_ICON = 12;
 const ROW_STROKE = 2;
@@ -3100,7 +3100,7 @@ function JobOutcome({ parts, note, onCopied }) {
     note === void 0 ? null : /* @__PURE__ */ jsx("p", { className: "armada-outcome__note", children: note })
   ] });
 }
-const meta$M = {
+const meta$N = {
   title: "Compositions/Job outcome",
   component: JobOutcome
 };
@@ -3190,7 +3190,7 @@ const __vite_glob_0_14 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   EveryPartServed: EveryPartServed$1,
   NoBranch,
   WhatIsServedToday,
-  default: meta$M
+  default: meta$N
 }, Symbol.toStringTag, { value: "Module" }));
 function Tabs({ items, value, defaultValue, onChange }) {
   const [internal, setInternal] = useState(defaultValue ?? items[0]?.id);
@@ -3255,7 +3255,7 @@ function JobRecord({
     /* @__PURE__ */ jsx("div", { className: "armada-record__panel", role: "tabpanel", children: open2?.panel })
   ] });
 }
-const meta$L = {
+const meta$M = {
   title: "Compositions/Job record",
   component: JobRecord
 };
@@ -3309,9 +3309,9 @@ const __vite_glob_0_15 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   ASectionOpened,
   FoldedRecord,
   NothingRecorded,
-  default: meta$L
+  default: meta$M
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$K = {
+const meta$L = {
   title: "Compositions/Job row (stacked)",
   component: JobRowStacked
 };
@@ -3567,7 +3567,7 @@ const __vite_glob_0_16 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   SpendAsQuota,
   SubDispatchedWaitingOnResources,
   UnfocusedWithItsKey,
-  default: meta$K
+  default: meta$L
 }, Symbol.toStringTag, { value: "Module" }));
 function Separator({
   className,
@@ -3634,7 +3634,7 @@ function ReviewDecision({
     disabled && disabledNote !== void 0 ? /* @__PURE__ */ jsx("p", { className: "armada-decision__said", role: "note", children: disabledNote }) : null
   ] });
 }
-const meta$J = {
+const meta$K = {
   title: "Compositions/Review decision",
   component: ReviewDecision,
   args: {
@@ -3677,7 +3677,7 @@ const __vite_glob_0_17 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   ANoteWritten,
   NotConnectedToFleet,
   NothingWrittenYet,
-  default: meta$J
+  default: meta$K
 }, Symbol.toStringTag, { value: "Module" }));
 const NAV_ICON = 16;
 const NAV_STROKE = 2;
@@ -3751,7 +3751,7 @@ function Sidebar({
     }
   );
 }
-const meta$I = {
+const meta$J = {
   title: "Compositions/Sidebar",
   component: Sidebar
 };
@@ -3800,7 +3800,7 @@ const __vite_glob_0_18 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   FlatForContrast,
   HelmActive,
   M1OneSurface,
-  default: meta$I
+  default: meta$J
 }, Symbol.toStringTag, { value: "Module" }));
 function count(n, one2, many) {
   return `${n} ${n === 1 ? one2 : many}`;
@@ -3828,7 +3828,7 @@ function StatusBar({
     spend ? /* @__PURE__ */ jsx("span", { className: "armada-status-bar__spend", children: spend }) : null
   ] });
 }
-const meta$H = {
+const meta$I = {
   title: "Compositions/StatusBar",
   component: StatusBar
 };
@@ -3918,9 +3918,9 @@ const __vite_glob_0_19 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   WithBothCounts,
   WithEscalationsOnly,
   WithOneOfEach,
-  default: meta$H
+  default: meta$I
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$G = {
+const meta$H = {
   title: "Compositions/Step activity mark",
   component: StepActivityMark
 };
@@ -3985,9 +3985,9 @@ const __vite_glob_0_20 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Running: Running$4,
   RunningPulsing: RunningPulsing$1,
   Stopped: Stopped$1,
-  default: meta$G
+  default: meta$H
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$F = {
+const meta$G = {
   title: "Compositions/Step bar",
   component: StepBar
 };
@@ -4028,7 +4028,7 @@ const __vite_glob_0_21 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   Running: Running$3,
   RunningLongWorkflow,
   RunningNeverPulses,
-  default: meta$F
+  default: meta$G
 }, Symbol.toStringTag, { value: "Module" }));
 function TransitionHistory({ moves, emptyNote, note }) {
   if (moves.length === 0) {
@@ -4051,7 +4051,7 @@ function TransitionHistory({ moves, emptyNote, note }) {
     note === void 0 ? null : /* @__PURE__ */ jsx("p", { className: "armada-history__note", children: note })
   ] });
 }
-const meta$E = {
+const meta$F = {
   title: "Compositions/Transition history",
   component: TransitionHistory
 };
@@ -4178,7 +4178,7 @@ const __vite_glob_0_22 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   AJobThatRanClean,
   NothingRecordedYet,
   TwoMovesInOneInstant,
-  default: meta$E
+  default: meta$F
 }, Symbol.toStringTag, { value: "Module" }));
 const OUTSIDE_PLAN = "outside plan";
 function UnifiedDiff({ files, emptyNote, cut, note, onCopied }) {
@@ -4213,15 +4213,15 @@ function UnifiedDiff({ files, emptyNote, cut, note, onCopied }) {
     note === void 0 ? null : /* @__PURE__ */ jsx("p", { className: "armada-diff__note", children: note })
   ] });
 }
-const meta$D = {
+const meta$E = {
   title: "Compositions/Unified diff",
   component: UnifiedDiff
 };
-const READ = "Read from this job's worktree against the branch it was cut from.";
+const READ$1 = "Read from this job's worktree against the branch it was cut from.";
 const APatchToDecideOn = {
   args: {
     emptyNote: "",
-    note: `${READ} Every path is inside the plan this step declared.`,
+    note: `${READ$1} Every path is inside the plan this step declared.`,
     files: [
       {
         path: "crates/fleet/src/gate.rs",
@@ -4256,7 +4256,7 @@ const APatchToDecideOn = {
 const AFileOutsideTheDeclaredPlan = {
   args: {
     emptyNote: "",
-    note: `${READ} 1 of 2 paths are outside the plan this step declared.`,
+    note: `${READ$1} 1 of 2 paths are outside the plan this step declared.`,
     files: [
       {
         path: "crates/fleet/src/gate.rs",
@@ -4282,7 +4282,7 @@ const AFileOutsideTheDeclaredPlan = {
 const APatchTooLongToDraw$1 = {
   args: {
     emptyNote: "",
-    note: READ,
+    note: READ$1,
     cut: "This is the first 2,000 lines of a 14,318-line patch. The rest is not on screen. Read the whole diff in the worktree named under Where the work is before deciding.",
     files: [
       {
@@ -4316,9 +4316,9 @@ const __vite_glob_0_23 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   AJobWithNoWorktree,
   APatchToDecideOn,
   APatchTooLongToDraw: APatchTooLongToDraw$1,
-  default: meta$D
+  default: meta$E
 }, Symbol.toStringTag, { value: "Module" }));
-const meta$C = {
+const meta$D = {
   title: "Compositions/Workflow rail",
   component: WorkflowRail
 };
@@ -4866,12 +4866,12 @@ const __vite_glob_0_24 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   UngatedAndUnanswerable,
   WaitingAndRetrying,
   WhatAStepDeclares,
-  default: meta$C
+  default: meta$D
 }, Symbol.toStringTag, { value: "Module" }));
 function ErrorCode({ kind, code }) {
   return /* @__PURE__ */ jsx("span", { className: `armada-error-code armada-error-code--${kind}`, "data-error-class": kind, children: code });
 }
-const meta$B = {
+const meta$C = {
   title: "Errors/Error code",
   component: ErrorCode
 };
@@ -4892,8 +4892,15 @@ const __vite_glob_0_25 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   AgainstAStatusBadge,
   Degraded,
   Fault,
-  default: meta$B
+  default: meta$C
 }, Symbol.toStringTag, { value: "Module" }));
+function Checkbox({ children, ...rest }) {
+  return /* @__PURE__ */ jsxs("label", { className: "armada-checkbox", children: [
+    /* @__PURE__ */ jsx("input", { ...rest, type: "checkbox", className: "armada-checkbox__input" }),
+    /* @__PURE__ */ jsx("span", { className: "armada-checkbox__box", "aria-hidden": "true", children: /* @__PURE__ */ jsx(Check, { size: 12, strokeWidth: 2 }) }),
+    /* @__PURE__ */ jsx("span", { children })
+  ] });
+}
 const GAP = 3;
 const INDENT = "  ";
 const NO_CODE = "none";
@@ -4943,8 +4950,180 @@ function copyDebugInfo(payload, onCopied) {
   void navigator.clipboard.writeText(debugInfo(payload)).then(said, said);
 }
 const COPIED = "The debug info";
-const COPY_DEBUG_INFO = "Copy debug info";
 const SAFETY = "Structured fields carry primitives only, and a credential does not compile into one. Nothing bounds the message or the chain, which are prose an error wrote — read them before you send this.";
+const COPY_DEBUG_INFO = "Copy debug info";
+const MIN_FENCE = 3;
+function fence(body2) {
+  let longest = 0;
+  let run = 0;
+  for (const character of body2) {
+    run = character === "`" ? run + 1 : 0;
+    if (run > longest) longest = run;
+  }
+  return "`".repeat(Math.max(MIN_FENCE, longest + 1));
+}
+const NO_SCRUB = "Nothing here was scrubbed. Armada removes nothing on the way out, so what is below is what left the machine.";
+function issueBody(filing) {
+  const lines = [`# ${filing.title}`, "", NO_SCRUB];
+  for (const item of filing.attached) {
+    const wrap = fence(item.body);
+    lines.push("", `## ${item.label}`, "", item.warning, "", wrap, item.body, wrap);
+  }
+  const withheld = filing.withheld ?? [];
+  if (withheld.length > 0) {
+    lines.push("", "## Not attached", "");
+    for (const item of withheld) lines.push(`- **${item.label}** — ${item.why}`);
+  }
+  return lines.join("\n");
+}
+function copyIssue(filing, onCopied) {
+  const said = () => onCopied?.(COPIED_ISSUE);
+  void navigator.clipboard.writeText(issueBody(filing)).then(said, said);
+}
+const COPIED_ISSUE = "The issue";
+const FILE_AN_ISSUE = "File an issue";
+const COPY_THE_ISSUE = "Copy the issue";
+const OPENS_NOTHING = "Armada does not open anything in the tracker. Copying puts the issue on your clipboard; the last step is yours.";
+const ENVELOPE$1 = "The error's own record";
+function envelopeOf(payload) {
+  return {
+    id: "envelope",
+    label: ENVELOPE$1,
+    warning: SAFETY,
+    body: debugInfo(payload),
+    required: true
+  };
+}
+const NOT_OFFERED = [
+  {
+    label: "The drone's turns",
+    why: "Whether a transcript may leave this machine is not decided. It carries every command the drone ran and every path it touched."
+  }
+];
+const FOLD_ICON = 16;
+const FOLD_STROKE = 2;
+const ALWAYS = "Always sent";
+const READ = "Read";
+function FileAnIssue({ compose, onCopied }) {
+  const [offered, setOffered] = useState(null);
+  const [removed, setRemoved] = useState(/* @__PURE__ */ new Set());
+  function close() {
+    setOffered(null);
+    setRemoved(/* @__PURE__ */ new Set());
+  }
+  return /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx(Button, { variant: "ghost", size: "sm", ground: "sunken", onClick: () => setOffered(compose()), children: FILE_AN_ISSUE }),
+    /* @__PURE__ */ jsx(
+      FilingReview,
+      {
+        offered,
+        removed,
+        onToggle: (id) => setRemoved((was) => {
+          const next = new Set(was);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return next;
+        }),
+        onCancel: close,
+        onCopy: (filing) => {
+          copyIssue(filing, onCopied);
+          close();
+        }
+      }
+    )
+  ] });
+}
+const REVIEW_TITLE = "Send this failure to an issue tracker?";
+function FilingReview({ offered, removed, onToggle, onCancel, onCopy }) {
+  const filing = offered === null ? null : {
+    ...offered,
+    attached: offered.attached.filter(
+      (item) => item.required === true || !removed.has(item.id)
+    )
+  };
+  return /* @__PURE__ */ jsx(
+    Dialog,
+    {
+      open: filing !== null,
+      tone: "neutral",
+      width: "wide",
+      title: REVIEW_TITLE,
+      confirmLabel: COPY_THE_ISSUE,
+      confirmDisabled: filing === null || filing.attached.length === 0,
+      onCancel,
+      onConfirm: () => {
+        if (filing !== null) onCopy(filing);
+      },
+      children: offered === null || filing === null ? null : /* @__PURE__ */ jsxs("div", { className: "armada-filing", children: [
+        /* @__PURE__ */ jsx("p", { className: "armada-filing__says", children: NO_SCRUB }),
+        /* @__PURE__ */ jsx("p", { className: "armada-filing__says", children: OPENS_NOTHING }),
+        /* @__PURE__ */ jsx("ul", { className: "armada-filing__rows", children: offered.attached.map((item) => /* @__PURE__ */ jsxs("li", { className: "armada-filing__row", children: [
+          /* @__PURE__ */ jsx("div", { className: "armada-filing__control", children: item.required === true ? (
+            // Not a checked, disabled checkbox: a control that cannot
+            // be operated reads as one that is broken, and this row is
+            // not a decision made for somebody. It is a fact about the
+            // artifact, stated after the name it is a fact about.
+            /* @__PURE__ */ jsxs(Fragment, { children: [
+              /* @__PURE__ */ jsx("span", { className: "armada-filing__label", children: item.label }),
+              /* @__PURE__ */ jsx("span", { className: "armada-filing__always", children: ALWAYS })
+            ] })
+          ) : /* @__PURE__ */ jsx(
+            Checkbox,
+            {
+              checked: !removed.has(item.id),
+              onChange: () => onToggle(item.id),
+              children: item.label
+            }
+          ) }),
+          /* @__PURE__ */ jsx("p", { className: "armada-filing__warning", children: item.warning }),
+          /* @__PURE__ */ jsxs("details", { className: "armada-filing__read", children: [
+            /* @__PURE__ */ jsxs("summary", { className: "armada-filing__summary", children: [
+              /* @__PURE__ */ jsx(Fold, {}),
+              READ
+            ] }),
+            /* @__PURE__ */ jsx("pre", { className: "armada-filing__text", children: item.body })
+          ] })
+        ] }, item.id)) }),
+        offered.withheld === void 0 || offered.withheld.length === 0 ? null : /* @__PURE__ */ jsxs("div", { className: "armada-filing__withheld", children: [
+          /* @__PURE__ */ jsx("p", { className: "armada-filing__says", children: "Not offered, and the issue body says so too — a reader who finds none of this cannot otherwise tell it was left out on purpose." }),
+          /* @__PURE__ */ jsx("ul", { className: "armada-filing__rows", children: offered.withheld.map((item) => /* @__PURE__ */ jsxs("li", { className: "armada-filing__row", children: [
+            /* @__PURE__ */ jsx("span", { className: "armada-filing__label", children: item.label }),
+            /* @__PURE__ */ jsx("p", { className: "armada-filing__warning", children: item.why })
+          ] }, item.label)) })
+        ] }),
+        /* @__PURE__ */ jsxs("details", { className: "armada-filing__read", children: [
+          /* @__PURE__ */ jsxs("summary", { className: "armada-filing__summary", children: [
+            /* @__PURE__ */ jsx(Fold, {}),
+            `${READ} the whole body`
+          ] }),
+          /* @__PURE__ */ jsx("pre", { className: "armada-filing__text", children: issueBody(filing) })
+        ] })
+      ] })
+    }
+  );
+}
+function Fold() {
+  return /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx(
+      ChevronRight,
+      {
+        className: "armada-filing__caret armada-filing__caret--shut",
+        size: FOLD_ICON,
+        strokeWidth: FOLD_STROKE,
+        "aria-hidden": true
+      }
+    ),
+    /* @__PURE__ */ jsx(
+      ChevronDown,
+      {
+        className: "armada-filing__caret armada-filing__caret--open",
+        size: FOLD_ICON,
+        strokeWidth: FOLD_STROKE,
+        "aria-hidden": true
+      }
+    )
+  ] });
+}
 const EXPANDABLE = {
   inline: "never",
   toast: "never",
@@ -4984,9 +5163,20 @@ function ErrorNotice(props) {
             /* @__PURE__ */ jsx("dd", { className: "armada-error__value", children: field.value })
           ] }, at)) }) : null
         ] }),
-        expanded && text !== null ? /* @__PURE__ */ jsxs("div", { className: "armada-error__payload", children: [
+        expanded && text !== null && payload !== void 0 ? /* @__PURE__ */ jsxs("div", { className: "armada-error__payload", children: [
           /* @__PURE__ */ jsx("pre", { className: "armada-error__debug", children: text }),
-          /* @__PURE__ */ jsx("p", { className: "armada-error__safety", children: SAFETY })
+          /* @__PURE__ */ jsx("p", { className: "armada-error__safety", children: SAFETY }),
+          /* @__PURE__ */ jsx(
+            FileAnIssue,
+            {
+              compose: () => ({
+                title: payload.message,
+                attached: [envelopeOf(payload)],
+                withheld: NOT_OFFERED
+              }),
+              onCopied
+            }
+          )
         ] }) : null,
         payload !== void 0 || actions !== void 0 ? /* @__PURE__ */ jsxs("div", { className: "armada-error__actions", children: [
           payload === void 0 ? null : /* @__PURE__ */ jsx(Button, { variant: "ghost", size: "sm", onClick: copy, children: COPY_DEBUG_INFO }),
@@ -4997,7 +5187,7 @@ function ErrorNotice(props) {
     }
   );
 }
-const REFUSED = {
+const REFUSED$1 = {
   code: "judge.undecided",
   message: "judge returned prose for criterion 2",
   run_id: "01JQ8ZC4M2WYVK7T3RQN8H",
@@ -5021,7 +5211,7 @@ const REFUSED = {
   fleetProtocol: "5.2",
   at: "2026-08-30T09:16:40Z"
 };
-const meta$A = {
+const meta$B = {
   title: "Errors/Error notice",
   component: ErrorNotice
 };
@@ -5094,7 +5284,7 @@ const FullSurface = {
   }
 };
 const InlineWithPayload = {
-  args: { ...Inline.args, payload: REFUSED }
+  args: { ...Inline.args, payload: REFUSED$1 }
 };
 const ToastWithPayload = {
   render: (args) => /* @__PURE__ */ jsx("div", { className: "armada-error-toast-region", children: /* @__PURE__ */ jsx(ErrorNotice, { ...args }) }),
@@ -5103,11 +5293,11 @@ const ToastWithPayload = {
     placement: "toast",
     code: "judge.undecided",
     message: "Job 31c7 escalated. The judge returned prose for criterion 2.",
-    payload: REFUSED
+    payload: REFUSED$1
   }
 };
 const BannerWithPayload = {
-  args: { ...Banner.args, payload: REFUSED }
+  args: { ...Banner.args, payload: REFUSED$1 }
 };
 const FullSurfaceWithPayload = {
   render: (args) => /* @__PURE__ */ jsx("div", { className: "armada-error-surface-region", children: /* @__PURE__ */ jsx(ErrorNotice, { ...args }) }),
@@ -5117,7 +5307,7 @@ const FullSurfaceWithPayload = {
     code: "judge.undecided",
     message: "Job 31c7 escalated. The judge returned prose for criterion 2.",
     act: "Read the judge's response, then overrule the verdict or redispatch the job.",
-    payload: REFUSED
+    payload: REFUSED$1
   }
 };
 const CodelessPayload = {
@@ -5156,6 +5346,92 @@ const __vite_glob_0_26 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   InlineWithPayload,
   Toast: Toast$1,
   ToastWithPayload,
+  default: meta$B
+}, Symbol.toStringTag, { value: "Module" }));
+const REFUSED = {
+  code: "judge.undecided",
+  message: "judge returned prose for criterion 2",
+  run_id: "01JQ8ZC4M2WYVK7T3RQN8H",
+  job_id: "job_31c7",
+  drone_id: "drn_4c8",
+  step_id: "verify",
+  fields: [
+    { key: "criterion", value: "2" },
+    { key: "judge_model", value: "sonnet" },
+    { key: "response_bytes", value: "1184" }
+  ],
+  chain: [
+    "judge: no verdict parsed from response",
+    "gate verify: undecided",
+    "job_31c7: escalated"
+  ],
+  bridgeProtocol: "5.2",
+  fleetProtocol: "5.2",
+  at: "2026-08-30T09:16:40Z"
+};
+const ENVELOPE = envelopeOf(REFUSED);
+const meta$A = {
+  title: "Errors/File an issue",
+  component: FileAnIssue
+};
+const DIFF = {
+  id: "worktree-diff",
+  label: "What the drone changed",
+  warning: "A patch is the contents of files on this machine, including any the drone read a secret out of.",
+  body: [
+    "diff --git a/crates/judge/src/parse.rs b/crates/judge/src/parse.rs",
+    "@@ -18,7 +18,7 @@",
+    "-    let verdict = line.split_once(':')?.1;",
+    "+    let verdict = line.split_once(':').map(|pair| pair.1)?;"
+  ].join("\n")
+};
+const TheControl = {
+  args: {
+    compose: () => ({ title: REFUSED.message, attached: [ENVELOPE], withheld: NOT_OFFERED })
+  }
+};
+const OneItemAndItCannotBeRemoved = {
+  render: () => /* @__PURE__ */ jsx(
+    FilingReview,
+    {
+      offered: { title: REFUSED.message, attached: [ENVELOPE], withheld: NOT_OFFERED },
+      removed: /* @__PURE__ */ new Set(),
+      onToggle: () => void 0,
+      onCancel: () => void 0,
+      onCopy: () => void 0
+    }
+  )
+};
+const AnItemThatCanBeRemoved = {
+  render: () => /* @__PURE__ */ jsx(
+    FilingReview,
+    {
+      offered: { title: REFUSED.message, attached: [ENVELOPE, DIFF], withheld: NOT_OFFERED },
+      removed: /* @__PURE__ */ new Set(),
+      onToggle: () => void 0,
+      onCancel: () => void 0,
+      onCopy: () => void 0
+    }
+  )
+};
+const AnItemRemoved = {
+  render: () => /* @__PURE__ */ jsx(
+    FilingReview,
+    {
+      offered: { title: REFUSED.message, attached: [ENVELOPE, DIFF], withheld: NOT_OFFERED },
+      removed: /* @__PURE__ */ new Set([DIFF.id]),
+      onToggle: () => void 0,
+      onCancel: () => void 0,
+      onCopy: () => void 0
+    }
+  )
+};
+const __vite_glob_0_27 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  AnItemRemoved,
+  AnItemThatCanBeRemoved,
+  OneItemAndItCannotBeRemoved,
+  TheControl,
   default: meta$A
 }, Symbol.toStringTag, { value: "Module" }));
 function Alert({ tone = "escalated", title, children, icon, action }) {
@@ -5206,7 +5482,7 @@ const Neutral = {
     action: /* @__PURE__ */ jsx("button", { type: "button", className: "armada-alert__button", children: "Open Doctor" })
   }
 };
-const __vite_glob_0_27 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_28 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Escalated: Escalated$1,
   Neutral,
@@ -5245,7 +5521,7 @@ const LongFilename = {
 const ReadOnly = {
   args: { filename: "evidence.log" }
 };
-const __vite_glob_0_28 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_29 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$7,
   LongFilename,
@@ -5316,7 +5592,7 @@ const EscalationReasons = {
     /* @__PURE__ */ jsx(Badge, { status: "escalated", icon: ArrowUpToLine, children: "Reached its ceiling" })
   ] })
 };
-const __vite_glob_0_29 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_30 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AwaitingApproval: AwaitingApproval$1,
   AwaitingAttestation,
@@ -5434,7 +5710,7 @@ const Light$7 = {
     /* @__PURE__ */ jsx(Button, { variant: "secondary", children: "Cancel" })
   ] }) })
 };
-const __vite_glob_0_30 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_31 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Destructive,
   Disabled: Disabled$7,
@@ -5486,20 +5762,13 @@ const Dimmed$1 = {
     /* @__PURE__ */ jsx(CardDescription, { children: "The work landed outside this job." })
   ] })
 };
-const __vite_glob_0_31 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_32 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$6,
   Dimmed: Dimmed$1,
   WithHeader,
   default: meta$v
 }, Symbol.toStringTag, { value: "Module" }));
-function Checkbox({ children, ...rest }) {
-  return /* @__PURE__ */ jsxs("label", { className: "armada-checkbox", children: [
-    /* @__PURE__ */ jsx("input", { ...rest, type: "checkbox", className: "armada-checkbox__input" }),
-    /* @__PURE__ */ jsx("span", { className: "armada-checkbox__box", "aria-hidden": "true", children: /* @__PURE__ */ jsx(Check, { size: 12, strokeWidth: 2 }) }),
-    /* @__PURE__ */ jsx("span", { children })
-  ] });
-}
 const meta$u = {
   title: "Primitives/Checkbox",
   component: Checkbox
@@ -5539,7 +5808,7 @@ const Disabled$6 = {
 const Light$6 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$5, { children: /* @__PURE__ */ jsx(Checkbox, { defaultChecked: true, children: "Run Doctor before dispatch" }) }) })
 };
-const __vite_glob_0_32 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_33 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Checked,
   Disabled: Disabled$6,
@@ -5790,7 +6059,7 @@ const DestructiveEntryConfirms = {
     ] });
   }
 };
-const __vite_glob_0_33 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_34 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AliasFindsTheLexiconTerm,
   DestructiveEntryConfirms,
@@ -5874,7 +6143,7 @@ const MoreThanFitsWithAFieldToReach = {
     ] })
   }
 };
-const __vite_glob_0_34 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_35 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Confirmation,
   KillTheDrone,
@@ -5998,7 +6267,7 @@ const AtTheRightEdge$2 = {
 const WithNoRoomBelow$2 = {
   render: () => /* @__PURE__ */ jsx(Frame$2, { edge: "bottom", children: /* @__PURE__ */ jsx(DropdownMenu, { defaultOpen: true, triggerLabel: "More", entries: rowActions }) })
 };
-const __vite_glob_0_35 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_36 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheLeftEdge: AtTheLeftEdge$2,
   AtTheRightEdge: AtTheRightEdge$2,
@@ -6061,7 +6330,7 @@ const Disabled$5 = {
 const Light$5 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$4, { children: /* @__PURE__ */ jsx(Input, { label: "Job title", defaultValue: "Refresh the auth token flow" }) }) })
 };
-const __vite_glob_0_36 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_37 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$5,
   Disabled: Disabled$5,
@@ -6096,7 +6365,7 @@ const ContextualKeys = {
     /* @__PURE__ */ jsx(Kbd, { children: "/" })
   ] })
 };
-const __vite_glob_0_37 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_38 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Chord,
   ContextualKeys,
@@ -6178,7 +6447,7 @@ const AtTheRightEdge$1 = {
 const WithNoRoomBelow$1 = {
   render: () => /* @__PURE__ */ jsx(Frame$1, { edge: "bottom", children: /* @__PURE__ */ jsx(Popover, { defaultOpen: true, trigger, children: body }) })
 };
-const __vite_glob_0_38 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_39 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AlignedToTheEnd,
   AtTheLeftEdge: AtTheLeftEdge$1,
@@ -6211,7 +6480,7 @@ const WhatItWillNotDraw = {
     text: "A link is written [like this](https://example.invalid/x) and stays written that way.\n\n> A blockquote is a paragraph that opens with a caret.\n\n| so | is | a table |"
   }
 };
-const __vite_glob_0_39 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_40 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AFlagsCitation,
   AJudgesConsequence,
@@ -6277,7 +6546,7 @@ const Light$4 = {
     /* @__PURE__ */ jsx(Radio, { name: "kit-light", children: "Start fresh" })
   ] }) }) })
 };
-const __vite_glob_0_40 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_41 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$3,
   Disabled: Disabled$4,
@@ -6394,7 +6663,7 @@ const WithinBounds = {
     }
   )
 };
-const __vite_glob_0_41 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_42 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Scrolling,
   WithinBounds,
@@ -6449,7 +6718,7 @@ const Disabled$3 = {
 const Light$3 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$2, { children: /* @__PURE__ */ jsx(Select, { label: "Concurrency ceiling", children: ceilings }) }) })
 };
-const __vite_glob_0_42 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_43 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$2,
   Disabled: Disabled$3,
@@ -6522,7 +6791,7 @@ const Vertical = {
 const Announced = {
   args: { decorative: false }
 };
-const __vite_glob_0_43 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_44 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Announced,
   Horizontal,
@@ -6594,7 +6863,7 @@ const Left = {
     children: "The command tripped the allowlist 5 times and was approved every time. Adding it here stops the prompt."
   }
 };
-const __vite_glob_0_44 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_45 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Left,
   Right,
@@ -6649,7 +6918,7 @@ const InACard = {
     /* @__PURE__ */ jsx(SkeletonText, { label: "Loading evidence" })
   ] })
 };
-const __vite_glob_0_45 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_46 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   InACard,
   Single,
@@ -6731,7 +7000,7 @@ const FocusedOnPrimary = {
     /* @__PURE__ */ jsx("div", { "data-preview-focus": "caret", children: /* @__PURE__ */ jsx(SplitButton, { items: reviewActions, variant: "primary", children: "Approve" }) })
   ] })
 };
-const __vite_glob_0_46 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_47 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Closed,
   Disabled: Disabled$2,
@@ -6805,7 +7074,7 @@ const WithADescription = {
 const Light$1 = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card$1, { children: /* @__PURE__ */ jsx(Switch, { defaultChecked: true, children: "Escalate on stall" }) }) })
 };
-const __vite_glob_0_47 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_48 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Disabled: Disabled$1,
   Focused: Focused$1,
@@ -6925,7 +7194,7 @@ const RowsGrowWithContent = {
     ] })
   ] }) })
 };
-const __vite_glob_0_48 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_49 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default: Default$1,
   Dimmed,
@@ -6958,7 +7227,7 @@ const LastActive = {
     ]
   }
 };
-const __vite_glob_0_49 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_50 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   LastActive,
   SectionsOfOneObject,
@@ -7013,7 +7282,7 @@ const Suspended = {
     ]
   }
 };
-const __vite_glob_0_50 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_51 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Queues,
   Suspended,
@@ -7075,7 +7344,7 @@ const Overflowing = {
 const Light = {
   render: () => /* @__PURE__ */ jsx("div", { "data-theme": "light", children: /* @__PURE__ */ jsx(Card, { children: /* @__PURE__ */ jsx(Textarea, { label: "Brief", defaultValue: BRIEF }) }) })
 };
-const __vite_glob_0_51 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_52 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Default,
   Disabled,
@@ -7123,7 +7392,7 @@ const Landed = {
     actionLabel: "View"
   }
 };
-const __vite_glob_0_52 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_53 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Copied,
   Killed: Killed$1,
@@ -7168,7 +7437,7 @@ const AtTheRightEdge = {
 const WithNoRoomBelow = {
   render: () => /* @__PURE__ */ jsx(Frame, { edge: "bottom", children: /* @__PURE__ */ jsx(Tooltip, { defaultOpen: true, label: longPath, children: /* @__PURE__ */ jsx("span", { className: "armada-tooltip__truncated", children: longPath }) }) })
 };
-const __vite_glob_0_53 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_54 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AtTheLeftEdge,
   AtTheRightEdge,
@@ -7810,7 +8079,7 @@ const EscalatedWithNoStepToResume = {
     }
   ) })
 };
-const __vite_glob_0_54 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_55 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AJudgeRefusedACriterion,
   EscalatedWithNoStepToResume,
@@ -8043,7 +8312,7 @@ const BeforeTheDetailArrives = {
 function Stub({ children }) {
   return /* @__PURE__ */ jsx("p", { className: "armada-record__note", children });
 }
-const __vite_glob_0_55 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_56 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AsBridgeDrawsItToday: AsBridgeDrawsItToday$1,
   BeforeTheDetailArrives,
@@ -8246,7 +8515,7 @@ const TheDiffNotReadYet = {
     diffAbsent: "Reading this job's diff."
   }
 };
-const __vite_glob_0_56 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_57 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AClaimWithNothingBehindIt,
   APatchTooLongToDraw,
@@ -8572,7 +8841,7 @@ const AGateReplyWaitingForTheNextDrone = {
     }
   ) })
 };
-const __vite_glob_0_57 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_58 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AGateReplyWaitingForTheNextDrone,
   AsBridgeDrawsItToday,
@@ -8606,7 +8875,7 @@ const Dispatch = {
     }
   ) })
 };
-const __vite_glob_0_58 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_59 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   Dispatch,
   default: meta$4
@@ -8646,7 +8915,7 @@ const FirstLaunch = {
     }
   ) })
 };
-const __vite_glob_0_59 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_60 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   FirstLaunch,
   default: meta$3
@@ -8919,7 +9188,7 @@ const WhatTheWireServes = {
   ) })
 };
 const STILL_RUNNING = { 0: "1h 04m", 1: "38m 12s", 2: "11m 03s" };
-const __vite_glob_0_60 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_61 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AwaitingApproval,
   Done,
@@ -9017,7 +9286,7 @@ const FleetIsNotRunning = {
   },
   render: Shell.render
 };
-const __vite_glob_0_61 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_62 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   CollapsedRail,
   FleetIsNotRunning,
@@ -9217,7 +9486,7 @@ const NothingButToolCalls = {
     }
   ) })
 };
-const __vite_glob_0_62 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+const __vite_glob_0_63 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   ADroneThatOutlivedItsFleet,
   ADroneThinking,
@@ -9257,42 +9526,43 @@ const stories = /* @__PURE__ */ Object.assign({
   "../src/compositions/WorkflowRail/WorkflowRail.stories.tsx": __vite_glob_0_24,
   "../src/errors/ErrorCode/ErrorCode.stories.tsx": __vite_glob_0_25,
   "../src/errors/ErrorNotice/ErrorNotice.stories.tsx": __vite_glob_0_26,
-  "../src/primitives/Alert/Alert.stories.tsx": __vite_glob_0_27,
-  "../src/primitives/AttachmentChip/AttachmentChip.stories.tsx": __vite_glob_0_28,
-  "../src/primitives/Badge/Badge.stories.tsx": __vite_glob_0_29,
-  "../src/primitives/Button/Button.stories.tsx": __vite_glob_0_30,
-  "../src/primitives/Card/Card.stories.tsx": __vite_glob_0_31,
-  "../src/primitives/Checkbox/Checkbox.stories.tsx": __vite_glob_0_32,
-  "../src/primitives/CommandPalette/CommandPalette.stories.tsx": __vite_glob_0_33,
-  "../src/primitives/Dialog/Dialog.stories.tsx": __vite_glob_0_34,
-  "../src/primitives/DropdownMenu/DropdownMenu.stories.tsx": __vite_glob_0_35,
-  "../src/primitives/Input/Input.stories.tsx": __vite_glob_0_36,
-  "../src/primitives/Kbd/Kbd.stories.tsx": __vite_glob_0_37,
-  "../src/primitives/Popover/Popover.stories.tsx": __vite_glob_0_38,
-  "../src/primitives/Prose/Prose.stories.tsx": __vite_glob_0_39,
-  "../src/primitives/Radio/Radio.stories.tsx": __vite_glob_0_40,
-  "../src/primitives/ScrollArea/ScrollArea.stories.tsx": __vite_glob_0_41,
-  "../src/primitives/Select/Select.stories.tsx": __vite_glob_0_42,
-  "../src/primitives/Separator/Separator.stories.tsx": __vite_glob_0_43,
-  "../src/primitives/Sheet/Sheet.stories.tsx": __vite_glob_0_44,
-  "../src/primitives/Skeleton/Skeleton.stories.tsx": __vite_glob_0_45,
-  "../src/primitives/SplitButton/SplitButton.stories.tsx": __vite_glob_0_46,
-  "../src/primitives/Switch/Switch.stories.tsx": __vite_glob_0_47,
-  "../src/primitives/Table/Table.stories.tsx": __vite_glob_0_48,
-  "../src/primitives/Tabs/Tabs.stories.tsx": __vite_glob_0_49,
-  "../src/primitives/TabsWithCounts/TabsWithCounts.stories.tsx": __vite_glob_0_50,
-  "../src/primitives/Textarea/Textarea.stories.tsx": __vite_glob_0_51,
-  "../src/primitives/Toast/Toast.stories.tsx": __vite_glob_0_52,
-  "../src/primitives/Tooltip/Tooltip.stories.tsx": __vite_glob_0_53,
-  "../src/screens/AFailedJobADeadEndReadAsOne/AFailedJobADeadEndReadAsOne.stories.tsx": __vite_glob_0_54,
-  "../src/screens/AFinishedJobWhatItWasAndWhatItProduced/AFinishedJobWhatItWasAndWhatItProduced.stories.tsx": __vite_glob_0_55,
-  "../src/screens/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop.stories.tsx": __vite_glob_0_56,
-  "../src/screens/ARunningJob/ARunningJob.stories.tsx": __vite_glob_0_57,
-  "../src/screens/DispatchAJobFullWithTheM1SubsetMarked/DispatchAJobFullWithTheM1SubsetMarked.stories.tsx": __vite_glob_0_58,
-  "../src/screens/FirstLaunch/FirstLaunch.stories.tsx": __vite_glob_0_59,
-  "../src/screens/TheListSixStatesOneRowShape/TheListSixStatesOneRowShape.stories.tsx": __vite_glob_0_60,
-  "../src/screens/TheShell/TheShell.stories.tsx": __vite_glob_0_61,
-  "../src/screens/WatchingADroneWork/WatchingADroneWork.stories.tsx": __vite_glob_0_62
+  "../src/errors/FileAnIssue/FileAnIssue.stories.tsx": __vite_glob_0_27,
+  "../src/primitives/Alert/Alert.stories.tsx": __vite_glob_0_28,
+  "../src/primitives/AttachmentChip/AttachmentChip.stories.tsx": __vite_glob_0_29,
+  "../src/primitives/Badge/Badge.stories.tsx": __vite_glob_0_30,
+  "../src/primitives/Button/Button.stories.tsx": __vite_glob_0_31,
+  "../src/primitives/Card/Card.stories.tsx": __vite_glob_0_32,
+  "../src/primitives/Checkbox/Checkbox.stories.tsx": __vite_glob_0_33,
+  "../src/primitives/CommandPalette/CommandPalette.stories.tsx": __vite_glob_0_34,
+  "../src/primitives/Dialog/Dialog.stories.tsx": __vite_glob_0_35,
+  "../src/primitives/DropdownMenu/DropdownMenu.stories.tsx": __vite_glob_0_36,
+  "../src/primitives/Input/Input.stories.tsx": __vite_glob_0_37,
+  "../src/primitives/Kbd/Kbd.stories.tsx": __vite_glob_0_38,
+  "../src/primitives/Popover/Popover.stories.tsx": __vite_glob_0_39,
+  "../src/primitives/Prose/Prose.stories.tsx": __vite_glob_0_40,
+  "../src/primitives/Radio/Radio.stories.tsx": __vite_glob_0_41,
+  "../src/primitives/ScrollArea/ScrollArea.stories.tsx": __vite_glob_0_42,
+  "../src/primitives/Select/Select.stories.tsx": __vite_glob_0_43,
+  "../src/primitives/Separator/Separator.stories.tsx": __vite_glob_0_44,
+  "../src/primitives/Sheet/Sheet.stories.tsx": __vite_glob_0_45,
+  "../src/primitives/Skeleton/Skeleton.stories.tsx": __vite_glob_0_46,
+  "../src/primitives/SplitButton/SplitButton.stories.tsx": __vite_glob_0_47,
+  "../src/primitives/Switch/Switch.stories.tsx": __vite_glob_0_48,
+  "../src/primitives/Table/Table.stories.tsx": __vite_glob_0_49,
+  "../src/primitives/Tabs/Tabs.stories.tsx": __vite_glob_0_50,
+  "../src/primitives/TabsWithCounts/TabsWithCounts.stories.tsx": __vite_glob_0_51,
+  "../src/primitives/Textarea/Textarea.stories.tsx": __vite_glob_0_52,
+  "../src/primitives/Toast/Toast.stories.tsx": __vite_glob_0_53,
+  "../src/primitives/Tooltip/Tooltip.stories.tsx": __vite_glob_0_54,
+  "../src/screens/AFailedJobADeadEndReadAsOne/AFailedJobADeadEndReadAsOne.stories.tsx": __vite_glob_0_55,
+  "../src/screens/AFinishedJobWhatItWasAndWhatItProduced/AFinishedJobWhatItWasAndWhatItProduced.stories.tsx": __vite_glob_0_56,
+  "../src/screens/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop.stories.tsx": __vite_glob_0_57,
+  "../src/screens/ARunningJob/ARunningJob.stories.tsx": __vite_glob_0_58,
+  "../src/screens/DispatchAJobFullWithTheM1SubsetMarked/DispatchAJobFullWithTheM1SubsetMarked.stories.tsx": __vite_glob_0_59,
+  "../src/screens/FirstLaunch/FirstLaunch.stories.tsx": __vite_glob_0_60,
+  "../src/screens/TheListSixStatesOneRowShape/TheListSixStatesOneRowShape.stories.tsx": __vite_glob_0_61,
+  "../src/screens/TheShell/TheShell.stories.tsx": __vite_glob_0_62,
+  "../src/screens/WatchingADroneWork/WatchingADroneWork.stories.tsx": __vite_glob_0_63
 });
 function label(key) {
   return key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim();
