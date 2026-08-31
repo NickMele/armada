@@ -93,7 +93,7 @@ Two tiers, and drawing them as one row of chips risks reading as one kind of thi
 
 **This contradicts [Job](../concepts/job.md)**, which states that a failed mechanical Check ends the Job at `completed_failed`, terminal and out of reach. Both cannot be true.
 
-**Where a step lands once retries are spent is unresolved** — `[retries-exhausted-destination]` on `crates/core-model/domain/README.md`. The screen assumes the Job holds with its Drone alive and idle, because redirect costs no respawn and consumes no attempt from there.
+**Where a step lands once retries are spent is unresolved** — `[retries-exhausted-destination]` on `crates/core-model/domain/README.md`. The screen assumes the Job holds with its Drone alive and idle, because redirect costs no respawn and consumes no attempt from there. Fleet does not do that yet: a spent budget ends the Job at `completed_failed`, and `crates/fleet/src/tests/retrying.rs` asserts it. The drawing is ahead of the code here on purpose, and the error-states drawing marks the badge provisional rather than naming a status that does not exist.
 
 **A Drone proposes what to try before it holds.** Picking one drafts the instruction, which stays editable, and writing one from nothing is always available.
 

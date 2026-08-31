@@ -126,6 +126,18 @@ corrects the data.
 
 ## Open questions
 
+- **[retries-exhausted-destination]** Where does a Job land when a step's
+  hand-back budget is spent? It ends at `completed_failed` today and
+  `Ruling::Failed` escalates nothing, the Job being over — `crates/fleet/src/gate.rs`
+  says outright that making the budget spendable is what makes this askable, and
+  that answering it is a person's. Restored 2026-08-31 after being deleted as
+  answered: `docs/concepts/job.md` had settled that a failed Check is *repaired*
+  rather than fatal, which is the first half and is in code and tested. The
+  destination is the second half and was never argued. Three call sites cite this
+  slug — `gate.rs`, `ruling.rs` and `tests/retrying.rs` — and the third asserts
+  `completed_failed` explicitly, so answering it changes a test that was written
+  to be changed.
+
 - **[workflowdef-schema-gaps]** Five keys appear in the workflow samples with
   no row in the field catalogue: `workflow_id`, `version`, `order`, `required`,
   `manifest_rule_overrides`. The `structure` field's prose also cites an `id`

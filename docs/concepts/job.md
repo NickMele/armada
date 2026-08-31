@@ -161,10 +161,13 @@ gate-failure retry limit. `build` failing is not a matter of opinion — which i
 why it cannot be overruled, and not a reason to end the Job over it. A failing
 test is work, and the Drone that wrote the code is the thing that should fix it.
 
-**Attempts spent holds the Job rather than ending it**, in a status of its own —
-not `completed_failed`, which says the Job failed, and not `escalated`, which
-says a machine's decision is waiting to be overruled. Neither is true here: the
-work is unfinished and no verdict is in dispute. The Drone keeps its session and
+**Where a spent budget lands is open** — `[retries-exhausted-destination]`. It
+ends the Job at `completed_failed` today, which is what `crates/fleet/src/gate.rs`
+says it makes askable rather than answers: the module made the budget spendable
+and left the destination to a person.
+
+What is settled is only that `completed_failed` is the reading under question,
+because it says the Job failed when the work is merely unfinished. The Drone keeps its session and
 its worktree, so a redirect costs no respawn and consumes no attempt, which is
 the act a person actually wants at that moment and was unreachable while the Job
 went terminal first. A step left `running` beneath a terminal Job was one nothing
