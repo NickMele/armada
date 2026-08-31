@@ -170,12 +170,12 @@ in_code = "Not yet"
 notes = "No glyph. The shield-* family is reserved to gates and checks, so the natural candidate sits there."
 
 [verbs.escalation_reason.dependency_failed]
-verb = ""
+verb = "an upstream failed"
 icon = ""
 status_token = "--status-escalated"
 vocabulary = "Escalation reason"
-in_code = "Not yet"
-notes = "Filed as a trigger Aug 2026 with neither a verb nor a glyph. Both are owed."
+in_code = "In code"
+notes = "Filed as a trigger Aug 2026 with neither a verb nor a glyph, and unreachable until `crates/fleet/src/coupling.rs` began raising it. The verb names what happened to the Job this one waited on rather than anything this Job did, because it did nothing — which is the whole of what a person needs to read here. The article follows `a check timed out`. No glyph: the `shield-*` family is reserved to gates and Checks, so the natural candidate is not this row's to take, and the glyph stays owed beside `blocked_by_policy` and `check_timeout`."
 
 [verbs.escalation_reason.evidence_suspect]
 verb = "evidence disputed"
@@ -206,7 +206,7 @@ verb = "stopped at the gate"
 icon = "circle-x"
 status_token = "--status-escalated"
 vocabulary = "Escalation reason"
-notes = "Read `failed a check` on `shield-x` until the Judge existed, then `refused by the judge` while `Ruling::Refused` was the only thing that produced it. It is not: `crates/fleet/src/dispatch.rs` raises it from `Ruling::Failed` too — a mechanical Check that failed with its retries spent, which the Judge never saw. A person reading `refused by the judge` on a step whose `judge` row says `not reached` goes looking for a verdict that does not exist, and that was measured on a real Job. The verb names the gate rather than which tier of it, because one trigger carries both and the step`s own rows say which tier stopped it."honestly did not pass\" is a refusal rather than gaming, which is `evidence_suspect`."
+notes = "Read `failed a check` on `shield-x` until the Judge existed, then `refused by the judge` while `Ruling::Refused` was the only thing that produced it. It is not: `crates/fleet/src/dispatch.rs` raises it from `Ruling::Failed` too — a mechanical Check that failed with its retries spent, which the Judge never saw. A person reading `refused by the judge` on a step whose `judge` row says `not reached` goes looking for a verdict that does not exist, and that was measured on a real Job. The verb names the gate rather than which tier of it, because one trigger carries both and the step's own rows say which tier stopped it. The `meaning` was always right: \"honestly did not pass\" is a refusal rather than gaming, which is `evidence_suspect`."
 in_code = "In code"
 
 [verbs.escalation_reason.gate_undecided]

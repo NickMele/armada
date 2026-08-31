@@ -49,7 +49,7 @@ export const QUEUED_REASON: Readonly<Record<string, Rendering | undefined>> = {
 export const ESCALATION_REASON: Readonly<Record<string, Rendering | undefined>> = {
   "blocked_by_policy": { verb: "blocked by policy", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "check_timeout": { verb: "a check timed out", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "dependency_failed": { verb: null, icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
+  "dependency_failed": { verb: "an upstream failed", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "evidence_suspect": { verb: "evidence disputed", icon: FileQuestionMark, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "evidence_too_large": { verb: "evidence too large", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "fan_out": { verb: "hit the sub-dispatch cap", icon: Split, badgeStatus: "escalated", statusToken: "--status-escalated" },
@@ -146,7 +146,7 @@ export const GAPS: readonly Gap[] = [
   { vocabulary: "job_status", variant: "escalated", missing: ["verb", "icon"] },
   { vocabulary: "escalation_reason", variant: "blocked_by_policy", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "check_timeout", missing: ["icon"] },
-  { vocabulary: "escalation_reason", variant: "dependency_failed", missing: ["verb", "icon"] },
+  { vocabulary: "escalation_reason", variant: "dependency_failed", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "evidence_too_large", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "gate_undecided", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "resource_exhausted", missing: ["icon"] },
