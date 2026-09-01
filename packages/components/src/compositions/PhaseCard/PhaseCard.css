@@ -133,8 +133,20 @@
   min-width: 0;
 }
 
+/* The mark, the label and the result on one line — and the line wraps, which
+   is the card's ceiling on a result that has none.
+
+   The card is a reading measure and cannot grow, so a result longer than the
+   line has to go somewhere inside it. `flex-wrap` puts it on its own line under
+   the command rather than shrinking the command to nothing, which is what
+   sharing a line with it would do: the label's basis is 0, so every pixel of
+   overflow would come off the result and the command would be left at zero
+   width. A skipped Check reports the whole path set it covers — `not run · no
+   changed file is under packages/**, package.json, pnpm-lock.yaml,
+   pnpm-workspace.yaml` — and that painted across the card's right edge. */
 .armada-phase-card__row-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-2);
   min-width: 0;
@@ -187,14 +199,26 @@
 }
 
 /* An exit code is measured, so it speaks flatly. The mark beside the row
-   already carries which verdict it is. */
+   already carries which verdict it is.
+
+   **It wraps rather than truncating**, and that is the difference between this
+   and the command above it. A command is recognised from its head, so an
+   ellipsis still leaves it identifiable; a result is a sentence about why —
+   what the Check was measured against and what it produced — and the half an
+   ellipsis would cut is the half that answers. `exit 0 · 47s` never wraps
+   because it never has to: it is shorter than the line, so it stays where the
+   drawing puts it, at the trailing edge beside its command. */
 .armada-phase-card__row-result {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
+  line-height: var(--leading-xs);
   color: var(--fg-subtle);
-  white-space: nowrap;
+  /* A path glob has no space in it to break at, so a long one would overflow
+     a line it was already wrapping onto. */
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 
 /* What the row cites. Indented under the criterion it belongs to, because a

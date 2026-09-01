@@ -30,6 +30,20 @@
   list-style: none;
 }
 
+/* The fourth track, where a reading carries line counts. Declared on the list
+   rather than per row so `+61` and `+118` sit in one column down the list —
+   the whole reason the tracks are the list's and not the row's. It is only
+   declared where something can fill it: an empty track still takes its column
+   gaps, which would put a double gap in front of the drift mark on every list
+   that has no counts, which is every list the wire can serve today. */
+.armada-files__list[data-counts] {
+  grid-template-columns:
+    max-content
+    minmax(0, 1fr)
+    max-content
+    max-content;
+}
+
 .armada-files__file {
   display: grid;
   grid-column: 1 / -1;
@@ -70,6 +84,29 @@
 
 .armada-files__path:hover {
   color: var(--accent);
+}
+
+/* Lines added and lines removed. Mono and tabular, so the digits line up down
+   the column, and the two diff hues — the one place below Job level the design
+   system does hand a colour to a value, because a red count and a green count
+   beside each other is the whole reading. Never wraps: a count is two short
+   tokens and the path beside it is the `minmax(0, 1fr)` that gives way. */
+.armada-files__counts {
+  display: flex;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.armada-files__added {
+  color: var(--diff-add-fg);
+}
+
+.armada-files__deleted {
+  color: var(--diff-del-fg);
 }
 
 /* Outside the declared plan. Sans, because it is a phrase and not a value, and

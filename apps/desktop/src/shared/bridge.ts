@@ -20,7 +20,7 @@ import type { ManifestSummary, ModelChoices, WorkflowSummary } from "./setup";
 import type { Artifact, Opened } from "./artifacts";
 import type { Recorded } from "./history";
 import type { Submitted, Work } from "./work";
-import type { Saw, Voice } from "./turn";
+import type { CallArguments, Saw, Voice } from "./turn";
 import { connects, skew, spoken } from "./version";
 import type { ProtocolVersion, Skew } from "./version";
 import { PROTOCOL_VERSION } from "./generated/protocol-version";
@@ -379,6 +379,23 @@ export type Turn = {
   saw: Saw;
 };
 
+/**
+ * What one call's arguments came back as.
+ *
+ * **Answered to the caller rather than published as state.** Every other read
+ * here is held by main and republished as events arrive, because a Job that
+ * moves has to redraw. A recorded argument never moves: it is fetched once, by
+ * the person who opened one row, and it is theirs. Putting it in `BridgeState`
+ * would make one reader's gesture part of what every surface re-renders on.
+ *
+ * A refusal is the row's own, never the screen's — `refused` on this route is
+ * the Job standing and the call not being in its transcripts, which is a thing
+ * to say inside the payload and not an error state for the Job.
+ */
+export type CallRead =
+  | { ok: true; call: CallArguments }
+  | { ok: false; outcome: Outcome };
+
 /** `GET /jobs/:job_id` for the open Job. */
 export type Watched = JobRead<{ detail: JobDetail }>;
 
@@ -623,6 +640,19 @@ export type BridgeApi = {
    */
   readDiff: (jobId: string | null) => Promise<void>;
   /**
+   * Read one recorded tool call's arguments — the whole of what the socket cut.
+   *
+   * **The one read here that answers rather than publishes**, and the one that
+   * names something smaller than a Job. Every other read is held open and kept
+   * current because the thing it draws moves; a recorded argument is finished,
+   * and a person opening one row is asking about that row. So it takes a call
+   * id, answers once, and nothing is left held.
+   *
+   * Read-only, like the reads above it. Nothing on it reaches a Drone, and the
+   * call id is one Fleet already put on a row this window was streamed.
+   */
+  readCall: (jobId: string, callId: string) => Promise<CallRead>;
+  /**
    * Read every filed report and the counts beside them, or `false` to drop it.
    *
    * **Read-only, and the only read here that names no Job.** A report is about
@@ -719,6 +749,7 @@ export const CHANNELS = {
   readHistory: "bridge:read-history",
   readEvidence: "bridge:read-evidence",
   readDiff: "bridge:read-diff",
+  readCall: "bridge:read-call",
   readReports: "bridge:read-reports",
   approveReview: "bridge:approve-review",
   requestChanges: "bridge:request-changes",

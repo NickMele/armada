@@ -47,13 +47,62 @@
   min-width: 0;
 }
 
-/* The pattern a workflow's flag_if named. Machine-derived, so mono. */
+/* The pattern a workflow's flag_if named. Machine-derived, so mono. Drawn only
+   where the caller has no verb for the spelling that arrived. */
 .armada-gaming-flags__pattern {
   flex: none;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-default);
+}
+
+/* The verb, where the registry has one. Sans, because it is a sentence and not
+   a value — `an assertion now asserts less` set in mono reads as something to
+   type rather than something to understand, which is the shape the raw
+   spelling had.
+
+   It shrinks where the wire spelling does not. A spelling is one token and a
+   sentence is forty characters, so on the rail's one-line row it gives way to
+   the citation and clips, with the whole of it in the title. */
+.armada-gaming-flags__pattern[data-verb] {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-family: var(--font-sans);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Where the flag is. Mono, because it is a path, and it is the one thing on the
+   row that goes anywhere — so it says so with the affordance token on hover and
+   no glyph, the way every openable path on this screen does. Trailing and
+   never shrinking: `report.ts:41` truncated is a location nobody can use. */
+.armada-gaming-flags__at {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+  text-align: inherit;
+}
+
+.armada-gaming-flags__at[data-opens] {
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-gaming-flags__at[data-opens]:hover {
+  color: var(--accent);
+}
+
+.armada-gaming-flags__at[data-opens]:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 /* Where the flag points — a file, a line, an assertion. Mono and flat, like the
@@ -99,6 +148,23 @@
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
   font-weight: var(--weight-medium);
+}
+
+/* The verb read in full. Nothing clips here — this is the finding a person is
+   signing for, and a heading they can only read half of is the defect the
+   assembled sentence had. */
+.armada-gaming-flags[data-citation="whole"] .armada-gaming-flags__pattern[data-verb] {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  text-wrap: pretty;
+}
+
+/* The location under the finding rather than beside it, for the reason the
+   citation is: the row is a column here, and a path pinned to the trailing
+   edge of a wrapped sentence has no edge to pin to. */
+.armada-gaming-flags[data-citation="whole"] .armada-gaming-flags__at {
+  align-self: flex-start;
 }
 
 /* Sans, and this is the split the whole change turns on. A pattern is a value

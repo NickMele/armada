@@ -43,6 +43,25 @@ export type ChangedFile = {
    * things the design system names as staying neutral below Job level.
    */
   outsidePlan?: boolean;
+  /**
+   * Lines added and lines removed in this file — the drawing's `+61 −4`.
+   *
+   * **Both optional, and a zero is not drawn.** The drawing gives an added file
+   * `+21` with no deletion beside it, because `−0` is a measurement of nothing
+   * and reads as a value that failed to arrive. A file with neither is a row
+   * with an empty count cell, which is every row today.
+   *
+   * **Nothing serves these.** `ChangedFile` on the wire is a path, a change
+   * kind and a drift mark — "the names, never the bytes" is that seam's own
+   * stated rule, and it holds for `Saw::Produced`, `job.files_changed` and the
+   * finished job's `TouchedFile` alike. The only route carrying line counts at
+   * all is `get_diff`, which serves the whole patch and is the expensive read
+   * the collapsed chapter exists to avoid. So this pair is drawn and cannot yet
+   * be filled. Reported rather than worked around: a component that computed
+   * them from a patch it fetched would spend the read the chapter is deferring.
+   */
+  added?: number;
+  deleted?: number;
 };
 
 export type ChangedFilesProps = {
@@ -63,6 +82,67 @@ export type ChangedFilesProps = {
 /** What a drifted row says. One wording, so two surfaces cannot disagree. */
 const OUTSIDE_PLAN = "outside plan";
 
+/**
+ * The header line for a list of these files — `3 files · +94 −31 · all inside
+ * the plan`.
+ *
+ * **It lives beside the list, not in the surface that draws the header.** The
+ * chapter header and the rows are two renderings of one reading, and a caller
+ * spelling the summary itself is the second vocabulary that lets the two
+ * disagree — a header claiming three files over a list of four.
+ *
+ * **`planDeclared` false says nothing about the plan.** False is "no step
+ * declared one", not "nothing drifted", so the clause is omitted rather than
+ * claiming everything is inside a plan that does not exist.
+ *
+ * `all inside the plan` is the drawing's own words. The drift counterpart is
+ * not drawn anywhere — `2 outside the plan` is decided here, to answer the
+ * drawn clause in the same grammar. Reported.
+ */
+export function changedFilesSummary(files: ChangedFile[], planDeclared?: boolean): string {
+  const parts = [`${files.length} ${files.length === 1 ? "file" : "files"}`];
+
+  // The same `+61 −4` a row draws, over the whole list. One spelling, so the
+  // header cannot say `+94 -31` while the rows say `+61 −4`.
+  const churn = countsOf({
+    added: sum(files, (file) => file.added),
+    deleted: sum(files, (file) => file.deleted),
+  });
+  if (churn !== undefined) {
+    parts.push([churn.added, churn.deleted].filter((n) => n !== undefined).join(" "));
+  }
+
+  if (planDeclared === true) {
+    const outside = files.filter((file) => file.outsidePlan === true).length;
+    parts.push(outside === 0 ? "all inside the plan" : `${outside} outside the plan`);
+  }
+
+  return parts.join(" · ");
+}
+
+/** A total, or nothing where no file in the list carried the count. */
+function sum(files: ChangedFile[], of: (file: ChangedFile) => number | undefined): number | undefined {
+  const counted = files.map(of).filter((n) => n !== undefined);
+  return counted.length === 0 ? undefined : counted.reduce((a, b) => a + b, 0);
+}
+
+/**
+ * `+61 −4`, `+21`, `−12`, or nothing at all.
+ *
+ * **A zero is dropped rather than drawn.** `−0` measures nothing and reads as a
+ * value that did not arrive; an added file is `+21` in the drawing and nothing
+ * sits beside it. U+2212 MINUS SIGN, not a hyphen — it is the glyph every
+ * count on this screen already carries.
+ */
+function countsOf({ added, deleted }: { added?: number; deleted?: number }):
+  | { added?: string; deleted?: string }
+  | undefined {
+  const plus = added === undefined || added === 0 ? undefined : `+${added}`;
+  const minus = deleted === undefined || deleted === 0 ? undefined : `\u2212${deleted}`;
+  if (plus === undefined && minus === undefined) return undefined;
+  return { added: plus, deleted: minus };
+}
+
 export function ChangedFiles({ files, emptyNote, note, onCopied }: ChangedFilesProps) {
   const copy = useCallback(
     (event: MouseEvent<HTMLElement>, value: string) => {
@@ -80,9 +160,14 @@ export function ChangedFiles({ files, emptyNote, note, onCopied }: ChangedFilesP
     );
   }
 
+  // The count track is drawn only where something can fill it. An empty track
+  // still takes its column gaps, which would put a double gap in front of the
+  // drift mark on every list — and no list can fill it today.
+  const counted = files.some((file) => countsOf(file) !== undefined);
+
   return (
     <div className="armada-files">
-      <ol className="armada-files__list">
+      <ol className="armada-files__list" data-counts={counted || undefined}>
         {files.map((file) => (
           <li
             className="armada-files__file"
@@ -100,6 +185,7 @@ export function ChangedFiles({ files, emptyNote, note, onCopied }: ChangedFilesP
             >
               {file.path}
             </span>
+            {counted ? <Counts file={file} /> : null}
             <span className="armada-files__mark">
               {file.outsidePlan === true ? OUTSIDE_PLAN : null}
             </span>
@@ -108,5 +194,24 @@ export function ChangedFiles({ files, emptyNote, note, onCopied }: ChangedFilesP
       </ol>
       {note === undefined ? null : <p className="armada-files__note">{note}</p>}
     </div>
+  );
+}
+
+/**
+ * One file's `+61 −4`. An empty cell where this file carries neither, because
+ * the track is declared for the list and every row borrows it.
+ */
+function Counts({ file }: { file: ChangedFile }) {
+  const counts = countsOf(file);
+  if (counts === undefined) return <span className="armada-files__counts" />;
+  return (
+    <span className="armada-files__counts">
+      {counts.added === undefined ? null : (
+        <span className="armada-files__added">{counts.added}</span>
+      )}
+      {counts.deleted === undefined ? null : (
+        <span className="armada-files__deleted">{counts.deleted}</span>
+      )}
+    </span>
   );
 }

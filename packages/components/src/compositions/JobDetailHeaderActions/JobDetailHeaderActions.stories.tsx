@@ -241,3 +241,39 @@ export const AtTheApprovalGate: Story = {
     ),
   },
 };
+
+/**
+ * **The window narrowing, at four widths.** The reported defect and what
+ * replaces it.
+ *
+ * The block used to hold one row at every width, and only the title column
+ * could give: the acts are fixed-width controls, so the headline wrapped to
+ * four lines beside three buttons and the fact run broke with `Spend` alone on
+ * the end. Now the acts drop under the title when the two stop fitting, and the
+ * facts read as one run again the moment they have the width.
+ *
+ * `--window-floor` is the narrowest window Bridge opens, and the two below it
+ * are what the panel is given inside one — the header is not the window.
+ * **Nothing is dropped at any of them**, which is the rule this block has
+ * carried from the start.
+ */
+export const AsTheWindowNarrows: Story = {
+  args: AtTheApprovalGate.args,
+  render: (args) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-8)" }}>
+      {(
+        [
+          ["the narrowest window Bridge opens", "var(--window-floor)"],
+          ["the panel inside one", "var(--w-dialog-wide)"],
+          ["narrower still", "var(--w-sheet)"],
+          ["narrower than anything ships", "var(--w-dialog)"],
+        ] as [string, string][]
+      ).map(([said, width]) => (
+        <div key={width} style={{ width, maxWidth: "100%" }}>
+          <span className="armada-screen__eyebrow">{said}</span>
+          <JobDetailHeaderActions {...args} />
+        </div>
+      ))}
+    </div>
+  ),
+};

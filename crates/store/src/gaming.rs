@@ -7,12 +7,40 @@
 //! not to be trusted; only these rows say what about it, which is the same
 //! thing a refusal's citation is to a `gate_failure`.
 
-use core_model::{GamingFlag, GamingPattern, JobId, StepId, Timestamp};
+use rusqlite::Row;
+
+use core_model::{CitedAt, GamingFlag, GamingPattern, JobId, RepoPath, StepId, Timestamp};
 
 use crate::attempt::attempt_now;
-use crate::error::{fault, LoadJobError, WriteError};
+use crate::error::{fault, LoadJobError, RowError, WriteError};
 use crate::open::Store;
-use crate::row::{enum_value, string};
+use crate::row::{column, enum_value, string};
+
+/// The table these columns are read from, named once. An error carries it as a
+/// fixed string, never a value from a row.
+const TABLE: &str = "job_step_gaming_flags";
+
+/// Version 24 — where a flag points, beside what it cites.
+///
+/// Beside the table it changes rather than in `schema.rs`, like
+/// [`V22`](crate::judged::V22) and for the same reason: that file is at the
+/// 900 lines the gate refuses at.
+///
+/// **Two nullable columns and no `CHECK`.** `SQLite` cannot add a constraint
+/// by `ALTER`, and the invariant one would state — a line is never recorded
+/// without the file it is a line of — is already unspeakable one layer up:
+/// `core_model::CitedAt` has no constructor taking a line alone. A row with a
+/// line and a null `cited_file` reads back as no location at all, which is
+/// what a value nothing in the workspace could have written deserves.
+///
+/// **Nothing is backfilled.** A flag written before this existed kept only the
+/// sentence the check wrote, and where in the patch that sentence came from was
+/// never recorded anywhere — so the honest answer for every existing row is
+/// null, which is V5's rule.
+pub(crate) const V24: &str = r#"
+ALTER TABLE job_step_gaming_flags ADD COLUMN cited_file TEXT;
+ALTER TABLE job_step_gaming_flags ADD COLUMN cited_line INTEGER;
+"#;
 
 impl Store {
     /// Record which patterns one run of one step tripped, replacing whatever an
@@ -53,8 +81,9 @@ impl Store {
         for (ordinal, flag) in flags.iter().enumerate() {
             tx.execute(
                 "INSERT INTO job_step_gaming_flags (
-                     job_id, step_id, attempt, ordinal, pattern, cited, flagged_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                     job_id, step_id, attempt, ordinal, pattern, cited, flagged_at,
+                     cited_file, cited_line
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 rusqlite::params![
                     job_id.as_str(),
                     step_id.as_str(),
@@ -63,6 +92,8 @@ impl Store {
                     flag.pattern.as_wire(),
                     flag.cited,
                     at.as_str(),
+                    flag.at.as_ref().map(|at| at.path().as_str()),
+                    flag.at.as_ref().and_then(CitedAt::line),
                 ],
             )
             .map_err(fault("writing a gaming flag"))
@@ -92,7 +123,8 @@ impl Store {
     ) -> Result<Vec<(StepId, Vec<GamingFlag>)>, LoadJobError> {
         let rows = self
             .collect(
-                "SELECT step_id, pattern, cited FROM job_step_gaming_flags AS f
+                "SELECT step_id, pattern, cited, cited_file, cited_line
+                 FROM job_step_gaming_flags AS f
                  WHERE job_id = ?1
                    AND attempt = (SELECT max(attempt) FROM job_step_gaming_flags
                                   WHERE job_id = f.job_id AND step_id = f.step_id)
@@ -111,6 +143,7 @@ impl Store {
                                 &pattern,
                             )?,
                             cited: string(row, "cited")?,
+                            at: cited_at(row)?,
                         },
                     ))
                 },
@@ -118,6 +151,23 @@ impl Store {
             .map_err(LoadJobError::Unreadable)?;
         Ok(grouped(rows))
     }
+}
+
+/// Where a flag points, out of the two columns that hold it.
+///
+/// **The file decides.** A line with no file beside it is dropped rather than
+/// carried, because there is nothing for it to be a line of — see [`V24`] for
+/// why no constraint says so instead.
+pub(crate) fn cited_at(row: &Row<'_>) -> Result<Option<CitedAt>, RowError> {
+    let file: Option<String> = row.get("cited_file").map_err(column(TABLE, "cited_file"))?;
+    let line: Option<i64> = row.get("cited_line").map_err(column(TABLE, "cited_line"))?;
+    Ok(file.map(|file| {
+        let path = RepoPath::new(file);
+        match line.and_then(|line| u32::try_from(line).ok()) {
+            Some(line) => CitedAt::at_line(path, line),
+            None => CitedAt::in_file(path),
+        }
+    }))
 }
 
 /// One list per step, in the order the rows came back. A linear pass rather

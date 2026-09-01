@@ -120,7 +120,7 @@ impl Store {
     ) -> Result<Vec<Attempted<Vec<GamingFlag>>>, LoadJobError> {
         let rows = self
             .collect(
-                "SELECT step_id, attempt, flagged_at, pattern, cited
+                "SELECT step_id, attempt, flagged_at, pattern, cited, cited_file, cited_line
                  FROM job_step_gaming_flags WHERE job_id = ?1
                  ORDER BY step_id, attempt, ordinal",
                 job_id,
@@ -255,6 +255,7 @@ fn flag(row: &Row<'_>) -> Result<GamingFlag, RowError> {
             &pattern,
         )?,
         cited: string(row, "cited")?,
+        at: crate::gaming::cited_at(row)?,
     })
 }
 

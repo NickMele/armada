@@ -114,6 +114,19 @@ export const STEP_STATE: Readonly<Record<string, Rendering | undefined>> = {};
 /** `advance_gate` — **no rows in `enum-verbs.toml`.** Every variant is a gap. */
 export const ADVANCE_GATE: Readonly<Record<string, Rendering | undefined>> = {};
 
+/** `gaming_pattern`, keyed by the wire value. */
+export const GAMING_PATTERN: Readonly<Record<string, Rendering | undefined>> = {
+  "assertion_weakened": { verb: "an assertion now asserts less", icon: null, badgeStatus: null, statusToken: null },
+  "test_scope_narrowed": { verb: "the tests cover less than they did", icon: null, badgeStatus: null, statusToken: null },
+  "tautological_test": { verb: "a test that passes whatever the code does", icon: null, badgeStatus: null, statusToken: null },
+  "test_skipped": { verb: "a test that ran is now skipped", icon: null, badgeStatus: null, statusToken: null },
+  "test_deleted": { verb: "a test file was removed whole", icon: null, badgeStatus: null, statusToken: null },
+  "check_config_edited": { verb: "the change edits what a Check runs through", icon: null, badgeStatus: null, statusToken: null },
+  "no_findings_on_substantial_diff": { verb: "a review that found nothing in a substantial change", icon: null, badgeStatus: null, statusToken: null },
+  "findings_not_tied_to_changed_lines": { verb: "findings that name nothing this change touched", icon: null, badgeStatus: null, statusToken: null },
+  "findings_generic": { verb: "findings that would fit any change", icon: null, badgeStatus: null, statusToken: null },
+};
+
 /** Where a Job is in its life, from `job-statuses.toml`. Not a rendering. */
 export type Lifecycle = {
   /** Whether the Job is over here. */
@@ -196,4 +209,13 @@ export const GAPS: readonly Gap[] = [
   { vocabulary: "criterion_verdict_check", variant: "passed", missing: ["icon", "token"] },
   { vocabulary: "criterion_verdict_judge", variant: "met", missing: ["token"] },
   { vocabulary: "criterion_verdict_judge", variant: "not_met", missing: ["token"] },
+  { vocabulary: "gaming_pattern", variant: "assertion_weakened", missing: ["icon", "token"] },
+  { vocabulary: "gaming_pattern", variant: "test_scope_narrowed", missing: ["icon", "token"] },
+  { vocabulary: "gaming_pattern", variant: "tautological_test", missing: ["icon", "token"] },
+  { vocabulary: "gaming_pattern", variant: "test_skipped", missing: ["icon", "token"] },
+  { vocabulary: "gaming_pattern", variant: "test_deleted", missing: ["icon", "token"] },
+  { vocabulary: "gaming_pattern", variant: "check_config_edited", missing: ["icon", "token"] },
+  { vocabulary: "gaming_pattern", variant: "no_findings_on_substantial_diff", missing: ["icon", "token"] },
+  { vocabulary: "gaming_pattern", variant: "findings_not_tied_to_changed_lines", missing: ["icon", "token"] },
+  { vocabulary: "gaming_pattern", variant: "findings_generic", missing: ["icon", "token"] },
 ];

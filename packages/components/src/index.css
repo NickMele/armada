@@ -100,3 +100,19 @@
    component: the strip positions it, and it draws flat on a panel too. */
 @import "./compositions/PhaseCard/PhaseCard.css";
 @import "./compositions/PhaseStrip/PhaseStrip.css";
+
+/* Three containers that were built and never registered, so their stylesheets
+   reached nothing — not the app and not Storybook, which loads this same file
+   rather than a rule per story. The run tree lost the well that gives job
+   detail's left column a surface of its own, and the two columns read as one
+   plane; the story and the activity log lost their layout outright.
+
+   Nothing catches this, and the header of this file already says why: there is
+   no `verify-components`, so a component whose line is missing is invisible and
+   the gate stays green. It is worse than invisible — the component renders,
+   with its class names on the elements and no rules behind them, which looks
+   like a component that was drawn wrong rather than one that was never
+   registered. Appended, per the rule above. */
+@import "./compositions/RunTree/RunTree.css";
+@import "./compositions/StepStory/StepStory.css";
+@import "./compositions/ActivityLog/ActivityLog.css";
