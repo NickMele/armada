@@ -17,6 +17,7 @@ import type {
   RedirectInFlight,
   RedirectWaiting,
 } from "./waiting";
+import type { StepAttempt } from "./attempt";
 import type { ProtocolVersion } from "./version";
 
 /** A Job, as a list row. `crates/ipc/src/job.rs`. */
@@ -643,31 +644,6 @@ export type Judged = {
 };
 
 /**
- * One run of one step: which run it was, when it began, and what it came to.
- *
- * **The outcome is a step state rather than a word of its own.** The inner
- * machine already names the six places a run can be — `advanced` is the run
- * that passed, `retrying` is the one that failed inside its budget, `stopped`
- * is the one that spent it, `awaiting_human` is the one holding for a person —
- * and a second vocabulary here would be a set no registry declares.
- */
-export type StepAttempt = {
-  /** Which run this was, counted from one. */
-  attempt: number;
-  /** Where the run got to. `running` while it is still going. */
-  outcome: string;
-  /**
-   * The escalation trigger the run carried out of `running`, where it carried
-   * one. Absent on a run that advanced, which is what makes `Attempt 2
-   * advanced` and `Attempt 1 refused` different sentences.
-   */
-  why?: string;
-  started_at: string;
-  /** Absent is the run still going, and there is at most one of those. */
-  ended_at?: string;
-};
-
-/**
  * One gaming pattern found, and what it was found in. **Never a verdict** — a
  * flag says the evidence is suspect, not that the step failed. `pattern` is a
  * string because no registry declares the set: it comes from what a workflow's
@@ -872,6 +848,11 @@ export type JobForgotten = { job_id: string };
 // wire vocabulary. They live in `events.ts` because this file reached the 900
 // lines the gate refuses; the cut is the socket seam `crates/ipc/src/event.rs`
 // already draws.
+// Every run of one step. Its own file for the reason `crates/ipc/src/attempt.rs`
+// has one: it is folded out of the job's log rather than read off a row, and
+// this file was over the gate's ceiling.
+export type { StepAttempt } from "./attempt";
+
 export type {
   ChangedFile,
   Delivered,
