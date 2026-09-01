@@ -80,6 +80,11 @@ export type Saw =
    * The detail is bounded and may be cut — a `Write` argument is a whole file —
    * and `truncated` is how a row says so, because a command can legitimately
    * end in an ellipsis.
+   *
+   * **`whole` is on the Rust variant and is not here.** `Shown` drops it before
+   * the socket, so no viewer ever receives it; declaring it would be a field a
+   * surface could read and never find. The rest comes back over HTTP, once, for
+   * the one call somebody opened — `CallArguments` below.
    */
   | {
       event: "called";
@@ -87,6 +92,22 @@ export type Saw =
       call: string;
       detail: string;
       truncated: boolean;
+      /**
+       * How many characters the argument had, before anything was cut.
+       *
+       * **What `truncated` on its own could not say.** The flag reports an
+       * absence and a size reports a proportion, so an opened row reads
+       * *showing 200 of 14,320 characters* instead of counting the string it
+       * was handed — which is the cut length, and would call every truncated
+       * row complete.
+       *
+       * **Absent is a row written before Fleet stamped this field**, whose true
+       * size nothing recovers — `step` and `by` carry the same absence for the
+       * same reason. Never an argument measured at nought, and never a reason
+       * to withhold the fetch: such a row says nothing about size and still
+       * offers the rest.
+       */
+      detail_length?: number;
     }
   | { event: "answered"; call: string; failed: boolean }
   | { event: "said"; text: string }
@@ -126,3 +147,47 @@ export type Saw =
   | { event: "produced"; files: ChangedFile[] }
   | { event: "unrecognised"; kind: string }
   | { event: "unreadable"; line: string; why: string };
+
+/**
+ * One tool call's arguments, as `GET /jobs/:job_id/calls/:call_id` answered.
+ * `crates/ipc/src/turn.rs`.
+ *
+ * **The other half of `Saw.called`, and the reason a cut row is not a dead
+ * end.** The socket carries a line and a size; this carries the argument. It is
+ * asked for once, by the person who opened one row — the split `get_diff`
+ * already makes against `job.files_changed`, for the same reason: the stream is
+ * bounded and lossy by design, and a row big enough to evict its neighbours
+ * loses the short form too.
+ *
+ * It is here rather than in `protocol.ts` because it is the other end of a row,
+ * and a row is this file's subject. Nothing here has a request half either.
+ */
+export type CallArguments = {
+  /** The tool, as its own vocabulary spells it. */
+  tool: string;
+  /** The call id the row carried, which is what was asked for. */
+  call: string;
+  /**
+   * The argument as the Drone sent it — whitespace and newlines intact, because
+   * a heredoc read as one line is not the thing that was run. It goes into the
+   * same pre block the payload already draws.
+   */
+  arguments: string;
+  /**
+   * Whether `arguments` is all of it. **False only where the record itself is
+   * short**: a row written before the file kept the whole carries the bounded
+   * line and nothing behind it.
+   *
+   * Stated rather than inferred from the two lengths agreeing, because a
+   * surface that inferred it would call a partial answer complete on every row
+   * where the count was also missing.
+   */
+  whole: boolean;
+  /**
+   * How many characters the argument had, where the record knows. Absent is an
+   * old row again, not an argument of no length — a surface holding
+   * `whole: false` and no length has what there is and no way to say how much
+   * is missing, and says nothing about size rather than inventing one.
+   */
+  length?: number;
+};

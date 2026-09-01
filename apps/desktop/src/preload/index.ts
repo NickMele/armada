@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 import { CHANNELS } from "../shared/bridge";
-import type { BridgeApi, BridgeState, ClearOutcome, Draft, Outcome } from "../shared/bridge";
+import type { BridgeApi, BridgeState, CallRead, ClearOutcome, Draft, Outcome } from "../shared/bridge";
 import type { FileReport } from "../shared/protocol";
 import type { Artifact, Opened } from "../shared/artifacts";
 import type { ProtocolVersion } from "../shared/version";
@@ -128,6 +128,15 @@ const api: BridgeApi = {
   // the bytes were separated for.
   readDiff: (jobId: string | null): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.readDiff, jobId),
+
+  // The rest of one cut call argument. **A separate entry from `observeJob`,
+  // and the narrowest read here**: it names a call id off a row this window was
+  // already streamed rather than opening anything, and it answers once instead
+  // of holding a subscription. Read-only like every entry around it — an
+  // argument the record kept is a fact, and nothing on this channel can put one
+  // there or reach the Drone that sent it.
+  readCall: (jobId: string, callId: string): Promise<CallRead> =>
+    ipcRenderer.invoke(CHANNELS.readCall, jobId, callId),
 
   // Every report filed, with the counts. Read-only, and **the one read here
   // that carries no Job id**: a report survives the Job being forgotten, so

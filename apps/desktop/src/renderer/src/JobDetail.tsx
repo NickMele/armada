@@ -58,6 +58,7 @@ import type {
 import type { FileReport, JobDetail as JobWhole, JobSummary, StepDetail } from "../../shared/protocol";
 import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
 import { Acts, StepActs, type ConfirmableAct } from "./Acts";
+import { useCallArguments, type Calls } from "./calls";
 import { Decide, DecidedDiff } from "./Decide";
 import { DIFF_CHAPTER, namesStep, useDetailKeys, type DetailKeys } from "./detail-keys";
 import { span } from "./duration";
@@ -204,6 +205,12 @@ export function JobDetail({
   // from what this holds; see `DetailShape.chapters`.
   const keys = useDetailKeys({ run, chapters: () => chapters, stages: phases?.stages });
 
+  // The rest of any call argument the socket cut, for as long as this Job is
+  // open. **Held for the Job rather than for a log**, because the story draws
+  // the same row twice — chapter one's turns and chapter two's preview — and a
+  // fetch made in one is the same argument in the other.
+  const calls = useCallArguments(job.id);
+
   const chapters =
     open === undefined
       ? []
@@ -216,6 +223,7 @@ export function JobDetail({
           diff: recorded.diff,
           live: observed.state === "watching",
           log: keys.inLog,
+          calls,
         });
 
   // The badge is the header, so a Job the registry has no glyph or verb for
@@ -550,6 +558,7 @@ function chaptersOf({
   diff,
   live,
   log,
+  calls,
 }: {
   job: JobSummary;
   step: StepDetail;
@@ -567,6 +576,13 @@ function chaptersOf({
    * turns are also chapter two's rows, so a row is named with its log.
    */
   log: DetailKeys["inLog"];
+  /**
+   * The arguments this Job's cut rows have been opened to, and how to ask for
+   * one. **Passed to every log rather than to the one that streams**, because
+   * chapter one draws Armada's turns out of the same rows and a cut call can
+   * land in either.
+   */
+  calls: Calls;
 }): StepChapter[] {
   const rows = watching === null ? [] : entriesOf(watching.rows, step.step_id);
   const told = rows.filter((row) => row.actor === "armada");
@@ -590,7 +606,9 @@ function chaptersOf({
       ...(told.length <= 1
         ? {}
         : {
-            content: <Log rows={told} emptyNote={NOT_OPENED_YET} {...log("instructions")} />,
+            content: (
+              <Log rows={told} emptyNote={NOT_OPENED_YET} calls={calls} {...log("instructions")} />
+            ),
             openLabel: `Everything Armada told it — ${told.length} turns`,
           }),
     },
@@ -609,12 +627,24 @@ function chaptersOf({
       // happening right now, so it is on the page while the Job runs rather
       // than a thing to go and open.
       preview: (
-        <Log rows={rows.slice(-PREVIEWED)} emptyNote={NOTHING_YET_ON_THIS_STEP} {...log("log")} />
+        <Log
+          rows={rows.slice(-PREVIEWED)}
+          emptyNote={NOTHING_YET_ON_THIS_STEP}
+          calls={calls}
+          {...log("log")}
+        />
       ),
       ...(rows.length <= PREVIEWED
         ? {}
         : {
-            content: <Log rows={rows} emptyNote={NOTHING_YET_ON_THIS_STEP} {...log("log")} />,
+            content: (
+              <Log
+                rows={rows}
+                emptyNote={NOTHING_YET_ON_THIS_STEP}
+                calls={calls}
+                {...log("log")}
+              />
+            ),
             openLabel: `Open the log — all ${rows.length} entries`,
           }),
     },
