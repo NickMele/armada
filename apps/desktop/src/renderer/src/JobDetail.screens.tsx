@@ -196,6 +196,9 @@ const INERT = {
   onRequestChanges: () => {},
   onReject: () => {},
   onCopied: () => {},
+  // The gallery has no toast and no main process behind it, so nothing here
+  // opens and nothing says why. The records draw as their file names.
+  onSaid: () => {},
 } as const;
 
 function screen(job: JobSummary, detail: JobWhole): ReactElement {

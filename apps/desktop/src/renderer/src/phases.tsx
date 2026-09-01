@@ -7,7 +7,30 @@
 // Nothing here invents a tier: a step declaring no Check and no Judge draws
 // three stages and a sentence saying what does advance it, which is the whole
 // of "an absent tier is not a failed tier".
+//
+// # The three records open here, each beside the thing it is evidence for
+//
+// A person reads a Check's output, the document the Judge read and the question
+// it was asked **because a verdict went against them**, and until `#246` all
+// three were a path on a screen that nothing opened — the owner hit it on a
+// real Job and lost the thread on a race the log would have named.
+//
+// They are not a fourth region. What a Check printed belongs on the Check's own
+// row, the brief belongs on the criterion it answers, and the deliverable
+// belongs to Submitted, which is the phase where the Drone handed the work
+// over. **Split up rather than listed together**, because the question being
+// asked is never "what files does this step have" — it is "why did that one
+// say that", and the answer is next to the thing that said it.
+//
+// # A `.tsx` because the rows carry a control now
+//
+// `PhaseCardRow.label`, `result` and `cited` are all `ReactNode`, so the strip
+// takes an element without any change to the component. That is the whole
+// reason this file grew an extension: the alternative was a path on a row and a
+// second surface to open it from.
 
+import type { ReactNode } from "react";
+import { Button } from "@armada/components";
 import type { PhaseStage, PhaseStageRow, PhaseStripProps } from "@armada/components";
 
 import {
@@ -17,7 +40,62 @@ import {
   CRITERION_VERDICT_JUDGE,
 } from "../../shared/generated/vocabulary";
 import type { CheckRun, Criterion, Judged, StepDetail } from "../../shared/protocol";
+import type { Kept } from "../../shared/artifacts";
 import { commandOf, nameOf } from "./declared";
+import { openArtifact } from "./opening";
+
+/**
+ * How a record is opened, and where a refusal is said.
+ *
+ * **Handed in rather than reached for, and required.** This file builds data
+ * for a strip and holds no Job id; the Job is the panel's, and the sentence a
+ * failed open writes has to reach a toast the panel owns. Required because the
+ * paths were already on screen and unopenable, and an optional handler is how
+ * a surface quietly goes back to that.
+ */
+export type Opens = {
+  jobId: string;
+  /** Say a sentence to the person. Called only where an open did not happen. */
+  onSaid: (sentence: string) => void;
+};
+
+/**
+ * One record, as a control that opens it.
+ *
+ * **The basename is the label and the whole path is the title.** A column of
+ * these clipped from the right would all read `.armada/checks/01JOB/…`, which
+ * is a run of rows saying nothing; the basename is the half a person came to
+ * read, and it is the half they were hunting for — `implement.3.3.log`.
+ *
+ * **Ghost, because opening a file decides nothing.** Nothing about the Job
+ * moves and nothing is spent, so it carries the same weight as the chapter act
+ * beside it rather than the weight of an act on the work.
+ */
+export function Opening({ path, what, opens }: { path: string; what: Kept["what"]; opens: Opens }) {
+  const kept: Kept = { kept: path, what };
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      title={path}
+      onClick={(event) => {
+        // The row sits inside a card the strip pins on a click. Without this
+        // the open would also be a press on the stage behind it.
+        event.stopPropagation();
+        void openArtifact(opens.jobId, kept).then((because) => {
+          if (because !== null) opens.onSaid(because);
+        });
+      }}
+    >
+      {basename(path)}
+    </Button>
+  );
+}
+
+/** The last segment of a repository-relative path. The informative half. */
+function basename(path: string): string {
+  return path.slice(path.lastIndexOf("/") + 1);
+}
 
 /** The gate value whose whole meaning is "the Checks are the whole gate". */
 const AUTO = "auto";
@@ -34,9 +112,14 @@ const JUDGE_ONLY = "auto_if_judge_passes";
  * two places, and drawing them apart made a reader hold two readings of one
  * fact.
  */
-export function phasesOf(step: StepDetail, criteria: Criterion[]): PhaseStripProps {
+export function phasesOf(
+  step: StepDetail,
+  criteria: Criterion[],
+  opens: Opens,
+): PhaseStripProps {
   const submitted = HAS_SUBMITTED.has(step.state);
   const working = step.state === "running" || step.state === "retrying";
+  const kept = keptRows(step, opens);
   const stages: PhaseStage[] = [
     {
       id: "instructed",
@@ -56,16 +139,30 @@ export function phasesOf(step: StepDetail, criteria: Criterion[]): PhaseStripPro
       label: "Submitted",
       state: submitted ? "cleared" : "ahead",
       stands: submitted ? undefined : "nothing submitted",
+      // **The document the Judge read hangs off Submitted, not off Judge.** It
+      // is what the Drone handed over, and it is the same document however many
+      // criteria were asked about it — putting it on the Judge card would make
+      // one artifact look like a property of the tier that read it. A step that
+      // declares no deliverable keeps none and this stays a marker, which is
+      // the rule the phases already follow: a card with nothing to say is not
+      // drawn as a control that opens an empty box.
+      opens: kept.length > 0 || undefined,
+      rows: kept,
+      cardNote:
+        kept.length === 0
+          ? undefined
+          : "What the Judge was shown, copied out as it was read. It outlives the checkout, " +
+            "so a step argued about after a clean can still be argued about.",
       detail:
         "The Drone reported the step complete through the Evidence tool. What it claimed is a " +
         "signal; everything that gates is computed on Fleet's side.",
     },
   ];
 
-  const checks = checksStage(step);
+  const checks = checksStage(step, opens);
   if (checks !== undefined) stages.push(checks);
 
-  const judge = judgeStage(step, criteria);
+  const judge = judgeStage(step, criteria, opens);
   if (judge !== undefined) stages.push(judge);
 
   // **`You` closes the strip, always.** It is the last thing that can hold a
@@ -91,7 +188,7 @@ const HAS_SUBMITTED: ReadonlySet<string> = new Set([
  * three it counts, because six commands on one control is a paragraph in a
  * strip.
  */
-function checksStage(step: StepDetail): PhaseStage | undefined {
+function checksStage(step: StepDetail, opens: Opens): PhaseStage | undefined {
   const declared = step.checks;
   if (declared === undefined || declared.length === 0) return undefined;
 
@@ -102,6 +199,14 @@ function checksStage(step: StepDetail): PhaseStage | undefined {
       mono: true,
       result: run === undefined ? "not run" : resultOf(run),
       named: run === undefined ? undefined : didNotPass(run) ? "failed" : "passed",
+      // **The output opens from the row of the Check that wrote it.** An exit
+      // code is the whole of what a failed Check said here, and the sentence
+      // that says why is in the file — which was a path on this screen that
+      // nothing opened.
+      cited:
+        run?.output_path === undefined ? undefined : (
+          <Opening path={run.output_path} what="check" opens={opens} />
+        ),
     };
   });
 
@@ -134,7 +239,11 @@ function checksStage(step: StepDetail): PhaseStage | undefined {
  * trust it, and a declared one says how many it will answer — which is what it
  * will report against.
  */
-function judgeStage(step: StepDetail, criteria: Criterion[]): PhaseStage | undefined {
+function judgeStage(
+  step: StepDetail,
+  criteria: Criterion[],
+  opens: Opens,
+): PhaseStage | undefined {
   const declared = step.judge_checks;
   if (declared === undefined || declared.length === 0) return undefined;
 
@@ -151,7 +260,7 @@ function judgeStage(step: StepDetail, criteria: Criterion[]): PhaseStage | undef
       // key and reads as a field name rather than as a ruling.
       result: CRITERION_VERDICT_JUDGE[judged.verdict]?.verb ?? judged.verdict,
       named: judged.verdict,
-      cited: citationOf(judged),
+      cited: citedOf(judged, opens),
     };
   });
 
@@ -198,6 +307,55 @@ function citationOf(judged: Judged): string | undefined {
     judged.consequence,
   ].filter((part): part is string => part !== undefined);
   return said.length === 0 ? undefined : said.join(" · ");
+}
+
+/**
+ * What the row cites, and the brief the verdict answers.
+ *
+ * **The brief is on every row, including the met ones**, which is the rule
+ * `CriterionVerdicts` states and the reason it is worth carrying: a Judge that
+ * refuses work it should have passed gets argued with the same day, and one
+ * that *passes* work it should have refused is the quiet failure — visible only
+ * against what it was shown.
+ *
+ * **Beside the citation rather than instead of it.** The citation is what the
+ * Judge said and the brief is what it was asked, and a reader deciding whether
+ * to overrule needs both: the pair is what separates a bad Judge from a bad
+ * brief. A row with neither cites nothing and draws nothing.
+ */
+function citedOf(judged: Judged, opens: Opens): ReactNode {
+  const said = citationOf(judged);
+  if (judged.brief_path === undefined) return said;
+  return (
+    <>
+      {said === undefined ? null : `${said} · `}
+      <Opening path={judged.brief_path} what="brief" opens={opens} />
+    </>
+  );
+}
+
+/**
+ * The documents this step was judged on, one row per run.
+ *
+ * **Per run, because a re-run is a different document.** A step worked three
+ * times was judged on three, and a single row would make *the one the Judge
+ * read* a guess on the one screen where that question is being asked. Empty on
+ * a step that declares no deliverable, and on one whose Judge was never asked —
+ * the bytes are copied where the call is built and nowhere else.
+ *
+ * **Newest run first.** The wire orders them oldest first, which is what a
+ * history wants; this is a person looking at why the last run went the way it
+ * did, and the run they are reading about is the one at the top.
+ */
+function keptRows(step: StepDetail, opens: Opens): PhaseStageRow[] {
+  return [...(step.deliverables ?? [])]
+    .reverse()
+    .map((kept) => ({
+      label: <Opening path={kept.path} what="deliverable" opens={opens} />,
+      mono: true,
+      result: `attempt ${kept.attempt}`,
+      state: "cleared" as const,
+    }));
 }
 
 /**

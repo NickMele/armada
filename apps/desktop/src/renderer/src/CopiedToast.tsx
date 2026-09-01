@@ -36,3 +36,41 @@ export function CopiedToast({ copied }: { copied: string | null }) {
     </div>
   );
 }
+
+/**
+ * The same timer, for a sentence the app already wrote.
+ *
+ * **Why a second hook rather than a second argument to the first.** `useCopied`
+ * holds a *value* and the toast composes the sentence around it, so a caller
+ * cannot say anything else through it. Opening a file has five ways to fail and
+ * each is its own sentence — `renderer/src/opening.ts` writes them — and
+ * "`.armada/briefs/…` is on the clipboard" is not one of them.
+ */
+export function useSaid(): [string | null, (sentence: string) => void] {
+  const [said, setSaid] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (said === null) return undefined;
+    const clear = setTimeout(() => setSaid(null), TOAST_MS);
+    return () => clearTimeout(clear);
+  }, [said]);
+
+  return [said, setSaid];
+}
+
+/**
+ * A sentence the app is telling somebody, carried whole.
+ *
+ * **An open that did nothing is the defect being fixed**, so a click that ends
+ * in nothing on screen is not an outcome this surface may have. Success says
+ * nothing — the file is in front of them, in their editor, which says it better
+ * than a toast would.
+ */
+export function SaidToast({ said }: { said: string | null }) {
+  if (said === null) return null;
+  return (
+    <div className="armada-app__toasts">
+      <Toast>{said}</Toast>
+    </div>
+  );
+}

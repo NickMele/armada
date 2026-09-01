@@ -3,7 +3,7 @@
 //
 // **What was here was the rail, and job detail no longer draws one.** The run
 // is a tree in `run.ts` and a step's gates are the phase strip's in
-// `phases.ts`, so `railOf` and everything it needed went with them. The
+// `phases.tsx`, so `railOf` and everything it needed went with them. The
 // `WorkflowRail` component is still drawn, by the proposal-time workflow
 // preview, which builds its rows in `preview.ts` and never came through here.
 //

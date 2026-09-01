@@ -25,7 +25,7 @@ import { NOTHING_YET } from "../../shared/bridge";
 import type { BridgeState, Draft, Outcome } from "../../shared/bridge";
 import type { FileReport } from "../../shared/protocol";
 import { Boundary } from "./Boundary";
-import { CopiedToast, useCopied } from "./CopiedToast";
+import { CopiedToast, SaidToast, useCopied, useSaid } from "./CopiedToast";
 import { FailureBlock } from "./FailureSurface";
 import { fleetFailure, jobFailure, refusalFailure, uncaughtFailure } from "./failures";
 import { headOf } from "./Head";
@@ -53,6 +53,10 @@ export function App() {
   const [acknowledged, setAcknowledged] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [copied, setCopied] = useCopied();
+  // What the app is telling somebody, as a sentence it already wrote. Today
+  // that is only an open that did not happen; a click ending in nothing on
+  // screen is the defect the openable records were added against.
+  const [telling, setTelling] = useSaid();
   // What a boundary could never catch: a throw in a handler, and a rejected
   // promise from a `void`-ed preload call.
   const [uncaught, setUncaught] = useState<Uncaught | null>(null);
@@ -463,6 +467,7 @@ export function App() {
                 onRequestChanges={(jobId, note) => void decide(jobId, "changes", note)}
                 onReject={(jobId) => void decide(jobId, "reject")}
                 onCopied={setCopied}
+                onSaid={setTelling}
               />
             </Boundary>
           ) : auditing ? (
@@ -546,6 +551,7 @@ export function App() {
       )}
 
       <CopiedToast copied={copied} />
+      <SaidToast said={telling} />
     </>
   );
 }
