@@ -97,7 +97,8 @@ where
         let worktree = match self.vcs().create_worktree(&spec) {
             Ok(worktree) => worktree,
             Err(cause) => {
-                self.interrupt(&job).await?;
+                self.stopped_before_a_drone(&job, EscalationTrigger::NoWorktree)
+                    .await?;
                 return Err(Adrift::NoWorktree {
                     job: job_id,
                     cause: Box::new(cause),
@@ -118,7 +119,12 @@ where
         // assembled, which is what makes the path `job_brief` writes one the
         // Drone can actually read.
         if let Err((filename, cause)) = copy_attachments(&job, &worktree) {
-            self.interrupt(&job).await?;
+            // `no_worktree` and not a trigger of its own. A worktree missing
+            // the files the brief tells the Drone to open is not one work can
+            // start in, which is the same state the line above leaves behind
+            // and the same person's to fix.
+            self.stopped_before_a_drone(&job, EscalationTrigger::NoWorktree)
+                .await?;
             return Err(Adrift::AttachmentUnreadable {
                 job: job_id,
                 filename,
@@ -398,8 +404,15 @@ where
         }
         // The step the Drone was **put on**, which is where its pointer is —
         // not the step the slot has advanced to beneath it.
-        let (job_id, spawned_on, _) = at_work.drone();
+        let (job_id, spawned_on, drone_id) = at_work.drone();
         let heard = at_work.heard();
+        // **Before anything moves the Job**, because the slot is what holds the
+        // events and the arms below take it. Recording twice is harmless — the
+        // spend row is keyed on the Drone — so `boundary::stood_down` folding
+        // the same run again costs nothing and neither of the two has to know
+        // about the other. See `crate::allowance`.
+        self.record_spend(&job_id, &drone_id, &at_work.spent(&self.now()))
+            .await?;
         // The status is read before the ending is folded, because an escalated
         // Job keeps its Drone: a process that is gone no longer proves the Job
         // was working, and asking one that already stopped to stop again is the
@@ -512,27 +525,38 @@ where
         }
     }
 
-    /// Pause the Job for a person, holding its worktree as-is.
+    /// Pause the Job for a person, holding its worktree as-is, before any
+    /// process existed.
     ///
-    /// `interrupted` is the trigger the registry gives for "a Job marked
-    /// running has no matching OS process", which is literally what a worktree
-    /// that would not be created and a Drone that would not start both leave
-    /// behind. **No trigger names an infrastructure failure at dispatch**, and
-    /// that gap is named in this crate's report rather than papered over with a
-    /// trigger that means something else.
+    /// **The trigger is a parameter because the answer differs and the fact
+    /// does not.** Every caller is upstream of the spawn, so on all of them
+    /// nothing is running and nothing is missing; what changes is who fixes it
+    /// — `no_worktree` the disk or the repository, `not_configurable` the
+    /// Manifest or the model roster, `would_not_start` the environment the
+    /// daemon runs in. That is what a person reads off the badge, and it is all
+    /// they get before they open the Job. All three are Job-level, so
+    /// [`core_model::StepLevelTrigger::of`] keeps them out of `last_verdict`.
     ///
-    /// Preparation used to come through here and no longer does: a
-    /// `setup.requires` command that fails leaves a worktree and no process to
-    /// be missing, so `crate::preparing` raises `not_prepared` instead. The
-    /// remaining callers are the ones where the sentence above still holds.
-    pub(crate) async fn interrupt(&self, job: &Job) -> Result<(), Adrift> {
-        self.move_job(
-            job,
-            Target::Escalated(EscalationTrigger::Interrupted),
-            Actor::Fleet,
-        )
-        .await
-        .map(|_| ())
+    /// **It was one trigger, `interrupted`, until 2026-08-31**, and this
+    /// method's doc used to say outright that no trigger named an
+    /// infrastructure failure at dispatch. Three do now. `interrupted` means a
+    /// Job marked running has no matching OS process, so borrowing it here sent
+    /// whoever read it after a dead Drone on a Job that had never spawned one —
+    /// the third time this defect was found in a week, after `gate_failure`'s
+    /// verb and `not_prepared`'s split.
+    ///
+    /// It is not a home for `interrupted` itself. The two sites that raise it
+    /// legitimately — a Drone that vanished, and a submission for a Job outside
+    /// the slot — have a process to be missing, which is the one thing no
+    /// caller here does.
+    pub(crate) async fn stopped_before_a_drone(
+        &self,
+        job: &Job,
+        trigger: EscalationTrigger,
+    ) -> Result<(), Adrift> {
+        self.move_job(job, Target::Escalated(trigger), Actor::Fleet)
+            .await
+            .map(|_| ())
     }
 
     /// Write the branch the worktree was made on. **No event and nothing

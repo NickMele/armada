@@ -132,6 +132,11 @@
 //! `headroom` is `#44`'s and the twenty-sixth: a Job held back because the
 //! machine is short, and a running one left alone when it fills.
 //!
+//! `starting` is the twenty-seventh: a Job that never started, and which of the
+//! three triggers upstream of a spawn its badge names. Every case asserts the
+//! trigger rather than the `Adrift`, because the error was always right and the
+//! one word a person reads before they open anything was not.
+//!
 //! `boundary` is the twenty-second, and the only thing here that asks the
 //! operating system what happened to a Drone. Every other boundary test asserts
 //! bookkeeping, and would pass over a `setsid`-detached Drone still running.
@@ -146,7 +151,8 @@
 //! nothing is kept of a document too big to have been judged, nothing of a step
 //! the mechanical tier stopped, and no copy is ever written over.
 
-mod asking;
+mod allowance;
+mod asked;
 mod attachments;
 mod attribution;
 mod boundary;
@@ -187,6 +193,7 @@ mod planted;
 mod preparing;
 mod process;
 mod proposing;
+mod questioning;
 mod queued;
 mod redirect;
 mod redispatch;
@@ -202,6 +209,7 @@ mod serving;
 mod session;
 mod settling;
 mod silence;
+mod starting;
 mod stuck;
 mod tmp;
 mod tools;

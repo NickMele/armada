@@ -12,7 +12,11 @@
 // copy of a roster that already has two, and an unknown status renders as
 // itself rather than as a guess.
 
-import type { QuestionInFlight } from "./question";
+import type {
+  QuestionInFlight,
+  RedirectInFlight,
+  RedirectWaiting,
+} from "./waiting";
 import type { ProtocolVersion } from "./version";
 
 /** A Job, as a list row. `crates/ipc/src/job.rs`. */
@@ -45,6 +49,25 @@ export type JobSummary = {
    * as a first one.
    */
   redispatched_from?: string;
+  /**
+   * Whether this job's drone is waiting on an answer from a person. Since
+   * protocol 5.7.
+   *
+   * **A flag, and deliberately not the question.** What was asked and what each
+   * answer commits to are on the detail's `asking`, which is one job somebody
+   * opened; this is a board drawn for every job at once, and a paragraph per row
+   * to say one true-or-false is what the summary redacts `facts` to avoid.
+   *
+   * **Absent is false and both mean the same thing**, unlike every other
+   * optional field here — fleet omits it when it is not set rather than sending
+   * `false`, because a bool has no third reading for absence to carry.
+   *
+   * It is the one field on the row that is not read off the record. It comes
+   * from the working slot, so it is false on every summary built where no slot
+   * was in hand, which is every event publish — correct rather than a gap, since
+   * `job.asking` is the message that says a question exists.
+   */
+  asking?: boolean;
   /**
    * When the Job was created. On the row rather than only on the detail,
    * because elapsed is what answers "is this stuck" without opening it, and
@@ -118,6 +141,15 @@ export type JobDetail = {
    */
   delivery?: JobDelivery;
   /**
+   * What the job has spent, against what it is allowed to. Since protocol 5.5.
+   *
+   * **Present on every job, including one that has spent nothing.** That is
+   * what makes a job which cost nothing legible as such rather than as a job
+   * Fleet has not measured, and it is why `drones` is on the payload: a cost of
+   * zero across one drone and a cost of zero across none are different facts.
+   */
+  spend?: JobSpend;
+  /**
    * The redirect this job's drone has been sent and has not answered yet.
    * Since protocol 4.14.
    *
@@ -144,7 +176,7 @@ export type JobDetail = {
   redirect_waiting?: RedirectWaiting;
   /**
    * The question this job's drone asked and nobody has answered yet. Since
-   * protocol 5.4.
+   * protocol 5.7.
    *
    * **Absent is the ordinary case**, and it covers three things the job's own
    * status tells apart: a drone that never asked, a drone whose question has
@@ -218,50 +250,6 @@ export type Stuck = {
 };
 
 /**
- * A redirect that has gone into the drone's session and has not been answered.
- * `crates/ipc/src/detail.rs`.
- *
- * **A fact about the last act, not a status.** The job is `escalated` and stays
- * there — it returns to `running` on the drone taking a turn, which is evidence
- * it resumed rather than evidence somebody pressed a button. It arrives one way
- * only, on the open job's detail: the wait ends with the job's own move to
- * `running`, and that move is already an event.
- *
- * It says Fleet wrote to the pipe and no more than that. Whether the drone read
- * the instruction is answered by the next turn it takes, so there is no
- * delivery flag here and there is nothing on this seam that could set one.
- */
-export type RedirectInFlight = {
-  /**
-   * When the instruction went into the session, by Fleet's clock. **A surface
-   * subtracts; nothing ticks on the wire**, as `JudgeInFlight.since` does.
-   */
-  sent_at: string;
-};
-
-/**
- * A person's note written where no drone was there to take it, still waiting
- * for the one that comes next. `crates/ipc/src/detail.rs`.
- *
- * **It is the note or it is nothing**: the record holds the words and clears
- * them on delivery, so this value's presence *is* the fact that one is waiting,
- * and there is no delivered flag and no instant because there is no state
- * between the two.
- *
- * **The words cross, and a count would not do.** `RedirectInFlight` serves no
- * text because that instruction went into a live session and the move back to
- * `running` is the answer; this one has gone nowhere, and a field saying only
- * that *some* note waits leaves a person who wrote two no better off.
- */
-export type RedirectWaiting = {
-  /**
-   * What the person typed, verbatim. **Never blank** — the record refuses a
-   * note with nothing in it, so a present value always has words in it.
-   */
-  note: string;
-};
-
-/**
  * What a finished job's branch came to.
  *
  * **Three independent absences, and a surface must not fold them.** A commit
@@ -270,6 +258,39 @@ export type RedirectWaiting = {
  * and a row that treated them as one would say "unknown" about a branch that is
  * sitting on a remote right now.
  */
+/**
+ * What one job has spent and what it is allowed to spend.
+ *
+ * **Four numbers and no verdict**, deliberately. Whether the job is over is the
+ * pair being compared, and a boolean could not say by how much or which of the
+ * two ceilings it was — which is exactly what `queued_reason: "over_budget"`
+ * leaves out.
+ *
+ * `cost_micros` and `cost_cap_micros` are millionths of a dollar, and they are
+ * **notional**. The figure is what the run would have cost at list price, which
+ * is not what a subscription account is billed; a surface that presents it as
+ * money owed is presenting a currency nothing here spends. What it is for is
+ * telling a runaway from a job that started with a cold cache.
+ *
+ * `ran_ms` has no cap beside it on purpose. Wall clock is bounded by a
+ * different setting at a different scope, which nothing enforces yet, so the
+ * figure is here to be read and there is no ceiling to draw it against.
+ */
+export type JobSpend = {
+  /** What every drone of this job has cost, added up, in millionths of a dollar. */
+  cost_micros: number;
+  /** What it may cost before Fleet stops starting drones on it. */
+  cost_cap_micros: number;
+  /** How many turns every drone of this job has taken, added up. */
+  turns: number;
+  /** How many it may take before Fleet stops starting drones on it. */
+  turn_cap: number;
+  /** How long those drones ran, in milliseconds. No cap beside it — see above. */
+  ran_ms: number;
+  /** How many drones this is the sum of. Zero is a job nothing has run for. */
+  drones: number;
+};
+
 export type JobDelivery = {
   /** The commit Fleet wrote over the job's work, by its id. */
   commit?: string;
@@ -588,6 +609,13 @@ export type Judged = {
   produced?: string;
   /** What that difference does to whoever consumes it. The triage line. */
   consequence?: string;
+  /**
+   * Where the whole brief this verdict answers was written, relative to the
+   * repository root. **The path, never the question** — a brief is the request,
+   * the deliverable and the whole branch diff, and Bridge does not read the
+   * filesystem. Absent where Fleet kept no brief.
+   */
+  brief_path?: string;
 };
 
 /**
@@ -844,9 +872,18 @@ export type {
   StreamMessage,
 } from "./events";
 
-// The question a drone asks and the answer a person picks, re-exported on the
-// same terms and cut out for the same reason. See `question.ts`.
-export type { AskedOption, ChosenAnswer, QuestionInFlight } from "./question";
+// What is outstanding on a live drone and what a person sends it back,
+// re-exported so `protocol.ts` stays the one import for the wire vocabulary.
+// Cut out for `events.ts`'s reason — this file reached 900 again — and the cut
+// is the one `crates/ipc/src/waiting.rs` makes on the other side. See
+// `waiting.ts`.
+export type {
+  AskedOption,
+  ChosenAnswer,
+  QuestionInFlight,
+  RedirectInFlight,
+  RedirectWaiting,
+} from "./waiting";
 
 /** A failure, flattened for the wire. `docs/contracts/error-contract.md`. */
 export type WireError = {

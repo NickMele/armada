@@ -30,7 +30,7 @@ use adapter_traits::{
     AgentHarness, Delivery, DroneSpawnConfig, Grant, McpConfig, Model, Prompt, SpawnConfigRefused,
     Toolbelt, Vcs, WorkProduct, Worktree,
 };
-use core_model::{Component, DroneId, Envelope, Job, JobId, Level, StepId};
+use core_model::{Component, DroneId, Envelope, EscalationTrigger, Job, JobId, Level, StepId};
 
 use crate::adrift::Adrift;
 use crate::briefing::Opening;
@@ -60,18 +60,21 @@ where
     /// Every failure leaves the Job `escalated` and returns the cause. A person
     /// decides; Fleet does not retry.
     ///
-    /// **A note waiting on the record rides the brief.** `#207`. It is folded
-    /// in **here** and not by whichever act reached the spawn, for the reason
-    /// the rebase is: this is the one funnel, and "the very next opening brief"
-    /// is a fact about the Job. A caller that had to remember it could forget.
+    /// **A note waiting on the record rides the brief.** `#207`, folded in
+    /// here rather than by whichever act reached the spawn: this is the one
+    /// funnel, and a caller told to remember it could forget.
     ///
-    /// **The branch is caught up first, and the brief is assembled after.**
-    /// See this module's header for why the order is that way round and why the
-    /// prompt is not a parameter. A catch-up that will not run joins the other
-    /// three pre-flight failures: the Job is interrupted and the cause is
-    /// returned, because a Drone put on a tree Fleet could not reconcile starts
-    /// from a state nobody has read. A rebase that ran and *conflicted* is not
-    /// that case — it is an answer, and it goes into the brief.
+    /// **The branch is caught up first, and the brief is assembled after**, for
+    /// the reason this module's header gives. A catch-up that will not run
+    /// stops the Job with `no_worktree`: a Drone put on a tree Fleet could not
+    /// reconcile starts from a state nobody has read. A rebase that ran and
+    /// *conflicted* is not that — it is an answer, and it goes into the brief.
+    ///
+    /// **Each failure below names who fixes it and none says `interrupted`.**
+    /// All five did until 2026-08-31, on Jobs that had never spawned a process
+    /// for anyone to find: `no_worktree` for the catch-up, `not_configurable`
+    /// for the brief and the spawn config, and `would_not_start` for the
+    /// transcript and the harness.
     pub(crate) async fn put_a_drone_on(
         &self,
         job: &Job,
@@ -84,7 +87,13 @@ where
         let moved = match self.caught_up_onto(&job_id, &worktree).await {
             Ok(moved) => moved,
             Err(cause) => {
-                self.interrupt(job).await?;
+                // `no_worktree`. The tree exists and git would not bring it up
+                // to its base, which leaves the same fact behind as a tree
+                // that was never made: there is nowhere a Drone can be started
+                // that anybody has read the state of. Whoever owns the disk and
+                // the repository fixes both.
+                self.stopped_before_a_drone(job, EscalationTrigger::NoWorktree)
+                    .await?;
                 return Err(cause);
             }
         };
@@ -96,14 +105,23 @@ where
         let brief = match opening.turn(job, job.workflow(), step, moved.as_ref()) {
             Ok(brief) => brief,
             Err(cause) => {
-                self.interrupt(job).await?;
+                // `not_configurable`, and so is the refusal below it. The brief
+                // is rendered from the Manifest and the Job's own values, so a
+                // brief that will not render is a line somebody wrote.
+                self.stopped_before_a_drone(job, EscalationTrigger::NotConfigurable)
+                    .await?;
                 return Err(Adrift::NotConfigurable { job: job_id, cause });
             }
         };
         let config = match self.spawn_config(job, step, &worktree, brief) {
             Ok(config) => config,
             Err(cause) => {
-                self.interrupt(job).await?;
+                // A model name no roster row carries is the case this is
+                // expected to catch, and `crates/config/src/roster.rs` says so.
+                // It reported as `interrupted` until 2026-08-31, which
+                // presented a typo in `armada.yml` as a crashed process.
+                self.stopped_before_a_drone(job, EscalationTrigger::NotConfigurable)
+                    .await?;
                 return Err(Adrift::NotConfigurable { job: job_id, cause });
             }
         };
@@ -118,14 +136,19 @@ where
         let recording = match self.recording(&job_id, &drone, step) {
             Ok(recording) => recording,
             Err(cause) => {
-                self.interrupt(job).await?;
+                // `would_not_start`. Everything resolved and the machine said
+                // no — here the disk, below the harness. Nothing ran, so there
+                // is no transcript to go through and the badge says as much.
+                self.stopped_before_a_drone(job, EscalationTrigger::WouldNotStart)
+                    .await?;
                 return Err(Adrift::NoTranscript { job: job_id, cause });
             }
         };
         let started = match drone::start(self.harness().as_ref(), &config).await {
             Ok(started) => started,
             Err(cause) => {
-                self.interrupt(job).await?;
+                self.stopped_before_a_drone(job, EscalationTrigger::WouldNotStart)
+                    .await?;
                 return Err(Adrift::NoDrone {
                     job: job_id,
                     cause: Box::new(cause),

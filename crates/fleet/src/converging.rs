@@ -12,14 +12,14 @@
 //! `escalation-triggers.toml`: *"active but not converging, **and the forced
 //! report also failed**"*. A Drone that thrashes and then reports when told to
 //! has not thrashed by that definition. Escalating at stage one would make
-//! `thrashing` mean "took a while"; escalating at stage two would spend a call
-//! and ignore what it said.
+//! `thrashing` mean "took a while"; at stage two it would spend a call and
+//! ignore what it said.
 //!
 //! [`Chain`] holds where a step stands and is cleared when the step changes, so
 //! a tripwire that stays tripped — drift does — buys no second call.
-//! **Nothing here kills a Drone.** `docs/concepts/helm.md`: a thrashing Drone
-//! is *held*, worktree intact, which leaves a redirect available. A Drone
-//! waiting on an answer is **not** thrashing — see `crate::asking`.
+//! **Nothing here kills a Drone.** `docs/concepts/helm.md` holds a thrashing
+//! Drone with its worktree intact, leaving a redirect available; one waiting on
+//! an answer is not thrashing at all — `crate::questioning`.
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
@@ -232,17 +232,13 @@ where
         job: &JobId,
         step: &StepId,
     ) -> Result<Option<Wandering>, Adrift> {
-        // A Drone that has submitted is at the gate, not thrashing; one that
-        // has asked a person a question is not working at all, and the wall
-        // clock runs while they think — without that second reading the
-        // tripwire fires the instant an answer lands, buying a Judge call on a
-        // step just unblocked. Both are cheaper than the tripwires and true
-        // regardless of them.
+        // At the gate, or waiting on a person — neither is thrashing, and both
+        // are cheaper than the tripwires. `crate::questioning` says why.
         if self.evidence_waiting_for(&job) > 0 {
             return Ok(None);
         }
         let at_work = working.as_ref().expect("the slot was read as full");
-        if crate::asking::waiting_on_an_answer(at_work) {
+        if crate::questioning::waiting_on_an_answer(at_work) {
             return Ok(None);
         }
         let Some(tripped) = self.tripped(at_work) else {

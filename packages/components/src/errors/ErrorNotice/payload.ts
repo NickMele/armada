@@ -205,6 +205,35 @@ export function copyDebugInfo(payload: DebugPayload, onCopied?: (what: string) =
 export const COPIED = "The debug info";
 
 /**
+ * Why the payload is safe to quote, and where that stops.
+ *
+ * **Two sentences, because one cannot be written that is true.** The first half
+ * is exactly right about `fields`: `ipc::WireValue` is five primitive variants,
+ * `Secret<T>` implements no `Display` and no `Serialize`, so formatting a
+ * credential into a field does not compile. Getting one in needs an explicit
+ * `expose()`, which is a deliberate act and greppable in one search.
+ *
+ * It says nothing about the rest of the payload, and the payload is not only
+ * `fields`. `message` and `chain` are prose written by whatever error `Display`
+ * impl raised them, and no type bounds what an author put there. Rendering the
+ * bounded claim over the whole artifact would promise an outcome the mechanism
+ * does not reach — and the mechanism is what the reader was owed.
+ *
+ * It also makes no claim about the wider context: a credential sitting in a
+ * repository file was never a `Secret<T>` and the type system was never
+ * involved.
+ *
+ * **Here rather than beside the expanded view, because two surfaces say it.**
+ * The expanded view shows it under the payload, and the file-an-issue dialog
+ * shows it against the envelope row — where it is the whole reason that row
+ * cannot be marked bounded and waved through. Two copies would be two claims
+ * about one mechanism, and the day the mechanism changed only one would move.
+ */
+export const SAFETY =
+  "Structured fields carry primitives only, and a credential does not compile into one. " +
+  "Nothing bounds the message or the chain, which are prose an error wrote — read them before you send this.";
+
+/**
  * What the act is called, wherever it appears — the control, the palette and
  * the tooltip beside its binding.
  *

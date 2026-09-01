@@ -118,6 +118,33 @@ pub struct JobSummary {
     /// without this a Board reads every second failure as a first one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub redispatched_from: Option<JobId>,
+    /// Whether this Job's Drone is waiting on an answer from a person.
+    ///
+    /// # A flag, and deliberately not the question
+    ///
+    /// The question, its options and what each commits to are on
+    /// [`JobDetail::asking`](crate::JobDetail), which is one Job somebody
+    /// opened. This is a Board drawn for every Job at once, and a list carrying
+    /// a paragraph of prose per row to say a single true-or-false is the cost
+    /// [`facts`](crate::JobDetail::facts) is redacted from the summary for.
+    ///
+    /// # It is the one thing on the row that is not from the record
+    ///
+    /// Every other field here is read off `core_model::Job`. This is read off
+    /// the working slot, which is why [`JobSummary::of`] takes it rather than
+    /// finding it — and why it is `false` on every summary built where no slot
+    /// was in hand, which is every event publish. That is correct rather than a
+    /// gap: a Job being created, advancing a step or losing its Drone is not a
+    /// Job that has just asked something, and the one message that says a
+    /// question exists is `job.asking`.
+    ///
+    /// # Why the Board needs it at all
+    ///
+    /// `who_is_acting` on `running` is `Drone`, so without this a Job waiting on
+    /// a person sits under **Running** and a question on a Job nobody has open
+    /// is invisible. `docs/concepts/job-board.md` carries the rule.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub asking: bool,
 }
 
 impl JobSummary {
@@ -126,10 +153,16 @@ impl JobSummary {
     /// The reason is a second argument because it is not on the record: the
     /// `jobs` row stores `status` and `job_events` stores why. Only a caller
     /// holding the log can supply it, which is Fleet.
+    /// `asking` is the fourth for [`queued_reason`](JobSummary::queued_reason)'s
+    /// reason, one layer further out: it is not on the record either, and only a
+    /// caller holding the working slot can supply it. A chained setter was the
+    /// alternative and was rejected — a summary built without the call would say
+    /// `false` silently, which is the redaction decision nobody made.
     pub fn of(
         job: &core_model::Job,
         reason: Option<&core_model::TransitionReason>,
         queued_reason: Option<core_model::QueuedReason>,
+        asking: bool,
     ) -> JobSummary {
         JobSummary {
             id: job.id().into(),
@@ -148,6 +181,7 @@ impl JobSummary {
             current_step_id: job.current_step_id().map(StepId::from),
             assigned_drone: job.assigned_drone().map(DroneId::from),
             redispatched_from: job.redispatched_from().map(JobId::from),
+            asking,
         }
     }
 }
@@ -207,7 +241,12 @@ pub struct Redirection {
 /// exactly what this conversion does not have.
 impl From<&core_model::Job> for JobSummary {
     fn from(job: &core_model::Job) -> JobSummary {
-        JobSummary::of(job, None, None)
+        // **`asking` is `false` here and that is the answer, not a default.**
+        // This conversion is what an event publish uses and it holds no slot;
+        // creation, a step advancing and a Drone arriving or leaving are none of
+        // them a Job that has just asked something. The message that says a
+        // question exists is `job.asking`, which carries the question itself.
+        JobSummary::of(job, None, None, false)
     }
 }
 

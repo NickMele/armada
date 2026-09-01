@@ -52,9 +52,9 @@ use tokio::process::{Child, ChildStdin};
 use tokio::sync::Mutex;
 use verification::OutcomeTurn;
 
-use crate::asking::Answered;
 use crate::briefing::{Declaring, Redeclaring};
 use crate::converging::ReportNow;
+use crate::questioning::Answer;
 use crate::resume::Redirection;
 use crate::silence::Poke;
 
@@ -137,12 +137,12 @@ pub trait LiveSession {
     /// apart from [`tell`](LiveSession::tell). A redirect is a person's own
     /// words and Fleet adds none; this is Fleet's own sentence built around a
     /// label the Drone itself offered, and there is no way to send other text
-    /// under it — [`Answered`] has no constructor taking one.
+    /// under it — [`Answer`] has no constructor taking one.
     ///
     /// One method taking either would let a person's free text arrive as though
     /// it were an answer to a closed question, which is the conversation
-    /// `crate::asking` exists instead of.
-    fn answer(&self, answer: &Answered) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    /// `crate::questioning` exists instead of.
+    fn answer(&self, answer: &Answer) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Ask a Drone that has said nothing whether it is still there.
     ///
@@ -238,10 +238,10 @@ impl Turn {
     /// A person's answer to the question this Drone asked, injected into a
     /// session already running.
     ///
-    /// The wording is [`Answered`]'s and there is no way to send other text
+    /// The wording is [`Answer`]'s and there is no way to send other text
     /// under it — which is the difference from [`redirection`](Turn::redirection),
     /// where a person's own words are exactly what travels.
-    pub fn answering(answer: &Answered) -> Turn {
+    pub fn answering(answer: &Answer) -> Turn {
         Turn::of(answer.text())
     }
 
@@ -359,7 +359,7 @@ impl LiveSession for DroneSession {
         self.say(&Turn::reporting(directive)).await
     }
 
-    async fn answer(&self, answer: &Answered) -> Result<(), io::Error> {
+    async fn answer(&self, answer: &Answer) -> Result<(), io::Error> {
         self.say(&Turn::answering(answer)).await
     }
 

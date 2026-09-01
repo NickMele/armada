@@ -112,7 +112,11 @@ pub enum Adrift {
     ///
     /// No trigger names an infrastructure failure at the gate, so this
     /// escalates nothing rather than borrowing a trigger that means something
-    /// else — the same gap `dispatch` names about its own failures.
+    /// else. `dispatch` used to name the same gap about its own failures and no
+    /// longer does — `no_worktree`, `not_configurable` and `would_not_start`
+    /// closed it upstream of a spawn. This one is still open because the
+    /// failure is downstream of every verdict: the work passed, and a commit
+    /// that would not run is not a Job that did not do it.
     NotCommitted {
         job: JobId,
         cause: Box<dyn Error + Send + Sync>,
@@ -192,11 +196,10 @@ pub enum Adrift {
     /// have kept, and the record would say a person injected context into a
     /// session that did not exist.
     NoDroneToRedirect { job: JobId },
-    /// An answer to a question that is not outstanding, is not the one
-    /// outstanding, names a label the Drone never offered, or would not go down
-    /// the pipe. **One variant carrying a sentence rather than four**: all four
-    /// are the same act refused for a reason the Job's state does not name, and
-    /// the recourse is identical — `crate::asking::NotAnswered` says which.
+    /// An answer that does not apply: nothing outstanding, the wrong question,
+    /// a label never offered, or a pipe that would not take it. **One variant
+    /// carrying a sentence rather than four** — the recourse is identical in all
+    /// four, and `crate::questioning::NotAnswered` says which this is.
     NotAnswerable { job: JobId, because: String },
     /// A review act was asked for on a Job that is not at a human gate.
     ///
@@ -554,8 +557,8 @@ impl fmt::Display for Adrift {
                  the worktree it left behind",
                 job.as_str()
             ),
-            // `crate::asking::NotAnswered`'s sentence, carried whole: a second
-            // wording here would be a second authority for one refusal.
+            // `questioning::NotAnswered`'s sentence, whole: a second wording
+            // here would be a second authority for one refusal.
             Adrift::NotAnswerable { because, .. } => out.write_str(because),
             Adrift::NotUnderReview { job, status } => write!(
                 out,

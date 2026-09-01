@@ -43,6 +43,7 @@ export const JOB_STATUS: Readonly<Record<string, Rendering | undefined>> = {
 /** `queued_reason`, keyed by the wire value. */
 export const QUEUED_REASON: Readonly<Record<string, Rendering | undefined>> = {
   "blocked_by_dependency": { verb: "blocked", icon: Link, badgeStatus: "not-started", statusToken: "--status-not-started" },
+  "over_budget": { verb: "over budget", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
   "waiting_on_resources": { verb: "waiting on resources", icon: Cpu, badgeStatus: "not-started", statusToken: "--status-not-started" },
 };
 
@@ -59,11 +60,14 @@ export const ESCALATION_REASON: Readonly<Record<string, Rendering | undefined>> 
   "hatch_unbidden": { verb: "stalled", icon: OctagonAlert, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "interrupted": { verb: "interrupted", icon: Unplug, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "loop_cap": { verb: "hit the iteration cap", icon: ArrowUpToLine, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "not_prepared": { verb: "the worktree was not prepared", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
+  "no_worktree": { verb: "the worktree was unusable", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
+  "not_configurable": { verb: "the Drone could not be configured", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
+  "not_prepared": { verb: "a required command did not succeed", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "resource_exhausted": { verb: "ran out of resources", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "silent": { verb: "stalled", icon: OctagonAlert, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "stalled": { verb: "stalled", icon: OctagonAlert, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "thrashing": { verb: "churning", icon: RefreshCw, badgeStatus: "escalated", statusToken: "--status-escalated" },
+  "would_not_start": { verb: "the Drone would not start", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
 };
 
 /** `check_outcome`, keyed by the wire value. */
@@ -155,12 +159,16 @@ export type Gap = {
 
 export const GAPS: readonly Gap[] = [
   { vocabulary: "job_status", variant: "escalated", missing: ["verb", "icon"] },
+  { vocabulary: "queued_reason", variant: "over_budget", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "blocked_by_policy", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "check_timeout", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "dependency_failed", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "evidence_too_large", missing: ["icon"] },
+  { vocabulary: "escalation_reason", variant: "no_worktree", missing: ["icon"] },
+  { vocabulary: "escalation_reason", variant: "not_configurable", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "not_prepared", missing: ["icon"] },
   { vocabulary: "escalation_reason", variant: "resource_exhausted", missing: ["icon"] },
+  { vocabulary: "escalation_reason", variant: "would_not_start", missing: ["icon"] },
   { vocabulary: "criterion_verdict_check", variant: "failed", missing: ["icon", "token"] },
   { vocabulary: "criterion_verdict_check", variant: "not_reached", missing: ["token"] },
   { vocabulary: "criterion_verdict_check", variant: "passed", missing: ["icon", "token"] },

@@ -16,7 +16,7 @@
 import WebSocket from "ws";
 
 import { PROTOCOL_VERSION } from "../shared/generated/protocol-version";
-import { connectedTo, NOTHING_YET } from "../shared/bridge";
+import { connectedTo, identifying, NOTHING_YET } from "../shared/bridge";
 import { connects, skew } from "../shared/version";
 import type { BridgeState, Connection } from "../shared/bridge";
 import type { JobHistory, Recorded } from "../shared/history";
@@ -27,7 +27,7 @@ import { JobReader } from "./reader";
 import { ReportsReader } from "./reports";
 import { ask, holdingsOf } from "./request";
 import { ReviewMaterial } from "./review";
-import { auditPath, HOST, machinePath, read } from "./runtime-file";
+import { HOST, machinePath, read, startingIdentity } from "./runtime-file";
 
 /** How long to wait before reading the runtime file again. */
 const RETRY_MS = 2000;
@@ -84,7 +84,7 @@ export class FleetConnection {
     this.wiring = wiring;
     // Resolved once, from the home main can see. A failure that cannot say
     // where its log is is half a failure.
-    this.current = { ...NOTHING_YET, bridge: { auditPath: auditPath(wiring.home) } };
+    this.current = { ...NOTHING_YET, bridge: startingIdentity(wiring.home) };
     this.turns = new ObserveSocket((observed) => this.publish({ observed }));
     this.material = new ReviewMaterial((change) => this.publish(change));
     this.watched = new JobReader<{ detail: JobDetail }>({
@@ -331,26 +331,17 @@ export class FleetConnection {
       return;
     }
 
-    if (event.kind === "job.judging") {
-      // **Re-read rather than fold.** The call in flight is served on the open
-      // Job's own `StepDetail.judging`, which is what a Bridge opened mid-call
-      // already reads, so folding this message into a second copy would give
-      // one fact two homes — and the one a surface picked would be whichever
+    if (event.kind === "job.judging" || event.kind === "job.asking") {
+      // **Re-read rather than fold**, and one arm for both because it is one
+      // argument. Each is served on the open Job's own field —
+      // `StepDetail.judging` and `asking` — which is what a Bridge opened
+      // mid-call or mid-question already reads, so folding either into a second
+      // copy would give one fact two homes and a surface would take whichever
       // arrived last. The event is the wake-up; the detail is the answer.
       //
       // Only the open Job's, for `job.files_changed`'s reason: nothing on the
-      // Board changes when a call goes out. Two reads per Judge call, against
-      // a call that lasts seconds to two minutes.
-      this.publish({ connection });
-      this.refresh(fleet.port, event.job_id);
-      return;
-    }
-
-    if (event.kind === "job.asking") {
-      // **Re-read rather than fold**, for `job.judging`'s reason exactly: the
-      // question is served on the open job's own `asking`, so folding this into
-      // a second copy would give one fact two homes. Two reads per question,
-      // against a question that waits as long as a person takes.
+      // Board changes when either goes out. Two reads per Judge call, and two
+      // per question against a wait as long as a person takes.
       this.publish({ connection });
       this.refresh(fleet.port, event.job_id);
       return;
@@ -499,7 +490,9 @@ export class FleetConnection {
   }
 
   private publish(change: Partial<BridgeState>): void {
-    this.current = { ...this.current, ...change };
+    // Fleet's version rides on the identity, so it is brought current in the
+    // one funnel every change passes through. `shared/bridge.ts` owns the rule.
+    this.current = identifying({ ...this.current, ...change });
     this.wiring.publish(this.current);
   }
 }

@@ -66,16 +66,27 @@ export type Failure = {
  * else. **Bridge holds no application version anywhere** — nothing publishes
  * one to the renderer — so the payload says "bridge protocol 5.2" rather than
  * inventing a number a reader would take for a release.
- *
- * Fleet's is reachable only where the caller already holds a `Connection`, and
- * of the five builders below exactly one does. The other four omit it, which
- * is wrong for a refusal in particular: a command Fleet refused came from a
- * Fleet whose version Bridge read out of the runtime file before connecting.
- * Closing it means threading the connection through four call sites in
- * `App.tsx`, or one field on `BridgeIdentity`, and neither file is this
- * branch's. Left absent and named rather than guessed.
  */
 const BRIDGE_PROTOCOL = spoken(PROTOCOL_VERSION);
+
+/**
+ * Both protocol versions, on every failure.
+ *
+ * Fleet's used to reach only the one builder that is handed a `Connection`, so
+ * four of the five payloads ended on a half tail — wrong for a refusal above
+ * all, since a command Fleet refused came from a Fleet whose version Bridge
+ * read before it connected. It is carried on `BridgeIdentity` now, derived
+ * once where the connection is published, and every builder reads it here.
+ *
+ * Absent stays absent: three connection states never got a version to read, and
+ * `debugInfo` omits the row rather than printing a blank one.
+ */
+function versions(bridge: BridgeIdentity): Pick<DebugPayload, "bridgeProtocol" | "fleetProtocol"> {
+  return {
+    bridgeProtocol: BRIDGE_PROTOCOL,
+    ...(bridge.fleetProtocol === null ? {} : { fleetProtocol: bridge.fleetProtocol }),
+  };
+}
 
 /**
  * Bridge's own machine log, as a payload field.
@@ -156,12 +167,6 @@ export function fleetFailure(
 ): Failure | null {
   if (statement.next === null) return null;
 
-  // Fleet's version is only known where a runtime file was read and believed.
-  // Three of the five states below hold a `FleetIdentity`; the other two never
-  // got a version to read, so their payload carries none.
-  const fleetProtocol =
-    "fleet" in connection ? spoken(connection.fleet.protocolVersion) : undefined;
-
   const base = {
     headline: statement.headline,
     next: statement.next,
@@ -187,8 +192,7 @@ export function fleetFailure(
         ...fields,
         ...logField(bridge),
       ],
-      bridgeProtocol: BRIDGE_PROTOCOL,
-      fleetProtocol,
+      ...versions(bridge),
     };
   }
 
@@ -371,7 +375,7 @@ export function rendererFailure(
         caught.stack === null
           ? frames(caught.where, caught.message)
           : frames(caught.stack, caught.message),
-      bridgeProtocol: BRIDGE_PROTOCOL,
+      ...versions(bridge),
     },
     // Safe to state flatly: Bridge and Fleet have independent lifetimes, so a
     // reload reconnects to the running daemon rather than restarting anything.
@@ -414,7 +418,7 @@ export function jobFailure(row: UnreadableJob, bridge: BridgeIdentity): Failure 
         ...(named ? [{ key: "job_log", value: `.armada/logs/${row.job_id}.jsonl` }] : []),
         ...logField(bridge),
       ],
-      bridgeProtocol: BRIDGE_PROTOCOL,
+      ...versions(bridge),
     },
     next: named
       ? "Every other job on the board is unaffected. Read the fault, or read the job's log."
@@ -492,7 +496,7 @@ export function refusalFailure(error: WireError, bridge: BridgeIdentity): Failur
         ...logField(bridge),
       ],
       chain: error.chain ?? [],
-      bridgeProtocol: BRIDGE_PROTOCOL,
+      ...versions(bridge),
     },
     headline: error.message,
     next: "Nothing was sent. Change what the command names, or read the log.",
@@ -522,7 +526,7 @@ export function uncaughtFailure(uncaught: Uncaught, bridge: BridgeIdentity): Fai
       message: uncaught.message,
       fields: [{ key: "from", value: uncaught.from }, ...logField(bridge)],
       chain: frames(uncaught.stack, uncaught.message),
-      bridgeProtocol: BRIDGE_PROTOCOL,
+      ...versions(bridge),
     },
     headline:
       uncaught.from === "rejection"

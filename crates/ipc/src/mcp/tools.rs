@@ -1,30 +1,32 @@
-//! The four tools a Drone is given, their arguments and their schemas.
+//! The tools a Drone is given, their arguments and their schemas.
 //!
 //! Split from the transport beside it because they are two things: [`mod@super`]
 //! reads JSON-RPC and decides what is answered, and this decides what a tool
-//! takes. A fifth tool touches only this file.
+//! takes. **A tool with nothing to share lives beside this file rather than in
+//! it** — [`ask`](mod@super::ask) is the first — so a fifth is a new file and
+//! about six lines here.
 //!
 //! # No tool takes a job id or a step id
 //!
 //! Fleet knows both, and a value a Drone supplies is a value a Drone chose. A
-//! call carrying one is refused **by name** rather than ignored — a field
-//! nothing reads is a promise the call makes and the system does not keep.
+//! call carrying one is refused **by name** — a field nothing reads is a promise
+//! the call makes and the system does not keep.
 //!
-//! [`CHECKS_TOOL`] takes nothing at all, not even a Check name: which Checks
-//! gate the step was frozen when the Job was approved, so a name here could
-//! only agree or disagree, and the disagreeing case is a Drone choosing which
-//! bar it is measured against. Its field list is empty, which makes every
-//! argument a named refusal.
+//! [`CHECKS_TOOL`] takes nothing at all, not even a Check name: the step's
+//! Checks were frozen at approval, so a name here could only agree or disagree,
+//! and disagreeing is a Drone choosing its own bar.
 //!
 //! # Why declaring is a different call from submitting
 //!
 //! A scope is declared **before** the work and evidence is submitted after it,
 //! so one call cannot carry both. Keeping them apart is also what leaves
-//! `submit_evidence` at the three prose fields the Agent Copy Contract names:
-//! a path list is not prose about the work, it is a claim about where the work
-//! will be, and Fleet checks it against the worktree rather than reading it.
+//! `submit_evidence` at the three prose fields the Agent Copy Contract names: a
+//! path list is a claim about where the work will be rather than prose about it,
+//! and Fleet checks it against the worktree rather than reading it.
 
 use serde_json::{json, Map, Value};
+
+use super::ask;
 
 /// The Evidence tool's own name, bare. The client joins it to the server name
 /// to make the allowlist entry.
@@ -37,14 +39,6 @@ pub const SCOPE_TOOL: &str = "declare_scope";
 /// no step, and `fleet::dry_run` says why the answer it returns can never be
 /// one.
 pub const CHECKS_TOOL: &str = "run_checks";
-
-/// The asking tool's name, bare.
-///
-/// **The one tool whose answer comes from a person.** Every other tool here is
-/// answered by Fleet out of what it already knows; this one is answered when
-/// somebody picks an option, which may be hours later and arrives as an
-/// injected turn rather than as this call's return value.
-pub const ASK_TOOL: &str = "ask_question";
 
 /// The three prose fields, and a refusal for anything else.
 ///
@@ -60,26 +54,6 @@ pub const SCOPE_FIELDS: &[&str] = &["context_paths"];
 /// Public for the same reason and carrying the opposite fact: a `run_checks`
 /// row with an empty detail is **accurate**, because there was no argument.
 pub const CHECKS_FIELDS: &[&str] = &[];
-/// The two fields the asking tool takes. Public for [`EVIDENCE_FIELDS`]' reason.
-pub const ASK_FIELDS: &[&str] = &["question", "options"];
-
-/// How few answers a question may offer.
-///
-/// **A question with one answer is not a question**, it is a notification, and
-/// a Drone that wanted to tell a person something has the Job's own log for it.
-/// Refused here rather than accepted and drawn as a single button, because a
-/// surface with one control is a surface that reads as a confirmation.
-pub const FEWEST_OPTIONS: usize = 2;
-
-/// How many answers a question may offer.
-///
-/// Four, matching the shape this workspace's own structured-question tool uses.
-/// The bound is not arbitrary: the whole value of asking rather than escalating
-/// is that a person answers in one glance, and a list long enough to scroll is
-/// a list somebody reads badly at 11pm. A Drone with more than four candidate
-/// splits has not finished thinking.
-pub const MOST_OPTIONS: usize = 4;
-
 /// What a Drone hands over. **The Agent Copy Contract's Work submission
 /// fields, spelled as the Drone is asked for them**, and nothing else.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -102,44 +76,6 @@ pub struct DeclareScope {
     /// Repository-relative. Legitimately empty: a step that will change nothing
     /// has declared that, and it is a different answer from not calling at all.
     pub context_paths: Vec<String>,
-}
-
-/// What a Drone asks a person, and what it will take as an answer.
-///
-/// **Structured, and there is no field for a free-text reply.** The owner asked
-/// for questions with structured answers, and this type is that requirement
-/// spelled: a Drone offers between [`FEWEST_OPTIONS`] and [`MOST_OPTIONS`]
-/// answers, a person picks one, and nothing types prose. A person who needs to
-/// say something the options do not cover uses `redirect_drone`, which already
-/// exists and is the one route a person's words reach a Drone by.
-///
-/// **It is not a conversation.** `docs/scope.md` records that orchestrator
-/// agents with sub agents was abandoned because having a conversation was not
-/// the tool that was wanted, and warns that a design reaching for "ask the
-/// agent" is reaching for that attempt again. The distinction is not whether a
-/// person is involved — it is whether a conversation is the medium. One question
-/// is outstanding per Job, it is asked once and answered once, and there is no
-/// id here joining it to an earlier one.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AskQuestion {
-    /// What the Drone wants to know. **Never blank** — a question with nothing
-    /// in it is a Drone asking a person to guess what it is stuck on.
-    pub question: String,
-    /// The answers it will accept. Between [`FEWEST_OPTIONS`] and
-    /// [`MOST_OPTIONS`], each with a distinct non-blank label and a non-blank
-    /// consequence.
-    pub options: Vec<AskedOption>,
-}
-
-/// One answer the Drone said it would accept.
-///
-/// **Both fields are required and neither may be blank.** A label with no
-/// consequence is a button whose effect a person has to guess, and guessing is
-/// the failure this whole tool exists to remove.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AskedOption {
-    pub label: String,
-    pub consequence: String,
 }
 
 /// Why a tool call did not read as a call of the tool it named.
@@ -199,11 +135,14 @@ pub enum NotAnArgument {
 impl core::fmt::Display for NotAnArgument {
     fn fmt(&self, out: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            NotAnArgument::NoSuchTool { named } => write!(
-                out,
-                "there is no tool called `{named}`. The tools are `{TOOL}`, \
-                 `{SCOPE_TOOL}`, `{CHECKS_TOOL}` and `{ASK_TOOL}`"
-            ),
+            NotAnArgument::NoSuchTool { named } => {
+                let asking = ask::ASK_TOOL;
+                write!(
+                    out,
+                    "there is no tool called `{named}`. The tools are `{TOOL}`, \
+                     `{SCOPE_TOOL}`, `{CHECKS_TOOL}` and `{asking}`"
+                )
+            }
             // The empty list is a real case now: `run_checks` takes nothing, so
             // a call of it with no arguments is a correct call and never
             // reaches here. A message reading "takes " with nothing after it
@@ -275,12 +214,15 @@ impl core::fmt::Display for NotAnArgument {
                  with `label`, which is what the person picks, and \
                  `consequence`, which is what you will do if they pick it"
             ),
-            NotAnArgument::WrongCount { offered } => write!(
-                out,
-                "you offered {offered} answers. Offer between {FEWEST_OPTIONS} \
-                 and {MOST_OPTIONS}: one answer is not a question, and a list \
-                 longer than {MOST_OPTIONS} is one a person reads badly"
-            ),
+            NotAnArgument::WrongCount { offered } => {
+                let (fewest, most) = (ask::FEWEST_OPTIONS, ask::MOST_OPTIONS);
+                write!(
+                    out,
+                    "you offered {offered} answers. Offer between {fewest} and \
+                     {most}: one answer is not a question, and a list longer \
+                     than {most} is one a person reads badly"
+                )
+            }
             NotAnArgument::SameTwice { label } => write!(
                 out,
                 "two answers are both labelled `{label}`. An answer names its \
@@ -351,52 +293,8 @@ pub(crate) fn declaration(arguments: &Map<String, Value>) -> Result<DeclareScope
     Ok(DeclareScope { context_paths })
 }
 
-/// The asking tool's arguments.
-///
-/// **Every rule the type states is checked here and refused by name.** A Drone
-/// whose question would draw badly is told what to fix and calls again; nothing
-/// is trimmed, defaulted or accepted-and-repaired, because the repair would be
-/// Fleet deciding what a person is asked.
-pub(crate) fn question(arguments: &Map<String, Value>) -> Result<AskQuestion, NotAnArgument> {
-    closed(arguments, ASK_TOOL, ASK_FIELDS)?;
-    let question = filled(arguments, "question")?;
-    let field = "options";
-    let listed = arguments
-        .get(field)
-        .ok_or(NotAnArgument::Missing { field })?
-        .as_array()
-        .ok_or(NotAnArgument::NotOptions { field })?;
-    if listed.len() < FEWEST_OPTIONS || listed.len() > MOST_OPTIONS {
-        return Err(NotAnArgument::WrongCount {
-            offered: listed.len(),
-        });
-    }
-    let mut options: Vec<AskedOption> = Vec::with_capacity(listed.len());
-    for offered in listed {
-        let offered = offered
-            .as_object()
-            .ok_or(NotAnArgument::NotOptions { field })?;
-        closed(offered, ASK_TOOL, OPTION_FIELDS)?;
-        let option = AskedOption {
-            label: filled(offered, "label")?,
-            consequence: filled(offered, "consequence")?,
-        };
-        if options.iter().any(|held| held.label == option.label) {
-            return Err(NotAnArgument::SameTwice {
-                label: option.label,
-            });
-        }
-        options.push(option);
-    }
-    Ok(AskQuestion { question, options })
-}
-
-/// What one answer's object may carry. **Not public**: it is refused through
-/// [`NotAnArgument::NotAField`] naming the tool, so no second reader spells it.
-const OPTION_FIELDS: &[&str] = &["label", "consequence"];
-
 /// Every argument is a field the tool takes.
-fn closed(
+pub(super) fn closed(
     arguments: &Map<String, Value>,
     tool: &'static str,
     takes: &'static [&'static str],
@@ -419,7 +317,7 @@ pub(crate) fn named(name: &str) -> Result<&'static str, NotAnArgument> {
         TOOL => Ok(TOOL),
         SCOPE_TOOL => Ok(SCOPE_TOOL),
         CHECKS_TOOL => Ok(CHECKS_TOOL),
-        ASK_TOOL => Ok(ASK_TOOL),
+        ask::ASK_TOOL => Ok(ask::ASK_TOOL),
         other => Err(NotAnArgument::NoSuchTool {
             named: other.to_string(),
         }),
@@ -435,9 +333,9 @@ pub(crate) fn argumentless(tool: &'static str) -> NotAnArgument {
             tool: SCOPE_TOOL,
             takes: SCOPE_FIELDS,
         },
-        ASK_TOOL => NotAnArgument::NoArguments {
-            tool: ASK_TOOL,
-            takes: ASK_FIELDS,
+        ask::ASK_TOOL => NotAnArgument::NoArguments {
+            tool: ask::ASK_TOOL,
+            takes: ask::ASK_FIELDS,
         },
         CHECKS_TOOL => NotAnArgument::NoArguments {
             tool: CHECKS_TOOL,
@@ -453,7 +351,10 @@ pub(crate) fn argumentless(tool: &'static str) -> NotAnArgument {
 /// Text that says something. **The blank check is here rather than at the Fleet
 /// boundary**, unlike [`crate::Redirection`]'s: this is a tool call, and a
 /// refusal a Drone reads is what it acts on. A 422 has nowhere to arrive.
-fn filled(arguments: &Map<String, Value>, field: &'static str) -> Result<String, NotAnArgument> {
+pub(super) fn filled(
+    arguments: &Map<String, Value>,
+    field: &'static str,
+) -> Result<String, NotAnArgument> {
     let said = text(arguments, field)?;
     if said.trim().is_empty() {
         return Err(NotAnArgument::Blank { field });
@@ -482,76 +383,12 @@ fn text(arguments: &Map<String, Value>, field: &'static str) -> Result<String, N
 /// schema is advice a client may enforce; [`closed`] is what makes a forged
 /// field a named refusal rather than a silently accepted one.
 pub(crate) fn listed() -> Vec<Value> {
-    vec![evidence_tool(), scope_tool(), checks_tool(), ask_tool()]
-}
-
-/// The asking tool.
-///
-/// **The description says what happens after the call returns**, because that
-/// is the part no other tool here has: the receipt is not the answer, the answer
-/// arrives as a later turn, and a Drone that treats the receipt as a refusal
-/// will guess — which is the exact failure this tool was built to remove.
-///
-/// It also says what asking is *not* for. Spike 6 measured that a description
-/// alone does not make a Drone call a tool, and the same finding cuts the other
-/// way: a tool described only by what it does gets called for everything. The
-/// bar is stated here and again in the briefing.
-fn ask_tool() -> Value {
-    json!({
-        "name": ASK_TOOL,
-        "description":
-            "Ask the person who approved this task a question you cannot answer \
-             from the repository, and offer them the answers you would accept. \
-             Use it when guessing would change what gets built, not when you \
-             merely have a preference — you were given the task because the \
-             ordinary decisions are yours. You get back a receipt, not an \
-             answer: the answer arrives later as a turn in this session, and it \
-             may be a while. Stop and wait for it. One question at a time, and \
-             asking again before this one is answered is refused.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "question": {
-                    "type": "string",
-                    "description":
-                        "What you need to know, in one sentence, with the facts \
-                         that make it decidable. Not what you would like an \
-                         opinion on.",
-                },
-                "options": {
-                    "type": "array",
-                    "minItems": FEWEST_OPTIONS,
-                    "maxItems": MOST_OPTIONS,
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "label": {
-                                "type": "string",
-                                "description":
-                                    "What the person picks, short enough to read \
-                                     at a glance. Distinct from every other label.",
-                            },
-                            "consequence": {
-                                "type": "string",
-                                "description":
-                                    "What you will do if they pick it. This is \
-                                     what they are actually deciding, so say the \
-                                     effect and not the reasoning.",
-                            },
-                        },
-                        "required": ["label", "consequence"],
-                        "additionalProperties": false,
-                    },
-                    "description":
-                        "The answers you will accept. Two to four. There is no \
-                         free-text reply — everything you want to be told has to \
-                         be one of these.",
-                },
-            },
-            "required": ["question", "options"],
-            "additionalProperties": false,
-        },
-    })
+    vec![
+        evidence_tool(),
+        scope_tool(),
+        checks_tool(),
+        ask::ask_tool(),
+    ]
 }
 
 /// The dry-run tool.

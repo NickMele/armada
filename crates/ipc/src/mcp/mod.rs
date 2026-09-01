@@ -21,6 +21,7 @@
 //! What one of them answers with is [`report`](mod@report). This module decides
 //! which method a message is and what is answered; it never decides what a
 //! field means.
+mod ask;
 mod report;
 mod tools;
 
@@ -29,11 +30,11 @@ use serde_json::{json, Value};
 
 use crate::codec::{encode, Unencodable};
 
+pub use ask::{AskQuestion, AskedOption, ASK_FIELDS, ASK_TOOL, FEWEST_OPTIONS, MOST_OPTIONS};
 pub use report::{CheckRan, CheckReport};
 pub use tools::{
-    AskQuestion, AskedOption, DeclareScope, NotAnArgument, SubmitEvidence, ASK_FIELDS, ASK_TOOL,
-    CHECKS_FIELDS, CHECKS_TOOL, EVIDENCE_FIELDS, FEWEST_OPTIONS, MOST_OPTIONS, SCOPE_FIELDS,
-    SCOPE_TOOL, TOOL,
+    DeclareScope, NotAnArgument, SubmitEvidence, CHECKS_FIELDS, CHECKS_TOOL, EVIDENCE_FIELDS,
+    SCOPE_FIELDS, SCOPE_TOOL, TOOL,
 };
 
 /// The name Armada's server is registered under in a Drone's MCP
@@ -297,7 +298,7 @@ fn called(id: CallId, params: Option<&Value>) -> Incoming {
         };
     }
     if tool == ASK_TOOL {
-        return match tools::question(arguments) {
+        return match ask::question(arguments) {
             Ok(asking) => Incoming::Ask { id, asking },
             Err(why) => Incoming::NotASubmission { id, why },
         };

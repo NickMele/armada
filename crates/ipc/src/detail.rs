@@ -30,9 +30,10 @@ use crate::checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 use crate::enums::{
     AdvanceGate, CriterionSource, DependencyDirection, JudgeVerdict, Recourse, StepState,
 };
-use crate::ids::{CriterionId, Instant, JobId, QuestionId, StepId};
+use crate::ids::{CriterionId, Instant, JobId, StepId};
 use crate::job::{JobSummary, Subject};
 use crate::overlap::ScopeOverlap;
+use crate::waiting::{QuestionInFlight, RedirectInFlight, RedirectWaiting};
 use crate::work::JobFootprint;
 
 /// What Fleet knows about one step beyond its `job_steps` row.
@@ -138,6 +139,19 @@ pub struct JobDetail {
     /// before it was ever stored.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delivery: Option<JobDelivery>,
+    /// What the Job has spent, against what it is allowed to.
+    ///
+    /// **Both halves or neither**, because either alone is unreadable: a figure
+    /// with no ceiling says nothing about whether the Job is near one, and a
+    /// ceiling with no figure says nothing about this Job at all. It is the
+    /// pair that tells a person which of the two signals held their Job back,
+    /// which is why the pair is one field.
+    ///
+    /// Present on every Job, including one that has spent nothing — that is
+    /// what makes a Job which cost nothing legible as such rather than as a Job
+    /// Fleet has not measured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spend: Option<JobSpend>,
     /// The redirect this Job's Drone has been sent and has not answered yet.
     ///
     /// **Absent is the ordinary case**, and on this field absent is the whole
@@ -294,12 +308,18 @@ impl JobDetail {
         stuck: Option<&core_model::Stuck>,
         write_scope_overlaps: Option<Vec<ScopeOverlap>>,
         delivery: Option<JobDelivery>,
+        spend: Option<JobSpend>,
     ) -> JobDetail {
         JobDetail {
-            job: JobSummary::of(job, reason, queued_reason),
+            // **From the question this call was already handed**, never a
+            // second argument: one fact, one source, and a detail whose row
+            // said `false` while its own `asking` held a question would be
+            // two answers to one question in one message.
+            job: JobSummary::of(job, reason, queued_reason, asking.is_some()),
             created_at: job.created_at().into(),
             branch: job.branch().map(|branch| branch.as_str().to_string()),
             delivery,
+            spend,
             steps: job
                 .steps()
                 .iter()
@@ -347,163 +367,6 @@ impl JobDetail {
             stuck: stuck.map(Stuck::of),
         }
     }
-}
-
-/// A person's redirect that has gone into the session and has not been answered.
-///
-/// **A fact about the last act, not a status.** The Job is `escalated` and stays
-/// there: it returns to `running` when the Drone takes a turn, which is evidence
-/// it resumed rather than evidence somebody pressed a button. Minting a status
-/// for the wait would mint one for a Job that is in the status it is already in
-/// — which is why `StepState` gained nothing for a Judge call in flight either.
-///
-/// # It says Fleet wrote to the pipe, and no more than that
-///
-/// Whether the Drone read the instruction is answered by the next turn it takes
-/// and by nothing else — a `tool_progress` heartbeat deliberately does not
-/// count, so a Drone wedged inside the call it was already wedged in does not
-/// clear this. The field is [`sent_at`](RedirectInFlight::sent_at) rather than
-/// `received_at` for that reason, and there is no delivery flag to add later:
-/// there is nothing on this seam that could set one honestly.
-///
-/// # Nothing ages it
-///
-/// The instant crosses once and every surface subtracts for itself, as
-/// [`JudgeInFlight::since`] does. A wait that lasts an hour costs this seam one
-/// message, and it ends where the Job's own move to `running` already says so.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RedirectInFlight {
-    /// When the instruction went into the Drone's session, by Fleet's clock.
-    ///
-    /// **The one field.** Who sent it is on the Job's log, what was said is the
-    /// person's own words and is deliberately not re-served, and which step it
-    /// was about is [`JobSummary::current_step_id`](crate::JobSummary) — a Job
-    /// that is `escalated` over a live Drone advances no step while it waits.
-    pub sent_at: Instant,
-}
-
-/// A person's note written where no Drone was there to take it, still waiting
-/// for the one that comes next.
-///
-/// # It is the note or it is nothing
-///
-/// The record holds the words and clears them the moment a Drone's opening
-/// brief is built from them, so the presence of this value **is** the fact that
-/// a note is waiting. There is no delivered flag and no instant, because there
-/// is no state between the two: `jobs.redirect_waiting` is set or it is not,
-/// and a surface drawn from it cannot show a note that has already gone.
-///
-/// # The words cross here and not on [`RedirectInFlight`]
-///
-/// That one deliberately serves no text, because the instruction went into a
-/// live session and the Job's move back to `running` is the answer a person is
-/// waiting for. This one has gone nowhere. The Job sits at `queued` looking
-/// exactly like a Job nobody typed anything into, and a field saying only that
-/// *some* note is waiting would leave a person who wrote two of them no better
-/// off than the log they cannot read from here.
-///
-/// It is not a new exposure either: `Adrift::NoteAlreadyWaiting` already quotes
-/// the held note back at whoever wrote the second one. What this does is make
-/// that an explicit redaction decision on the detail — beside `facts`, which is
-/// the requester's own free text and crosses here on the same grounds — rather
-/// than an accident of a `Display` impl.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RedirectWaiting {
-    /// What the person typed, verbatim. **Never blank** — the record refuses a
-    /// note with nothing in it, so a present value always has words in it.
-    pub note: String,
-}
-
-impl RedirectWaiting {
-    pub fn of(waiting: &core_model::RedirectWaiting) -> RedirectWaiting {
-        RedirectWaiting {
-            note: waiting.text().to_string(),
-        }
-    }
-}
-
-/// One question a Drone asked a person, while it is still unanswered.
-///
-/// # It is not a status, and neither registry is touched
-///
-/// `step-states.toml` declares six and `job-statuses.toml` eleven; a variant
-/// added to either is one the other side matches on, which is a **major** bump
-/// by this seam's own table. It would be the wrong fact anyway: a step whose
-/// Drone is waiting is `running` in exactly the way a step whose gate is asking
-/// a Judge is `running`, and it stops waiting without moving. So this rides
-/// beside the state, as [`JudgeInFlight`] does.
-///
-/// # A question is an event on a Job, not a conversation
-///
-/// `docs/scope.md` records that orchestrator agents with sub agents was
-/// abandoned because having a conversation was not the tool that was wanted.
-/// The distinction is not whether a person is involved — it is whether a
-/// conversation is the medium. So: **asked once, answered once**, one
-/// outstanding per Job, the answer one of the options the Drone offered, and no
-/// field a reply could arrive in. A person who needs to say something the
-/// options do not cover has `redirect_drone`.
-///
-/// **`asked_at` crosses once and every surface subtracts for itself**, as
-/// [`JudgeInFlight::since`] does. Nothing ticks: a question that waits an hour
-/// costs this seam two messages.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct QuestionInFlight {
-    /// The id Fleet minted for this question. **What an answer names**, and
-    /// what makes answering a question that has since been replaced a refusal
-    /// rather than a coincidence — see [`QuestionId`].
-    pub question_id: QuestionId,
-    /// Which step's Drone is waiting. A Job is `running` under one step at a
-    /// time and this is that step, so a rail can mark the row that is stopped.
-    pub step_id: StepId,
-    /// When the Drone asked, by Fleet's clock.
-    pub asked_at: Instant,
-    /// What was asked, in the Drone's own words. **One question, not a
-    /// thread** — there is no id joining this to an earlier one and no field a
-    /// follow-up could arrive in.
-    pub question: String,
-    /// What the Drone will accept as an answer. **Never fewer than two and
-    /// never more than four**, and every label distinct: Fleet refuses the tool
-    /// call otherwise, so a surface may draw these as a closed set of controls
-    /// without checking.
-    ///
-    /// The whole of "structured answers" is here. A person picks one of these
-    /// and types nothing.
-    pub options: Vec<AskedOption>,
-}
-
-/// One answer a Drone said it would accept.
-///
-/// **Two fields, because a label alone is not a decision.** `label` is what a
-/// control says and `consequence` is what pressing it commits to — which is the
-/// briefing register the design contract asks for, applied to the smallest
-/// surface there is. A person deciding between two ways of splitting a
-/// milestone at 11pm needs to be told what each produces, and the Drone is the
-/// only thing that knows.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AskedOption {
-    /// What a person picks. **The answer's own name** — an answer names the
-    /// label rather than a position, so a log line reads as a sentence and an
-    /// off-by-one cannot pick the wrong option.
-    pub label: String,
-    /// What the Drone will do if this one is picked, in its own words. Never
-    /// blank: Fleet refuses a question whose options do not say what they mean.
-    pub consequence: String,
-}
-
-/// A person's answer to one question. The request half of `answer_question`.
-///
-/// **It carries no prose and there is no field for any.** The answer is one of
-/// the labels the Drone offered, and an answer Fleet cannot match to one of them
-/// is refused rather than passed through — which is what keeps this from
-/// becoming the conversation `docs/scope.md` rejected. Words go to a Drone
-/// through [`Redirection`](crate::Redirection) and through nothing else.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ChosenAnswer {
-    /// Which question is being answered. A window that has been open across an
-    /// answered question names an id Fleet no longer holds, and is told so.
-    pub question_id: QuestionId,
-    /// The [`AskedOption::label`] chosen, verbatim.
-    pub chose: String,
 }
 
 /// One `job_steps` row: which step, where in the order, and where it got to.
@@ -740,6 +603,18 @@ pub struct Judged {
     /// triages on.**
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub consequence: Option<String>,
+    /// Where the whole brief this verdict answers was written, relative to the
+    /// repository root.
+    ///
+    /// **A reference, never the question**, the way [`CheckRun::output_path`]
+    /// is one: a brief carries the request, the deliverable and the whole
+    /// branch diff, and Bridge does not read the filesystem. **Absent where the
+    /// brief was not kept**, which is a verdict nobody can re-read against its
+    /// input rather than one with an empty question.
+    ///
+    /// [`CheckRun::output_path`]: crate::CheckRun::output_path
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub brief_path: Option<String>,
 }
 
 impl From<&core_model::Judgment> for Judged {
@@ -750,6 +625,7 @@ impl From<&core_model::Judgment> for Judged {
             expected: judgment.expected.clone(),
             produced: judgment.produced.clone(),
             consequence: judgment.consequence.clone(),
+            brief_path: judgment.brief_path.clone(),
         }
     }
 }
@@ -874,4 +750,42 @@ pub struct JobDelivery {
     /// The address a person clicks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pull_request: Option<String>,
+}
+
+/// What a Job has spent and what it is allowed to spend.
+///
+/// **Four numbers and no verdict.** Whether the Job is over is the pair being
+/// compared, and a client that was handed a boolean instead could not say by
+/// how much or which of the two signals it was — which is the whole of what
+/// `queued_reason = over_budget` does not carry.
+///
+/// `cost_micros` and `cost_cap_micros` are millionths of a dollar. They are
+/// integers because a cap compared as a float answers differently on two
+/// machines, and **notional**: `total_cost_usd` is what a run would have cost
+/// at list price, which is not what a subscription account is billed. It is a
+/// runaway detector denominated in dollars rather than an invoice, and a
+/// surface that presents it as money owed is presenting a currency nothing
+/// here spends.
+///
+/// `ran_ms` carries no cap beside it on purpose. Wall clock is bounded by
+/// `settings.drone-job-timeout`, which is a different row at a different scope
+/// and is not enforced yet — so the figure is here to be read and the ceiling
+/// is not here to be believed in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobSpend {
+    /// What every Drone of this Job has cost, added up.
+    pub cost_micros: u64,
+    /// What it may cost before Fleet stops starting Drones on it.
+    pub cost_cap_micros: u64,
+    /// How many turns every Drone of this Job has taken, added up.
+    pub turns: u64,
+    /// How many it may take before Fleet stops starting Drones on it.
+    pub turn_cap: u64,
+    /// How long those Drones ran, in milliseconds. **No cap beside it** — see
+    /// this type's note.
+    pub ran_ms: u64,
+    /// How many Drones this is the sum of. **Zero is not the same as a cost of
+    /// zero**: it is a Job nothing has run for yet, and a surface that folded
+    /// the two would say a Job was free when nobody had tried it.
+    pub drones: u64,
 }

@@ -18,8 +18,8 @@ use std::time::Duration;
 use adapter_traits::DroneEvent;
 use core_model::{
     AcceptanceCriterion, CriterionId, CriterionSource, EscalationTrigger, Facts, Job, JobId,
-    JudgeVerdict, Judgment, ManifestId, ModelName, NewJob, RepoPath, StepId, StepLevelTrigger,
-    StepSeed, StepVerdict, Timestamp, TopLevelOrigin, Ulid, Urgency,
+    ManifestId, ModelName, NewJob, RepoPath, StepId, StepLevelTrigger, StepSeed, StepVerdict,
+    Timestamp, TopLevelOrigin, Ulid, Urgency,
 };
 use ipc::mcp::DeclareScope;
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Gate, Scoped, Sketch};
@@ -657,13 +657,12 @@ fn a_restart_after_a_gate_that_could_not_decide_is_not_told_its_work_failed() {
 #[test]
 fn a_restart_after_a_gate_failure_is_told_its_work_did_not_pass() {
     let mut stopped = stopped_by(EscalationTrigger::GateFailure);
-    stopped.judged = vec![Judgment {
-        criterion_id: CriterionId::new("c1"),
-        verdict: JudgeVerdict::NotMet,
-        expected: Some(String::from("the reader stops one line later")),
-        produced: Some(String::from("the reader stops where it did")),
-        consequence: Some(String::from("every caller still reads short")),
-    }];
+    stopped.judged = vec![testkit::refusal(
+        "c1",
+        "the reader stops one line later",
+        "the reader stops where it did",
+        "every caller still reads short",
+    )];
     let said = restarted(&stopped);
 
     assert!(said.contains("checked and did not pass"), "{said}");

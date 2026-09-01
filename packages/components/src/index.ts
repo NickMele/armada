@@ -89,3 +89,4 @@ export * from "./screens/TheShell/TheShell";
 // not a primitive and is not a composition of one.
 export * from "./errors/ErrorCode/ErrorCode";
 export * from "./errors/ErrorNotice/ErrorNotice";
+export * from "./errors/FileAnIssue/FileAnIssue";

@@ -124,6 +124,31 @@ export const TheRegistryHasNoWordForIt: Story = {
 };
 
 /**
+ * The brief, on a refusal and on a pass alike.
+ *
+ * **A verdict that cannot be re-read against its input is one nobody can argue
+ * with.** The path is the whole of what Bridge shows — a brief carries the
+ * request, the deliverable and the entire branch diff, and Bridge does not read
+ * the filesystem — so it is mono, subtle, and copies on click, exactly as a
+ * Check's output path does one row up.
+ *
+ * **On the met row too, and that is the point.** A Judge that refuses wrongly
+ * is argued with the same day; a Judge that *passes* something it should have
+ * refused is the quiet failure, and that one is only visible against what it
+ * was shown. It sits at the end of the head line, so a met verdict is still one
+ * line.
+ */
+export const WhereTheBriefWasKept: Story = {
+  args: {
+    label: "What the judge answered",
+    rows: [
+      { ...met, briefPath: ".armada/briefs/01JOB/implement.1.c1.txt" },
+      { ...refused, briefPath: ".armada/briefs/01JOB/implement.1.c2.txt" },
+    ],
+  },
+};
+
+/**
  * Where these actually draw: beneath the step the Judge judged, in the rail on
  * job detail.
  *

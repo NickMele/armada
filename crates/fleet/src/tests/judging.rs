@@ -29,6 +29,7 @@ use testkit::{FakeJudge, FakeWorkProduct, Gate, Scoped, Sketch};
 use ipc::{JobDetail, RunId};
 use verification::Request;
 
+use crate::asked::Asked;
 use crate::at_step::AtStep;
 use crate::gate::{apply, rule_on, Ruling};
 use crate::judging::{Aloft, JudgeBudget, Judging, Marking};
@@ -71,6 +72,7 @@ fn judged_by(client: FakeJudge) -> Judging {
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: Marking::detached(),
+        asked: Asked::nowhere(),
     }
 }
 
@@ -373,6 +375,7 @@ async fn a_step_that_declares_no_criterion_never_asks() {
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: Marking::detached(),
+        asked: Asked::nowhere(),
     };
 
     let ruling = rule_on(
@@ -423,6 +426,7 @@ async fn a_failing_check_never_reaches_the_judge() {
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: Marking::detached(),
+        asked: Asked::nowhere(),
     };
 
     let ruling = rule_on(
@@ -464,6 +468,7 @@ async fn the_call_carries_the_patch_and_the_facts_and_nothing_the_drone_wrote() 
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: Marking::detached(),
+        asked: Asked::nowhere(),
     };
 
     rule_on(
@@ -746,6 +751,7 @@ async fn while_judging(judge: FakeJudge, worktree: &Worktree) -> (Vec<ipc::JobJu
         default_model: Model::named("the-cheap-model").expect("a model name"),
         environment: Environment::nothing(),
         marking: marking(aloft.clone(), events.clone()),
+        asked: Asked::nowhere(),
     };
     rule_on(
         at,

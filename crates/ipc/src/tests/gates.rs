@@ -5,6 +5,7 @@
 //! a person — rendered as a step with no check on it, because neither the
 //! declaration nor the gate was on the wire at all.
 
+use super::detail_of;
 use core_model::{
     AdvanceGate, CriterionId, EvidenceType, Facts, FrozenWorkflow, GamingCheck, GamingPattern, Job,
     JobId, JudgeCheck, JudgeCriterion, ManifestId, ModelName, NewJob, ResolvedStep, StepId,
@@ -116,18 +117,7 @@ fn gated_job() -> Job {
 /// no check on it — the opposite of what happens.
 #[test]
 fn a_step_says_it_will_stop_for_a_person_before_it_stops() {
-    let detail = JobDetail::of(
-        &gated_job(),
-        None,
-        None,
-        &[],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
+    let detail = detail_of(&gated_job(), &[]);
     let json = encode(&detail).expect("a detail is plain data");
 
     let gates: Vec<&str> = detail
@@ -159,18 +149,7 @@ fn a_step_says_it_will_stop_for_a_person_before_it_stops() {
 /// there is one.
 #[test]
 fn a_declared_judge_check_crosses_as_counts_and_a_panel_only_above_one() {
-    let detail = JobDetail::of(
-        &gated_job(),
-        None,
-        None,
-        &[],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
+    let detail = detail_of(&gated_job(), &[]);
     let judged: Vec<&Vec<DeclaredJudge>> = detail
         .steps
         .iter()
@@ -217,25 +196,13 @@ fn a_declared_judge_check_crosses_as_counts_and_a_panel_only_above_one() {
 #[test]
 fn a_step_the_workflow_does_not_declare_carries_neither_key() {
     let job = job();
-    let declared = encode(&JobDetail::of(
-        &job,
-        None,
-        None,
-        &[],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    ))
-    .expect("plain data");
+    let declared = encode(&detail_of(&job, &[])).expect("plain data");
     assert!(
         declared.contains("\"judge_checks\":[]") && declared.contains("\"advance_gate\":\"auto\""),
         "a declared step answers both: {declared}"
     );
 
-    let mut detail = JobDetail::of(&job, None, None, &[], None, None, None, None, None, None);
+    let mut detail = detail_of(&job, &[]);
     detail.steps[0].judge_checks = None;
     detail.steps[0].advance_gate = None;
     let unanswerable = encode(&detail).expect("plain data");

@@ -31,8 +31,8 @@ use core_model::{
 use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
     ChangesRequested, JobDelivery, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory,
-    JobId, JobList, JobSummary, ManifestId, ManifestSummary, ModelChoices, Overruled, ProposeJob,
-    Redirection, Redispatched, Work, WorkflowId, WorkflowSummary,
+    JobId, JobList, JobSpend, JobSummary, ManifestId, ManifestSummary, ModelChoices, Overruled,
+    ProposeJob, Redirection, Redispatched, Work, WorkflowId, WorkflowSummary,
 };
 use store::LoadJobError;
 
@@ -163,6 +163,23 @@ where
             }
         };
         let queued = self.queued_reason(&job).await?;
+        // **Read for every Job, unlike the footprint and the delivery above.**
+        // Those two are absent until a Job finishes; this one is what a person
+        // watching a running Job wants most, and it is one indexed query. The
+        // cap travels with the figure because neither half is readable alone.
+        let allowance = self.allowance();
+        let spent = self
+            .spend_of(job.id())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        let spend = Some(JobSpend {
+            cost_micros: spent.cost_micros,
+            cost_cap_micros: allowance.cost().count(),
+            turns: spent.turns,
+            turn_cap: allowance.turns(),
+            ran_ms: spent.ran_ms,
+            drones: spent.drones,
+        });
         // Before `step_facts`, which consumes the Check runs: the
         // classification reads them to answer whether an override is available,
         // and reading them twice would be a second answer to one question.
@@ -186,6 +203,7 @@ where
             stuck.as_ref(),
             overlaps,
             delivery,
+            spend,
         ))
     }
 
@@ -622,7 +640,7 @@ where
     /// the row rather than re-reading the board — and not because anything
     /// about it is different.
     ///
-    /// The four refusals are `crate::asking::NotAnswered`'s and it says each;
+    /// The four refusals are `crate::questioning::NotAnswered`'s and it says each;
     /// this only carries one out as the 409 it is.
     async fn answer_question(
         &self,
@@ -648,7 +666,7 @@ where
     /// **The receipt says the question was taken and never that it was
     /// answered.** What a person chose arrives in the Drone's own session as a
     /// turn, however much later, which is why this call does not block. See
-    /// `crate::asking`.
+    /// `crate::questioning`.
     async fn ask_question(
         &self,
         caller: api::Caller,
@@ -744,14 +762,21 @@ where
         })
     }
 
-    /// A Job as a Board row, with the reason its last transition stored.
+    /// A Job as a Board row, with the reason its last transition stored and
+    /// whether its Drone is waiting on somebody.
+    ///
+    /// **The slot read is free on every row but the working ones.**
+    /// `Fleet::question_awaited` answers `None` for a Job that holds no slot
+    /// without touching the store, which is every row on a Board but the handful
+    /// being worked.
     async fn summarised(&self, job: &Job) -> Result<JobSummary, Refusal> {
         let reason = self
             .last_reason(job.id())
             .await
             .map_err(|why| self.refusal(why))?;
         let queued = self.queued_reason(job).await?;
-        Ok(JobSummary::of(job, reason.as_ref(), queued))
+        let asking = self.question_awaited(job.id()).await.is_some();
+        Ok(JobSummary::of(job, reason.as_ref(), queued, asking))
     }
 
     /// Why an approved Job has not started, worked out from the board as it
@@ -761,14 +786,18 @@ where
     /// but the waiting ones — the board read is the cost, and a status that
     /// cannot have this reason must not pay it.
     ///
-    /// The dependency half is [`clear_to_run`] and the resource half is
-    /// `Fleet::room_for_another` — both the predicates admission itself uses.
-    /// A second answer here is how a Board comes to say a Job is blocked while
-    /// Fleet is starting it.
+    /// The dependency half is [`clear_to_run`], the budget half is
+    /// `Fleet::overspent` and the resource half is `Fleet::room_for_another` —
+    /// all three the predicates admission itself uses, asked in the order
+    /// admission asks them. A second answer here is how a Board comes to say a
+    /// Job is blocked while Fleet is starting it.
     ///
-    /// **`None` is the registry's `none`** — approved, unblocked, and there is
-    /// room. **Nothing is stored**: headroom frees on its own, so a reason
-    /// written down is wrong from the moment it is.
+    /// **`None` is the registry's `none`** — approved, unblocked, inside its
+    /// budget, and there is room. **Nothing is stored**: headroom frees on its
+    /// own, so a reason written down is wrong from the moment it is. The budget
+    /// half does not free on its own and is still computed here, because what
+    /// changes it is a person raising the cap and a stored label would survive
+    /// that.
     async fn queued_reason(&self, job: &Job) -> Result<Option<CoreQueuedReason>, Refusal> {
         if job.status() != CoreJobStatus::Queued {
             return Ok(None);
@@ -781,6 +810,20 @@ where
             .collect();
         if !clear_to_run(job, &standing) {
             return Ok(Some(CoreQueuedReason::BlockedByDependency));
+        }
+        // **Before the machine reading, and not only because admission asks it
+        // first.** Headroom frees on its own and a spent budget does not, so a
+        // Job that is both would be told it is waiting for something that is
+        // already on its way when the thing actually holding it needs a person.
+        // The dollars and the turns fold to this one label; which of the two it
+        // was is on the Job's detail, where the figures are.
+        if self
+            .overspent(job)
+            .await
+            .map_err(|why| self.refusal(why))?
+            .is_some()
+        {
+            return Ok(Some(CoreQueuedReason::OverBudget));
         }
         // **The same predicate admission opens with**, asked of the same
         // roster. The bound and each of the three machine readings fold to the

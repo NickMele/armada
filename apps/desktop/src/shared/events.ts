@@ -16,7 +16,7 @@ import type {
   JudgeInFlight,
   Reason,
 } from "./protocol";
-import type { QuestionInFlight } from "./question";
+import type { QuestionInFlight } from "./waiting";
 import type { ProtocolVersion } from "./version";
 
 /** One message from Fleet to a connected client. `crates/ipc/src/event.rs`. */

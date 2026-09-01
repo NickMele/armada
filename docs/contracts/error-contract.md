@@ -275,6 +275,50 @@ the mechanism does not make — and none of it says anything about a credential
 that was never a `Secret<T>` in the first place, sitting in a repository file
 or echoed by a subprocess.
 
+### What a person files
+
+**Copying stays on the machine. Filing leaves it**, so they are two acts and
+only the second one has a review. `Copy debug info` puts the payload on the
+clipboard in one press. **File an issue** opens a dialog naming every item that
+would go, with its text on screen and a control to take it out. **Send is never
+one press from an error.**
+
+**It appears where the payload is legible in full** — a full-surface error and
+an expanded view — and never on a toast or an inline error. A review needs the
+artifact on screen, and a toast is gone before it would be read.
+
+**Armada makes no scrub claim.** It states that nothing is removed on the way
+out and puts the exact text of every item on the row it belongs to. A promise it
+cannot keep is worse than the work of reading — and the mechanism that bounds
+`fields` reaches nothing else, which is why the error's own record carries the
+same sentence pair the expanded view shows rather than being waved through as
+structured and safe.
+
+**The record cannot be taken out, and that is not a safety claim.** An issue
+with the record removed is a sentence somebody typed, which is the thing this
+replaces. Required is about the report being answerable, not about the artifact
+being bounded — and an item a person cannot remove is the item they had most
+better have read.
+
+**Nothing is sent, and the dialog says so.** Fleet holds no credential for an
+issue tracker and nothing on the wire names the repository's remote, so filing
+produces a body and puts it on the clipboard. Two things follow and are not
+built: a **Reported** strip carrying the issue link and the time, and offering
+an already-filed issue to the second occurrence of a code. Both need an issue
+number, and none ever reaches Bridge. **The control therefore stays after a
+filing**, and nothing on the error says one happened — a strip saying "reported"
+on the evidence that somebody pressed copy would be Armada claiming to know
+something it does not. **The body carries what was attached and what was not, by
+name** — with no strip, it is the only place that answer lives.
+
+**The record is the only item offered today.** Doctor is not built; a Judge
+response and a diff belong to a Job read whole, which no failure surface holds;
+and whether an observed transcript may leave the machine is
+`[observe-transcript-sharing]` on [Observe](../concepts/observe.md), which is
+open and names attaching one to a bug report as removing today's bound. Only the
+transcript's absence is said on screen, because it is the only one somebody
+looks for and finds missing.
+
 ---
 
 ## Deliberately outside this
@@ -306,6 +350,27 @@ do.**
 
 ## Open questions
 
+- **[filing-transport]** How does a filed issue actually reach a tracker, and
+  whose act is the send? Filing is specified above and built, and it ends at
+  the clipboard: Fleet holds no credential for an issue tracker and nothing on
+  the wire names the repository's remote, so the dialog says outright that
+  Armada opens nothing and the last step is the person's. Three things decide
+  it, and none has been argued. **Where a credential lives** — Armada brokers
+  credentials to Drones and `Secret<T>` is the type that carries one, but a
+  tracker credential is the app's rather than a Job's, and no config surface
+  claims it. **What names the remote** — a Manifest knows its repository and
+  the wire does not carry it, so either the operation grows a field or Bridge
+  reads it from somewhere that is not the wire. **Whether Armada sends at all**
+  — `crates/ipc/operations.toml` already records the strongest `No` in the file
+  against an agent filing on the owner's behalf, on the grounds that the record
+  is evidence and his reason is the finding; whether that reasoning extends to
+  the owner pressing Send himself is a different question and is not answered
+  there. Two built-and-refused things wait on this and are named above: the
+  **Reported** strip, and offering an already-filed issue to a second
+  occurrence. Both need an issue number, which only a real send produces —
+  which is also why `[error-occurrence-grouping]` below has nothing waiting on
+  it today.
+
 - **[error-occurrence-grouping]** Does Bridge count a repeat occurrence of an
   error on `code` alone, or on `code` plus `step_id`? Raised by the error-states
   drawing on 2026-08-31, which offers an already-filed issue to the second
@@ -314,7 +379,9 @@ do.**
   different steps of different Jobs are one row under it. Code plus `step_id`
   under-groups in the other direction — the same fault at two steps reads as two
   problems. What decides it is which one a person filing a bug would rather be
-  wrong about, and that has not been argued.
+  wrong about, and that has not been argued. **Nothing waits on it today**: the
+  offer it counts for needs an issue number to point at, Bridge never receives
+  one, and no occurrence counting is built.
 
 Every question the three source proposals raised is answered above. Two only
 looked open and were settled elsewhere: Bridge gets no log viewer, and where a

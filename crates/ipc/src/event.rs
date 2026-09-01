@@ -27,6 +27,11 @@
 //! and would need a subscribe message, an unsubscribe message and a rule for
 //! what a resync means when the set changes mid-stream.
 //!
+//! **Over 500 lines and left as one file.** One `#[serde(tag = "kind")]` enum
+//! is the closed set a rule compares against `operations.toml` row by row, so a
+//! split would assemble that roster from two places. It was at exactly 500
+//! before `job.asking`.
+//!
 //! # Seven event kinds are produced at M1
 //!
 //! The rest of `operations.toml`'s — `alert.raised`, `review.ready`,
@@ -78,11 +83,12 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::detail::{JudgeInFlight, QuestionInFlight};
+use crate::detail::JudgeInFlight;
 use crate::enums::{Actor, JobStatus, StepState};
 use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
 use crate::job::{JobForgotten, JobList, JobSummary};
 use crate::version::ProtocolVersion;
+use crate::waiting::QuestionInFlight;
 
 /// A position in the stream. Monotonic, assigned by Fleet, never reused.
 ///

@@ -19,7 +19,7 @@
 //! | `stalled` | **once `poke_limit` is spent** | the escalation |
 //!
 //! **Two silences are declined outright**: evidence at the gate, and a question
-//! waiting on a person — neither is silent, see `crate::asking`.
+//! waiting on a person — neither is silent, see `crate::questioning`.
 //! `escalation-triggers.toml` types the trigger and this builds what it says.
 //! **No model is asked anything**: whether the Drone spoke is a count, and *why*
 //! it stopped is another issue's.
@@ -179,8 +179,8 @@ where
         //
         // Free, and read second only because the evidence reading is cheaper
         // still: this is a field on the slot already in hand. See
-        // `crate::asking`.
-        if crate::asking::waiting_on_an_answer(at_work) {
+        // `crate::questioning`.
+        if crate::questioning::waiting_on_an_answer(at_work) {
             at_work.waiting(self.now());
             return Ok(None);
         }

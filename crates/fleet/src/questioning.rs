@@ -45,7 +45,7 @@ use crate::working::Working;
 /// answer naming an id a peer invented joins to nothing — and the cost of a
 /// join that silently succeeds against the wrong question is a dispatched Job.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Asked {
+pub struct Question {
     id: core_model::Ulid,
     step: StepId,
     asked_at: Timestamp,
@@ -53,15 +53,15 @@ pub struct Asked {
     options: Vec<AskedOption>,
 }
 
-impl Asked {
+impl Question {
     /// A question Fleet has just taken, on the step whose Drone asked it.
     pub(crate) fn minted(
         id: core_model::Ulid,
         step: StepId,
         asked_at: Timestamp,
         asking: AskQuestion,
-    ) -> Asked {
-        Asked {
+    ) -> Question {
+        Question {
             id,
             step,
             asked_at,
@@ -93,17 +93,15 @@ impl Asked {
 
     /// Every label offered, for a refusal that names them.
     pub(crate) fn labels(&self) -> Vec<&str> {
-        self.options
-            .iter()
-            .map(|option| option.label.as_str())
-            .collect()
+        self.options.iter().map(|o| o.label.as_str()).collect()
     }
 
-    /// The wire shape, for `get_job` and for the event.
-    pub(crate) fn in_flight(&self, job_step: &StepId) -> ipc::QuestionInFlight {
+    /// The wire shape, for `get_job` and for the event. **No step parameter**:
+    /// a question belongs to the step whose Drone asked it.
+    pub(crate) fn in_flight(&self) -> ipc::QuestionInFlight {
         ipc::QuestionInFlight {
             question_id: ipc::QuestionId::from(&self.id),
-            step_id: ipc::StepId::from(job_step),
+            step_id: ipc::StepId::from(&self.step),
             asked_at: (&self.asked_at).into(),
             question: self.question.clone(),
             options: self
@@ -124,20 +122,19 @@ impl Asked {
 /// [`ReportNow`] have and for their reason. What varies is the question and the
 /// option, and both came from the Drone itself.
 ///
-/// **It restates the question.** The answer may arrive hours later in a session
-/// that has done other things since, and a bare label would be a word with no
-/// antecedent. The consequence is echoed because it is the Drone's own reading
-/// of what that option commits to, which removes the last place two readings
-/// could differ.
+/// **It restates the question**, because the answer may arrive hours later in a
+/// session that has done other things since and a bare label would be a word
+/// with no antecedent. The consequence is echoed because it is the Drone's own
+/// reading of what that option commits to.
 ///
 /// [`Poke`]: crate::Poke
 /// [`ReportNow`]: crate::ReportNow
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Answered(String);
+pub struct Answer(String);
 
-impl Answered {
-    pub(crate) fn to(question: &str, chose: &AskedOption) -> Answered {
-        Answered(format!(
+impl Answer {
+    pub(crate) fn to(question: &str, chose: &AskedOption) -> Answer {
+        Answer(format!(
             "You asked: {question}\n\n\
              The answer is: {}\n\
              Which you said means: {}\n\n\
@@ -203,10 +200,10 @@ impl std::error::Error for NotAsked {}
 pub enum NotAnswered {
     /// No question is outstanding on this Job.
     NothingIsAsking { job: JobId },
-    /// A question is outstanding and it is not the one being answered — the
-    /// window was open across an answer. **Refused rather than applied to
-    /// whatever is outstanding now**, because a label that matched the newer
-    /// question by coincidence would dispatch work nobody chose.
+    /// The window was open across an answer, so this names a question that is
+    /// gone. **Refused rather than applied to whatever is outstanding now**: a
+    /// label matching the newer question by chance would dispatch work nobody
+    /// chose.
     Superseded { job: JobId },
     /// The label is not one the Drone offered.
     NotOffered { chose: String, offered: Vec<String> },
@@ -217,11 +214,10 @@ pub enum NotAnswered {
 impl core::fmt::Display for NotAnswered {
     fn fmt(&self, out: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            NotAnswered::NothingIsAsking { job } => write!(
-                out,
-                "job {} has no drone waiting on an answer",
-                job.as_str()
-            ),
+            NotAnswered::NothingIsAsking { job } => {
+                let id = job.as_str();
+                write!(out, "job {id} has no drone waiting on an answer")
+            }
             NotAnswered::Superseded { job } => write!(
                 out,
                 "the question being answered on job {} is not the one \
@@ -278,7 +274,7 @@ where
         &self,
         caller: &JobId,
         asking: AskQuestion,
-    ) -> Result<Asked, NotAsked> {
+    ) -> Result<Question, NotAsked> {
         let Some(slot) = self.slot_of(caller).await else {
             return Err(NotAsked::NothingIsWorking);
         };
@@ -306,7 +302,7 @@ where
             });
         }
         let now = self.now();
-        let asked = Asked::minted(self.mint().ulid(), step.clone(), now.clone(), asking);
+        let asked = Question::minted(self.mint().ulid(), step.clone(), now.clone(), asking);
         at_work.asks(asked.clone());
         // **Restarted here, not when the answer lands.** The clock a poke is
         // measured from is the moment the Drone was last spoken to or last
@@ -317,7 +313,7 @@ where
         self.events().publish(ipc::Event::JobAsking(ipc::JobAsking {
             job_id: ipc::JobId::from(&job),
             step_id: ipc::StepId::from(&step),
-            asking: Some(asked.in_flight(&step)),
+            asking: Some(asked.in_flight()),
             // **The Drone, not Fleet.** Fleet caused nothing here; it took
             // a question a Drone chose to ask.
             actor: Actor::Drone.into(),
@@ -369,7 +365,7 @@ where
             });
         };
         let step = asked.step().clone();
-        let told = Answered::to(asked.question(), chosen);
+        let told = Answer::to(asked.question(), chosen);
         let label = chosen.label.clone();
         // **The write before the clear.** A session that will not take the
         // answer leaves the question outstanding, so a person can try again
@@ -427,13 +423,13 @@ where
             .as_ref()
             .filter(|at_work| at_work.is(job))
             .and_then(|at_work| at_work.asked())
-            .map(|asked| asked.in_flight(asked.step()))
+            .map(Question::in_flight)
     }
 
     /// Write the question into the Job's own log. **Fields, never an
     /// interpolated message**, so a query can find every step that had to ask
     /// — which is the number that says whether a workflow's brief is enough.
-    fn noted_asked(&self, job: &JobId, step: &StepId, asked: &Asked) {
+    fn noted_asked(&self, job: &JobId, step: &StepId, asked: &Question) {
         let envelope = Envelope::new(
             self.now(),
             Level::Info,
@@ -455,9 +451,9 @@ where
         let _ = transcript::note(&self.host().repo_root, job, &envelope);
     }
 
-    /// Write the answer into the Job's own log. **Where a decision a person
-    /// made is recorded, beside the verdicts** — readable afterwards by somebody
-    /// working out why a Job was split the way it was.
+    /// Write the answer into the Job's own log. **Where a person's decision is
+    /// recorded, beside the verdicts** — readable afterwards by somebody working
+    /// out why a Job was split the way it was.
     fn noted_answered(&self, job: &JobId, step: &StepId, question_id: &str, chose: &str) {
         let envelope = Envelope::new(
             self.now(),
@@ -492,8 +488,8 @@ impl From<NotAsked> for ipc::mcp::NotRecorded {
     }
 }
 
-/// The Adrift a person's refusal crosses the seam as. `IllegalMove` in every
-/// case, which is what the four are: the Job exists and the act does not apply.
+/// The Adrift a person's refusal crosses as. `IllegalMove` in all four cases:
+/// the Job exists and the act does not apply to it as it stands.
 impl NotAnswered {
     pub(crate) fn about(self, job: &JobId) -> Adrift {
         Adrift::NotAnswerable {

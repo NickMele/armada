@@ -1,4 +1,4 @@
-// Where a Job's work is, and what the Job was told — the two halves of the
+// Where a Job's work is, what the Job was told, and what it has spent — the
 // region a person opens when a Job has gone wrong.
 //
 // # Derived is not served, and the region says which
@@ -17,13 +17,20 @@
 // `shell.openPath` would be an arbitrary-file capability wearing a row's
 // clothes. So this file draws the path and main opens it, from one derivation.
 //
-// # No count, ever
+// # No count Bridge would have to invent
 //
-// The drawing shows "142 lines · 0 error". Nothing counts either, so a row
-// names its path and stops. The only `meta` here says a file is not written
-// yet, which is read off `branch`: the worktree is created and the branch
-// stamped on the Job before the log is opened, so a Job with no branch has
-// nothing under any of these paths.
+// The drawing shows "142 lines · 0 error". Nothing counts lines or errors, so a
+// path row names its path and stops. The `meta` on one of them says a file is
+// not written yet, which is read off `branch`: the worktree is created and the
+// branch stamped on the Job before the log is opened, so a Job with no branch
+// has nothing under any of these paths.
+//
+// **What the Job has spent is the exception, and it is the rule's own reason
+// that admits it.** `JobDetail.spend` is served — Fleet is the only side that
+// can add it up, because a Job's Drones do not know about each other — so
+// drawing it here is reading a figure rather than inventing one. It is the
+// second group, under a rule, and `spending` below carries why both halves of
+// each pair are on the row.
 
 import { File, Folder, GitBranch } from "lucide-react";
 import type { JobBriefProps, JobDetailLog, JobLogReferenceRow, NotOpened } from "@armada/components";
@@ -33,8 +40,10 @@ import { artifactPath, repoOf } from "../../shared/artifacts";
 import type { Artifact, Opened } from "../../shared/artifacts";
 import type {
   JobDetail as JobWhole,
+  JobSpend,
   JobSummary,
 } from "../../shared/protocol";
+import { lasting } from "./duration";
 import type { ManifestSummary } from "../../shared/setup";
 
 export { repoOf };
@@ -168,7 +177,83 @@ export function workOf(
     rows.push(transcript(repo, job));
   }
 
+  rows.push(...spending(whole.spend));
+
   return { brief: briefOf(whole), rows, note: noteOf(repo, dispatched) };
+}
+
+/**
+ * What the job has spent, against what it is allowed to spend.
+ *
+ * **The one exception to this region's "no count, ever" rule, and it is the
+ * rule's own reason that admits it.** That rule was written because nothing
+ * counted: a file's lines and a log's errors are figures Bridge would have had
+ * to invent, so a row named its path and stopped. These four are served —
+ * `JobDetail.spend`, since protocol 5.5 — and Fleet is the only side that can
+ * add them up, because a job's drones do not know about each other.
+ *
+ * **Both halves on one row.** A figure with no ceiling says nothing about
+ * whether the job is near one, and a ceiling with no figure says nothing about
+ * this job. It is the pair that tells a person which of the two signals held
+ * their job back, which is what the `over budget` badge on its own cannot.
+ *
+ * **The wall clock has no ceiling beside it** and says so, because there is
+ * none to draw: it is bounded by a setting at a different scope that nothing
+ * enforces yet, and a figure drawn as though it were capped would be the
+ * unenforced-cap failure in another shape.
+ *
+ * Absent on a Fleet older than 5.5, which draws nothing rather than zeroes —
+ * a job that cost nothing and a Fleet that does not count are different facts.
+ * No glyph on either row: nothing in the icon registry depicts money or a turn,
+ * and the values read as what they are.
+ */
+function spending(spend: JobSpend | undefined): JobLogReferenceRow[] {
+  if (spend === undefined) return [];
+  return [
+    {
+      iconLabel: "Spent",
+      value: `${money(spend.cost_micros)} of ${money(spend.cost_cap_micros)}`,
+      meta: droneCount(spend.drones),
+      separated: true,
+    },
+    {
+      iconLabel: "Turns",
+      value: `${spend.turns} of ${spend.turn_cap} turns`,
+      meta: `${lasting(spend.ran_ms)} of drone time, uncapped`,
+    },
+  ];
+}
+
+/**
+ * A spend, from millionths of a dollar.
+ *
+ * **Hedged, and the same rendering `turns.ts` uses**, for the same two reasons.
+ * The design contract spells an estimated value `~$2.40` and never `$2.40`; and
+ * the figure is notional besides — it is what the run would have cost at list
+ * price, which is not what a subscription account is billed.
+ *
+ * **Four places under a cent**, so a job that has cost a tenth of a penny does
+ * not round to `~$0.00` and read as free.
+ */
+function money(micros: number): string {
+  const dollars = micros / 1_000_000;
+  return `~$${dollars.toFixed(dollars > 0 && dollars < CENT ? 4 : 2)}`;
+}
+
+/** A cent, in dollars. Below this two decimal places round to nothing. */
+const CENT = 0.01;
+
+/**
+ * How many drones the figure is the sum of.
+ *
+ * **Zero is stated rather than left out**, because zero drones and a cost of
+ * zero are different facts: one is a job nobody has run yet and the other is a
+ * job that ran for free, and a row that said nothing would let a reader take
+ * the first for the second.
+ */
+function droneCount(drones: number): string {
+  if (drones === 0) return "no drone has run yet";
+  return drones === 1 ? "across 1 drone" : `across ${drones} drones`;
 }
 
 /** A file that will exist, named before it does. Never a count. */

@@ -21,7 +21,7 @@
 // |---|---|
 // | Finished | `terminal` |
 // | Running | `mode` is `Working` — `running` and `piloted`, because a job somebody has taken over is still moving |
-// | Needs you | `who_is_acting` is `Person` — `awaiting_approval`, `awaiting_attestation`, `awaiting_review`, `escalated` |
+// | Needs you | `who_is_acting` is `Person` — `awaiting_approval`, `awaiting_attestation`, `awaiting_review`, `escalated` — **or the row says `asking`** |
 // | Queued | `who_is_acting` is `Drone` — `queued` |
 //
 // **Every tab is a positive rule and none is a leftover.** `Needs you` was
@@ -30,6 +30,14 @@
 // rather than on the rule, so the first status added anywhere would have joined
 // it silently. The registry has said `who_is_acting = "Person"` on exactly those
 // four all along; the codegen just was not carrying it.
+//
+// **`asking` is the one rule that is not a lifecycle row, and it is still a
+// positive one.** A drone waiting on a person's answer is on a `running` job —
+// nothing about the status moves while it waits, which is deliberate and is why
+// there is no seventh step state — so the registry has nothing to say about it
+// and cannot. The row carries the fact instead. Without it a question would sit
+// under Running and be invisible until somebody happened to open that job, which
+// is the whole failure `Needs you` exists to prevent.
 //
 // **The order of the two mode-and-actor tests is the one thing to read
 // carefully.** `piloted` is `Working` and its actor is a `Person`, so `Working`
@@ -119,6 +127,16 @@ export function tabOf(job: JobSummary): StateTab | null {
   const life = JOB_LIFECYCLE[job.status];
   if (life === undefined) return null;
   if (life.terminal) return "finished";
+  // **The one rule here that is not a lifecycle row, and it is first for a
+  // reason.** A drone waiting on an answer is on a `running` job whose
+  // `who_is_acting` is `Drone`, so every rule below would put it under Running
+  // — and a question on a job nobody has open would be invisible until somebody
+  // opened it. The registry cannot say this: it is a fact about a live slot
+  // rather than about a status, which is exactly why it rides on the row.
+  //
+  // It is above `terminal` in intent and below it in code because a terminal
+  // job has no drone left to be waiting, so the two can never both be true.
+  if (job.asking) return "needs-you";
   // Before the actor, and not after it: `piloted` is `Working` with a person
   // acting, and a job somebody has taken over is still moving.
   if (life.mode === "Working") return "running";

@@ -102,7 +102,8 @@
 
 pub mod admitting;
 pub mod adrift;
-pub mod asking;
+pub mod allowance;
+pub mod asked;
 pub mod at_step;
 mod boundary;
 pub mod briefing;
@@ -139,6 +140,7 @@ pub mod preparing;
 pub mod process;
 pub mod proposal;
 pub mod proposing;
+pub mod questioning;
 pub mod readmitting;
 pub mod redaction;
 pub mod redispatch;
@@ -170,7 +172,8 @@ pub mod working;
 mod tests;
 
 pub use adrift::{Adrift, NotDeclared, NotSubmitted};
-pub use asking::{Answered, Asked, NotAnswered, NotAsked, Told};
+pub use allowance::{Allowance, Micros, Overspent};
+pub use asked::Asked;
 pub use at_step::AtStep;
 pub use clock::{Clock, SystemClock};
 pub use converging::{ReportNow, Stage, StepNorms, Tripwire, Wandering};
@@ -193,6 +196,7 @@ pub use peer::{NotACaller, PeerOf};
 pub use process::{holder_of, Holder, ProbeFailed, StartedAt};
 pub use proposal::{proposed, Proposing};
 pub use proposing::{NotProposed, Proposal, ProposedJob, Unresolved};
+pub use questioning::{Answer, NotAnswered, NotAsked, Question, Told};
 pub use redaction::Redactor;
 pub use redispatch::Replacement;
 pub use reporting::{Counted, Filed, NotFiled};

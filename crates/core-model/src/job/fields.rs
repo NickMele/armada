@@ -136,28 +136,45 @@ impl Urgency {
 /// moment headroom frees. It is computed from `dependencies` and live headroom
 /// at read time.
 ///
-/// **Two variants and not three.** The registry's vocabulary reads
-/// `blocked_by_dependency / waiting_on_resources / none`, and `none` is the
-/// absence of one — `Option<QueuedReason>` carries it, so there is no variant
-/// meaning "no reason" for a renderer to have a case for.
+/// **Three variants and not four.** The registry's vocabulary reads
+/// `blocked_by_dependency / over_budget / waiting_on_resources / none`, and
+/// `none` is the absence of one — `Option<QueuedReason>` carries it, so there
+/// is no variant meaning "no reason" for a renderer to have a case for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QueuedReason {
     /// A Job it depends on has not reached `completed_success`.
     BlockedByDependency,
+    /// Its Drones have already spent more than the Job is allowed, so Fleet
+    /// will not start another one on it.
+    ///
+    /// **The one reason here that does not clear on its own.** Headroom frees
+    /// and an upstream finishes; a spent budget stays spent, and what clears
+    /// this is a person raising the cap. That is why it is a reason to wait
+    /// rather than an escalation trigger: nothing has gone wrong with the work,
+    /// and the Job is one number away from running.
+    ///
+    /// **Which signal it was — the dollars or the turns — is not carried
+    /// here**, for the reason `fleet::headroom::Short` is not a variant of this
+    /// enum either: the registry gives `queued` one label per kind of wait, and
+    /// telling the two apart is done from the figures on the Job's detail,
+    /// where what was spent stands beside what was allowed.
+    OverBudget,
     /// Nothing is in its way but the slot.
     WaitingOnResources,
 }
 
 impl QueuedReason {
-    /// Both variants, in the order `job-statuses.toml` names them.
+    /// Every variant, in the order `job-statuses.toml` names them.
     pub const ALL: &'static [QueuedReason] = &[
         QueuedReason::BlockedByDependency,
+        QueuedReason::OverBudget,
         QueuedReason::WaitingOnResources,
     ];
 
     pub fn as_wire(&self) -> &'static str {
         match self {
             QueuedReason::BlockedByDependency => "blocked_by_dependency",
+            QueuedReason::OverBudget => "over_budget",
             QueuedReason::WaitingOnResources => "waiting_on_resources",
         }
     }

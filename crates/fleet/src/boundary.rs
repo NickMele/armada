@@ -115,11 +115,19 @@ where
         working: &mut Option<Working>,
     ) -> Result<Option<StoodDown>, Adrift> {
         let stood_down = match working.take() {
-            Some(at_work) => Some(at_work.stood_down().await),
+            Some(at_work) => Some(at_work.stood_down(&self.now()).await),
             None => None,
         };
         if let Some(stood_down) = &stood_down {
             self.noted_stood_down(stood_down);
+            // **Before the exit is recorded, and returning if it will not
+            // write.** The figure is what the Job's cap is compared against,
+            // and one that silently failed to land would leave a Job with an
+            // allowance it can never exhaust. Recording twice is harmless: the
+            // row is keyed on the Drone, so `dispatch::reap` having already
+            // folded this run writes the same row again. See `crate::allowance`.
+            self.record_spend(&stood_down.job, &stood_down.drone, &stood_down.spent)
+                .await?;
         }
         self.every_exit_recorded(job_id).await?;
         Ok(stood_down)

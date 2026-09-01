@@ -91,15 +91,28 @@ rather than listed anywhere a surface can retype it.
 | Tab | Rule |
 | --- | --- |
 | Finished | `terminal` |
+| Needs you | the row's `asking` is set |
 | Running | `mode = "Working"` |
 | Needs you | `who_is_acting = "Person"` |
 | Queued | `who_is_acting = "Drone"` |
 
-**Every tab is a positive rule and none is a leftover.** `Needs you` is
-`who_is_acting = "Person"` and nothing else — the field the tab has always been
-described by. Reaching the same four by subtracting the ones that could be named
-would make its membership depend on the absence of a rule, so the next status
-added anywhere would join it silently.
+**Every tab is a positive rule and none is a leftover.** Reaching the four by
+subtracting the ones that could be named would make membership depend on the
+absence of a rule, so the next status added anywhere would join one silently.
+
+**One rule is not a lifecycle row, and it is the only one.** A [Drone](drone.md)
+that has asked a person a question is on a Job that is `running`, with
+`who_is_acting = "Drone"`, and nothing about the Job or its step moves while it
+waits — which is deliberate, and is why there is no seventh step state for it.
+So `job-statuses.toml` has nothing to say about this and cannot: it is a fact
+about a live working slot rather than about a status, and it rides on the Job
+row as `asking`.
+
+It is asked **before** `mode = "Working"`, because that rule would otherwise
+claim it first and a question would sit under Running — invisible until somebody
+happened to open that Job, which is the failure `Needs you` exists to prevent. A
+terminal Job has no Drone left to be waiting, so `terminal` still comes first and
+the two can never both be true.
 
 **`Working` is asked before the actor.** `piloted` is `Working` with a person
 acting, and a Job somebody has taken over is still moving.

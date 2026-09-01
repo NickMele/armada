@@ -65,13 +65,52 @@ pub enum EscalationTrigger {
     /// thrashing rather than following it, and nothing mechanical has to fire
     /// first.
     HatchUnbidden,
-    /// Crash recovery. A Job marked running has no matching OS process. Set by
-    /// Fleet's restart reconciliation.
+    /// Crash recovery. A Job marked running has no matching OS process — a
+    /// Drone that vanished without reporting, or one the record still names on
+    /// a Job that is no longer in the slot. Set by Fleet's restart
+    /// reconciliation for the same fact.
+    ///
+    /// **A process that was there and is not, and nothing else.** It named
+    /// nine other failures until 2026-08-31, every one of them a spawn that
+    /// had not happened yet — [`NotPrepared`](Self::NotPrepared),
+    /// [`NoWorktree`](Self::NoWorktree),
+    /// [`NotConfigurable`](Self::NotConfigurable) and
+    /// [`WouldNotStart`](Self::WouldNotStart) are those, and each names who
+    /// fixes it. The verb sent a person hunting for a dead Drone; there had
+    /// never been one.
+    ///
+    /// It fires the default `running -> escalated` like every other trigger,
+    /// and it *also* owns `awaiting_review -> escalated` — see
+    /// [`declared_edge`](Self::declared_edge), which returns the second. Both
+    /// are its own and the definition above is reached through the first.
     Interrupted,
     /// A loop workflow's step hit its `iteration_cap`. Nothing failed — the
     /// loop did not converge, which is why the count that tripped it is
     /// `iteration_count` and never the retry budget.
     LoopCap,
+    /// Git or the filesystem could not put the Job in a worktree work could
+    /// start in: none was created, the attachments would not copy into one,
+    /// the one an earlier step used has been reclaimed, or the branch would
+    /// not come up to its base. **The state is the same on all four and the
+    /// remedy is the same person's** — whoever owns the disk and the
+    /// repository — which is why they are one trigger and not four.
+    ///
+    /// Not [`NotPrepared`](Self::NotPrepared), which is the nearest row and the
+    /// easy mistake: there the worktree is a real checkout and a command the
+    /// *Manifest* names failed inside it, so the fix is `armada.yml`. Here
+    /// there is no checkout to run anything in.
+    NoWorktree,
+    /// The values a spawn is built from would not resolve: the opening brief
+    /// would not render, or the spawn config was refused — a model name no
+    /// roster row carries, an MCP config path that is not usable, an
+    /// environment variable that is not a name.
+    ///
+    /// **Nothing was launched and nothing is missing.** The remedy is a line in
+    /// the Manifest or in the model roster, and
+    /// [`Interrupted`](Self::Interrupted) sent whoever read it to look for a
+    /// dead process instead. Not [`WouldNotStart`](Self::WouldNotStart): there
+    /// the configuration was good and the machine refused it.
+    NotConfigurable,
     /// A command the Manifest's `setup.requires` names did not succeed, so the
     /// worktree is not one work can be run in. Raised once, before any step is
     /// entered, which is what makes it Job-level: there is no step for it to
@@ -82,6 +121,11 @@ pub enum EscalationTrigger {
     /// Check gates a step, and this runs where no step exists. It was raised as
     /// [`Interrupted`](Self::Interrupted) until 2026-08-31, which sent a person
     /// looking for a process that had never started.
+    ///
+    /// Not [`NoWorktree`](Self::NoWorktree) either, and the two are told apart
+    /// by who fixes them: a checkout git would not produce is the disk's or the
+    /// repository's, and a `setup.requires` line that failed inside a perfectly
+    /// good checkout is the Manifest's.
     NotPrepared,
     /// A running Job exhausted CPU or memory. Belongs to the process, not to
     /// any step it happened to be on.
@@ -96,6 +140,17 @@ pub enum EscalationTrigger {
     Stalled,
     /// Active but not converging, and the forced report also failed.
     Thrashing,
+    /// Everything the spawn needed resolved and the machine still would not
+    /// start it: the transcript would not open on disk, or the harness refused
+    /// to launch the process.
+    ///
+    /// **A Drone that never started, which is the opposite end of
+    /// [`Interrupted`](Self::Interrupted)** — that one is a process that was
+    /// there and is not. The remedy here is the environment the daemon runs
+    /// in: disk, permissions, the agent binary. Not
+    /// [`NotConfigurable`](Self::NotConfigurable), where the values were
+    /// wrong and nothing was ever asked to start.
+    WouldNotStart,
 }
 
 /// Whether a row is a trigger of its own or a sub-kind of another, as the
@@ -183,10 +238,13 @@ impl StepLevelTrigger {
             | EscalationTrigger::FanOut
             | EscalationTrigger::HatchUnbidden
             | EscalationTrigger::Interrupted
+            | EscalationTrigger::NoWorktree
+            | EscalationTrigger::NotConfigurable
             | EscalationTrigger::NotPrepared
             | EscalationTrigger::ResourceExhausted
             | EscalationTrigger::Silent
-            | EscalationTrigger::Stalled => false,
+            | EscalationTrigger::Stalled
+            | EscalationTrigger::WouldNotStart => false,
         }
     }
 }
@@ -205,11 +263,14 @@ impl EscalationTrigger {
         EscalationTrigger::HatchUnbidden,
         EscalationTrigger::Interrupted,
         EscalationTrigger::LoopCap,
+        EscalationTrigger::NoWorktree,
+        EscalationTrigger::NotConfigurable,
         EscalationTrigger::NotPrepared,
         EscalationTrigger::ResourceExhausted,
         EscalationTrigger::Silent,
         EscalationTrigger::Stalled,
         EscalationTrigger::Thrashing,
+        EscalationTrigger::WouldNotStart,
     ];
 
     /// The wire value, which is also the registry key.
@@ -226,11 +287,14 @@ impl EscalationTrigger {
             EscalationTrigger::HatchUnbidden => "hatch_unbidden",
             EscalationTrigger::Interrupted => "interrupted",
             EscalationTrigger::LoopCap => "loop_cap",
+            EscalationTrigger::NoWorktree => "no_worktree",
+            EscalationTrigger::NotConfigurable => "not_configurable",
             EscalationTrigger::NotPrepared => "not_prepared",
             EscalationTrigger::ResourceExhausted => "resource_exhausted",
             EscalationTrigger::Silent => "silent",
             EscalationTrigger::Stalled => "stalled",
             EscalationTrigger::Thrashing => "thrashing",
+            EscalationTrigger::WouldNotStart => "would_not_start",
         }
     }
 
@@ -279,9 +343,12 @@ impl EscalationTrigger {
             | EscalationTrigger::FanOut
             | EscalationTrigger::HatchUnbidden
             | EscalationTrigger::Interrupted
+            | EscalationTrigger::NoWorktree
+            | EscalationTrigger::NotConfigurable
             | EscalationTrigger::NotPrepared
             | EscalationTrigger::ResourceExhausted
-            | EscalationTrigger::Stalled => TriggerLevel::Job,
+            | EscalationTrigger::Stalled
+            | EscalationTrigger::WouldNotStart => TriggerLevel::Job,
             // A sub-kind has no level of its own. It pauses the Job exactly as
             // its parent does, so it reads its parent's rather than declaring
             // a second answer that could drift from it.
@@ -296,6 +363,15 @@ impl EscalationTrigger {
     /// registry row names as the default. This returns `None` for those rather
     /// than filling the default in, because the edge table is where the default
     /// lives and two copies of it would be one too many.
+    ///
+    /// **A declared edge is a second one, never the only one.** The default
+    /// admits every trigger — `the default escalation edge accepts every
+    /// trigger` in this module's tests is that claim — so what a declared edge
+    /// adds is a `from` no other trigger may arrive at `escalated` from. Read
+    /// as *the* edge it says `interrupted` can only happen at a human gate,
+    /// which is neither what the registry means nor what Fleet does: both
+    /// sites that raise it raise it from `running`, and the gate edge is there
+    /// for the reconciliation that has not been built.
     pub fn declared_edge(&self) -> Option<(JobStatus, JobStatus)> {
         match self {
             EscalationTrigger::DependencyFailed => Some((JobStatus::Queued, JobStatus::Escalated)),

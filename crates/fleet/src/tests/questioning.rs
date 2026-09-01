@@ -2,29 +2,32 @@
 //!
 //! # What these prove, and what they deliberately do not
 //!
-//! The ask, the refusals, the answer reaching the pipe, and — the two that
-//! matter most — that neither vigil counts a waiting Drone as a stopped one.
-//! **A Drone blocked on an unanswered question must not escalate as `stalled`
-//! or `thrashing`**, because the wait is a person's and has no budget, and a
-//! Job escalated for having a question outstanding is a Job that stopped for
-//! doing the right thing.
+//! The ask, the four refusals, the answer reaching the pipe, and — the two that
+//! matter most — that neither vigil counts a waiting Drone as a stopped one. **A
+//! Drone blocked on an unanswered question must not escalate as `stalled` or
+//! `thrashing`**: the wait is a person's and has no budget, so a Job escalated
+//! for having a question outstanding is a Job that stopped for doing the right
+//! thing.
 //!
-//! What is not proved here is that the Drone *acts* on the answer. That is the
-//! model's, and this workspace's own rule is that nothing reads what a Drone
-//! said. What Fleet owes is that the answer went down the pipe and that the
-//! question stopped being outstanding, and both are asserted.
+//! Not proved here: that the Drone *acts* on the answer — nothing in this
+//! workspace reads what a Drone said. `Fleet::ask_question` is called with the
+//! Job id the peer lookup would have produced, so what is skipped is the socket
+//! and nothing about the binding.
 //!
-//! # The Job is started for real and the question is asked through the tool
+//! # Over 500 lines, and left as one file
 //!
-//! `Fleet::ask_question` is called with the Job id the peer lookup would have
-//! produced, which is the same value `crate::serving` hands it — so what is
-//! skipped is the socket and nothing about the binding.
-
+//! `crate::tests::headroom`'s argument. The ask, the refusals, the answer and
+//! the two vigils are one act proved at four depths, and a split would put "a
+//! label never offered is refused" in a different file from "the Drone waiting
+//! for that answer is not read as stalled" — the same Drone, one turn apart.
+//! Sixty of the lines are the pushed clock and the production thresholds, which
+//! are the fixture; `crate::tests::silence`'s clock is private to it.
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::{CallDetail, DroneEvent};
+use api::Daemon;
 use config::ResolvedWorkflow;
 use core_model::{
     Actor, EscalationTrigger, JobId, JobStatus, StepId, StepState, Target, Timestamp,
@@ -32,10 +35,10 @@ use core_model::{
 use ipc::mcp::{AskQuestion, AskedOption};
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};
 
-use crate::asking::{NotAnswered, NotAsked};
 use crate::clock::Clock;
 use crate::converging::StepNorms;
 use crate::daemon::Fleet;
+use crate::questioning::{NotAnswered, NotAsked};
 use crate::silence::Liveness;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
@@ -264,6 +267,46 @@ async fn the_question_reaches_the_wire_whole() {
         "a label with no consequence is a button whose effect has to be guessed"
     );
     assert_eq!(served.step_id.as_str(), IMPLEMENT);
+}
+
+/// **The Board row says so, which is what puts the Job under Needs you.**
+///
+/// `who_is_acting` on `running` is `Drone`, so without this flag a Job waiting
+/// on a person sits under Running and a question on a Job nobody has open is
+/// invisible. `apps/desktop/src/renderer/src/board.ts` reads it, and
+/// `docs/concepts/job-board.md` is the rule; this is the half of that pair Rust
+/// can prove, because Bridge has no test runner.
+#[tokio::test]
+async fn the_board_row_says_the_drone_is_waiting_and_stops_saying_it() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_listens());
+    let job = started(&fleet, &home).await;
+
+    let before = Daemon::list_jobs(&fleet).await.expect("a board");
+    assert!(
+        before.jobs.iter().all(|row| !row.asking),
+        "a Drone that has asked nothing is not waiting on anybody"
+    );
+
+    let asked = fleet.ask_question(&job, a_question()).await.unwrap();
+    let waiting = Daemon::list_jobs(&fleet).await.expect("a board");
+    assert!(
+        waiting
+            .jobs
+            .iter()
+            .any(|row| row.id.as_str() == job.as_str() && row.asking),
+        "the row a Board draws has to carry it — the question itself does not"
+    );
+
+    fleet
+        .answer_question(&job, asked.id().as_str(), "Fold it in")
+        .await
+        .unwrap();
+    let after = Daemon::list_jobs(&fleet).await.expect("a board");
+    assert!(
+        after.jobs.iter().all(|row| !row.asking),
+        "answered once, so the row stops claiming it — there is no badge to go stale"
+    );
 }
 
 /// **One at a time.** A Drone that could stack questions would be holding a

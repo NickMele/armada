@@ -83,6 +83,19 @@ fn job() -> Job {
     )
 }
 
+/// One Job's detail, with the eight facts that are not the Job itself absent.
+///
+/// **A helper because the signature is eleven positional arguments**, eight of
+/// which every case here passes `None` for. Two of the eight were added on one
+/// night by two people who could not see each other's, and a run of eight
+/// `None`s is where a ninth lands in the wrong slot silently. What a case is
+/// about is the Job and its steps, and this says so.
+pub(super) fn detail_of(job: &core_model::Job, steps: &[StepFacts]) -> JobDetail {
+    JobDetail::of(
+        job, None, None, steps, None, None, None, None, None, None, None,
+    )
+}
+
 #[test]
 fn a_summary_carries_what_a_board_renders_and_nothing_else() {
     let summary = JobSummary::from(&job());
@@ -133,10 +146,8 @@ fn a_row_names_its_branch_only_once_a_worktree_exists() {
 #[test]
 fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
     let job = job();
-    let ungated = JobDetail::of(
+    let ungated = detail_of(
         &job,
-        None,
-        None,
         &[StepFacts {
             step_id: crate::StepId::carried("repro"),
             label: Some("Reproduce it".to_string()),
@@ -146,20 +157,12 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             flagged: Vec::new(),
             judging: None,
         }],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
     );
     let json = encode(&ungated).expect("a detail is plain data");
     assert!(json.contains("\"checks\":[]"), "declares none: {json}");
 
-    let unanswerable = JobDetail::of(
+    let unanswerable = detail_of(
         &job,
-        None,
-        None,
         &[StepFacts {
             step_id: crate::StepId::carried("repro"),
             label: None,
@@ -169,12 +172,6 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             flagged: Vec::new(),
             judging: None,
         }],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
     );
     let json = encode(&unanswerable).expect("a detail is plain data");
     assert!(
@@ -192,10 +189,8 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
 /// empty label draws as.
 #[test]
 fn a_step_with_no_label_reads_as_its_id() {
-    let detail = JobDetail::of(
+    let detail = detail_of(
         &job(),
-        None,
-        None,
         &[StepFacts {
             step_id: crate::StepId::carried("repro"),
             label: Some("   ".to_string()),
@@ -205,26 +200,18 @@ fn a_step_with_no_label_reads_as_its_id() {
             flagged: Vec::new(),
             judging: None,
         }],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
     );
     assert_eq!(detail.steps[0].label, "repro");
 
-    let unanswerable = JobDetail::of(&job(), None, None, &[], None, None, None, None, None, None);
+    let unanswerable = detail_of(&job(), &[]);
     assert_eq!(unanswerable.steps[0].label, "repro");
 }
 
 /// A recorded run round-trips, and a pass carries neither sentence.
 #[test]
 fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
-    let detail = JobDetail::of(
+    let detail = detail_of(
         &job(),
-        None,
-        None,
         &[StepFacts {
             step_id: crate::StepId::carried("repro"),
             label: Some("Reproduce it".to_string()),
@@ -246,12 +233,6 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
             flagged: Vec::new(),
             judging: None,
         }],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
     );
     let json = encode(&detail).expect("a detail is plain data");
 
@@ -277,10 +258,8 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
 /// what was wrong with the work. A person reading the Job is the audience.
 #[test]
 fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
-    let detail = JobDetail::of(
+    let detail = detail_of(
         &job(),
-        None,
-        None,
         &[StepFacts {
             step_id: crate::StepId::carried("repro"),
             label: Some("Reproduce it".to_string()),
@@ -293,6 +272,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
                     expected: Some("the caller's bound narrowed".to_string()),
                     produced: Some("the reader's bound widened".to_string()),
                     consequence: Some("every other caller reads one row too many".to_string()),
+                    brief_path: Some(".armada/briefs/01JOB/repro.1.c1.txt".to_string()),
                 },
                 Judged {
                     criterion_id: crate::CriterionId::carried("c2"),
@@ -300,17 +280,12 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
                     expected: None,
                     produced: None,
                     consequence: None,
+                    brief_path: None,
                 },
             ],
             flagged: Vec::new(),
             judging: None,
         }],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
     );
     let json = encode(&detail).expect("a detail is plain data");
 
@@ -333,7 +308,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
 /// ungated step says so about its Checks.
 #[test]
 fn a_step_the_judge_was_never_asked_about_carries_an_empty_list() {
-    let detail = JobDetail::of(&job(), None, None, &[], None, None, None, None, None, None);
+    let detail = detail_of(&job(), &[]);
     let json = encode(&detail).expect("a detail is plain data");
     assert!(json.contains("\"judged\":[]"), "{json}");
 }
@@ -354,18 +329,7 @@ fn a_note_waiting_for_the_next_drone_crosses_until_it_is_delivered() {
         )
         .expect("nothing was waiting");
 
-    let held = JobDetail::of(
-        &waiting,
-        None,
-        None,
-        &[],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
+    let held = detail_of(&waiting, &[]);
     let json = encode(&held).expect("a detail is plain data");
     assert_eq!(
         held.redirect_waiting
@@ -385,18 +349,7 @@ fn a_note_waiting_for_the_next_drone_crosses_until_it_is_delivered() {
 
     // Delivery is what clears it, so the field cannot be a badge that goes
     // stale: there is no third state for a surface to keep drawing.
-    let delivered = JobDetail::of(
-        &waiting.redirect_delivered(),
-        None,
-        None,
-        &[],
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
+    let delivered = detail_of(&waiting.redirect_delivered(), &[]);
     assert!(
         delivered.redirect_waiting.is_none(),
         "a delivered note stops saying it is waiting"

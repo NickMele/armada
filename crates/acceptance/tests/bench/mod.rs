@@ -40,8 +40,8 @@ use core_model::{
 };
 use fleet::dispatch::stopping;
 use fleet::{
-    apply, rule_on, AtStep, CheckBudget, Clock, JudgeBudget, Judging, Keeping, Marking, Mint,
-    Ruling,
+    apply, rule_on, Asked, AtStep, CheckBudget, Clock, JudgeBudget, Judging, Keeping, Marking,
+    Mint, Ruling,
 };
 use testkit::{resolved, FakeJudge, FakeVcs, FakeWorkProduct, Gaming, Gate, Sketch};
 use verification::{Claimed, NotClaimed, Request, ShownBy, Submission};
@@ -295,6 +295,7 @@ impl Bench {
                 // itself while it was out — and it reaches no `api` and no
                 // `ipc`, which is the hermetic rule this file's header states.
                 marking: Marking::detached(),
+                asked: Asked::nowhere(),
             },
             moves: RefCell::new(Vec::new()),
             step_moves: RefCell::new(Vec::new()),

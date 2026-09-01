@@ -96,6 +96,8 @@ A new Claude Code session, on the Drone's worktree, with the bundle loaded as co
 - **Fleet stops scheduling against the Job** for as long as it is piloted. The Job stays on the Board and leaves the scheduler.
 - **Worktree ownership transfers.** Fleet must not reclaim, clean or garbage-collect a piloted worktree.
 
+**The exits are a panel on the Job, not a prompt in the session.** Armada says nothing inside a Claude Code session, so the only place a way back can live is the surface a person returns to. Submit for verification, Attest complete and Close as superseded render there; submitting returns the Job to `running` with no Drone assigned.
+
 ## Job state
 
 A piloted Job has its own status, `piloted` — **the ninth Job status**, carrying a Pilot-specific reason. On the Board, not scheduled, not finished, with the worktree belonging to the engineer rather than to Fleet. Its reason records which of the three outcomes was chosen.
@@ -143,5 +145,4 @@ Resuming it as-is produces a Drone that fights the engineer's changes or redoes 
 **Assist renders disabled in the modal with a coming-soon state**, rather than hidden, so the outcome set does not change shape when it ships.
 
 ## Open questions
-
-- **[pilot-ninth-status-name]** What is the name of the ninth Job status, and what is its full reason set? Decided Aug 21 2026 that a ninth status carries a Pilot-specific reason and also holds a Job that is done but owes a human an attestation — but the status's name and its reason set are not yet decided.
+Nothing. `[pilot-ninth-status-name]` asked what the ninth status is called and what its reasons are, on the premise that one status carried both a piloted Job and one owing an attestation. **The code answered it by splitting them.** `crates/core-model/domain/job-statuses.toml` carries `piloted` and `awaiting_attestation` as separate rows, each with its own reasons — which is why the question could not be answered as asked.

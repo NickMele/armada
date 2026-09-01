@@ -1,14 +1,63 @@
-// The question vocabulary, as TypeScript sees it. `crates/ipc/src/detail.rs`.
+// What is outstanding on a live drone, and what a person sends it back.
+// `crates/ipc/src/waiting.rs`.
 //
 // **Split out of `protocol.ts` for `events.ts`'s reason and by the same rule.**
-// That file reached the 900 lines the gate refuses again. The cut is a seam the
-// Rust side already draws: `ask_question` is the Fleet/Drone tool and
-// `answer_question` is the Fleet/Bridge command, and these three types are the
-// only ones on the wire that belong to both halves of one act. `protocol.ts`
-// re-exports every name here, so nothing that imported one had to change.
+// That file reached the 900 lines the gate refuses again. The cut is one subject
+// and the Rust side makes it too: a redirect in flight and a question in flight
+// are the same shape — a fact about a drone that is alive and not moving, read
+// off a working slot rather than off the record, gone the instant the thing it
+// names is answered. Both exist because "nothing is happening" and "something is
+// happening this seam could not state" were the same pixels.
 //
-// The header rules there hold here: hand-written, they drift the day a field
-// moves, and every closed set is left as `string`.
+// `RedirectWaiting` is the third because it is the same act with no session to
+// go into, and `AskedOption` and `ChosenAnswer` are the two halves of answering.
+//
+// The header rules in `protocol.ts` hold here: hand-written, they drift the day
+// a field moves, and every closed set is left as `string`.
+
+/**
+ * A redirect that has gone into the drone's session and has not been answered.
+ * `crates/ipc/src/detail.rs`.
+ *
+ * **A fact about the last act, not a status.** The job is `escalated` and stays
+ * there — it returns to `running` on the drone taking a turn, which is evidence
+ * it resumed rather than evidence somebody pressed a button. It arrives one way
+ * only, on the open job's detail: the wait ends with the job's own move to
+ * `running`, and that move is already an event.
+ *
+ * It says Fleet wrote to the pipe and no more than that. Whether the drone read
+ * the instruction is answered by the next turn it takes, so there is no
+ * delivery flag here and there is nothing on this seam that could set one.
+ */
+export type RedirectInFlight = {
+  /**
+   * When the instruction went into the session, by Fleet's clock. **A surface
+   * subtracts; nothing ticks on the wire**, as `JudgeInFlight.since` does.
+   */
+  sent_at: string;
+};
+
+/**
+ * A person's note written where no drone was there to take it, still waiting
+ * for the one that comes next. `crates/ipc/src/detail.rs`.
+ *
+ * **It is the note or it is nothing**: the record holds the words and clears
+ * them on delivery, so this value's presence *is* the fact that one is waiting,
+ * and there is no delivered flag and no instant because there is no state
+ * between the two.
+ *
+ * **The words cross, and a count would not do.** `RedirectInFlight` serves no
+ * text because that instruction went into a live session and the move back to
+ * `running` is the answer; this one has gone nowhere, and a field saying only
+ * that *some* note waits leaves a person who wrote two no better off.
+ */
+export type RedirectWaiting = {
+  /**
+   * What the person typed, verbatim. **Never blank** — the record refuses a
+   * note with nothing in it, so a present value always has words in it.
+   */
+  note: string;
+};
 
 /**
  * One question a drone asked a person, while it is still unanswered.

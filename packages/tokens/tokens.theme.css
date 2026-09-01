@@ -103,6 +103,7 @@
   --color-border-width: var(--border-width);
   --spacing-row: var(--h-row);
   --spacing-row-header: var(--h-row-header);
+  --spacing-row-action: var(--h-row-action);
   --spacing-row-stacked: var(--h-row-stacked);
   --spacing-control: var(--h-control);
   --spacing-control-sm: var(--h-control-sm);

@@ -198,6 +198,7 @@ impl Daemon for FakeDaemon {
             return Err(self.no_such_job(&job_id));
         };
         Ok(JobDetail {
+            spend: None,
             delivery: None,
             job: job.clone(),
             created_at: Instant::carried("2026-08-26T09:00:00.000Z"),
@@ -441,6 +442,8 @@ impl Daemon for FakeDaemon {
             current_step_id: None,
             assigned_drone: None,
             redispatched_from: None,
+            // No slot, so nothing is waiting. See `Daemon::ask_question`.
+            asking: false,
         };
         self.jobs.lock().expect("not poisoned").push(job.clone());
         self.events.publish(Event::JobCreated(JobCreated {
@@ -584,10 +587,9 @@ impl Daemon for FakeDaemon {
         Ok(job.clone())
     }
 
-    /// The answer to a question, faked on the one thing a `JobSummary` can see:
+    /// The answer to a question, faked on the one thing a `JobSummary` shows:
     /// **there is no Drone waiting.** Which question is outstanding and which
-    /// labels it offered are read off a working slot this daemon has none of,
-    /// so it does not pretend to know — `fleet`'s own suite asserts those.
+    /// labels it offered come off a working slot this daemon has none of.
     async fn answer_question(
         &self,
         job_id: JobId,
@@ -868,9 +870,9 @@ impl Daemon for FakeDaemon {
         })
     }
 
-    /// A question taken, refused on the one thing this daemon can see: nothing
-    /// is being worked. **The receipt says taken and never answered** — what a
-    /// person chose arrives in the Drone's session, which no fake has.
+    /// A question taken, refused on the one thing this daemon sees: nothing is
+    /// being worked. **The receipt says taken, never answered** — what a person
+    /// chose arrives in the Drone's session, which no fake has.
     async fn ask_question(
         &self,
         _caller: crate::Caller,
@@ -957,6 +959,7 @@ pub fn at(daemon: &FakeDaemon, id: &str, spelling: &str) {
         current_step_id: None,
         assigned_drone: None,
         redispatched_from: None,
+        asking: false,
     });
 }
 

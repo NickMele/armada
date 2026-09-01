@@ -62,6 +62,8 @@ mod fold;
 mod footprint;
 mod forget;
 mod gaming;
+/// Where a verdict's own question was kept, and the column that points at it.
+mod judged;
 /// The note a boundary is holding, and the column it waits in.
 mod note;
 mod open;
@@ -73,6 +75,8 @@ mod read;
 mod report;
 mod row;
 mod schema;
+/// What a Job's Drones have cost it: one row per Drone, summed per Job.
+mod spend;
 #[cfg(feature = "wreckage")]
 mod wreckage;
 mod write;
@@ -91,3 +95,4 @@ pub use plan::DeclaredPlan;
 pub use read::{Loaded, RowIdentity, StatusRepair, UnreadableRow};
 pub use report::Report;
 pub use schema::KNOWN_SCHEMA_VERSION;
+pub use spend::{DroneSpend, Spend};

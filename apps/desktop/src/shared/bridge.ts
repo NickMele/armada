@@ -20,7 +20,7 @@ import type { Artifact, Opened } from "./artifacts";
 import type { Recorded } from "./history";
 import type { Submitted, Work } from "./work";
 import type { Saw } from "./turn";
-import { connects, skew } from "./version";
+import { connects, skew, spoken } from "./version";
 import type { ProtocolVersion, Skew } from "./version";
 import { PROTOCOL_VERSION } from "./generated/protocol-version";
 
@@ -105,7 +105,8 @@ export function connectedTo(fleet: FleetIdentity, cursor: number): Connection {
 }
 
 /**
- * What a Bridge failure can point a person at.
+ * What every Bridge failure carries that is not about the failure — where the
+ * machine log is, and which Fleet is on the other end of the one connection.
  *
  * **No `run_id`, and none is minted.** The envelope makes `run_id` the one id an
  * emitter mints for itself, but nothing in Bridge writes a log line yet, so an
@@ -113,13 +114,52 @@ export function connectedTo(fleet: FleetIdentity, cursor: number): Connection {
  * identified the failure. The only real one is the one a `WireError` carries,
  * and that names Fleet's run rather than any single failure.
  *
- * The path is a fact about the main process — the renderer cannot resolve a
- * home directory — so it is published rather than guessed at.
+ * Both fields are facts main holds and the renderer cannot derive — a home
+ * directory it cannot resolve, and a connection it does not own — so both are
+ * published rather than guessed at.
  */
 export type BridgeIdentity = {
   /** The machine log. `null` where HOME is not set and no path resolves. */
   auditPath: string | null;
+  /**
+   * The protocol Fleet speaks, written `5.2`, as the runtime file said it.
+   *
+   * **Here rather than at each failure, because four of the five failures are
+   * handed no connection.** A refusal is the case that made it worth fixing:
+   * Fleet answered it, so Fleet's version is the first thing a reader of the
+   * payload wants, and it was the one payload guaranteed to omit it. Derived
+   * where the connection is published, so nothing re-derives it per failure.
+   *
+   * `null` before a runtime file has been read and believed, and again the
+   * moment the connection is one of the states that never got a version —
+   * which is a fact rather than a gap, and the tail omits the row.
+   */
+  fleetProtocol: string | null;
 };
+
+/**
+ * The state with its identity current, which today means Fleet's version.
+ *
+ * **Here rather than at the five places a failure is built**, for the reason
+ * `connectedTo` is here: a fact derived from the connection is derived once, by
+ * the thing that owns the connection, so no surface can publish a state whose
+ * identity disagrees with it. Four of the five failure builders are handed no
+ * connection at all, and a refusal — the one Fleet itself answered — was the
+ * payload most obviously wrong to omit Fleet's version from.
+ *
+ * The identity is rewritten only when the version moves, so a state whose
+ * connection did not change keeps the same object and nothing redraws for it.
+ *
+ * `null` for the three connection states that never read a runtime file. Absent
+ * rather than guessed: a version written in for a Fleet Bridge never identified
+ * would be the one row of that payload nobody could check.
+ */
+export function identifying(state: BridgeState): BridgeState {
+  const fleetProtocol =
+    "fleet" in state.connection ? spoken(state.connection.fleet.protocolVersion) : null;
+  if (fleetProtocol === state.bridge.fleetProtocol) return state;
+  return { ...state, bridge: { ...state.bridge, fleetProtocol } };
+}
 
 /** Everything the renderer draws, published by main and never assembled twice. */
 export type BridgeState = {
@@ -623,7 +663,7 @@ export const NOTHING_YET: BridgeState = {
   connection: { state: "reading" },
   // Main resolves the log path from the home it can see. Until it answers, the
   // renderer does not know it and does not name one.
-  bridge: { auditPath: null },
+  bridge: { auditPath: null, fleetProtocol: null },
   jobs: [],
   unreadable: [],
   missed: 0,

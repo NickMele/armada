@@ -395,6 +395,10 @@ function verdictsOf(step: StepDetail, criteria: Criterion[]): CriterionVerdict[]
       // A word chosen here would be the second vocabulary.
       verdict: reading?.verb ?? judged.verdict,
       icon: reading?.icon ?? undefined,
+      // On every row and not only the refusals: a Judge that passed something
+      // it should have refused is the failure nobody argues with on the day,
+      // and it is only visible against what the call was shown.
+      briefPath: judged.brief_path,
       ...cited(judged),
     };
   });

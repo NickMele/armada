@@ -31,13 +31,14 @@ use adapter_traits::{AgentHarness, DroneEvent, Footprint, Worktree};
 use core_model::{DeclaredPaths, DroneId, JobId, RepoPath, StepId, Timestamp};
 use tokio::process::ChildStderr;
 
-use crate::asking::Asked;
 use crate::converging::{elapsed, Chain};
 use crate::drone::{Ending, Started};
 use crate::footprint::Publishing;
+use crate::questioning::Question;
 use crate::session::{DroneSession, LiveSession};
 use crate::transcript::Taps;
 use crate::watch::Watching;
+use store::DroneSpend;
 use verification::NotConverging;
 
 /// The Job being worked, and everything holding it up.
@@ -122,7 +123,7 @@ pub(crate) struct Working {
     /// only thing that tells the two apart: the process is alive, the Job is
     /// `running`, the step is `running`, and nothing is arriving. Both vigils
     /// read this and decline, exactly as they decline on evidence sitting at
-    /// the gate — see `crate::asking`.
+    /// the gate — see `crate::questioning`.
     ///
     /// Held here and written to no column, for
     /// [`JudgeInFlight`](ipc::JudgeInFlight)'s reason: it is only ever true
@@ -133,7 +134,7 @@ pub(crate) struct Working {
     /// **One at a time.** `Fleet::ask_question` refuses a second while one is
     /// held, because a Drone that could stack questions would be holding a
     /// conversation and a queue is a thing a person answers out of order.
-    asked: Option<Asked>,
+    asked: Option<Question>,
     /// How many liveness pokes this step has spent.
     ///
     /// **The step's budget, not the episode's.** A Drone that answers a poke
@@ -219,6 +220,10 @@ pub(crate) struct StoodDown {
     /// What the whole run folded to, read after the pipe closed. The last lines
     /// before an exit are in it because the drain waited for them.
     pub(crate) ending: Ending,
+    /// What the run cost the Job, folded from the same drained stream. **Not
+    /// part of [`Ending`]**: how a run finished and what it cost are different
+    /// questions, and a Drone that vanished still spent whatever it spent.
+    pub(crate) spent: DroneSpend,
     /// What signalling the Drone came to. **An error is not a failure to
     /// report**: it is a process already gone, or one the operating system
     /// would not signal, and neither is anything a caller can do more about.
@@ -284,16 +289,23 @@ impl Working {
     /// [`Watching`]'s `Drop` aborts the reader over whatever the pipe still
     /// held; and [`Ending::of`] over a stream still being read is a fold over
     /// a prefix, missing the terminating event at the end of it.
-    pub(crate) async fn stood_down(mut self) -> StoodDown {
+    pub(crate) async fn stood_down(mut self, at: &Timestamp) -> StoodDown {
         let terminated = self.session.terminate().await;
         self.transcript.drained().await;
-        let ending = Ending::of(&self.transcript.events());
+        let events = self.transcript.events();
+        let ending = Ending::of(&events);
+        // **Folded after the drain, like the ending is**, and for the same
+        // reason: what the Drone said on its way out is the last thing it said,
+        // and a terminating line read before the pipe closed is a cost read off
+        // a prefix. Recording it is the caller's, as recording the exit is.
+        let spent = crate::allowance::spent(&events, elapsed(&self.step_began, at));
         StoodDown {
             job: self.job,
             step: self.step,
             drone: self.drone,
             worktree: self.worktree,
             ending,
+            spent,
             terminated,
         }
     }
@@ -533,7 +545,7 @@ impl Working {
     }
 
     /// The question this Drone is waiting on, where there is one.
-    pub(crate) fn asked(&self) -> Option<&Asked> {
+    pub(crate) fn asked(&self) -> Option<&Question> {
         self.asked.as_ref()
     }
 
@@ -543,7 +555,7 @@ impl Working {
     /// under this slot's lock and before it mints an id, because the refusal it
     /// answers with names the question already outstanding — which is a value
     /// this method has no way to return.
-    pub(crate) fn asks(&mut self, asked: Asked) {
+    pub(crate) fn asks(&mut self, asked: Question) {
         self.asked = Some(asked);
     }
 
@@ -663,5 +675,20 @@ impl Working {
     /// anybody asks a transcript.
     pub(crate) fn heard(&self) -> Vec<DroneEvent> {
         self.transcript.events()
+    }
+
+    /// What this Drone's run has cost the Job so far.
+    ///
+    /// **A second fold over the same events `Ending::of` reads**, and not a
+    /// field on `Ending`: what the run cost and how it finished are different
+    /// questions, and a `Vanished` Drone still spent whatever it spent before
+    /// the stream stopped. The fold itself is `crate::allowance::spent`, which
+    /// is where the reason cost and turns fold differently is written down.
+    ///
+    /// The wall clock is measured from `step_began`, which is when this slot
+    /// was opened — a `Working` is built once per spawn, so that is the Drone's
+    /// own start and not the step's across a restart.
+    pub(crate) fn spent(&self, now: &Timestamp) -> DroneSpend {
+        crate::allowance::spent(&self.heard(), elapsed(&self.step_began, now))
     }
 }

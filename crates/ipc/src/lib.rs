@@ -73,6 +73,8 @@ mod turn;
 /// The two numbers both sides read, and what a mismatch between them means.
 /// `build.rs` embeds them from `protocol-version.toml`.
 mod version;
+/// What is outstanding on a live Drone, and what a person sends it back.
+mod waiting;
 /// The material a reviewing person reads, and what their note carries.
 mod work;
 
@@ -82,9 +84,8 @@ mod tests;
 pub use checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use detail::{
-    AskedOption, ChosenAnswer, Criterion, Dependency, Flagged, JobDelivery, JobDetail,
-    JudgeInFlight, Judged, QuestionInFlight, RedirectInFlight, RedirectWaiting, StepDetail,
-    StepFacts, Stuck, Verdict,
+    Criterion, Dependency, Flagged, JobDelivery, JobDetail, JobSpend, JudgeInFlight, Judged,
+    StepDetail, StepFacts, Stuck, Verdict,
 };
 pub use enums::{
     Actor, AdvanceGate, CheckOutcome, CriterionSource, DependencyDirection, DronePresence,
@@ -108,6 +109,7 @@ pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, R
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
 pub use turn::{Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage, Withheld};
 pub use version::{ProtocolVersion, Skew, PROTOCOL_VERSION};
+pub use waiting::{AskedOption, ChosenAnswer, QuestionInFlight, RedirectInFlight, RedirectWaiting};
 pub use work::{
     ChangesRequested, DeclaredPlan, JobDiff, JobEvidence, JobFootprint, Overruled, Submitted,
     TouchedFile, Work,

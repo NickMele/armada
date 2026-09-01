@@ -109,6 +109,7 @@ pub(super) fn record_a_whole_run(store: &mut Store, id: &str, saying: &str, when
                 expected: Some("the cause is addressed".to_string()),
                 produced: Some(saying.to_string()),
                 consequence: Some("the symptom returns".to_string()),
+                brief_path: Some(format!(".armada/briefs/{id}/fix.1.c1.txt")),
             }],
             &at(when),
         )
