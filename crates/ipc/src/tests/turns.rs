@@ -9,6 +9,7 @@ fn row(saw: Saw) -> TranscriptRow {
     TranscriptRow {
         ts: Instant::carried("2026-08-27T14:12:00.000Z"),
         step: None,
+        by: crate::Voice::Drone,
         saw,
     }
 }
@@ -52,4 +53,68 @@ fn the_sinks_own_losses_are_still_withheld() {
         decode::<Shown>("a shown row", json.as_bytes()).is_err(),
         "and a peer cannot mint one from the other end either"
     );
+}
+
+/// **The three rows the activity log is drawn with, and the voice on each.**
+/// The drawing has `Armada`, `Drone` and `Fleet`; the socket carried the middle
+/// one, so a surface either invented the other two or explained that they were
+/// not on the wire.
+#[test]
+fn what_armada_said_and_what_fleet_did_reach_the_viewer_with_their_voice() {
+    let told = TranscriptRow {
+        by: crate::Voice::Armada,
+        ..row(Saw::Instructed {
+            occasion: "opening".to_string(),
+            text: "Implement the route. Done means: a request reaches it.".to_string(),
+        })
+    };
+    let json =
+        encode(&Shown::of(told.clone()).expect("Armada's turn is shown")).expect("it encodes");
+    assert!(json.contains(r#""by":"armada""#), "whose row it is: {json}");
+    assert!(
+        json.contains("Done means"),
+        "and what the Drone was told, whole and uncut: {json}"
+    );
+    let back: Shown = decode("a shown row", json.as_bytes()).expect("it decodes");
+    assert_eq!(back.row(), &told);
+
+    let checked = TranscriptRow {
+        by: crate::Voice::Fleet,
+        ..row(Saw::Checked {
+            run: crate::CheckRun {
+                name: "suite".to_string(),
+                outcome: crate::CheckOutcome::from_wire("passed").expect("a registry outcome"),
+                expected: None,
+                produced: None,
+                output_path: None,
+            },
+        })
+    };
+    let json = encode(&Shown::of(checked).expect("a Check Fleet ran is shown")).expect("encodes");
+    assert!(json.contains(r#""by":"fleet""#), "{json}");
+    assert!(json.contains(r#""name":"suite""#), "{json}");
+
+    let produced = TranscriptRow {
+        by: crate::Voice::Fleet,
+        ..row(Saw::Produced {
+            files: vec![crate::ChangedFile {
+                path: "crates/api/src/routes.rs".to_string(),
+                change: crate::ChangeKind::Modified,
+                outside_plan: false,
+            }],
+        })
+    };
+    let json =
+        encode(&Shown::of(produced).expect("what a step produced is shown")).expect("encodes");
+    assert!(json.contains("crates/api/src/routes.rs"), "{json}");
+}
+
+/// A row with no voice on it is a Drone's. **Every row written before the field
+/// existed is one**, which is what makes the default the truth rather than a
+/// convenience.
+#[test]
+fn a_row_written_before_the_voice_existed_is_the_drones() {
+    let old = r#"{"ts":"2026-08-27T14:12:00.000Z","event":"said","text":"reading the file"}"#;
+    let back: TranscriptRow = decode("a row", old.as_bytes()).expect("it decodes");
+    assert_eq!(back.by, crate::Voice::Drone);
 }

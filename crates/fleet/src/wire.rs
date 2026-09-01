@@ -14,7 +14,7 @@ use ipc::{
     CheckRun, DeclaredCheck, DeclaredJudge, Flagged, Judged, StepFacts, StepId, Submitted,
     WorkflowStep,
 };
-use store::{LoadJobError, Moved, RecordedEvent};
+use store::{LoadJobError, Moved, RecordedEvent, Store};
 
 use crate::adrift::{Adrift, NotSubmitted};
 use crate::judging::Aloft;
@@ -213,6 +213,52 @@ fn unreadable(column: &'static str, value: &str) -> Adrift {
     ))
 }
 
+/// One recorded step move, kept only as far as the wire spells it.
+///
+/// **A `&'static str` for each word, taken straight off the registry's own
+/// `as_wire`.** Nothing here restates a spelling and nothing allocates one: the
+/// fold already refused a row whose state or trigger this build has no value
+/// for, so what is kept is the pair of pointers plus the instant.
+pub(crate) struct StepMove {
+    step_id: core_model::StepId,
+    to: &'static str,
+    why: Option<&'static str>,
+    at: ipc::Instant,
+}
+
+/// Every step move in one Job's log, in `seq` order, with the status
+/// transitions and Drone arrivals dropped.
+///
+/// **The same rows `get_job_events` serves**, read once and narrowed here
+/// rather than folded per step: a Job with four steps would otherwise walk the
+/// log four times. Nothing replays — `crates/store/src/fold.rs` has already
+/// done that by the time this runs, exactly as [`recorded`] says.
+pub(crate) fn step_moves(
+    store: &Store,
+    job: &core_model::JobId,
+) -> Result<Vec<StepMove>, LoadJobError> {
+    Ok(narrowed(
+        &store.events_for(job).map_err(LoadJobError::Unreadable)?,
+    ))
+}
+
+fn narrowed(events: &[RecordedEvent]) -> Vec<StepMove> {
+    events
+        .iter()
+        .filter_map(|event| match event.moved() {
+            Moved::Step {
+                step_id, to, why, ..
+            } => Some(StepMove {
+                step_id: step_id.clone(),
+                to: to.as_wire(),
+                why: why.map(|trigger| trigger.as_wire()),
+                at: event.at().into(),
+            }),
+            Moved::Job { .. } | Moved::Drone { .. } => None,
+        })
+        .collect()
+}
+
 /// What Fleet knows about a Job's steps beyond the `job_steps` rows.
 ///
 /// **The declaration comes from the Job's own frozen workflow**, which is
@@ -242,6 +288,7 @@ pub(crate) fn step_facts(
     ran: Vec<(core_model::StepId, Vec<core_model::StepCheck>)>,
     judged: Vec<(core_model::StepId, Vec<core_model::Judgment>)>,
     flagged: Vec<(core_model::StepId, Vec<core_model::GamingFlag>)>,
+    moves: &[StepMove],
 ) -> Vec<StepFacts> {
     job.steps()
         .iter()
@@ -270,6 +317,19 @@ pub(crate) fn step_facts(
                 .find(|(at, _)| at == step.step_id())
                 .map(|(_, found)| found.iter().map(Flagged::from).collect())
                 .unwrap_or_default(),
+            // The third source, beside the workflow and the per-step tables:
+            // the log, which is where how many times a step ran has always
+            // been and where `store::step_attempt` reads the same count from.
+            attempts: ipc::StepAttempt::over(
+                moves
+                    .iter()
+                    .filter(|moved| &moved.step_id == step.step_id())
+                    .map(|moved| ipc::Move {
+                        to: moved.to,
+                        why: moved.why,
+                        at: &moved.at,
+                    }),
+            ),
             // The one fact here that is not a row. Read from the live slot
             // as the answer is assembled, because nothing writes it down.
             judging: aloft.on(&ipc::JobId::from(job.id()), &StepId::from(step.step_id())),

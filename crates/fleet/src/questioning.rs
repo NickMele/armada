@@ -30,7 +30,7 @@ use ipc::mcp::{AskQuestion, AskedOption};
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
-use crate::session::LiveSession;
+use crate::session::{LiveSession, Occasion};
 use crate::transcript;
 use crate::working::Working;
 
@@ -374,6 +374,7 @@ where
         // failed write as spent — a poke is Fleet's patience and this is a
         // person's decision, and losing one of those is not the same as losing
         // the other.
+        at_work.instructed(Occasion::Answer, told.text());
         at_work
             .session()
             .answer(&told)

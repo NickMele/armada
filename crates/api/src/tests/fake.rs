@@ -56,6 +56,7 @@ fn step_rail(
         overridden: false,
         judged: Vec::new(),
         flagged: Vec::new(),
+        attempts: Vec::new(),
         judging: None,
         entered_at: Instant::carried("2026-08-26T09:00:00.000Z"),
         updated_at: Instant::carried("2026-08-26T09:00:00.000Z"),

@@ -33,7 +33,7 @@ use core_model::{
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
-use crate::session::LiveSession;
+use crate::session::{LiveSession, Occasion};
 use crate::transcript;
 use crate::working::Working;
 
@@ -248,7 +248,9 @@ where
             };
         };
         let spent = at_work.pokes() + 1;
-        let sent = at_work.session().poke(&Poke::after(after)).await;
+        let nudge = Poke::after(after);
+        at_work.instructed(Occasion::Poke, nudge.text());
+        let sent = at_work.session().poke(&nudge).await;
         // **The clock restarts whether or not the write landed.** The next
         // silence is measured from the moment the Drone was last spoken to, and
         // a Drone that could not be spoken to has still had its chance — reading

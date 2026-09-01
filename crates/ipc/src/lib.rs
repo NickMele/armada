@@ -50,6 +50,9 @@
 //! lifeboat that shares a type with the protocol it is the lifeboat for is not
 //! one. [`Skew`] decides when Bridge needs it.
 
+/// How many times a step was worked, and what each run came to. **The record
+/// held it and nothing served it** — see the module.
+mod attempt;
 /// How many Drones Fleet may run, how many it is running, and what holds the
 /// next one back. **Fleet-wide, and not a Job's field.**
 mod capacity;
@@ -84,6 +87,7 @@ mod work;
 #[cfg(test)]
 mod tests;
 
+pub use attempt::{Move, StepAttempt};
 pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
@@ -111,7 +115,7 @@ pub use job::{
 pub use overlap::{ScopeOverlap, SharedPath};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
-pub use turn::{Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage, Withheld};
+pub use turn::{Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage, Voice, Withheld};
 pub use version::{ProtocolVersion, Skew, PROTOCOL_VERSION};
 pub use waiting::{AskedOption, ChosenAnswer, QuestionInFlight, RedirectInFlight, RedirectWaiting};
 pub use work::{

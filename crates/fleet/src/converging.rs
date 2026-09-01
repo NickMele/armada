@@ -32,7 +32,7 @@ use verification::{Convergence, NotConverging};
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::judging;
-use crate::session::LiveSession;
+use crate::session::{LiveSession, Occasion};
 use crate::transcript;
 use crate::working::Working;
 
@@ -406,9 +406,11 @@ where
         let Some(at_work) = working.as_ref() else {
             return Ok(());
         };
+        let directive = ReportNow::about(why);
+        at_work.instructed(Occasion::Report, directive.text());
         at_work
             .session()
-            .interrupt(&ReportNow::about(why))
+            .interrupt(&directive)
             .await
             .map_err(|cause| Adrift::NotTold {
                 job: job.clone(),
