@@ -31,7 +31,7 @@ first move is to shorten it rather than to file it as a document.
 | `adapter-traits` | exists, empty | nothing (same rule, same reason) | `cargo tree`, manually today |
 | `testkit` | exists, empty | anything a test needs | none — never shipped, never a dependency of anything that is |
 | `store` | not built | SQLite (`rusqlite` or similar); scoped so it's the *only* crate with a SQLite dependency | `xtask` rule five (JSON), and whatever crate-dependency rule eventually lands |
-| `ipc` | not built | the wire types, `protocol-version.toml`, generated TS | `xtask` rule five (JSON); `cargo xtask verify-protocol` per `agents/protocol-engineer.md` |
+| `ipc` | not built | the wire types, `protocol-version.toml`, generated TS | `xtask` rule five (JSON); the gate holds `protocol-version.toml` to the TS constant generated from it |
 | `adapters` | not built | vendor SDKs, freely | `xtask` rule six (vendor literal) |
 
 `core-model` and `adapter-traits` sit under every other crate, which is exactly

@@ -139,3 +139,5 @@ fn routes(compact: &str) -> Vec<String> {
         .map(str::to_string)
         .collect()
 }
+
+pub mod version;
