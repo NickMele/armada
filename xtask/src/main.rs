@@ -31,6 +31,7 @@ mod rules_protocol;
 mod rules_screens;
 mod rules_stories;
 mod rules_stylesheets;
+mod rules_tokens;
 mod rules_toolbelt;
 mod rules_unsafe;
 mod tokens;
@@ -106,7 +107,8 @@ fn verify_foundations() -> ExitCode {
         rules_privacy::nothing_names_a_person_or_a_machine(&root),
         rules_unsafe::unsafe_is_spoken_only_where_named(&root),
         rules::nothing_writes_its_own_log_format(&root),
-        rules::the_tokens_generate_what_is_checked_in(&root),
+        rules_tokens::the_tokens_generate_what_is_checked_in(&root),
+        rules_tokens::no_media_query_resolves_through_a_custom_property(&root),
         rules_design::no_off_contract_design_value(&root),
         rules_docs::every_open_question_is_collected(&root),
         rules_docs::every_document_is_indexed(&root),

@@ -233,7 +233,8 @@ pub fn check(
         // on a list and `open_log` on detail, and those are one binding each on
         // a surface a person is looking at — not two acts fighting over a key.
         // Keying on tier and shortcut alone refused a registry that was right.
-        let (tier, shortcut, scope) = (entry.get("tier"), entry.get("shortcut"), entry.get("scope"));
+        let (tier, shortcut, scope) =
+            (entry.get("tier"), entry.get("shortcut"), entry.get("scope"));
         if let Some(first) = bindings.insert((tier, shortcut, scope), id) {
             report.fail(format!(
                 "{at} — `{id}` and `{first}` are both bound to `{shortcut}` in the {tier} tier, \

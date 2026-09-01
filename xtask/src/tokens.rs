@@ -82,6 +82,15 @@ pub enum Slot {
     /// No namespace can carry it. Read from CSS as `var(--token)`, with the
     /// reason it is not a utility.
     CssOnly(&'static str),
+    /// `--breakpoint-<key>` carrying the token's **literal value**, in a plain
+    /// `@theme` block rather than the `inline` one.
+    ///
+    /// The only namespace `inline` cannot serve. Tailwind compiles `narrow:`
+    /// into a media feature value — `@media (width >= …)` — and `var()` is not
+    /// legal there, so a browser drops the whole rule and `max-narrow:`
+    /// compiles to nothing. `inline` guarantees the value is a `var()`, so the
+    /// two collapse points carry their literal and cannot be moved by a theme.
+    Breakpoint(&'static str),
 }
 
 /// Name-to-namespace, exact entries before prefixes.
@@ -194,14 +203,12 @@ pub const THEME: &[(&str, Slot)] = &[
         Slot::CssOnly("a window bound the main process reads"),
     ),
     // The two collapse points, in the namespace Tailwind reads for responsive
-    // variants. They are not CSS-only: a component that spells `lg:` resolves
-    // from here, which is what stops it writing an `@media` that cannot read a
-    // custom property anyway.
-    ("--layout-breakpoint", Slot::Named("breakpoint", "wide")),
-    (
-        "--layout-breakpoint-narrow",
-        Slot::Named("breakpoint", "narrow"),
-    ),
+    // variants. A component that spells `narrow:` resolves from here, which is
+    // what stops it writing an `@media` that cannot read a custom property —
+    // and is why `Slot::Breakpoint` is the one slot that leaves the `inline`
+    // block, since an aliased breakpoint would write exactly that `@media`.
+    ("--layout-breakpoint", Slot::Breakpoint("wide")),
+    ("--layout-breakpoint-narrow", Slot::Breakpoint("narrow")),
 ];
 
 /// One declared custom property, with the comment that explains it.
