@@ -38,7 +38,16 @@ old one with everything green — which is the same class of miss the tool was
 built to end, one level up.
 
 **`--bridge` captures the app's own compositions.** Every figure on that side
-imports the component it is a shot of. The screens are declared in
+imports the component it is a shot of, and a screen is a screen: `JobDetail` at
+one state, not its header and not one of its buttons. Everything on the shot —
+the badge, the field run, the tree, the panel, the acts — is derived by the
+app's own code from one fixture, the way it is derived from one wire read at
+runtime. A shot of a control in isolation proves the control and says nothing
+about the screen, which is the question this side exists to answer.
+
+**The stage is Bridge's own window, 1280×800, and it clips.** A right edge cut
+off is a finding rather than an artifact: it is a screen whose content will not
+shrink to the window it ships in. The screens are declared in
 `*.screens.tsx` beside the code they draw: a file exports a `title` and a
 `screens` array, and each entry states its own `data-shot` mark, the name to
 print, and one element. Fixtures are written in the file — enough of the wire's
