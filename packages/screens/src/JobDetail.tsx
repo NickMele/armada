@@ -66,7 +66,8 @@ import type { FileReport, JobDetail as JobWhole, JobSummary, StepDetail } from "
 import type { JobFootprint } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 import { Acts, StepActs, type ConfirmableAct } from "./Acts";
-import { useCallArguments, type Calls } from "./calls";
+import { useCallArguments, type Calls, type ReadCall } from "./calls";
+import type { OpenArtifact } from "./opening";
 import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
 import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
@@ -119,6 +120,25 @@ export type JobDetailProps = {
   onOverrule: (jobId: string, reason: string) => void;
   /** Ask the gate again on a step it could not decide. Nothing is at stake. */
   onRerun: (jobId: string) => void;
+  /**
+   * Which Job's diff the host should hold open, or `null` for none.
+   *
+   * **It has to be stable**: an effect depends on it, and a lambda rebuilt on
+   * every tick of the clock would reopen the read on every tick with it.
+   */
+  onReadDiff: (jobId: string | null) => void;
+  /**
+   * The host calls this screen makes on a person's behalf, handed in.
+   *
+   * **Every one of them is a round trip to a process with a filesystem or a
+   * socket.** This screen decides what they mean and when to make them; it
+   * does not reach for the thing that makes them, because a screen that did
+   * could not be rendered anywhere but inside the app.
+   */
+  onOpenArtifact: OpenArtifact;
+  onReadCall: ReadCall;
+  /** Stable, like `onReadDiff` — an effect in the decision block depends on it. */
+  onNeedMaterial: (jobId: string | null) => void;
   /** Say this job failed in error, with the record attached. */
   onReport: (jobId: string, filing: FileReport) => Promise<Outcome>;
   /** Let this Job run. Sent on the press, with no confirmation. */
@@ -145,6 +165,10 @@ export type JobDetailProps = {
 };
 
 export function JobDetail({
+  onReadDiff,
+  onOpenArtifact,
+  onReadCall,
+  onNeedMaterial,
   job,
   watched,
   workflows,
@@ -202,9 +226,9 @@ export function JobDetail({
   // is still the expensive read and it is still made once, here, so the Produced
   // chapter and the review decision draw from one answer.
   useEffect(() => {
-    void window.armada.readDiff(job.id);
+    onReadDiff(job.id);
     return () => {
-      void window.armada.readDiff(null);
+      onReadDiff(null);
     };
   }, [job.id]);
 
@@ -239,7 +263,7 @@ export function JobDetail({
   // went against them, and each opens. The Job id and the toast are the panel's,
   // so they are handed down rather than reached for; `phases.tsx` says why.
   const opensRecords = useMemo(
-    () => ({ jobId: job.id, onSaid }),
+    () => ({ jobId: job.id, open: onOpenArtifact, onSaid }),
     [job.id, onSaid],
   );
   const phases =
@@ -272,7 +296,7 @@ export function JobDetail({
   // open. **Held for the Job rather than for a log**, because the story draws
   // the same row twice — chapter one's turns and chapter two's preview — and a
   // fetch made in one is the same argument in the other.
-  const calls = useCallArguments(job.id);
+  const calls = useCallArguments(onReadCall, job.id);
 
   const rows = watching === null || open === undefined ? [] : entriesOf(watching.rows, open.step_id);
 
@@ -370,7 +394,7 @@ export function JobDetail({
       // the reason the two are separate props at all.
       openSteps={keys.openSteps}
       onOpenStep={keys.onOpenStep}
-      where={workOf(job, whole, manifest, workflow)}
+      where={workOf(onOpenArtifact, job, whole, manifest, workflow)}
       whereNote={NAMED_NOT_NEEDED}
       whereAbsent={whyNoWork(watched, job.id)}
       brief={whole === null ? undefined : briefOf(whole)}
@@ -421,6 +445,7 @@ export function JobDetail({
                 render === "reviewing" ? (
                   <Decide
                     job={job}
+                    onNeedMaterial={onNeedMaterial}
                     evidence={recorded.evidence}
                     diff={recorded.diff}
                     stale={stale}

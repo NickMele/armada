@@ -79,6 +79,11 @@ const PREVIEW = "What this workflow will do, step by step";
 const ORIGIN = "manual";
 
 export type ComposerProps = {
+  /**
+   * Put a picked or pasted file somewhere the Job can name, and answer with the
+   * path. Staged before the Job exists, so there is no id to key it on.
+   */
+  onStage: (bytes: ArrayBuffer, filename: string, mimeType: string) => Promise<{ path: string }>;
   /** The workflows Fleet holds. **The only ones it will accept.** */
   workflows: readonly WorkflowSummary[];
   /** The Manifest the rail names. A fact here, not a choice. */
@@ -90,7 +95,14 @@ export type ComposerProps = {
   onPropose: (draft: Draft) => void;
 };
 
-export function Composer({ workflows, manifest, models, disabled, onPropose }: ComposerProps) {
+export function Composer({
+  workflows,
+  manifest,
+  models,
+  disabled,
+  onStage,
+  onPropose,
+}: ComposerProps) {
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
   const [workflowId, setWorkflowId] = useState("");
@@ -135,7 +147,7 @@ export function Composer({ workflows, manifest, models, disabled, onPropose }: C
    */
   async function stage(file: File): Promise<void> {
     const bytes = await file.arrayBuffer();
-    const { path } = await window.armada.stageAttachment(bytes, file.name, file.type);
+    const { path } = await onStage(bytes, file.name, file.type);
     setAttachments((current) => [...current, { path, filename: file.name, mimeType: file.type }]);
   }
 

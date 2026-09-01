@@ -1,0 +1,25 @@
+{
+  "name": "@armada/screens",
+  "private": true,
+  "version": "0.0.0",
+  "description": "A whole screen, assembled: props in, callbacks out. No socket, no Electron.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@armada/components": "workspace:*",
+    "@armada/protocol": "workspace:*",
+    "@armada/shell": "workspace:*",
+    "@armada/tokens": "workspace:*",
+    "lucide-react": "^0.550.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "^5.9.0"
+  }
+}

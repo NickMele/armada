@@ -79,6 +79,20 @@ export function whyNotOpened(opened: Opened, what: Artifact): string | null {
  * `null` is success and is the whole of the confirmation: the file is in front
  * of the person, in their editor, which says it better than a toast would.
  */
-export async function openArtifact(jobId: string, what: Artifact): Promise<string | null> {
-  return whyNotOpened(await window.armada.openArtifact(jobId, what), what);
+export async function openArtifact(
+  open: OpenArtifact,
+  jobId: string,
+  what: Artifact,
+): Promise<string | null> {
+  return whyNotOpened(await open(jobId, what), what);
 }
+
+/**
+ * Asking the host to open a file, as the caller hands it in.
+ *
+ * **Taken rather than reached for.** This module says what an unopenable file
+ * means, which is a reading a screen does; the socket that opens one belongs to
+ * the process that has a filesystem. Screens sit above that process and cannot
+ * import it, so the call arrives as an argument.
+ */
+export type OpenArtifact = (jobId: string, what: Artifact) => Promise<Opened>;

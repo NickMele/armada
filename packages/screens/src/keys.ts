@@ -33,7 +33,7 @@
 // | `/` | search the current list | here |
 // | `1`–`5` | state filter, Job Board only, in tab order | here |
 //
-// **The arrows are not in `pressOf` and that is deliberate.** `Active jobs
+// **The arrows are not in `boardPressOf` and that is deliberate.** `Active jobs
 // list` is a listbox and already roves on `↓ ↑ Home End`; a second handler on
 // `window` would move the cursor twice per press. `j` and `k` are here because
 // nothing else claims them, and both paths converge on the same cursor — they
@@ -191,7 +191,12 @@ function answersEnter(target: EventTarget | null): boolean {
  * place the safety rules can be checked against the contract instead of five
  * places they can each be forgotten in.
  */
-export function pressOf(event: KeyboardEvent): BoardPress | null {
+/**
+ * **Named apart from job detail's.** The two key maps answer different keys on
+ * different objects and are deliberately separate files; one package exporting
+ * two `pressOf` is the ambiguity that separation exists to avoid.
+ */
+export function boardPressOf(event: KeyboardEvent): BoardPress | null {
   // A modifier means a different tier is being addressed — the palette's `⌘K`,
   // the rail's `⌘1`–`⌘5`. This map is bare keys only.
   if (event.metaKey || event.ctrlKey || event.altKey) return null;

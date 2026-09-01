@@ -93,7 +93,7 @@ import {
   type BoardTab,
 } from "./board";
 import { ClearTerminalControl } from "@armada/shell";
-import { pressOf, SEARCH_KEY, verbOf } from "./keys";
+import { boardPressOf, SEARCH_KEY, verbOf } from "./keys";
 import { foldedNote, foldLineages, headlineOf } from "./lineage";
 import { readingOf } from "./reading";
 import { isTerminal, Row } from "./Row";
@@ -271,7 +271,7 @@ export function Jobs({
     // dialogs are on both sides of this file and a flag would have to be
     // threaded through both.
     if (document.querySelector('[role="dialog"], [role="alertdialog"]') !== null) return;
-    const read = pressOf(event);
+    const read = boardPressOf(event);
     if (read === null) return;
     const job = under();
     switch (read.act) {

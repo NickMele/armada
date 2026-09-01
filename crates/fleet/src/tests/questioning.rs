@@ -273,7 +273,7 @@ async fn the_question_reaches_the_wire_whole() {
 ///
 /// `who_is_acting` on `running` is `Drone`, so without this flag a Job waiting
 /// on a person sits under Running and a question on a Job nobody has open is
-/// invisible. `apps/desktop/src/renderer/src/board.ts` reads it, and
+/// invisible. `packages/screens/src/board.ts` reads it, and
 /// `docs/concepts/job-board.md` is the rule; this is the half of that pair Rust
 /// can prove, because Bridge has no test runner.
 #[tokio::test]

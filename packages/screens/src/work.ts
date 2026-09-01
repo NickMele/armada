@@ -40,7 +40,7 @@ import type { JobBriefProps, JobLogReferenceRow, NotOpened } from "@armada/compo
 import type { Watched } from "@armada/protocol";
 import { artifactPath, repoOf } from "@armada/protocol";
 import type { Artifact } from "@armada/protocol";
-import { openArtifact } from "./opening";
+import { openArtifact, type OpenArtifact } from "./opening";
 import type { JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 
@@ -81,11 +81,11 @@ export function briefOf(whole: JobWhole): JobBriefProps {
  * per-step records now and needs the same five, and two copies of them would
  * drift into two vocabularies for one failure.
  */
-function opener(jobId: string, what: Artifact, label: string) {
+function opener(open: OpenArtifact, jobId: string, what: Artifact, label: string) {
   return {
     label,
     go: async (): Promise<NotOpened> => {
-      const because = await openArtifact(jobId, what);
+      const because = await openArtifact(open, jobId, what);
       return because === null ? null : { because };
     },
   };
@@ -98,6 +98,7 @@ function opener(jobId: string, what: Artifact, label: string) {
  * because "still reading" and "Fleet did not answer" are different sentences.
  */
 export function workOf(
+  open: OpenArtifact,
   job: JobSummary,
   whole: JobWhole | null,
   manifest: ManifestSummary | undefined,
@@ -117,7 +118,7 @@ export function workOf(
       iconLabel: "Worktree",
       value: where,
       copyValue: where,
-      open: opener(job.id, "worktree", "Open the worktree"),
+      open: opener(open, job.id, "worktree", "Open the worktree"),
       meta: dispatched ? undefined : NOT_WRITTEN,
     });
   }

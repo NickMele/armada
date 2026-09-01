@@ -42,11 +42,15 @@ import {
  * every render would open and close the read on a loop, and the read publishes
  * state, so the loop would feed itself.
  */
-function askForMaterial(jobId: string | null): void {
-  void window.armada.readEvidence(jobId);
-}
-
 export type DecideProps = {
+  /**
+   * Ask the host to open or close the evidence read for a Job, or for none.
+   *
+   * **It has to be stable**, for the reason the reports read is: an effect
+   * depends on it, and a lambda rebuilt every render would open and close the
+   * read on a loop that feeds itself.
+   */
+  onNeedMaterial: (jobId: string | null) => void;
   job: JobSummary;
   evidence: Evidence;
   diff: Diff;
@@ -75,6 +79,7 @@ export function DecidedDiff({ diff, jobId }: { diff: Diff; jobId: string }) {
 }
 
 export function Decide({
+  onNeedMaterial,
   job,
   evidence,
   diff,
@@ -90,8 +95,8 @@ export function Decide({
   const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
-    askForMaterial(job.id);
-    return () => askForMaterial(null);
+    onNeedMaterial(job.id);
+    return () => onNeedMaterial(null);
   }, [job.id]);
 
   // A draft belongs to the Job it was written about. Carrying one into the next
