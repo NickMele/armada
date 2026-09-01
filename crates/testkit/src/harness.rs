@@ -1,39 +1,27 @@
 //! An `AgentHarness` that renders something harmless.
-//!
-//! # What it is faithful about, and what it is not
-//!
 //! **Faithful: the seam.** It takes a real `DroneSpawnConfig`, answers with a
-//! real `Launch`, and records what it was asked for — so a test can start a
-//! Drone end to end, through `fleet::drone::start`, and then read back exactly
-//! what was rendered. The confinement questions a test wants to ask of the real
-//! harness are questions about a `Launch`, and this produces one.
+//! real `Launch` and records what it was asked for, so a test can start a Drone
+//! end to end through `fleet::drone::start` and read back what was rendered.
+//! What a test wants to ask of the real harness is a question about a `Launch`.
 //!
 //! **Not faithful: the argument list.** It renders a program that is not an
 //! agent, because a test must never start one — a real spawn costs money, needs
 //! a network and needs a credential, and a suite with any of those in it is a
 //! suite people stop running. Whether the *real* argument list carries the
-//! flags that confine a Drone is asserted in `adapters`, against the real
-//! renderer, with no process at all.
+//! flags confining a Drone is asserted in `adapters`, with no process at all.
 //!
-//! **Not faithful: reading.** It does not decode. Turning a line of a vendor's
-//! stream into an event is that vendor's schema and belongs to `adapters`,
-//! which is also the only crate permitted to read untyped bytes on this path.
+//! **Not faithful: reading.** It does not decode — turning a line of a vendor's
+//! stream into an event is that vendor's schema, and belongs to `adapters`,
+//! the only crate permitted to read untyped bytes on this path.
 //! [`FakeHarness::read`] answers with the line as prose unless a test scripted
-//! something for it, which is enough for a caller that only needs *an* event.
+//! something, which is enough for a caller that only needs *an* event.
 //!
-//! # The shell adds three variables of its own
-//!
-//! Every constructor below that reports something runs `/bin/sh`, and a POSIX
-//! shell sets `PWD`, `SHLVL` and `_` for itself after it starts. They are not
-//! inherited and they are not Fleet's; a test asserting on what a Drone got has
-//! to say so rather than count lines. A program that added nothing would have
-//! to print and exit, which races the first turn's write.
-//!
-//! # Why the constructors are named for behaviour
-//!
-//! `that_listens`, `that_exits_immediately`, `that_reports_its_environment` —
-//! each names the Drone behaviour a test is trying to produce rather than the
-//! program that produces it. A test asserting what happens when a Drone dies
+//! **The shell adds three variables of its own.** Every constructor below that
+//! reports something runs `/bin/sh`, and a POSIX shell sets `PWD`, `SHLVL` and
+//! `_` for itself after it starts. A test asserting on what a Drone got has to
+//! say so rather than count lines, and a program adding nothing would have to
+//! print and exit, which races the first turn's write. The constructors are
+//! named for behaviour, not for the program: a test about a Drone that dies
 //! before it is told anything should say that, not `/usr/bin/true`.
 
 use std::collections::BTreeMap;

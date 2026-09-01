@@ -5,36 +5,24 @@
 //! the only thing that drives a transition; a Drone's self-report is an input
 //! signal and never authoritative.
 //!
-//! # Where the shape comes from
+//! **The shape does not come from this module.** `crates/core-model/domain/` is
+//! the authority — the statuses, the edges, the step states, the escalation
+//! triggers and the field list, each carried here with the registry's own wire
+//! values as the variant spellings. A page in the design workspace that
+//! disagrees with one of those files is stale, not right, and so is this code.
 //!
-//! Not from this module. `crates/core-model/domain/` is the authority — twelve
-//! statuses, thirty-four edges, six step states, thirteen escalation triggers
-//! and the field list, each carried here with the registry's own wire values as
-//! the variant spellings. A page in the design workspace that disagrees with
-//! one of those files is stale, not right, and so is this code.
+//! **Two levels.** [`JobStatus`] is the outer half and [`StepState`] the inner,
+//! and both are built. The registry gives step states no edge table, so
+//! [`step_machine`](crate::StepTarget) declares the edges M1 walks and says on
+//! each why it is there, rather than transcribing a file. [`Guard`] is where
+//! the halves meet: a status edge may carry a condition on the Job's step rows.
 //!
-//! # The two-level machine, and the half that is here
-//!
-//! [`JobStatus`] is the outer half and [`StepState`] is the inner one, and both
-//! are built. The registry gives step states no edge table, so [`step_machine`]
-//! transcribes nothing: it declares the three states M1 reaches and the two
-//! edges it walks, and makes the other three unreachable by giving
-//! [`StepTarget`] no variant that names them. The full edge table stays an
-//! honest gap rather than a guess. [`Guard`] is where the two halves meet: a
-//! status edge may carry a condition on the Job's step rows.
-//!
-//! [`step_machine`]: crate::StepTarget
-//!
-//! # What "no setter" means concretely
-//!
-//! [`Job`]'s fields are private, no method on it takes `&mut self`, and
-//! [`Job::transition`] and [`Job::transition_step`] are the only things that
-//! return a `Job` differing from the one they were given. There is no
-//! constructor that accepts a status or a step state either — [`Job::create_top_level`] enters at `awaiting_approval` and
-//! [`Job::create_sub_dispatched`] enters at `queued`, and neither takes the
-//! choice from a caller. A test that wanted a Job in some other state has to
-//! transition into it, which is the point: a test that constructs its way there
-//! asserts nothing about the machine it claims to be testing.
+//! **"No setter" concretely.** [`Job`]'s fields are private, no method takes
+//! `&mut self`, and [`Job::transition`] and [`Job::transition_step`] are the
+//! only things returning a `Job` different from the one handed in. No
+//! constructor accepts a status or a step state either, so a test wanting a Job
+//! in some other state has to transition into it — a test that constructs its
+//! way there asserts nothing about the machine it claims to be testing.
 
 mod attempt;
 mod check;

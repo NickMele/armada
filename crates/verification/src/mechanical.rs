@@ -1,37 +1,25 @@
 //! The mechanical tier: facts that already exist, and what they mean.
 //!
-//! # Nothing here parses output
+//! **Nothing here parses output** — an exit code, a signal, an expired budget,
+//! a count of changed files. Which lines of a test run were the failure is a
+//! Judge's question, answered by reading the diff, never a runner's question
+//! answered by matching on stdout. No field in this module holds a Check's
+//! output. [`Exit::Code`] is the only variant an expectation is ever compared
+//! against, so none of the ways a Check ends without a code can be compared
+//! into a pass.
 //!
-//! An exit code, a signal, an expired budget, a count of changed files. Which
-//! lines of a test run were the failure is a Judge's question, answered by
-//! reading the diff — never a runner's question, answered by matching on
-//! stdout. There is no field in this module that holds a Check's output.
-//!
-//! # Three ways a Check fails without failing
-//!
-//! A hanging Check, a Check whose command is not installed, and a Check killed
-//! by a signal all produce **no exit code at all**. Each is its own variant of
-//! [`Exit`] rather than a stand-in code, because every stand-in is a number
-//! some real command also returns: `124` is `timeout`'s convention and a real
-//! program's exit, `127` is a shell's "not found" and a real program's exit.
-//! [`Exit::Code`] is the only variant an expectation is ever compared against,
-//! so none of the three can be compared into a pass.
-//!
-//! # A skipped check is a third answer, not a pass
-//!
-//! [`Observed::Skipped`] is a check whose declared paths the step did not
-//! touch. It is still an observation, so [`Ran::of`] keeps refusing a short
-//! list. It fails nothing and passes nothing: [`Ran::advances`] is the gate's
-//! question and [`Ran::all_passed`] answers no, because a step that measured
+//! **A skipped check is a third answer, not a pass.** [`Observed::Skipped`] is
+//! a check whose declared paths the step did not touch. It is still an
+//! observation, so [`Ran::of`] keeps refusing a short list; it fails nothing and
+//! passes nothing, so [`Ran::all_passed`] answers no — a step that measured
 //! nothing must not be recorded as one whose checks held.
 //!
-//! # Why the outcomes are built against the step
-//!
-//! [`Ran`] pairs the step's checks with what was observed of each, in order,
-//! and refuses a list that is short. A gate reading a `Vec` of outcomes cannot
-//! tell "every check passed" from "the checks that were run passed", and those
-//! are the same value with different meanings — which is exactly the vacuous
-//! pass this step exists to make unreachable.
+//! **The outcomes are built against the step.** [`Ran`] pairs the step's checks
+//! with what was observed of each, in order, and refuses a list that is short.
+//! A gate reading a `Vec` of outcomes cannot tell "every check passed" from
+//! "the checks that were run passed", and those are the same value with
+//! different meanings — which is exactly the vacuous pass this crate exists to
+//! make unreachable.
 
 use std::time::Duration;
 
@@ -49,6 +37,13 @@ pub const EVIDENCE_SCOPE: &str = "evidence_scope";
 
 /// How a Check's process ended. The fact, before anything decides what it
 /// means.
+///
+/// **Three ways a Check fails without failing.** A hanging Check, a Check whose
+/// command is not installed, and a Check killed by a signal all produce **no
+/// exit code at all**. Each is its own variant rather than a stand-in code,
+/// because every stand-in is a number some real command also returns: `124` is
+/// `timeout`'s convention and a real program's exit, `127` is a shell's "not
+/// found" and a real program's exit.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Exit {
     /// It ran to completion and returned a code. **The only variant an

@@ -2,38 +2,27 @@
 //!
 //! A worktree is a branch and a checkout and nothing else. What a repository's
 //! Checks need beyond that is the repository's to say, and `setup.requires` in
-//! its `armada.yml` is where it says it. This runs what it named, in order,
-//! stopping at the first failure — `[install, generate]` is a sequence, and
-//! carrying on past the first would produce the second's error about the
-//! first's job.
+//! its `armada.yml` is where it says it. [`prepare`] runs what it named, in
+//! order, stopping at the first failure.
 //!
-//! # Not a Check, and the distinction is the whole design
+//! **Not a Check, and the distinction is the whole design.** A Check gates a
+//! step and re-runs at the gate; preparation gates nothing and runs before any
+//! step exists. Sharing one mechanism would make a failed `pnpm install` read
+//! as failing work, which is #227 arriving a second time — so the two share
+//! only [`checks_runner::run`], a process and a budget with no opinion about
+//! what it runs.
 //!
-//! A Check gates a step and re-runs at the gate. Preparation gates nothing and
-//! runs before any step exists. Sharing one mechanism would make a failed
-//! `pnpm install` read as failing work, which is #227 arriving a second time.
-//! So the two share only [`checks_runner::run`], which is a process and a
-//! budget with no opinion about what it runs.
-//!
-//! Nothing but zero passes. A Check may declare `expect_exit_code`; there is
-//! no reading of *the install failed and that was expected* that leaves a
-//! worktree a Job can work in. `CheckBudget`
-//! bounds it, because a cold install and a cold workspace build are the same
-//! minutes and a second dial would be a second number nobody could find.
-//!
-//! # Once per worktree, by where it is called rather than by a record
-//!
-//! `crate::dispatch` calls this immediately after `Vcs::create_worktree`, the
-//! only call to it in the workspace: every other spawn path goes through
+//! **Once per worktree, by where it is called rather than by a record.**
+//! `crate::dispatch` calls this straight after `Vcs::create_worktree` and is
+//! the only caller; every other spawn path goes through
 //! `resume::surviving_worktree` and finds one already on disk. So a Job whose
 //! three steps mean three Drones pays for one install, and a record saying so
-//! would be a second statement of a fact the call site already makes.
+//! would restate a fact the call site already makes.
 //!
-//! **Half of what `docs/concepts/manifest.md` asks for**, which also re-runs on
-//! drift in the lockfile a Scan traced the command from. That is Verify's
-//! detection at dispatch time and there is no Scan yet — and a worktree lives
-//! for one Job, so nothing here can reach one prepared against a lockfile that
-//! has since moved.
+//! **Half of what `docs/concepts/manifest.md` asks for**, which also re-runs
+//! on drift in the lockfile a Scan traced the command from. There is no Scan —
+//! but a worktree lives for one Job, so nothing here can reach one prepared
+//! against a lockfile that has since moved.
 
 use std::fmt;
 use std::path::Path;
@@ -150,6 +139,16 @@ const SAID_LIMIT: usize = 1_500;
 ///
 /// `Ok(())` where there was nothing to run, which is the ordinary case for a
 /// repository that declares no `setup`.
+///
+/// **In order, stopping at the first failure.** `[install, generate]` is a
+/// sequence, and carrying on past the first would produce the second's error
+/// about the first's job.
+///
+/// **Nothing but zero passes.** A Check may declare `expect_exit_code`; there
+/// is no reading of *the install failed and that was expected* that leaves a
+/// worktree a Job can work in. `CheckBudget` bounds it, because a cold install
+/// and a cold workspace build are the same minutes, and a second dial would be
+/// a second number nobody could find.
 pub(crate) async fn prepare(
     required: &[Preparation],
     worktree: &Path,

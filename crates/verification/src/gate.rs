@@ -1,39 +1,28 @@
 //! The gate: evidence plus every mechanical check, and nothing else.
 //!
-//! # Two things, and either alone advances nothing
-//!
-//! [`decide`] takes an [`Accepted`] submission and a [`Ran`] set of checks. It
-//! cannot be called with only one of them, because both are parameters and
-//! neither is optional. That is the whole rule, and it is a signature rather
-//! than a sentence:
+//! **Two things, and either alone advances nothing.** [`decide`] takes an
+//! [`Accepted`] submission and a [`Ran`] set of checks, and cannot be called
+//! with only one because neither is optional. A signature, not a sentence:
 //!
 //! - **Evidence with a failing check** cannot reach [`Verdict::Advance`],
 //!   because `Ran::advances` is false and the match has no other arm.
-//! - **Passing checks with no evidence** cannot reach `decide` at all, because
-//!   there is no `Accepted` to pass and no constructor that makes one without a
+//! - **Passing checks with no evidence** cannot reach `decide` at all: there is
+//!   no `Accepted` to pass and no constructor makes one without a
 //!   [`Submission`](crate::Submission).
 //! - **Prose** reaches nothing. No type in this crate can be built from a
 //!   Drone's message, so there is no path from text to a transition.
 //!
-//! # A step with no checks advances on evidence alone
+//! **A step with no checks advances on evidence alone** — not a special case
+//! and not a branch. `Ran` for such a step has no failures, so the ordinary
+//! rule is satisfied, and two of the four sample workflows lean on it. A step
+//! whose every Check was *skipped* advances by the same rule and is not the same
+//! fact: [`decide`] asks `Ran::advances`, not `Ran::all_passed`, so the verdict
+//! matches and the record does not — `check_runs` carries a `skipped` row each.
 //!
-//! Not a special case and not a branch. `Ran` for a step with no checks has no
-//! failures, so the ordinary rule — evidence, and no failing check — is
-//! satisfied. Two of the four sample workflows lean on this and it is the
-//! common shape rather than the edge.
-//!
-//! A step whose every Check was skipped advances by the same rule and is not
-//! the same fact. [`decide`] asks `Ran::advances`, not `Ran::all_passed`; the
-//! verdict matches and the record does not, because `check_runs` carries a
-//! `skipped` row per Check.
-//!
-//! # Why acceptance is a separate step from deciding
-//!
-//! A submission of the wrong kind for the step establishes nothing, and running
-//! a Manifest Check for it would spend minutes of a test suite to reach a
-//! conclusion already available. [`Accepted::of`] is therefore where the kind is
-//! matched, and holding an `Accepted` is what licenses Fleet to run the checks
-//! at all.
+//! **Acceptance is a separate step from deciding.** A submission of the wrong
+//! kind establishes nothing, and running a Manifest Check for it would spend
+//! minutes to reach a conclusion already available. [`Accepted::of`] is where
+//! the kind is matched, and holding one licenses Fleet to run the checks.
 
 use config::{EvidenceType, ResolvedStep};
 

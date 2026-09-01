@@ -1,37 +1,23 @@
 //! What the Drone is told once the gate has ruled, and when it is told nothing
 //! at all.
 //!
-//! # The wording here is drafted, not sanctioned
-//!
+//! **The wording here is drafted, not sanctioned.**
 //! `docs/contracts/agent-prompt.md` governs every turn Fleet injects and lists
-//! six of them. **The gate's own outcome turn is not one of the six** — the
-//! mechanism was decided and the wording never written. What is below is a
-//! draft in the shape the contract's other drafts take, and it is marked as one
-//! rather than presented as agreed copy.
+//! six of them; the gate's own outcome turn is not one — the mechanism was
+//! decided and the wording never written. What is below is a draft in the shape
+//! the contract's other drafts take, and is marked as one.
 //!
-//! # A failure produces a turn only where there is something to do with it
-//!
-//! A failed Check used to end the Job outright, so the Drone was terminated
+//! **A failure produces a turn only where there is something to do with it.** A
+//! failed Check used to end the Job outright, so the Drone was terminated
 //! rather than told: a turn explaining a verdict to a process about to be
-//! killed spends a Drone's remaining tool call (measured: an injected message
+//! killed spends a Drone's remaining tool call — measured, an injected message
 //! is delivered at the next turn boundary, so it costs whatever is left of the
-//! current one) to deliver information nobody reads.
-//!
-//! That argument holds exactly while the failure is terminal.
-//! [`handed_back`](OutcomeTurn::handed_back) is the case where it is not — the
-//! step's retry budget has room, the Drone is about to work the step again, and
-//! what the check printed is the whole of what it needs. Where the budget is
-//! spent the Job still ends and the Drone is still not told; the reason goes to
-//! the person who opens the branch.
-//!
-//! # No counter, ever
-//!
-//! An injected turn carries no attempt count, no remaining budget and no
-//! consequence. A Drone one attempt from escalation has the strongest possible
-//! incentive to satisfy a bar rather than do the work, and this type has no
-//! constructor that takes a number. That holds hardest on the hand-back:
-//! "this is your last try" is the sentence most likely to produce a weakened
-//! assertion instead of a fix.
+//! current one — to deliver information nobody reads. That holds exactly while
+//! the failure is terminal. [`handed_back`](OutcomeTurn::handed_back) is where
+//! it is not: the retry budget has room, the Drone is about to work the step
+//! again, and what the Check printed is the whole of what it needs. Where the
+//! budget is spent the Job still ends, the Drone is still not told, and the
+//! reason goes to the person who opens the branch.
 
 use config::ResolvedStep;
 
@@ -92,6 +78,12 @@ impl Verified {
 /// the third says it did not and is being worked again. There is none that
 /// says a step failed and is over — that turn does not exist, because there is
 /// nobody left to read it.
+///
+/// **No counter, ever.** It carries no attempt count, no remaining budget and
+/// no consequence, and there is no constructor that takes a number. A Drone one
+/// attempt from escalation has every incentive to satisfy a bar rather than do
+/// the work, and "this is your last try" is the sentence most likely to produce
+/// a weakened assertion instead of a fix.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OutcomeTurn {
     text: String,

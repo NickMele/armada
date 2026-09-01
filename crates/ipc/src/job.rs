@@ -1,15 +1,9 @@
 //! What a Job looks like to Bridge, and what Bridge may propose.
-//!
-//! # The conversion is the redaction
-//!
-//! [`JobSummary`] is built by hand from `core_model::Job`, field by field, and
-//! that is the whole reason it exists. `Job` will accrete fields as Fleet's
-//! needs grow — worktree paths, adapter state, whatever a scheduler wants — and
-//! if the record itself were serialised, every new field would be redacted or
-//! not by whatever serde does by default. **A domain type on the wire is a
-//! redaction decision nobody made.**
-//!
-//! What is deliberately left behind, and why:
+//! **The conversion is the redaction.** [`JobSummary`] is built by hand from
+//! `core_model::Job`, field by field, which is the whole reason it exists. `Job`
+//! will accrete fields as Fleet's needs grow, and were the record itself
+//! serialised, every new field would be redacted or not by whatever serde does
+//! by default: **a domain type on the wire is a redaction nobody decided.**
 //!
 //! | Left behind | Why |
 //! |---|---|
@@ -19,22 +13,16 @@
 //! | `acceptance_criteria` | The requester's words. `get_job` returns the Job in full; this is the list |
 //! | `dependencies`, `gate_manifests`, `dispatched_by` | The graph, which the Board does not draw at M1 |
 //!
-//! `branch` crosses too: it is a name in Armada's own namespace, not a path,
-//! and it is what a person merges once the Job is done.
+//! `branch` crosses because it is a name in Armada's own namespace rather than a
+//! path, and is what a person merges. `title` crosses because it is the one
+//! string on a Job written to be read off a screen: a list of ids and statuses
+//! with no name on any row is a list nobody can use.
 //!
-//! `title` is the field that goes the other way, and the only free text on the
-//! record that does: `facts` is redacted because it is the likeliest place a
-//! secret lands, and a title is the one string on a Job written to be read off
-//! a screen. A list of ids and statuses with no name on any row is a list
-//! nobody can use.
-//!
-//! # The list carries its failures
-//!
-//! [`JobList`] is not a `Vec<JobSummary>`. `store` hands back the Jobs that
-//! loaded *and* the ones that did not, and a wire shape that dropped the second
-//! half would reintroduce the v1 bug — twenty-one Jobs missing from a
-//! well-typed list with nothing in the signature saying so — one layer further
-//! out, where nobody would look for it.
+//! **The list carries its failures.** [`JobList`] is not a `Vec<JobSummary>`:
+//! `store` hands back the Jobs that loaded *and* the ones that did not, and a
+//! wire shape dropping the second half would reintroduce the v1 bug — twenty-one
+//! Jobs missing from a well-typed list with nothing in the signature saying so —
+//! one layer further out, where nobody would look for it.
 
 use serde::{Deserialize, Serialize};
 
