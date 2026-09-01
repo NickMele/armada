@@ -223,6 +223,20 @@ where
                 let passed = self.declared_step(&job, step)?.clone();
                 let job = self.move_step(&job, step, StepTarget::Advanced).await?;
                 let next = self.step_after(&job, step)?;
+                // **The step that just dispatched, and children still
+                // going.** Whatever comes next is work about those Jobs, and a
+                // Drone put on it now would hold the slot its own children need
+                // to finish — at a bound of two, a parent and one child fill it.
+                // So the Job goes back in the queue with this step advanced and
+                // the next one not entered, its Drone stands down, and
+                // `admit_next` holds it there until every child is terminal.
+                // `crate::sub_dispatch` holds the predicate;
+                // `crate::readmitting` puts the Drone back.
+                if self.dispatched_and_waits(&job, step).await? {
+                    self.move_job(&job, Target::Queued, Actor::Fleet).await?;
+                    self.stood_down(job_id, working).await?;
+                    return Ok(());
+                }
                 let job = self.move_step(&job, &next, StepTarget::Running).await?;
                 // Every step's evidence as the record holds it, read after
                 // `crate::settling` wrote this step's. `Produced::before`

@@ -70,6 +70,14 @@ const EVIDENCE_TOOL: &str = "mcp__armada__submit_evidence";
 const SCOPE_TOOL: &str = "mcp__armada__declare_scope";
 const CHECKS_TOOL: &str = "mcp__armada__run_checks";
 
+/// **Not in the table above, because it is not in every toolbelt.** It is the
+/// one Armada tool that is granted rather than given: a Drone that may create
+/// Jobs is a Drone one approval bought several Drones' worth of spend from, so
+/// it is rendered only where [`Grant::DispatchAJob`] was granted. A Drone that
+/// calls it without the grant is denied by the CLI silently, which is why Fleet
+/// refuses the same call in words on its own side.
+const DISPATCH_TOOL: &str = "mcp__armada__dispatch_job";
+
 /// The program name `crates/config/settings.toml` gives as the default for the
 /// AgentHarness binary path: `claude (on PATH)`.
 ///
@@ -235,6 +243,7 @@ fn allowlist(config: &DroneSpawnConfig) -> Result<String, HarnessRefused> {
                 allowed.push("Write".into());
             }
             Grant::RunADeclaredCommand(run) => allowed.push(command_rule(run)?),
+            Grant::DispatchAJob => allowed.push(DISPATCH_TOOL.into()),
         }
     }
     Ok(allowed.join(","))
@@ -358,7 +367,14 @@ pub fn checks_tool() -> &'static str {
     CHECKS_TOOL
 }
 
-/// The server both tools above are served from.
+/// The dispatch tool's name, for a caller that needs to assert it is *absent*
+/// from a toolbelt. The three above are in every one; this is the only Armada
+/// tool a spawn can be built without.
+pub fn dispatch_tool() -> &'static str {
+    DISPATCH_TOOL
+}
+
+/// The server every tool above is served from.
 pub fn evidence_server() -> &'static str {
     EVIDENCE_SERVER
 }

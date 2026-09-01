@@ -28,7 +28,7 @@ use api::{Daemon, Observed, Refusal};
 use core_model::{
     Job, JobId as CoreJobId, JobStatus as CoreJobStatus, QueuedReason as CoreQueuedReason,
 };
-use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
+use ipc::mcp::{CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
     ChangesRequested, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence, JobForgotten,
     JobHistory, JobId, JobList, JobSpend, JobSummary, ManifestId, ManifestSummary, ModelChoices,
@@ -37,6 +37,7 @@ use ipc::{
 use store::LoadJobError;
 
 use crate::admitting::clear_to_run;
+use crate::sub_dispatch::waiting_on_children;
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::footprint::kept;
@@ -708,6 +709,36 @@ where
                 because: why.to_string(),
             })
     }
+
+    /// The Drone asking for one more Job to exist.
+    ///
+    /// The same shape as the three above: it places the caller, converts, and
+    /// decides nothing. **What is different is what a success is** — the other
+    /// three answer about the Job the call was made on, and this one answers
+    /// with the id of a record that did not exist a moment ago.
+    ///
+    /// `crate::sub_dispatch` holds whether the caller was allowed to ask, and
+    /// the refusal reaches the Drone as a tool error it can read rather than a
+    /// status code it can only retry.
+    async fn dispatch_job(
+        &self,
+        caller: api::Caller,
+        dispatch: DispatchJob,
+    ) -> Result<Receipt, NotRecorded> {
+        let job = self.placed(&caller)?;
+        match Fleet::sub_dispatch(self, &job, &dispatch).await {
+            // The minted id, and nothing else. A Drone needs it to name this
+            // Job in a later call's `after`, and it needs nothing else — the
+            // Job's state is not knowable yet and a receipt implying it were
+            // would be the verdict `Receipt` exists to have no room for.
+            Ok(minted) => Ok(Receipt {
+                word: minted.as_str().to_string(),
+            }),
+            Err(why) => Err(NotRecorded {
+                because: why.to_string(),
+            }),
+        }
+    }
 }
 
 // `canonical`, `declared_check`, `declared`, `recorded`, `submitted`,
@@ -805,6 +836,15 @@ where
             .map(|held| (held.id().clone(), held.status()))
             .collect();
         if !clear_to_run(job, &standing) {
+            return Ok(Some(CoreQueuedReason::BlockedByDependency));
+        }
+        // **The same label as the edge above, because it is the same fact from
+        // the Board's side.** The registry gives a `queued` Job no reason
+        // meaning "waiting on the Jobs it created"; a Job held for its children
+        // is held for work that has to finish first, which is what the
+        // dependency label says. The mechanism differs — provenance rather than
+        // an edge — and that difference is not a Board fact.
+        if waiting_on_children(job, &crate::sub_dispatch::children_standing(&loaded.jobs)) {
             return Ok(Some(CoreQueuedReason::BlockedByDependency));
         }
         // **Before the machine reading, and not only because admission asks it

@@ -104,6 +104,7 @@ pub static EDGES: &[Edge] = &[
     edge(Running, Escalated),
     edge(Running, Killed),
     edge(Running, Piloted),
+    edge(Running, Queued),
 ];
 
 const fn edge(from: JobStatus, to: JobStatus) -> Edge {

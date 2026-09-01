@@ -1,5 +1,5 @@
-//! The Drone endpoint: one path, three tools, on the listener that was already
-//! there.
+//! The Drone endpoint: one path, the Drone's tools, on the listener that was
+//! already there.
 //!
 //! # Why this is not in the route table
 //!
@@ -151,6 +151,16 @@ async fn called<D: Daemon>(
             Ok(report) => Answered::Checked { id, report },
             Err(why) => Answered::Refused { id, why },
         },
+        // **The one arm whose success is another Job.** It goes through the
+        // daemon like the other three and is refused the same way — a tool
+        // error the Drone reads — because a Drone told "no" by a status code
+        // has nothing to correct.
+        Incoming::Dispatch { id, dispatch } => {
+            match served.daemon().dispatch_job(caller, dispatch).await {
+                Ok(receipt) => Answered::Recorded { id, receipt },
+                Err(why) => Answered::Refused { id, why },
+            }
+        }
     };
     match mcp::answer(answered) {
         Ok(body) => (

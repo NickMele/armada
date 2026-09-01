@@ -65,6 +65,16 @@ pub(crate) enum Owed {
     /// The step is `advanced` — a person overruled the verdict that stopped it.
     /// The step after it is entered at the spawn.
     Overruled { advanced: StepId, next: StepId },
+    /// The step is `advanced` and it dispatched Jobs — the machine cleared it,
+    /// the Job stood its Drone down so its children could have the slot, and
+    /// every child has now finished.
+    ///
+    /// **The same two step ids as [`Owed::Overruled`] and a different
+    /// sentence.** What the Drone is told about the part before it is the whole
+    /// difference: nobody read that part, a gate did, and telling a fresh Drone
+    /// a person accepted it would be the record saying something that did not
+    /// happen.
+    AfterADispatch { dispatched: StepId, next: StepId },
 }
 
 impl Owed {
@@ -162,7 +172,14 @@ where
 
         let job = self.move_job(&job, Target::Running, Actor::Fleet).await?;
         let (job, step) = self.entered(job, &owed).await?;
-        let crossed = carried_across(&job, &step, &owed, &recorded);
+        // **Read only after a dispatch**, and it is a board read: every other
+        // act here pays nothing for it. `None` on the other three is the
+        // ordinary boundary carrying nothing.
+        let dispatched = match &owed {
+            Owed::AfterADispatch { .. } => self.dispatched_jobs(&job_id).await?,
+            _ => None,
+        };
+        let crossed = carried_across(&job, &step, &owed, &recorded).and_dispatched(dispatched);
         let opening = match stopped {
             // **`resuming`, which no other path here takes.** The Drone is as
             // new as a fresh one and knows only what stopped *this* part.
@@ -210,6 +227,21 @@ where
             }),
             StepState::Stopped => Ok(Owed::Restarted { step }),
             StepState::Advanced => match job.workflow().after(&step) {
+                // Which of the two an advanced step is, read off the frozen
+                // workflow rather than off a column: a step that dispatched is
+                // one the definition gave the dispatching role, and a person
+                // cannot have overruled a gate that never refused.
+                Some(next)
+                    if job
+                        .workflow()
+                        .step(&step)
+                        .is_some_and(ResolvedStep::may_dispatch_jobs) =>
+                {
+                    Ok(Owed::AfterADispatch {
+                        dispatched: step,
+                        next: next.id().clone(),
+                    })
+                }
                 Some(next) => Ok(Owed::Overruled {
                     advanced: step,
                     next: next.id().clone(),
@@ -242,7 +274,7 @@ where
                 let job = self.move_step(&job, step, StepTarget::Running).await?;
                 Ok((job, step.clone()))
             }
-            Owed::Overruled { next, .. } => {
+            Owed::Overruled { next, .. } | Owed::AfterADispatch { next, .. } => {
                 let job = self.move_step(&job, next, StepTarget::Running).await?;
                 Ok((job, next.clone()))
             }
@@ -276,8 +308,18 @@ fn carried_across(
         // one before it — its gate may have been auto. And a step sent back
         // across a gate was not accepted at all; the person's own note is what
         // says why the Drone is there, and `put_a_drone_on` folds it in.
-        Owed::Standing { .. } | Owed::Restarted { .. } => None,
+        //
+        // The part after a dispatch is not here either, and it is the one case
+        // left out for the opposite reason: the part before it *was* cleared, by
+        // the machine, and that is `Cleared::checked` two arms down rather than
+        // `Cleared::reviewed`.
+        Owed::Standing { .. } | Owed::Restarted { .. } | Owed::AfterADispatch { .. } => None,
     };
+    if let Owed::AfterADispatch { dispatched, .. } = owed {
+        if let Some(passed) = job.workflow().step(dispatched) {
+            return crossed.and_cleared(Cleared::checked(passed));
+        }
+    }
     match cleared {
         Some(passed) => crossed.and_cleared(Cleared::reviewed(passed)),
         None => crossed,

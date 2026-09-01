@@ -436,6 +436,13 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
         text.push_str("\n\n");
         text.push_str(&redirect.text());
     }
+    // **Before the step block, with the other things the boundary carried.**
+    // It is what the part is about rather than a footnote to it: a Drone after
+    // a dispatch has no other way to learn that the Jobs exist.
+    if let Some(dispatched) = crossed.dispatched() {
+        text.push_str("\n\n");
+        text.push_str(dispatched.text());
+    }
     if let Some(step) = workflow.steps().iter().find(|step| step.id() == at) {
         text.push_str("\n\n");
         text.push_str(&step_block(step));

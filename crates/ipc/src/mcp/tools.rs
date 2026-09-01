@@ -1,8 +1,10 @@
-//! The three tools a Drone is given, their arguments and their schemas.
+//! The tools a Drone is given, their arguments and their schemas.
 //!
 //! Split from the transport beside it because they are two things: [`mod@super`]
 //! reads JSON-RPC and decides what is answered, and this decides what a tool
-//! takes. A fourth tool touches only this file.
+//! takes. **The dispatch tool is [`dispatch`](mod@super::dispatch)**, whose
+//! refusals have nothing in common with a missing `claimed`; what it shares is
+//! [`closed`], [`text`] and [`list`], the half that must not be copied.
 //!
 //! # No tool takes a job id or a step id
 //!
@@ -12,19 +14,19 @@
 //!
 //! [`CHECKS_TOOL`] takes nothing at all, not even a Check name: which Checks
 //! gate the step was frozen when the Job was approved, so a name here could
-//! only agree or disagree, and the disagreeing case is a Drone choosing which
-//! bar it is measured against. Its field list is empty, which makes every
-//! argument a named refusal.
+//! only be a Drone choosing which bar it is measured against.
 //!
 //! # Why declaring is a different call from submitting
 //!
 //! A scope is declared **before** the work and evidence is submitted after it,
 //! so one call cannot carry both. Keeping them apart is also what leaves
 //! `submit_evidence` at the three prose fields the Agent Copy Contract names:
-//! a path list is not prose about the work, it is a claim about where the work
-//! will be, and Fleet checks it against the worktree rather than reading it.
+//! a path list is a claim about where the work will be, which Fleet checks
+//! against the worktree rather than reading.
 
 use serde_json::{json, Map, Value};
+
+use super::dispatch::{DISPATCH_FIELDS, DISPATCH_TOOL};
 
 /// The Evidence tool's own name, bare. The client joins it to the server name
 /// to make the allowlist entry.
@@ -84,7 +86,7 @@ pub struct DeclareScope {
 /// told is to fix it and call again.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NotAnArgument {
-    /// A tool that is none of the three.
+    /// A tool this server does not serve.
     NoSuchTool {
         named: String,
     },
@@ -99,7 +101,7 @@ pub enum NotAnArgument {
     NotText {
         field: &'static str,
     },
-    /// A field whose value should be a list of paths and is not.
+    /// A field whose value should be a list of strings and is not.
     NotAList {
         field: &'static str,
     },
@@ -117,7 +119,7 @@ impl core::fmt::Display for NotAnArgument {
             NotAnArgument::NoSuchTool { named } => write!(
                 out,
                 "there is no tool called `{named}`. The tools are `{TOOL}`, \
-                 `{SCOPE_TOOL}` and `{CHECKS_TOOL}`"
+                 `{SCOPE_TOOL}`, `{CHECKS_TOOL}` and `{DISPATCH_TOOL}`"
             ),
             // The empty list is a real case now: `run_checks` takes nothing, so
             // a call of it with no arguments is a correct call and never
@@ -135,20 +137,23 @@ impl core::fmt::Display for NotAnArgument {
             ),
             NotAnArgument::Missing { field } => write!(
                 out,
-                "`{field}` is missing. It is required and may be empty only \
-                 where it is not_claimed — submit again with it"
+                "`{field}` is missing. Every field this tool takes is required, \
+                 and the ones that may be empty are empty rather than absent — \
+                 call again with it"
             ),
             NotAnArgument::NotText { field } => {
                 write!(out, "`{field}` is not text. Submit again with a string")
             }
             NotAnArgument::NotAList { field } => write!(
                 out,
-                "`{field}` is not a list of repository-relative paths. Call \
-                 again with one, using [] if this part changes nothing"
+                "`{field}` is not a list of strings. Call again with one, \
+                 using [] where the list is legitimately empty"
             ),
             // The two a Drone is likeliest to invent get the reason, because
             // "no such field" reads as an oversight it should work around.
-            NotAnArgument::NotAField { named, .. } if named == "job_id" || named == "step_id" => {
+            NotAnArgument::NotAField { named, .. }
+                if named == "job_id" || named == "step_id" || named == "parent_id" =>
+            {
                 write!(
                     out,
                     "`{named}` is not a field of this tool. Fleet knows which Job \
@@ -226,25 +231,45 @@ pub(crate) fn nothing(arguments: &Map<String, Value>) -> Result<(), NotAnArgumen
 
 pub(crate) fn declaration(arguments: &Map<String, Value>) -> Result<DeclareScope, NotAnArgument> {
     closed(arguments, SCOPE_TOOL, SCOPE_FIELDS)?;
-    let field = "context_paths";
+    Ok(DeclareScope {
+        context_paths: list(arguments, "context_paths")?,
+    })
+}
+
+/// One field that is a list of strings, entry by entry.
+///
+/// **Legitimately empty and never absent.** A list nothing is in is an answer;
+/// a missing field is not, and the two are told apart here rather than by a
+/// caller reading a length.
+///
+/// `pub(super)` for [`closed`]'s reason — the dispatch tool takes two of these.
+pub(super) fn list(
+    arguments: &Map<String, Value>,
+    field: &'static str,
+) -> Result<Vec<String>, NotAnArgument> {
     let listed = arguments
         .get(field)
         .ok_or(NotAnArgument::Missing { field })?
         .as_array()
         .ok_or(NotAnArgument::NotAList { field })?;
-    let mut context_paths = Vec::with_capacity(listed.len());
-    for path in listed {
-        context_paths.push(
-            path.as_str()
+    let mut entries = Vec::with_capacity(listed.len());
+    for entry in listed {
+        entries.push(
+            entry
+                .as_str()
                 .ok_or(NotAnArgument::NotAList { field })?
                 .into(),
         );
     }
-    Ok(DeclareScope { context_paths })
+    Ok(entries)
 }
 
 /// Every argument is a field the tool takes.
-fn closed(
+///
+/// `pub(super)` because [`dispatch`](mod@super::dispatch) reads its own tool's
+/// arguments and must refuse an unknown field identically. A second copy of
+/// this loop is a second place the rule could stop being true.
+pub(super) fn closed(
     arguments: &Map<String, Value>,
     tool: &'static str,
     takes: &'static [&'static str],
@@ -267,6 +292,7 @@ pub(crate) fn named(name: &str) -> Result<&'static str, NotAnArgument> {
         TOOL => Ok(TOOL),
         SCOPE_TOOL => Ok(SCOPE_TOOL),
         CHECKS_TOOL => Ok(CHECKS_TOOL),
+        DISPATCH_TOOL => Ok(DISPATCH_TOOL),
         other => Err(NotAnArgument::NoSuchTool {
             named: other.to_string(),
         }),
@@ -286,6 +312,10 @@ pub(crate) fn argumentless(tool: &'static str) -> NotAnArgument {
             tool: CHECKS_TOOL,
             takes: CHECKS_FIELDS,
         },
+        DISPATCH_TOOL => NotAnArgument::NoArguments {
+            tool: DISPATCH_TOOL,
+            takes: DISPATCH_FIELDS,
+        },
         _ => NotAnArgument::NoArguments {
             tool: TOOL,
             takes: EVIDENCE_FIELDS,
@@ -293,7 +323,11 @@ pub(crate) fn argumentless(tool: &'static str) -> NotAnArgument {
     }
 }
 
-fn text(arguments: &Map<String, Value>, field: &'static str) -> Result<String, NotAnArgument> {
+/// One text field. `pub(super)` for [`closed`]'s reason.
+pub(super) fn text(
+    arguments: &Map<String, Value>,
+    field: &'static str,
+) -> Result<String, NotAnArgument> {
     let value = arguments
         .get(field)
         .ok_or(NotAnArgument::Missing { field })?;
@@ -314,7 +348,12 @@ fn text(arguments: &Map<String, Value>, field: &'static str) -> Result<String, N
 /// schema is advice a client may enforce; [`closed`] is what makes a forged
 /// field a named refusal rather than a silently accepted one.
 pub(crate) fn listed() -> Vec<Value> {
-    vec![evidence_tool(), scope_tool(), checks_tool()]
+    vec![
+        evidence_tool(),
+        scope_tool(),
+        checks_tool(),
+        super::dispatch::dispatch_tool(),
+    ]
 }
 
 /// The dry-run tool.

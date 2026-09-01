@@ -36,6 +36,7 @@ use crate::coupling::{coupling, Coupling};
 use crate::daemon::Fleet;
 use crate::headroom::{Reading, Short};
 use crate::slots::Slots;
+use crate::sub_dispatch::{children_standing, waiting_on_children};
 
 /// Whether Fleet may start another Drone, and what stops it where it may not.
 ///
@@ -235,6 +236,9 @@ where
             .iter()
             .map(|job| (job.id().clone(), job.status()))
             .collect();
+        // Read before the loop consumes the board, because every waiting Job
+        // asks the same question of it.
+        let children = children_standing(&loaded.jobs);
         let mut waiting = Vec::new();
         for job in loaded.jobs {
             if job.status() != JobStatus::Queued {
@@ -244,6 +248,18 @@ where
             // reordered — the queue is by approval and this is not a Job's turn
             // being taken, it is a Job that has nothing to work against yet.
             if !clear_to_run(&job, &standing) {
+                continue;
+            }
+            // Approved, and waiting on Jobs it created rather than on peers.
+            // **The wait that frees the slot instead of holding it**: this Job
+            // gave its Drone up so its children could have one, and starting it
+            // again before they finish is the deadlock that stand-down avoids
+            // arriving one turn later. `crate::sub_dispatch`.
+            //
+            // Beside `clear_to_run` and before the budget for the same reason
+            // it is: both are a Job whose turn has not come, and neither has
+            // spent anything on this attempt.
+            if waiting_on_children(&job, &children) {
                 continue;
             }
             // Approved and already past what it may spend. **Skipped and not

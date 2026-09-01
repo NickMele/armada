@@ -192,6 +192,16 @@ pub enum Grant {
     /// The string comes from a `commands.<name>.run` in an `armada.yml` that a
     /// person committed, never from a Drone.
     RunADeclaredCommand(String),
+    /// Create Jobs, as children of the one being worked.
+    ///
+    /// **The only grant whose effect outlives the Drone that holds it.** Every
+    /// other capability here changes a worktree or reads one; this one makes
+    /// records that get their own worktrees, their own Drones and their own
+    /// bill. It is granted on one step of one workflow — the step after a
+    /// person read the plan — and withheld everywhere else, which is what makes
+    /// a Drone inventing work a call that is not on its list rather than a call
+    /// somebody remembered to refuse.
+    DispatchAJob,
 }
 
 /// What a Drone may call.

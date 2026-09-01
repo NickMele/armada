@@ -13,7 +13,9 @@ use adapter_traits::{
     Worktree,
 };
 
-use crate::harness::{checks_tool, evidence_tool, scope_tool, HarnessRefused, HeadlessAgent};
+use crate::harness::{
+    checks_tool, dispatch_tool, evidence_tool, scope_tool, HarnessRefused, HeadlessAgent,
+};
 
 const SECRET_LOOKING_TASK: &str = "fix the parser, the token is hunter2";
 
@@ -123,6 +125,34 @@ fn a_grant_becomes_the_tools_it_needs_and_armadas_own_stay_first() {
     assert!(entries.contains(&"Read"), "{allowed}");
     assert!(entries.contains(&"Edit"), "{allowed}");
     assert!(entries.contains(&"Bash(cargo test:*)"), "{allowed}");
+}
+
+/// **The dispatch tool is granted, not given.** A Drone that was not granted it
+/// has no entry for it at all, which is what makes creating Jobs a call that is
+/// not on its list rather than one somebody remembered to refuse.
+#[test]
+fn a_toolbelt_without_the_grant_carries_no_dispatch_tool() {
+    let args = rendered(
+        Toolbelt::evidence_only()
+            .and(Grant::ReadTheWorktree)
+            .and(Grant::ChangeTheWorktree),
+    );
+    let allowed = value_after(&args, "--allowedTools").expect("an allowlist is rendered");
+    assert!(
+        !allowed.contains(dispatch_tool()),
+        "a Drone on an ordinary step may not create Jobs: {allowed}"
+    );
+}
+
+#[test]
+fn the_grant_puts_the_dispatch_tool_on_the_list() {
+    let args = rendered(Toolbelt::evidence_only().and(Grant::DispatchAJob));
+    let allowed = value_after(&args, "--allowedTools").expect("an allowlist is rendered");
+    let entries: Vec<&str> = allowed.split(',').collect();
+    assert!(entries.contains(&dispatch_tool()), "{allowed}");
+    // Armada's own three still lead, which is the ordering the file states and
+    // the thing a reader checks an argument list by eye against.
+    assert_eq!(entries.first(), Some(&evidence_tool()));
 }
 
 #[test]
