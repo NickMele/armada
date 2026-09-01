@@ -29,9 +29,20 @@ checks:
   # to install on demand, the three race each other into one empty tree and
   # whichever loses reports a missing module — #227.
   typecheck:
-    # `-b --force`: the tsconfig owns only referenced projects, and stale
-    # build info would skip the one just edited.
-    run: pnpm -C apps/desktop typecheck
+    # Two commands, because neither config reaches the other's files and there
+    # is no third that covers both. `apps/desktop` needs `-b --force`: its
+    # tsconfig owns only referenced projects, and stale build info would skip
+    # the one just edited. The library is one project that writes no build
+    # info, so `--noEmit -p` is the whole job and `--force` has nothing to
+    # force.
+    #
+    # Named rather than left to `pnpm -r`, which skips a package that declares
+    # no `typecheck` — silently, which is how the library went unchecked for as
+    # long as it existed. `storybook` below is not a substitute: Vite
+    # transpiles per file and typechecks none of it, and desktop's own pass
+    # reaches only the components it imports, never a story. A `ShieldMinus`
+    # used without importing it threw on render, on main, until #235.
+    run: pnpm -C apps/desktop typecheck && pnpm -C packages/components typecheck
     # `domain/**` and `protocol-version.toml`: codegen emits TypeScript from
     # them, so a change there is a change to compiled code.
     when:
