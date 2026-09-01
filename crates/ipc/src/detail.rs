@@ -676,6 +676,13 @@ pub struct Flagged {
     pub cited: String,
     /// Where [`cited`](Flagged::cited) is, where Fleet established that from
     /// the patch. **Absent is a real answer**: see [`CitedAt`].
+    ///
+    /// Skipped rather than serialised as `null`, which is this crate's rule
+    /// wherever an `Option` crosses — `checks.rs` and `attempt.rs` both do it.
+    /// The TypeScript side spells the field `at?:`, and a `null` arriving
+    /// under a `?:` reads as present-and-empty to every guard written against
+    /// it. One did, and job detail stopped drawing.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub at: Option<CitedAt>,
 }
 

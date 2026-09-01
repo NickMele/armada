@@ -149,7 +149,7 @@ export function GamingFlags({
                 {flag.cited}
               </span>
             )}
-            {flag.at === undefined ? null : <Where at={flag.at} onOpen={onOpenAt} />}
+            {flag.at == null ? null : <Where at={flag.at} onOpen={onOpenAt} />}
           </li>
         ))}
       </ul>
