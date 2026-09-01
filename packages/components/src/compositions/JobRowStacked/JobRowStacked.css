@@ -6,9 +6,17 @@
    there is one place to change when the tokens land. Reported. */
 .armada-job-row,
 .armada-job-row-list {
-  /* 132px: the badge column. Fixed on every row, which is what lets the badge
-     — and the pulse it carries — sit in one predictable place down the list
-     rather than moving with the headline's length. */
+  /* 132px: the badge column's FLOOR, and the drawn width. One column down the
+     whole list is what lets the badge — and the pulse it carries — sit in one
+     predictable place rather than moving with the headline's length, and
+     subgrid is what gives that: the list sizes the column to its widest badge
+     and every row borrows it.
+
+     It was a bare fixed value until #262, which is the one track that did not
+     follow the floor-and-auto rule stated below. A 34-character escalation
+     verb — `a required command did not succeed` — painted across the headline,
+     because Badge is nowrap and nothing clips it. Widening the fixed value is
+     the tempting fix and postpones the same bug to the next longer verb. */
   --armada-track-badge: calc(var(--space-12) * 2 + var(--space-8) + var(--space-1));
   /* 168px: the branch or the workflow. The widest of the five, because a
      branch name is the longest machine value in the run. */
@@ -49,7 +57,7 @@
      the row has room. The 1fr before the action is what the slack goes into,
      so the field values keep their measure instead of drifting apart. */
   --armada-job-row-tracks:
-    var(--armada-track-badge)
+    minmax(var(--armada-track-badge), max-content)
     minmax(var(--armada-track-origin), auto)
     minmax(var(--armada-track-bar), auto)
     minmax(var(--armada-track-step), auto)
