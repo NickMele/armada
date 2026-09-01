@@ -101,3 +101,7 @@ export * from "./compositions/PhaseStrip/PhaseStrip";
 // The activity log — the Drone's turns, Armada's injected turns and Fleet's
 // own events, in one stream, every entry naming who.
 export * from "./compositions/ActivityLog/ActivityLog";
+
+// The step's story — Drone instructions, Activity log, Produced. Opening one
+// collapses the others to their header line.
+export * from "./compositions/StepStory/StepStory";

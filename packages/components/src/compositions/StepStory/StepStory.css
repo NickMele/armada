@@ -1,0 +1,84 @@
+/* The step's story — three chapters, one order, one open at a time. */
+.armada-story {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+/* A chapter is a card with its own header. Cards rather than a rule between
+   sections, because a collapsed chapter has to keep being a thing on the
+   screen — a header line floating on the panel's own surface reads as a label
+   for whatever is under it. */
+.armada-story__chapter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--border-default);
+  background: var(--bg-raised);
+  min-width: 0;
+}
+
+/* The open chapter takes the brighter edge. Emphasis, not status: it says
+   which part of the story is long right now. */
+.armada-story__chapter[data-open] {
+  border-color: var(--border-strong);
+}
+
+.armada-story__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Its place in the story. A number, because the order is the thing a reader
+   navigates by and it never changes. */
+.armada-story__ordinal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--space-4);
+  height: var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--fg-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+.armada-story__title {
+  flex: none;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+}
+
+/* What the chapter holds. Mono, because it is a count of what the system
+   recorded, and it is what makes a collapsed chapter answer for itself. */
+.armada-story__summary {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-story__body {
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}

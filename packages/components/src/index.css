@@ -86,3 +86,6 @@
 
 /* The activity log — one stream, three voices, every entry opening. */
 @import "./compositions/ActivityLog/ActivityLog.css";
+
+/* The step's story — three chapters, one order, one open at a time. */
+@import "./compositions/StepStory/StepStory.css";
