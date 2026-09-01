@@ -1,50 +1,28 @@
 //! Starting a Drone, and what its ending means for the Job.
 //!
-//! # Fleet builds the environment; nobody inherits one
+//! **Fleet builds the environment; nobody inherits one.** [`environment`] is
+//! the whole of what a Drone gets and every variable in it was named there.
+//! Nothing here reads `std::env`: the two values a Drone needs are parameters
+//! resolved by the composition root, for the same reason a timestamp is — a
+//! function reading its own inputs from the process cannot be tested or replayed.
 //!
-//! [`environment`] is the whole of what a Drone gets, and every variable in it
-//! was named here. `env_clear` appears nowhere in v1's production code, so a
-//! token exported in the operator's shell reached every Drone v1 started —
-//! while v1's own handoff table rejected "Armada's own environment" as a
-//! channel for exactly that reason. It is the only place v1's Drone spawn was
-//! worse than its check spawn.
+//! **No credential of any kind is on that list**, which is the second half of
+//! "a Drone cannot push" — the first being that no [`Grant`] can express one. A
+//! shell that reached a push anyway would have no `SSH_AUTH_SOCK`, no
+//! `GIT_ASKPASS`, no forge token and nobody to ask, and the attempt is a
+//! `DroneEvent::Refused` in the transcript either way.
 //!
-//! Nothing in this module reads `std::env`. The two values a Drone needs are
-//! parameters, resolved by the composition root, for the same reason a
-//! timestamp is: a function that reads its own inputs from the process cannot
-//! be tested and cannot be replayed.
-//!
-//! # What a Drone cannot do because of what it does not have
-//!
-//! **No credential of any kind is on that list**, and that is the second half
-//! of "a Drone cannot push". The first half is that no [`Grant`] can express a
-//! push. This half is that a shell which reached one anyway would have no
-//! `SSH_AUTH_SOCK`, no `GIT_ASKPASS`, no forge token and no agent to ask one of
-//! — and the attempt is a `DroneEvent::Refused` in the transcript either way.
-//!
-//! # The prompt goes in on stdin, and the write is checked
-//!
-//! Not in argv: `ps` prints a same-uid child's argument list on darwin 27, so
-//! argv is public to every process on the machine. The first turn is written to
-//! the child's stdin instead, which is the same channel a later turn is
-//! injected through.
+//! **The prompt goes in on stdin, not argv.** `ps` prints a same-uid child's
+//! argument list on darwin 27, so argv is public to every process on the
+//! machine. The first turn goes to the child's stdin instead, the same channel
+//! a later turn is injected through — [`start`] holds why the write is checked.
 //!
 //! **The environment is not a hiding place either, and this module used to say
-//! it was.** `ps -Eww` prints a same-uid process's environment on darwin 27 —
-//! measured against a live Drone in `docs/spikes/011-what-can-one-drone-reach.md`.
-//! Nothing here depended on the old claim, so nothing moves; it is corrected
-//! because a false statement about what is visible is the kind a later design
-//! rests on.
-//!
-//! That write is the one place this module can be killed by a child. v1 wrote
-//! its own handoff with `let _ = pipe.write_all(…)` while SIGPIPE was at
-//! `SIG_DFL` process-wide, so a child that exec'd and exited before reading
-//! would take the parent down with exit 141, mid-spawn, after the record was
-//! already written — and `let _ =` cannot catch it, because the signal arrives
-//! before `write` returns. Here the result is matched, a broken pipe is its own
-//! variant, and **nothing in this workspace restores SIGPIPE**, so the write
-//! returns `EPIPE` rather than a signal. `a_drone_that_dies_before_it_is_told`
-//! is the test that would fail if any of that changed.
+//! it was.** `ps -Eww` prints a same-uid process's environment on darwin 27,
+//! measured against a live Drone in
+//! `docs/spikes/011-what-can-one-drone-reach.md`. Nothing here depended on the
+//! old claim, so nothing moves; it is corrected because a false statement about
+//! what is visible is the kind a later design rests on.
 
 use std::error::Error;
 use std::fmt;
@@ -91,6 +69,12 @@ pub struct HostPaths<'a> {
 /// Four variables, and each one is here because something breaks without it.
 /// Adding a fifth is a deliberate edit to this function, which is the point:
 /// the list is a diff, not a default.
+///
+/// `env_clear` appears nowhere in v1's production code, so a token exported in
+/// the operator's shell reached every Drone v1 started — while v1's own handoff
+/// table rejected "Armada's own environment" as a channel for exactly that
+/// reason. It is the only place v1's Drone spawn was worse than its check
+/// spawn.
 pub fn environment(host: HostPaths<'_>) -> Result<Environment, SpawnConfigRefused> {
     Environment::nothing()
         .and("PATH", host.path)?
@@ -140,6 +124,16 @@ pub struct Started {
 /// a caller that gets an `Ok` has a Drone that has been told what to do. A
 /// caller that gets an `Err` has one that is gone — every failure below ends
 /// with nothing running.
+///
+/// **The write is the one place this module can be killed by a child.** v1
+/// wrote its own handoff with `let _ = pipe.write_all(…)` while SIGPIPE was at
+/// `SIG_DFL` process-wide, so a child that exec'd and exited before reading
+/// would take the parent down with exit 141, mid-spawn, after the record was
+/// already written — and `let _ =` cannot catch it, because the signal arrives
+/// before `write` returns. Here the result is matched, a broken pipe is its own
+/// variant, and **nothing in this workspace restores SIGPIPE**, so the write
+/// returns `EPIPE` rather than a signal. `a_drone_that_dies_before_it_is_told`
+/// is the test that would fail if any of that changed.
 pub async fn start<H>(
     harness: &H,
     config: &DroneSpawnConfig,

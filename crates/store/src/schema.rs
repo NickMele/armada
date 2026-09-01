@@ -1,38 +1,28 @@
 //! The tables, and the only thing that changes them.
 //!
-//! # Why a version exists before anything needs one
-//!
-//! A schema with no version is a schema nobody can change later: the first
+//! **A schema with no version is a schema nobody can change later**: the first
 //! migration has to answer "what is already there?" and, with nothing recorded,
-//! the honest answer is a guess. [`MIGRATIONS`] is therefore an ordered list,
-//! and `armada_meta.schema_version` records how many of them a file has had
-//! applied. Adding a migration is appending a `&str`.
+//! the honest answer is a guess. [`MIGRATIONS`] is an ordered list and
+//! `armada_meta.schema_version` records how many of them a file has had
+//! applied, so adding one is appending a `&str`. The table serves a second
+//! purpose that costs nothing: **its presence is what distinguishes an Armada
+//! store from some other database that happens to be at the path.** A file with
+//! tables and no `armada_meta` is refused rather than migrated into, which is
+//! the difference between opening the wrong file loudly and writing Jobs in it.
 //!
-//! [`V2`] is the first one appended, and what it had to decide is on it: what a
-//! Job written before the column existed is called.
-//!
-//! The table also serves a second purpose that costs nothing: **its presence is
-//! what distinguishes an Armada store from some other database that happens to
-//! be at the path.** A file with tables and no `armada_meta` is refused rather
-//! than migrated into, which is the difference between opening the wrong file
-//! loudly and writing Jobs into it.
-//!
-//! # `job_events` is append-only in the database, not in the code
-//!
-//! Two triggers refuse `UPDATE` on it, and `DELETE` while the Job it belongs to
+//! **`job_events` is append-only in the database, not in the code.** Two
+//! triggers refuse `UPDATE` on it, and `DELETE` while the Job it belongs to
 //! still exists — see [`V4`], which narrowed the second. A convention that
-//! events are never edited is a convention some later query breaks; a trigger
-//! is the same rule where breaking it is an error and not a diff nobody
-//! reviewed.
+//! events are never edited is one some later query breaks; a trigger is the
+//! same rule where breaking it is an error rather than a diff nobody reviewed.
 //!
-//! # `STRICT`, and integer keys
-//!
-//! Every table is `STRICT`, so a column typed `TEXT` cannot quietly hold an
-//! integer. `job_events.seq` is `INTEGER PRIMARY KEY AUTOINCREMENT`: the fold
-//! orders by it and never by `at`, because timestamps are injected — two events
-//! may legitimately carry the same instant, and a test may hand back an earlier
-//! one. `AUTOINCREMENT` rather than a bare rowid so a key is never reused, which
-//! matters for a log whose whole value is that entries do not move.
+//! **`STRICT`, and integer keys.** Every table is `STRICT`, so a column typed
+//! `TEXT` cannot quietly hold an integer. `job_events.seq` is `INTEGER PRIMARY
+//! KEY AUTOINCREMENT`: the fold orders by it and never by `at`, because
+//! timestamps are injected — two events may legitimately carry the same
+//! instant, and a test may hand back an earlier one. `AUTOINCREMENT` rather
+//! than a bare rowid so a key is never reused, which matters for a log whose
+//! whole value is that entries do not move.
 
 use rusqlite::Connection;
 
@@ -211,32 +201,27 @@ END;
 
 /// Version 2 — a Job has a title.
 ///
-/// # What happens to a Job written by version 1
-///
-/// **It is named after itself, visibly.** `Untitled job <job_id>` — computed
-/// per row, so no two migrated Jobs come back carrying the same name and
-/// nothing on a Board reads as though a person typed it. A single backfill
-/// constant would have been shorter and is what this deliberately does not do:
-/// a store where every Job is suddenly called "Untitled" has quietly lost a
-/// distinction, and looks from the outside like one where somebody typed the
-/// same title twelve times.
+/// **A Job written by version 1 is named after itself, visibly.**
+/// `Untitled job <job_id>`, computed per row, so no two migrated Jobs come back
+/// carrying the same name and nothing on a Board reads as though a person typed
+/// it. A single backfill constant would have been shorter and is what this
+/// deliberately does not do: a store where every Job is suddenly called
+/// "Untitled" has quietly lost a distinction, and looks from the outside like
+/// one where somebody typed the same title twelve times.
 ///
 /// **Refusing to open was the other honest option, and is worse here.** There
 /// are no production stores, so a refusal protects nothing; what it does is
-/// take a file with real Jobs in it and make every one of them unreachable over
-/// a column that was never written. `open.rs` refuses a file this build cannot
-/// read — and a version 1 Job reads perfectly well, it just has nothing to be
-/// called.
+/// take a file with real Jobs in it and make every one unreachable over a column
+/// that was never written. `open.rs` refuses a file this build cannot read, and
+/// a version 1 Job reads perfectly well — it just has nothing to be called.
 ///
-/// # Why the column carries a `DEFAULT` it must never use
-///
-/// SQLite will not add a `NOT NULL` column without one. The default is `''`,
-/// which is exactly the value a title may not be, so the two triggers close the
-/// hole the `ALTER` opens: an insert or an update that would leave a blank
-/// title aborts. `insert_job` binds the column on every write and
-/// [`Title`](core_model::Title) cannot hold a blank, so nothing in this crate
-/// can trip them — which is the point, the same way `job_events`' append-only
-/// triggers are.
+/// **The column carries a `DEFAULT` it must never use.** SQLite will not add a
+/// `NOT NULL` column without one, so the default is `''`, exactly the value a
+/// title may not be, and two triggers close the hole the `ALTER` opens: an
+/// insert or update that would leave a blank title aborts. `insert_job` binds
+/// the column on every write and [`Title`](core_model::Title) cannot hold a
+/// blank, so nothing in this crate can trip them — which is the point, the same
+/// way `job_events`' append-only triggers are.
 const V2: &str = r#"
 ALTER TABLE jobs ADD COLUMN title TEXT NOT NULL DEFAULT '';
 
@@ -261,48 +246,23 @@ END;
 
 /// Version 3 — a step move is a row in the same log, not a log of its own.
 ///
-/// # Why a kind on `job_events` and not a `job_step_events` table
+/// **A kind on `job_events`, and not a `job_step_events` table, because the two
+/// have to be replayed in one order.** `job-fields.toml` says the inner machine
+/// "advances only while the Job is `running` or `awaiting_review`", so replaying
+/// a step move means knowing which status the Job stood in when it happened.
+/// Two tables means two `AUTOINCREMENT` sequences, and two sequences cannot be
+/// interleaved: the fold would have to take the step row's word for the status,
+/// which is a column nothing can check. One log in one order means the status a
+/// step moved under is `status_from` on its own row, and the fold checks it the
+/// same way it checks every other row — against where it has got to. A separate
+/// table was the tidier schema and would have cost the one property this whole
+/// log exists for.
 ///
-/// **Because the two have to be replayed in one order.** `job-fields.toml` says
-/// the inner machine "advances only while the Job is `running` or
-/// `awaiting_review`", so replaying a step move means knowing which status the
-/// Job stood in when it happened. Two tables means two `AUTOINCREMENT`
-/// sequences, and two sequences cannot be interleaved: the fold would have to
-/// take the step row's word for the status, which is a column nothing can
-/// check. One log in one order means the status a step moved under is
-/// `status_from` on its own row, and the fold checks it the same way it checks
-/// every other row — against where it has got to.
-///
-/// A separate table was the tidier schema and would have cost the one property
-/// this whole log exists for.
-///
-/// # What a step row puts in the status columns
-///
-/// The Job's status, in both. They are `NOT NULL` and a step move is honestly
-/// described by them: the Job did not move. That is also what makes the row
-/// checkable. `SQLite` cannot drop a `NOT NULL` without rebuilding the table,
-/// and rebuilding an append-only log means copying it out and dropping the
-/// original past its own triggers — so weakening them was never the cheaper
-/// option either.
-///
-/// # There is no backfill, and the refusal being removed is why
-///
-/// V2 had to name every existing Job per row, because a constant would have
-/// lost a distinction. V3 has no such row to fill: `read.rs` refused a
-/// `job_steps` row that was not `not_started` and refused a non-null
-/// `current_step_id`, so every step in every existing store is at the state
-/// creation wrote and no move has been lost. The `DEFAULT` on `kind` is
-/// therefore not a guess about old rows — it is the only thing an old row could
-/// be, because nothing could write it anything else.
-///
-/// # The shape trigger
-///
-/// One table holding two shapes is one table that can hold a third by accident.
-/// The trigger refuses an insert that is neither shape whole: a job transition
-/// carrying step columns, a step move missing one, a step move claiming the Job
-/// changed status, or a `kind` nobody declared. Same argument as the
-/// append-only triggers — a rule the database holds is not a rule a later query
-/// can quietly break.
+/// | Also decided here | Why |
+/// |---|---|
+/// | A step row puts the Job's status in **both** status columns | They are `NOT NULL` and a step move is honestly described by them — the Job did not move — which is also what makes the row checkable. `SQLite` cannot drop a `NOT NULL` without rebuilding the table, and rebuilding an append-only log means copying it out and dropping the original past its own triggers, so weakening them was never the cheaper option either |
+/// | No backfill | V2 had to name every existing Job per row, because a constant would have lost a distinction. V3 has no such row to fill: `read.rs` refused a `job_steps` row that was not `not_started` and refused a non-null `current_step_id`, so every step in every existing store is at the state creation wrote and no move has been lost. The `DEFAULT` on `kind` is therefore not a guess about old rows — it is the only thing an old row could be |
+/// | A shape trigger | One table holding two shapes is one table that can hold a third by accident. The trigger refuses an insert that is neither shape whole: a job transition carrying step columns, a step move missing one, a step move claiming the Job changed status, or a `kind` nobody declared. Same argument as the append-only triggers — a rule the database holds is not a rule a later query can quietly break |
 const V3: &str = r#"
 ALTER TABLE job_events ADD COLUMN kind TEXT NOT NULL DEFAULT 'job_transition';
 ALTER TABLE job_events ADD COLUMN step_id TEXT;
@@ -439,22 +399,19 @@ CREATE TABLE job_step_checks (
 /// | `job_events.drone_id` | Which Drone the row is about. Set on the two drone rows and null on every other |
 /// | `job_events.kind` (values) | Admits `drone_spawned` and `drone_exited`, which the V3 shape trigger refused |
 ///
-/// # `workflow` is null on every existing row, and that is a refusal
+/// **`workflow` is null on every existing row, and that is a refusal.** V2 named
+/// a titleless Job after itself because a per-row value existed to compute;
+/// there is none here, since nothing in a pre-V7 store records which definition
+/// a Job followed, and a step backfilled as declaring no Check is the one wrong
+/// answer — it reads as an ungated step rather than as a gap. V5's rule applies:
+/// backfill only what is observed, and nothing is. `read.rs` refuses such a row
+/// and `load_all_jobs` carries it out beside the Jobs that did load.
 ///
-/// V2 named a titleless Job after itself because a per-row value existed to
-/// compute. There is none here: nothing in a pre-V7 store records which
-/// definition a Job followed, and a step backfilled as declaring no Check is
-/// the one wrong answer — it reads as an ungated step rather than as a gap.
-/// V5's rule applies, which is to backfill only what is observed, and nothing
-/// is. `read.rs` refuses such a row, and `load_all_jobs` carries it out beside
-/// the Jobs that did load rather than shortening the list.
-///
-/// # The shape trigger is replaced rather than extended
-///
-/// `SQLite` cannot alter a trigger, so admitting a third and fourth kind means
-/// dropping V3's and writing the whole condition again. The rule is unchanged
-/// in kind: one row is one whole shape, and a drone row is a `drone_id` beneath
-/// an unchanged status with no step columns and no reason.
+/// **The shape trigger is replaced rather than extended.** `SQLite` cannot
+/// alter a trigger, so admitting a third and fourth kind means dropping V3's
+/// and writing the whole condition again. The rule is unchanged in kind: one
+/// row is one whole shape, and a drone row is a `drone_id` beneath an unchanged
+/// status with no step columns and no reason.
 const V7: &str = r#"
 ALTER TABLE jobs ADD COLUMN workflow TEXT;
 ALTER TABLE job_step_checks ADD COLUMN output_path TEXT;
@@ -665,18 +622,16 @@ CREATE TABLE job_step_gaming_flags (
 /// the verdicts is what shows the same note went unaddressed three times, which
 /// is the judgement `iteration_cap` exists to force."
 ///
-/// `attempt` is derived rather than declared — the number of times the step's
-/// own `job_events` rows say it entered `running`, counted inside the writing
-/// transaction. `job_events` stays the source of truth, the fold reads none of
-/// this, and no caller supplies an ordinal that could disagree with the
-/// history. `crate::attempt` carries the rest of the reasoning.
+/// `attempt` is derived rather than declared — how many times the step's own
+/// `job_events` rows say it entered `running`, counted inside the writing
+/// transaction, so no caller supplies an ordinal that could disagree with the
+/// history. `crate::attempt` carries the rest.
 ///
-/// # Why the tables are rebuilt rather than altered
-///
-/// `SQLite` can add a column and cannot widen a primary key, and the key is
-/// what had to change: `(job_id, step_id, ordinal)` refuses a second run's
-/// ordinal zero outright, so a column added beside the old key would have kept
-/// the defect behind a constraint error.
+/// **The tables are rebuilt rather than altered** because `SQLite` can add a
+/// column and cannot widen a primary key, and the key is what had to change:
+/// `(job_id, step_id, ordinal)` refuses a second run's ordinal zero outright,
+/// so a column beside the old key would have kept the defect behind a
+/// constraint error.
 ///
 /// **Every existing row is carried across as attempt one**, observed rather
 /// than assumed in V5's sense: nothing before this could write a second run's
@@ -845,29 +800,23 @@ END;
 /// differently depending on whether anybody was watching — which is the shape
 /// this table exists to remove.
 ///
-/// # Two tables, because zero rows has to mean one thing
+/// **Two tables, because zero rows has to mean one thing.** `job_footprint` is
+/// the header and `job_footprint_files` is the reading. A Job with no header
+/// was never recorded — still running, or finished before this existed. A Job
+/// with a header and no file rows was read and had changed nothing, which is a
+/// real and different answer and the one a `diff_nonempty` check refuses. One
+/// table could not say both. **Nothing to backfill**: no footprint was written
+/// down before this table existed, which is what zero rows says.
 ///
-/// `job_footprint` is the header and `job_footprint_files` is the reading. A
-/// Job with no header was never recorded — it is still running, or it finished
-/// before this existed. A Job with a header and no file rows was read and had
-/// changed nothing, which is a real and different answer and the one a
-/// `diff_nonempty` check refuses. One table could not say both.
-///
-/// # No drift mark, and that is the honest shape
-///
-/// A plan is declared by one step and this is the Job's whole work since the
-/// branch was cut. The step holding the pen when a Job stops is usually not the
-/// step that declared — `handoff` finishes a Job that `implement` scoped — so a
-/// mark taken here would measure every step's work against the last step's
-/// promise. `outside_plan` stays on the live reading, where the step that
-/// declared is the step being watched.
-///
-/// [`crate::plan::V18`] is what made the record answerable without a column
-/// here: every step's promise is kept beside this, named by the step and the
-/// run that made it, and the two are compared where they are served.
-///
-/// **Nothing to backfill.** No footprint was written down before this table
-/// existed, which is what zero rows says.
+/// **No drift mark, and that is the honest shape.** A plan is declared by one
+/// step and this is the Job's whole work since the branch was cut; the step
+/// holding the pen when a Job stops is usually not the step that declared —
+/// `handoff` finishes a Job that `implement` scoped — so a mark taken here
+/// would measure every step's work against the last step's promise.
+/// `outside_plan` stays on the live reading, where the step that declared is
+/// the step being watched. [`crate::plan::V18`] is what made the record
+/// answerable without a column here: every step's promise is kept beside this,
+/// named by the step and the run that made it, and compared where served.
 const V15: &str = r#"
 CREATE TABLE job_footprint (
     job_id      TEXT PRIMARY KEY NOT NULL REFERENCES jobs(job_id),

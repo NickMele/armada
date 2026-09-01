@@ -1,49 +1,28 @@
 //! The three answers a person gives at a human gate.
 //!
-//! # Every one of them is a transition, and none writes a status
+//! **Every one is a transition, and none writes a status.** Approving advances
+//! the step on the inner machine and then moves the Job on the outer one;
+//! requesting changes re-queues it at the same step; rejecting ends it. All
+//! three go through `Job::transition`, so a review is a row in the same log as
+//! everything else, and the actor on it is **human**.
 //!
-//! Approving advances the step on the inner machine and then moves the Job on
-//! the outer one; requesting changes re-queues it at the same step; rejecting
-//! ends it. All three go through `Job::transition`, so a review is a row in the
-//! same log as everything else and the actor on it is **human**.
-//!
-//! # All three refuse anywhere but `awaiting_review`
-//!
+//! **All three refuse anywhere but `awaiting_review`.**
 //! `awaiting_approval -> rejected` is a legal edge and it is the *dispatch*
-//! gate's — `deny_dispatch`, a different act on a Job that never ran. A reject
-//! that took it would be two operations sharing one route.
+//! gate's — `deny_dispatch`, a different act on a Job that never ran, and a
+//! reject that took it would be two operations sharing one route. What puts a
+//! Job at this gate is a step gated `advance_gate: human_always` whose tiers
+//! all held: `crate::gate` rules `HeldForReview`, `apply` takes the edge, and
+//! the step stays `running`.
 //!
-//! # The step advances before the Job moves, and it has to
-//!
+//! **The step advances before the Job moves, and it has to.**
 //! `ADVANCING_STATUSES` is `running` and `awaiting_review`, so the inner
 //! machine freezes the moment the Job leaves the gate. Both step moves an
 //! approval makes are therefore made while it is still standing there, and
 //! `current_step_id` is what re-admission reads to know where to put the Drone.
 //!
-//! # What puts a Job into `awaiting_review`
-//!
-//! A step gated `advance_gate: human_always` whose tiers all held: `crate::gate`
-//! rules `HeldForReview` and `apply` takes the edge. The step stays `running`,
-//! which is why the ordering above is what it is.
-//!
-//! # The branch is caught up on the far side of the person's decision
-//!
-//! An approval is a verdict on the step that was worked, not an authorisation
-//! to merge, so the rebase does not touch what was read — it moves the tree the
-//! *next* step starts from, which the reviewer was never shown. Rebasing on the
-//! way *in* to `awaiting_review` buys nothing for it: the base moves while a
-//! person reads, and a conflict would put markers into the diff being judged.
-//!
-//! The rebase is inside [`put_a_drone_on`](Fleet::put_a_drone_on).
-//!
-//! # The gate holds no Drone and no slot
-//!
-//! A person's review costs no fleet time: the Drone ends when the machine gates
-//! pass, and the slot goes to the next Job. So **both** answers that keep the
-//! Job re-queue rather than resume, and differ in one move and one note — an
-//! approval advances the step, `request_changes` writes the words onto the Job
-//! and does not. `job-statuses.toml`'s `awaiting_review` row says the same for
-//! whoever reads the registry instead of this file.
+//! **The gate holds no Drone and no slot**, so a person's review costs no fleet
+//! time: both answers that keep the Job re-queue rather than resume.
+//! `job-statuses.toml`'s `awaiting_review` row says the same.
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{
     Actor, Component, Envelope, Job, JobId, JobStatus, Level, RedirectWaiting, StepId, StepTarget,
@@ -68,28 +47,31 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// Take the work. **The counterpart to [`approve`](Fleet::approve)**, at the
-    /// other end of the Job: that one releases a Job to spawn and this one
-    /// accepts what it produced.
+    /// Take the work. **The counterpart to [`approve`](Fleet::approve)**, at
+    /// the other end of the Job: that one releases a Job to spawn, this one
+    /// accepts what it produced. It needs no Drone and there is never one to
+    /// need — the decision is the person's, recorded whatever the slot holds.
     ///
-    /// The step advances, and then one of two things happens. A gate on the last
-    /// step commits the work, delivers the branch and records
+    /// The step advances, and then one of two things happens. A gate on the
+    /// last step commits the work, delivers the branch and records
     /// `completed_success` — the same three things [`finish`](Fleet::finish)
     /// does, because a Job whose branch is uncommitted is correct, verified and
     /// unmergeable. A workflow with a step left goes back in the **queue**.
     ///
     /// **Approving is not a resume, and the slot is why.** The gate stood its
-    /// Drone down when it opened, so a person's review costs no fleet time —
-    /// and the slot it freed is very often another Job's by the time they
-    /// answer. A Job that assumed a slot here would either fail or take one
-    /// from underneath the Job in it. So both step moves are made where the
-    /// inner machine is still live, the Job takes `awaiting_review -> queued`,
-    /// and `crate::dispatch`'s re-admission puts a Drone back on it when a slot
-    /// is free — immediately, on the ordinary turn where nothing else is
-    /// running.
+    /// Drone down when it opened, and the slot it freed is very often another
+    /// Job's by the time a person answers; a Job that assumed one here would
+    /// either fail or take it from underneath the Job in it. So both step moves
+    /// are made where the inner machine is still live, the Job takes
+    /// `awaiting_review -> queued`, and `crate::dispatch`'s re-admission puts a
+    /// Drone back on it on the first turn a slot is free.
     ///
-    /// **It needs no Drone and there is never one to need.** The decision is
-    /// the person's and is recorded whatever the slot holds.
+    /// **The branch is caught up on the far side of the decision**, inside
+    /// [`put_a_drone_on`](Fleet::put_a_drone_on). An approval is a verdict on
+    /// the step that was worked, not an authorisation to merge, so the rebase
+    /// moves the tree the *next* step starts from rather than what was read.
+    /// Rebasing on the way *in* buys nothing: the base moves while a person
+    /// reads, and a conflict would put markers into the diff being judged.
     pub async fn approve_review(&self, job_id: &JobId) -> Result<Job, Adrift> {
         // **A Job at a human gate has no Drone**, because the gate stood it
         // down so a person's review costs no fleet time — so ordinarily there
@@ -139,19 +121,15 @@ where
     }
 
     /// Send the work back with a note. **The worktree and every step so far
-    /// survive**: the Job is worked again at the same step, and the note is
-    /// what it is worked against.
+    /// survive**: the Job is worked again at the same step and the note is what
+    /// it is worked against. The step does not move, which is the whole
+    /// difference between this and an approval.
     ///
-    /// The step does not move, which is the whole difference between this and an
-    /// approval — the work is being done again rather than accepted.
-    ///
-    /// # Two paths, and exactly one of them runs
-    ///
-    /// **A Drone that is there is told, and nothing waits.** That is the act as
-    /// it has always been: a turn injected into a live session, the Job back to
-    /// `running`, no record of the words. It is the branch a gate does not
-    /// reach today and it is kept anyway, because "there is a process" is a
-    /// question about the slot rather than about where the Job stands.
+    /// **A Drone that is there is told, and nothing waits**: a turn injected
+    /// into a live session, the Job back to `running`, no record of the words.
+    /// It is the branch a gate does not reach today and is kept anyway, because
+    /// "there is a process" is a question about the slot rather than about
+    /// where the Job stands.
     ///
     /// **A gate with no Drone writes the note down and re-queues.** The note
     /// goes onto the Job, the Job takes `awaiting_review -> queued`, and
@@ -160,17 +138,13 @@ where
     /// clears it. **Not `running`**, which is what this used to refuse over: a
     /// Job put straight back to `running` with no process on it escalates as
     /// `interrupted` a moment later. The slot the gate freed is very often
-    /// another Job's by the time a person answers, which is exactly
-    /// [`approve_review`](Fleet::approve_review)'s situation and why the two
-    /// take the same edge.
+    /// another Job's by the time a person answers, which is why this and
+    /// [`approve_review`](Fleet::approve_review) take the same edge.
     ///
-    /// **Whichever runs, the other must not.** A note both injected and written
-    /// down is a note a Drone reads twice.
-    ///
-    /// It refuses before anything moves where a Job has no worktree left to put
-    /// a Drone on, because there is then genuinely nowhere for the note to go —
-    /// [`Adrift::NoDroneToTell`], narrowed from "no process right now" to "no
-    /// process, and none possible".
+    /// **Whichever runs, the other must not** — a note both injected and
+    /// written down is one a Drone reads twice. Where a Job has no worktree
+    /// left to put a Drone on there is nowhere for the note to go at all, and
+    /// it refuses before anything moves: [`Adrift::NoDroneToTell`].
     pub async fn request_changes(&self, job_id: &JobId, note: &Redirection) -> Result<Job, Adrift> {
         let slot = self.slot_for(job_id).await;
         let working = slot.lock().await;

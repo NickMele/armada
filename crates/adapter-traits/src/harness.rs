@@ -1,19 +1,17 @@
 //! What a Drone is started as, in a crate that cannot start one.
 //!
-//! # The harness renders; Fleet starts
-//!
+//! **The harness renders; Fleet starts.**
 //! [`AgentHarness`](super::AgentHarness) does not spawn. It turns a
 //! [`DroneSpawnConfig`] into a [`Launch`] — a program, an argument list, an
 //! environment and a directory — and Fleet starts that, detached, through the
-//! one type in the workspace that can start anything.
-//!
-//! Three things fall out of the split, and each was a reason to take it.
+//! one type in the workspace that can start anything. Three things fall out of
+//! the split, and each was a reason to take it.
 //!
 //! **Every confinement property becomes a pure assertion.** Whether the strict
 //! flag is on the argument list, whether an ambient server can appear, whether
-//! a credential is in the environment — all of it is a value a test reads,
-//! with no process, no timing and no machine involved. The alternative is a
-//! suite that can only check confinement by spawning the thing being confined.
+//! a credential is in the environment — all of it is a value a test reads, with
+//! no process, no timing and no machine involved. The alternative is a suite
+//! that can only check confinement by spawning the thing being confined.
 //!
 //! **The environment is built by Fleet, once, and not by whoever spawns.** v1's
 //! Drone spawn inherited the operator's environment wholesale, and v1's own
@@ -21,30 +19,9 @@
 //! inherit: [`Environment::nothing`] is where every Drone environment starts.
 //!
 //! **A harness cannot start an attached process**, because it cannot start one.
-//!
-//! # There is no escape hatch, at three levels
-//!
-//! [`DroneSpawnConfig`] has private fields, one constructor, no `Default`, no
-//! setter and no raw argument builder. [`Launch`] can only be built from a
-//! config, and takes its environment and its directory from that config rather
-//! than from its own caller — so an implementation cannot render a Drone into a
-//! different directory or a different environment than the one it was given.
-//! And [`McpConfig`] answers [`McpConfig::ambient_servers`] with a one-variant
-//! enum, so the strict flag is a consequence of the field's type rather than a
-//! second field somebody could set to false.
-//!
-//! # Why there is no field for the prompt's text on the argument list
-//!
-//! The task text goes in on stdin as the session's first turn, not in argv.
-//! Argv is world-readable through `ps` — measured on darwin 27, where the
-//! environment of a same-uid child is *not* — so anything on it is public to
-//! every process on the machine. Nothing brokered may be there, permanently,
-//! and a Job's brief is not something to publish either.
-//!
-//! The same channel is what [`crate::AgentHarness`] needs for a live session:
-//! stdin is held open, one JSON object per line, which is the mechanism spike 4
-//! measured. So the prompt and every later injected turn take one path, and
-//! there is not a second one to keep correct.
+//! And there is no escape hatch at any of the three levels this is built from:
+//! [`DroneSpawnConfig`], [`Launch`] and [`McpConfig`] each say what they
+//! refuse.
 
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -396,6 +373,20 @@ pub enum SpawnConfigRefused {
 /// **There is no stdio on it.** Where the Drone's input, output and errors go
 /// is fixed by whoever starts it — stdin holds the session, stdout carries the
 /// transcript — and a field here would be a way to ask for something else.
+///
+/// **And no field for the prompt's text on the argument list.** Argv is
+/// world-readable through `ps`, measured on darwin 27 — where the environment
+/// of a same-uid child is *not* — so anything on it is public to every process
+/// on the machine, and a Job's brief is not something to publish. The task text
+/// goes in on stdin as the session's first turn instead, which is also what a
+/// live session needs: stdin held open, one JSON object per line, the mechanism
+/// spike 4 measured. The prompt and every later injected turn take one path,
+/// and there is not a second one to keep correct.
+///
+/// It takes its environment and its directory from the [`DroneSpawnConfig`]
+/// rather than from its own caller, so an implementation cannot render a Drone
+/// into a different directory or a different environment than the one it was
+/// given.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Launch {
     program: String,

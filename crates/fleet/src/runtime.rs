@@ -3,48 +3,25 @@
 //!
 //! Written once the listener is bound, removed on a clean exit, left behind on
 //! an unclean one. Four fields — protocol version, pid, port, and the start
-//! time that makes the pid mean something.
+//! time that makes the pid mean something. [`Presence`] is what a reader gets
+//! back, and it never collapses two answers Bridge draws differently.
 //!
-//! # Three answers, because Bridge renders three different things
+//! **The host is not in the file.** Only the port is written; `127.0.0.1` is a
+//! constant here and never data, so there is no field an edited file could put
+//! `0.0.0.0` into and no code path that reads a host from disk. Loopback is
+//! structural rather than configured.
 //!
-//! `../../docs/contracts/design-system.md` gives Fleet's status bar three
-//! states, and two of them are told apart by this file rather than by a
-//! connection attempt. So [`read`] never collapses them:
+//! **Publishing needs proof the path is free.** [`RuntimeFile::publish`] takes
+//! a [`Vacancy`], and a second Fleet cannot overwrite a first's runtime file
+//! because the call that would do it cannot be spelled without one.
 //!
-//! | [`Presence`] | What is true | What Bridge says |
-//! |---|---|---|
-//! | `NotRunning` | No file at the path | Fleet is not running |
-//! | `Stale(PidDead)` | A file, naming a pid nothing holds | Fleet is not running |
-//! | `Stale(PidHeldByAnother)` | A file, naming a pid *something else* holds | Fleet is not running — and do not connect |
-//! | `Running` | A file whose pid is held by the process that wrote it | Connect. Silence past here is *unreachable*, not *down* |
-//!
-//! The third row is the one v1 could not produce. Its check proved a pid was
-//! held; being held by the wrong process reads identically to being held by
-//! the right one, and the consequence is a client opening a socket against a
-//! port some unrelated program now owns.
-//!
-//! # The host is not in the file
-//!
-//! Only the port is written. `127.0.0.1` is a constant here and never data, so
-//! there is no field an edited file could put `0.0.0.0` into and no code path
-//! that reads a host from disk. Loopback is structural rather than configured.
-//!
-//! # Publishing needs proof the path is free
-//!
-//! [`RuntimeFile::publish`] takes a [`Vacancy`], and the only thing that mints
-//! one is a [`read`] that found no live Fleet. A second Fleet cannot overwrite
-//! a first's runtime file, because the call that would do it cannot be spelled
-//! without the token, and the token does not exist while the first is alive.
-//!
-//! # A file that will not parse is refused, not ignored
-//!
-//! v1 read a corrupt pidfile as "not running" — fail-safe, and correct there,
-//! because a torn file was a plausible crash artifact. It is not one here: the
-//! file is written to a sibling and renamed, so a reader sees the whole of one
-//! version or the whole of the previous one, never half of either. A file that
-//! does not parse was therefore written by something that is not Fleet, and
-//! reading that as "nothing is running" is how a second Fleet gets started over
-//! a live one.
+//! **A file that will not parse is refused, not ignored.** v1 read a corrupt
+//! pidfile as "not running" — fail-safe, and correct there, because a torn file
+//! was a plausible crash artifact. It is not one here: the file is written to a
+//! sibling and renamed, so a reader sees the whole of one version or the whole
+//! of the previous one, never half of either. A file that does not parse was
+//! therefore written by something that is not Fleet, and reading that as
+//! "nothing is running" is how a second Fleet gets started over a live one.
 
 use std::fs;
 use std::io;
@@ -100,6 +77,23 @@ pub struct RuntimeFile {
 }
 
 /// What is at the runtime file's path.
+///
+/// **Three answers, because Bridge renders three different things.**
+/// `../../docs/contracts/design-system.md` gives Fleet's status bar three
+/// states, and two of them are told apart by this file rather than by a
+/// connection attempt — so [`read`] never collapses them.
+///
+/// | Variant | What is true | What Bridge says |
+/// |---|---|---|
+/// | `NotRunning` | No file at the path | Fleet is not running |
+/// | `Stale(PidDead)` | A file, naming a pid nothing holds | Fleet is not running |
+/// | `Stale(PidHeldByAnother)` | A file, naming a pid *something else* holds | Fleet is not running — and do not connect |
+/// | `Running` | A file whose pid is held by the process that wrote it | Connect. Silence past here is *unreachable*, not *down* |
+///
+/// The third row is the one v1 could not produce. Its check proved a pid was
+/// held; being held by the wrong process reads identically to being held by the
+/// right one, and the consequence is a client opening a socket against a port
+/// some unrelated program now owns.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Presence {
     /// No file. Fleet has never started here, or it exited cleanly.
@@ -149,7 +143,9 @@ impl Presence {
 
 /// Proof that no live Fleet holds a particular runtime file path.
 ///
-/// Minted only by [`Presence::vacancy`], and it carries the path it was minted
+/// Minted only by [`Presence::vacancy`], which answers with one only where no
+/// live Fleet was found, so the token does not exist while a first Fleet is
+/// alive. It carries the path it was minted
 /// for — so a publish cannot check one path and write another. It also carries
 /// what it is replacing, so the composition root can say which of the two stale
 /// cases it found, which is a fact worth an audit line.

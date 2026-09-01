@@ -1,47 +1,28 @@
 //! Whether a citation quotes the material it was shown, or invents it.
 //!
-//! # The defect
-//!
-//! One refusal read *as scope notes "Implementation, tests, and the IPC/UI
-//! wiring itself are not done…"*, and that sentence was in no note, no
-//! submission, no evidence row and no file. A refusal persuades because it
+//! **The defect.** One refusal read *as scope notes "Implementation, tests, and
+//! the IPC/UI wiring itself are not done…"*, and that sentence was in no note,
+//! no submission, no evidence row and no file. A refusal persuades because it
 //! cites, so an invented citation is not a strict verdict — it is one nobody
 //! outside the call can check.
 //!
-//! # A quoted span is the one part of an answer a machine can check
+//! **A quoted span is the one part of an answer a machine can check.** The rest
+//! is the Judge's own reading, which nothing here can grade. Quotation marks
+//! are different: they claim these words are *in the material above*, and
+//! [`Brief::question`](crate::Brief::question) is the whole of that material.
+//! So the check is containment — no second call, and no opinion about whether
+//! the reading was right.
 //!
-//! The rest is the Judge's own reading, which nothing here can grade.
-//! Quotation marks are different: they claim these words are *in the material
-//! above*, and [`Brief::question`](crate::Brief::question) is the whole of the
-//! material above. So the check is containment — no second call, and no
-//! opinion about whether the reading was right.
-//!
-//! # It cannot be narrowed to `produced`
-//!
-//! The obvious cut — only `produced` claims the material contains something, so
-//! check only that — reopens #171, where the invented sentence was in
-//! `expected`. `expected` is where a call reaches for the yardstick it was shown
-//! and so where it fabricates one. What is honestly quoted and what is
-//! fabricated are not sorted by field.
-//!
-//! # Only a quotation attributed to a source claims anything
-//!
-//! Two Jobs stopped here on honest refusals. One wrote its own standard inside
-//! quotation marks — *"A plan addressing all five variants as stated: …"* — and
-//! the other its own paraphrase of the facts it had been shown. Neither names a
-//! source, and neither is a claim that those words are anywhere: they are the
-//! Judge's wording, in quotation marks. Containment has nothing to check in
-//! them and answers the only way it can, which is wrongly.
-//!
-//! So [`invented`] reads a quotation only where the words in front of it put it
-//! **in** something — *as scope notes*, *the diff shows*, *per serving.rs*.
-//! That is what makes it a claim, and it is the claim that is checked.
-//!
-//! Raising [`A_CITATION`] would not have done this. The fabrication in #171 is
-//! ten words and the two honest spans are nineteen and twenty-nine, so every
-//! threshold that lets them through lets the fabrication through first.
-//! Narrowing by field would not have done it either: #171 and the first of the
-//! two are both in `expected`.
+//! **Only a quotation attributed to a source claims anything.** Two Jobs
+//! stopped here on honest refusals: one wrote its own standard inside quotation
+//! marks — *"A plan addressing all five variants as stated: …"* — and the other
+//! its own paraphrase of the facts it had been shown. Neither names a source,
+//! so neither claims those words are anywhere; they are the Judge's wording, in
+//! quotation marks, and containment has nothing to check in them and answers
+//! the only way it can, which is wrongly. So [`invented`] reads a quotation
+//! only where the words in front of it put it **in** something — *as scope
+//! notes*, *the diff shows*, *per serving.rs*. That is what makes it a claim,
+//! and the claim is what is checked.
 
 /// The shortest run of words a quotation mark makes a claim about. Under four
 /// it is a term or an emphasis — `"met"`, `"the queue"` — and not a claim about
@@ -51,6 +32,10 @@
 /// it from (#154). Deliberately the loose end, because a false positive demotes
 /// an honest refusal to a call that could not be answered, and both stop the
 /// step for a person.
+///
+/// **Raising it would not have caught the fabrication.** #171's invented span
+/// is ten words and the two honest ones are nineteen and twenty-nine, so every
+/// threshold that lets those through lets the fabrication through first.
 const A_CITATION: usize = 4;
 
 /// The first quoted span in `cited` that is attributed to a source and appears
@@ -62,6 +47,12 @@ const A_CITATION: usize = 4;
 /// **Each side of an elision is checked on its own.** A model quoting across a
 /// cut writes `"the note says X … and then Y"`, and requiring the ellipsis
 /// itself to appear would fail every truncated quotation, which is most of them.
+///
+/// **It cannot be narrowed to `produced`.** The obvious cut — only `produced`
+/// claims the material contains something — reopens #171, whose invented
+/// sentence was in `expected`. `expected` is where a call reaches for the
+/// yardstick it was shown, and so where it fabricates one: what is honestly
+/// quoted and what is fabricated are not sorted by field.
 pub(crate) fn invented(cited: &str, shown: &str) -> Option<String> {
     let material = words(shown);
     quotations(cited)
@@ -93,30 +84,26 @@ struct Quotation {
 /// **This is a phrase list, and a phrase list is a heuristic.** There is no
 /// structural signal underneath it: the two false positives and the one true
 /// positive are the same shape — a `field:` line with a quoted run of words in
-/// it — and what separates them is English. Every alternative considered read
-/// worse. Extracting the material's own headings and matching them in the
-/// run-up sounds structural, but the brief carries the whole diff and the whole
-/// note, so almost any noun matches something in it. Treating a quotation that
-/// begins its field as unattributed fits all three cases we have, but it is a
-/// test for a bare quotation rather than for attribution, and *the plan should
-/// establish "…"* would walk straight past it.
+/// it — and what separates them is English. Extracting the material's own
+/// headings and matching them in the run-up sounds structural, but the brief
+/// carries the whole diff and the whole note, so almost any noun matches. And
+/// treating a quotation that begins its field as unattributed fits all three
+/// cases we have, but tests for a bare quotation rather than for attribution:
+/// *the plan should establish "…"* would walk straight past it.
 ///
 /// **An unrecognised construction reads as unattributed and is not checked.**
-/// The two costs are not symmetric. A missed fabrication reaches a person as a
-/// refusal, with the words to argue with; a false positive demotes an honest
-/// refusal to [`Unreadable`](crate::Unreadable) and the reason is in a log file
-/// nobody is looking at. Two Jobs in a row stopped that way and neither reached
-/// a Check.
+/// The two costs are not symmetric: a missed fabrication reaches a person as a
+/// refusal, with the words to argue with, while a false positive demotes an
+/// honest refusal to [`Unreadable`](crate::Unreadable) with the reason in a log
+/// file nobody is looking at. Two Jobs in a row stopped that way and neither
+/// reached a Check.
 ///
 /// **Attribution has to be in the run-up, not somewhere in the field.** It is
 /// cut at the previous quotation and at the last sentence boundary, so a model
-/// that attributes one quotation does not make the next one checkable, and a
-/// sentence that names a source does not vouch for the sentence after it.
-///
-/// What it misses, written down rather than discovered: attribution after the
-/// quotation (*"…", the note says*), attribution by a bare colon (*the scope
-/// note: "…"*), and any verb of saying not in the list. Each of those is a
-/// fabrication that goes unchecked.
+/// that attributes one quotation does not make the next one checkable. What it
+/// misses, written down rather than discovered: attribution after the quotation
+/// (*"…", the note says*), by a bare colon (*the scope note: "…"*), and any
+/// verb of saying that is not in the list.
 fn attributed(runup: &str) -> bool {
     let sentence = runup
         .rsplit(['.', '!', '?', ';', '\n'])
