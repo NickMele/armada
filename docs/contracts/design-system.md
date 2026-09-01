@@ -643,14 +643,16 @@ d              redirect
 s              restart step        (detail only)
 p              pilot               (not built)
 c              copy debug info
+b              report this job     (detail only) (confirms)
 x              kill                (confirms)
+X              kill & redispatch   (detail only) (confirms) (not built)
 n              new job
 /              search the current list
 1–5            state filter        (Job Board only, in tab order)
 a              approve             (dispatch card only)
 v              observe             (detail only)
 u              submit for verification  (piloted job only)
-e              redispatch
+e              redispatch as a new job
 h / l / ← / →  expand and collapse  (detail only)
 [ ]            move between chapters  (detail only)
 Enter          open the log         (detail only, not built)

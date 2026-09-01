@@ -17,6 +17,7 @@
 // | `[` `]` | `focus_chapter`, scope `detail` | move between the three chapters |
 // | `f` | `open_diff`, scope `detail` | open the Produced chapter to the diff |
 // | `g` | `open_stage`, scope `detail` | open a stage of the phase strip |
+// | `b` | `report_job`, scope `detail` | open the dialog that says this job failed in error |
 // | `Esc` | `back`, scope `detail` | the list, and `App.tsx` owns it |
 //
 // # It names what it opens, and holds what it opened
@@ -84,7 +85,9 @@ export type DetailPress =
   /** `f` — open the Produced chapter to the diff. */
   | { act: "diff" }
   /** `g` — open a stage of the phase strip. */
-  | { act: "stage" };
+  | { act: "stage" }
+  /** `b` — say this job failed in error. The only act key this surface binds. */
+  | { act: "report" };
 
 /**
  * What a keypress means on job detail, or `null` for nothing.
@@ -128,6 +131,8 @@ export function pressOf(event: KeyboardEvent): DetailPress | null {
       return { act: "diff" };
     case "g":
       return { act: "stage" };
+    case "b":
+      return { act: "report" };
     default:
       return null;
   }
@@ -155,6 +160,16 @@ export type DetailShape = {
   chapters: () => readonly StepChapter[];
   /** The strip, in order, or nothing on a step that has none. */
   stages: readonly PhaseStage[] | undefined;
+  /**
+   * Open the report dialog. **The one entry here that moves nothing on the
+   * screen** — every other act opens something this file already holds, and
+   * this one raises a dialog the screen owns, so the screen passes in what to
+   * call rather than this file learning what a report is.
+   *
+   * Absent where the state does not offer it, and the press is then left
+   * unswallowed rather than answered with nothing.
+   */
+  onReport?: () => void;
 };
 
 /** The open state this file holds, in the shape the screen takes it in. */
@@ -282,7 +297,20 @@ function act(press: DetailPress, shape: DetailShape, on: Moves): boolean {
       return diff(shape, on);
     case "stage":
       return stage(shape, on);
+    case "report":
+      return report(shape);
   }
+}
+
+/**
+ * `b`, from `actions.toml` — `report_job`, scope `detail`, which is this
+ * surface and no other. It confirms, and the dialog it raises is the
+ * confirmation: nothing is filed by the press.
+ */
+function report(shape: DetailShape): boolean {
+  if (shape.onReport === undefined) return false;
+  shape.onReport();
+  return true;
 }
 
 /** A row the cursor can be on: what it is called, and the control it is. */

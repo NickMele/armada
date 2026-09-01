@@ -139,6 +139,14 @@ export const CONFIRM: Record<ConfirmableAct, { title: string; body: string; tone
  * happens is that a gate which could not answer is asked again, and the label
  * is that sentence with the words taken out.
  */
+/**
+ * Say this job failed in error. **Not a `JobAct`** — it moves nothing, so it is
+ * outside the record every other label here is keyed by, and it still needs one
+ * word wherever it is offered. `actions.toml` calls it `report_job` and binds
+ * it to `b`.
+ */
+export const REPORT_LABEL = "Report this job";
+
 export const ACT_LABEL: Record<JobAct, string> = {
   kill_drone: "Kill drone",
   kill_job: "Kill job",
