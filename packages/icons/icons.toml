@@ -199,6 +199,14 @@
   reserved = "A submission that landed. Never a Check result, which is the shield-* family."
   notes = "The check marks that evidence was submitted, not that anything passed — a submission returns a receipt and the verdict arrives later. Distinguishing those two is why this is not `shield-check`."
 
+[icons.file-diff]
+  means = "A page outline carrying a plus and a minus"
+  group = "Evidence"
+  size = "12px"
+  status = "Specified"
+  reserved = "Reading what one produced file changed. Never a Check result, which is the shield-* family; never a submission that landed, which is file-check; and never the change count on a row, which is text — a Job row already reads `3 files · +94 −31` and a glyph there would say it twice."
+  notes = "Added 2026-08-31 for job detail's Produced chips, where a file a step produced opens its diff. The file-* family means evidence throughout and a produced file is evidence, so the diff takes a member of that family rather than a new silhouette: file-check says a submission arrived and claims nothing about its content, and this is the one that opens the content. It carries more interior detail than any other member — a plus and a minus on the page's face rather than one mark at its edge — so it is drawn at 12px and never smaller, which is the size both the palette row and the chip use."
+
 [icons.file-question-mark]
   means = "A page outline with a question mark"
   group = "Escalation reason"
