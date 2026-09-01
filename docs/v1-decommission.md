@@ -13,7 +13,7 @@ v1's own store is the only authoritative record of which repositories it touched
 | Repository | Evidence | Jobs | Worktrees left behind |
 |---|---|---|---|
 | `~/Development/armada` | `manifest.db` workspace `c24a68b6`; `machine.yml` `fleet.carry`; 36 jobs | 36 | none — no `.git/worktrees` directory exists |
-| `~/Development/chariot` | 1 job record | 1 | none of v1's — its two registrations are Claude Code's own, under `.claude/worktrees/`, and are live |
+| `~/Development/chariot` | 1 job record | 1 | none of v1's — its two registrations are Claude Code's own agent worktrees, and are live |
 | `.../scratchpad/jobtest` (throwaway) | 10 job records | 10 | directory no longer exists |
 
 v1's worktrees lived under `~/.armada/workspaces/<repo>/<name>`, not inside the source repos.
