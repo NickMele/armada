@@ -22,7 +22,7 @@ files, a rule can — and the rule is the point.
 | `job-fields.toml` | What a Job record holds — the `jobs` row, the `job_steps` row, and the three things stored elsewhere |
 | `escalation-triggers.toml` | Why a Job stopped and a person is being asked |
 | `check-outcomes.toml` | What one declared mechanical Check did. The `outcome` column on `job_step_checks` |
-| `enum-verbs.toml` | The word, the glyph and the colour each variant of the seven enums renders as |
+| `enum-verbs.toml` | The word, the glyph and the colour each variant renders as, for every enum its own header lists |
 | `workflowdef-fields.toml` | What a WorkflowDef declares: a step's gates, its evidence scope, the def-level defaults |
 | `workflows.toml` | The workflows Armada runs, and the ones it has decided not to design yet |
 | `workflow-samples/*.json` | The WorkflowDefs themselves, verbatim. One per workflow whose row says it has one |

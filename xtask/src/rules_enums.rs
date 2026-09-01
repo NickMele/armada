@@ -72,6 +72,10 @@ const ENUMS: &[EnumSource] = &[
         path: "crates/core-model/src/job/fields.rs",
     },
     EnumSource {
+        name: "Origin",
+        path: "crates/core-model/src/job/fields.rs",
+    },
+    EnumSource {
         name: "Guard",
         path: "crates/core-model/src/job/guard.rs",
     },
@@ -159,6 +163,15 @@ const PAIRINGS: &[Pairing] = &[
         prefix: "verbs.resumption.",
         enum_name: "Resumption",
     },
+    // Where a Job came from, and it has no registry file of its own either:
+    // `job-fields.toml` names the five on the `origin` row as prose, and the
+    // verbs are the only place they are spelled key by key. The Board draws
+    // this on every row, so an unpaired sixth value is a blank cell.
+    Pairing {
+        registry: "enum-verbs.toml",
+        prefix: "verbs.origin.",
+        enum_name: "Origin",
+    },
 ];
 
 /// The vocabularies `enum-verbs.toml` declares in its own header.
@@ -180,6 +193,7 @@ const VOCABULARIES: &[&str] = &[
     "criterion_verdict_check",
     "criterion_verdict_judge",
     "criterion_verdict_attested",
+    "origin",
 ];
 
 /// Every enum's `variant -> wire` map, read from the source that declares it.

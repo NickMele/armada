@@ -641,7 +641,7 @@ r              review
 t              attest
 d              redirect
 s              restart step        (detail only)
-p              pilot
+p              pilot               (not built)
 c              copy debug info
 x              kill                (confirms)
 n              new job
@@ -651,6 +651,10 @@ a              approve             (dispatch card only)
 v              observe             (detail only)
 u              submit for verification  (piloted job only)
 e              redispatch
+h / l / ← / →  expand and collapse  (detail only, not built)
+[ ]            move between chapters  (detail only, not built)
+f              open the diff        (detail only, not built)
+g              open the stage       (detail only, not built)
 ```
 
 **This is the map, not a pattern.** It was settled by drawing the Job
@@ -664,6 +668,23 @@ and the authority. They stay here because this document is pasted whole
 into a design session, where a pointer resolves to nothing; the gate
 reads both and fails where they disagree, on the binding, the verb and
 the annotations in brackets.
+
+**Job detail's bindings are in the map before the screen is rebuilt.**
+The run tree, the chapters, the produced files and the phase strip each
+carry one. The run tree roves on the same `j`/`k` as a list rather than
+taking a second pair of keys — moving between steps and moving between
+rows are one act — and expanding a step's facts is the same act as
+opening a log entry's payload, so both are one binding on the other
+axis. #265 builds the screen they belong to.
+
+**`not built` means the binding is registered and nothing answers it.**
+The map was settled by drawing, so it holds acts nobody has written, and
+the palette displays a binding beside every entry — a row a person
+presses and gets nothing from is worse than one that is absent. The
+registry's `unbuilt` column names the issue that gives each of them an
+act, and the gate holds the annotation and the column to each other. So
+the palette can draw these rows disabled, or leave them out, on a fact
+rather than on a list of exceptions kept in the app.
 
 Three reversals against what stood before, each with a reason:
 

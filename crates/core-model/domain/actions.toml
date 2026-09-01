@@ -35,12 +35,24 @@
 #                 list and detail | detail | job board | piloted job
 #   destructive - whether it ends or overrules a Job's record
 #   confirms    - whether it takes a confirmation. Destructive implies it
+#   unbuilt     - the issue that builds the act, on a row Bridge cannot answer
+#                 yet. Absent means live. The gate refuses anything here that
+#                 is not an issue reference, and the contract's map annotates
+#                 the same rows `not built`
 #   notes       - the reasoning the row carries
 #
-# `icon_absent = "undecided"` is a gap, not a default. Eight rows carry one,
-# because no registered glyph means the act and inventing one is a decision
-# that belongs in the icon registry rather than here. They are countable and
-# the gate counts them; what a new action may not do is ship without either.
+# `icon_absent = "undecided"` is a gap, not a default: no registered glyph
+# means the act, and inventing one is a decision that belongs in the icon
+# registry rather than here. The gate counts the rows carrying it; what a new
+# action may not do is ship without either.
+#
+# **`unbuilt` is the other kind of blank, and it is not a gap.** This file was
+# transcribed from a map settled by drawing the Board and the palette together,
+# so it holds acts nobody has written — `p` and `s` when it landed, and job
+# detail's bindings since. The palette displays a binding beside every entry,
+# which makes a row nothing answers a key a person will press; the alternative
+# to a column is a list of them in `apps/`, which is the second registry this
+# file exists to prevent. A row loses the field in the change that builds it.
 
 # ------------------------------------------------------------------ global
 
@@ -122,10 +134,10 @@ tier = "Contextual"
 verb = "Move focus"
 icon = ""
 shortcut = "j / k / ↓ / ↑"
-scope = "list"
+scope = "list and detail"
 destructive = false
 confirms = false
-notes = "The two navigation keys the destructive-key rule is measured against. A list is a listbox and already roves on the arrows; j and k are here because nothing else claims them."
+notes = "The two navigation keys the destructive-key rule is measured against. A list is a listbox and already roves on the arrows; j and k are here because nothing else claims them. The scope covers detail because the run tree and the activity log are listboxes too — moving between steps and moving between rows are one act, and a second pair of keys for it would be the ⌘F deletion made again. #265 builds the detail half."
 
 [actions.open_focused]
 kind = "Motion"
@@ -205,7 +217,7 @@ shortcut = "s"
 scope = "detail"
 destructive = false
 confirms = false
-notes = "`rotate-cw` is Redispatch and `refresh-cw` is reserved to churning, so the two rotation glyphs are both spoken for. Restarting one step is neither."
+notes = "`rotate-cw` is Redispatch and `refresh-cw` is reserved to churning, so the two rotation glyphs are both spoken for. Restarting one step is neither. Carries no `unbuilt`: Bridge has this act — `Acts.tsx` fires `restart_step` from the step panel and has since #62. What it has no keyboard path to is a different thing from what it cannot do, and #233 read the missing binding as a missing act."
 
 [actions.pilot]
 kind = "Action"
@@ -216,7 +228,8 @@ shortcut = "p"
 scope = "list and detail"
 destructive = false
 confirms = false
-notes = "The glyph is reserved to Pilot. Once the terminal has focus every keystroke belongs to it and this tier is suspended; only Esc Esc releases it."
+unbuilt = "#250"
+notes = "The glyph is reserved to Pilot. Once the terminal has focus every keystroke belongs to it and this tier is suspended; only Esc Esc releases it — a safety rule written against an act that does not exist yet, which is what #233 found. #250 is the control; the handover the exemption describes is #255's three exits."
 
 [actions.copy_debug_info]
 kind = "Action"
@@ -309,3 +322,52 @@ scope = "list and detail"
 destructive = false
 confirms = false
 notes = "The glyph is the registry's own assignment for Redispatch — a single arrow, distinct from the two chasing arrows that mean churning."
+
+[actions.disclose]
+kind = "Action"
+tier = "Contextual"
+verb = "Expand and collapse"
+icon = "chevron-right"
+shortcut = "h / l / ← / →"
+scope = "detail"
+destructive = false
+confirms = false
+unbuilt = "#265"
+notes = "One act, not two. A step's facts and a log entry's payload both open in place beneath the focused row, and giving each its own key would put two bindings on one gesture. The keys mirror `move_focus` on the other axis — a tree discloses sideways and roves vertically — and the glyph is the icon registry's own word for it, taken under the reservation's tree reading rather than its record reading: the run tree is a tree, and a Job row still does not grow a caret, which is why the scope is detail and not the list."
+
+[actions.focus_chapter]
+kind = "Motion"
+tier = "Contextual"
+verb = "Move between chapters"
+icon = ""
+shortcut = "[ ]"
+scope = "detail"
+destructive = false
+confirms = false
+unbuilt = "#265"
+notes = "A Motion: it lands somewhere and acts on nothing, which is what `j`/`k` cannot do here — those rove inside whichever chapter has focus. Unmodified brackets against ⌘[ ⌘] for back and forward, which is `1–5` against `⌘1–⌘5` again: one row of keys, two acts, separated by the modifier and drawn that way on purpose. Reading order, so `]` goes down the screen."
+
+[actions.open_diff]
+kind = "Action"
+tier = "Contextual"
+verb = "Open the diff"
+icon = "file-diff"
+shortcut = "f"
+scope = "detail"
+destructive = false
+confirms = false
+unbuilt = "#265"
+notes = "The focused Produced chip, opened to what the step actually wrote. `f` for the file, since `d` is Redirect and `o` is Open, which on a list means a Job — this opens a file inside one and the two must not read as the same key doing different things. The glyph was registered for this row."
+
+[actions.open_stage]
+kind = "Action"
+tier = "Contextual"
+verb = "Open the stage"
+icon = ""
+icon_absent = "undecided"
+shortcut = "g"
+scope = "detail"
+destructive = false
+confirms = false
+unbuilt = "#265"
+notes = "The phase strip's stages are controls: opening one says what that stage is, what it is waiting on and where it stands, so the explanation sits where the question is asked. `g` for the gate the strip draws. No glyph, and this one may never take a generic one — every stage already carries its own mark on its chip, so a silhouette standing for any stage would be a mark competing with the four beneath it. The obvious candidates are refused anyway: the circle-* family is the Judge's, and a question mark inside a circle is that family's outline whatever it is named."
