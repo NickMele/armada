@@ -41,6 +41,7 @@ import {
   InsideAJob,
   type JobDetailField,
   type JobDetailHeading,
+  type RunTreeStep,
   type StepChapter,
   type StepNotice,
 } from "@armada/components";
@@ -58,7 +59,7 @@ import type { FileReport, JobDetail as JobWhole, JobSummary, StepDetail } from "
 import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
 import { Acts, StepActs, type ConfirmableAct } from "./Acts";
 import { Decide, DecidedDiff } from "./Decide";
-import { act, pressOf } from "./detail-keys";
+import { DIFF_CHAPTER, namesStep, useDetailKeys, type DetailKeys } from "./detail-keys";
 import { span } from "./duration";
 import { factsOf, ordered } from "./facts";
 import { filesOf, footprintNote, readingFor, whyNoFootprint } from "./files";
@@ -171,19 +172,6 @@ export function JobDetail({
     };
   }, [job.id]);
 
-  // The detail's contextual tier. Bound while a Job is open and not before, so
-  // nothing on the Board listens for a key that means nothing there — and the
-  // press is swallowed only where something answered it.
-  useEffect(() => {
-    function pressed(event: KeyboardEvent): void {
-      const press = pressOf(event);
-      if (press === null) return;
-      if (act(press)) event.preventDefault();
-    }
-    window.addEventListener("keydown", pressed);
-    return () => window.removeEventListener("keydown", pressed);
-  }, []);
-
   const reading = readingOf(job);
   const render = renderFor(job);
   const workflow = workflows.find((held) => held.id === job.workflow_id);
@@ -192,6 +180,43 @@ export function JobDetail({
   // Job that was open a moment ago would draw another Job's steps under this
   // Job's title.
   const whole = watched.state === "read" && watched.jobId === job.id ? watched.detail : null;
+
+  const steps = whole === null ? [] : ordered(whole);
+  const open = steps.find((step) => step.step_id === (selected ?? job.current_step_id)) ?? steps[0];
+  // The rows this Job's socket has carried, or none. Checked against the id
+  // it was opened for: the socket lags a selection by a round trip, and another
+  // Job's turns under this Job's step would be a transcript under the wrong
+  // title.
+  const watching = "turns" in observed && observed.jobId === job.id ? observed.turns : null;
+
+  // What the keyboard can name, built before it is drawn. **The three regions
+  // the contextual tier reaches are values here rather than queries later** —
+  // the run, the story and the strip — which is what lets `detail-keys` open a
+  // step, a chapter or a stage by name. #271.
+  const run = whole === null ? [] : runOf(whole, now, selected ?? undefined, watching?.rows ?? []);
+  const phases =
+    whole === null || open === undefined ? undefined : phasesOf(open, whole.acceptance_criteria);
+
+  // The detail's contextual tier, and the open state it moves. Bound while a
+  // Job is open and not before, so nothing on the Board listens for a key that
+  // means nothing there — and the press is swallowed only where something
+  // answered it. The story is read back through a function because it is built
+  // from what this holds; see `DetailShape.chapters`.
+  const keys = useDetailKeys({ run, chapters: () => chapters, stages: phases?.stages });
+
+  const chapters =
+    open === undefined
+      ? []
+      : chaptersOf({
+          job,
+          step: open,
+          render,
+          watching,
+          footprint: recorded.footprint,
+          diff: recorded.diff,
+          live: observed.state === "watching",
+          log: keys.inLog,
+        });
 
   // The badge is the header, so a Job the registry has no glyph or verb for
   // cannot be drawn at all. Named rather than half-drawn.
@@ -227,19 +252,10 @@ export function JobDetail({
     ),
   };
 
-  const steps = whole === null ? [] : ordered(whole);
-  const open = steps.find((step) => step.step_id === (selected ?? job.current_step_id)) ?? steps[0];
-  // The rows this Job's socket has carried, or none. Checked against the id
-  // it was opened for: the socket lags a selection by a round trip, and another
-  // Job's turns under this Job's step would be a transcript under the wrong
-  // title.
-  const watching =
-    "turns" in observed && observed.jobId === job.id ? observed.turns : null;
-
   return (
     <InsideAJob
       heading={heading}
-      run={whole === null ? [] : runOf(whole, now, selected ?? undefined, watching?.rows ?? [])}
+      run={run.map(named)}
       runElapsed={span(job.created_at, now) ?? undefined}
       runAbsent={whyNoSteps(watched, job.id)}
       // One animated mark per screen, on the thing being read — and nothing
@@ -247,6 +263,11 @@ export function JobDetail({
       // is making.
       pulsing={render === "working"}
       onSelectStep={setSelected}
+      // The tree draws exactly what the keyboard holds. **Selecting a step
+      // still does not open its facts** — that is `RunTree`'s rule and it is
+      // the reason the two are separate props at all.
+      openSteps={keys.openSteps}
+      onOpenStep={keys.onOpenStep}
       where={workOf(job, whole, manifest, workflow)}
       whereNote={NAMED_NOT_NEEDED}
       whereAbsent={whyNoWork(watched, job.id)}
@@ -280,17 +301,17 @@ export function JobDetail({
               // strip and the story, because it is the same kind of thing: a
               // box a person acts in about the step they are looking at.
               before: questionOf(whole, job.id, now, stale, acting, onAnswer),
-              phases: whole === null ? undefined : phasesOf(open, whole.acceptance_criteria),
+              // The strip draws the stage the keyboard pinned, and hover stays
+              // its own: hovering reports where the pointer is rather than what
+              // a reader decided, so nothing up here holds it.
+              phases:
+                phases === undefined
+                  ? undefined
+                  : { ...phases, pinnedStage: keys.pinnedStage, onPin: keys.onPinStage },
               phasesAbsent: whyNoSteps(watched, job.id),
-              chapters: chaptersOf({
-                job,
-                step: open,
-                render,
-                watching,
-                footprint: recorded.footprint,
-                diff: recorded.diff,
-                live: observed.state === "watching",
-              }),
+              chapters,
+              openChapterId: keys.openChapterId,
+              onOpenChapter: keys.onOpenChapter,
               // Review and reply are one loop: the decision is the block under
               // the story, one scroll from the diff it is made against, never a
               // second surface and never a second panel.
@@ -313,6 +334,31 @@ export function JobDetail({
       onCopied={onCopied}
     />
   );
+}
+
+/**
+ * A step of the run, with its name marked so the keyboard can find the control
+ * the name is drawn in.
+ *
+ * **The marker draws nothing.** It is `display: contents`, so the row lays out
+ * exactly as it did with a bare string — which matters on this row, where the
+ * name is the only column that flexes and the ellipsis it truncates with is the
+ * whole reason the duration column never moves.
+ *
+ * It is here rather than in `run.ts` because that file builds data and this one
+ * builds elements, and it is here at all because `j`/`k` move focus: focus is
+ * the only cursor the tree can draw, so the keyboard has to be able to reach
+ * the control. Everything else it does to the run goes through `openSteps`.
+ */
+function named(step: RunTreeStep): RunTreeStep {
+  return {
+    ...step,
+    label: (
+      <span className="contents" {...namesStep(step.id)}>
+        {step.label}
+      </span>
+    ),
+  };
 }
 
 /**
@@ -503,6 +549,7 @@ function chaptersOf({
   footprint,
   diff,
   live,
+  log,
 }: {
   job: JobSummary;
   step: StepDetail;
@@ -512,6 +559,14 @@ function chaptersOf({
   diff: Diff;
   /** Whether the socket is still carrying rows, for the chapter's live mark. */
   live: boolean;
+  /**
+   * What one log takes, by name. Held by `detail-keys` for the reason the
+   * chapters and the strip are: `h`/`l` open a row, and a keyboard and a
+   * pointer disagreeing about which row is open is two answers to one question.
+   * **By name, because a story draws two logs over one stream** — chapter one's
+   * turns are also chapter two's rows, so a row is named with its log.
+   */
+  log: DetailKeys["inLog"];
 }): StepChapter[] {
   const rows = watching === null ? [] : entriesOf(watching.rows, step.step_id);
   const told = rows.filter((row) => row.actor === "armada");
@@ -535,7 +590,7 @@ function chaptersOf({
       ...(told.length <= 1
         ? {}
         : {
-            content: <Log rows={told} emptyNote={NOT_OPENED_YET} />,
+            content: <Log rows={told} emptyNote={NOT_OPENED_YET} {...log("instructions")} />,
             openLabel: `Everything Armada told it — ${told.length} turns`,
           }),
     },
@@ -553,16 +608,18 @@ function chaptersOf({
       // Always drawn, and never behind a control. The log is what says what is
       // happening right now, so it is on the page while the Job runs rather
       // than a thing to go and open.
-      preview: <Log rows={rows.slice(-PREVIEWED)} emptyNote={NOTHING_YET_ON_THIS_STEP} />,
+      preview: (
+        <Log rows={rows.slice(-PREVIEWED)} emptyNote={NOTHING_YET_ON_THIS_STEP} {...log("log")} />
+      ),
       ...(rows.length <= PREVIEWED
         ? {}
         : {
-            content: <Log rows={rows} emptyNote={NOTHING_YET_ON_THIS_STEP} />,
+            content: <Log rows={rows} emptyNote={NOTHING_YET_ON_THIS_STEP} {...log("log")} />,
             openLabel: `Open the log — all ${rows.length} entries`,
           }),
     },
     {
-      id: "produced",
+      id: DIFF_CHAPTER,
       ordinal: 3,
       title: "Produced",
       summary: touched === undefined ? undefined : `${touched.files.length} files`,

@@ -25,33 +25,47 @@ const DETAIL: usize = 200;
 
 /// What a tool call was on, as a person reads it: a path, a command, a pattern.
 ///
-/// **Bounded at construction and nowhere else.** The field is private and
-/// [`CallDetail::of`] is the only way to fill it, so there is no call site at
-/// which an unbounded argument can be put on a row — a `Write` argument is a
-/// whole file.
+/// **Two forms and a true size, because a row and an opened row are different
+/// questions.** A row is one line, so [`shown`](CallDetail::shown) collapses
+/// whitespace and stops at [`DETAIL`]. Opening that row exists to read the
+/// argument, so [`whole`](CallDetail::whole) is what the Drone sent, and
+/// [`length`](CallDetail::length) is how much there was — which is what lets a
+/// reader be told *showing 200 of 14,320 characters* instead of being told that
+/// something was taken away.
 ///
-/// Whitespace collapses to single spaces, because a row is one line and a
-/// heredoc is not.
+/// **The whole is present exactly where the shown form is less than all of
+/// it.** There is no state in which a row was cut and the rest is unreachable,
+/// and none in which a whole is carried beside a shown form that already had
+/// everything.
+///
+/// **Bounded at construction and nowhere else.** The fields are private and
+/// [`CallDetail::of`] is the only way to fill them, so no call site can put an
+/// unbounded argument on a row, and none can state a length the argument did
+/// not have.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CallDetail {
-    text: String,
-    truncated: bool,
+    shown: String,
+    whole: Option<String>,
+    length: usize,
 }
 
 impl CallDetail {
-    /// Bound one: whitespace collapses to single spaces, and what is left is
-    /// cut at [`DETAIL`] characters.
+    /// Collapse for the row, keep the whole for the payload, count what there
+    /// was.
     ///
-    /// The cut happens word by word rather than on the whole string, so a
-    /// single argument the size of a file is never assembled to be thrown away.
+    /// The collapse runs word by word and stops at [`DETAIL`], so the shown
+    /// form never assembles a string the size of a file to throw most of it
+    /// away. The whole is copied only where the collapse ran out of room: an
+    /// argument that fits is already all of it, and a second copy would travel
+    /// the pipe, the file and back for nothing.
     pub fn of(text: &str) -> CallDetail {
         let mut collapsed = String::new();
-        let mut truncated = false;
+        let mut ran_out = false;
         for word in text.split_whitespace() {
             let separator = usize::from(!collapsed.is_empty());
             let room = DETAIL.saturating_sub(collapsed.chars().count() + separator);
             if room == 0 {
-                truncated = true;
+                ran_out = true;
                 break;
             }
             if separator == 1 {
@@ -60,15 +74,19 @@ impl CallDetail {
             match word.char_indices().nth(room) {
                 Some((cut, _)) => {
                     collapsed.push_str(&word[..cut]);
-                    truncated = true;
+                    ran_out = true;
                     break;
                 }
                 None => collapsed.push_str(word),
             }
         }
         CallDetail {
-            text: collapsed,
-            truncated,
+            shown: collapsed,
+            whole: match ran_out {
+                true => Some(String::from(text)),
+                false => None,
+            },
+            length: text.chars().count(),
         }
     }
 
@@ -78,15 +96,37 @@ impl CallDetail {
         CallDetail::default()
     }
 
-    pub fn text(&self) -> &str {
-        &self.text
+    /// What a row shows: one line, whitespace collapsed, cut at [`DETAIL`].
+    pub fn shown(&self) -> &str {
+        &self.shown
+    }
+
+    /// The argument as the Drone sent it, where that is more than a row shows.
+    ///
+    /// **`None` is never "nothing was sent"** — it is the shown form already
+    /// being all of it, which is why a caller that wants the argument whatever
+    /// its size reads this and falls back to [`shown`](CallDetail::shown).
+    pub fn whole(&self) -> Option<&str> {
+        self.whole.as_deref()
+    }
+
+    /// How many characters the argument had, before anything was cut.
+    ///
+    /// **The size of what there is, never of what is shown.** A reader holding
+    /// both learns how much is behind the rest, which is the one thing a
+    /// `truncated` flag on its own could not say.
+    pub fn length(&self) -> usize {
+        self.length
     }
 
     /// Whether what a person is shown is less than what the Drone sent. **A row
     /// says it was cut**, rather than leaving a reader to infer it from a
     /// trailing character a command could legitimately end with.
+    ///
+    /// Derived from the whole being kept rather than stored beside it, so "this
+    /// was cut" and "the rest is here" cannot disagree.
     pub fn truncated(&self) -> bool {
-        self.truncated
+        self.whole.is_some()
     }
 }
 
@@ -106,10 +146,12 @@ pub enum DroneEvent {
     },
     /// The Drone reached for a tool, and what it reached for it with.
     ///
-    /// **A call carries what it did, bounded.** `Bash · toolu_01Haa…`
-    /// twenty-two times cannot tell `ls` from `rm -rf`, so this carries a
-    /// [`CallDetail`]. The bound is the type's rather than a caller's, because
-    /// a `Write` argument is a whole file.
+    /// **A call carries what it did, bounded for the row and whole behind
+    /// it.** `Bash · toolu_01Haa…` twenty-two times cannot tell `ls` from
+    /// `rm -rf`, so this carries a [`CallDetail`]. The bound is the type's
+    /// rather than a caller's, because a heredoc argument is a whole file — and
+    /// the same type keeps that file, so what a row cut is served rather than
+    /// apologised for.
     Called {
         tool: String,
         call: String,
@@ -194,14 +236,26 @@ mod tests {
     fn a_detail_longer_than_a_row_is_cut_and_says_so() {
         let bounded = CallDetail::of(&"x".repeat(DETAIL * 3));
         assert!(bounded.truncated());
-        assert_eq!(bounded.text().chars().count(), DETAIL);
+        assert_eq!(bounded.shown().chars().count(), DETAIL);
+    }
+
+    /// **The row that was cut is the row that can be opened.** A size and no
+    /// remainder is the state this type is built so nobody can construct.
+    #[test]
+    fn a_cut_detail_states_its_true_size_and_keeps_the_rest() {
+        let argument = "x".repeat(DETAIL * 3);
+        let bounded = CallDetail::of(&argument);
+        assert_eq!(bounded.length(), DETAIL * 3);
+        assert_eq!(bounded.whole(), Some(argument.as_str()));
     }
 
     #[test]
     fn a_detail_that_fits_is_untouched_and_does_not_claim_to_be_cut() {
         let bounded = CallDetail::of("cargo build --workspace");
-        assert_eq!(bounded.text(), "cargo build --workspace");
+        assert_eq!(bounded.shown(), "cargo build --workspace");
         assert!(!bounded.truncated());
+        assert_eq!(bounded.length(), "cargo build --workspace".chars().count());
+        assert_eq!(bounded.whole(), None, "the shown form is already all of it");
     }
 
     /// A row is one line. A word cut mid-way is still cut, and the flag is what
@@ -210,17 +264,31 @@ mod tests {
     #[test]
     fn whitespace_collapses_and_the_cut_never_leaves_a_trailing_space() {
         let bounded = CallDetail::of("cat <<EOF\n  one\n  two\nEOF");
-        assert_eq!(bounded.text(), "cat <<EOF one two EOF");
+        assert_eq!(bounded.shown(), "cat <<EOF one two EOF");
 
         let words = CallDetail::of(&"word ".repeat(DETAIL));
-        assert!(bounded.text() == bounded.text().trim());
-        assert_eq!(words.text(), words.text().trim_end());
+        assert!(bounded.shown() == bounded.shown().trim());
+        assert_eq!(words.shown(), words.shown().trim_end());
         assert!(words.truncated());
+    }
+
+    /// Collapsing is not cutting. A heredoc that fits loses its newlines on the
+    /// row and nothing at all behind it, so a reader is not told there is more
+    /// where there is not.
+    #[test]
+    fn collapsed_whitespace_alone_is_not_a_cut() {
+        let bounded = CallDetail::of("cat <<EOF\n  one\n  two\nEOF");
+        assert!(!bounded.truncated());
+        assert_eq!(
+            bounded.length(),
+            "cat <<EOF\n  one\n  two\nEOF".chars().count()
+        );
     }
 
     #[test]
     fn nothing_worth_showing_is_empty_rather_than_a_guess() {
-        assert_eq!(CallDetail::none().text(), "");
+        assert_eq!(CallDetail::none().shown(), "");
         assert!(!CallDetail::none().truncated());
+        assert_eq!(CallDetail::none().length(), 0);
     }
 }

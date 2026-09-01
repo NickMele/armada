@@ -65,6 +65,26 @@ pub struct TranscriptRow {
     pub saw: Saw,
 }
 
+impl TranscriptRow {
+    /// The row without the parts the file keeps and a viewer is not sent.
+    ///
+    /// Today that is one field: the whole of a long call argument. **The
+    /// narrowing is by field and not by row**, which is what [`Shown`] alone
+    /// could not do — a `called` row is shown, and the file's copy of a
+    /// fourteen-thousand-character heredoc is not.
+    ///
+    /// It is called twice, and deliberately. [`Shown`] calls it so nothing can
+    /// reach the socket carrying a whole, and the backfill calls it as it reads
+    /// so a history of two thousand rows never holds two thousand arguments in
+    /// memory to strip them one at a time on the way out.
+    pub fn for_a_viewer(mut self) -> TranscriptRow {
+        if let Saw::Called { whole, .. } = &mut self.saw {
+            *whole = None;
+        }
+        self
+    }
+}
+
 /// Who a row is. The three actors a step's story has.
 ///
 /// A step is a conversation: Armada opens it with an instruction, the Drone
@@ -110,6 +130,11 @@ pub enum Saw {
         model: String,
         mcp_servers: usize,
     },
+    /// The Drone reached for a tool, and what it reached for it with.
+    ///
+    /// **Three fields about one argument, because a row and an opened row ask
+    /// different things.** `detail` is the line; `detail_length` is how much
+    /// there is; `whole` is the rest, kept by the file and never sent.
     Called {
         tool: String,
         call: String,
@@ -120,6 +145,31 @@ pub enum Saw {
         /// The detail was longer than a row carries. **Said rather than
         /// implied** — a command can legitimately end in an ellipsis.
         truncated: bool,
+        /// How many characters the argument had, before anything was cut.
+        ///
+        /// **What `truncated` on its own could not say.** A flag makes a row
+        /// report an absence; a size makes it report a proportion, so an opened
+        /// row reads *showing 200 of 14,320 characters* and offers the rest
+        /// through `get_call`.
+        ///
+        /// **`None` is a row written before this field existed**, whose true
+        /// size nobody can recover — the same absence
+        /// [`step`](TranscriptRow::step) carries, for the same reason, and not
+        /// an argument measured at nought.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        detail_length: Option<usize>,
+        /// The argument as the Drone sent it, uncollapsed.
+        ///
+        /// **The file's, never a viewer's.** [`Shown`] drops it, so the socket
+        /// carries the bounded row whatever the argument's size — the stream is
+        /// bounded and lossy by design, and a row big enough to evict its
+        /// neighbours loses the short form too. What a person opens instead
+        /// comes back over HTTP, once, for the one call they asked about.
+        ///
+        /// Present exactly where `truncated` is true and the row was written
+        /// since the file kept it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        whole: Option<String>,
     },
     Answered {
         call: String,
@@ -229,6 +279,11 @@ pub enum Saw {
 /// `observe.md` withholds, so the wire cannot carry a withheld row by
 /// oversight. Decoding goes through the same check, so a peer cannot mint one
 /// either.
+///
+/// **It narrows fields as well as kinds.** Every row that reaches this is put
+/// through [`TranscriptRow::for_a_viewer`], so the whole of a long call
+/// argument stays in the file whatever the caller hands over — the socket's
+/// bound is a property of the type rather than of somebody remembering.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "TranscriptRow", into = "TranscriptRow")]
 pub struct Shown(TranscriptRow);
@@ -242,6 +297,38 @@ impl Shown {
     pub fn row(&self) -> &TranscriptRow {
         &self.0
     }
+}
+
+/// One tool call's arguments, as the record holds them.
+///
+/// **The other half of [`Saw::Called`], and the reason a cut row is not a dead
+/// end.** The socket carries a line and a size; this carries the argument, and
+/// it is asked for once, by a person who opened one row. The split is the one
+/// `get_diff` already makes against `job.files_changed`: the cheap fact streams
+/// and the bytes are fetched.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallArguments {
+    /// The tool, as its own vocabulary spells it.
+    pub tool: String,
+    /// The call id the row carried, which is what was asked for.
+    pub call: String,
+    /// The argument, as the Drone sent it — whitespace and newlines intact,
+    /// because a heredoc read as one line is not the thing that was run.
+    pub arguments: String,
+    /// Whether [`arguments`](CallArguments::arguments) is all of it.
+    ///
+    /// **False only where the record itself is short**: a row written before
+    /// the file kept the whole carries the bounded line and nothing behind it.
+    /// It is stated rather than inferred from the two lengths agreeing, because
+    /// a surface that inferred it would call a partial answer complete on any
+    /// row where the count was also missing.
+    pub whole: bool,
+    /// How many characters the argument had, where the record knows.
+    ///
+    /// `None` is an old row again — not an argument of no length. A surface
+    /// holding `whole: false` and `length: None` has what there is and no way
+    /// to say how much is missing, and says that rather than inventing a size.
+    pub length: Option<usize>,
 }
 
 /// A row that is recorded and not shown.
@@ -272,7 +359,7 @@ impl TryFrom<TranscriptRow> for Shown {
             | Saw::Checked { .. }
             | Saw::Produced { .. }
             | Saw::Unrecognised { .. }
-            | Saw::Unreadable { .. } => Ok(Shown(row)),
+            | Saw::Unreadable { .. } => Ok(Shown(row.for_a_viewer())),
         }
     }
 }

@@ -355,6 +355,13 @@ pub enum Adrift {
     /// naming the other were both permanently unadmittable behind a Board label
     /// that reads as ordinary waiting.
     NoSuchPeer { named: String },
+    /// A request named a tool call this Job's transcripts do not carry.
+    ///
+    /// **The Job is there and the call is not**, which is why it is this rather
+    /// than a missing Job: an id read off a row that is no longer in the record
+    /// — transcripts reclaimed, or a Fleet that never wrote them — and a
+    /// caller told the Job does not exist would go looking for the wrong thing.
+    NoSuchCall { named: String },
     /// A proposal named no model and nothing configured supplies one.
     ///
     /// Refused **at creation**, which is the whole point: the same value used
@@ -694,6 +701,12 @@ impl fmt::Display for Adrift {
                  is what makes a plan creatable in dependency order and a cycle impossible \
                  to state"
             ),
+            Adrift::NoSuchCall { named } => write!(
+                out,
+                "nothing in this Job's transcripts is the call `{named}`. The record holds \
+                 what a Drone did while a Fleet was writing it down, so an id from a row \
+                 whose transcript has since been reclaimed reaches nothing"
+            ),
             Adrift::NoSuchManifest { named, held } => write!(
                 out,
                 "no Manifest is named `{named}`. This Fleet holds `{held}`, the one declared by \
@@ -788,6 +801,7 @@ impl Adrift {
             | Adrift::NoSuchWorkflow { .. }
             | Adrift::NoSuchManifest { .. }
             | Adrift::NoSuchPeer { .. }
+            | Adrift::NoSuchCall { .. }
             | Adrift::Modelless
             | Adrift::NothingToPropose
             | Adrift::NoReadingWorktree(_)
@@ -830,6 +844,7 @@ impl Error for Adrift {
             | Adrift::NoSuchWorkflow { .. }
             | Adrift::NoSuchManifest { .. }
             | Adrift::NoSuchPeer { .. }
+            | Adrift::NoSuchCall { .. }
             // The five resume refusals are refusals rather than faults: a Job
             // that cannot be redirected has nothing underneath saying why, only
             // the state it is in.

@@ -310,12 +310,85 @@ async fn what_a_call_did_survives_to_the_row_a_viewer_is_sent() {
             call: String::from("toolu_01Haa"),
             detail: String::from("cargo build --workspace"),
             truncated: false,
+            detail_length: Some("cargo build --workspace".chars().count()),
+            whole: None,
         }
     );
     assert!(
         ipc::Shown::of(rows[0].clone()).is_some(),
         "a call is a row a viewer is shown"
     );
+}
+
+/// **A row that was cut is not a dead end.** The line a viewer is sent says how
+/// much there was and carries none of it; the file keeps the argument, and
+/// `arguments` is what a person opening the row reaches.
+#[tokio::test]
+async fn a_cut_argument_is_sized_on_the_wire_and_whole_in_the_file() {
+    let at = TempDir::new();
+    let recording = recording(&at, "01DRONEKKKKKKKKKKKKKKKKKKK");
+    let heredoc = format!("cat <<EOF > out.txt {}", "word ".repeat(400));
+    recording.saw(&[DroneEvent::Called {
+        tool: String::from("Bash"),
+        call: String::from("toolu_01Haa"),
+        detail: adapter_traits::CallDetail::of(&heredoc),
+    }]);
+    recording.settled().await;
+
+    let root = at.path().to_string_lossy().to_string();
+    let job = JobId::carried(Ulid::carried(JOB));
+    let (rows, _) = history(&root, &job).await;
+
+    let ipc::Saw::Called {
+        detail,
+        truncated,
+        detail_length,
+        whole,
+        ..
+    } = rows[0].saw.clone()
+    else {
+        panic!("the row is a call");
+    };
+    assert!(truncated, "the argument was longer than a row carries");
+    assert_eq!(
+        detail_length,
+        Some(heredoc.chars().count()),
+        "the row states how much there is, not how much it shows"
+    );
+    assert!(detail.chars().count() < heredoc.chars().count());
+    assert_eq!(
+        whole, None,
+        "a viewer's row never carries the argument, whatever its size"
+    );
+
+    let served = crate::transcript::arguments(&root, &job, "toolu_01Haa")
+        .await
+        .expect("the file kept what the row did not");
+    assert_eq!(served.arguments, heredoc, "the argument, as it was sent");
+    assert!(served.whole);
+    assert_eq!(served.length, Some(heredoc.chars().count()));
+}
+
+/// An id from a row whose transcript is gone reaches nothing, and that is a
+/// different answer from a Job that never ran.
+#[tokio::test]
+async fn a_call_the_record_does_not_hold_answers_with_nothing() {
+    let at = TempDir::new();
+    let recording = recording(&at, "01DRONEKKKKKKKKKKKKKKKKKKK");
+    recording.saw(&[DroneEvent::Called {
+        tool: String::from("Bash"),
+        call: String::from("toolu_01Haa"),
+        detail: adapter_traits::CallDetail::of("cargo build --workspace"),
+    }]);
+    recording.settled().await;
+
+    assert!(crate::transcript::arguments(
+        &at.path().to_string_lossy(),
+        &JobId::carried(Ulid::carried(JOB)),
+        "toolu_never"
+    )
+    .await
+    .is_none());
 }
 
 /// A retry is a second `drone_id` under one `job_id`, and both files are the

@@ -13,11 +13,11 @@ use ipc::mcp::{
     CheckRan, CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, SubmitEvidence,
 };
 use ipc::{
-    Actor, ChangesRequested, Event, EvidenceType, FleetCapacity, Instant, JobCreated, JobDetail,
-    JobDiff, JobEvidence, JobForgotten, JobHistory, JobId, JobList, JobStateChanged, JobStatus,
-    JobSummary, ManifestId, ManifestSummary, ModelChoices, Movement, Origin, ProposeJob, Recorded,
-    Redispatched, RunId, StatusMoved, StepId, Submitted, UnreadableJob, Urgency, Work, WorkflowId,
-    WorkflowSummary,
+    Actor, CallArguments, ChangesRequested, Event, EvidenceType, FleetCapacity, Instant,
+    JobCreated, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory, JobId, JobList,
+    JobStateChanged, JobStatus, JobSummary, ManifestId, ManifestSummary, ModelChoices, Movement,
+    Origin, ProposeJob, Recorded, Redispatched, RunId, StatusMoved, StepId, Submitted,
+    UnreadableJob, Urgency, Work, WorkflowId, WorkflowSummary,
 };
 
 use crate::{Broadcaster, Daemon, Feed, Observed, Refusal, Turns};
@@ -31,6 +31,14 @@ pub fn status(spelling: &str) -> JobStatus {
 pub fn run_id() -> RunId {
     RunId::carried("01RUN")
 }
+
+/// The one call id this fake's record holds. Anything else is a call the
+/// transcripts do not carry, which is a different answer from a missing Job.
+pub const THE_CALL: &str = "toolu_01Haa";
+
+/// An argument longer than a row carries, so a test can prove the whole of it
+/// comes back rather than the line the socket sent.
+pub const THE_ARGUMENT: &str = "cat <<'EOF' > notes.md\n  one\n  two\n  three\nEOF";
 
 /// One step of the rail, declared and not yet run.
 ///
@@ -334,6 +342,31 @@ impl Daemon for FakeDaemon {
                     "--- a/crates/store/src/read.rs\n+++ b/crates/store/src/read.rs\n".to_string(),
                 ),
             }),
+        })
+    }
+
+    /// One call's arguments, whole. **The fake holds exactly one**, keyed by
+    /// [`THE_CALL`]: what the route has to prove is that the argument comes
+    /// back at its full size and that an id the record does not hold is a
+    /// different answer from a Job that is not there.
+    async fn get_call(&self, job_id: JobId, call_id: String) -> Result<CallArguments, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        if !jobs.iter().any(|job| job.id == job_id) {
+            return Err(self.no_such_job(&job_id));
+        }
+        if call_id != THE_CALL {
+            return Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fleet.no_such_call",
+                format!("nothing in this Job's transcripts is the call `{call_id}`"),
+                run_id(),
+            )));
+        }
+        Ok(CallArguments {
+            tool: "Bash".to_string(),
+            call: call_id,
+            arguments: THE_ARGUMENT.to_string(),
+            whole: true,
+            length: Some(THE_ARGUMENT.chars().count()),
         })
     }
 

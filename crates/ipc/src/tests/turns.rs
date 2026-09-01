@@ -38,6 +38,57 @@ fn what_a_drone_spent_reaches_the_viewer_that_asked_for_its_turns() {
     assert_eq!(back.row(), &ended());
 }
 
+/// **The narrowing is by field as well as by kind.** A `called` row is shown
+/// and the whole of its argument is not, so what a viewer holds is bounded
+/// however large the argument was — and the size travels with it, because a row
+/// that cannot say how much there is is the dead end this replaced.
+#[test]
+fn a_shown_call_carries_its_size_and_never_the_argument() {
+    let called = row(Saw::Called {
+        tool: "Bash".to_string(),
+        call: "toolu_01Haa".to_string(),
+        detail: "cat <<EOF > notes.md one two three".to_string(),
+        truncated: true,
+        detail_length: Some(14_320),
+        whole: Some("cat <<EOF > notes.md\none\ntwo\nthree\nEOF".to_string()),
+    });
+    let json = encode(&called).expect("the file holds the whole of it");
+    assert!(
+        json.contains(r#""whole":"#),
+        "the file's own line carries it"
+    );
+
+    let shown = Shown::of(called).expect("a call is a row a viewer is shown");
+    let json = encode(&shown).expect("it encodes");
+    assert!(
+        !json.contains(r#""whole":"#),
+        "the socket never carries the argument: {json}"
+    );
+    assert!(
+        json.contains(r#""detail_length":14320"#),
+        "and it says how much there is, which is what makes the row openable"
+    );
+}
+
+/// A row from before the file kept a size says so rather than reading as an
+/// argument of no length. The same absence `step` carries, for the same reason.
+#[test]
+fn a_row_written_before_the_size_existed_still_decodes() {
+    let line = r#"{"ts":"2026-08-27T14:12:00.000Z","by":"drone","event":"called",
+        "tool":"Bash","call":"toolu_1","detail":"ls","truncated":false}"#;
+    let back: TranscriptRow = decode("a transcript row", line.as_bytes()).expect("it decodes");
+    let Saw::Called {
+        detail_length,
+        whole,
+        ..
+    } = back.saw
+    else {
+        panic!("a call");
+    };
+    assert_eq!(detail_length, None, "unrecoverable, and not nought");
+    assert_eq!(whole, None);
+}
+
 /// Showing one kind did not widen the narrowing. `QuotaMoved` is the other
 /// side of this and is asserted where it has been since it was written —
 /// [`mcp::a_withheld_row_has_no_constructor_and_no_decoder`](super::mcp).

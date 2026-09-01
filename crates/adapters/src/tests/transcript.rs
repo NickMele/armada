@@ -235,7 +235,7 @@ fn a_call_carries_what_it_did() {
     let shown: Vec<&str> = read
         .iter()
         .map(|event| match event {
-            DroneEvent::Called { detail, .. } => detail.text(),
+            DroneEvent::Called { detail, .. } => detail.shown(),
             other => panic!("{other:?}"),
         })
         .collect();
@@ -263,7 +263,7 @@ fn a_runaway_argument_is_cut_and_the_row_says_so() {
         panic!("{read:?}")
     };
     assert!(detail.truncated(), "a cut row says it was cut");
-    assert!(detail.text().len() < 400, "{}", detail.text().len());
+    assert!(detail.shown().len() < 400, "{}", detail.shown().len());
 }
 
 /// A heredoc is many lines and a row is one. Collapsing is what keeps a
@@ -278,7 +278,7 @@ fn a_multi_line_command_collapses_to_one_line() {
     let DroneEvent::Called { detail, .. } = &read[0] else {
         panic!("{read:?}")
     };
-    assert_eq!(detail.text(), "cat <<EOF one two EOF");
+    assert_eq!(detail.shown(), "cat <<EOF one two EOF");
     assert!(!detail.truncated());
 }
 
@@ -298,7 +298,7 @@ fn a_path_under_a_home_directory_does_not_carry_the_operator_s_name() {
         let DroneEvent::Called { detail, .. } = &read[0] else {
             panic!("{read:?}")
         };
-        assert_eq!(detail.text(), "~/Development/armada/src/lib.rs");
+        assert_eq!(detail.shown(), "~/Development/armada/src/lib.rs");
     }
 }
 
@@ -330,8 +330,8 @@ fn a_real_write_call_carries_its_path_and_not_its_content() {
         })
         .next()
         .expect("the capture writes a file");
-    assert!(written.text().ends_with("POKED2.txt"), "{written:?}");
-    assert!(!written.text().contains("POKED\""), "{written:?}");
+    assert!(written.shown().ends_with("POKED2.txt"), "{written:?}");
+    assert!(!written.shown().contains("POKED\""), "{written:?}");
 }
 
 #[test]
@@ -456,7 +456,7 @@ fn a_call_of_armada_s_own_tools_carries_its_argument() {
     let shown: Vec<&str> = read
         .iter()
         .map(|event| match event {
-            DroneEvent::Called { detail, .. } => detail.text(),
+            DroneEvent::Called { detail, .. } => detail.shown(),
             other => panic!("{other:?}"),
         })
         .collect();
@@ -483,7 +483,7 @@ fn declaring_nothing_is_not_the_same_row_as_never_declaring() {
     let DroneEvent::Called { detail, .. } = &read[0] else {
         panic!("{read:?}")
     };
-    assert_eq!(detail.text(), "[]");
+    assert_eq!(detail.shown(), "[]");
     assert_ne!(detail, &CallDetail::none());
 }
 
@@ -503,8 +503,8 @@ fn a_declaration_longer_than_a_row_is_cut_and_says_so() {
         panic!("{read:?}")
     };
     assert!(detail.truncated(), "a cut row says it was cut");
-    assert!(detail.text().starts_with("crates/c0/src,"));
-    assert!(detail.text().chars().count() <= 200);
+    assert!(detail.shown().starts_with("crates/c0/src,"));
+    assert!(detail.shown().chars().count() <= 200);
 }
 
 /// A Drone can type an absolute path into a field asking for a relative one,
@@ -519,7 +519,7 @@ fn a_declared_path_under_a_home_directory_does_not_carry_the_operator_s_name() {
     let DroneEvent::Called { detail, .. } = &read[0] else {
         panic!("{read:?}")
     };
-    assert_eq!(detail.text(), "~/Development/armada/crates/fleet");
+    assert_eq!(detail.shown(), "~/Development/armada/crates/fleet");
 }
 
 /// **The drift alarm for the fix, not for the stream.** The keys above are

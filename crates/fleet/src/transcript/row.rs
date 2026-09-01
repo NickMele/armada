@@ -42,11 +42,18 @@ pub(crate) fn seen(at: &Timestamp, step: &StepId, event: &DroneEvent) -> Transcr
                 model: model.clone(),
                 mcp_servers: *mcp_servers,
             },
+            // **The file takes the whole argument and the socket does not.**
+            // `ipc::Shown` is what drops it on the way out, so this arm writes
+            // what the record should hold rather than what a viewer should see
+            // — the two are different questions and only one of them is asked
+            // here.
             DroneEvent::Called { tool, call, detail } => Saw::Called {
                 tool: tool.clone(),
                 call: call.clone(),
-                detail: String::from(detail.text()),
+                detail: String::from(detail.shown()),
                 truncated: detail.truncated(),
+                detail_length: Some(detail.length()),
+                whole: detail.whole().map(String::from),
             },
             DroneEvent::Answered { call, failed } => Saw::Answered {
                 call: call.clone(),

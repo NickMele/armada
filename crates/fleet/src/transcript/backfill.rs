@@ -9,12 +9,14 @@
 //! one `job_id`, so a Job may name several, and they are read in the order the
 //! log names them.
 //!
-//! # Bounded, and it says so
+//! # Bounded in rows and in each row
 //!
 //! A transcript has no size limit and a viewer is a window. Only the last
 //! [`HISTORY`] rows are sent and the count of what came before travels with
 //! them, because a truncated history nobody was told about reads as the whole
-//! one.
+//! one. Each row is narrowed as it is read, so that window is a window of
+//! *lines* rather than of arguments. [`arguments`] is the other read of the
+//! same file: one call, for a person who opened its row.
 //!
 //! # Missing is ordinary
 //!
@@ -26,7 +28,7 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 
 use core_model::JobId;
-use ipc::TranscriptRow;
+use ipc::{CallArguments, Saw, TranscriptRow};
 use serde::Deserialize;
 use tokio::fs;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -64,10 +66,68 @@ pub async fn history(repo_root: &str, job: &JobId) -> (Vec<TranscriptRow>, u64) 
                 kept.pop_front();
                 skipped += 1;
             }
-            kept.push_back(row);
+            // Narrowed on the way in, not on the way out. `ipc::Shown` would
+            // drop the whole argument as the row is sent either way; doing it
+            // here is what keeps two thousand buffered rows from being two
+            // thousand buffered heredocs.
+            kept.push_back(row.for_a_viewer());
         }
     }
     (Vec::from(kept), skipped)
+}
+
+/// One call's arguments, out of the file that kept them.
+///
+/// **The read a person's gesture pays for.** Opening a row asks about one call,
+/// so this scans for one call id rather than materialising a history — the same
+/// trade `get_diff` makes against `job.files_changed`, on the other side of the
+/// same argument.
+///
+/// `None` where nothing in the Job's transcripts carries that id: a Job whose
+/// transcripts were reclaimed, or an id that was never in them. Not an error,
+/// and not an empty argument either — those are different answers and the
+/// caller decides what to say about each.
+///
+/// **A row written before the file kept the whole answers with what it has**,
+/// says so, and does not guess a size. That is the one case where what comes
+/// back is less than the argument, and it is a fact about the record rather
+/// than about the transport.
+pub async fn arguments(repo_root: &str, job: &JobId, call: &str) -> Option<CallArguments> {
+    for at in transcripts(repo_root, job).await {
+        let Ok(file) = fs::File::open(&at).await else {
+            continue;
+        };
+        let mut lines = BufReader::new(file).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            let Ok(row) = ipc::decode::<TranscriptRow>("a transcript row", line.as_bytes()) else {
+                continue;
+            };
+            let Saw::Called {
+                tool,
+                call: id,
+                detail,
+                truncated,
+                detail_length,
+                whole: kept,
+            } = row.saw
+            else {
+                continue;
+            };
+            if id != call {
+                continue;
+            }
+            return Some(CallArguments {
+                tool,
+                call: id,
+                // All of it two ways: the file kept the rest, or the row was
+                // never cut and the line is already the argument.
+                whole: kept.is_some() || !truncated,
+                arguments: kept.unwrap_or(detail),
+                length: detail_length,
+            });
+        }
+    }
+    None
 }
 
 /// Every transcript this Job's log names, in the order it names them.
