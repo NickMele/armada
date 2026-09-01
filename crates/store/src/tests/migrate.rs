@@ -688,3 +688,93 @@ fn version_nineteen_puts_the_append_only_trigger_back() {
         "a recorded move is never edited, including by whoever comes after the migration"
     );
 }
+
+// ------------------------------------------------------- version twenty-five
+
+/// A file at version 24 holding one Job's footprint, written when a row was a
+/// path and a change kind and nothing else.
+fn version_twenty_four(dir: &TempDir, id: &str) {
+    let conn = Connection::open(dir.db()).expect("a file to put version 24 in");
+    for migration in &MIGRATIONS[..24] {
+        conn.execute_batch(migration).expect("a migration");
+    }
+    conn.execute(
+        "INSERT INTO armada_meta (key, value) VALUES (?1, '24')",
+        (SCHEMA_VERSION_KEY,),
+    )
+    .expect("recorded as version 24");
+    conn.execute(
+        "INSERT INTO jobs (
+             job_id, title, status, workflow_id, owner_manifest_id, origin, urgency,
+             atomic, model, acceptance_criteria, dependencies, facts, scope_revisions,
+             write_targets_known, created_at
+         ) VALUES (?1, 'a job that finished before the counts', 'completed_success',
+                   '01WORKFLOW', '01OWNERMANIFEST', 'manual', 'normal', 0, 'a-model-name',
+                   '[]', '[]', '', '[]', 0, '2026-08-26T09:00:00.000Z')",
+        (id,),
+    )
+    .expect("a Job as version 24 wrote it");
+    conn.execute(
+        "INSERT INTO job_footprint (job_id, recorded_at)
+         VALUES (?1, '2026-08-26T09:40:00.000Z')",
+        (id,),
+    )
+    .expect("a footprint header as version 24 wrote it");
+    for (ordinal, path, change) in [
+        (0, "src/read.rs", "modified"),
+        (1, "src/gone.rs", "deleted"),
+    ] {
+        conn.execute(
+            "INSERT INTO job_footprint_files (job_id, ordinal, path, change)
+             VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![id, ordinal as i64, path, change],
+        )
+        .expect("a footprint row as version 24 wrote it");
+    }
+}
+
+/// **The table is rebuilt, so what it held has to come through it.** V25 adds
+/// two columns a `CHECK` binds together, which `SQLite` cannot do to a table
+/// that exists — and a rebuild that dropped a row would delete the only record
+/// a finished Job has of what it touched.
+///
+/// The rows come back uncounted rather than zeroed, which is the whole reason
+/// the columns are nullable.
+#[test]
+fn version_twenty_five_keeps_every_footprint_row_and_counts_none_of_them() {
+    let dir = TempDir::new();
+    version_twenty_four(&dir, "01BEFORETHECOUNTS");
+    let store = Store::open(&dir.db()).expect("a version 24 file opens and is migrated");
+    assert_eq!(recorded_version(&store), KNOWN_SCHEMA_VERSION.to_string());
+
+    let read = store
+        .footprint(&job_id("01BEFORETHECOUNTS"))
+        .expect("the footprint loads")
+        .expect("it survived the rebuild");
+    assert_eq!(
+        read.files
+            .iter()
+            .map(|file| (file.path(), file.lines().is_some()))
+            .collect::<Vec<(&str, bool)>>(),
+        vec![("src/read.rs", false), ("src/gone.rs", false)],
+        "both rows, in order, and neither claiming a count nobody took"
+    );
+}
+
+/// The `CHECK` the rebuild exists to install. One number without the other is
+/// a state no reading produces, and the file refuses to hold it.
+#[test]
+fn version_twenty_five_refuses_half_a_count() {
+    let dir = TempDir::new();
+    version_twenty_four(&dir, "01BEFORETHECOUNTS");
+    let store = Store::open(&dir.db()).expect("migrated");
+
+    let refused = store.conn.execute(
+        "UPDATE job_footprint_files SET added = 61 WHERE ordinal = 0",
+        [],
+    );
+    assert!(
+        refused.is_err(),
+        "a file counted for what it gained and not for what it lost"
+    );
+}

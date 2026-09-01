@@ -6,15 +6,29 @@
 //! and a Job recorded as having changed nothing are two answers, and the pair
 //! of tables exists only to keep them apart.
 
-use adapter_traits::{Change, Changed, ChangedFile};
+use adapter_traits::{Change, ChangedFile, Counted, CountedFile, LineCount};
 
 use crate::tests::{created_at, job_id, open, top_level, TempDir};
 
-fn changed(files: &[(&str, Change)]) -> Changed {
-    Changed::of(
+fn changed(files: &[(&str, Change)]) -> Counted {
+    counted(
+        &files
+            .iter()
+            .map(|(path, change)| (*path, *change, None))
+            .collect::<Vec<(&str, Change, Option<(u32, u32)>)>>(),
+    )
+}
+
+fn counted(files: &[(&str, Change, Option<(u32, u32)>)]) -> Counted {
+    Counted::of(
         files
             .iter()
-            .map(|(path, change)| ChangedFile::new(path.to_string(), *change))
+            .map(|(path, change, lines)| {
+                CountedFile::new(
+                    ChangedFile::new(path.to_string(), *change),
+                    lines.map(|(added, deleted)| LineCount::of(added, deleted)),
+                )
+            })
             .collect(),
     )
 }
@@ -129,4 +143,73 @@ fn a_second_reading_replaces_the_first_rather_than_joining_it() {
         vec!["src/read.rs"],
         "the second reading, whole, with nothing of the first left under it"
     );
+}
+
+/// **The counts survive the process too, and absent survives as absent.** A
+/// file nothing could count comes back with no numbers, and a file that gained
+/// and lost nothing comes back as zero — the pair the nullable columns exist to
+/// keep apart, read back rather than assumed.
+#[test]
+fn what_each_file_gained_and_lost_survives_and_uncounted_stays_uncounted() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    store
+        .insert_job(&top_level("01LINES"), &created_at())
+        .expect("stored");
+    store
+        .record_footprint(
+            &job_id("01LINES"),
+            &counted(&[
+                ("src/read.rs", Change::Modified, Some((61, 4))),
+                ("assets/logo.png", Change::Added, None),
+                ("src/moved.rs", Change::Renamed, Some((0, 0))),
+            ]),
+            &created_at(),
+        )
+        .expect("recorded");
+    drop(store);
+
+    let reopened = open(&dir);
+    let read = reopened
+        .footprint(&job_id("01LINES"))
+        .expect("loads")
+        .expect("a footprint was recorded");
+    assert_eq!(
+        read.files
+            .iter()
+            .map(|file| (file.path(), file.lines()))
+            .collect::<Vec<(&str, Option<LineCount>)>>(),
+        vec![
+            ("src/read.rs", Some(LineCount::of(61, 4))),
+            ("assets/logo.png", None),
+            ("src/moved.rs", Some(LineCount::of(0, 0))),
+        ],
+        "a binary nobody counted is absent, and a move that edited nothing is zero"
+    );
+}
+
+/// **A footprint written before the counts existed is not a footprint of
+/// nothing.** [`crate::footprint::V25`] backfills no numbers, so every file a
+/// migrated file already held reads as uncounted — which is the sentence the
+/// nullable column was chosen to say.
+#[test]
+fn a_footprint_recorded_before_the_counts_existed_reads_as_uncounted() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    store
+        .insert_job(&top_level("01OLD"), &created_at())
+        .expect("stored");
+    store
+        .record_footprint(
+            &job_id("01OLD"),
+            &changed(&[("src/read.rs", Change::Modified)]),
+            &created_at(),
+        )
+        .expect("recorded");
+
+    let read = store
+        .footprint(&job_id("01OLD"))
+        .expect("loads")
+        .expect("a footprint");
+    assert_eq!(read.files[0].lines(), None);
 }

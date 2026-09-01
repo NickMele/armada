@@ -19,13 +19,58 @@
 //! What the record is measured against is [`crate::plan`]; the comparison is
 //! made where the two are served and is stored in neither, for
 //! [`crate::attempt`]'s reason.
+//!
+//! # The counts are here and on no live seam
+//!
+//! `added` and `deleted` arrived in [`V25`], because counting a file costs the
+//! xdiff that renders its patch — 25ms over a hundred files, 90ms over four
+//! hundred, against under a microsecond for the path list. That is affordable
+//! once, on the transition that ends a Job, and it is not affordable on a
+//! reading taken every two seconds inside a 250ms turn. So the record carries
+//! them and `job.files_changed` does not.
 
-use adapter_traits::{Change, Changed, ChangedFile};
+use adapter_traits::{Change, ChangedFile, Counted, CountedFile, LineCount};
 use core_model::{JobId, Timestamp};
 
 use crate::error::{fault, LoadJobError, RowError, WriteError};
 use crate::open::Store;
-use crate::row::string;
+use crate::row::{column, string};
+
+/// Version 25 — what each file in a footprint gained and lost.
+///
+/// Beside the table it changes, like [`V17`](crate::report::V17) and the
+/// migrations after it: `schema.rs` is at the 900 lines the gate refuses at.
+///
+/// **Nullable, and null is "not counted" rather than zero.** A binary file has
+/// no patch to count and a rename that edited nothing is a real `0` — a column
+/// that could not tell those apart would turn an unmeasured file into a file
+/// that changed nothing.
+///
+/// **The pair may not half-arrive**, which is why the table is rebuilt rather
+/// than altered: `SQLite` cannot add a `CHECK` to a table that exists, and the
+/// counts come from one walk of one patch, so a row holding one number and not
+/// the other is a state no reading can produce and none should be able to
+/// write. **Nothing to backfill**: a footprint written before this has no
+/// counts, which is what null says.
+pub(crate) const V25: &str = r#"
+CREATE TABLE job_footprint_files_counted (
+    job_id  TEXT NOT NULL REFERENCES jobs(job_id),
+    ordinal INTEGER NOT NULL,
+    path    TEXT NOT NULL,
+    change  TEXT NOT NULL,
+    added   INTEGER,
+    deleted INTEGER,
+    PRIMARY KEY (job_id, ordinal),
+    CHECK ((added IS NULL) = (deleted IS NULL))
+) STRICT;
+
+INSERT INTO job_footprint_files_counted (job_id, ordinal, path, change)
+SELECT job_id, ordinal, path, change FROM job_footprint_files;
+
+DROP TABLE job_footprint_files;
+
+ALTER TABLE job_footprint_files_counted RENAME TO job_footprint_files;
+"#;
 
 /// One Job's footprint as it was written down, and when.
 ///
@@ -36,7 +81,10 @@ use crate::row::string;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Footprinted {
     /// The reading, in the order it was found. Never re-sorted.
-    pub files: Vec<ChangedFile>,
+    ///
+    /// A file with no [`LineCount`] is one nothing could count, which is not a
+    /// file that changed no lines.
+    pub files: Vec<CountedFile>,
     /// When the reading was taken, which is when the Job reached its terminal
     /// status and not when anybody asked for it.
     pub recorded_at: Timestamp,
@@ -57,7 +105,7 @@ impl Store {
     pub fn record_footprint(
         &mut self,
         job_id: &JobId,
-        changed: &Changed,
+        changed: &Counted,
         at: &Timestamp,
     ) -> Result<(), WriteError> {
         let tx = self
@@ -83,13 +131,15 @@ impl Store {
 
         for (ordinal, file) in changed.files().iter().enumerate() {
             tx.execute(
-                "INSERT INTO job_footprint_files (job_id, ordinal, path, change)
-                 VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO job_footprint_files (job_id, ordinal, path, change, added, deleted)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 rusqlite::params![
                     job_id.as_str(),
                     ordinal as i64,
                     file.path(),
                     file.change().as_wire(),
+                    file.lines().map(|lines| i64::from(lines.added())),
+                    file.lines().map(|lines| i64::from(lines.deleted())),
                 ],
             )
             .map_err(fault("writing a changed file"))
@@ -132,20 +182,21 @@ impl Store {
         };
         let files = self
             .collect(
-                "SELECT path, change FROM job_footprint_files
+                "SELECT path, change, added, deleted FROM job_footprint_files
                  WHERE job_id = ?1 ORDER BY ordinal",
                 job_id,
                 "reading a job's changed files",
                 |row| {
                     let change = string(row, "change")?;
-                    Ok(ChangedFile::new(
+                    let file = ChangedFile::new(
                         string(row, "path")?,
                         Change::from_wire(&change).ok_or(RowError::UnknownEnumValue {
                             table: "job_footprint_files",
                             column: "change",
                             value: change,
                         })?,
-                    ))
+                    );
+                    Ok(CountedFile::new(file, counted(row)?))
                 },
             )
             .map_err(LoadJobError::Unreadable)?;
@@ -153,5 +204,31 @@ impl Store {
             files,
             recorded_at: Timestamp::from_rfc3339(recorded_at),
         }))
+    }
+}
+
+/// What one stored row says the file gained and lost, or nothing where it was
+/// never counted.
+///
+/// **A half-filled pair is a refusal, not an absence.** [`V25`]'s `CHECK` means
+/// no write can make one, so a row holding one number and not the other was
+/// written by something that is not this crate — and reading it as "not
+/// counted" would let a file that lost four hundred lines report nothing at
+/// all.
+fn counted(row: &rusqlite::Row<'_>) -> Result<Option<LineCount>, RowError> {
+    let added: Option<i64> = row
+        .get("added")
+        .map_err(column("job_footprint_files", "added"))?;
+    let deleted: Option<i64> = row
+        .get("deleted")
+        .map_err(column("job_footprint_files", "deleted"))?;
+    match (added, deleted) {
+        (Some(added), Some(deleted)) => Ok(Some(LineCount::of(added as u32, deleted as u32))),
+        (None, None) => Ok(None),
+        _ => Err(RowError::MalformedColumn {
+            table: "job_footprint_files",
+            column: "added",
+            detail: "one of the line counts is null and the other is not".to_string(),
+        }),
     }
 }
