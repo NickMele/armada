@@ -26,7 +26,7 @@ import { JobLogReference } from "../JobLogReference/JobLogReference";
  * **A boundary fallback may have no wire code, and the chip still draws.** The
  * treatment says the code is always shown because `ipc::WireError` guarantees
  * one; a renderer that threw is built from a caught exception, and
- * `apps/desktop/src/renderer/src/failures.ts` is right that Bridge must not
+ * `packages/shell/src/failures.ts` is right that Bridge must not
  * mint a code — an invented one is in no manifest and means nothing to the
  * lookup. So the chip carries the **region** instead: same solid fill, same
  * mono, same not-a-status claim, and honest about being a name rather than a

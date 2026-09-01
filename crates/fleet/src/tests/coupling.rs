@@ -43,7 +43,7 @@ job: 3
 workflow: feature
 title: Draw the new field
 because: it renders what the consumer now has
-writes: apps/desktop/src/renderer/src/Jobs.tsx
+writes: packages/screens/src/Jobs.tsx
 after: 2
 ";
 

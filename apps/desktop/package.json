@@ -27,6 +27,7 @@
     "@armada/brand": "workspace:*",
     "@armada/components": "workspace:*",
     "@armada/protocol": "workspace:*",
+    "@armada/screens": "workspace:*",
     "@armada/shell": "workspace:*",
     "@armada/tokens": "workspace:*",
     "lucide-react": "^0.550.0",

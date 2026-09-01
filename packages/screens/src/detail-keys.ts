@@ -124,7 +124,7 @@ export type DetailPress =
  * to the surface that opened the Job, and two handlers answering one key is the
  * defect `answersEnter` exists to prevent one key over.
  */
-export function pressOf(event: KeyboardEvent): DetailPress | null {
+export function detailPressOf(event: KeyboardEvent): DetailPress | null {
   // A modifier means a different tier is being addressed — the palette's `⌘K`,
   // the rail's `⌘1`–`⌘5`, and `⌘[` `⌘]` for back and forward, which is exactly
   // why the brackets here are unmodified.
@@ -279,7 +279,7 @@ export function useDetailKeys(shape: DetailShape): DetailKeys {
 
   useEffect(() => {
     function pressed(event: KeyboardEvent): void {
-      const press = pressOf(event);
+      const press = detailPressOf(event);
       if (press === null) return;
       if (act(press, held.current, moves.current)) event.preventDefault();
     }

@@ -19,6 +19,9 @@ importers:
       '@armada/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@armada/screens':
+        specifier: workspace:*
+        version: link:../../packages/screens
       '@armada/shell':
         specifier: workspace:*
         version: link:../../packages/shell
@@ -123,6 +126,40 @@ importers:
 
   packages/protocol:
     devDependencies:
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+
+  packages/screens:
+    dependencies:
+      '@armada/components':
+        specifier: workspace:*
+        version: link:../components
+      '@armada/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@armada/shell':
+        specifier: workspace:*
+        version: link:../shell
+      '@armada/tokens':
+        specifier: workspace:*
+        version: link:../tokens
+      lucide-react:
+        specifier: ^0.550.0
+        version: 0.550.0(react@19.2.8)
+      react:
+        specifier: ^19.2.0
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.2.0
+        version: 19.2.5(@types/react@19.2.18)
       typescript:
         specifier: ^5.9.0
         version: 5.9.3

@@ -56,7 +56,16 @@ export type Calls = {
  * is held is only meaningful under the Job it was read for — carried into the
  * next Job, a call id would name a call that Job never made.
  */
-export function useCallArguments(jobId: string): Calls {
+/**
+ * Reading one call's arguments, as the screen's caller hands it in.
+ *
+ * **An argument, not a global.** What a call did is a reading; fetching it is
+ * a round trip to a process that has the log on disk. The screen does the
+ * first and is handed the second.
+ */
+export type ReadCall = (jobId: string, callId: string) => Promise<CallRead>;
+
+export function useCallArguments(read: ReadCall, jobId: string): Calls {
   const [held, setHeld] = useState<Record<string, CallState>>({});
   useEffect(() => setHeld({}), [jobId]);
 
@@ -72,7 +81,7 @@ export function useCallArguments(jobId: string): Calls {
       // flight is the same request, and Fleet reads a file for each one.
       if (current.current[callId] !== undefined) return;
       setHeld((was) => ({ ...was, [callId]: { state: "fetching" } }));
-      void window.armada.readCall(jobId, callId).then(
+      void read(jobId, callId).then(
         (read) => setHeld((was) => ({ ...was, [callId]: settled(read) })),
         // A rejected invoke is main gone, which is the window closing. Recorded
         // as an absence like any other so the row is not left saying `Fetching`
@@ -80,7 +89,7 @@ export function useCallArguments(jobId: string): Calls {
         () => setHeld((was) => ({ ...was, [callId]: { state: "absent", note: NOT_ANSWERED } })),
       );
     },
-    [jobId],
+    [read, jobId],
   );
 
   const of = useCallback((callId: string) => current.current[callId], []);

@@ -64,7 +64,7 @@ export const TwoPathsOutsideThePlan: Story = {
     emptyNote: NOTHING_YET,
     note: "Read from the worktree while the drone was working. 2 of 5 paths are outside the plan this step declared.",
     files: [
-      { path: "apps/desktop/src/renderer/src/JobDetail.tsx", change: "modified" },
+      { path: "packages/screens/src/JobDetail.tsx", change: "modified" },
       { path: "packages/protocol/src/protocol.ts", change: "modified" },
       { path: "packages/tokens/src/status.css", change: "modified", outsidePlan: true },
       { path: "packages/components/src/compositions/ChangedFiles/ChangedFiles.tsx", change: "added" },

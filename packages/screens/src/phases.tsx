@@ -37,7 +37,7 @@ import { ADVANCE_GATE, CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_JUDGE } 
 import type { CheckRun, Criterion, Judged, StepDetail } from "@armada/protocol";
 import type { Kept } from "@armada/protocol";
 import { commandOf, nameOf } from "./declared";
-import { openArtifact } from "./opening";
+import { openArtifact, type OpenArtifact } from "./opening";
 
 /**
  * How a record is opened, and where a refusal is said.
@@ -50,6 +50,12 @@ import { openArtifact } from "./opening";
  */
 export type Opens = {
   jobId: string;
+  /**
+   * Ask the host to open a file. **Carried here rather than reached for**: a
+   * screen says what an unopenable file means and the process with a
+   * filesystem does the opening, and the two sit on different layers.
+   */
+  open: OpenArtifact;
   /** Say a sentence to the person. Called only where an open did not happen. */
   onSaid: (sentence: string) => void;
 };
@@ -77,7 +83,7 @@ export function Opening({ path, what, opens }: { path: string; what: Kept["what"
         // The row sits inside a card the strip pins on a click. Without this
         // the open would also be a press on the stage behind it.
         event.stopPropagation();
-        void openArtifact(opens.jobId, kept).then((because) => {
+        void openArtifact(opens.open, opens.jobId, kept).then((because) => {
           if (because !== null) opens.onSaid(because);
         });
       }}

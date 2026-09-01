@@ -23,7 +23,7 @@ import { Alert, Button, Dialog } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
 import type { BridgeState } from "../../shared/bridge";
-import type { Draft, Outcome } from "@armada/protocol";
+import type { Artifact, Draft, Outcome } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
 import { Boundary } from "@armada/shell";
 import { CopiedToast, SaidToast, useCopied, useSaid } from "@armada/shell";
@@ -31,11 +31,11 @@ import { FailureBlock } from "@armada/shell";
 import { fleetFailure, jobFailure, refusalFailure, uncaughtFailure } from "@armada/shell";
 import { headOf } from "@armada/shell";
 import { statementOf } from "@armada/shell";
-import { Composer } from "./Composer";
-import { Reports } from "./Reports";
-import { JobDetail, type ConfirmableAct } from "./JobDetail";
-import { ACT_LABEL, CONFIRM, said } from "./copy";
-import { Jobs } from "./Jobs";
+import { Composer } from "@armada/screens";
+import { Reports } from "@armada/screens";
+import { JobDetail, type ConfirmableAct } from "@armada/screens";
+import { ACT_LABEL, CONFIRM, said } from "@armada/screens";
+import { Jobs } from "@armada/screens";
 import { Shell } from "@armada/shell";
 import { watchUncaught } from "@armada/shell";
 import type { Uncaught } from "@armada/shell";
@@ -45,6 +45,25 @@ const TICK_MS = 1000;
 
 /** Re-exported so nothing importing it has to learn a new path. */
 export const WAITING: BridgeState = NOTHING_YET;
+
+/* The host calls the screens make, bound once at module scope.
+ *
+ * **Stable on purpose.** Three of these are depended on by effects, and a
+ * lambda rebuilt every render would open and close a read on a loop that feeds
+ * itself — the reads publish state. Module scope is the cheapest guarantee
+ * there is, and `window.armada` is itself fixed for the life of the window.
+ *
+ * They exist at all because a screen may not reach for the preload. A screen
+ * that did could not be rendered outside the app, which is the whole of why the
+ * screens are a layer. */
+const readDiff = (jobId: string | null): void => void window.armada.readDiff(jobId);
+const readReports = (want: boolean): void => void window.armada.readReports(want);
+const readEvidence = (jobId: string | null): void => void window.armada.readEvidence(jobId);
+const readCall = (jobId: string, callId: string) => window.armada.readCall(jobId, callId);
+const openArtifact = (jobId: string, what: Artifact) => window.armada.openArtifact(jobId, what);
+const stageAttachment = (bytes: ArrayBuffer, filename: string, mimeType: string) =>
+  window.armada.stageAttachment(bytes, filename, mimeType);
+
 
 export function App() {
   const [state, setState] = useState<BridgeState>(WAITING);
@@ -443,6 +462,10 @@ export function App() {
             <Boundary region="the job detail" {...guarded}>
               <JobDetail
                 job={reading}
+                onReadDiff={readDiff}
+                onOpenArtifact={openArtifact}
+                onReadCall={readCall}
+                onNeedMaterial={readEvidence}
                 watched={state.watched}
                 workflows={state.holds.workflows}
                 manifests={state.holds.manifests}
@@ -476,7 +499,7 @@ export function App() {
                point, and a listing reached from a Job would show only the
                reports somebody already had reason to open. */
             <Boundary region="the filed reports" {...guarded}>
-              <Reports reports={state.reports} onCopied={setCopied} />
+              <Reports reports={state.reports} onWant={readReports} onCopied={setCopied} />
             </Boundary>
           ) : composing ? (
             /* What Fleet holds, read over the one connection. Not scraped off
@@ -485,6 +508,7 @@ export function App() {
             <Boundary region="the job composer" {...guarded}>
               <Composer
                 workflows={state.holds.workflows}
+                onStage={stageAttachment}
                 manifest={scoped}
                 models={state.holds.models}
                 disabled={!live}

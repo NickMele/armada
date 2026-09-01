@@ -67,11 +67,16 @@ import { claimed, issueOf } from "./Report";
  * an effect depending on a lambda rebuilt every render would open and close the
  * read on a loop, and the read publishes state, so the loop would feed itself.
  */
-function askForReports(want: boolean): void {
-  void window.armada.readReports(want);
-}
-
 export type ReportsProps = {
+  /**
+   * Ask the host to open or close the reports read.
+   *
+   * **It has to be stable.** This is depended on by an effect, and a lambda
+   * rebuilt every render would open and close the read on a loop — the read
+   * publishes state, so the loop would feed itself. Module scope in the caller,
+   * or a `useCallback` with no dependencies.
+   */
+  onWant: (want: boolean) => void;
   /** `GET /reports`, as main published it. */
   reports: ReportsRead;
   /** A clipboard write is silent, so the surface confirms it. */
@@ -91,10 +96,10 @@ export type ReportsProps = {
  * scrolls. The day a store has hundreds, this is the surface that needs
  * `[list-virtualization]` answered before anything else does.
  */
-export function Reports({ reports, onCopied }: ReportsProps) {
+export function Reports({ reports, onWant, onCopied }: ReportsProps) {
   useEffect(() => {
-    askForReports(true);
-    return () => askForReports(false);
+    onWant(true);
+    return () => onWant(false);
   }, []);
 
   if (reports.state === "failed") {
