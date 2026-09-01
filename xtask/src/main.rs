@@ -26,6 +26,7 @@ mod rules_design;
 mod rules_docs;
 mod rules_enums;
 mod rules_icons;
+mod rules_privacy;
 mod rules_protocol;
 mod rules_stories;
 mod rules_toolbelt;
@@ -100,7 +101,7 @@ fn verify_foundations() -> ExitCode {
         rules::no_vendor_literal_outside_adapters(&root),
         rules::no_bloated_claude_md(&root),
         rules::the_v1_harvest_has_an_index(&root),
-        rules::nothing_names_a_person_or_a_machine(&root),
+        rules_privacy::nothing_names_a_person_or_a_machine(&root),
         rules_unsafe::unsafe_is_spoken_only_where_named(&root),
         rules::nothing_writes_its_own_log_format(&root),
         rules::the_tokens_generate_what_is_checked_in(&root),
