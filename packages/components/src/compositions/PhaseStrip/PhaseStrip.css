@@ -194,7 +194,7 @@
   white-space: nowrap;
 }
 
-.armada-phases__row-label[data-mono] {
+.armada-phases__row-label[data-mono="true"] {
   font-family: var(--font-mono);
 }
 
