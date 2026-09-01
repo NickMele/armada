@@ -28,8 +28,10 @@ mod rules_enums;
 mod rules_icons;
 mod rules_privacy;
 mod rules_protocol;
+mod rules_screens;
 mod rules_stories;
 mod rules_stylesheets;
+mod rules_tokens;
 mod rules_toolbelt;
 mod rules_unsafe;
 mod tokens;
@@ -105,7 +107,8 @@ fn verify_foundations() -> ExitCode {
         rules_privacy::nothing_names_a_person_or_a_machine(&root),
         rules_unsafe::unsafe_is_spoken_only_where_named(&root),
         rules::nothing_writes_its_own_log_format(&root),
-        rules::the_tokens_generate_what_is_checked_in(&root),
+        rules_tokens::the_tokens_generate_what_is_checked_in(&root),
+        rules_tokens::no_media_query_resolves_through_a_custom_property(&root),
         rules_design::no_off_contract_design_value(&root),
         rules_docs::every_open_question_is_collected(&root),
         rules_docs::every_document_is_indexed(&root),
@@ -115,6 +118,7 @@ fn verify_foundations() -> ExitCode {
         rules_icons::every_glyph_in_use_is_registered(&root),
         rules_actions::every_action_carries_three_columns(&root),
         rules_stories::every_story_names_its_own_path(&root),
+        rules_screens::every_render_has_a_screen(&root),
         rules_stylesheets::every_stylesheet_reaches_the_sheet_the_app_loads(&root),
         rules_protocol::the_router_serves_what_the_inventory_names(&root),
         rules_protocol::version::the_version_and_its_generated_constant_agree(&root),

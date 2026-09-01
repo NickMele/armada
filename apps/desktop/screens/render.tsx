@@ -11,7 +11,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactElement } from "react";
 
-type Screen = { mark: string; name: string; element: ReactElement; width?: number };
+type Screen = { mark: string; name: string; render: string; element: ReactElement; width?: number };
 
 const modules = import.meta.glob<Record<string, unknown>>("../src/renderer/src/**/*.screens.tsx", {
   eager: true,
@@ -19,7 +19,7 @@ const modules = import.meta.glob<Record<string, unknown>>("../src/renderer/src/*
 
 export type Rendered = {
   title: string;
-  shots: { mark: string; name: string; html: string; width?: number }[];
+  shots: { mark: string; name: string; render: string; html: string; width?: number }[];
 };
 
 export function collect(): Rendered[] {
@@ -31,6 +31,7 @@ export function collect(): Rendered[] {
     const shots = screens.map((screen) => ({
       mark: screen.mark,
       name: screen.name,
+      render: screen.render,
       width: screen.width,
       /* A screen that throws is drawn as the failure rather than dropped. A
          missing figure reads as a state nobody built, which is a different

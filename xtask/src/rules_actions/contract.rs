@@ -102,7 +102,9 @@ pub fn against_the_contract(
         // fault, because a reader cannot tell either.
         let Some((id, entry)) = (match rows.as_slice() {
             [only] => Some(only),
-            many => many.iter().find(|(_, e)| rest.contains(&e.get("scope").to_lowercase())),
+            many => many
+                .iter()
+                .find(|(_, e)| rest.contains(&e.get("scope").to_lowercase())),
         }) else {
             report.fail(format!(
                 "{CONTRACT}:{} — `{}` is bound to {} acts in {REGISTRY} and this line names no \

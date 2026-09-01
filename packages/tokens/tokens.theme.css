@@ -7,12 +7,14 @@
    directly, so a theme variant is a CSS block redefining the token and
    not a rebuild. Plain @theme freezes the value at :root.
  
+   The breakpoints are the one exception, in a plain @theme of their
+   own below with the reason written beside them.
+ 
    Each namespace is reset to `initial` so Tailwind's own scales stop
    resolving: bg-slate-800, h-16 and text-lg are off-contract values that
    would otherwise compile clean. */
 
 @theme inline {
-  --breakpoint-*: initial;
   --color-*: initial;
   --ease-*: initial;
   --font-weight-*: initial;
@@ -119,8 +121,6 @@
   --spacing-min: var(--sidebar-min);
   --spacing-max: var(--sidebar-max);
   --spacing-rail: var(--sidebar-rail);
-  --breakpoint-wide: var(--layout-breakpoint);
-  --breakpoint-narrow: var(--layout-breakpoint-narrow);
   --spacing-run-column: var(--w-run-column);
   --spacing-width: var(--palette-width);
   --spacing-max-height: var(--palette-max-height);
@@ -156,6 +156,17 @@
   --text-lg--line-height: var(--leading-lg);
   --text-xl--line-height: var(--leading-xl);
   --text-2xl--line-height: var(--leading-2xl);
+}
+
+/* Plain @theme, not inline — the one block in this file that is.
+   A responsive variant is not a declaration: Tailwind writes the value
+   into @media (width >= …), where var() is not legal, so a browser drops
+   the whole rule and max-* compiles to nothing at all. These carry their
+   literal, which is why `narrow:` works and why a theme cannot move it. */
+@theme {
+  --breakpoint-*: initial;
+  --breakpoint-wide: 1100px;
+  --breakpoint-narrow: 880px;
 }
 
 /* Read from CSS as var(--token). No namespace carries them:

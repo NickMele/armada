@@ -1,12 +1,12 @@
 // Whether the window is at `--window-floor`.
 //
-// **A media query cannot read a custom property**, and the Tailwind breakpoint
-// variants that were meant to stand in for one do not work either: the theme
-// declares `--breakpoint-wide: var(--layout-breakpoint)` under `@theme inline`,
-// so `wide:` compiles to `@media (width >= var(--layout-breakpoint))`, which
-// every browser drops, and `max-wide:` compiles to nothing at all. Measured in
-// the emitted stylesheet, not assumed — `apps/desktop/out/renderer/assets/`
-// carries exactly those two media queries and no others.
+// **`--window-floor` is not a breakpoint token.** The theme carries a
+// `--breakpoint-*` namespace with two entries in it, `wide` and `narrow`, and a
+// component that wants either spells the variant and gets a real media query.
+// The floor is not one of them: `packages/tokens/tokens.theme.css` lists it
+// under "Read from CSS as var(--token). No namespace carries them", so there is
+// no variant to spell — and a media feature value cannot be a custom property,
+// which rules out writing the `@media` by hand.
 //
 // So the one place that can read the token is the one place that can run: this
 // reads `--window-floor` off the document and hands it to `matchMedia`. The

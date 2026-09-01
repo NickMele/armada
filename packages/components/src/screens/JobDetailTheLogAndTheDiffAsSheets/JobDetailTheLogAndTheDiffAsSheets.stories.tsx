@@ -227,9 +227,23 @@ const ESCALATED_ENTRIES: ActivityEntry[] = [
     actor: "drone",
     summary: "Bash",
     subject: "cargo nextest run -p armada-settings",
+    output: ["    Starting 2034 tests across 41 binaries", "     Summary 2034 tests run: 2034 passed"].join(
+      "\n",
+    ),
+    ran: "exit 0 · 1m 12s · in .armada/worktrees/job_2d90bb",
   },
   { id: "e2", at: "14:45:18", actor: "drone", summary: "Submitted for verification — attempt 3." },
-  { id: "e3", at: "14:45:22", actor: "fleet", summary: "Checks passed —", subject: "build, test" },
+  {
+    id: "e3",
+    at: "14:45:22",
+    actor: "fleet",
+    summary: "Checks passed —",
+    subject: "build, test",
+    output: ["build   cargo build --workspace --locked   exit 0", "test    cargo nextest run --workspace   exit 0"].join(
+      "\n",
+    ),
+    ran: "2 of 2 Checks · 2m 04s",
+  },
   {
     id: "e4",
     at: "14:47:09",

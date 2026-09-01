@@ -311,6 +311,13 @@ const PREVIEW: ActivityEntry[] = [
     actor: "drone",
     summary: "Edit",
     subject: "packages/settings/src/selectors.ts",
+    output: [
+      "@@ -14,6 +14,9 @@",
+      "+import { selectColumnOrder } from './selectors/columns'",
+      "+",
+      " export const selectSettings = (s: RootState) => s.settings",
+    ].join("\n"),
+    ran: `+3 −0 · in ${WORKTREE}`,
   },
   {
     id: "3",
@@ -345,7 +352,20 @@ export const WHOLE: ActivityEntry[] = [
     summary:
       "Splitting the selector block into its own module so the tests can import it without the store.",
   },
-  { id: "1c", at: "14:23:11", actor: "drone", summary: "Read", subject: "packages/settings/src/reducer.ts" },
+  {
+    id: "1c",
+    at: "14:23:11",
+    actor: "drone",
+    summary: "Read",
+    subject: "packages/settings/src/reducer.ts",
+    output: [
+      "import { createSlice } from '@reduxjs/toolkit'",
+      "import type { SettingsState } from './types'",
+      "",
+      "const initialState: SettingsState = { columns: {}, density: 'comfortable' }",
+    ].join("\n"),
+    ran: `214 lines · in ${WORKTREE}`,
+  },
   ...PREVIEW.slice(1),
 ];
 

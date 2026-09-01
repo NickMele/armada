@@ -104,8 +104,14 @@ export type ActivityLogProps = {
   openId?: string;
 };
 
-/** Chevrons are 16px — disclosure is chrome, and chrome runs at 16. */
-const CHEVRON = 16;
+/**
+ * Row glyphs are 12px at strokeWidth 2, the same as `LogEntry`'s mark and the
+ * same as every mark the drawing puts on a log row. It was 16 — chrome's size,
+ * which is right for a control and wrong for a marker on a line of text. The
+ * two components draw the same stream on the same screen, so one of them
+ * running a size larger was visible the moment they were shot together.
+ */
+const CHEVRON = 12;
 const STROKE = 2;
 
 /**
@@ -161,39 +167,70 @@ export function ActivityLog({
           const shown = open.has(entry.id);
           const opens = entry.output !== undefined || entry.payload !== undefined || entry.ran !== undefined;
           const bounded = boundedTo(entry.output, maxLines);
+          const row = (
+            <>
+              <span className="armada-activity__at">{entry.at}</span>
+              {/* Named on every entry, never on some of them. Three voices in
+                  one column with attribution on two is worse than none. */}
+              <span className="armada-activity__who" data-actor={entry.actor}>
+                {NAMED[entry.actor]}
+              </span>
+              <span className="armada-activity__summary">{entry.summary}</span>
+              {entry.subject === undefined ? null : (
+                <span className="armada-activity__subject" data-named={entry.named}>
+                  {entry.subject}
+                </span>
+              )}
+              {/* The disclosure, on the trailing edge and rotated in place.
+                  It read the other way round until #295: nothing at all on a
+                  closed row, and a chevron on the leading edge of the one row
+                  already open — so the only line advertising that it opened
+                  was the line that had. A log of 1676 entries whose rows look
+                  inert is a log people scroll past, and the marker is the
+                  whole of how anyone learns there is more under a line.
+
+                  An entry with nothing behind it draws none. The drawing gives
+                  every row one because in its fixture every line has a
+                  payload; a heartbeat that carries nothing must not offer to
+                  open something that is not there. */}
+              {!opens ? null : shown ? (
+                <ChevronDown
+                  size={CHEVRON}
+                  strokeWidth={STROKE}
+                  className="armada-activity__chevron"
+                  aria-hidden
+                />
+              ) : (
+                <ChevronRight
+                  size={CHEVRON}
+                  strokeWidth={STROKE}
+                  className="armada-activity__chevron"
+                  aria-hidden
+                />
+              )}
+            </>
+          );
           return (
             <li className="armada-activity__entry" key={entry.id}>
-              <button
-                type="button"
-                className="armada-activity__row"
-                data-open={shown || undefined}
-                data-opens={opens || undefined}
-                aria-expanded={shown}
-                onClick={() => toggle(entry.id)}
-              >
-                <span className="armada-activity__chevron">
-                  {/* An entry with nothing behind it keeps the column and
-                      renders no chevron: the rows stay aligned, and nothing
-                      offers to open something that is not there. */}
-                  {!opens ? null : shown ? (
-                    <ChevronDown size={CHEVRON} strokeWidth={STROKE} aria-hidden />
-                  ) : (
-                    <ChevronRight size={CHEVRON} strokeWidth={STROKE} aria-hidden />
-                  )}
-                </span>
-                <span className="armada-activity__at">{entry.at}</span>
-                {/* Named on every entry, never on some of them. Three voices in
-                    one column with attribution on two is worse than none. */}
-                <span className="armada-activity__who" data-actor={entry.actor}>
-                  {NAMED[entry.actor]}
-                </span>
-                <span className="armada-activity__summary">{entry.summary}</span>
-                {entry.subject === undefined ? null : (
-                  <span className="armada-activity__subject" data-named={entry.named}>
-                    {entry.subject}
-                  </span>
-                )}
-              </button>
+              {/* A row that opens nothing is not a control. It was a disabled-
+                  looking button carrying aria-expanded={false}, which tells a
+                  screen reader the line opens and then does nothing when it is
+                  pressed — the same false promise the missing chevron made to
+                  everyone else, in the one place it is stated outright. */}
+              {opens ? (
+                <button
+                  type="button"
+                  className="armada-activity__row"
+                  data-open={shown || undefined}
+                  data-opens
+                  aria-expanded={shown}
+                  onClick={() => toggle(entry.id)}
+                >
+                  {row}
+                </button>
+              ) : (
+                <div className="armada-activity__row">{row}</div>
+              )}
 
               {!shown || !opens ? null : (
                 <div className="armada-activity__payload">

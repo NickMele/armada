@@ -112,6 +112,13 @@ fn json_str(s: &str) -> String {
 /// `var(--bg-base)` and resolves at the element, so a variant is one CSS block.
 /// Measured against 4.3.3, not assumed.
 ///
+/// **Except the breakpoints**, which get a second, plain `@theme` block. A
+/// responsive variant is not a declaration — Tailwind substitutes the value
+/// into `@media (width >= …)`, where `var()` is not legal, so the browser
+/// drops the rule. See [`Slot::Breakpoint`]. Two blocks rather than a
+/// partition inside one, because the reason is a property of the block: a
+/// reader has to see which `@theme` a line is in to know what it compiles to.
+///
 /// Every namespace is reset with `--<ns>-*: initial` first. Without that,
 /// `bg-slate-800`, `h-16` and Tailwind's own `text-lg` stay reachable, and each
 /// is an off-contract value that compiles clean.
@@ -123,6 +130,7 @@ pub fn theme_css(tokens: &[Token]) -> Result<String, String> {
     let mut leadings: Vec<(String, String)> = Vec::new();
     let mut css_only: Vec<(&str, &'static str)> = Vec::new();
     let mut literals: Vec<(String, String)> = Vec::new();
+    let mut breakpoints: Vec<(String, String)> = Vec::new();
 
     for t in tokens {
         let Some(slot) = slot(&t.name) else {
@@ -145,6 +153,28 @@ pub fn theme_css(tokens: &[Token]) -> Result<String, String> {
 
             Slot::Literal => {
                 literals.push((t.name.clone(), t.value.clone()));
+                continue;
+            }
+            Slot::Breakpoint(key) => {
+                // The whole point of the slot. An aliased breakpoint emits the
+                // `var()` into a media feature and the rule is dropped silently,
+                // which is the failure this variant exists to make unspeakable.
+                if t.value.contains("var(") {
+                    return Err(format!(
+                        "{} is a breakpoint and its value is `{}` — a media feature \
+                         value cannot be a var(). Declare the literal in {}",
+                        t.name, t.value, t.file
+                    ));
+                }
+                let var = format!("--breakpoint-{key}");
+                if let Some(other) = seen.insert(var.clone(), t.name.clone()) {
+                    return Err(format!(
+                        "{} and {other} both become `{var}` — one would silently \
+                         overwrite the other. Give one a different key in THEME",
+                        t.name
+                    ));
+                }
+                breakpoints.push((var, t.value.clone()));
                 continue;
             }
             Slot::Named(ns, key) => (*ns, format!("--{ns}-{key}")),
@@ -173,6 +203,9 @@ pub fn theme_css(tokens: &[Token]) -> Result<String, String> {
          \x20  `inline` is load-bearing: it makes each utility read var(--token)\n\
          \x20  directly, so a theme variant is a CSS block redefining the token and\n\
          \x20  not a rebuild. Plain @theme freezes the value at :root.\n\
+         \x20\n\
+         \x20  The breakpoints are the one exception, in a plain @theme of their\n\
+         \x20  own below with the reason written beside them.\n\
          \x20\n\
          \x20  Each namespace is reset to `initial` so Tailwind's own scales stop\n\
          \x20  resolving: bg-slate-800, h-16 and text-lg are off-contract values that\n\
@@ -205,6 +238,21 @@ pub fn theme_css(tokens: &[Token]) -> Result<String, String> {
         }
     }
     out.push_str("}\n");
+    if !breakpoints.is_empty() {
+        out.push_str(
+            "\n/* Plain @theme, not inline — the one block in this file that is.\n\
+             \x20  A responsive variant is not a declaration: Tailwind writes the value\n\
+             \x20  into @media (width >= …), where var() is not legal, so a browser drops\n\
+             \x20  the whole rule and max-* compiles to nothing at all. These carry their\n\
+             \x20  literal, which is why `narrow:` works and why a theme cannot move it. */\n\
+             @theme {\n\
+             \x20 --breakpoint-*: initial;\n",
+        );
+        for (var, value) in &breakpoints {
+            let _ = writeln!(out, "  {var}: {value};");
+        }
+        out.push_str("}\n");
+    }
     if !css_only.is_empty() {
         out.push_str("\n/* Read from CSS as var(--token). No namespace carries them:\n");
         for (name, why) in &css_only {

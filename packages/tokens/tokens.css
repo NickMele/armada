@@ -356,10 +356,14 @@
      because the window cannot get there — a media query under it is dead code.
 
      A media query cannot read a custom property, so a drawing repeats the
-     literal and names the token beside it. In the app these are the Tailwind
-     breakpoint scale and resolve from here, which is why a component spells a
-     responsive variant rather than an @media of its own. A third collapse point
-     is a proposal against this file, never a local media query. */
+     literal and names the token beside it — and so does the theme. The
+     generator copies these two values into --breakpoint-wide and
+     --breakpoint-narrow, as literals under a plain @theme rather than as an
+     alias under the inline one, which is what makes `narrow:` compile to a
+     real media query and is why a component spells a responsive variant rather
+     than an @media of its own. The copy is also why these two alone cannot be
+     moved by a theme block at runtime: every other token can. A third collapse
+     point is a proposal against this file, never a local media query. */
   --layout-breakpoint: 1100px;
   --layout-breakpoint-narrow: 880px;
   /* 380px: job detail's left column — the run tree and Where things are. THE
