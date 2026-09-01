@@ -39,7 +39,8 @@ import type { JobBriefProps, JobLogReferenceRow, NotOpened } from "@armada/compo
 
 import type { Watched } from "../../shared/bridge";
 import { artifactPath, repoOf } from "../../shared/artifacts";
-import type { Artifact, Opened } from "../../shared/artifacts";
+import type { Artifact } from "../../shared/artifacts";
+import { openArtifact } from "./opening";
 import type { JobDetail as JobWhole, JobSummary } from "../../shared/protocol";
 import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
 
@@ -74,37 +75,17 @@ export function briefOf(whole: JobWhole): JobBriefProps {
 }
 
 /**
- * Why an open did not happen, in the app's voice.
+ * Open one of a Job's artifacts, and say why it did not when it did not.
  *
- * **Four sentences, not one.** A reclaimed directory, a Manifest Fleet no
- * longer holds and an OS with no handler need three different next steps, and a
- * shared sentence would send a person to look for the wrong one.
+ * **The sentences moved to `opening.ts`.** The phase strip opens the three
+ * per-step records now and needs the same five, and two copies of them would
+ * drift into two vocabularies for one failure.
  */
-function whyNotOpened(opened: Opened, what: Artifact): string | null {
-  if (opened.ok) return null;
-  switch (opened.why) {
-    case "unknown_job":
-      return "Bridge no longer holds this job, so it could not work out where that is.";
-    case "no_repository":
-      return (
-        "Fleet holds no manifest with this job's id, so Bridge cannot say which repository " +
-        "the work is in. The path above follows from the job id once it can."
-      );
-    case "not_there":
-      return what === "worktree"
-        ? "Nothing is there. It was reclaimed, and the branch survives it."
-        : "That file has not been written, or it has been removed. The path is still where it goes.";
-    case "refused":
-      return `This machine did not open it: ${opened.detail}`;
-  }
-}
-
-/** Open one of a Job's artifacts, and say why it did not when it did not. */
 function opener(jobId: string, what: Artifact, label: string) {
   return {
     label,
     go: async (): Promise<NotOpened> => {
-      const because = whyNotOpened(await window.armada.openArtifact(jobId, what), what);
+      const because = await openArtifact(jobId, what);
       return because === null ? null : { because };
     },
   };

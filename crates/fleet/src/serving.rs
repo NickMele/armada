@@ -222,7 +222,15 @@ where
             reason.as_ref(),
             queued,
             self.resumption(&job),
-            &step_facts(self.aloft(), &job, ran, judged, flagged, &moves),
+            &step_facts(
+                self.aloft(),
+                &self.host().repo_root,
+                &job,
+                ran,
+                judged,
+                flagged,
+                &moves,
+            ),
             recorded
                 .as_ref()
                 .map(|(footprint, plans)| kept(footprint, plans)),

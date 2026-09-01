@@ -49,7 +49,7 @@
 // the raw event table is not something this screen needs at all.
 
 import { GAMING_PATTERN } from "../../shared/generated/vocabulary";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   DroneQuestion,
@@ -82,7 +82,7 @@ import { chaptersOf } from "./chapters";
 import { clock, span } from "./duration";
 import { Decide } from "./Decide";
 import { factsOf, ordered } from "./facts";
-import { phasesOf } from "./phases";
+import { Opening, phasesOf, type Opens } from "./phases";
 import { recourseOf } from "./recovery";
 import { escalation, renderFor } from "./render";
 import { runOf } from "./run";
@@ -144,6 +144,12 @@ export type JobDetailProps = {
   /** The reads the panel's chapters draw from. */
   recorded: FoldedReads;
   onCopied: (value: string) => void;
+  /**
+   * Say a sentence to the person. **Only ever a failure**, today — an open that
+   * did nothing is the defect `#246` is about, and success is the file being in
+   * front of them.
+   */
+  onSaid: (sentence: string) => void;
 };
 
 export function JobDetail({
@@ -169,6 +175,7 @@ export function JobDetail({
   onRequestChanges,
   onReject,
   onCopied,
+  onSaid,
 }: JobDetailProps) {
   // Which step the panel is showing. **The whole of navigation inside a Job**:
   // `null` means the one Fleet says is current, so a Job that moves on carries
@@ -236,8 +243,17 @@ export function JobDetail({
   // the run, the story and the strip — which is what lets `detail-keys` open a
   // step, a chapter or a stage by name. #271.
   const run = whole === null ? [] : runOf(whole, now, selected ?? undefined, watching?.rows ?? []);
+  // The strip's rows carry the three records a person reads because a verdict
+  // went against them, and each opens. The Job id and the toast are the panel's,
+  // so they are handed down rather than reached for; `phases.tsx` says why.
+  const opensRecords = useMemo(
+    () => ({ jobId: job.id, onSaid }),
+    [job.id, onSaid],
+  );
   const phases =
-    whole === null || open === undefined ? undefined : phasesOf(open, whole.acceptance_criteria);
+    whole === null || open === undefined
+      ? undefined
+      : phasesOf(open, whole.acceptance_criteria, opensRecords);
 
   // The detail's contextual tier, and the open state it moves. Bound while a
   // Job is open and not before, so nothing on the Board listens for a key that
@@ -390,7 +406,7 @@ export function JobDetail({
               // A question outranks the render's own notice: nothing else on
               // this step is what a person is here for while one is open, and
               // the two would otherwise both claim the band.
-              notice: askingOf(whole) ?? noticeOf(job, whole, render, open),
+              notice: askingOf(whole) ?? noticeOf(job, whole, render, open, opensRecords),
               // **The question sits where the redirect box does** — between the
               // strip and the story, because it is the same kind of thing: a
               // box a person acts in about the step they are looking at.
@@ -612,6 +628,7 @@ function noticeOf(
   whole: JobWhole | null,
   render: string,
   step: StepDetail,
+  opens: Opens,
 ): StepNotice | undefined {
   if (render === "reviewing") {
     return {
@@ -627,15 +644,29 @@ function noticeOf(
     reason?.verb,
     at === undefined ? undefined : `stopped at ${at.label}`,
     at?.check,
-    at?.outputPath,
   ].filter((part) => part != null);
+  // **The line that named the file a person could not open.** This band is the
+  // first thing read on a Job that stopped and it has always ended with the log
+  // path — as text, which is where `#246` was reported from. The strip opens it
+  // too, on the Check's own row; this one is where somebody is already looking.
+  const log = at?.outputPath;
   const recourse = recourseOf(job, whole);
   const flagged = step.flagged;
   return {
     // A Job that is over is red; one holding with a live Drone is not, because
     // a person deciding what happens next is not a failure.
     tone: job.status === "escalated" ? "stopped" : "failed",
-    title: said.length === 0 ? "This Job stopped." : said.join(" · "),
+    title: (
+      <>
+        {said.length === 0 ? "This Job stopped." : said.join(" · ")}
+        {log === undefined ? null : (
+          <>
+            {" · "}
+            <Opening path={log} what="check" opens={opens} />
+          </>
+        )}
+      </>
+    ),
     children: (
       <>
         {flagged.length === 0 ? null : (

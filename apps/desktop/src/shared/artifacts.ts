@@ -11,6 +11,14 @@
 // from a click handler and going to `shell.openPath` is a capability the
 // renderer was never given. Two copies of this arithmetic would be two
 // capabilities that agree until one of them is edited.
+//
+// **Three paths are not derivable and are served instead.** A Check's output, a
+// Judge's brief and a step's deliverable are keyed by step, run, ordinal and
+// criterion, which is Fleet's arithmetic and not a layout rule — `get_job`
+// carries each as a path relative to the repository root. The rule above still
+// holds for them, one level up: main does not trust the string, it checks the
+// string is one Fleet named for that Job. A set membership rather than a
+// derivation, because there is nothing here to derive from.
 
 import type { ManifestSummary } from "./setup";
 
@@ -18,13 +26,44 @@ import type { ManifestSummary } from "./setup";
 export const ARMADA = ".armada";
 
 /**
- * Which artifact of a Job. **A closed set, and the whole of what the renderer
- * may name** — the path itself is main's to build.
+ * Which artifact of a Job.
  *
- * The branch is not here. It is served rather than derived, it is not a path,
+ * **Two shapes, because there are two kinds of path and only one of them can
+ * be derived.** The three words name the Job-level paths the architecture
+ * fixes, and main rebuilds each from the Job id. [`Kept`] names the three
+ * per-step records — a Check's output, a Judge's brief, a step's deliverable —
+ * whose paths only Fleet knows, because each carries a step, a run, and an
+ * ordinal or a criterion that no layout rule derives.
+ *
+ * **Neither shape hands the renderer an arbitrary-file capability.** A word is
+ * rebuilt from the Job id; a kept path is checked against the paths Fleet named
+ * for that Job in the detail main is holding, and refused where it is not one
+ * of them. `main/open.ts` is where that check is.
+ *
+ * The branch is neither. It is served rather than derived, it is not a path,
  * and it is the one row the owner said was already right as a copy.
  */
-export type Artifact = "worktree" | "log" | "transcript";
+export type Artifact = "worktree" | "log" | "transcript" | Kept;
+
+/**
+ * One of Fleet's per-step records, by the path Fleet named it with.
+ *
+ * **The path is the identity, and that is the decision.** The alternative was a
+ * key — step, run, ordinal — that main would rebuild the file name from, which
+ * would be a second spelling of arithmetic living in `crates/fleet`'s
+ * `keeping.rs`, `asked.rs` and `check_output.rs`. Two spellings of one name
+ * agree until one of them is edited, and what that failure produces is a path
+ * to a file nobody has — which is the defect being fixed, one layer down.
+ *
+ * `what` is what the row is, for the sentence a failed open says. **It never
+ * decides where the file is.**
+ */
+export type Kept = { kept: string; what: "check" | "brief" | "deliverable" };
+
+/** Whether this names a per-step record rather than one of the fixed paths. */
+export function isKept(what: Artifact): what is Kept {
+  return typeof what !== "string";
+}
 
 /**
  * The repository a Job's artifacts sit under, or `null`.
@@ -55,6 +94,10 @@ export function artifactPath(
   jobId: string,
   droneId: string | undefined,
 ): string {
+  // A kept record's path is Fleet's own, relative to the repository root, so
+  // this only joins the two halves. Deciding the string is one Fleet named is
+  // main's, not this function's — the renderer reaches here too, to draw a row.
+  if (isKept(what)) return `${repo}/${what.kept}`;
   switch (what) {
     case "worktree":
       return `${repo}/${ARMADA}/worktrees/${jobId}`;
@@ -84,6 +127,18 @@ export type Opened =
   | { ok: false; why: "no_repository" }
   /** The path was derived and nothing is at it. */
   | { ok: false; why: "not_there"; path: string }
+  /**
+   * A kept record was named that the Job's detail main is holding does not
+   * name.
+   *
+   * **Not something a person can cause, and it still gets a sentence.** A row
+   * only ever hands back the path it was drawn from, so this is a detail main
+   * published and then replaced — the Job re-read between the draw and the
+   * click — or a caller sending a string it never read off the wire. Refusing
+   * is what keeps `shell.openPath` off an arbitrary path; refusing *silently*
+   * would be the same dead click this whole seam exists to remove.
+   */
+  | { ok: false; why: "not_named"; path: string }
   /**
    * The path was derived, it is there, and nothing opened it.
    *

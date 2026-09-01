@@ -6,6 +6,15 @@
 // string arriving from a click handler and going to the shell would make every
 // capability the CSP and the sandbox hold back reachable through one row.
 //
+// **The three per-step records are the exception, and they are checked rather
+// than derived.** A Check's output, a Judge's brief and a step's deliverable
+// are keyed by things only Fleet holds, so `get_job` carries each as a path.
+// The property above survives as set membership: `named` collects every path
+// the detail main is holding names for that Job, and a string that is not one
+// of them is refused before anything is joined to it. So the renderer still
+// cannot reach a file Fleet did not put on the wire — it can only ask for one
+// that is already on this screen.
+//
 // Fleet is not involved. Nothing here is a Job act, which is why it is beside
 // `command.ts` rather than in it: those are POSTs to routes under a Job, and
 // this touches the filesystem and stops.
@@ -18,7 +27,7 @@ import { shell } from "electron";
 import { stat } from "node:fs/promises";
 
 import type { BridgeState } from "../shared/bridge";
-import { artifactPath, repoOf } from "../shared/artifacts";
+import { artifactPath, isKept, repoOf } from "../shared/artifacts";
 import type { Artifact, Opened } from "../shared/artifacts";
 import { chooseEditor, startEditor, whereIs } from "./editor";
 import type { Editor } from "./editor";
@@ -36,6 +45,34 @@ function jobOf(state: BridgeState, jobId: string): JobSummary | undefined {
   if (row !== undefined) return row;
   const watched = state.watched;
   return watched.state === "read" && watched.jobId === jobId ? watched.detail.job : undefined;
+}
+
+/**
+ * Every repo-relative path this Job's detail names, as one set.
+ *
+ * **Read off `watched` alone, and that is the whole of the rule.** `jobs` is
+ * the Board's summaries and carries no step, so a Job that is not the one open
+ * names no record — which is right, because the only surface that draws these
+ * rows is the open Job's. A Job re-read between the draw and the click answers
+ * from the new reading, so a record a re-run replaced stops being reachable at
+ * the moment it stops being on screen.
+ *
+ * **Reachability is therefore keyed on the row, exactly as the row is.** The
+ * files outlive the rows — `armada clean` forgets a Job and leaves its briefs
+ * and deliverables under the repository root — and nothing here tries to reach
+ * one whose row is gone. A cleaned Job has no screen either, so no path is
+ * named-and-unreachable; what a person keeps is a directory they can open by
+ * hand. Retention over all four artifact kinds is `#69`.
+ */
+function named(state: BridgeState, jobId: string): ReadonlySet<string> {
+  const watched = state.watched;
+  if (watched.state !== "read" || watched.jobId !== jobId) return new Set();
+  const paths = watched.detail.steps.flatMap((step) => [
+    ...step.check_runs.map((run) => run.output_path),
+    ...step.judged.map((judged) => judged.brief_path),
+    ...(step.deliverables ?? []).map((kept) => kept.path),
+  ]);
+  return new Set(paths.filter((path): path is string => path !== undefined));
 }
 
 /**
@@ -90,6 +127,12 @@ export async function openArtifact(
   if (repo === null) return { ok: false, why: "no_repository" };
 
   const path = artifactPath(what, repo, job.id, job.assigned_drone);
+  // Membership before the filesystem, and before the path is spoken to anything
+  // outside this process. `not_there` would be the wrong answer here: it says
+  // Fleet named a file and the file is gone, and this says nothing named it.
+  if (isKept(what) && !named(state, jobId).has(what.kept)) {
+    return { ok: false, why: "not_named", path };
+  }
   try {
     await stat(path);
   } catch {

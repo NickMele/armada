@@ -21,7 +21,7 @@ use verification::Request;
 
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, Ruling};
-use crate::keeping::{deliverables_dir, Keeping};
+use crate::keeping::{deliverables_dir, kept_deliverables, Keeping};
 use crate::tests::gate::{budget, judged_by_shared, note_evidence};
 use crate::tests::tmp::TempDir;
 
@@ -132,6 +132,18 @@ impl Repo {
             .collect();
         names.sort();
         names
+    }
+
+    /// What a reader of the record can reach for one run of the step, exactly
+    /// as `get_job` answers it — relative to the repository root.
+    fn reachable(&self, attempt: Attempt) -> Vec<String> {
+        kept_deliverables(
+            &self.root().to_string_lossy(),
+            &job_id(),
+            &StepId::new("plan"),
+            attempt,
+            TARGET,
+        )
     }
 
     fn kept_bytes(&self, name: &str) -> String {
@@ -299,5 +311,48 @@ fn a_step_id_that_would_leave_the_directory_keeps_nothing() {
             .parent()
             .is_some_and(|up| up.join("elsewhere.1.plan.md").exists()),
         "and nothing was written beside the repository either"
+    );
+}
+
+/// **The reader answers what the writer wrote, in the order it wrote it.** The
+/// name is rebuilt from the step, the run and the target rather than parsed out
+/// of a listing, so this is the one test holding the two spellings of that
+/// arithmetic together — a reader that derived a different name would serve a
+/// path to a file nobody has.
+#[tokio::test]
+async fn the_reader_names_every_copy_of_one_run_oldest_first() {
+    let repo = Repo::new();
+    repo.drone_wrote("The first plan.\n");
+    repo.gated(Arc::new(FakeJudge::with_no_objection())).await;
+    repo.drone_wrote("The second plan, after a person edited it.\n");
+    repo.gated(Arc::new(FakeJudge::with_no_objection())).await;
+
+    assert_eq!(
+        repo.reachable(Attempt::FIRST),
+        vec![
+            format!(".armada/deliverables/{JOB}/plan.1.plan.md"),
+            format!(".armada/deliverables/{JOB}/plan.1.1.plan.md"),
+        ],
+        "both documents were judged and both are reachable"
+    );
+}
+
+/// **A path is named only where a file is there.** The whole of `#246` is a
+/// record named on a surface that nothing opens, and a reader that derived the
+/// name without the check would put that defect one layer down: every step of
+/// every Job would carry a path, and the ones with nothing behind them would
+/// look exactly like the ones with a document.
+#[tokio::test]
+async fn a_run_that_kept_nothing_is_named_nowhere() {
+    let repo = Repo::new();
+    std::fs::create_dir_all(repo.worktree_path()).expect("a worktree with no deliverable in it");
+
+    repo.gated(Arc::new(FakeJudge::with_no_objection())).await;
+
+    assert!(repo.reachable(Attempt::FIRST).is_empty());
+    assert!(
+        repo.reachable(Attempt::stored(2).expect("a second run"))
+            .is_empty(),
+        "and neither is a run that never happened"
     );
 }

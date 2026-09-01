@@ -41,6 +41,45 @@ pub fn deliverables_dir(repo_root: &str, job: &JobId) -> PathBuf {
         .join(job.as_str())
 }
 
+/// The copies of one step's one attempt that are on disk now, in the order they
+/// were written, each relative to the repository root.
+///
+/// **The name is rebuilt rather than parsed back out of a listing.**
+/// [`file_name`] is the whole of the arithmetic and a reader has every argument
+/// to it — the step, the attempt and the target the frozen workflow names — so
+/// the candidates are regenerated. Parsing would have to decide where a step id
+/// ends inside a name that holds dots, and a step id is text a workflow author
+/// typed.
+///
+/// **Every path answered has been checked.** A path named on a surface that
+/// opens nothing is exactly the defect `#246` is about, one layer further down,
+/// and this is the only place that can tell — nothing above it reads the
+/// filesystem. The rotations are contiguous by construction, because `kept`
+/// tries `nth` only after `nth - 1` was taken, so the first absent name is the
+/// end of the run rather than a hole to look past.
+///
+/// **A read, and nothing else**, which is why it is a free function beside
+/// [`Keeping`] rather than a method on it: that type's whole property is that
+/// holding one is the capability to write a copy, and reading a record back
+/// must not need it.
+pub fn kept_deliverables(
+    repo_root: &str,
+    job: &JobId,
+    step: &StepId,
+    attempt: Attempt,
+    target: &str,
+) -> Vec<String> {
+    let dir = deliverables_dir(repo_root, job);
+    (0..ROTATIONS)
+        .map_while(|nth| file_name(step, attempt, target, nth))
+        .take_while(|name| dir.join(name).is_file())
+        // The same spelling `asked::kept` answers with, and for the same
+        // reason: what crosses the wire is relative to the repository root, so
+        // nothing about where the repository is reaches a client.
+        .map(|name| format!(".armada/deliverables/{}/{name}", job.as_str()))
+        .collect()
+}
+
 /// How many copies of one step's one attempt may exist before the rest are
 /// dropped.
 ///

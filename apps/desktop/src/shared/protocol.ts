@@ -393,6 +393,19 @@ export type StepDetail = {
    */
   flagged: Flagged[];
   /**
+   * The copies of this step's deliverable Fleet kept, oldest run first.
+   *
+   * **The third of the three records a verdict is argued with**, beside
+   * `check_runs[].output_path` and `judged[].brief_path`: what the Judge read,
+   * what the Checks printed, and what the Judge was asked. One without the
+   * others cannot separate a bad Judge from a bad brief, which is why all three
+   * are on the wire rather than the two that were.
+   *
+   * **Absent is the ordinary case** — a step that declares no deliverable keeps
+   * none, and so does one whose Judge was never asked.
+   */
+  deliverables?: KeptDeliverable[];
+  /**
    * Every run of this step, oldest first. **`Attempt 1 refused`, `Attempt 2
    * advanced`** — the rows the run tree draws under a step that was worked
    * more than once.
@@ -530,6 +543,9 @@ export type CheckRun = {
    * repository root. **A reference, never the content**, and absent where there
    * is no file — a built-in assertion runs no command, and a Check that never
    * started printed nothing.
+   *
+   * **Main opens it; the renderer never composes it into a path.** See
+   * `shared/artifacts.ts`, which owns that rule for all three kept records.
    */
   output_path?: string;
 };
@@ -558,10 +574,36 @@ export type Judged = {
   /**
    * Where the whole brief this verdict answers was written, relative to the
    * repository root. **The path, never the question** — a brief is the request,
-   * the deliverable and the whole branch diff, and Bridge does not read the
-   * filesystem. Absent where Fleet kept no brief.
+   * the deliverable and the whole branch diff, and no answer on this seam
+   * carries one. Absent where Fleet kept no brief, which is a verdict nobody
+   * can re-read against its input. Opened the way `CheckRun.output_path` is.
    */
   brief_path?: string;
+};
+
+/**
+ * One copy of a step's deliverable, as Fleet kept it.
+ *
+ * **A reference, never the document.** A deliverable is up to 16 KiB of text
+ * and a detail is re-read every time an event names the open Job; the path is
+ * what `main/open.ts` hands to the OS.
+ *
+ * **The attempt is on the row rather than implied by its position.** A step
+ * worked three times keeps three copies and they are three different documents,
+ * so a list a reader had to count through would make *the one the Judge read* a
+ * guess. It is the same ordinal `StepAttempt.attempt` carries.
+ */
+export type KeptDeliverable = {
+  /** Which run of the step wrote it, counted from one. Joins to `attempts`. */
+  attempt: number;
+  /**
+   * Where the copy is, relative to the repository root.
+   *
+   * **Fleet checked it was there when it answered**, which is the one thing the
+   * renderer cannot check for itself. It can still be gone by the time somebody
+   * clicks it, and main says so.
+   */
+  path: string;
 };
 
 /**
