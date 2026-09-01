@@ -345,6 +345,19 @@ destructive = false
 confirms = false
 notes = "A Motion: it lands somewhere and acts on nothing, which is what `j`/`k` cannot do here — those rove inside whichever chapter has focus. Unmodified brackets against ⌘[ ⌘] for back and forward, which is `1–5` against `⌘1–⌘5` again: one row of keys, two acts, separated by the modifier and drawn that way on purpose. Reading order, so `]` goes down the screen."
 
+[actions.open_log]
+kind = "Action"
+tier = "Contextual"
+verb = "Open the log"
+icon = ""
+icon_absent = "undecided"
+shortcut = "Enter"
+scope = "detail"
+destructive = false
+confirms = false
+unbuilt = "#286"
+notes = "The step's activity log, opened to the layer that can hold it — 1676 entries on a real Job, which is not a longer version of anything the panel holds. `Enter` rather than a letter: every letter with a mnemonic is spent, and `Enter` already belongs to whatever holds focus, which here is the chapter `[` `]` landed on. Against `open_focused`, which is the same key on a list where nothing holds focus. No glyph — `list` and `file-text` are not registered, and inventing one belongs in the icon registry rather than here."
+
 [actions.open_diff]
 kind = "Action"
 tier = "Contextual"
