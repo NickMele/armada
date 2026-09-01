@@ -129,10 +129,11 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             ("build", "cargo build --workspace --locked"),
             ("test", "cargo nextest run --workspace --exclude acceptance"),
             ("format", "cargo fmt --all --check"),
-            (
-                "typecheck",
-                "pnpm -C apps/desktop typecheck && pnpm -C packages/components typecheck",
-            ),
+            // **One name, not a chain.** A `run` gets no shell, so the `&&`
+            // this used to hold was passed to `tsc` as an argument and the
+            // Check could never pass. The chain lives in a `package.json`
+            // script, where a shell exists and the packages stay named.
+            ("typecheck", "pnpm typecheck"),
             ("bridge_build", "pnpm -C apps/desktop build"),
             ("storybook", "pnpm -C packages/components build-storybook"),
         ]
