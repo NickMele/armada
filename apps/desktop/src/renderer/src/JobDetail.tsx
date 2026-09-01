@@ -159,6 +159,18 @@ export function JobDetail({
   // would name a step that Job may not have.
   useEffect(() => setSelected(null), [job.id]);
 
+  // The diff, for every Job that is open rather than only for one at review.
+  // **A produced file opens to what it actually wrote**, and it did that on one
+  // status because the review block was the only thing asking for the read. It
+  // is still the expensive read and it is still made once, here, so the Produced
+  // chapter and the review decision draw from one answer.
+  useEffect(() => {
+    void window.armada.readDiff(job.id);
+    return () => {
+      void window.armada.readDiff(null);
+    };
+  }, [job.id]);
+
   // The detail's contextual tier. Bound while a Job is open and not before, so
   // nothing on the Board listens for a key that means nothing there — and the
   // press is swallowed only where something answered it.

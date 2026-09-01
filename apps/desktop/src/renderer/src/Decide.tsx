@@ -44,7 +44,6 @@ import {
  */
 function askForMaterial(jobId: string | null): void {
   void window.armada.readEvidence(jobId);
-  void window.armada.readDiff(jobId);
 }
 
 export type DecideProps = {
