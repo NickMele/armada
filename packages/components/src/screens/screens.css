@@ -487,22 +487,38 @@
 
 /* The run on the left, the panel on the right, at every state.
 
-   Both tracks are proportional and neither is a fixed width. A fixed track
-   keeps demanding its width in a narrow window and the other one scrolls
-   sideways instead, which is the failure this app was built to escape. Two to
-   three is the drawing's own split at its 1180px width, and it holds down to
-   the window floor with no breakpoint — the tree gets narrower, the
-   directories recede, and the basenames the tree exists to keep never
-   truncate. A breakpoint was drawn first and removed: a media query cannot
-   read a custom property, so it could only be written as a literal, and the
-   proportional pair needs no query at all. `minmax(0, …)` on both is what
-   stops one long path from widening its own column past the pair. */
+   THE LEFT COLUMN NEVER CHANGES WIDTH. `--w-run-column` is the drawn 380px and
+   the panel takes every pixel of slack — that is the drawing's own rule and it
+   is what the tokens file argues for at length.
+
+   It was a 2fr/3fr pair here, defended in a comment that read well and was
+   wrong: a proportional rail widens with the window, so the tree of six short
+   names grew to half a maximised screen while the panel that has to hold a
+   diff grew by the same fraction rather than by the surplus. The old note
+   worried that a fixed track "keeps demanding its width in a narrow window".
+   380px against `--window-floor`'s 768 leaves 363 for the panel at the
+   narrowest window Bridge opens, which is tight and never sideways-scrolling —
+   and `minmax(0, 1fr)` on the panel is what keeps one long path from pushing
+   the pair wider than the window.
+
+   The middle track is the rule between them. Half a gap either side, so the
+   drawn 24px gutter still measures 24 with a hairline down the middle of it
+   rather than 24 plus a rule plus another 24. */
 .armada-inside {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-  gap: var(--space-4);
+  grid-template-columns: var(--w-run-column) var(--border-width) minmax(0, 1fr);
+  column-gap: var(--space-3);
+  row-gap: var(--space-4);
   align-items: start;
   min-width: 0;
+}
+
+/* The rule between the columns. `align-self: stretch` against the grid's
+   `align-items: start`, because a zero-height element is what a start-aligned
+   hairline is. */
+.armada-inside__rule {
+  align-self: stretch;
+  background: var(--border-subtle);
 }
 
 .armada-inside__run,

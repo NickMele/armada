@@ -221,6 +221,11 @@ export function InsideAJob({
           )}
         </div>
 
+        {/* The rule between the columns. Its own track, not a border on
+            either side, so it measures the full height of the taller column
+            whichever one that is. */}
+        <div className="armada-inside__rule" aria-hidden />
+
         {/* The panel. Same regions in the same order at every state. */}
         <div className="armada-inside__panel">
           <div className="armada-inside__brief">
