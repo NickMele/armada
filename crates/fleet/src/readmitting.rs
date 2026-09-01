@@ -38,18 +38,24 @@ use crate::working::Working;
 
 /// What a re-queued Job is owed: the step to work, and how the Drone opens.
 ///
-/// **Three variants for the three shapes the inner machine can be in**, read
-/// off the current step's state rather than off a column that remembers which
-/// button was pressed.
+/// **One variant per shape the inner machine can be in**, read off the current
+/// step's state rather than off a column that remembers which button was
+/// pressed.
 ///
-/// | The current step reads | The act was | The Drone gets |
+/// | The current step reads | What put it back | The Drone gets |
 /// |---|---|---|
 /// | `running` | an approval, or changes asked for | the next step, or the same one again |
 /// | `stopped` | a restart | the same step, told what stopped it |
-/// | `advanced` | an override | the step after it, told a person cleared this one |
+/// | `advanced`, no dispatch | an override | the step after it, told a person cleared this one |
+/// | `advanced`, it dispatched | Fleet, once the children finished | the step after it, told what they came to |
 ///
 /// The two `running` cases are told apart by the waiting note, which is
 /// `request_changes`'s alone — that test predates this file and is unchanged.
+/// The two `advanced` cases are told apart by the frozen workflow, which is the
+/// only thing that knows whether a step was allowed to create Jobs.
+///
+/// **Three of the four are a person and the fourth is not**, which is what
+/// [`Owed::resumption`] answers `None` for.
 pub(crate) enum Owed {
     /// The step is `running` — a person answered at a human advance gate, and
     /// the step moves the act already made are made.
@@ -83,11 +89,27 @@ impl Owed {
     /// **The wire's half of the same partition**, so a Board row and the Drone
     /// re-admission actually puts on cannot come from two readings. `Room::hold`
     /// is the same arrangement one file over.
-    pub(crate) fn resumption(&self) -> Resumption {
+    ///
+    /// # `None` is a real answer, and it is not the absence of a fourth word
+    ///
+    /// [`Resumption`] names **a person's act**: all three of its values are
+    /// something somebody did. A parent re-queued because it dispatched Jobs
+    /// and is waiting on them was put back by Fleet, and nobody did anything —
+    /// so the honest answer is that nothing resumed it, and the row reads as
+    /// the ordinary queued Job it is, with `blocked_by_dependency` as its
+    /// reason.
+    ///
+    /// **Do not add a variant for it.** `Resumption` is a strict `wire_enum!`,
+    /// so a fourth value is a major protocol bump — and the thing that would be
+    /// bought is a word for something that is not a resumption in the first
+    /// place. A variant added here that is Fleet's own doing, rather than a
+    /// person's, wants `None` for the same reason.
+    pub(crate) fn resumption(&self) -> Option<Resumption> {
         match self {
-            Owed::Standing { .. } => Resumption::Reviewed,
-            Owed::Restarted { .. } => Resumption::Restarted,
-            Owed::Overruled { .. } => Resumption::Overruled,
+            Owed::Standing { .. } => Some(Resumption::Reviewed),
+            Owed::Restarted { .. } => Some(Resumption::Restarted),
+            Owed::Overruled { .. } => Some(Resumption::Overruled),
+            Owed::AfterADispatch { .. } => None,
         }
     }
 }
@@ -265,7 +287,7 @@ where
     /// Enter the step the Drone is about to be put on, where it is not there
     /// already.
     ///
-    /// **This is where a run begins**, and it is why two of the three shapes
+    /// **This is where a run begins**, and it is why three of the four shapes
     /// arrive with a step still to move: see the module header.
     async fn entered(&self, job: Job, owed: &Owed) -> Result<(Job, StepId), Adrift> {
         match owed {

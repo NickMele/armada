@@ -283,6 +283,13 @@ impl AdmissionHold {
 /// share this value: both are a person answering at the gate and the Job goes
 /// again either way. Which it was is carried by the note that waits on the
 /// record.
+///
+/// **Every value here is something a person did**, which is what bounds the
+/// set rather than the table above. `advanced` has a second reading that is not
+/// in it — a Job whose step created other Jobs and is waiting for them was put
+/// back by Fleet, and that answers absent rather than adding a word. A shape
+/// Fleet reaches on its own is not a resumption, and a strict `wire_enum!`
+/// makes the alternative a major bump for a word nobody asked for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resumption {
     /// A person answered at a human advance gate. `approve_review`, or

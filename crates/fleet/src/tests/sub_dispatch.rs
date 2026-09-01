@@ -282,9 +282,16 @@ async fn a_parent_waiting_for_its_children_gives_up_its_slot() {
     );
 }
 
-/// The Board says why, in the words the registry gives a `queued` Job.
+/// The Board says why, in the words the registry gives a `queued` Job — and
+/// says nobody put it back, because nobody did.
+///
+/// **Both halves of the row, in one test, because the pair is the claim.**
+/// `resumption` names a person's act; a parent waiting on Jobs it created was
+/// re-queued by Fleet. A `Some` here would be the Board telling somebody they
+/// pressed something, and it is the shape a fourth `Resumption` variant would
+/// have produced — `readmitting::Owed::resumption` holds why there is not one.
 #[tokio::test]
-async fn a_waiting_parent_reads_as_blocked_rather_than_as_short_of_resources() {
+async fn a_waiting_parent_reads_as_blocked_and_as_nobody_having_put_it_back() {
     use api::Daemon;
 
     let home = TempDir::new();
@@ -309,6 +316,11 @@ async fn a_waiting_parent_reads_as_blocked_rather_than_as_short_of_resources() {
         summary.queued_reason.map(|why| why.as_wire()),
         Some("blocked_by_dependency"),
         "the Jobs it created are what it is waiting for, which is what that label says"
+    );
+    assert_eq!(
+        summary.resumption.map(|act| act.as_wire()),
+        None,
+        "Fleet stood this Drone down; no person put the Job back, so no act names one"
     );
 }
 

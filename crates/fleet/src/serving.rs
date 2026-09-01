@@ -799,11 +799,18 @@ where
     /// arrived from `awaiting_approval` and has never run. The refusal that
     /// matters is still re-admission's, made at the spawn: this renders nothing
     /// where that would refuse, and never offers a word where it would not.
+    ///
+    /// **A shape that resolves and answers `None` reads the same way**, and
+    /// means something different: re-admission knows exactly which step this
+    /// Job is owed, and no person is why it is waiting for one. A parent that
+    /// dispatched Jobs and stood its Drone down is the case — see
+    /// `readmitting::Owed::resumption`, which holds why that is not a fourth
+    /// word.
     fn resumption(&self, job: &Job) -> Option<core_model::Resumption> {
         if job.status() != CoreJobStatus::Queued {
             return None;
         }
-        self.owed(job).ok().map(|owed| owed.resumption())
+        self.owed(job).ok().and_then(|owed| owed.resumption())
     }
 
     /// Why an approved Job has not started, worked out from the board as it
