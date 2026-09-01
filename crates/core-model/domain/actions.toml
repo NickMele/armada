@@ -332,7 +332,6 @@ shortcut = "h / l / ← / →"
 scope = "detail"
 destructive = false
 confirms = false
-unbuilt = "#265"
 notes = "One act, not two. A step's facts and a log entry's payload both open in place beneath the focused row, and giving each its own key would put two bindings on one gesture. The keys mirror `move_focus` on the other axis — a tree discloses sideways and roves vertically — and the glyph is the icon registry's own word for it, taken under the reservation's tree reading rather than its record reading: the run tree is a tree, and a Job row still does not grow a caret, which is why the scope is detail and not the list."
 
 [actions.focus_chapter]
@@ -344,7 +343,6 @@ shortcut = "[ ]"
 scope = "detail"
 destructive = false
 confirms = false
-unbuilt = "#265"
 notes = "A Motion: it lands somewhere and acts on nothing, which is what `j`/`k` cannot do here — those rove inside whichever chapter has focus. Unmodified brackets against ⌘[ ⌘] for back and forward, which is `1–5` against `⌘1–⌘5` again: one row of keys, two acts, separated by the modifier and drawn that way on purpose. Reading order, so `]` goes down the screen."
 
 [actions.open_diff]
@@ -356,7 +354,6 @@ shortcut = "f"
 scope = "detail"
 destructive = false
 confirms = false
-unbuilt = "#265"
 notes = "The focused Produced chip, opened to what the step actually wrote. `f` for the file, since `d` is Redirect and `o` is Open, which on a list means a Job — this opens a file inside one and the two must not read as the same key doing different things. The glyph was registered for this row."
 
 [actions.open_stage]
@@ -369,5 +366,4 @@ shortcut = "g"
 scope = "detail"
 destructive = false
 confirms = false
-unbuilt = "#265"
 notes = "The phase strip's stages are controls: opening one says what that stage is, what it is waiting on and where it stands, so the explanation sits where the question is asked. `g` for the gate the strip draws. No glyph, and this one may never take a generic one — every stage already carries its own mark on its chip, so a silhouette standing for any stage would be a mark competing with the four beneath it. The obvious candidates are refused anyway: the circle-* family is the Judge's, and a question mark inside a circle is that family's outline whatever it is named."

@@ -651,10 +651,10 @@ a              approve             (dispatch card only)
 v              observe             (detail only)
 u              submit for verification  (piloted job only)
 e              redispatch
-h / l / ← / →  expand and collapse  (detail only, not built)
-[ ]            move between chapters  (detail only, not built)
-f              open the diff        (detail only, not built)
-g              open the stage       (detail only, not built)
+h / l / ← / →  expand and collapse  (detail only)
+[ ]            move between chapters  (detail only)
+f              open the diff        (detail only)
+g              open the stage       (detail only)
 ```
 
 **This is the map, not a pattern.** It was settled by drawing the Job
