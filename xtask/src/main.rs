@@ -25,6 +25,7 @@ mod rules_enums;
 mod rules_icons;
 mod rules_protocol;
 mod rules_stories;
+mod rules_toolbelt;
 mod rules_unsafe;
 mod tokens;
 mod tokens_emit;
@@ -113,6 +114,7 @@ fn verify_foundations() -> ExitCode {
         rules_enums::every_registry_key_is_a_variant(&root),
         rules_enums::edges::the_registry_and_the_edge_table_hold_the_same_edges(&root),
         rules_enums::reachability::every_status_declares_the_step_states_it_holds(&root),
+        rules_toolbelt::the_roster_and_the_allowlist_hold_the_same_set(&root),
     ];
 
     let mut out = String::new();
