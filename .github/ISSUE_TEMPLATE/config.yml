@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How an issue is written here
+    url: https://github.com/NickMele/armada/blob/main/docs/practices/writing-an-issue.md
+    about: The first paragraph rule, and what belongs under each heading.

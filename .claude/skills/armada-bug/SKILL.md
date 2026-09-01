@@ -49,19 +49,21 @@ Four things wear the same clothes, and only one of them is a bug.
 ### 3. Write it so it survives
 
 The owner will read this weeks from now, and so will an agent with none of
-today's context. Follow the shape the repository's issues already use:
+today's context.
 
-- **`## What happened`** — the symptom in his words, quoted, and what the code
-  actually does. Include the exact error text and the commands that show it.
-- **`## Why it matters`** — the consequence, not the severity. "A person who
-  cannot approve from the detail view has to go back to the list" beats "high
-  priority".
-- **`## In`** — what has to change, and **what already exists that it builds
-  on.** Name the file and the line. An issue that makes the reader rediscover
-  what you already found wastes the work.
-- **`## Watch for`** — the wrong fix. Every bug has one, and it is usually the
-  first thing that comes to mind.
-- **`## Definition of done`** — one sentence, checkable.
+**The shape is `.github/ISSUE_TEMPLATE/bug.md` and the rules are
+`docs/practices/writing-an-issue.md`.** Read that page; do not write the shape
+from memory of this one.
+
+**The rule this skill adds, because it is where filing goes wrong:** the opening
+paragraph is the consequence, and the provenance goes last. You have just spent
+an hour finding this, and the reflex is to open with how you found it. Thirty-one
+of the last sixty issues open on *Found by…*, *Drawn in…* or *Filing this small
+because…*. Every one of them is worth keeping and none of them is the answer.
+
+`## Why it matters` was the best section in those issues and it sat in third
+position, where it was scrolled past. It is now the first paragraph, and it has
+no heading — because a heading is what let it be skipped.
 
 **Write down the reasoning, not just the conclusion.** The best issues in this
 repository say *why* the obvious fix is wrong — that is what stops it being

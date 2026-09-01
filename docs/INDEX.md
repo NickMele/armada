@@ -33,6 +33,9 @@ Each ends with the questions it found and did not answer.
 - [`practices/comparing-to-the-drawing.md`](practices/comparing-to-the-drawing.md) —
   `pnpm shoot`: how a built screen and its drawing become two images side by
   side, and why an unmarked drawing is refused.
+- [`practices/writing-an-issue.md`](practices/writing-an-issue.md) — an issue has
+  two readers who need opposite things. Where the consequence goes, where the
+  detail goes, and why the answer was in third position
 - [`practices/half-built.md`](practices/half-built.md) — the defect this
   codebase produces most: a thing that exists and nothing reaches. Read before
   calling a change finished
