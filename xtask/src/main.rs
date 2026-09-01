@@ -1,10 +1,13 @@
 //! Armada's repository gate.
 //!
-//! `cargo xtask verify-foundations` is **written before any crate it checks**
-//! and is red from that moment until the last subject lands. There is no
-//! pending state: a rule whose subject does not exist yet fails, and says what
-//! is missing. A gate that goes green before the milestone is finished is the
-//! green-signal-with-nothing-behind-it failure it exists to prevent.
+//! `cargo xtask verify-foundations` is **written before any crate it checks**,
+//! and there is no pending state: a rule whose subject does not exist yet
+//! fails, and says what is missing. So red is a legitimate reading, and green
+//! says only that every subject named so far has landed. What this design
+//! refuses is a green signal with nothing behind it, never red itself.
+//!
+//! **Neither colour is the signal — the delta is.** A `missing:` line a change
+//! introduced is a regression whatever the totals did.
 //!
 //! No dependencies. The gate must run on a checkout with nothing built.
 
@@ -141,7 +144,8 @@ fn verify_foundations() -> ExitCode {
     if fails > 0 {
         println!("\nverify-foundations: RED — {fails} failing, {warns} warning");
         println!(
-            "Red is the expected state until M0 is finished. Each line above names its subject."
+            "Red is a legitimate state. Each line above names its subject — read those, \
+             and compare them against the baseline on main rather than to zero."
         );
         ExitCode::FAILURE
     } else {

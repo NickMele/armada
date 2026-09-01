@@ -14,10 +14,12 @@ in `xtask`'s own rules, and are referenced below as `store`, `ipc` and
 other six are not named anywhere in the repo and this document does not invent
 names for them.
 
-`cargo xtask verify-foundations` is red right now, on purpose. A gate that goes
-green before the milestone it's checking is finished is the failure mode it
-exists to prevent — see the module comment in `xtask/src/main.rs`. Don't chase
-green; read what each failing rule says is missing.
+**Read `cargo xtask verify-foundations` as a delta against a baseline you pinned
+on `main` in the same pass, not as a colour.** A rule whose subject does not
+exist yet fails and names what is missing, so red is a legitimate state and
+green means the lines named so far are cleared — see the module comment in
+`xtask/src/main.rs`. A `missing:` line your change added is a regression: fix
+it, or split what grew.
 
 **Comments are governed by `.claude/skills/comments/SKILL.md`.** A comment says
 why in a line or two; a block over twenty-five lines fails the gate, and the
@@ -290,6 +292,12 @@ grown a `match` arm for every new case instead of dispatching through a trait
 that already exists for exactly that purpose — `adapter-traits` exists so
 that kind of growth happens in `adapters`, per-vendor, instead of in one
 crate's `match`.
+
+**A `warn:` your change adds, you argue in the file it is about** — a module
+comment, not a report. An unexplained warning is one the next reader treats as
+permission, and a report is read once while the file is read every time. The
+precedent is `crates/fleet/src/tests/headroom.rs`, which stayed one file over
+500 lines with the reason written into its header.
 
 The rule covers `.rs`, `.ts`, and `.tsx` under `crates`, `apps`, `packages`,
 and `xtask`. `docs/` is prose and isn't gated by it.

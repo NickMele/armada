@@ -44,7 +44,7 @@ For every branch this session committed to. The gate is all of it, every time:
 | `cargo test -p acceptance` | separately; a milestone's own claim may be red while it is in flight |
 | `cargo fmt --all --check` | clean |
 | `cargo xtask verify-docs` | green — a stale `docs/OPEN.md` fails it |
-| `cargo xtask verify-foundations` | **red on purpose.** Read the delta; never chase it green |
+| `cargo xtask verify-foundations` | **the delta, never the colour.** A `missing:` line this session added is a regression |
 | Bridge: `typecheck`, `build`, `build-storybook` | if `apps/` or `packages/` was touched |
 
 **Take the baseline from `main` in the same pass**, not from a brief written

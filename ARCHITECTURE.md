@@ -137,9 +137,11 @@ Each is enforced by `cargo xtask verify-foundations`, not by remembering.
 - 900 lines refuses a file, 500 asks.
 - Every document is in an index, and every open question is collected.
 
-**The gate is red until a milestone finishes, and that is the design.** A rule
-whose subject does not exist yet fails and names what is missing. Do not chase
-green — read what each failing line says.
+**Read the delta against a pinned baseline, never the colour.** A rule whose
+subject does not exist yet fails and names what is missing, so red is a
+legitimate state and a milestone landing registry rows ahead of the code
+satisfying them returns the gate to it. Green means the lines named so far are
+cleared, not that the foundations are finished.
 
 ## Reading order
 

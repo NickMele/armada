@@ -102,10 +102,11 @@ harmless in review.
    and that is the gap `[protocol-codegen]` names.
 4. **Run `cargo xtask verify-foundations`.** It refuses a generated constant
    that disagrees with `protocol-version.toml` and names both versions, which
-   is the whole of step 3 for the version. It needs nothing built and is red
-   for other reasons until a milestone finishes, so read the line rather than
-   the exit code. That nothing outside the generated file hard-codes the
-   version is still verified by reading — `[verify-protocol-task]` below.
+   is the whole of step 3 for the version. It needs nothing built, and it
+   reports on rules that have nothing to do with the protocol, so read the line
+   naming the version rather than the exit code. That nothing outside the
+   generated file hard-codes the version is still verified by reading —
+   `[verify-protocol-task]` below.
 5. Commit the `ipc` source change and the regenerated files in the same
    change. A generated-file diff with no corresponding source diff, or vice
    versa, is the thing review should bounce.

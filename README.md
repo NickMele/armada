@@ -119,9 +119,10 @@ crate graph, and the rules that hold everywhere, with diagrams.
 
 ## Building it
 
-You will get a gate that reports red. **That is the expected output** — it
-stays red until a milestone is finished, and each failing line names its own
-subject. The tests pass.
+**A gate that reports red is not a broken checkout.** A rule whose subject does
+not exist yet fails and names it, so the gate goes red whenever a milestone
+lands its registry rows ahead of the code satisfying them. The tests pass
+either way.
 
 **Requirements:** macOS, Rust 1.90 or later, Node 22 or later, and
 [pnpm](https://pnpm.io).
@@ -129,7 +130,7 @@ subject. The tests pass.
 ```sh
 git clone https://github.com/NickMele/armada.git
 cd armada
-cargo xtask verify-foundations   # red until a milestone finishes — read what it names
+cargo xtask verify-foundations   # read what each line names, not the exit code
 pnpm install
 ```
 
@@ -140,7 +141,7 @@ runs on a laptop and in CI. It has no dependencies and needs nothing built.
 
 | Command | Checks |
 |---|---|
-| `cargo xtask verify-foundations` | Every rule below. **Red is the expected state** until a milestone is finished |
+| `cargo xtask verify-foundations` | Every rule below. **Red is a legitimate state** — read what each line names |
 | `cargo xtask verify-tokens` | The design token outputs match the CSS they are generated from |
 | `cargo xtask verify-docs` | Open questions are collected, and every citation of one resolves |
 | `cargo xtask verify-roadmap` | Capabilities and their GitHub issues agree. Needs `gh` and a network — deliberately not part of the gate |

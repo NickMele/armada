@@ -138,9 +138,10 @@ pub fn every_document_is_indexed(root: &Path) -> Report {
 /// alternative is remembering. The needle is assembled rather than written so
 /// this rule does not fail on itself.
 ///
-/// **Red is the expected state while the contracts are still moving.** Each
-/// line it names is a document that has not been carried across yet, and the
-/// list shortens as they land.
+/// **A line this rule names is a fix, not a tolerance.** It is a document still
+/// carrying an address out of the workspace it was drafted in, and the fix is to
+/// say what the thing is rather than where it lives. Carrying more documents
+/// across puts lines back on the list, which is the rule doing its job.
 pub fn nothing_links_to_the_design_workspace(root: &Path) -> Report {
     let mut report = Report::new("nothing links to the design workspace");
     let needle = concat!("notion", ".");

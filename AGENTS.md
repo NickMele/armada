@@ -3,8 +3,8 @@
 A macOS app that dispatches coding agents against git repositories and verifies
 their work before advancing them. Rust daemon, Electron app, one repo.
 
-- `cargo xtask verify-foundations` is **red on purpose** until a milestone is
-  finished. Do not chase green — read what each failing line names.
+- **Read `cargo xtask verify-foundations` as a delta against `main`, not as a
+  colour.** Red is legitimate — read what each line names, and never chase green.
 - **The acceptance test is a milestone's own claim**, written before the code.
   `docs/practices/acceptance-tests.md`.
 - **v1 is deleted.** A bare file path in a doc means `git show v1-final:<path>`.

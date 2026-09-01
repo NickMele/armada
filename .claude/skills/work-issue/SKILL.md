@@ -76,7 +76,7 @@ them yourself is running what Fleet would run:
 | Tests | `cargo nextest run --workspace --exclude acceptance` |
 | The milestone's own claim | `cargo test -p acceptance` |
 | Bridge | `pnpm -C apps/desktop typecheck`, `build`, and `pnpm -C packages/components build-storybook` |
-| The gate | `cargo xtask verify-foundations` — **red on purpose**, so read what each line names rather than chasing green |
+| The gate | `cargo xtask verify-foundations` — **no worse than the baseline you took off `main`.** Read what each line names; never chase a colour |
 
 **Verify it yourself rather than on a report.** An agent's claim of green has
 been wrong here.

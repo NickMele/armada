@@ -35,7 +35,7 @@ Four things, and a line that gives fewer is a line that will be run wrong.
 | **What it does** | In a sentence, from the reader's side. Not "runs the verifier" — *checks that the token outputs match the CSS they are generated from* |
 | **When you run it** | Before a commit, after changing a registry, only in CI, never by hand |
 | **What it needs** | A network, `gh`, a built workspace, a running daemon. **Say when it needs nothing** — that is worth as much |
-| **What its output means** | Especially failure. `verify-foundations` is red on purpose; a reader who does not know that reads a healthy repository as a broken one |
+| **What its output means** | Especially failure. `verify-foundations` goes red naming a subject that does not exist yet; a reader who does not know that reads a healthy repository as a broken one |
 
 ## Human readable is the requirement, not a preference
 

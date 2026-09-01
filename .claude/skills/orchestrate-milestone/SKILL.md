@@ -80,9 +80,9 @@ All of it, every time:
 | | |
 |---|---|
 | The gating check passes | `cargo nextest run --workspace --exclude acceptance` |
-| The acceptance tests pass | separately; a milestone's own claim may be red on purpose while it is in flight |
+| The acceptance tests pass | separately; a milestone's own claim is red until the milestone lands, which is why it is written first |
 | Both halves build | Bridge too, if it was touched |
-| `verify-foundations` is no worse | it is red on purpose — read the delta, never chase it green |
+| `verify-foundations` is no worse | against a baseline off `main`, not against zero — a `missing:` the branch added blocks |
 | `verify-docs` is green | a stale `docs/OPEN.md` fails it |
 | You have read the diff | not the report |
 

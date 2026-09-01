@@ -101,8 +101,8 @@ From `packages/components`:
 
 From the repository root:
 
-- `cargo xtask verify-foundations`. Red is expected on unrelated lines; read
-  what each names rather than chasing green.
+- `cargo xtask verify-foundations`. It reports on the whole repository, so run
+  it on `main` too and own the lines your change added — never the colour.
 
 ## What a change owes
 
