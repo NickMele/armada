@@ -3,11 +3,11 @@
 //! # The reading already existed and was thrown away
 //!
 //! [`crate::scope`] reads the worktree on every turn of a step that watches its
-//! scope, keeps the paths outside the declared plan and discards the rest. The
-//! footprint it discarded is the thing a person watching a Drone actually wants
-//! — not *did it wander*, but *what has it touched* — and no event carried it.
-//! So this takes the reading, publishes the whole list, and hands what it read
-//! to the drift check so the same turn does not open the repository twice.
+//! scope, keeps the paths outside the declared plan and discards the rest. What
+//! it discarded is what a person watching a Drone actually wants — not *did it
+//! wander* but *what has it touched* — and no event carried it. So this takes
+//! the reading, publishes the whole list, and hands what it read to the drift
+//! check so one turn does not open the repository twice.
 //!
 //! # Three conditions, and none of them is "every turn"
 //!
@@ -21,40 +21,8 @@
 //! | Some client is subscribed to the event stream | A Fleet nobody has open reads nothing. The event has exactly one consumer and it is a window somebody closed to go to lunch |
 //! | [`FOOTPRINT_INTERVAL`] has passed since the last reading | Seven turns in eight open no repository |
 //!
-//! The interval is the one that needed choosing rather than deriving. Two
-//! seconds is slower than a person can read a list and faster than they can
-//! wonder whether it is stuck, and it is measured **from the last reading
-//! attempt** rather than the last success — a repository that will not open
-//! must not turn into a read every 250ms for as long as the step lasts.
-//!
-//! # A footprint that has not moved is not republished
-//!
-//! The event channel is drop-oldest and fixed, and everything evicted from it
-//! costs a full resync of every Job. A reading identical to the last one
-//! therefore publishes nothing, which is what keeps a Drone that is thinking
-//! rather than writing from pushing the Board's state changes out of the
-//! buffer.
-//!
-//! **The one exception is a client that just arrived.** A resync carries the
-//! Job list and no footprint, so a Bridge opened mid-Job would hold an empty
-//! file list until the Drone next wrote — indistinguishable from a Drone that
-//! has done nothing. When the watcher count rises off zero the memo is dropped,
-//! and the next reading publishes whatever it finds.
-//!
-//! # The last reading is written down, and that one is not thrown away
-//!
-//! Everything above is a live view, and it is only taken while somebody is
-//! watching — so a Job read a week after it finished showed a different
-//! footprint from the same Job read while it ran, which teaches a person not to
-//! trust the surface. [`Fleet::kept_footprint`] takes one more reading at the
-//! terminal transition and hands it to the store.
-//!
-//! **At the transition and never afterwards.** `armada clean` gives worktrees
-//! back, so a reading taken when somebody opens the Job is a guess about a
-//! directory that may not exist. This one is a record of one that did.
-//!
-//! Its drift mark names steps rather than asserting one — [`kept`], over what
-//! `store::plan` wrote as each step declared, silent where none did.
+//! What [`Publishing`] then decides is whether the reading is worth sending,
+//! and [`Fleet::kept_footprint`] is the one reading that is written down.
 
 use std::time::Duration;
 
@@ -73,6 +41,11 @@ use crate::working::Working;
 /// Not a setting. It is the resolution of a live view rather than a policy
 /// anybody tunes per repository, and a number in one place is one thing to
 /// change if the measurement ever says otherwise.
+///
+/// **Two seconds**: slower than a person can read a list, faster than they can
+/// wonder whether it is stuck. Measured **from the last reading attempt** and
+/// not the last success, so a repository that will not open does not turn into
+/// a read every 250ms for as long as the step lasts.
 pub(crate) const FOOTPRINT_INTERVAL: Duration = Duration::from_secs(2);
 
 /// What the slot remembers between readings of the live footprint.
@@ -84,6 +57,15 @@ pub(crate) const FOOTPRINT_INTERVAL: Duration = Duration::from_secs(2);
 ///
 /// Cleared when the step changes, for the reason the declaration is: a
 /// footprint belongs to the Drone that is holding the pen.
+///
+/// **A footprint that has not moved is not republished.** The event channel is
+/// drop-oldest and fixed, and everything evicted from it costs a full resync of
+/// every Job — so a reading identical to the last one publishes nothing, which
+/// keeps a Drone that is thinking rather than writing from pushing the Board's
+/// state changes out of the buffer. The exception is a client that just
+/// arrived: a resync carries the Job list and no footprint, so a Bridge opened
+/// mid-Job would hold an empty file list until the Drone next wrote —
+/// indistinguishable from a Drone that has done nothing. See [`Self::watched`].
 #[derive(Debug, Default)]
 pub(crate) struct Publishing {
     /// When the last reading was **attempted**. `None` before the first.
@@ -183,14 +165,22 @@ where
     /// Read the worktree one last time and write it down, because nothing else
     /// will be able to.
     ///
-    /// Called on the transition that ends a Job, from the one path every Job
-    /// move goes through, so no terminal status is reached without passing
-    /// here. **It takes no slot lock**: the caller may be a turn already
-    /// holding it, and the worktree is derived from the Job rather than from
-    /// the Drone that was on it.
+    /// Called on the transition that ends a Job, from the one path every move
+    /// goes through, so no terminal status is reached without passing here.
+    /// **It takes no slot lock**: the caller may be a turn already holding it,
+    /// and the worktree is derived from the Job rather than from the Drone.
     ///
-    /// # Nothing here can fail the transition
+    /// **At the transition and never afterwards.** The live view is taken only
+    /// while somebody is watching, so a Job read a week after it finished
+    /// showed a different footprint from the same Job read while it ran, which
+    /// teaches a person not to trust the surface. And `armada clean` gives
+    /// worktrees back, so a reading taken when somebody opens the Job is a
+    /// guess about a directory that may not exist; this one is a record of one
+    /// that did. Its drift mark names steps rather than asserting one —
+    /// [`kept`], over what `store::plan` wrote as each step declared, silent
+    /// where none did.
     ///
+    /// **Nothing here can fail the transition.**
     /// The move has already landed. A Job with no worktree — one never
     /// dispatched, one refused at the approval gate — records nothing, which is
     /// the absent case and not an empty one. A worktree that will not open, or

@@ -1,85 +1,17 @@
 //! What travels the socket: the resync, the events, and the admission that
 //! events were dropped.
 //!
-//! # A reconnection resyncs; it does not replay
-//!
-//! Every connection opens with a [`StreamMessage::Resync`] carrying the current
-//! state of every Job and the [`Cursor`] that state is current as of. Replay
-//! from the beginning was rejected on what it would cost mid-Job: a Bridge
-//! reopened after lunch would receive hours of transitions to fold before it
-//! could draw anything, and it would be folding them into a Board that Fleet
-//! could already state in one message.
-//!
-//! **What a client can rebuild from a resync:** where every Job is now, why —
-//! where the reason was stored — which step it is on, and whether a Drone is on
-//! it.
-//!
-//! **What it cannot:** the path taken. No transition history, no instants for
-//! anything that already happened, and nothing at all about a Job that reached
-//! a terminal status and was retained out. A surface that draws a timeline
-//! reads `get_job_events`, and its timeline begins at the connection.
-//!
-//! # The stream is global, and a client subscribes to nothing
-//!
-//! One socket carries every Job, because Bridge holds exactly one connection
-//! and the Board renders every Job on it. A per-Job subscription would put
-//! state on a connection whose entire value is being cheap to drop and remake,
-//! and would need a subscribe message, an unsubscribe message and a rule for
-//! what a resync means when the set changes mid-stream.
+//! **`docs/practices/protocol.md`, *The first socket*, owns the decisions here**
+//! — why a reconnection resyncs rather than replays, what a resync can and
+//! cannot rebuild, why the stream is global with no subscription, why an
+//! unproduced kind is not stubbed, and why `job.created` is a kind of its own
+//! rather than a [`JobStateChanged`] with a `from` the edge table has no row
+//! for.
 //!
 //! **Over 500 lines and left as one file.** One `#[serde(tag = "kind")]` enum
 //! is the closed set a rule compares against `operations.toml` row by row, so a
 //! split would assemble that roster from two places. It was at exactly 500
 //! before `job.asking`.
-//!
-//! # Seven event kinds are produced at M1
-//!
-//! The rest of `operations.toml`'s — `alert.raised`, `review.ready`,
-//! `evidence.submitted` and `usage.threshold` — describe records this workspace
-//! has no type for yet, and are **not stubbed**: a kind that exists and never
-//! fires reads as a stream that is working.
-//!
-//! The Drone lifecycle pair left that list when `assigned_drone` got an event
-//! that sets it. A Board could show a Drone only by re-reading the Job, and
-//! nothing told it to.
-//!
-//! `job.step_advanced` was in that list until the inner machine arrived, and
-//! then a Job running through four steps still emitted one event and nothing
-//! after it. What changes most often during a run was what the stream did not
-//! carry.
-//!
-//! `job.files_changed` is the sixth, and it is the only kind that describes a
-//! worktree rather than a record. Fleet already read the footprint every turn a
-//! step watched its scope and kept only the paths that had drifted; what a
-//! person needs while a Drone works is the whole list, and nothing carried it.
-//! **Bridge does not read a worktree** — no surface on the other side of this
-//! seam opens a repository, so the only way a file list reaches one is as an
-//! event like every other.
-//!
-//! # `job.created` is a kind and not a state change, and that is why it exists
-//!
-//! A Job proposed while a client was connected never reached it: creation
-//! publishes nothing, so nothing woke Bridge, and the row appeared only when
-//! something else forced a re-read.
-//!
-//! The alternative was publishing a [`JobStateChanged`] on creation. It was
-//! rejected on what that message would have to say: the type has a `from` and
-//! a `to`, and a created Job has no `from` — the honest fields would be
-//! `from: awaiting_approval, to: awaiting_approval`, a transition the edge
-//! table does not contain, from a status the Job was never in. Every client
-//! folding the stream would apply a move that did not happen. A creation is a
-//! row appearing, not a row moving, and the two are different messages.
-//!
-//! It carries the whole [`JobSummary`] for the same reason: a kind that only
-//! named an id would make every client fetch the row it was just told about.
-//!
-//! # `job.forgotten` is the opposite message, and carries the opposite payload
-//!
-//! Where `job.created` carries the row whole because there is nothing yet for
-//! a client to have, `job.forgotten` carries only the id — a `forget_job` is a
-//! real deletion, through `Store::forget_job`, and by the time the event is
-//! published there is no row left to carry. A client drops it from whatever
-//! it is holding rather than replacing it.
 
 use serde::{Deserialize, Serialize};
 

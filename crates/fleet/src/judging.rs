@@ -1,68 +1,28 @@
 //! Making the Judge's calls, and folding the answers into a veto.
 //!
-//! # Nothing here can advance a step
+//! **Nothing here can advance a step.** [`judged`] answers `Option<Refusals>`:
+//! refused, or declined to refuse. No value means "approved", so all the gate
+//! can do with it is `Verdict::but_for`, which narrows.
 //!
-//! [`judged`] answers `Option<Refusals>` — refused, or declined to refuse. It
-//! has no return value meaning "approved", so the only thing the gate can do
-//! with it is `Verdict::but_for`, which narrows.
+//! **A call that could not be made is not an answer.** A missing program, a
+//! non-zero exit, a signal, an expired budget, an empty answer, prose instead of
+//! a verdict — each is a [`CallFailed`]. A machine that cannot answer must not
+//! produce one, in either direction.
 //!
-//! # A call that could not be made is not an answer
-//!
-//! Every failure — a program that is not there, a non-zero exit, a signal, an
-//! expired budget, an empty answer, prose instead of a verdict — comes back as
-//! [`CallFailed`] rather than as a verdict. A machine that cannot answer must
-//! not produce one, in either direction.
-//!
-//! # What one call is shown, and who decided it
-//!
-//! [`judged`] assembles two things the Judge is not otherwise given. The
-//! **work product** comes from `verification::Product`, which reads the step's
-//! own declared `evidence_type` — a step whose product is a document is shown
-//! the document, and a step whose product is the change is shown the diff. The
-//! **yardstick** comes from `evidence_scope.reference_docs`, resolved through
+//! **A caller chooses none of what the Judge is shown.** The work product comes
+//! from `verification::Product`, reading the step's declared `evidence_type`;
+//! the yardstick from `evidence_scope.reference_docs` through
 //! [`AtStep::baseline`], which answers only with a strictly earlier step that
-//! actually recorded something.
+//! recorded something. The **request** is the exception — it belongs to the Job
+//! rather than the step and rides every brief, including the drift look.
+//! Unconditional on purpose: per-criterion needs a key in the definition, and a
+//! criterion asking about the request whose author forgot the key is #169 one
+//! dial smaller. The cost is unmeasured: a few hundred characters beside a brief
+//! already carrying a whole diff, times `panel_size` — the dial to reach for.
 //!
-//! Neither is a parameter a caller chooses. A definition names what it is
-//! measured against and the step declares what it produces, so nothing here
-//! decides what the Judge may see.
-//!
-//! The **request** is the third and it is the one thing a caller does hand in,
-//! because it belongs to the Job rather than to the step: `verification::
-//! Request::of` reads it off the `Job` row and there is no other constructor.
-//! It goes on every brief, including the drift look, and that is a cost:
-//! a title, the requester's facts and the Job's acceptance criteria, added to
-//! every criterion of every step and multiplied by `panel_size`. Nobody has
-//! measured it and this does not invent a number — what is known is the shape,
-//! a few hundred characters beside a brief that already carries a whole diff.
-//!
-//! **Unconditional on purpose.** Making it per-criterion needs a key in the
-//! definition, and a criterion that asks about the request while its author
-//! forgot the key is the defect #169 named, one dial smaller. If the cost is
-//! ever shown to matter, the dial to reach for is `panel_size`, which
-//! multiplies the whole brief and not this part of it.
-//!
-//! # A call that is out says so while it is out
-//!
-//! Every call here is marked into [`Marking`] before it goes and unmarked when
-//! it comes back, so `get_job` can answer *which criterion, since when* and the
-//! event stream can say it without being asked. The verdict rendered and the
-//! wait did not, so a step waiting on a model call and a step that had quietly
-//! become unreachable were the same pixels.
-//!
-//! **The mark is a guard, not a pair of calls.** A call ends every way
-//! [`CallFailed`] has and one more — and a matching "and now clear it" written
-//! at each of them is the one that gets forgotten at the next one added.
-//!
-//! [`said`] is deliberately not where the mark goes, even though it is where
-//! every call actually runs: the Job proposer calls it too, and a proposal is
-//! not a Judge. The mark is at the four sites that are.
-//!
-//! # Where it runs
-//!
-//! In the process's temporary directory, never the worktree. A `JudgeCall`
-//! carries no directory, so the repository is not something the call declines
-//! to open — it is somewhere the call is not.
+//! **Calls run in the process's temporary directory, never the worktree.** A
+//! `JudgeCall` carries no directory, so the repository is not something a call
+//! declines to open — it is somewhere the call is not.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -222,6 +182,19 @@ impl Aloft {
 ///
 /// Bound to one Job at the moment the gate is entered. `Fleet::judging` takes a
 /// Job for that reason and for no other.
+///
+/// **A call that is out says so while it is out.** Every call is marked here
+/// before it goes and unmarked when it returns, so `get_job` can answer *which
+/// criterion, since when* and the stream can say it unasked. The verdict
+/// rendered and the wait did not, so a step waiting on a model call and a step
+/// that had quietly become unreachable were the same pixels.
+///
+/// **The mark is a guard, not a pair of calls.** A call ends every way
+/// [`CallFailed`] has and one more, and a matching "and now clear it" written
+/// at each is the one forgotten at the next end added. [`said`] is deliberately
+/// not where it goes, even though it is where every call runs: the Job proposer
+/// calls it too, and a proposal is not a Judge. The mark is at the four sites
+/// that are.
 ///
 /// **Detached is a real state and not a stub.** `Judging` is a value, and the
 /// only caller holding a Fleet is Fleet — a gate driven straight, by the

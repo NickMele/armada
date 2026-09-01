@@ -1,73 +1,27 @@
 //! `armada serve` — Fleet, started by hand, against a repository.
 //!
-//! # The shape, which is the point of this step
+//! # The order is the specification
 //!
-//! Seven things happen, in this order, and the order is the specification:
+//! 1. Read any runtime file there: refuse over a live Fleet, replace a stale one.
+//! 2. Read the repository's own setup — no `--manifest` flag, [`crate::setup`]
+//!    for why — and **refuse before taking anything.** An `armada.yml` found
+//!    wrong after the bind costs a port and a runtime file, and both would have
+//!    to be given back.
+//! 3. Bind the listener: loopback, provisional port.
+//! 4. Write the runtime file carrying the port **read back from the bound
+//!    listener**. Publishing a number nobody listens on gives Bridge a socket
+//!    that refuses and no way to tell that from a wedged Fleet.
+//! 5. Assemble a Fleet over that repository; reconcile the store against what
+//!    this process can see.
+//! 6. Serve, turning the same `Arc` the router holds. The loop starts first,
+//!    because reconciliation can admit a queued Job that needs turning whether
+//!    or not anything ever connects.
+//! 7. Wait to be stopped; the file's guard removes it.
 //!
-//! 1. Read whatever runtime file is already there, and refuse to start over a
-//!    live Fleet. A stale one is replaced.
-//! 2. **Read the repository's own setup and refuse before taking anything.**
-//!    An `armada.yml` that is absent or wrong costs a port and a runtime file
-//!    if it is discovered after the bind, and both would have to be given back.
-//! 3. Bind the listener. Loopback, at a provisional port.
-//! 4. Write the runtime file, carrying the port **read back from the bound
-//!    listener** rather than the one that was asked for.
-//! 5. Assemble a Fleet over that repository, and reconcile what the store says
-//!    against what this process can actually see.
-//! 6. Serve the five operations over the bound listener.
-//! 7. Wait to be told to stop, then let the file's guard remove it.
-//!
-//! Binding before publishing is what makes the file's port true. Publishing a
-//! number nobody is listening on gives Bridge a socket that refuses and no way
-//! to tell that from a Fleet that is wedged.
-//!
-//! # A repository carries its own setup
-//!
-//! There is no `--manifest` flag and no `--workflow` flag. Fleet is given a
-//! repository — one argument, or the working directory — and everything else
-//! is read from inside it: `armada.yml` at the root and one definition in
-//! `.armada/workflows/`. [`crate::setup`] holds the reasoning; what matters
-//! here is that a Fleet started twice against one repository cannot be started
-//! two different ways.
-//!
-//! # The refusals are not swallowed
-//!
-//! `config` names every fault in a file rather than stopping at the first, and
-//! every one of them reaches the terminal on a line of its own. The person
-//! reading that output is the person who wrote the file.
-//!
-//! # This is not launchd, and it is deliberately shaped for it
-//!
-//! No plist is written here and no `launchctl` is called; supervision is the
-//! Ship milestone's. What this step owes that milestone is a process launchd
-//! can adopt without a rewrite — one that binds, publishes, runs until
-//! signalled, and cleans up on the way out. Every one of those is what launchd
-//! expects of a job it holds, so adding supervision later adds a plist and
-//! changes nothing here.
-//!
-//! One launchd-shaped rule is **not** implemented, on purpose: Fleet exiting
-//! `0` on a permanent refusal, so `KeepAlive={SuccessfulExit:false}` leaves it
-//! down instead of crash-looping it. That rule earns its keep only once
-//! something is restarting Fleet. Started by hand, a refusal that exits `0`
-//! reads to the person at the terminal as success. So a genuine refusal below —
-//! an unreadable runtime file, a port something else holds, a Manifest Armada
-//! will not have — exits non-zero, and turning that around belongs with the
-//! plist that makes it mean something.
-//!
-//! Starting over a Fleet that is already running is **not** one of those. It
-//! exits `0` and names the pid holding the port, because the state the caller
-//! asked for is the state that already holds. v1's `start` was idempotent for
-//! the same reason and carried a test by that name.
-//!
-//! # What is served, and what turns it
-//!
-//! `api::router` over the bound listener, with a real Fleet: the five
-//! operations answer from Jobs rather than from a fake. **And the same Fleet is
-//! turned** — the router and `fleet::keep_turning` hold one `Arc` each, so a
-//! Job approved from Bridge is settled rather than left dispatched. The loop
-//! starts before the listener, because reconciliation can admit a queued Job on
-//! the way out and that Job needs turning whether or not anything ever
-//! connects.
+//! **`exit 0` on a permanent refusal is deliberately not implemented.**
+//! `docs/concepts/fleet.md` requires it of a supervised Fleet; started by hand,
+//! a refusal exiting `0` reads at the terminal as success. Starting over a live
+//! Fleet is not a refusal — it exits `0` and names the pid holding the port.
 
 use std::error::Error;
 use std::path::PathBuf;
@@ -140,37 +94,23 @@ pub const PROVISIONAL_JUDGE_BUDGET: Duration = Duration::from_secs(120);
 ///
 /// **Provisional, and measured on one repository rather than on none.**
 /// `docs/spikes/009-how-long-does-a-step-take.md` holds the distribution and
-/// what it was taken over — the Jobs this repository has run, on two
-/// workflows, one model, with a warm build cache. Not a fleet-wide constant.
-/// Tripping one of them costs a Judge call and nothing else — see
-/// `fleet::converging`, where the escalation is three stages further on.
+/// what it was taken over — 31 steps, two workflows, one model, a warm build
+/// cache. Not a fleet-wide constant.
 ///
-/// **Calls, at sixty.** The unit is the Drone's own tool calls per step, which
-/// is what `fleet::Progress::calls` counts and what the harness's `turns` could
-/// not be read as mid-step. Measured per step rather than per invocation —
-/// the unit the comparison uses — the median is 18 and the p90 is 68, so sixty
-/// sits just under the widest ordinary step and four of the 31 steps measured
-/// would have bought a look. Left where it is rather than raised to the p95:
-/// sixty is the more sensitive reading, and 31 steps on one repository is not
-/// enough to move a tripwire in the direction that makes it fire less.
+/// | Wire | Value | What the measurement said |
+/// |---|---|---|
+/// | Calls, per step | 60 | Median 18, p90 68, so sixty sits just under the widest ordinary step and four of the 31 would have bought a look. Left there rather than raised to the p95: sixty is the more sensitive reading, and 31 steps on one repository is not enough to move a tripwire in the direction that makes it fire less. The unit is `fleet::Progress::calls`, because the harness's `turns` could not be read per step |
+/// | Wall clock | 1500s | Down from an 1800s nothing had measured. Nine steps in ten finished inside 500s and the longest honest one took 1777s — but the floor is not the distribution, it is 1337s: one Check at [`PROVISIONAL_CHECK_BUDGET`] plus a p90 step's own work, because a step's clock runs through Fleet's own Checks and does not restart on a retry |
+/// | Grace | 120s | The shortest of the three deliberately. Spike 4 measured an injected turn consumed in 1.59s mid-task and 33s against a forty-second command, so two minutes is a Drone that is not answering rather than one inside a long call |
 ///
-/// **The wall clock, at 1500s, down from an 1800s nothing had measured.** Nine
-/// steps in ten finished inside 500s and the longest honest one took 1777s.
-/// The floor is not the distribution: a step's clock runs through Fleet's own
-/// Checks and does not restart on a retry, so an honest step can hold one
-/// Check at `PROVISIONAL_CHECK_BUDGET` plus a p90 step's own work, which is
-/// 1337s. And **a trip spends the step's only look**, whichever wire fired, so
-/// a ceiling low enough to catch a stuck Drone early is a ceiling that burns
-/// the attention a later, real thrash would need.
+/// **A trip spends the step's only look**, whichever wire fired, so a ceiling
+/// low enough to catch a stuck Drone early is one that burns the attention a
+/// later, real thrash would need. Tripping costs a Judge call and nothing else
+/// — see `fleet::converging`, where the escalation is three stages further on.
 ///
-/// **What it does not catch is what stopped every stuck step measured.** They
-/// were quiet, not long, and that is [`PROVISIONAL_LIVENESS`]'s to catch rather
-/// than this value's.
-///
-/// The grace is the shortest of the three deliberately: spike 4 measured an
-/// injected turn consumed in 1.59s mid-task and 33s against a forty-second
-/// command, so two minutes is a Drone that is not answering rather than one
-/// inside a long call.
+/// **What none of them catches is what stopped every stuck step measured.**
+/// They were quiet, not long, and that is [`PROVISIONAL_LIVENESS`]'s to catch
+/// rather than this value's.
 pub const PROVISIONAL_STEP_NORMS: StepNorms =
     StepNorms::of(60, Duration::from_secs(1_500), Duration::from_secs(120));
 
@@ -278,19 +218,10 @@ const PROVISIONAL_RESOURCE_POLL: Polling = Polling::every(Duration::from_secs(5)
 /// carry both — see `fleet::allowance`, and spike 5, which is why there are two
 /// signals at all.
 ///
-/// **Five dollars, and it is deliberately wide.** A small feature Job measured
-/// at a mean of $0.099 across three identical successful runs, whose prices
-/// spread 2.31x on cache warmth alone — $0.063, $0.087, $0.146 — with almost
-/// none of that attributable to the work. A cap set anywhere near the mean
-/// would refuse a healthy Job for having started cold. Five dollars is roughly
-/// fifty such Jobs, which is not a Job going slightly over: it is a Job that
-/// has stopped making progress and kept paying.
-///
-/// **Three hundred turns, and that one is the ceiling that actually catches
-/// something.** The same three runs turned 7, 7 and 4 times, so turns are the
-/// steady signal the price is not. A four-step Job at a generous thirty turns a
-/// step is 120; three hundred leaves room for a workflow twice that long and
-/// still stops a Drone that has been going in circles for hours.
+/// | Cap | Value | Why there |
+/// |---|---|---|
+/// | Dollars | 5 | Deliberately wide. A small feature Job measured a mean of $0.099 across three identical successful runs whose prices spread 2.31x on cache warmth alone — $0.063, $0.087, $0.146 — with almost none of that attributable to the work, so a cap anywhere near the mean would refuse a healthy Job for having started cold. Five dollars is roughly fifty such Jobs: not a Job going slightly over, but one that has stopped making progress and kept paying |
+/// | Turns | 300 | The ceiling that actually catches something. The same three runs turned 7, 7 and 4 times, so turns are the steady signal the price is not. A four-step Job at a generous thirty turns a step is 120; three hundred leaves room for a workflow twice that long and still stops a Drone that has been going in circles for hours |
 ///
 /// **Neither figure stops a Drone that is spending**, and the settings rows say
 /// so where a person sets them. `cost_micros` arrives once, on the final result

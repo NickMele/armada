@@ -1,20 +1,14 @@
 //! The two verification tiers, and the gate between them.
 //!
 //! Mechanical Checks are pure functions over facts that already exist — an exit
-//! code, a file's presence, whether a diff is empty. **Armada does not parse**:
-//! deciding which lines of a test run were the failure is a Judge's question,
-//! answered by reading the diff, never a runner's output.
-//!
-//! The Judge is a veto and not a grant. It fires on mechanical triggers, is
-//! blind to how the step went, and judges whether evidence satisfies the step's
-//! intent. It cannot vouch for something an exit code already contradicted, and
-//! [`Verdict::but_for`] has no arm that produces an advance.
-//!
-//! # The property this crate exists to hold
+//! code, a file's presence, whether a diff is empty. **Armada does not parse:**
+//! which lines of a test run were the failure is a Judge's question, answered by
+//! reading the diff, never a runner's output. The Judge is a veto and not a
+//! grant — it fires on mechanical triggers, is blind to how the step went, and
+//! [`Verdict::but_for`] has no arm producing an advance.
 //!
 //! **A Drone claiming completion in prose advances nothing, and there is no
-//! path from text to a transition.** That is not a check anywhere in this
-//! crate; it is the shape of the types:
+//! path from text to a transition.** Not a check anywhere here — the types:
 //!
 //! | To reach | You need | Which you can only get from |
 //! |---|---|---|
@@ -23,41 +17,12 @@
 //! | [`Submission`] | [`Submission::submitted`] | The fields of the tool call |
 //! | [`Ran`] | [`Ran::of`] | One observation per check the step declared |
 //!
-//! Nothing in that chain accepts a message, a turn, a transcript or a claim —
-//! and the Judge is not on it, because a Judge answer can only take an advance
-//! away.
-//!
-//! # What the Drone hands over, and what Fleet derives
-//!
-//! **A Drone hands over prose and nothing else.** Every gating artifact is
-//! Fleet's own reading: the diff is in the worktree and the Check result is its
-//! own run. So [`Submission`] carries no typed exit code, no file list and no
-//! diff — a Drone cannot report a fact that gates its own step, because there
-//! is no field to report it in.
-//!
-//! `shown_by` is not that field. It **names** an artifact, in prose, for a
-//! person who will go and look; nothing in this crate reads it, and a Drone
-//! writing "exit 0" into it has moved no check. The artifact and the report of
-//! the artifact are different objects, and only the first one gates.
-//!
-//! # The one place a Drone's own words do reach the Judge, and why it is not a
-//! hole
-//!
-//! On a step whose declared work product is a document — a `facts_note`, a
-//! Design Plan — the writing **is** the deliverable rather than a report of
-//! one, and a Judge shown no diff there refuses every time on every Job. It
-//! did. [`Product`] is where that arrives, and [`product`](mod@product) holds
-//! the rule that keeps it from being a loophole: the source is a type, so a
-//! step whose product is the change cannot get its submission in front of a
-//! Judge at all. The transcript reaches nothing, on any step.
-//!
-//! # Why the diff computation lives behind this crate
-//!
-//! The raw diff-computation adapter method is exposed **only** here, so exactly
-//! one place decides whether files changed outside their declared scope. Two
-//! places deciding that is two answers. [`scope`](mod@scope) is that place:
-//! [`InScope::resolved`] at the gate, and [`drifted`] on every turn of a step
-//! that declared its plan up front.
+//! Nothing in that chain accepts a message, a turn, a transcript or a claim.
+//! [`submission`](mod@submission) holds the fields that do not exist, and
+//! [`product`](mod@product) the one step type whose writing *is* the
+//! deliverable. **The raw diff-computation adapter method is exposed only
+//! here**, because two places deciding whether files changed outside their
+//! declared scope is two answers — [`scope`](mod@scope) is the one place.
 
 mod answered;
 mod converging;

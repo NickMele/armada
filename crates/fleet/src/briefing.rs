@@ -1,59 +1,28 @@
 //! The first turn a Drone is given, assembled from the Job it is being put on.
 //!
-//! # The baseline is quoted, not written here
-//!
-//! `docs/contracts/agent-prompt.md` section 5 carries the M1 rendering as
-//! sanctioned copy, and the three clauses it contains each passed a membership
-//! test this module is in no position to re-run. So [`BASELINE`] is that text,
-//! transcribed, and the rest of this module assembles the per-Job blocks around
-//! it. **A wording change belongs in the contract**, and a copy here that
+//! **The baseline is quoted, not written here.** `docs/contracts/agent-prompt.md`
+//! section 5 carries the M1 rendering as sanctioned copy, and each clause in it
+//! passed a membership test this module is in no position to re-run. [`BASELINE`]
+//! is that text transcribed, and the rest of this module assembles the per-Job
+//! blocks around it. A wording change belongs in the contract; a copy here that
 //! drifted from it would be the second-vocabulary defect in prose.
+//! [`notekeeping`], [`Delivering`], the gaming half of [`Stopped`] and the whole
+//! of [`Redeclaring`] are **drafted** for the same reason: sanctioned copy is
+//! the contract's to write and it has none for them yet.
 //!
-//! # Four blocks of six layers, and the two that are missing are missing
+//! **What is not assembled is missing rather than empty.** The contract names
+//! six layers and M1 has no Kit and no Manifest, which its own M1 rendering
+//! says, so what is assembled is baseline, job brief, where-you-are and step.
+//! The exemplar corpus and a review step's injected reference material each
+//! need a record M1 has no type for, and a block rendered empty reads to a
+//! Drone as a block that was answered. What the previous step produced was on
+//! that list and is not — [`crossing`](mod@crate::crossing) is what does.
 //!
-//! The contract names six layers: baseline, Kit, Manifest, WorkflowDef framing,
-//! the Job brief, and the step. **M1 has no Kit and no Manifest layer**, which
-//! the contract's own M1 rendering says, so what is assembled here is baseline,
-//! job brief, where-you-are, step — the four blocks the rendering shows.
-//!
-//! What is not assembled: the exemplar corpus, and the injected reference
-//! material a review step needs. Each needs a record M1 has no type for, and a
-//! block rendered empty reads to a Drone as a block that was answered. **What
-//! the previous step produced was on that list and is not** —
-//! [`crossing`](mod@crate::crossing) is what a boundary hands across.
-//!
-//! Two blocks are assembled that the rendering does not show: [`notekeeping`],
-//! which names where a Drone's own files go, and [`Delivering`], which names
-//! the file the step must produce. Both are **drafted**, like the gaming half
-//! of [`Stopped`] and the whole of [`Redeclaring`] — the contract has no
-//! sanctioned copy for either, and sanctioned copy is the contract's to write.
-//!
-//! # A Drone is not told what the Checks are. It is told it can run them
-//!
-//! This module used to say the first half and stop there: telling a Drone the
-//! Check would let it satisfy the Check rather than do the work. **The owner
-//! overruled that on 2026-08-28** — *"this is what the judge is for and the
-//! gaming checks"* — because the defence against a Drone satisfying the bar
-//! instead of doing the work is `docs/concepts/judge.md` and the gaming
-//! patterns, `check_config_edited` among them, and not keeping the Drone
-//! ignorant. What the old rule actually cost is in `crate::dry_run`: a Drone
-//! that could not run a single command that would tell it anything, hand-
-//! checked its work, said so honestly, and failed a Check it had no way to see
-//! coming.
-//!
-//! So the narrowing that remains is narrower and is about this module rather
-//! than about the system. **No block here is written from a `ResolvedCheck`'s
-//! `run` string** — the step block is written from [`ResolvedStep::label`] and
-//! the Job's own fields, and [`Checking`] says a tool exists rather than what
-//! it will run. A Drone that wants to know what the Checks are calls the tool
-//! and reads what they printed, which is Fleet running them rather than a
-//! Drone reading a command out of a prompt.
-//!
-//! Five blocks outlive the turn they were written for and are types rather
-//! than paragraphs: [`Declaring`], [`Redeclaring`], [`Checking`], [`Stopped`]
-//! and [`Reconciling`]. An opening turn is asked for as [`Opening`] rather than
-//! assembled by the caller: every spawn rebases first, so what a Drone is told
-//! about its branch is not known when the caller would have built the prompt.
+//! **No block here is written from a `ResolvedCheck`'s `run` string.** The step
+//! block comes from [`ResolvedStep::label`] and the Job's own fields, and
+//! [`Checking`] says a tool exists rather than what it will run. Five blocks
+//! outlive the turn they were written for and are types rather than paragraphs:
+//! [`Declaring`], [`Redeclaring`], [`Checking`], [`Stopped`], [`Reconciling`].
 
 use adapter_traits::{Prompt, SpawnConfigRefused};
 use core_model::{
@@ -64,41 +33,31 @@ use verification::TheBaseMoved;
 
 use crate::crossing::{Crossed, Produced, Reconciling, Redirected};
 
-/// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering.
+/// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering: **mechanics,
+/// never task content**, identical on every step of every Job, which is what
+/// makes it a constant rather than something assembled.
 ///
-/// **Mechanics, never task content**, and identical on every step of every Job
-/// — which is what makes it a constant rather than something assembled.
+/// **Its third paragraph names which outcome comes back and which does not.** It
+/// used to promise a later turn carrying the reason whenever work did not pass,
+/// and exactly one outcome keeps that promise:
+/// [`HandedBack`](crate::Ruling::HandedBack) carries a `tell` built from what
+/// each Check expected and produced. [`Refused`](crate::Ruling::Refused),
+/// [`Suspect`](crate::Ruling::Suspect) and [`CouldNotDecide`](crate::Ruling::CouldNotDecide)
+/// have no message field at all — the step stops, the Job escalates, `dispatch`
+/// terminates without a turn, and a Drone told to wait waited holding a live
+/// session until a person noticed. Twice on one Job: nineteen hours, nearly all
+/// of it that wait.
 ///
-/// # The third paragraph names which outcome comes back and which does not
+/// **The promise narrowed rather than the system gaining a message.** Telling a
+/// refused Drone changes nothing it can act on — a refusal says the work runs
+/// and is not what was asked for, which resubmitting under the same instructions
+/// cannot answer — and `#140` ends a Drone once its step's work clears the
+/// machine gates, so the process is ending either way.
 ///
-/// It used to promise a later turn carrying the reason whenever the work did
-/// not pass, and exactly one outcome keeps that promise:
-/// [`Ruling::HandedBack`] carries a `tell`, built from what each Check
-/// expected and produced. [`Ruling::Refused`], [`Ruling::Suspect`] and
-/// [`Ruling::CouldNotDecide`] have no message field at all — the step stops,
-/// the Job escalates, and `crate::dispatch` terminates without a turn. So a
-/// Drone that had been told to wait waited, holding a live session, until a
-/// person noticed. Twice on one Job, nineteen hours, almost all of it that
-/// wait.
-///
-/// **The promise narrowed rather than the system gaining a message.** Telling
-/// a refused Drone changes nothing it can act on — a refusal says the work
-/// runs and is not what was asked for, which resubmitting under the same
-/// instructions cannot answer — and `#140` ends a Drone when its step's work
-/// clears the machine gates, so by the time the verdict exists the process is
-/// ending either way. What was left to fix was the sentence.
-///
-/// **It is stated positively, over both halves.** "You may not hear back" is
-/// true and tells a Drone nothing, and a rule written only about refusals
-/// would leave a Drone whose work *passed* reading its own silence as one: a
-/// step that advances ends its Drone too, and sends nothing. So the turn is
-/// promised where the part is coming back, and every other ending is named as
-/// an ending.
-///
-/// [`Ruling::HandedBack`]: crate::Ruling::HandedBack
-/// [`Ruling::Refused`]: crate::Ruling::Refused
-/// [`Ruling::Suspect`]: crate::Ruling::Suspect
-/// [`Ruling::CouldNotDecide`]: crate::Ruling::CouldNotDecide
+/// **Stated positively, over both halves.** "You may not hear back" tells a Drone
+/// nothing, and a rule about refusals alone would leave a Drone whose work
+/// *passed* reading its own silence as one: a step that advances ends its Drone
+/// too, and sends nothing.
 pub const BASELINE: &str = "\
 You are working in a git worktree on a branch of your own. You cannot push, \
 open a pull request, or run commands this repository has not declared.
@@ -130,6 +89,10 @@ asked about it again.";
 /// keeps [`put_a_drone_on`]'s signature closed: the carried items ride the
 /// `Opening` a caller already passes, which is how `#207`'s waiting redirect
 /// arrived without the spawn funnel changing shape.
+///
+/// **An opening turn is asked for rather than assembled by the caller.** Every
+/// spawn rebases first, so what a Drone is told about its branch is not known
+/// at the moment the caller would have built the prompt.
 ///
 /// [`put_a_drone_on`]: crate::daemon::Fleet::put_a_drone_on
 #[derive(Clone, Debug)]
@@ -519,29 +482,28 @@ impl Delivering {
 /// What a step tells its Drone about the dry run, where it has Checks to run.
 ///
 /// **A tool nothing points at is the defect this whole capability is about.**
-/// Spike 6 measured that a description alone does not make a Drone call a tool,
-/// which is why the Evidence obligation is in the baseline and the scope ask is
-/// in [`Declaring`]; this is the same fact applied to an offer rather than an
-/// obligation.
+/// Spike 6 measured that a description alone does not make a Drone call a tool
+/// — which is why the Evidence obligation is in the baseline, the scope ask is
+/// in [`Declaring`], and this offer exists at all.
 ///
 /// **It offers and does not instruct.** A block a Drone reads as a requirement
-/// puts every step through a build nobody asked for, and the cost of one is
-/// minutes. So the whole of it is conditional, and the last sentence says
-/// outright that not calling it is a legitimate way to work.
+/// puts every step through a build nobody asked for, at a cost of minutes, so
+/// the whole of it is conditional and the last sentence says outright that not
+/// calling it is a legitimate way to work.
 ///
-/// **It names no number.** The allowance is Fleet's and is named in the refusal
-/// a Drone gets when it is spent — `docs/concepts/drone.md` keeps counters out
-/// of what a Drone is told, because a counter is a bar, and "two runs left" is
-/// a thing to optimise against rather than information about the work.
+/// **It names no number.** The allowance is Fleet's, named in the refusal a
+/// Drone gets once it is spent — `docs/concepts/drone.md` keeps counters out of
+/// what a Drone is told, because "two runs left" is a bar to optimise against.
 ///
 /// **It says twice that this is not the gate**, in the two places a Drone could
-/// stop reading: that a pass here is not a pass, and that submitting is still
-/// the only way to report. A Drone that read a green dry run as a finished step
-/// would have been made worse off by being offered this at all.
+/// stop reading: a pass here is not a pass, and submitting is still the only
+/// way to report. A Drone reading a green dry run as a finished step would have
+/// been made worse off by being offered this at all.
 ///
 /// **Drafted wording**, like [`Redeclaring`] and the gaming half of [`Stopped`].
-/// `docs/contracts/agent-prompt.md` has no sanctioned copy for it, and
-/// sanctioned copy is the contract's to write.
+/// Keeping a Drone ignorant of the Checks was never the defence against it
+/// satisfying the bar rather than doing the work — `docs/concepts/judge.md` and
+/// the gaming patterns are. What the wider rule cost is `crate::dry_run`'s.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Checking(String);
 
@@ -719,39 +681,30 @@ impl Redeclaring {
 }
 
 /// Where a file a Drone writes for itself goes, which is not the repository
-/// root.
+/// root. A private function rather than one of the types above: it is rendered
+/// where the turn is assembled, and does not outlive it.
 ///
-/// **Every other per-Job artifact is already keyed by Job id**: the log at
-/// `.armada/logs/<job-id>.jsonl`, a Check's output under
-/// `.armada/checks/<job-id>/`, the worktree itself, and the brief's
-/// attachments, which `drafting` keeps under `<attachments_dir>/<job_id>/` and
-/// [`job_brief`] names a line at a time. A plan was the one piece that was
-/// not, and one shared slot at the root cannot say whether what is in it is
-/// still live — the `PLAN.md` this repository carried belonged to a Job that
-/// finished and merged, and every worktree cut after it inherited a confident
-/// plan for work nobody had asked for.
-///
-/// **No Drone is known to have been misled by it.** Nothing pointed at that
-/// file — not this module, not the Manifest, not the agent files — so a Drone
-/// reached it only by going looking. The reason for this block is that the
-/// Job-keyed path is the correct home, not that harm was observed.
+/// **Every other per-Job artifact is already keyed by Job id** — the log, a
+/// Check's output, the worktree, the brief's attachments. A plan was the one
+/// piece that was not, and one shared slot at the root cannot say whether what
+/// is in it is still live: the `PLAN.md` this repository carried belonged to a
+/// Job that finished and merged, and every worktree cut after it inherited a
+/// confident plan for work nobody had asked for. **No Drone is known to have
+/// been misled by it** — nothing pointed at that file, so one reached it only
+/// by going looking. The Job-keyed path is the correct home; harm was not
+/// observed.
 ///
 /// **It offers a place; it does not ask for a plan.** A block a Drone reads as
 /// an instruction puts every Job through a planning step nobody requested, so
-/// the whole of it is conditional and the last sentence says so outright.
+/// the whole of it is conditional and the last sentence says so outright. A
+/// plan is no longer one of its examples either: on a `plan` step that made it
+/// read as an instruction to put the step's deliverable in the one directory
+/// the Judge cannot see, and [`Delivering`] names that file instead.
 ///
 /// **"Plan" already means something else here.** [`Declaring`] calls the
-/// declared scope "the plan you declared", and a second meaning in the same
-/// turn is the second-vocabulary defect in prose. So this block leads with what
-/// a Drone is actually holding — a file it wrote for itself.
-///
-/// **A plan is no longer one of the examples.** It was, and on a `plan` step
-/// that made this block read as an instruction to put the step's deliverable in
-/// the one directory the Judge cannot see. [`Delivering`] names that file, and
-/// the closing sentence here points at it rather than competing with it.
-///
-/// A private function rather than one of the three types above: it is rendered
-/// where the turn is assembled and nowhere else, and does not outlive it.
+/// declared scope "the plan you declared", and a second meaning in one turn is
+/// the second-vocabulary defect in prose — so this block leads with what a
+/// Drone is actually holding, a file it wrote for itself.
 fn notekeeping(job: &JobId) -> String {
     format!(
         "FILES YOU WRITE FOR YOURSELF\n\nA checklist, notes you want to keep \

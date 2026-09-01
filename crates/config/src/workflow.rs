@@ -1,68 +1,28 @@
 //! A WorkflowDef, in the slice M1 reads.
 //!
-//! # Six fields, of nine
+//! **A field nothing reads is a promise the file makes and the system does not
+//! keep**, so this parser refuses one rather than ignoring it. `verdict_routing`,
+//! `iteration_cap`, `hard_prerequisite`, `default_gate_policy`, `on_fail` and
+//! `on_gaming_flag` are refused because there is no loop; `evidence_scope` and
+//! `declare_plan_at` are read, and [`crate::scope`] holds the two keys inside
+//! that block that are not.
 //!
-//! `version`, `name`, `structure`, `steps[]`, and within a step `id`, `label`,
-//! `evidence_type`, `mechanical_checks[]`, `judge_checks[]`, `model` and
-//! `advance_gate`.
-//! The rest of the schema — `verdict_routing`, `iteration_cap`,
-//! `hard_prerequisite`, `default_gate_policy`, `on_fail`, `on_gaming_flag` — is
-//! refused, because there is no loop. A field nothing reads is a promise the
-//! file makes and the system does not keep. `evidence_scope` and
-//! `declare_plan_at` are read; see [`crate::scope`] for the two keys inside the
-//! block that are not.
+//! **Three closed sets, each narrowed.** [`Structure`], `AdvanceGate` and
+//! [`MechanicalCheck`] carry fewer variants than the schema has, and each is an
+//! enum rather than a `String` so that widening one is a compile error at every
+//! `match` reading it. A `String` would widen silently. The two a Job freezes —
+//! `AdvanceGate` and [`EvidenceType`] — are `core-model`'s, because the record
+//! carries them.
 //!
-//! # `retry_limit` is read, and absent means none
-//!
-//! It was refused with the loop keys until there was a retry ledger to spend.
-//! There is one now — `store::attempt` counts a step's runs off its own log —
-//! so the key is carried onto the frozen step and `fleet::gate` asks it whether
-//! a failed mechanical gate goes back to the Drone or stands.
-//!
-//! **A step that declares none gets none**, which is exactly what every step
-//! did before the key was read. `settings.toml` names three attempts per step
-//! as the Kit-level default and there is no Kit-level anything here to read it
-//! from; inventing three in this parser would put a threshold in the one place
-//! nobody looking at a workflow would find it. The workflows under
-//! `.armada/workflows/` declare their own, in the file, where an author reading
-//! the step can see what it costs.
-//!
-//! # `model` is read, and absent means the Job's
-//!
-//! A step names the model its own work needs; a step that names none is run as
-//! the Job was proposed. **The refusal is the load-bearing half** — an unknown
-//! name is refused against the roster the caller resolved rather than carried
-//! to the spawn, where it would kill a Job that already has a worktree and
-//! report the wrong cause. [`crate::Roster`] holds that reasoning and says why
-//! the legal set is a parameter.
-//!
-//! # Three closed sets, each narrowed
-//!
-//! [`Structure`], `AdvanceGate` and [`MechanicalCheck`] each carry fewer
-//! variants than the schema has, and each is an enum rather than a string
-//! so that widening one is a compile error at every `match` that reads it. A
-//! `String` here would widen silently. The two a Job freezes —
-//! [`AdvanceGate`] and [`EvidenceType`] — are `core-model`'s, because the
-//! record carries them.
-//!
-//! # `mechanical_checks` is absent more often than it is present
-//!
-//! Two of the four steps in this milestone step's worked example carry none,
-//! and the concept page says a gateless step is the common case rather than an
-//! edge one. So the field is optional and its absence is an empty list, not a
-//! refusal — and [`Step::mechanical_checks`] returns a slice that is routinely
-//! empty.
-//!
-//! # `advance_gate: auto` does not mean unverified
-//!
-//! It means the mechanical tier is the whole gate. Where a step also declares
-//! `mechanical_checks`, **all entries must pass** — the array exists because
-//! `implement` needs both that the build succeeded and that the diff is
-//! non-empty, since a build passes cleanly on an empty diff and a Drone that
-//! did nothing would otherwise advance on the build alone. `human_always`
-//! means the tiers still run and a person decides; the gate reader says why
-//! the fourth value is still refused, and the step reader why the agreement
-//! rule does not reach a human gate.
+//! **Absent is not a default.** Every optional key on [`Step`] says on its own
+//! reader what leaving it out means, and none of them invents a value here.
+//! `settings.toml` names three attempts per step as the Kit-level default and
+//! there is no Kit-level anything for this parser to read it from; inventing
+//! three here would put a threshold in the one place nobody looking at a
+//! workflow would find it. The workflows under `.armada/workflows/` declare
+//! their own, in the file, where an author reading the step sees what it costs.
+//! An unknown model name is refused here against the roster the caller resolved
+//! rather than carried to the spawn — [`crate::Roster`] for why.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -211,7 +171,14 @@ impl Step {
         self.evidence_type
     }
 
-    /// All entries must pass. Routinely empty.
+    /// All entries must pass. **Routinely empty** — a gateless step is the
+    /// common case rather than an edge one, so absence is an empty list rather
+    /// than a refusal.
+    ///
+    /// `implement` is why the field is an array: it needs both that the build
+    /// succeeded and that the diff is non-empty, because a build passes cleanly
+    /// on an empty diff and a Drone that did nothing would otherwise advance on
+    /// the build alone.
     pub fn mechanical_checks(&self) -> &[MechanicalCheck] {
         &self.mechanical_checks
     }
@@ -225,10 +192,17 @@ impl Step {
     /// How many times a failed mechanical gate hands this step back to its
     /// Drone. **Zero where the file declares none**, which is what every step
     /// meant before the key was read.
+    ///
+    /// The ledger it is spent against is `store::attempt`, which counts a
+    /// step's runs off its own log; `fleet::gate` is what asks.
     pub fn retry_limit(&self) -> u32 {
         self.retry_limit
     }
 
+    /// **`auto` does not mean unverified.** It means the mechanical tier is the
+    /// whole gate. `human_always` means the tiers still run and a person
+    /// decides; the gate reader says why the fourth value is still refused, and
+    /// the step reader why the agreement rule does not reach a human gate.
     pub fn advance_gate(&self) -> AdvanceGate {
         self.advance_gate
     }

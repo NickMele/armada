@@ -3,60 +3,26 @@
 //!
 //! # Fleet decides, and the Drone's part is over when it submits
 //!
-//! Everything that reaches a decision here is derived by Fleet. The Checks are
+//! Everything reaching a decision here is derived by Fleet. The Checks are
 //! Fleet's own runs in the Job's worktree, the diff is Fleet's own reading of
 //! that worktree, and the only thing the Drone contributed is that it called
-//! the tool at all. There is no parameter on any function in this module
-//! through which a Drone could supply a fact that gates its own step.
+//! the tool at all. **There is no parameter on any function in this module
+//! through which a Drone could supply a fact that gates its own step.**
 //!
 //! It held when a Drone said outright that its step had failed and the step
 //! advanced: reading prose catches an honest Drone and believes a dishonest
 //! one. See [`rule_on`] for what should have caught it.
 //!
-//! # This runs after the tool call has returned
+//! # What this module does not do
 //!
-//! The Evidence tool queues and returns `recorded`; this drains the queue. The
-//! separation is not tidiness — a tool call that blocked while `cargo test` ran
-//! would time out, and the Drone would be told nothing by a mechanism that had
-//! already failed.
+//! It does not wait. This runs after the Evidence tool has returned `recorded`,
+//! draining the queue that call left — `crate::evidence` holds why a tool call
+//! cannot block on `cargo test`.
 //!
-//! # The budget is a parameter and there is no default
-//!
-//! Nothing in `crates/config/settings.toml` names a Check timeout, so there is
-//! no value to read and inventing one here would put a threshold somewhere
-//! nobody can find it. [`CheckBudget`] therefore has one constructor taking a
-//! duration and no `Default`.
-//!
-//! # A failed Check goes back to the Drone before it goes to a person
-//!
-//! [`Ruling::Failed`] used to be every mechanical failure, and it is terminal.
-//! That is the correct verdict with nowhere to go: the Job that produced this
-//! module's newest case failed one Check on a one-line regression and was
-//! thrown away on its first attempt, with a live Drone holding the whole
-//! context needed to fix it.
-//!
-//! [`Ruling::HandedBack`] is the same failure inside a budget. Three things
-//! have to be true for it, and each is decided somewhere that can see the
-//! question:
-//!
-//! | | Asked of | Why there |
-//! |---|---|---|
-//! | the step declares a budget | `ResolvedStep::may_hand_back` | the arithmetic is one place, next to the field |
-//! | this run is inside it | `AtStep::attempt` | derived from the step's log, never from a caller |
-//! | trying again could change the answer | `CheckFailed::the_drone_can_answer` | only that type knows what each failure means |
-//!
-//! **What is exhausted is still [`Ruling::Failed`]**, unchanged, and still ends
-//! the Job at `completed_failed`. Whether that is where a spent budget belongs
-//! is `[retries-exhausted-destination]` in `docs/OPEN.md`, and it is a person's
-//! to answer — this module makes the question askable by making the budget
-//! spendable, and answers none of it.
-//!
-//! # What a ruling does not do
-//!
-//! It does not write anything. [`apply`] turns a ruling into the Job move it
-//! implies, and moving a Job is `Job::transition` and the store, in that order,
-//! by the caller. Keeping the decision separate from the write is what lets
-//! every case below be tested with no database.
+//! And it does not write. [`apply`] turns a ruling into the Job move it
+//! implies; making the move is `Job::transition` and then the store, by the
+//! caller. Keeping the decision apart from the write is what lets every case
+//! below be tested with no database.
 
 use std::error::Error;
 use std::fs::File;
@@ -85,8 +51,11 @@ use crate::keeping::Keeping;
 ///
 /// A newtype rather than a bare `Duration` so that the argument cannot be
 /// confused with any other duration at a call site, and so that the one place
-/// the value is decided is visible in a search. **No `Default`**: see this
-/// module's comment.
+/// the value is decided is visible in a search.
+///
+/// **No `Default`, and one constructor taking a duration.** Nothing in
+/// `crates/config/settings.toml` names a Check timeout, so there is no value to
+/// read and inventing one here would put a threshold where nobody can find it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CheckBudget(Duration);
 
@@ -118,33 +87,15 @@ pub use crate::ruling::Ruling;
 /// not run for a submission the step did not ask for, and no path in this
 /// function reaches a verdict without one.
 ///
-/// `request` is what the Job was asked for, and it is a parameter rather than
-/// something reached from `at`: a position knows the frozen workflow, and the
-/// requester's text is on the Job row. It is not an `Option` — a gate that
-/// could rule without it is the gate this had until #169, which judged a scope
-/// note against itself and never against what was asked. **It reaches the Judge
-/// and nothing
-/// else here**; no Check and no mechanical tier reads it, so a request cannot
-/// pass or fail a step by itself.
+/// **Four things are handed in rather than derived here**, each for a reason
+/// the caller can see and this function cannot.
 ///
-/// `recorded` is what every step of this Job has submitted so far. It has two
-/// readers — the gaming check's baseline and a step's `reference_docs` — and
-/// both reach it through [`AtStep::baseline`], which will not answer with
-/// anything but a strictly earlier step's.
-/// `keeping` is where a copy of the step's deliverable goes, and it is a
-/// parameter rather than something derived here for the reason `request` is:
-/// the repository and the Job are the caller's to know, and a worktree path is
-/// not something to reverse-engineer either of them out of. **It is not an
-/// `Option`** — every caller of this function is gating a real Job in a real
-/// repository, and a gate that could rule without keeping what it read is the
-/// gate `#223` was filed against.
-///
-/// `entered_with` is what the worktree held when this step began — **after the
-/// boundary rebase that started it**, which is `crate::dispatch::Fleet::marked`'s
-/// to place and not this function's. `diff_nonempty` is decided by comparing it
-/// against a second reading taken here. That is what catches the step that
-/// advanced having written nothing: the check used to read the whole branch and
-/// count an earlier step's file as this step's work.
+/// | Parameter | Why it is not derived here |
+/// |---|---|
+/// | `request` | A position knows the frozen workflow; the requester's text is on the Job row. Not an `Option` — a gate that could rule without it is the gate this had until #169, which judged a scope note against itself and never against what was asked. **It reaches the Judge and nothing else here**: no Check and no mechanical tier reads it, so a request cannot pass or fail a step by itself |
+/// | `recorded` | What every step of this Job has submitted so far. Its two readers — the gaming check's baseline and a step's `reference_docs` — both reach it through [`AtStep::baseline`], which will not answer with anything but a strictly earlier step's |
+/// | `keeping` | Where a copy of the step's deliverable goes. The repository and the Job are the caller's to know, and a worktree path is not something to reverse-engineer either of them out of. **Not an `Option`** — every caller is gating a real Job in a real repository, and a gate that could rule without keeping what it read is the gate `#223` was filed against |
+/// | `entered_with` | What the worktree held when this step began, **after the boundary rebase that started it**, which is `crate::dispatch::Fleet::marked`'s to place and not this function's. `diff_nonempty` is decided by comparing it against a second reading taken here — which is what catches the step that advanced having written nothing, where the check used to read the whole branch and count an earlier step's file as this step's work |
 pub async fn rule_on<W>(
     at: AtStep<'_>,
     request: Request<'_>,

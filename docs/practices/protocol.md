@@ -319,6 +319,71 @@ reasonable-sounding change that turns four static routes into a second thing
 that can be stale. If a change to this document's four rows is ever proposed,
 that's the signal to slow down, not speed up.
 
+## The first socket: every Job's state
+
+`GET /events` is the stream Bridge draws the Board from. Its shape is
+`crates/ipc/src/event.rs`, which points here.
+
+**A reconnection resyncs; it does not replay.** Every connection opens with a
+`Resync` carrying the current state of every Job and the cursor that state is
+current as of. Replay from the beginning was rejected on what it costs mid-Job:
+a Bridge reopened after lunch would fold hours of transitions before it could
+draw anything, into a Board Fleet could state in one message.
+
+| A resync rebuilds | A resync cannot |
+|---|---|
+| Where every Job is now, and why | The path taken — no transition history |
+| Which step it is on | An instant for anything that already happened |
+| Whether a Drone is on it | Anything about a Job retained out after a terminal status |
+
+A surface drawing a timeline reads `get_job_events`, and its timeline begins at
+the connection.
+
+**The stream is global, and a client subscribes to nothing.** Bridge holds
+exactly one connection and the Board renders every Job on it. A per-Job
+subscription would put state on a connection whose whole value is being cheap
+to drop and remake, and would need a subscribe message, an unsubscribe message,
+and a rule for what a resync means when the set changes mid-stream. The one
+place a per-Job subscription *is* right is the second socket, below.
+
+### A kind exists when something produces it
+
+**An event kind that never fires reads as a stream that is working**, so a kind
+`crates/ipc/operations.toml` names is not stubbed until a record exists for it
+to carry. The kinds still waiting describe records this workspace has no type
+for.
+
+Two of the produced kinds are there because their absence was a specific
+defect, and both are the same defect: what changed most during a run was what
+the stream did not carry. A Job running four steps emitted one event until
+`job.step_advanced` arrived; a Board could show which Drone was on a Job only
+by re-reading the Job until the Drone lifecycle pair did.
+
+`job.files_changed` is the only kind describing a worktree rather than a
+record. **Bridge does not read a worktree** — no surface on the far side of
+this seam opens a repository, so a file list reaches one only as an event.
+
+### `job.created` is a kind, not a state change
+
+A Job proposed while a client was connected never reached it: creation
+published nothing, so nothing woke Bridge and the row appeared only when
+something else forced a re-read.
+
+Publishing a `JobStateChanged` instead was rejected on what that message would
+have to say. The type has a `from` and a `to`, and a created Job has no `from`
+— the honest fields would be `from: awaiting_approval, to: awaiting_approval`,
+a transition the edge table does not contain, from a status the Job was never
+in. Every client folding the stream would apply a move that did not happen. **A
+creation is a row appearing, not a row moving.**
+
+It carries the whole `JobSummary`, because a kind naming only an id would make
+every client fetch the row it was just told about.
+
+`job.forgotten` is the opposite message and carries the opposite payload: only
+the id. A forget is a real deletion through `Store::forget_job`, and by the
+time the event is published there is no row left to carry. A client drops it
+rather than replacing it.
+
 ## The unmeasured risk: the WebSocket sink has no back-pressure
 
 This hasn't bitten anyone yet, which is exactly why it's the most dangerous

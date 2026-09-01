@@ -19,11 +19,28 @@ use crate::gate::CheckOutput;
 /// What Fleet decided, and what follows from it.
 ///
 /// **Only [`Ruling::Advanced`], [`Ruling::Finished`] and
-/// [`Ruling::HeldForReview`] are reached through [`Verdict::Advance`]**, and
-/// that verdict needs evidence and a full set of passing checks. Nothing else
-/// in this enum can be produced by a Drone doing anything at all — and the
-/// third of the three advances nothing, so a Drone cannot reach the far side of
-/// a human gate by satisfying it.
+/// [`Ruling::HeldForReview`] are reached through [`Verdict::Advance`]**, which
+/// needs evidence and a full set of passing checks. Nothing else here can be
+/// produced by a Drone doing anything at all, and the third of the three
+/// advances nothing — so no Drone reaches the far side of a human gate.
+///
+/// **A failed Check goes back to the Drone before it goes to a person.**
+/// [`Ruling::Failed`] is terminal and used to be every mechanical failure: the
+/// Job that produced [`Ruling::HandedBack`] failed one Check on a one-line
+/// regression and was thrown away on its first attempt, with a live Drone
+/// holding the whole context needed to fix it. `HandedBack` is that failure
+/// inside a budget, and three things must be true, each decided where the
+/// question is visible:
+///
+/// | | Asked of | Why there |
+/// |---|---|---|
+/// | the step declares a budget | `ResolvedStep::may_hand_back` | the arithmetic is one place, next to the field |
+/// | this run is inside it | `AtStep::attempt` | derived from the step's log, never from a caller |
+/// | trying again could change the answer | `CheckFailed::the_drone_can_answer` | only that type knows what each failure means |
+///
+/// **What is exhausted is still `Failed`**, and still ends the Job at
+/// `completed_failed`. Whether a spent budget belongs there is
+/// `[retries-exhausted-destination]` in `docs/OPEN.md`, and a person's to say.
 #[derive(Debug)]
 pub enum Ruling {
     /// The step passed. The Drone that worked it is ended and a fresh one takes

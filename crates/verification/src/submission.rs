@@ -1,70 +1,28 @@
 //! What a Drone hands over, and the things it may say.
 //!
-//! # There is no `source` field, and that is the whole guarantee
+//! # What is absent is the guarantee
 //!
-//! Evidence carries a verification source elsewhere in the design — whether a
-//! fact was established mechanically or attested by a person. **A Drone must
-//! not be able to mark its own evidence human-attested**, and the way that is
-//! guaranteed here is that the field does not exist on this type. There is
-//! nothing to set, nothing to validate and nothing to reject afterwards. A
-//! rejection is a check somebody can relax; an absent field is not.
+//! Each row could have been a parameter with a rule refusing the bad value, and
+//! **a rejection is a check somebody can relax where an absent field is not.**
 //!
-//! The same reasoning removes the step id. Fleet knows which step the Job is
-//! on, so a Drone naming one could only agree with Fleet or disagree with it,
-//! and the disagreeing case would need a rule. There is no parameter.
-//!
-//! # The record: `claimed`, `shown_by`, `not_claimed`
-//!
-//! These are the field names the Agent Copy Contract defines and the Drone
-//! prompts already ask for by name — the clarification reprompt says "Shown by
-//! names no artifact", and the force-interrupt directive says partial work with
-//! an accurate Not claimed is worth more than carrying on. A tool taking any
-//! other vocabulary would instruct a Drone in one language and hand it a form
-//! in another.
-//!
-//! | Field | Holds |
+//! | Not a field here | Because |
 //! |---|---|
-//! | `claimed` | What the work now does, as an observable — behaviour, never a description of the change |
-//! | `shown_by` | The artifact demonstrating it — a named test, a command and exit code, a rendered string |
-//! | `not_claimed` | Everything the claim does not assert — the gap, and the side effect |
+//! | `source` — mechanical, or attested by a person | A Drone must not be able to mark its own evidence human-attested. There is nothing to set, nothing to validate, and nothing to reject afterwards |
+//! | The step id | Fleet knows which step the Job is on, so a Drone naming one could only agree with Fleet or disagree with it, and the disagreeing case would need a rule |
+//! | [`EvidenceType`] | The step declares it and Fleet fills it in. A Drone is never told which type its step declared, so a guess that disagreed would refuse work that was actually done |
+//! | A `note` | A fourth place for what the three fields already hold: what you did is `claimed`, where to look is `shown_by`, what you left is `not_claimed`. A step whose work product is a written finding names that file in `shown_by`, like any other step |
 //!
-//! **Empty is legal, absent is not**, and that distinction is a type rather
-//! than a check: [`NotClaimed`] is not an `Option`, so a Drone saying it left
-//! nothing behind is expressible and a Drone declining to answer is not.
-//! `claimed` and `shown_by` are refused when empty, because a record whose
-//! claim or whose artifact is blank has evidenced nothing.
+//! # The vocabulary is somebody else's, deliberately
 //!
-//! **Nothing here gates.** No rule in this crate reads any of the three: the
-//! Judge never reads a work submission and the mechanical tier does not parse
-//! one. Their only reader is a person, which is exactly why padding
-//! `not_claimed` buys nothing.
+//! `claimed`, `shown_by` and `not_claimed` are the Agent Copy Contract's own
+//! names, which the Drone prompts already ask for by name — a tool taking any
+//! other would instruct a Drone in one language and hand it a form in another.
+//! [`EvidenceType`] is `config`'s for the same reason: a second enum here would
+//! be a second vocabulary, and v1's drifted three times before it was deleted.
 //!
-//! # Three prose fields, and two of them are interchangeable to a compiler
-//!
-//! `claimed` and `shown_by` are both prose about the same work, so a call
-//! passing them the wrong way round would type-check and produce a record that
-//! reads backwards — and the contract's first rule about this record is that
-//! the two are not the same kind of thing. [`Claimed`], [`ShownBy`] and
-//! [`NotClaimed`] exist so that swap is a compile error rather than a
-//! convention.
-//!
-//! # There is no `note`, and every step submits the same three fields
-//!
-//! A note was a fourth place to put what the three already hold: what you did
-//! is `claimed`, where to look is `shown_by`, what you left is `not_claimed`.
-//! A step whose work product is a written finding names the file it wrote in
-//! `shown_by`, the same as any other step.
-//!
-//! # Why the vocabulary is `config`'s and not this crate's
-//!
-//! [`EvidenceType`] is the set a WorkflowDef's `evidence_type` field already
-//! parses into. A second enum here would be a second vocabulary, and the one
-//! that drifted three times in v1 was deleted for it.
-//!
-//! **The step declares the type and Fleet fills it in.** The Evidence tool has
-//! no parameter for one, for the reason the step id has none: a Drone is never
-//! told which type its step declared, so a Drone naming one would be guessing,
-//! and a guess that disagrees would refuse work that was actually done.
+//! **Nothing in this crate reads the three.** The Judge never reads a work
+//! submission and the mechanical tier does not parse one; a person is their
+//! only reader, which is why padding `not_claimed` buys nothing.
 
 use config::EvidenceType;
 use core_model::StepEvidence;
@@ -79,6 +37,10 @@ pub struct Claimed<'a>(pub &'a str);
 
 /// The artifact demonstrating the claim — a named test, a command and its exit
 /// code, a rendered string.
+///
+/// **It names the artifact; it is not the artifact.** Nothing in this crate
+/// reads it, so a Drone writing "exit 0" here has moved no check — the report
+/// of a thing and the thing are different objects, and only the second gates.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ShownBy<'a>(pub &'a str);
 
