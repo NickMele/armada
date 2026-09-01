@@ -3692,11 +3692,24 @@ const AtTheApprovalGate = {
     ] })
   }
 };
+const AsTheWindowNarrows = {
+  args: AtTheApprovalGate.args,
+  render: (args) => /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: "var(--space-8)" }, children: [
+    ["the narrowest window Bridge opens", "var(--window-floor)"],
+    ["the panel inside one", "var(--w-dialog-wide)"],
+    ["narrower still", "var(--w-sheet)"],
+    ["narrower than anything ships", "var(--w-dialog)"]
+  ].map(([said, width]) => /* @__PURE__ */ jsxs("div", { style: { width, maxWidth: "100%" }, children: [
+    /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", children: said }),
+    /* @__PURE__ */ jsx(JobDetailHeaderActions, { ...args })
+  ] }, width)) })
+};
 const __vite_glob_0_16 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AFailedJob,
   AFinishedJob,
   ARunningJob,
+  AsTheWindowNarrows,
   AtTheApprovalGate,
   BothKills,
   BothKillsMenuOpen,

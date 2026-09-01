@@ -1,18 +1,48 @@
 /* Job detail header actions — the identity of the Job on the leading edge, the
    act at the trailing one. Items align to the top so the button sits on the
-   title's line rather than floating against a two-line block. */
+   title's line rather than floating against a two-line block.
+
+   **It stacks rather than squeezing.** The two halves shared one row at every
+   width, and only one of them could give: the acts are fixed-width controls, so
+   a narrow window took the whole shortfall out of the title column — the
+   headline wrapped to four lines beside three buttons and the fact run broke
+   with `Spend` alone on the end of it. Neither is a wrapping bug; both are the
+   column being narrower than anything in it wants to be.
+
+   So the row wraps, and the acts go under the title rather than competing with
+   it for a row that cannot hold both. The facts fix themselves once that
+   happens: they are already a wrapping run and the reason `Spend` was on its
+   own line is that there was room for nothing else.
+
+   **No media query, and that is deliberate rather than incidental.** There is
+   none anywhere in this repository yet, so the first one sets a convention; and
+   `@media` cannot read a custom property, so `--layout-breakpoint` could only
+   be spelled as a literal that the design lint is right to refuse. A wrapping
+   flex line answers the same question from the content rather than from a
+   number: the acts drop when they and the identity block genuinely stop
+   fitting, at whatever width that is for the acts this state carries — which a
+   fixed breakpoint could only approximate, since the set changes per state. */
 .armada-job-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-4);
   font-family: var(--font-sans);
 }
 
+/* The identity block asks for the width of the run column beneath it and grows
+   into every pixel beyond. `--w-run-column` is not borrowed for its number: it
+   is what job detail's own left column measures, and a title column narrower
+   than the tree under it is the arrangement that reads broken. It is a floor
+   the line break is decided against, never a width — `flex-grow: 1` takes all
+   the slack, and `min-width: 0` keeps a long headline wrapping rather than
+   pushing the pair wider than the window. */
 .armada-job-head__ident {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  flex: 1 1 var(--w-run-column);
   min-width: 0;
 }
 
@@ -43,11 +73,15 @@
 }
 
 /* The facts, wrapping rather than truncating. No fact is dropped at any width:
-   each one is here because a decision depends on it. */
+   each one is here because a decision depends on it. `min-width: 0` so the run
+   can wrap inside the column it is given instead of setting how wide that
+   column has to be — without it the longest fact is a floor under the whole
+   identity block, and the block is what the line break is decided against. */
 .armada-job-head__facts {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-4);
+  min-width: 0;
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-muted);
@@ -87,4 +121,9 @@
   align-items: flex-start;
   gap: var(--space-2);
   flex: none;
+  /* On the row it holds the trailing edge; on a line of its own it keeps it,
+     so the acts sit where they always sit rather than moving to the leading
+     edge the moment they wrap. `space-between` cannot say this — a lone item on
+     a flex line has no gap to distribute. */
+  margin-inline-start: auto;
 }
