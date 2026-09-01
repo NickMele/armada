@@ -35,14 +35,29 @@ Four columns, and the last two are the point.
 | **What** | The thing, named as he would name it. An issue number where one exists |
 | **State** | Merged, running, built and unmerged, filed, drawn — a state, not a narrative |
 | **Blocked on** | The specific thing, or **Nothing**. Never "in progress" |
-| **Owner** | **You** or **Me**. Never blank, never both |
+| **Owner** | Who moves it. Never blank, never two |
 
-**Owner is you where the next move is a decision, a handoff, or something only
-he can run.** Owner is me where the next move is work, and I should say what I
-will do rather than asking whether to.
+**Name the actor, not the pronoun.** "You" and "Me" read fine in a sentence and
+badly in a column he is scanning — by the fourth row he is working out which of
+us "me" was.
 
-**A row that says `Nothing` under Blocked on and `Me` under Owner is a row I
-should be working**, not reporting. Check that before writing it down.
+| Owner | Means |
+|---|---|
+| **Human** | A decision, a handoff, or something only he can run |
+| **Claude Code** | Work in this repository — me, or an agent I dispatch |
+| **Claude Design** | A drawing, or a correction to one |
+| **Fleet** | A Job dispatched through Armada itself — the answer whenever the work could be one |
+
+Where a row is with something already running, say so — **Claude Code
+(running)**, **Fleet (running)** — because that is a different thing from work
+nobody has started.
+
+**Fleet is the owner more often than it gets written down.** Hand-landing what a
+Job could have done hides every gap in the fleet, so a row that reads Claude Code
+where Fleet could have taken it is worth a second look before it goes in.
+
+**A row that says `Nothing` under Blocked on and `Claude Code` under Owner is a
+row I should be working**, not reporting. Check that before writing it down.
 
 ## What not to do
 
