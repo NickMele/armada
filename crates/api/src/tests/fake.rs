@@ -5,71 +5,26 @@
 //! there, against the edge table. This exists to answer the operations M1 serves
 //! so the transport can be exercised, and it is written without `core-model` on
 //! purpose: if a fake daemon can be built out of `ipc` alone, so can a Bridge.
+//!
+//! **The record is here and the answers are in [`shapes`](super::shapes)**,
+//! which is where this file was cut when it reached 900 lines. What is left
+//! below is the `Vec`, the moves it makes, and the refusals it raises; every
+//! fixed value it hands back is over there, still built out of `ipc` alone.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
-use ipc::mcp::{
-    CheckRan, CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, SubmitEvidence,
-};
+use ipc::mcp::{CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    Actor, CallArguments, ChangesRequested, Event, EvidenceType, FleetCapacity, Instant,
-    JobCreated, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory, JobId, JobList,
-    JobStateChanged, JobStatus, JobSummary, ManifestId, ManifestSummary, ModelChoices, Movement,
-    Origin, ProposeJob, Recorded, Redispatched, RunId, StatusMoved, StepId, Submitted,
-    UnreadableJob, Urgency, Work, WorkflowId, WorkflowSummary,
+    Actor, CallArguments, ChangesRequested, Event, FleetCapacity, Instant, JobCreated, JobDetail,
+    JobDiff, JobEvidence, JobForgotten, JobHistory, JobId, JobList, JobStateChanged, JobSummary,
+    ManifestId, ManifestSummary, ModelChoices, Origin, ProposeJob, Redispatched, UnreadableJob,
+    Urgency, WorkflowId, WorkflowSummary,
 };
 
+use super::shapes;
+use super::shapes::{run_id, status};
 use crate::{Broadcaster, Daemon, Feed, Observed, Refusal, Turns};
-
-/// A spelling the registry has. Panics in a test rather than returning an
-/// `Option` nobody would handle.
-pub fn status(spelling: &str) -> JobStatus {
-    JobStatus::from_wire(spelling).expect("a status the registry has")
-}
-
-pub fn run_id() -> RunId {
-    RunId::carried("01RUN")
-}
-
-/// The one call id this fake's record holds. Anything else is a call the
-/// transcripts do not carry, which is a different answer from a missing Job.
-pub const THE_CALL: &str = "toolu_01Haa";
-
-/// An argument longer than a row carries, so a test can prove the whole of it
-/// comes back rather than the line the socket sent.
-pub const THE_ARGUMENT: &str = "cat <<'EOF' > notes.md\n  one\n  two\n  three\nEOF";
-
-/// One step of the rail, declared and not yet run.
-///
-/// **Built out of `ipc` and nothing else**, which is the file's whole claim: a
-/// gate and a judge declaration a Bridge can construct are a gate and a judge
-/// declaration a Bridge can read.
-fn step_rail(
-    step_id: &str,
-    ordinal: u32,
-    gate: &str,
-    judge_checks: Vec<ipc::DeclaredJudge>,
-) -> ipc::StepDetail {
-    ipc::StepDetail {
-        step_id: StepId::carried(step_id),
-        label: step_id.to_string(),
-        ordinal,
-        state: ipc::StepState::from_wire("not_started").expect("a step state the registry has"),
-        checks: Some(Vec::new()),
-        check_runs: Vec::new(),
-        judge_checks: Some(judge_checks),
-        advance_gate: Some(ipc::AdvanceGate::from_wire(gate).expect("a gate the registry has")),
-        last_verdict: None,
-        overridden: false,
-        judged: Vec::new(),
-        flagged: Vec::new(),
-        attempts: Vec::new(),
-        judging: None,
-        entered_at: Instant::carried("2026-08-26T09:00:00.000Z"),
-        updated_at: Instant::carried("2026-08-26T09:00:00.000Z"),
-    }
-}
 
 pub struct FakeDaemon {
     jobs: Mutex<Vec<JobSummary>>,
@@ -198,246 +153,85 @@ impl Daemon for FakeDaemon {
         })
     }
 
-    /// A fleet of two, one place taken, and the disk short.
-    ///
-    /// **Fixed, and built through `ipc::AdmissionHold::from_wire`** — which is
-    /// this file's whole claim one type further on: a spelling a client can
-    /// check against the registry is a spelling a Bridge can check. The value
-    /// exercises the shape a caller has to handle, which is all three fields
-    /// present at once.
     async fn get_capacity(&self) -> Result<FleetCapacity, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));
         }
-        Ok(FleetCapacity {
-            bound: 2,
-            occupied: 1,
-            held_by: ipc::AdmissionHold::from_wire("disk"),
-        })
+        Ok(shapes::capacity())
     }
 
-    /// One Job, with nothing the fake does not hold — except a step rail,
-    /// which it holds because the rail is the shape a client draws a Job from.
-    ///
-    /// **Two steps, and they are the pair the rail turns on**: one the Judge
-    /// gates, one a person does. Every other list is empty and every other
-    /// option absent, because this daemon holds `JobSummary` and nothing
-    /// beneath it, and the real values are asserted against a real Fleet in
-    /// `fleet`'s own suite.
     async fn get_job(&self, job_id: JobId) -> Result<JobDetail, Refusal> {
         let jobs = self.jobs.lock().expect("not poisoned");
         let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
             return Err(self.no_such_job(&job_id));
         };
-        Ok(JobDetail {
-            spend: None,
-            delivery: None,
-            job: job.clone(),
-            created_at: Instant::carried("2026-08-26T09:00:00.000Z"),
-            branch: None,
-            steps: vec![
-                step_rail(
-                    "implement",
-                    0,
-                    "auto_if_judge_passes",
-                    vec![ipc::DeclaredJudge {
-                        criteria: 2,
-                        panel_size: Some(3),
-                        gaming_check: true,
-                    }],
-                ),
-                step_rail("handoff", 1, "human_always", Vec::new()),
-            ],
-            acceptance_criteria: Vec::new(),
-            facts: None,
-            write_targets: None,
-            subject: None,
-            dependencies: Vec::new(),
-            // Absent, like every other option here: this daemon reads no store
-            // and a footprint is a store's answer.
-            footprint: None,
-            // Absent for the same reason, one layer further in: an outstanding
-            // redirect is read from a working slot, and this daemon holds none.
-            redirecting: None,
-            // Absent for the redirect's reason exactly: an unanswered question
-            // lives on a working slot, and this daemon holds none.
-            asking: None,
-            // Absent again: a waiting note is a column on `jobs`, and this
-            // daemon's Jobs are wire summaries rather than records.
-            redirect_waiting: None,
-            // Absent, not empty: no other Job's record is held, so nothing looked.
-            write_scope_overlaps: None,
-            // Absent for the same reason again: a classification is read from
-            // a slot, a filesystem and a store, and this daemon has none of the
-            // three.
-            stuck: None,
-        })
+        Ok(shapes::detail(job.clone()))
     }
 
-    /// The one move this fake records: the Job reaching the status it is at.
-    ///
-    /// **Not a fold and not a machine.** The header comment holds for this too
-    /// — the fake asserts nothing about either machine, and what it answers is
-    /// the shape rather than a real history. The refusal is what matters here:
-    /// an id that names nothing is a 404, never an empty list.
+    /// **The refusal is what matters here**: an id that names nothing is a 404,
+    /// never an empty list. What the history says is [`shapes::history`].
     async fn get_job_events(&self, job_id: JobId) -> Result<JobHistory, Refusal> {
         let jobs = self.jobs.lock().expect("not poisoned");
         let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
             return Err(self.no_such_job(&job_id));
         };
-        Ok(JobHistory {
-            job_id,
-            moves: vec![Recorded {
-                seq: 1,
-                status: status("awaiting_approval"),
-                moved: Movement::Status(StatusMoved {
-                    to: job.status,
-                    reason: None,
-                }),
-                actor: Actor::from_wire("human").expect("an actor the envelope has"),
-                at: Instant::carried("2026-08-26T09:00:00.000Z"),
-            }],
-        })
+        let at = job.status;
+        Ok(shapes::history(job_id, at))
     }
 
-    /// One step's evidence, for a Job that exists. **A step that submitted
-    /// nothing is absent** rather than blank, which is the shape the store
-    /// answers in and the one this fake is here to prove crosses.
     async fn get_evidence(&self, job_id: JobId) -> Result<JobEvidence, Refusal> {
         let jobs = self.jobs.lock().expect("not poisoned");
         if !jobs.iter().any(|job| job.id == job_id) {
             return Err(self.no_such_job(&job_id));
         }
-        Ok(JobEvidence {
-            job_id,
-            steps: vec![Submitted {
-                step_id: StepId::carried("implement"),
-                evidence_type: EvidenceType::from_wire("diff").expect("a type the registry has"),
-                claimed: "the log reader stops one line early".to_string(),
-                shown_by: "a failing test that now passes".to_string(),
-                // Absent, not blank. The rule the whole DTO turns on.
-                not_claimed: None,
-            }],
-        })
+        Ok(shapes::evidence(job_id))
     }
 
-    /// A reading with a patch in it. **Present because there is something in
-    /// it** — the absent case is a Job with no worktree, and this fake has no
-    /// worktrees to be absent.
     async fn get_diff(&self, job_id: JobId) -> Result<JobDiff, Refusal> {
         let jobs = self.jobs.lock().expect("not poisoned");
         if !jobs.iter().any(|job| job.id == job_id) {
             return Err(self.no_such_job(&job_id));
         }
-        Ok(JobDiff {
-            job_id,
-            work: Some(Work {
-                files: vec![ipc::ChangedFile {
-                    path: "crates/store/src/read.rs".to_string(),
-                    change: ipc::ChangeKind::Modified,
-                    outside_plan: false,
-                }],
-                plan_declared: false,
-                patch: Some(
-                    "--- a/crates/store/src/read.rs\n+++ b/crates/store/src/read.rs\n".to_string(),
-                ),
-            }),
-        })
+        Ok(shapes::diff(job_id))
     }
 
-    /// One call's arguments, whole. **The fake holds exactly one**, keyed by
-    /// [`THE_CALL`]: what the route has to prove is that the argument comes
-    /// back at its full size and that an id the record does not hold is a
-    /// different answer from a Job that is not there.
+    /// **The two refusals are what this side holds**: a Job that is not there,
+    /// and an id the record does not carry, which are different answers.
+    /// [`shapes::THE_CALL`] is the one id it does carry.
     async fn get_call(&self, job_id: JobId, call_id: String) -> Result<CallArguments, Refusal> {
         let jobs = self.jobs.lock().expect("not poisoned");
         if !jobs.iter().any(|job| job.id == job_id) {
             return Err(self.no_such_job(&job_id));
         }
-        if call_id != THE_CALL {
+        if call_id != shapes::THE_CALL {
             return Err(Refusal::Unacceptable(ipc::WireError::raised(
                 "fleet.no_such_call",
                 format!("nothing in this Job's transcripts is the call `{call_id}`"),
                 run_id(),
             )));
         }
-        Ok(CallArguments {
-            tool: "Bash".to_string(),
-            call: call_id,
-            arguments: THE_ARGUMENT.to_string(),
-            whole: true,
-            length: Some(THE_ARGUMENT.chars().count()),
-        })
+        Ok(shapes::call(call_id))
     }
 
-    /// The one workflow this fake holds. A list, because the operation is one.
     async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));
         }
-        Ok(vec![WorkflowSummary {
-            id: WorkflowId::carried("01WF"),
-            name: "a-workflow".to_string(),
-            version: 1,
-            steps: vec![
-                // Gated, and ungated. The pair is the distinction `get_job`'s
-                // rail turns on, so the fake carries both rather than one — and
-                // the second is the step that stops for a person, which a
-                // preview drew as a step with nothing on it.
-                ipc::WorkflowStep {
-                    step_id: StepId::carried("implement"),
-                    label: "Implement the change".to_string(),
-                    checks: vec![ipc::DeclaredCheck {
-                        kind: "manifest_check".to_string(),
-                        name: Some("build".to_string()),
-                        run: Some("cargo build --workspace --locked".to_string()),
-                        expect_exit_code: Some(0),
-                        // Covering everything, which is most Checks. The scoped
-                        // case is asserted in `ipc`'s own round-trip.
-                        when: None,
-                    }],
-                    judge_checks: vec![ipc::DeclaredJudge {
-                        criteria: 2,
-                        panel_size: None,
-                        gaming_check: false,
-                    }],
-                    advance_gate: ipc::AdvanceGate::from_wire("auto_if_judge_passes")
-                        .expect("a gate the registry has"),
-                },
-                ipc::WorkflowStep {
-                    step_id: StepId::carried("handoff"),
-                    label: "Hand the work back".to_string(),
-                    checks: Vec::new(),
-                    judge_checks: Vec::new(),
-                    advance_gate: ipc::AdvanceGate::from_wire("human_always")
-                        .expect("a gate the registry has"),
-                },
-            ],
-            manifest_id: ManifestId::carried("01MF"),
-        }])
+        Ok(shapes::workflows())
     }
 
     async fn list_manifests(&self) -> Result<Vec<ManifestSummary>, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));
         }
-        Ok(vec![ManifestSummary {
-            id: ManifestId::carried("01MF"),
-            repository: "a-repository".to_string(),
-            path: "/a-repository/armada.yml".to_string(),
-            version: 1,
-            checks: vec!["build".to_string()],
-        }])
+        Ok(shapes::manifests())
     }
 
     async fn list_models(&self) -> Result<ModelChoices, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));
         }
-        Ok(ModelChoices {
-            models: vec!["a-model".to_string(), "another-model".to_string()],
-            default: "a-model".to_string(),
-        })
+        Ok(shapes::models())
     }
 
     /// The proposer's own path, faked at the seam above it: the fake names the
@@ -956,9 +750,6 @@ impl Daemon for FakeDaemon {
         })
     }
 
-    /// One passing Check and one failing one, so a test over this router can
-    /// tell that a report reaches the Drone **and** that a failure in it is
-    /// still a successful tool call.
     async fn run_checks(&self, _caller: crate::Caller) -> Result<CheckReport, NotRecorded> {
         let running = self
             .jobs
@@ -972,24 +763,7 @@ impl Daemon for FakeDaemon {
             });
         }
         self.checked.fetch_add(1, Ordering::SeqCst);
-        Ok(CheckReport {
-            ran: vec![
-                CheckRan {
-                    name: "fmt".to_string(),
-                    outcome: outcome("passed"),
-                    detail: None,
-                    took: std::time::Duration::from_millis(300),
-                    log: Some(".armada/checks/a-job/implement.dry.0.log".to_string()),
-                },
-                CheckRan {
-                    name: "tests".to_string(),
-                    outcome: outcome("failed"),
-                    detail: Some("exit code 101, expected 0".to_string()),
-                    took: std::time::Duration::from_secs(12),
-                    log: Some(".armada/checks/a-job/implement.dry.1.log".to_string()),
-                },
-            ],
-        })
+        Ok(shapes::check_report())
     }
 
     /// One minted id, and the call recorded. **The fake decides nothing about
@@ -1025,46 +799,13 @@ pub fn running(daemon: &FakeDaemon, id: &str) {
     at(daemon, id, "running");
 }
 
-/// A Job parked at any status the registry has, without a transition to get it
-/// there. What a fake is for: the transport is the thing under test.
+/// A Job put straight into the record at any status the registry has, without
+/// a transition to get it there. **Putting it there is this side's**; the row
+/// it puts is [`shapes::job_at`].
 pub fn at(daemon: &FakeDaemon, id: &str, spelling: &str) {
-    daemon.jobs.lock().expect("not poisoned").push(JobSummary {
-        id: JobId::carried(id),
-        title: format!("a Job called {id}"),
-        status: status(spelling),
-        created_at: Instant::carried("2026-01-01T00:00:00.000Z"),
-        branch: Some(format!("armada/{id}")),
-        reason: None,
-        queued_reason: None,
-        resumption: None,
-        workflow_id: WorkflowId::carried("01WF"),
-        owner_manifest_id: ManifestId::carried("01MF"),
-        origin: Origin::from_wire("manual").expect("an origin"),
-        urgency: Urgency::from_wire("normal").expect("an urgency"),
-        atomic: false,
-        model: "a-model".to_string(),
-        current_step_id: None,
-        assigned_drone: None,
-        redispatched_from: None,
-        asking: false,
-    });
+    daemon
+        .jobs
+        .lock()
+        .expect("not poisoned")
+        .push(shapes::job_at(id, spelling));
 }
-
-/// A check outcome by its registry spelling. **`from_wire` rather than a
-/// variant**, because this crate names no domain type — the same reason
-/// `origin` and `urgency` above are built this way.
-fn outcome(spelling: &str) -> ipc::CheckOutcome {
-    ipc::CheckOutcome::from_wire(spelling).expect("a check outcome")
-}
-
-/// A proposal body, as Bridge would send it.
-pub const A_PROPOSAL: &str = r#"{
-    "title": "fix the off-by-one in the log reader",
-    "workflow_id": "01WF",
-    "owner_manifest_id": "01MF",
-    "origin": "manual",
-    "urgency": "normal",
-    "atomic": false,
-    "model": "a-model",
-    "acceptance_criteria": [{"text": "the symptom is gone", "source": "check"}]
-}"#;

@@ -12,7 +12,8 @@ use http_body_util::BodyExt;
 use ipc::{JobList, JobSummary, StreamMessage, WireError};
 use tower::ServiceExt;
 
-use crate::tests::fake::{at, run_id, running, FakeDaemon, A_PROPOSAL, THE_ARGUMENT, THE_CALL};
+use crate::tests::fake::{at, running, FakeDaemon};
+use crate::tests::shapes::{run_id, A_PROPOSAL, THE_ARGUMENT, THE_CALL};
 use crate::{router, Broadcaster, Next, Served, Subscription, SERVED};
 
 fn wired(daemon: FakeDaemon, events: Broadcaster) -> Router {

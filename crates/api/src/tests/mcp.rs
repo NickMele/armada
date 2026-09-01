@@ -18,7 +18,8 @@ use axum::Router;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
-use crate::tests::fake::{at, run_id, running, FakeDaemon};
+use crate::tests::fake::{at, running, FakeDaemon};
+use crate::tests::shapes::run_id;
 use crate::{router, Broadcaster, Served, MCP_PATH, SERVED};
 
 fn wired(daemon: FakeDaemon) -> Router {

@@ -15,7 +15,8 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 
 use crate::tests::connected;
-use crate::tests::fake::{run_id, FakeDaemon};
+use crate::tests::fake::FakeDaemon;
+use crate::tests::shapes::run_id;
 use crate::{router, Broadcaster, Served};
 
 async fn read(socket: &mut WebSocketStream<DuplexStream>) -> StreamMessage {

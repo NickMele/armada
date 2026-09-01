@@ -11,6 +11,7 @@ mod fake;
 mod mcp;
 mod observing;
 mod served;
+mod shapes;
 mod stream;
 
 use axum::Router;

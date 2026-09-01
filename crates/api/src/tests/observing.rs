@@ -20,7 +20,8 @@ use tokio_tungstenite::WebSocketStream;
 use tower::{Service, ServiceExt};
 
 use crate::tests::connected;
-use crate::tests::fake::{run_id, FakeDaemon, A_PROPOSAL};
+use crate::tests::fake::FakeDaemon;
+use crate::tests::shapes::{run_id, A_PROPOSAL};
 use crate::{router, Broadcaster, Served};
 
 /// The daemon kept alongside the router, because a test drives both: it plants
