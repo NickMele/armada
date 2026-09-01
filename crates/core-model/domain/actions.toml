@@ -1,0 +1,311 @@
+# The verb, the glyph and the binding every act in Bridge carries. The artifact
+# `docs/contracts/design-system.md` promises under "One artifact, three
+# columns", and the source the two key-map blocks under "Two tiers" are
+# transcribed from.
+#
+# Authored here. This file is the authority on what an act is called and what
+# it is bound to. The contract's blocks are the same map written for a design
+# session to paste, and the gate fails where the two disagree.
+#
+# **The glyph is a reference, never a copy.** `icon` names a key in
+# `packages/icons/icons.toml`, which stays the authority on what a silhouette
+# may mean and what it may never be reused for; a second roster of glyphs here
+# is the drift this repository has collected before. The same holds against
+# `enum-verbs.toml`, which carries the word a *state* renders as. Nothing there
+# is an act and no key is spelled in both files — `killed` is a badge, `kill`
+# is this file's.
+#
+# The table key is the id an implementation binds to. `shortcut` is the binding
+# spelled exactly as the contract spells it, so a rule compares the two with no
+# mapping in between: `⌘1–⌘4` is one row rather than four because the contract
+# makes the rule rail order rather than the digits, and four rows would fix an
+# assignment it refuses to fix.
+#
+# Fields:
+#   kind        - Action | Motion. A Motion moves the cursor, appears in no
+#                 palette and so carries no glyph. Every other row is an act
+#   tier        - Global | Contextual
+#   verb        - what a person reads, in the lexicon's word. Never the id
+#   icon        - a glyph key in packages/icons/icons.toml
+#   icon_absent - why the glyph column is empty where it is. `undecided`, or
+#                 `by design` where a document decided this act carries none.
+#                 An Action with neither a glyph nor a reason fails the gate
+#   shortcut    - the binding, as the contract's map spells it
+#   scope       - where the binding is offered: anywhere | list |
+#                 list and detail | detail | job board | piloted job
+#   destructive - whether it ends or overrules a Job's record
+#   confirms    - whether it takes a confirmation. Destructive implies it
+#   notes       - the reasoning the row carries
+#
+# `icon_absent = "undecided"` is a gap, not a default. Eight rows carry one,
+# because no registered glyph means the act and inventing one is a decision
+# that belongs in the icon registry rather than here. They are countable and
+# the gate counts them; what a new action may not do is ship without either.
+
+# ------------------------------------------------------------------ global
+
+[actions.command_palette]
+kind = "Action"
+tier = "Global"
+verb = "Command palette"
+icon = ""
+icon_absent = "undecided"
+shortcut = "⌘K"
+scope = "anywhere"
+destructive = false
+confirms = false
+notes = "The palette is the discovery surface for every other row here, and it is the one row that cannot be discovered inside it. `search` was not taken: the registry gives it to the search control, and the palette is a superset of the UI rather than a search over a list."
+
+[actions.bridge_surfaces]
+kind = "Action"
+tier = "Global"
+verb = "Bridge surfaces"
+icon = ""
+icon_absent = "by design"
+shortcut = "⌘1–⌘4"
+scope = "anywhere"
+destructive = false
+confirms = false
+notes = "One binding over the rail rather than four over four destinations — the contract's rule is rail order, not the numbers, and the digits shift if the rail does. Each destination carries its own navigation glyph in the icon registry, so a glyph on this row would be a fifth one standing for all of them."
+
+[actions.helm]
+kind = "Action"
+tier = "Global"
+verb = "Helm"
+icon = "message-square"
+shortcut = "⌘5"
+scope = "anywhere"
+destructive = false
+confirms = false
+notes = "The digit after the last Bridge surface, and a sibling surface rather than a fifth Bridge one. The glyph is the registry's own assignment for Helm."
+
+[actions.toggle_sidebar]
+kind = "Action"
+tier = "Global"
+verb = "Toggle sidebar"
+icon = ""
+icon_absent = "undecided"
+shortcut = '⌘\'
+scope = "anywhere"
+destructive = false
+confirms = false
+notes = "No panel glyph is registered. The 48px rail is reachable by ⌘-digit without labels, which is why hiding it costs little."
+
+[actions.history]
+kind = "Action"
+tier = "Global"
+verb = "Back / forward"
+icon = ""
+icon_absent = "undecided"
+shortcut = "⌘[ ⌘]"
+scope = "anywhere"
+destructive = false
+confirms = false
+notes = "One row for a pair, because the two are one act with a direction. `chevron-left` is not registered and `chevron-right` is reserved to expand and collapse, so neither half has a glyph to take."
+
+[actions.close]
+kind = "Action"
+tier = "Global"
+verb = "Close"
+icon = "x"
+shortcut = "Esc"
+scope = "anywhere"
+destructive = false
+confirms = false
+notes = "Closes an overlay, or returns to the list from a detail route. `x` is the badge set's system-failure mark and the registry already carries its second reading: as chrome it is the dialog close, unchanged."
+
+# -------------------------------------------------------------- contextual
+
+[actions.move_focus]
+kind = "Motion"
+tier = "Contextual"
+verb = "Move focus"
+icon = ""
+shortcut = "j / k / ↓ / ↑"
+scope = "list"
+destructive = false
+confirms = false
+notes = "The two navigation keys the destructive-key rule is measured against. A list is a listbox and already roves on the arrows; j and k are here because nothing else claims them."
+
+[actions.open_focused]
+kind = "Motion"
+tier = "Contextual"
+verb = "Open the focused job"
+icon = ""
+shortcut = "Enter"
+scope = "list"
+destructive = false
+confirms = false
+notes = "Acts on nothing, which is what makes it a motion rather than a second Open. Enter belongs to whatever holds focus first — a row, a button — and this is what it means when none of them does."
+
+[actions.open]
+kind = "Action"
+tier = "Contextual"
+verb = "Open"
+icon = ""
+icon_absent = "undecided"
+shortcut = "o"
+scope = "list"
+destructive = false
+confirms = false
+notes = "The same act as Enter, named so the palette can display it — which is the whole reason it has a row of its own. `external-link` is not it: that hands a path to something outside Bridge."
+
+[actions.review]
+kind = "Action"
+tier = "Contextual"
+verb = "Review"
+icon = "eye"
+shortcut = "r"
+scope = "list and detail"
+destructive = false
+confirms = false
+notes = "The most-pressed contextual key in the app: review is on every needs-you row, which is why it holds `r` and redirect moved to `d`. The glyph is reserved to Review and to nothing else."
+
+[actions.attest]
+kind = "Action"
+tier = "Contextual"
+verb = "Attest"
+icon = "stamp"
+shortcut = "t"
+scope = "list and detail"
+destructive = false
+confirms = false
+notes = "The glyph is the registry's awaiting-attestation badge, and the act is what the badge is waiting for. A stamp is literally what an attestation performs."
+
+[actions.redirect]
+kind = "Action"
+tier = "Contextual"
+verb = "Redirect"
+icon = "corner-up-right"
+shortcut = "d"
+scope = "list and detail"
+destructive = false
+confirms = false
+notes = "`d` rather than the initial, because `r` is spent on Review. The glyph is the registry's own assignment for Redirect."
+
+[actions.approve]
+kind = "Action"
+tier = "Contextual"
+verb = "Approve"
+icon = ""
+icon_absent = "undecided"
+shortcut = "a"
+scope = "dispatch card"
+destructive = false
+confirms = false
+notes = "The one act that approves, and the only place it happens. Nothing on a list approves — the Board's needs-approval row carries Review, and #217 records that the held-key rule moved here with the act: `a` acts once and needs releasing, because a queue approved by holding one key is what the one-job-one-decision rule exists to prevent. Scoped rather than global for that reason: a binding that approves must not be live on a surface showing fourteen approvable rows."
+
+[actions.restart_step]
+kind = "Action"
+tier = "Contextual"
+verb = "Restart step"
+icon = ""
+icon_absent = "undecided"
+shortcut = "s"
+scope = "detail"
+destructive = false
+confirms = false
+notes = "`rotate-cw` is Redispatch and `refresh-cw` is reserved to churning, so the two rotation glyphs are both spoken for. Restarting one step is neither."
+
+[actions.pilot]
+kind = "Action"
+tier = "Contextual"
+verb = "Pilot"
+icon = "terminal"
+shortcut = "p"
+scope = "list and detail"
+destructive = false
+confirms = false
+notes = "The glyph is reserved to Pilot. Once the terminal has focus every keystroke belongs to it and this tier is suspended; only Esc Esc releases it."
+
+[actions.copy_debug_info]
+kind = "Action"
+tier = "Contextual"
+verb = "Copy debug info"
+icon = ""
+icon_absent = "by design"
+shortcut = "c"
+scope = "list and detail"
+destructive = false
+confirms = false
+notes = "The contract decides the blank: nothing in the error treatment carries a glyph, and `triangle-alert` and `octagon-alert` are both spoken for. `copy` was not taken either — it means copy an id or a path, and a debug payload is an artifact rather than a value. Widening it is a decision for the icon registry."
+
+[actions.kill]
+kind = "Action"
+tier = "Contextual"
+verb = "Kill"
+icon = "power"
+shortcut = "x"
+scope = "list and detail"
+destructive = true
+confirms = true
+notes = "`x` and never `k`, because `k` sits against `j` and a mistyped navigation keystroke must not end a running job. The glyph is the registry's deliberate-stop mark, which is what kill is against unplug's connection lost."
+
+[actions.new_job]
+kind = "Action"
+tier = "Contextual"
+verb = "New job"
+icon = ""
+icon_absent = "undecided"
+shortcut = "n"
+scope = "anywhere"
+destructive = false
+confirms = false
+notes = "The one contextual key that acts on nothing on screen, which is why its scope is anywhere rather than the list it is pressed on. `send` is Dispatch and this composes rather than dispatches — the dispatch card is between them."
+
+[actions.search]
+kind = "Action"
+tier = "Contextual"
+verb = "Search"
+icon = "search"
+shortcut = "/"
+scope = "list"
+destructive = false
+confirms = false
+notes = "⌘F was deleted for this one: two bindings for one act break the one-artifact rule. A text match is not a state, so it reads every job whatever the state filter is set to."
+
+[actions.state_filter]
+kind = "Action"
+tier = "Contextual"
+verb = "State filter"
+icon = "filter"
+shortcut = "1–5"
+scope = "job board"
+destructive = false
+confirms = false
+notes = "One row for the five tabs, in tab order, for the reason ⌘1–⌘4 is one row. `1`–`5` and `⌘1`–`⌘5` are different acts on one row of keys, separated by the modifier and drawn that way deliberately."
+
+[actions.observe]
+kind = "Action"
+tier = "Contextual"
+verb = "Observe"
+icon = ""
+icon_absent = "undecided"
+shortcut = "v"
+scope = "detail"
+destructive = false
+confirms = false
+notes = "`eye` is the obvious glyph and is reserved to Review, so observing has none. The two acts are close enough that sharing a silhouette would be the collision the reservation exists to prevent."
+
+[actions.submit_for_verification]
+kind = "Action"
+tier = "Contextual"
+verb = "Submit for verification"
+icon = ""
+icon_absent = "undecided"
+shortcut = "u"
+scope = "piloted job"
+destructive = false
+confirms = false
+notes = "Hands a piloted job back to the machinery that checks it. `file-check` is a badge for a submission that landed rather than a control that submits one, and `send` is Dispatch."
+
+[actions.redispatch]
+kind = "Action"
+tier = "Contextual"
+verb = "Redispatch"
+icon = "rotate-cw"
+shortcut = "e"
+scope = "list and detail"
+destructive = false
+confirms = false
+notes = "The glyph is the registry's own assignment for Redispatch — a single arrow, distinct from the two chasing arrows that mean churning."

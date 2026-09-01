@@ -54,14 +54,14 @@ const NOT_A_GLYPH: &[&str] = &[
 ];
 
 /// One `[icons.<name>]` table, reduced to what the rule asks of it.
-struct Entry {
+pub struct Entry {
     line: usize,
     /// Whether `means` is set anywhere — on the table, or on a `usage`
     /// sub-table. `file-cog` carries no top-level meaning because it has two,
     /// one per context, and demanding one on the table would force a summary
     /// that is not true of either.
     means: bool,
-    status: Option<String>,
+    pub status: Option<String>,
 }
 
 /// One glyph named by an import, with where it was named.
@@ -154,7 +154,7 @@ pub fn every_glyph_in_use_is_registered(root: &Path) -> Report {
 }
 
 /// Every `[icons.<name>]` table, reporting anything malformed as it goes.
-fn read_registry(text: &str, report: &mut Report) -> BTreeMap<String, Entry> {
+pub fn read_registry(text: &str, report: &mut Report) -> BTreeMap<String, Entry> {
     let mut entries: BTreeMap<String, Entry> = BTreeMap::new();
     // The glyph the current section belongs to. A `usage` sub-table contributes
     // to the table above it; a `[conventions.*]` table is not a glyph at all.

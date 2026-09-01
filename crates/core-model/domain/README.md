@@ -26,6 +26,16 @@ files, a rule can — and the rule is the point.
 | `workflowdef-fields.toml` | What a WorkflowDef declares: a step's gates, its evidence scope, the def-level defaults |
 | `workflows.toml` | The workflows Armada runs, and the ones it has decided not to design yet |
 | `workflow-samples/*.json` | The WorkflowDefs themselves, verbatim. One per workflow whose row says it has one |
+| `actions.toml` | The verb, the glyph and the binding every act in Bridge carries |
+
+**`actions.toml` is the one file here that is not a domain enum**, and it lives
+here for the reason `enum-verbs.toml` does: it is a set code reads, and a set
+code reads is a data file beside the crate with a check over it. It holds acts
+where the rest hold states, so no key is spelled in both — `killed` is a badge
+in `enum-verbs.toml`, `kill` is an action. Its glyphs are keys in
+`packages/icons/icons.toml` rather than a second roster, and its bindings are
+the two blocks under "Keyboard and command palette" in
+`docs/contracts/design-system.md`, which the gate reads and compares.
 
 ## What a rule can check, and why the layout is shaped for it
 
@@ -106,8 +116,10 @@ the rows that say otherwise.
 
 A value added here is a value some enum must gain, so add it in the change that
 adds the variant, not before and not after. A transition added here needs both
-its ends present first. Nothing under this directory is Rust and nothing is
-under `src/`.
+its ends present first. `actions.toml` has no enum to gain a variant: a row
+there needs its line in the contract's key map in the same change, and a glyph
+or a stated reason for having none. Nothing under this directory is Rust and
+nothing is under `src/`.
 
 ## Known inconsistencies, not open questions
 
