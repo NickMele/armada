@@ -57,19 +57,9 @@ export * from "./compositions/TransitionHistory/TransitionHistory";
 export * from "./compositions/UnifiedDiff/UnifiedDiff";
 export * from "./compositions/WorkflowRail/WorkflowRail";
 
-// Job detail — the three renders a Job's status chooses between. A screen was
-// a story with hardcoded fixtures and nothing else could render it; these take
-// props, and the stories render them with the same fixtures they held.
+// What every job detail render shares. The five screens that took it are gone:
+// job detail is one arrangement, and the five were the defect.
 export * from "./screens/detail";
-export * from "./screens/AFailedJobADeadEndReadAsOne/AFailedJobADeadEndReadAsOne";
-export * from "./screens/AFinishedJobWhatItWasAndWhatItProduced/AFinishedJobWhatItWasAndWhatItProduced";
-export * from "./screens/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop";
-export * from "./screens/ARunningJob/ARunningJob";
-
-// Observe — one Job's turns, read while they are still being written. A screen
-// rather than a region of job detail: it is opened on one Job deliberately and
-// closed, which is the shape the turn-level detail rule already has.
-export * from "./screens/WatchingADroneWork/WatchingADroneWork";
 
 // The three journey screens, lifted for the reason the job detail three were:
 // a story with hardcoded fixtures is a screen nothing outside Storybook can

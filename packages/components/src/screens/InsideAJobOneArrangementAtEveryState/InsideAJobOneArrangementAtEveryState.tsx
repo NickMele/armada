@@ -129,6 +129,18 @@ export type InsideAJobProps = {
   whereNote?: ReactNode;
   /** Why nothing can be named there, where nothing can. */
   whereAbsent?: string;
+  /**
+   * Everything the Job left behind, folded — its moves, its Drone's turns, what
+   * it touched, what it changed, what it claimed.
+   *
+   * **A Job-level region, in a Job-level column, at every state.** It sat in
+   * the finished render with eight sections and the stopped render with five,
+   * and the difference was never about the Job — it was about which screen a
+   * status happened to route to. Absent draws nothing rather than an empty
+   * frame: a Job with nothing recorded is not a hole in the screen.
+   */
+  record?: ReactNode;
+  recordLabel?: ReactNode;
   /** The Job's brief, above the step on the panel's raised surface. */
   brief?: JobBriefProps;
   /** Why there is no brief, where there is none. */
@@ -152,6 +164,8 @@ export function InsideAJob({
   whereLabel = "Where things are",
   whereNote,
   whereAbsent = "Nothing serves this Job's paths or its branch.",
+  record,
+  recordLabel = "What it left behind",
   brief,
   briefAbsent = "Nothing serves this Job's brief or its acceptance criteria.",
   step,
@@ -195,6 +209,15 @@ export function InsideAJob({
             <JobLogReference rows={where} onCopied={onCopied}>
               {whereNote}
             </JobLogReference>
+          )}
+
+          {record === undefined ? null : (
+            <>
+              <span className="armada-screen__eyebrow" data-spaced>
+                {recordLabel}
+              </span>
+              {record}
+            </>
           )}
         </div>
 
