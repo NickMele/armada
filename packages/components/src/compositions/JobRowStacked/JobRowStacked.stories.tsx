@@ -469,3 +469,42 @@ export const SubDispatchedWaitingOnResources: Story = {
     ),
   },
 };
+
+/**
+ * **The longest verb in the registry, at the width floor.** `a required
+ * command did not succeed` is 34 characters — `enum-verbs.toml`'s longest, and
+ * more than twice what the drawn 132px badge column holds.
+ *
+ * The column was a bare fixed value until #262 and this painted across the
+ * headline: `Badge` is `nowrap` and nothing clips it. It is `minmax(132px,
+ * max-content)` now, so the drawn width is a floor like every other track's
+ * and the list sizes the column to its widest badge.
+ *
+ * **This story is against the registry, not against the bug report.** The
+ * reported case was `evidence disputed` at 17 characters, and a story pinned to
+ * that would pass again the next time a longer verb is added. Widening the
+ * fixed value would also have passed it — which is why the drawing's own 184px
+ * is not the fix.
+ */
+export const TheLongestVerbAtTheWidthFloor: StoryObj = {
+  render: () => (
+    <div style={{ width: "calc(var(--window-floor) - var(--sidebar-rail))" }}>
+      <JobRowStacked
+        status="escalated"
+        statusIcon={OctagonAlert}
+        statusLabel="A required command did not succeed"
+        headline="Reconcile orphaned drones on Fleet start"
+        jobId="job_31c7"
+        fields={[
+          { value: "fix/orphan-reconcile", mono: true, icon: GitBranch, copyValue: "fix/orphan-reconcile" },
+          { value: <StepBar total={5} current={3} activity="failed" label="Step 4 of 5" /> },
+          { value: "Regression check", emphasis: true },
+          { value: "1h 12m", mono: true },
+          { value: "~$3.40", mono: true },
+          { value: "Dispatched by you" },
+        ]}
+        action={open}
+      />
+    </div>
+  ),
+};
