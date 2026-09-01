@@ -11,6 +11,12 @@ dist/
 out/
 .vite/
 
+# The gallery's own intermediate bundle. `out/` above does not match a leading
+# dot, so this was tracked: a 400kB generated file re-committed by anyone who
+# touched a story, three times in the last week alone. It is rebuilt by
+# `packages/components/gallery/build.mjs` in seconds and read by nothing else.
+.out/
+
 # macOS
 .DS_Store
 
@@ -31,6 +37,13 @@ out/
 
 # Storybook builds from source on demand; the output is not a record of anything.
 storybook-static/
+
+# What `pnpm shoot` writes: a PNG per screen, a PNG per pair, one page that
+# holds them beside each other, and a copy of the drawing they were compared
+# against. Regenerated from the build and the drawing in about a minute, so
+# committing it would be committing a rendering of two things already in
+# version control — and one that is out of date the next time either moves.
+.shots/
 
 # What a Fleet pointed at this repository writes into it. `.armada/workflows/`
 # is this repository declaring its own workflows and is checked in; everything

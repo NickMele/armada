@@ -635,7 +635,7 @@ a modifier.
 
 ```
 j / k / ↓ / ↑  move focus
-Enter          open the focused job. Acts on nothing
+Enter          open the focused job. Acts on nothing   (list only)
 o              open. The same act, named so the palette can display it
 r              review
 t              attest
@@ -653,6 +653,7 @@ u              submit for verification  (piloted job only)
 e              redispatch
 h / l / ← / →  expand and collapse  (detail only)
 [ ]            move between chapters  (detail only)
+Enter          open the log         (detail only, not built)
 f              open the diff        (detail only)
 g              open the stage       (detail only)
 ```

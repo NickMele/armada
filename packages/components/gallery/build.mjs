@@ -2,7 +2,7 @@
    component stylesheet inlined. Self-contained on purpose — it has to open on a
    phone with no server and no network. */
 import { build } from "vite";
-import { readFileSync, writeFileSync, readdirSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,27 +32,78 @@ const groups = collect();
 // generated output from source — the same way `storybook-static` did.
 mkdirSync(join(here, "dist"), { recursive: true });
 
-/* Every tree under src/ that owns stylesheets, in the order index.css imports
-   them. Primitives alone was the original list, written when primitives were
-   the only tree; every composition rendered here unstyled and the gallery said
-   nothing about it. A screen is an arrangement of compositions, so the same
-   omission would have made every screen unreadable.
+/* Exactly what the app loads, flattened. `src/index.css` is the app's one list
+   of component stylesheets, and Storybook loads that same file rather than a
+   rule per story, so reading it here makes the gallery show what the app shows
+   and nothing else.
 
-   `errors` joined on the same terms and was omitted the same way. A tree left
-   off this list does not fail the build — it renders unstyled and the gallery
-   says nothing — which is why the list is stated beside the reason rather than
-   derived: the next tree has to be added here by hand, and the omission is
-   silent when it is not. */
-const css = [readFileSync(join(root, "../tokens/tokens.css"), "utf8")];
-for (const tree of ["primitives", "compositions", "errors"]) {
-  for (const dir of readdirSync(join(root, "src", tree))) {
-    const f = join(root, "src", tree, dir, `${dir}.css`);
-    try { css.push(readFileSync(f, "utf8")); } catch {}
-  }
+   It used to `readdirSync` three named trees instead, and its own comment
+   admitted the flaw: a tree left off that list did not fail the build, it
+   rendered unstyled and the gallery said nothing. That was a second answer to
+   "which stylesheets are there", and a second answer is how a stylesheet goes
+   unimported with every gate green. There is one answer now — a line missing
+   from `index.css` is missing from the app too, where a gate rule can see it.
+
+   An `@import` naming a file that is not there throws. In the app that is a
+   build error; here it would otherwise be a component rendered with its class
+   names and no rules behind them, which reads as a component drawn wrong
+   rather than one never registered. */
+function flatten(file, seen = new Set()) {
+  if (seen.has(file)) return "";
+  seen.add(file);
+  const dir = dirname(file);
+  return readFileSync(file, "utf8").replace(/@import\s+["']([^"']+)["']\s*;/g, (_, spec) => {
+    const target = join(dir, spec);
+    try {
+      readFileSync(target);
+    } catch {
+      throw new Error(`${file} imports ${spec}, which does not exist`);
+    }
+    return flatten(target, seen);
+  });
 }
-/* Screens are stories, not components, so their layout lives in one stylesheet
-   the screens tree owns rather than one file per screen. */
-try { css.push(readFileSync(join(root, "src/screens/screens.css"), "utf8")); } catch {}
+
+const css = [
+  readFileSync(join(root, "../tokens/tokens.css"), "utf8"),
+  flatten(join(root, "src/index.css")),
+];
+
+/* The mark `shoot` captures by, stamped on a screen's story and on nothing
+   else. A component is not a screen and has no frame in a drawing to pair
+   with, so stamping one would invent a state no drawing can answer.
+
+   `WaitingOnYou` becomes `waiting-on-you`, and a drawing whose frame carries
+   `data-shot="waiting-on-you"` is drawing the same state. */
+const kebab = (s) =>
+  s
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+/* A screen's own mark, used only to break a tie. A screen title is a headline
+   and a subtitle joined by an em dash — "The list — six states, one row
+   shape" — and the headline alone is what a person calls the screen. */
+const screenMark = (title) => kebab(title.split("/").pop().split(/\s+—\s+/)[0]);
+
+const screens = groups.filter((g) => g.title.startsWith("Screens/"));
+
+/* Two screens each export a story called `Running`, and one flat mark cannot
+   hold both — one PNG would overwrite the other and the overwrite would be
+   silent. A mark claimed once stays bare; a mark claimed twice is qualified by
+   its screen on both sides, so neither wins by accident and the pairing can
+   name the two screens that collided. */
+const claimed = new Map();
+for (const g of screens)
+  for (const s of g.stories) claimed.set(kebab(s.key), (claimed.get(kebab(s.key)) ?? 0) + 1);
+
+const marks = new Map();
+for (const g of screens)
+  for (const s of g.stories) {
+    const bare = kebab(s.key);
+    marks.set(s, claimed.get(bare) > 1 ? `${screenMark(g.title)}-${bare}` : bare);
+  }
 
 const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
 
@@ -65,7 +116,10 @@ const body = groups
     (g) => `<section id="${encodeURIComponent(g.title)}">
   <h2>${esc(g.title.split("/").pop())}</h2>
   ${g.stories
-    .map((s) => `<figure><figcaption>${esc(s.name)}</figcaption><div class="stage">${s.html}</div></figure>`)
+    .map(
+      (s) =>
+        `<figure${marks.has(s) ? ` data-shot="${marks.get(s)}"` : ""}><figcaption>${esc(s.name)}</figcaption><div class="stage">${s.html}</div></figure>`,
+    )
     .join("\n  ")}
 </section>`,
   )
@@ -114,4 +168,7 @@ ${body}
   "utf8",
 );
 
-console.log(`${groups.length} components, ${groups.reduce((n, g) => n + g.stories.length, 0)} stories`);
+console.log(
+  `${groups.length} components, ${groups.reduce((n, g) => n + g.stories.length, 0)} stories, ` +
+    `${marks.size} marked for shoot`,
+);

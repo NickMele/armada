@@ -213,7 +213,7 @@ pub fn check(
 ) {
     let mut undecided: Vec<String> = Vec::new();
     let mut registered: Vec<String> = Vec::new();
-    let mut bindings: BTreeMap<(&str, &str), &str> = BTreeMap::new();
+    let mut bindings: BTreeMap<(&str, &str, &str), &str> = BTreeMap::new();
 
     for (id, entry) in entries {
         let at = format!("{REGISTRY}:{}", entry.line);
@@ -229,11 +229,15 @@ pub fn check(
                  confirms, even from the keyboard"
             ));
         }
-        let (tier, shortcut) = (entry.get("tier"), entry.get("shortcut"));
-        if let Some(first) = bindings.insert((tier, shortcut), id) {
+        // Scope is part of the key, not decoration. `Enter` is `open_focused`
+        // on a list and `open_log` on detail, and those are one binding each on
+        // a surface a person is looking at — not two acts fighting over a key.
+        // Keying on tier and shortcut alone refused a registry that was right.
+        let (tier, shortcut, scope) = (entry.get("tier"), entry.get("shortcut"), entry.get("scope"));
+        if let Some(first) = bindings.insert((tier, shortcut, scope), id) {
             report.fail(format!(
-                "{at} — `{id}` and `{first}` are both bound to `{shortcut}` in the {tier} tier. \
-                 One binding, one act"
+                "{at} — `{id}` and `{first}` are both bound to `{shortcut}` in the {tier} tier, \
+                 both scoped `{scope}`. One binding, one act"
             ));
         }
     }

@@ -17,7 +17,7 @@
   inset: 0;
   z-index: var(--z-modal);
   display: flex;
-  background: color-mix(in srgb, var(--bg-sunken) 62%, transparent);
+  background: var(--scrim);
 }
 
 .armada-sheet {

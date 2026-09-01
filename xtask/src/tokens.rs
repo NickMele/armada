@@ -124,6 +124,7 @@ pub const THEME: &[(&str, Slot)] = &[
     // emit `--color-error-edge: 3px`, which is the shape `--edge-active`
     // already has and is wrong for the same reason.
     ("--error", Slot::Named("color", "error")),
+    ("--scrim", Slot::Named("color", "scrim")),
     (
         "--error-edge",
         Slot::CssOnly("a fault's edge width, read beside --error"),
