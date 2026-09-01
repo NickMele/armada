@@ -160,10 +160,17 @@ const shotRows = (read) =>
       pixels: pngSize(w.file),
     }));
 
+// The path is printed because a shot is meant to be opened, and a name with no
+// path makes a person go and find it. Absolute, because most terminals make an
+// absolute path clickable and a relative one nothing at all.
 const printShots = (rows, where) => {
   console.log(`\n${plural(rows.length, "state", "states")} captured to ${where}`);
   const pad = Math.max(8, ...rows.map((r) => r.state.length));
-  for (const r of rows) console.log(`  ${r.state.padEnd(pad)}  ${r.css.width}×${r.css.height}`);
+  const size = Math.max(9, ...rows.map((r) => `${r.css.width}×${r.css.height}`.length));
+  for (const r of rows) {
+    const dims = `${r.css.width}×${r.css.height}`;
+    console.log(`  ${r.state.padEnd(pad)}  ${dims.padStart(size)}  ${resolve(shots, r.file)}`);
+  }
 };
 
 // ---------------------------------------------------------------------- the app
@@ -554,6 +561,17 @@ function report(rows, left, right, manifestFile) {
   console.log(
     `A height gap is flagged over ${HEIGHT_TOLERANCE * 100}% of the taller shot, and never under ${HEIGHT_FLOOR}px. Sizes are CSS pixels.`,
   );
+  // The pairs are the point, so they are the last thing said and they are
+  // openable. One line each rather than a directory to go rummage in.
+  const paired = rows.filter((r) => r.kind === "paired");
+  if (paired.length > 0) {
+    console.log(`\n${plural(paired.length, "pair", "pairs")} to open:`);
+    const w = Math.max(8, ...paired.map((r) => r.state.length));
+    for (const r of paired) {
+      console.log(`  ${r.state.padEnd(w)}  ${resolve(shots, "pairs", `${r.state}.png`)}`);
+    }
+  }
+  console.log(`\nAll of them at once   ${resolve(shots, "sheet.html")}`);
 
   const blocking = rows.filter((r) => r.kind === `${left}-only`);
   if (blocking.length)
