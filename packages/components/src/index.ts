@@ -97,3 +97,7 @@ export * from "./compositions/RunTree/RunTree";
 // Where this step is. Each stage is a control, and Checks and the Judge are
 // drawn as the different things they are.
 export * from "./compositions/PhaseStrip/PhaseStrip";
+
+// The activity log — the Drone's turns, Armada's injected turns and Fleet's
+// own events, in one stream, every entry naming who.
+export * from "./compositions/ActivityLog/ActivityLog";

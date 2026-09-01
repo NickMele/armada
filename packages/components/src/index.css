@@ -83,3 +83,6 @@
 
 /* Where this step is — the phases and the gate tiers as one progression. */
 @import "./compositions/PhaseStrip/PhaseStrip.css";
+
+/* The activity log — one stream, three voices, every entry opening. */
+@import "./compositions/ActivityLog/ActivityLog.css";
