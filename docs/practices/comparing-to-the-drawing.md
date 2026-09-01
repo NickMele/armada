@@ -1,8 +1,8 @@
 # Comparing a screen to its drawing
 
 **Kind:** practice. **Governs:** `pnpm shoot`, the tool that screenshots a
-drawing and the build and pairs them. Read before changing a screen, and before
-reviewing one.
+drawing, the component gallery and Bridge's own screens, and pairs them. Read
+before changing a screen, and before reviewing one.
 
 A screen shipped about thirty differences from its drawing with every gate
 green. An unimported stylesheet rendered a component as a vertical stack and a
@@ -17,12 +17,37 @@ beside the drawing.
 | Command | What it does |
 |---|---|
 | `pnpm shoot` | Builds the gallery, captures every marked screen story to `.shots/app/` |
+| `pnpm shoot --bridge` | Builds Bridge's own screens from `apps/desktop`, captures them to `.shots/bridge/` |
 | `pnpm shoot --design <file.dc.html>` | Captures every marked frame of a drawing to `.shots/design/`, caching the drawing beside them |
 | `pnpm shoot --design <file> --suggest` | Proposes a mark for each unmarked frame instead of refusing |
 | `pnpm shoot --sheet` | Pairs what has been captured into `.shots/sheet.html` and `.shots/pairs/` |
 
 **It needs nothing but an installed workspace.** No network, no running Fleet,
 no built app. The browser is Bridge's own Electron.
+
+### `app` is the components, and `bridge` is the app
+
+**The side called `app` is the component library's gallery, and for a long time
+that was the only side there was.** It answers whether a component is drawn
+right. It cannot answer whether the screen the app assembles out of them is,
+because the gallery's screen stories build their own arrangements: `Screens/
+Inside a job` hand-builds the Job header out of four `<Button>`s. That is a
+drawing of the screen written in React. A change to the app's own header
+could not move it, so a header could ship rebuilt and this tool would report the
+old one with everything green — which is the same class of miss the tool was
+built to end, one level up.
+
+**`--bridge` captures the app's own compositions.** Every figure on that side
+imports the component it is a shot of. The screens are declared in
+`*.screens.tsx` beside the code they draw: a file exports a `title` and a
+`screens` array, and each entry states its own `data-shot` mark, the name to
+print, and one element. Fixtures are written in the file — enough of the wire's
+shape for the composition to decide what it draws, and nothing else. Nothing
+runs; a screen that needed a Fleet is a screen nobody captures.
+
+**A mark is written by hand here rather than derived.** There is no story export
+name to derive one from, and a mark that a drawing has to match is not something
+to leave to a transform. Two screens claiming one mark is refused at build.
 
 **Everything it writes is under `.shots/`, which is ignored.** Regenerating both
 sides takes about a minute.
@@ -81,6 +106,12 @@ which states pair and how far the heights are apart; reading the difference is a
 person's job or an agent's.
 
 **It captures resting states only.** Hover, focus and open menus need a pointer.
+A split button is captured closed, so what its menu holds is not on the shot —
+read that in the markup or in the code.
+
+**`--bridge` captures and does not pair.** `--sheet` pairs the drawing against
+`app`. Pairing a drawing against `bridge` needs the drawing's frames to carry
+the same marks, and no drawing does yet.
 
 **It pairs one drawing at a time.** `--design` replaces `.shots/design/`.
 
