@@ -58,6 +58,7 @@ import type {
   Watched,
 } from "../../shared/bridge";
 import type { FileReport, JobDetail as JobWhole, JobSummary, StepDetail } from "../../shared/protocol";
+import type { JobFootprint } from "../../shared/footprint";
 import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
 import { Acts, StepActs, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type Calls } from "./calls";
@@ -65,7 +66,8 @@ import { Decide, DecidedDiff } from "./Decide";
 import { DIFF_CHAPTER, namesStep, useDetailKeys, type DetailKeys } from "./detail-keys";
 import { span } from "./duration";
 import { factsOf, ordered } from "./facts";
-import { filesOf, footprintNote, readingFor, whyNoFootprint } from "./files";
+import { readingFor, whyNoFootprint } from "./files";
+import { producedIn } from "./produced";
 import { Log } from "./Log";
 import { phasesOf } from "./phases";
 import { recourseOf } from "./recovery";
@@ -222,6 +224,7 @@ export function JobDetail({
           render,
           watching,
           footprint: recorded.footprint,
+          kept: whole?.footprint,
           diff: recorded.diff,
           live: observed.state === "watching",
           log: keys.inLog,
@@ -567,6 +570,7 @@ function chaptersOf({
   render,
   watching,
   footprint,
+  kept,
   diff,
   live,
   log,
@@ -577,6 +581,12 @@ function chaptersOf({
   render: string;
   watching: { rows: readonly Turn[]; skipped: number } | null;
   footprint: Footprint;
+  /**
+   * What this Job's own detail says it touched, where it has stopped. **Fleet
+   * serves it on a terminal Job and on no other**, so its presence is what
+   * chooses between the record and the live reading — see `produced.ts`.
+   */
+  kept: JobFootprint | undefined;
   diff: Diff;
   /** Whether the socket is still carrying rows, for the chapter's live mark. */
   live: boolean;
@@ -599,7 +609,7 @@ function chaptersOf({
   const rows = watching === null ? [] : entriesOf(watching.rows, step.step_id);
   const told = rows.filter((row) => row.actor === "armada");
   const opened = told[0];
-  const touched = readingFor(footprint, job.id);
+  const produced = producedIn(kept, readingFor(footprint, job.id));
   return [
     {
       id: "instructions",
@@ -666,25 +676,27 @@ function chaptersOf({
       title: "Produced",
       // The header carries the summary, so a collapsed chapter still says what
       // the step produced. `changedFilesSummary` is the one reading of it —
-      // the body draws the same files from the same answer.
+      // the body draws the same files from the same answer. On a finished Job
+      // that summary carries `+94 −31`, because the record it draws from is the
+      // one reading anybody counted.
       summary:
-        touched === undefined ? undefined : changedFilesSummary(filesOf(touched), touched.plan_declared),
+        produced === undefined
+          ? undefined
+          : changedFilesSummary(produced.files, produced.planDeclared),
       preview:
-        touched === undefined ? (
+        produced === undefined ? (
           <p className="text-2xs text-fg-muted">{whyNoFootprint(job.assigned_drone !== undefined)}</p>
         ) : (
-          <ChangedFiles
-            files={filesOf(touched)}
-            emptyNote={NOTHING_TOUCHED}
-            note={footprintNote(touched)}
-          />
+          <ChangedFiles files={produced.files} emptyNote={NOTHING_TOUCHED} note={produced.note} />
         ),
       // A produced file opens to what it actually wrote, at every state. The
       // diff is the expensive read and opening the chapter is what spends it —
       // which is the whole reason one chapter is open at a time.
       content: <DecidedDiff diff={diff} jobId={job.id} />,
       openLabel:
-        touched === undefined ? "Open the diff" : `Open the diff — ${touched.files.length} files`,
+        produced === undefined
+          ? "Open the diff"
+          : `Open the diff — ${produced.files.length} files`,
     },
   ];
 }
