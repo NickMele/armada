@@ -32,7 +32,7 @@ No retry button, no escalation category, no suggested action. Every one of those
 
 What this journey mostly owes is **legibility of a dead end**. The screen's job is to make it obvious what failed, where the work is, and that nothing further is going to happen automatically.
 
-**Milestone design file:** `M1 - Dogfood.dc.html`, block `1f`. Drawn 2026-08-23. The screen states four things in order — what failed, that the job is over, where the branch is, and where the log is — and the sentence saying nothing happens automatically is written out rather than left to be inferred from an absence of buttons. All three controls take you to the work; none offers to act on it.
+**From the milestone design pass.** The screen states four things in order — what failed, that the job is over, where the branch is, and where the log is — and the sentence saying nothing happens automatically is written out rather than left to be inferred from an absence of buttons. All three controls take you to the work; none offers to act on it.
 
 Two decisions came out of drawing it. **A failed step gained an activity value**, `--step-failed` with a `--step-failed-bg` surface and a bare `x` glyph: it was drawn neutral first, on the grounds that a Check result is measured and measured facts render flatly, and that was reversed — the row that ended the Job is the entire reason a person opened the screen, and making them find it by weight in a rail of muted rows is the frustration this journey exists to prevent. The gate row beneath stays neutral: the step's state is hued, the Check's exit code is measured. **The per-job log gained a surface**, the first place in Armada that points at a log sink.
 
@@ -46,11 +46,9 @@ The screen's four things are unchanged, because each still has an answer — wha
 failed, that the Job is over, where the branch is, where the log is. What
 changes is the sentence about nothing happening automatically: it is now true
 because a person made it true, rather than because a Check exited non-zero. See
-[Monitor Active Work](4-monitor-active-work.md), Job detail, and the
+[Monitor Active Work](monitor-active-work.md), Job detail, and the
 contradiction it names with [Job](../concepts/job.md).
 
 ## Related
 
 Read the work and merge by hand — the successful counterpart to this journey, for a Job that reaches `completed_success` instead.
-
-This journey has no number because the design project has not drawn it. A number in a filename here means a `Journey N` drawing exists to match it; inventing one would assert a correspondence that does not.

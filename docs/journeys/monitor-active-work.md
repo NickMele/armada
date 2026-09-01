@@ -12,11 +12,11 @@ Design fidelity: Full on job detail, which is drawn whole. Active jobs stays the
 
 **Milestone:** Board. Active jobs shipped under M1 — Dogfood and is history here; job detail is the open work.
 
-**Design file:** `Journey 4 - Monitor active work.dc.html` in the Armada Mockups project. One file per journey; this document is the record, the file is the drawing. Active jobs and job detail are both drawn there.
+Active jobs and job detail are both drawn there.
 
 **Drawn against** `docs/contracts/design-system.md` and `docs/contracts/workflow-design-system.md`. The M1 drawing adds `docs/contracts/iconography.md` and the primitive stories under `packages/components/src/primitives/`.
 
-**Milestone design file:** `M1 - Dogfood.dc.html`, blocks `1a`, `1b`, `1d` and `1e`. Added 2026-08-23. What M1 needs and no more: the shell with one surface in the rail, the empty list in both Fleet states, the list at five job states, and a running job's rail. Three decisions came out of it — Fleet's three status-bar strings, an ungated step saying so in words, and the pulse narrowing to one mark per screen.
+**From the milestone design pass.** What M1 needs and no more: the shell with one surface in the rail, the empty list in both Fleet states, the list at five job states, and a running job's rail. Three decisions came out of it — Fleet's three status-bar strings, an ungated step saying so in words, and the pulse narrowing to one mark per screen.
 
 Analysis: Complete. UI/UX design: In progress.
 

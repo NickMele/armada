@@ -7,7 +7,7 @@
 // every row on it is a job something can still be done to. A report is the
 // opposite kind of reading — nothing here is waiting, nothing here can be
 // acted on, and the question it answers is *has the judge been worth trusting*,
-// which is asked deliberately and rarely. `docs/journeys/3-triage-queue.md`
+// which is asked deliberately and rarely. `docs/journeys/triage-queue.md`
 // draws that line, and putting a calibration figure on the board would put a
 // number nobody can act on beside rows that exist to be acted on.
 //

@@ -12,8 +12,6 @@ Design fidelity: not set. Analysis: Complete. UI/UX design: In progress.
 
 **Milestone:** Reach.
 
-**Design file:** `Journey 9 - Run and edit a manifest.dc.html` in the Armada Mockups project.
-
 **Drawn against** `docs/contracts/configuration.md`.
 
 New journey, added 2026-08-21 from a gap the other journeys did not cover.

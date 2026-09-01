@@ -100,7 +100,7 @@ export type ConfirmableAct = Exclude<
  * with disputed evidence — collapsed the title's column and wrapped a
  * seven-word title to three lines, because the header's width was a function of
  * how many acts the state offered. It is not a function of that any more.
- * `docs/journeys/4-monitor-active-work.md`, Acts.
+ * `docs/journeys/monitor-active-work.md`, Acts.
  *
  * **This is not the red split the previous pass removed.** That one made the
  * header's only control the loudest thing on a screen that is read rather than

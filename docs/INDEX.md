@@ -111,8 +111,7 @@ approximations.
 ## Journeys
 
 - [`journeys/`](journeys/) — how a person moves through Armada, one document
-  per journey, indexed in its own `INDEX.md`. A numbered filename means the
-  design project has drawn it; an unnumbered one has not been drawn yet.
+  per journey, indexed in its own `INDEX.md`.
 
 ## Measured
 

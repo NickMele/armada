@@ -127,5 +127,5 @@ Everything below is drawn without a source, and each is a decision somebody has 
 
 - [`../concepts/job.md`](../concepts/job.md) — the scope history field, the transitions, and the recovery acts this is measured against.
 - [`../concepts/convoy.md`](../concepts/convoy.md) — the permission rules a widening resolves again.
-- [`3.5-respond-to-a-push-alert.md`](3.5-respond-to-a-push-alert.md) — Redirect, the act that puts a person back on a Job and costs no respawn.
-- [`6-take-over-a-job.md`](6-take-over-a-job.md) — the level test this reuses to place the act.
+- [`respond-to-a-push-alert.md`](respond-to-a-push-alert.md) — Redirect, the act that puts a person back on a Job and costs no respawn.
+- [`take-over-a-job.md`](take-over-a-job.md) — the level test this reuses to place the act.

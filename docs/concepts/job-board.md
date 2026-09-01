@@ -57,7 +57,7 @@ Still uncovered: what a freeze does to a Convoy already running, since freeze is
 | Flat list | The Board. Sorted and filtered, state among the filters |
 | DAG / graph view | Opt-in toggle, for inspecting dependencies — not the default, and not scheduled |
 
-Default view (list vs. graph) is user-configurable, not fixed — see Configuration below. The graph view is unscheduled: the graph a person asked for is a Job's own workflow, which is drawn on job detail — see [Monitor Active Work](../journeys/4-monitor-active-work.md).
+Default view (list vs. graph) is user-configurable, not fixed — see Configuration below. The graph view is unscheduled: the graph a person asked for is a Job's own workflow, which is drawn on job detail — see [Monitor Active Work](../journeys/monitor-active-work.md).
 
 **The graph view has no Convoy case (see Open questions).** The graph view renders `dependencies`. A [Convoy](convoy.md) has none of its own by construction, but it **may be a peer node** in someone else's, and the Job proposer may emit a graph containing one.
 
@@ -255,7 +255,7 @@ origin field of its own. The label above is what a row renders.
 
 **Three of the five read as sentences rather than labels**, settled on the
 drawing and amended 2026-08-21 — see [Monitor active
-work](../journeys/4-monitor-active-work.md). *Auto-detected*, *Manual* and
+work](../journeys/monitor-active-work.md). *Auto-detected*, *Manual* and
 *Helm-drafted* were settings vocabulary naming modes the lexicon does not have;
 *Found by Fleet*, *Dispatched by you* and *Drafted in Helm* say who acted. The
 other two already named an act and are unchanged. Origin renders as plain sans

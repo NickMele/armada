@@ -12,7 +12,7 @@ Design fidelity: drawn. Analysis: Complete. UI/UX design: Complete.
 
 **Milestone:** Recovery.
 
-**Design file:** `Journey 6 - Take over a job.dc.html` in the Armada Mockups project. Frames `6a` the control, `6b` the modal, `6c` the bundle, `6d` the Convoy case, `6e` a piloted job and the way back, `6f` `hatch_unbidden`.
+Frames `6a` the control, `6b` the modal, `6c` the bundle, `6d` the Convoy case, `6e` a piloted job and the way back, `6f` `hatch_unbidden`.
 
 The mechanism lives on the Pilot concept page; this document is the flow. Assist stays deferred, so the hand-back leg is undrawn and this is worth revisiting when it ships.
 
@@ -77,5 +77,3 @@ The session runs at a Guild-level unrestricted toolset. The narrow Drone toolset
 ## Related
 
 Pilot — the concept page carrying the mechanism this journey's flow only names: the `escape_hatch` tool, the handoff bundle, the toolset and secrets rules, and the Evidence position.
-
-This journey has no number because the design project has not drawn it. A number in a filename here means a `Journey N` drawing exists to match it; inventing one would assert a correspondence that does not.

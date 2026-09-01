@@ -6,15 +6,12 @@ Design fidelity: not set. Analysis: Complete. UI/UX design: Not started.
 
 ---
 
-*Numbering note: the design project has not yet drawn this journey and names no `Journey N - ...` file for it. Numbered here only to give the file set a stable order — see the note on Guild Setup & Configuration for how the sequence after Journey 9 was assigned.*
 
 **Trigger:** First launch after install.
 
 **Concepts touched:** Kit, Machine, Manifest, Fleet (via Doctor), Job Board.
 
 **Milestone:** Ship. Design note: chains Guild Setup, Set Up a Project, Check System Health and Dispatch a Job into one hard-gated sequence — the only place in Armada where step order is enforced. Cannot complete until its four constituent journeys land, so it is finished last even though the user meets it first. That also makes it the journey most likely to expose seams between the others, and it will expose them late.
-
-**Prototype discarded (Aug 2026).** An earlier prototyping pass in Bridge (Armada Mockups) produced surface-level designs for Steps 1 and 2. **That prototype was not completed and is not being used.** Its surface descriptions, field treatments, and button placements have been removed from this document.
 
 **What was kept and why:** three findings from that pass stand independently of the prototype's quality — they are reasoning about the flow, not renderings of it. They are marked **Finding** below and are recorded as *open design questions*, not settled decisions. The five contract corrections are also kept, because they record drift that was caught; deleting them means the same drift returns unrecognized.
 
@@ -126,5 +123,3 @@ Four further open items bear on this journey and are recorded, not duplicated, w
 ## Related
 
 Guild Setup & Configuration · Set Up a Project (Manifest) · Check System Health · Dispatch a Job.
-
-This journey has no number because the design project has not drawn it. A number in a filename here means a `Journey N` drawing exists to match it; inventing one would assert a correspondence that does not.

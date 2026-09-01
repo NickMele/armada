@@ -6,7 +6,6 @@ Design fidelity: not set. Analysis: Complete. UI/UX design: Not started.
 
 ---
 
-*Numbering note: the design project has not yet drawn this journey and names no `Journey N - ...` file for it. Numbered here only to give the file set a stable order — see the note on Guild Setup & Configuration for how the sequence after Journey 9 was assigned.*
 
 **Trigger:** You want to ask a question that spans multiple Jobs/Drones, or plan out a goal before dispatching individual Jobs.
 
@@ -32,5 +31,3 @@ Full design detail — action authority, audit trail, session model, budget trea
 ## Related
 
 Helm — the concept page carrying the full design: action authority, audit trail, session model, budget treatment.
-
-This journey has no number because the design project has not drawn it. A number in a filename here means a `Journey N` drawing exists to match it; inventing one would assert a correspondence that does not.

@@ -12,8 +12,6 @@ Design fidelity: not set. Analysis: Complete. UI/UX design: In progress.
 
 **Milestone:** Board.
 
-**Design file:** `Journey 3 - Triage queue.dc.html` in the Armada Mockups project. One file per journey; this document is the record, the file is the drawing.
-
 ## Flow
 
 Covers one surface and one filter, since a genuine "what's waiting" check touches both:

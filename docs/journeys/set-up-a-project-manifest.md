@@ -6,7 +6,6 @@ Design fidelity: full on Locate, the picker, the proposal sheet and Verify. Anal
 
 ---
 
-*Numbering note: the design project assigned this journey the number 5. The filename here is unnumbered, from when it had not been drawn — see the note on numbering in `INDEX.md`.*
 
 **Trigger:** You point Armada at a repo or workspace it has not seen before.
 
@@ -224,7 +223,7 @@ Cheap and worth doing, because each is a file and so each is evidence: a Dockerf
 
 **A failing Check here means the file is wrong, not the code** — the distinction a person needs at minute one of onboarding.
 
-**Verify is a rehearsal, not an audit.** Drift asks whether everything a file names still exists, and there is nothing to have drifted from on a file written a second ago, so drift has no meaning here; it belongs to [Run and edit a Manifest](9-run-and-edit-a-manifest.md). This is also the moment the journey pays off or does not: a proposal that parses cleanly and fails every command has told you nothing until this step runs.
+**Verify is a rehearsal, not an audit.** Drift asks whether everything a file names still exists, and there is nothing to have drifted from on a file written a second ago, so drift has no meaning here; it belongs to [Run and edit a Manifest](run-and-edit-a-manifest.md). This is also the moment the journey pays off or does not: a proposal that parses cleanly and fails every command has told you nothing until this step runs.
 
 ### Fixing a failed Verify
 
@@ -291,4 +290,4 @@ This journey also shares `drone-secrets-handling` with [Guild Setup & Configurat
 
 ## Related
 
-[Run and edit a Manifest](9-run-and-edit-a-manifest.md) for drift detection once a Manifest already exists · [Consult Helm](consult-helm.md) for the proposal conversation · [First-Run Onboarding](first-run-onboarding.md), which chains this journey behind Guild Setup.
+[Run and edit a Manifest](run-and-edit-a-manifest.md) for drift detection once a Manifest already exists · [Consult Helm](consult-helm.md) for the proposal conversation · [First-Run Onboarding](first-run-onboarding.md), which chains this journey behind Guild Setup.

@@ -6,7 +6,6 @@ Design fidelity: not set. Analysis: Complete. UI/UX design: Not started.
 
 ---
 
-*Numbering note: the design project has not yet drawn this journey — `UI/UX Design` reads `Not started` and its own page names no `Journey N - ...` file. Journeys 1 through 4 and 9 carry numbers stated in the design project itself; this journey and the six after it are numbered here only to give the file set a stable order, continuing after the highest number the design project has assigned. Renumber this file if the design project later assigns a different one.*
 
 *This journey's own title predates the Guild → Kit / Machine split (retired Aug 2026) and is left as Notion has it, per the retitling question still open below.*
 
@@ -52,5 +51,3 @@ Also covers Import/Export (Git-repo or file-based, for moving one Kit config acr
 ## Related
 
 Kit, Machine — the two concept pages this journey's four functional groups split across. First-Run Onboarding — the hard-gated sequence this journey's Section 1 is step one of.
-
-This journey has no number because the design project has not drawn it. A number in a filename here means a `Journey N` drawing exists to match it; inventing one would assert a correspondence that does not.

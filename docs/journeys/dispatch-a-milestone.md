@@ -71,5 +71,3 @@ Journey 1 — Dispatch a Job. Its approval card is the one used here, and its st
 Read a failed Job, and Read the work and merge by hand — what a single child looks like at the end.
 
 Monitor Active Work — the Board a decomposing Job fills.
-
-This journey has no number because the design project has not drawn it. A number in a filename here means a `Journey N` drawing exists to match it; inventing one would assert a correspondence that does not.

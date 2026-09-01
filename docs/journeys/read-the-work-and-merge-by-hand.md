@@ -34,7 +34,7 @@ No in-app diff viewer, no approve/reject buttons, no merge action. The app's job
 
 The interesting question this journey answers for the milestone is **whether the Evidence trail is worth reading**. If I merge without looking at it, the submission schema is wrong, and that is a finding.
 
-**Milestone design file:** `M1 - Dogfood.dc.html`, block `1g`. Drawn 2026-08-23. The branch name is the largest value on the screen and copies on click; the Evidence trail is the largest element, one entry per step in submission order with the Check that let it pass, rather than a panel to expand — if the trail is the reason to open the screen it should not be the thing you have to open. Two controls, both secondary and neither filled: copy the branch, open the worktree. No approve, no reject, no merge, no in-app diff.
+**From the milestone design pass.** The branch name is the largest value on the screen and copies on click; the Evidence trail is the largest element, one entry per step in submission order with the Check that let it pass, rather than a panel to expand — if the trail is the reason to open the screen it should not be the thing you have to open. Two controls, both secondary and neither filled: copy the branch, open the worktree. No approve, no reject, no merge, no in-app diff.
 
 The sentence carrying the handover is "the branch is unpushed and unmerged. Armada does not push and has no merge action — read the diff in your own tools and land it yourself." The accent appears nowhere on this screen; it is spent on Approve and dispatch, because there is no decision here that Armada participates in.
 
@@ -43,5 +43,3 @@ Produced one new component row: **Evidence trail** in Armada Components.
 ## Related
 
 Read a failed Job — the unsuccessful counterpart to this journey, for a Job that reaches a terminal failed state instead.
-
-This journey has no number because the design project has not drawn it. A number in a filename here means a `Journey N` drawing exists to match it; inventing one would assert a correspondence that does not.

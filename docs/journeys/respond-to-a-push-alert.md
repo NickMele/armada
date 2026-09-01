@@ -12,7 +12,7 @@ Design fidelity: not set. Analysis: Complete. UI/UX design: In progress.
 
 **Milestone:** Recovery. Alerts is the surface that stayed in the rail when Active Jobs, Reviews and the Activity Feed folded into the Board.
 
-**Design file:** `Journey 3.5 - Respond to a push alert.dc.html` in the Armada Mockups project. One file per journey; this document is the record, the file is the drawing. It shares design order with Triage Queue — 3 and 3.5 — because the two should be designed together, not sequentially.
+It shares design order with Triage Queue — 3 and 3.5 — because the two should be designed together, not sequentially.
 
 ## Settled in design, 2026-08-21
 

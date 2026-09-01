@@ -4,7 +4,7 @@
 //
 // A redispatch mints a new Job and kills the old one, so five goes at the same
 // ask are five rows on a board whose whole purpose is scanning — and four of
-// them are over. `docs/journeys/3-triage-queue.md` is explicit that the list is
+// them are over. `docs/journeys/triage-queue.md` is explicit that the list is
 // scanned rather than read, and four dead rows for one ask is what makes that
 // fail.
 //
