@@ -76,7 +76,7 @@ impl<'a> Dispatching<'a> {
     }
 
     /// Where a child records that it came from here: the Job **and the step**,
-    /// which is what `DispatchOrigin` carries and what a roll-up reads back.
+    /// which is what `DispatchOrigin` carries and what a later step reads back.
     fn origin(&self) -> DispatchOrigin {
         DispatchOrigin {
             job_id: self.parent.id().clone(),
@@ -237,11 +237,16 @@ where
     /// Whether the step that just advanced dispatched Jobs that are still
     /// going.
     ///
-    /// **Asked at the moment a step advances, about the step that advanced.**
-    /// Whatever comes after a step that created Jobs is work about those Jobs,
-    /// so the wait belongs to the step that made them rather than to a marker
-    /// on the one that follows — which is also what keeps this true if the
-    /// steps after a dispatch stop being a single one.
+    /// **Asked about the step that advanced, never about the step ahead.**
+    /// Whatever follows a step that created Jobs is work about those Jobs, so
+    /// the wait belongs to the step that made them.
+    ///
+    /// A marker on the step ahead would have worked too, and it is the version
+    /// that does not survive: the workflow this is for is a loop — plan,
+    /// dispatch, assess, round again — so the step after a dispatch is
+    /// sometimes the one the loop returns to and sometimes the one it exits by,
+    /// and neither could carry a marker meaning *wait here*. Asked backwards,
+    /// nothing downstream has to be labelled at all.
     ///
     /// `false` on every step of every workflow that creates nothing, and on a
     /// dispatch whose children have all finished already — that one goes
@@ -279,15 +284,16 @@ where
     /// Whether every Job this one dispatched has stopped, whatever it stopped
     /// at.
     ///
-    /// **Terminal, not successful.** A roll-up reports what happened, and a
-    /// child that failed is exactly the thing a person needs the report for —
-    /// so this is a weaker test than `crate::admitting`'s `clear_to_run`, which
-    /// asks whether an upstream landed. A parent held until its children
-    /// *succeeded* would never report on the ones that did not.
+    /// **Terminal, not successful.** The step after a dispatch reports what
+    /// happened, and a child that failed is exactly the thing a person needs
+    /// that report for — so this is a weaker test than `crate::admitting`'s
+    /// `clear_to_run`, which asks whether an upstream landed. A parent held
+    /// until its children *succeeded* would never report on the ones that did
+    /// not.
     ///
     /// A parent that dispatched nothing has nothing outstanding, which is
     /// `true` and is the honest answer: a plan of no Jobs is a plan whose
-    /// roll-up has nothing to wait for.
+    /// next step has nothing to wait for.
     pub(crate) async fn children_all_settled(&self, parent: &JobId) -> Result<bool, Adrift> {
         Ok(self
             .children_of(parent)
@@ -300,7 +306,7 @@ where
 /// Every sub-dispatched Job on the board, as the parent it names and where it
 /// got to.
 ///
-/// **The board reduced to the two facts a roll-up needs**, so that a caller
+/// **The board reduced to the two facts the wait needs**, so that a caller
 /// already holding the board pays nothing to ask about its children and
 /// [`waiting_on_children`] needs no read of its own.
 pub(crate) fn children_standing(board: &[Job]) -> Vec<(JobId, JobStatus)> {

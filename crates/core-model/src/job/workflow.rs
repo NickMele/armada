@@ -17,6 +17,12 @@
 //! `config::ResolvedWorkflow` is still proof that happened. What that
 //! resolution produces is a field of the Job, so it is spelled here, where the
 //! record is — `config` re-exports it, and `store` reads one back off a row.
+//!
+//! # Over 500 lines, and left as one file
+//!
+//! Every field of a frozen step lives on [`ResolvedStep`]. Moving the newest
+//! one out to buy six lines costs a tenth positional argument on
+//! [`ResolvedStep::frozen`], at ten call sites in three crates — a worse shape.
 
 use alloc::string::String;
 use alloc::vec::Vec;

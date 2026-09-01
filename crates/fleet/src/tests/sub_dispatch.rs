@@ -111,7 +111,7 @@ async fn a_dispatched_child_enters_queued_naming_the_step_that_made_it() {
     assert_eq!(
         by.step_id.as_str(),
         "split",
-        "the step is half of `DispatchOrigin`, and it is what a roll-up reads back"
+        "the step is half of `DispatchOrigin`, and it is what a later step reads back"
     );
 }
 
