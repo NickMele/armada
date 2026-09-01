@@ -28,14 +28,14 @@ import WebSocket from "ws";
 import { PROTOCOL_VERSION } from "../shared/generated/protocol-version";
 import { connectedTo, identifying, NOTHING_YET } from "../shared/bridge";
 import { connects, skew } from "../shared/version";
-import type { BridgeState, Connection } from "../shared/bridge";
+import type { BridgeState, CallRead, Connection } from "../shared/bridge";
 import type { JobHistory, Recorded } from "../shared/history";
 import type { JobDetail, JobSummary, StreamMessage } from "../shared/protocol";
 import { JobCommands } from "./command";
 import { ObserveSocket } from "./observe";
 import { JobReader } from "./reader";
 import { ReportsReader } from "./reports";
-import { ask, capacityOf, holdingsOf } from "./request";
+import { ask, callArgumentsOf, capacityOf, holdingsOf } from "./request";
 import { ReviewMaterial } from "./review";
 import { HOST, machinePath, read, startingIdentity } from "./runtime-file";
 
@@ -473,6 +473,21 @@ export class FleetConnection {
    */
   async readDiff(jobId: string | null): Promise<void> {
     await this.material.diff(this.connected()?.port ?? null, jobId);
+  }
+
+  /**
+   * One recorded call's arguments — the rest of a row the socket cut.
+   *
+   * **It answers the caller and publishes nothing.** Every read above is held
+   * because the thing it draws moves; a recorded argument is finished, and it
+   * is one reader's gesture on one row rather than state the window renders
+   * from. Nothing connected is the caller's to say, so it comes back as the
+   * refusal every other operation here uses rather than as silence.
+   */
+  async readCall(jobId: string, callId: string): Promise<CallRead> {
+    const port = this.connected()?.port ?? null;
+    if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
+    return await callArgumentsOf(port, jobId, callId);
   }
 
   // ----------------------------------------------- every report, and the counts

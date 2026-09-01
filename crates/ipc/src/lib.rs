@@ -66,8 +66,8 @@ pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use detail::{
-    Criterion, Dependency, Flagged, JobDelivery, JobDetail, JobSpend, JudgeInFlight, Judged,
-    StepDetail, StepFacts, Stuck, Verdict,
+    CitedAt, Criterion, Dependency, Flagged, JobDelivery, JobDetail, JobSpend, JudgeInFlight,
+    Judged, StepDetail, StepFacts, Stuck, Verdict,
 };
 pub use enums::{
     Actor, AdvanceGate, CheckOutcome, CriterionSource, DependencyDirection, DronePresence,

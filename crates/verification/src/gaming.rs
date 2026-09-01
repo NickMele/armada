@@ -23,11 +23,14 @@
 //! configures how commands run — and lets a legitimate edit flag rather than
 //! block. See `docs/concepts/workflow.md`, Evidence gaming.
 
-use core_model::{DecidedBy, GamingFlag, GamingPattern, ResolvedStep, StepEvidence};
+use core_model::{
+    CitedAt, DecidedBy, GamingFlag, GamingPattern, RepoPath, ResolvedStep, StepEvidence,
+};
 
 use adapter_traits::Patch;
 
 use crate::judge::Unreadable;
+use crate::located::{header_path, hunk_start};
 
 /// The two words a gaming answer may use, and the citation a flag owes.
 ///
@@ -150,15 +153,28 @@ const TEST_MARKERS: &[&str] = &["test", "spec", "__tests__"];
 /// **No model is called.** A pattern the diff answers and a pattern a Judge
 /// answers are told apart by [`GamingPattern::decided_by`], so a call site
 /// cannot spend money on one of these by accident.
+///
+/// **Every flag from here names a file**, because the scan found it by walking
+/// one — and only the skip marker names a line, because only it is about a
+/// line the change leaves behind. [`located`](mod@crate::located) is the same
+/// question asked of a judged answer.
 pub fn in_the_diff(patch: &Patch, patterns: &[GamingPattern]) -> Vec<GamingFlag> {
     let wanted = |pattern: GamingPattern| patterns.contains(&pattern);
     let mut flags = Vec::new();
     let mut path = String::new();
     let mut deleted = false;
+    // Which post-image line the next added or context line is. `None` until a
+    // hunk header sets it, so no line number is offered before one has.
+    let mut post: Option<u32> = None;
     for line in patch.as_str().lines() {
         if let Some(named) = header_path(line) {
             path = named;
             deleted = false;
+            post = None;
+            continue;
+        }
+        if let Some(start) = hunk_start(line) {
+            post = Some(start);
             continue;
         }
         if line.starts_with("deleted file mode") {
@@ -169,14 +185,25 @@ pub fn in_the_diff(patch: &Patch, patterns: &[GamingPattern]) -> Vec<GamingFlag>
                 flags.push(GamingFlag {
                     pattern: GamingPattern::TestDeleted,
                     cited: format!("`{path}` is removed whole"),
+                    // The file and never a line: there is no post image of a
+                    // file the change removes, so every line in it is gone.
+                    at: Some(CitedAt::in_file(RepoPath::new(&path))),
                 });
             }
             continue;
         }
         let Some(added) = line.strip_prefix('+') else {
+            if line.starts_with(' ') {
+                post = post.map(|n| n + 1);
+            }
             continue;
         };
-        if deleted || added.starts_with("++") {
+        if added.starts_with("++") {
+            continue;
+        }
+        let at = post;
+        post = post.map(|n| n + 1);
+        if deleted {
             continue;
         }
         if wanted(GamingPattern::TestSkipped) {
@@ -184,6 +211,12 @@ pub fn in_the_diff(patch: &Patch, patterns: &[GamingPattern]) -> Vec<GamingFlag>
                 flags.push(GamingFlag {
                     pattern: GamingPattern::TestSkipped,
                     cited: format!("`{path}` gains `{marker}`: {}", added.trim()),
+                    // The marker is on a line the change writes, so the change
+                    // leaves it in the file and the number is navigable.
+                    at: Some(match at {
+                        Some(line) => CitedAt::at_line(RepoPath::new(&path), line),
+                        None => CitedAt::in_file(RepoPath::new(&path)),
+                    }),
                 });
             }
         }
@@ -210,15 +243,12 @@ fn config_edits(patch: &Patch) -> Vec<GamingFlag> {
         .map(|path| GamingFlag {
             pattern: GamingPattern::CheckConfigEdited,
             cited: format!("`{path}` configures how a command runs, and this change edits it"),
+            // The file and no line. The finding is that this file was edited
+            // at all, so naming one of its lines would narrow a claim that is
+            // about the whole of it.
+            at: Some(CitedAt::in_file(RepoPath::new(&path))),
         })
         .collect()
-}
-
-/// The path a `diff --git a/x b/y` header names, taking the post-image side.
-fn header_path(line: &str) -> Option<String> {
-    let rest = line.strip_prefix("diff --git ")?;
-    let (_, after) = rest.rsplit_once(" b/")?;
-    Some(after.to_string())
 }
 
 fn is_test_path(path: &str) -> bool {
@@ -342,7 +372,14 @@ impl GamingBrief {
     /// flag decides nothing already — it puts the step in front of a person —
     /// so dropping it would turn a citation defect into a missed game, and
     /// failing the call would take down the flags the same pass found honestly.
-    pub fn read(&self, answer: &str) -> Result<Option<GamingFlag>, Unreadable> {
+    ///
+    /// **The patch is a parameter because a location cannot be made up.** What
+    /// this returns may carry a file and a line, and the only thing entitled to
+    /// say where a citation is, is the material it was cited from — so there is
+    /// no way to read a gaming answer without holding the change it is about.
+    /// See [`located`](mod@crate::located), and `CitedAt` for what a `-` line
+    /// can and cannot be given.
+    pub fn read(&self, answer: &str, patch: &Patch) -> Result<Option<GamingFlag>, Unreadable> {
         let flagged = crate::judge::field(answer, "flag")
             .and_then(|found| match found.to_ascii_lowercase().as_str() {
                 "yes" => Some(true),
@@ -357,12 +394,17 @@ impl GamingBrief {
         // `self.question` is the whole of what this call was shown — the diff,
         // the baseline and the question itself — so this is containment and
         // costs no call. Why it is not `Unreadable` is on this method.
+        // Located from what the model wrote, before the note below is appended
+        // to it — the note quotes a span the patch does not have, and looking
+        // it up would be looking up the failure itself.
+        let at = crate::located::in_the_patch(patch, &cited);
         Ok(Some(GamingFlag {
             pattern: self.pattern,
             cited: match crate::quoted::invented(&cited, &self.question) {
                 None => cited,
                 Some(span) => unchecked(&cited, &span),
             },
+            at,
         }))
     }
 }

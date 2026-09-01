@@ -204,12 +204,13 @@ fn baseline_evidence() -> StepEvidence {
     }
 }
 
+/// The diff [`brief`] is about, named so that a `read` can be handed the same
+/// material the brief was built from.
+const A_TRIVIAL_DIFF: &str =
+    "diff --git a/tests/a.test.ts b/tests/a.test.ts\n+expect(x).toBe(true);\n";
+
 fn brief(baseline: Option<Baseline<'_>>) -> GamingBrief {
-    about(
-        GamingPattern::AssertionWeakened,
-        "diff --git a/tests/a.test.ts b/tests/a.test.ts\n+expect(x).toBe(true);\n",
-        baseline,
-    )
+    about(GamingPattern::AssertionWeakened, A_TRIVIAL_DIFF, baseline)
 }
 
 fn about(pattern: GamingPattern, text: &str, baseline: Option<Baseline<'_>>) -> GamingBrief {
@@ -262,14 +263,25 @@ fn a_flag_carries_its_citation_and_a_clearance_carries_nothing() {
     let brief = brief(Some(Baseline::of("scope", &evidence)));
     assert_eq!(
         brief
-            .read("flag: yes\ncited: tests/a.test.ts asserts toBe(true) against a constant")
+            .read(
+                "flag: yes\ncited: tests/a.test.ts asserts toBe(true) against a constant",
+                &patch(A_TRIVIAL_DIFF),
+            )
             .expect("a readable answer"),
         Some(GamingFlag {
             pattern: GamingPattern::AssertionWeakened,
             cited: "tests/a.test.ts asserts toBe(true) against a constant".to_string(),
+            // Unquoted, so there is nothing to look up and no location is
+            // claimed. See `an_unquoted_citation_has_nowhere_to_point`.
+            at: None,
         })
     );
-    assert_eq!(brief.read("flag: no").expect("a readable answer"), None);
+    assert_eq!(
+        brief
+            .read("flag: no", &patch(A_TRIVIAL_DIFF))
+            .expect("a readable answer"),
+        None
+    );
 }
 
 /// **A verification that could not run is not a clearance.** Reading prose as
@@ -279,10 +291,13 @@ fn an_unreadable_answer_is_neither_a_flag_nor_a_clearance() {
     let evidence = baseline_evidence();
     let brief = brief(Some(Baseline::of("scope", &evidence)));
     assert_eq!(
-        brief.read("I had a look and it seems fine"),
+        brief.read("I had a look and it seems fine", &patch(A_TRIVIAL_DIFF)),
         Err(Unreadable::NoFlag)
     );
-    assert_eq!(brief.read("flag: yes"), Err(Unreadable::FlagCitesNothing));
+    assert_eq!(
+        brief.read("flag: yes", &patch(A_TRIVIAL_DIFF)),
+        Err(Unreadable::FlagCitesNothing)
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -324,7 +339,10 @@ fn a_citation_carrying_the_diff_marker_and_its_indentation_is_a_citation() {
          expect(rollover.boundary).toBeGreaterThan(0);\"",
     ] {
         let flag = brief
-            .read(&format!("flag: yes\ncited: {cited}"))
+            .read(
+                &format!("flag: yes\ncited: {cited}"),
+                &patch(A_LOOSENED_ASSERTION),
+            )
             .expect("a readable answer")
             .expect("a flag");
         assert!(!flag.cited.contains("unchecked"), "{}", flag.cited);
@@ -346,6 +364,7 @@ fn a_flag_quoting_what_the_call_was_never_shown_is_kept_and_marked() {
         .read(
             "flag: yes\ncited: the suite drops \"the rollover window is pinned to a whole \
              multiple of the sample rate\" and asserts nothing in its place",
+            &patch(A_LOOSENED_ASSERTION),
         )
         .expect("a readable answer")
         .expect("a flag");
@@ -415,7 +434,10 @@ fn an_unquoted_citation_is_a_whole_flag() {
         A_LOOSENED_ASSERTION,
         Some(Baseline::of("scope", &evidence)),
     )
-    .read("flag: yes\ncited: REVIEW.md reports nothing against a hunk that loosens an assertion")
+    .read(
+        "flag: yes\ncited: REVIEW.md reports nothing against a hunk that loosens an assertion",
+        &patch(A_LOOSENED_ASSERTION),
+    )
     .expect("a readable answer")
     .expect("a flag");
     assert!(!flag.cited.contains("unchecked"), "{}", flag.cited);
@@ -432,6 +454,7 @@ fn a_citation_of_the_baseline_is_in_the_material() {
         .read(
             "flag: yes\ncited: \"the window boundary is fixed to multiples of windowMs\" \
              is no longer asserted anywhere",
+            &patch(A_LOOSENED_ASSERTION),
         )
         .expect("a readable answer")
         .expect("a flag");

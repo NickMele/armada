@@ -25,6 +25,13 @@
 // affordance a lie. Where a call's arguments arrived cut, the row shows what
 // was sent and says how much of it there is — never that Bridge was given
 // nothing.
+//
+// **The size is the wire's and never the string's.** `detail_length` is what
+// the argument had before anything was cut; `detail.length` is what survived
+// the cut, so a row measuring itself reports 200 of 200 on an argument of
+// fourteen thousand characters and calls the fetch pointless. Where the wire
+// carries no size the row says nothing about size at all — an old transcript
+// cannot recover one, and a number nobody measured is worse than no number.
 
 import type { Turn } from "../../shared/bridge";
 import type { ChangedFile, CheckRun } from "../../shared/protocol";
@@ -54,6 +61,25 @@ export type LogRow = {
   working?: boolean;
   /** What the row opens to. Empty is a row that carried nothing to open. */
   payload: LogLine[];
+  /**
+   * The call whose argument the wire cut, where it cut one. Present makes the
+   * open row offer the rest — `Log` fetches it and drops it into this payload.
+   *
+   * **Keyed off `truncated` and never off a size.** A row with no
+   * `detail_length` is a transcript written before Fleet stamped one: it says
+   * nothing about how much there is, and there is still more of it to fetch.
+   */
+  call?: CutCall;
+};
+
+/** A cut argument: which call, how much of it the row has, and how much there is. */
+export type CutCall = {
+  /** The call id, which is what `readCall` asks for. */
+  id: string;
+  /** Characters the row is showing — the cut string's own length. */
+  shown: number;
+  /** Characters the argument had. Absent on a pre-existing transcript. */
+  length?: number;
 };
 
 /** What a step with no rows says. Ordinary, and never an error. */
@@ -119,26 +145,31 @@ function rowOf(row: Turn): LogRow {
           { text: `${saw.mcp_servers} mcp servers`, named: "meta" },
         ],
       };
-    case "called":
+    case "called": {
+      const size = sizeOf(saw.detail.length, saw.detail_length);
       return {
         id,
         at,
         actor,
         message: saw.detail === "" ? `${saw.tool}  ${saw.call}` : `${saw.tool}  ${saw.detail}`,
         mono: true,
-        // What was sent, and how much of it there is where the wire cut it.
-        // The row never reports an absence: `detail` is what arrived, and a
-        // size is what tells a reader whether they are looking at all of it.
+        // What was sent, and how much of it there is where the wire said. The
+        // row never reports an absence: `detail` is what arrived, and the size
+        // is what tells a reader whether they are looking at all of it.
         payload:
           saw.detail === ""
             ? [{ text: saw.call, named: "meta" }]
             : [
                 { text: saw.detail },
-                ...(saw.truncated
-                  ? [{ text: `${saw.detail.length} characters shown`, named: "meta" as const }]
-                  : []),
+                ...(size === undefined ? [] : [{ text: size, named: "meta" as const }]),
               ],
+        // Offered wherever the wire cut the argument, size or no size. A row
+        // that arrived whole has nothing behind it and gets no control.
+        ...(saw.truncated
+          ? { call: { id: saw.call, shown: saw.detail.length, length: saw.detail_length } }
+          : {}),
       };
+    }
     case "answered":
       return {
         id,
@@ -260,4 +291,20 @@ function endedOf(turns: number, costMicros: number, refusals: number): string {
   if (refusals > 0) said.push(`${refusals} refusals`);
   said.push(`~$${(costMicros / 1_000_000).toFixed(2)}`);
   return said.join(" · ");
+}
+
+/**
+ * *showing 200 of 14,320 characters*, or nothing where no size was carried.
+ *
+ * **Both numbers or neither.** A row that knows only what it is holding can say
+ * `200 characters shown`, which reads as the whole of it — the sentence people
+ * were given before the wire carried a true size, and the reason a cut argument
+ * looked like a short one. Absent, the row says nothing about size and the
+ * control beside it still offers the rest.
+ *
+ * Grouped, because five figures run together are read as a different number.
+ */
+export function sizeOf(shown: number, length: number | undefined): string | undefined {
+  if (length === undefined) return undefined;
+  return `showing ${shown.toLocaleString()} of ${length.toLocaleString()} characters`;
 }

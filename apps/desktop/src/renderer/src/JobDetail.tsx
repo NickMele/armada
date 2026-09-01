@@ -32,6 +32,7 @@
 // region is gone: the turns are chapter two, the files are chapter three, and
 // the raw event table is not something this screen needs at all.
 
+import { GAMING_PATTERN } from "../../shared/generated/vocabulary";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -44,6 +45,7 @@ import {
   type RunTreeStep,
   type StepChapter,
   type StepNotice,
+  changedFilesSummary,
 } from "@armada/components";
 
 import type {
@@ -58,6 +60,7 @@ import type {
 import type { FileReport, JobDetail as JobWhole, JobSummary, StepDetail } from "../../shared/protocol";
 import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
 import { Acts, StepActs, type ConfirmableAct } from "./Acts";
+import { useCallArguments, type Calls } from "./calls";
 import { Decide, DecidedDiff } from "./Decide";
 import { DIFF_CHAPTER, namesStep, useDetailKeys, type DetailKeys } from "./detail-keys";
 import { span } from "./duration";
@@ -204,6 +207,12 @@ export function JobDetail({
   // from what this holds; see `DetailShape.chapters`.
   const keys = useDetailKeys({ run, chapters: () => chapters, stages: phases?.stages });
 
+  // The rest of any call argument the socket cut, for as long as this Job is
+  // open. **Held for the Job rather than for a log**, because the story draws
+  // the same row twice — chapter one's turns and chapter two's preview — and a
+  // fetch made in one is the same argument in the other.
+  const calls = useCallArguments(job.id);
+
   const chapters =
     open === undefined
       ? []
@@ -216,6 +225,7 @@ export function JobDetail({
           diff: recorded.diff,
           live: observed.state === "watching",
           log: keys.inLog,
+          calls,
         });
 
   // The badge is the header, so a Job the registry has no glyph or verb for
@@ -522,7 +532,17 @@ function noticeOf(
     children: (
       <>
         {flagged.length === 0 ? null : (
-          <GamingFlags flags={flagged} said={WHAT_THE_CHECK_FOUND} citation="whole" />
+          <GamingFlags
+            flags={flagged.map((flag) => ({
+              ...flag,
+              // The registry carries a verb per pattern since #279; the wire
+              // spelling is the key, never the copy. A pattern with no row
+              // falls back to it rather than rendering nothing.
+              verb: GAMING_PATTERN[flag.pattern]?.verb ?? undefined,
+            }))}
+            said={WHAT_THE_CHECK_FOUND}
+            citation="whole"
+          />
         )}
         <span>{recourse.stands}</span>
         {recourse.withheld === undefined ? null : (
@@ -550,6 +570,7 @@ function chaptersOf({
   diff,
   live,
   log,
+  calls,
 }: {
   job: JobSummary;
   step: StepDetail;
@@ -567,6 +588,13 @@ function chaptersOf({
    * turns are also chapter two's rows, so a row is named with its log.
    */
   log: DetailKeys["inLog"];
+  /**
+   * The arguments this Job's cut rows have been opened to, and how to ask for
+   * one. **Passed to every log rather than to the one that streams**, because
+   * chapter one draws Armada's turns out of the same rows and a cut call can
+   * land in either.
+   */
+  calls: Calls;
 }): StepChapter[] {
   const rows = watching === null ? [] : entriesOf(watching.rows, step.step_id);
   const told = rows.filter((row) => row.actor === "armada");
@@ -590,7 +618,9 @@ function chaptersOf({
       ...(told.length <= 1
         ? {}
         : {
-            content: <Log rows={told} emptyNote={NOT_OPENED_YET} {...log("instructions")} />,
+            content: (
+              <Log rows={told} emptyNote={NOT_OPENED_YET} calls={calls} {...log("instructions")} />
+            ),
             openLabel: `Everything Armada told it — ${told.length} turns`,
           }),
     },
@@ -609,12 +639,24 @@ function chaptersOf({
       // happening right now, so it is on the page while the Job runs rather
       // than a thing to go and open.
       preview: (
-        <Log rows={rows.slice(-PREVIEWED)} emptyNote={NOTHING_YET_ON_THIS_STEP} {...log("log")} />
+        <Log
+          rows={rows.slice(-PREVIEWED)}
+          emptyNote={NOTHING_YET_ON_THIS_STEP}
+          calls={calls}
+          {...log("log")}
+        />
       ),
       ...(rows.length <= PREVIEWED
         ? {}
         : {
-            content: <Log rows={rows} emptyNote={NOTHING_YET_ON_THIS_STEP} {...log("log")} />,
+            content: (
+              <Log
+                rows={rows}
+                emptyNote={NOTHING_YET_ON_THIS_STEP}
+                calls={calls}
+                {...log("log")}
+              />
+            ),
             openLabel: `Open the log — all ${rows.length} entries`,
           }),
     },
@@ -622,7 +664,11 @@ function chaptersOf({
       id: DIFF_CHAPTER,
       ordinal: 3,
       title: "Produced",
-      summary: touched === undefined ? undefined : `${touched.files.length} files`,
+      // The header carries the summary, so a collapsed chapter still says what
+      // the step produced. `changedFilesSummary` is the one reading of it —
+      // the body draws the same files from the same answer.
+      summary:
+        touched === undefined ? undefined : changedFilesSummary(filesOf(touched), touched.plan_declared),
       preview:
         touched === undefined ? (
           <p className="text-2xs text-fg-muted">{whyNoFootprint(job.assigned_drone !== undefined)}</p>

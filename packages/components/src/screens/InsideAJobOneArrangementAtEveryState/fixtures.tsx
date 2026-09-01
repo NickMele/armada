@@ -1,7 +1,11 @@
 import { CircleDot, Eye, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ActivityLog, type ActivityEntry } from "../../compositions/ActivityLog/ActivityLog";
-import { ChangedFiles } from "../../compositions/ChangedFiles/ChangedFiles";
+import {
+  ChangedFiles,
+  changedFilesSummary,
+  type ChangedFile,
+} from "../../compositions/ChangedFiles/ChangedFiles";
 import type { JobBriefProps } from "../../compositions/JobBrief/JobBrief";
 import type { JobLogReferenceRow } from "../../compositions/JobLogReference/JobLogReference";
 import type { RunTreeStep } from "../../compositions/RunTree/RunTree";
@@ -66,14 +70,22 @@ export const WHERE: JobLogReferenceRow[] = [
   { iconLabel: "Drone", value: DRONE, copyValue: DRONE },
 ];
 
+/**
+ * The brief the panel opens with — one line, on the panel's own surface.
+ *
+ * **`only: "facts"` and no label**, which is what the surface passes: the
+ * region is called `Brief` and the sentence follows it, so a second heading
+ * over one line is the sub-heading this screen removed. The criteria are what
+ * the Judge stage of the phase strip opens to, with each one's verdict beside
+ * it, which is one place rather than two.
+ */
 export const BRIEF: JobBriefProps = {
   facts:
     "The selectors cannot be tested without constructing the whole store, which makes every " +
     "settings test an integration test.",
-  criteria: [
-    { text: "Selectors import without the store.", source: "judge" },
-    { text: "No behaviour change in the reducer.", source: "judge" },
-  ],
+  criteria: [],
+  only: "facts",
+  factsLabel: null,
 };
 
 export const HEADING = {
@@ -318,15 +330,23 @@ const WHOLE: ActivityEntry[] = [
   ...PREVIEW.slice(1),
 ];
 
+/**
+ * The three files the step produced, each with its own count — the drawing
+ * lists them that way, and the chapter's header is the same reading summed.
+ *
+ * **Nothing on the wire fills `added` and `deleted`.** The seam carries the
+ * names and never the bytes, by its own stated rule. Drawn here because the
+ * drawing draws it; the surface cannot reach it yet, and that is reported
+ * rather than papered over with a shorter fixture.
+ */
+const PRODUCED_FILES: ChangedFile[] = [
+  { path: "packages/settings/src/selectors.ts", change: "modified", added: 61, deleted: 4 },
+  { path: "packages/settings/src/reducer.ts", change: "modified", added: 12, deleted: 27 },
+  { path: "packages/settings/src/index.ts", change: "added", added: 21 },
+];
+
 const PRODUCED = (
-  <ChangedFiles
-    emptyNote="This drone has not changed anything yet."
-    files={[
-      { path: "packages/settings/src/selectors.ts", change: "modified" },
-      { path: "packages/settings/src/reducer.ts", change: "modified" },
-      { path: "packages/settings/src/index.ts", change: "added" },
-    ]}
-  />
+  <ChangedFiles emptyNote="This drone has not changed anything yet." files={PRODUCED_FILES} />
 );
 
 /**
@@ -359,7 +379,9 @@ export const CHAPTERS: StepChapter[] = [
     id: "produced",
     ordinal: 3,
     title: "Produced",
-    summary: "3 files · +94 −31 · all inside the plan",
+    // Built from the list rather than typed beside it, so the header and the
+    // rows cannot disagree about what the reading found.
+    summary: changedFilesSummary(PRODUCED_FILES, true),
     preview: PRODUCED,
     content: PRODUCED,
     openLabel: "Open the diff — 3 files",

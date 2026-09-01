@@ -86,6 +86,82 @@ export const FlaggedAndNotCited: Story = {
 };
 
 /**
+ * **The verb, and where the flag is.** The two halves of #279 item 6.
+ *
+ * `assertion_weakened` was printed at a person because nothing carried a verb
+ * for it. `gaming_pattern` is a registered vocabulary now, so the app hands the
+ * verb down and the row reads as the sentence it is. This package cannot import
+ * the generated module — a copy of it here would be the second vocabulary
+ * `enum-verbs.toml` exists to prevent — so the prop is optional and the wire
+ * spelling is still what draws where a caller has no verb.
+ *
+ * **Three rows, three answers about where.** Both parts, the file alone, and
+ * nothing at all. Absent is not a loading state: a `test_deleted` flag has no
+ * post-image line to point at and a finding about an absence has no file, and
+ * neither will ever gain one.
+ */
+export const WhatItMeansAndWhereItIs: Story = {
+  args: {
+    citation: "clipped",
+    said: "the gaming check flagged this evidence",
+    onOpenAt: () => {},
+    flags: [
+      {
+        pattern: "assertion_weakened",
+        verb: "an assertion now asserts less",
+        cited: "served_every_operation counts the filtered set",
+        at: { file: "crates/api/src/tests/served.rs", line: 214 },
+      },
+      {
+        pattern: "test_deleted",
+        verb: "a test file was removed whole",
+        cited: "the whole of served_every_operation is gone",
+        at: { file: "crates/api/src/tests/served.rs" },
+      },
+      {
+        pattern: "no_findings_on_substantial_diff",
+        verb: "a review that found nothing in a substantial change",
+        cited: "1,204 lines across 18 files, and the review answered clean",
+      },
+    ],
+  },
+};
+
+/**
+ * A pattern the registry does not hold. **The wire spelling still renders, in
+ * mono**, because that is a value and not a sentence — and a surface that
+ * dropped the row would hide a flag rather than an unregistered name.
+ */
+export const APatternWithNoVerb: Story = {
+  args: {
+    citation: "clipped",
+    flags: [{ pattern: "evidence_reused", cited: "the same run is cited on two steps" }],
+  },
+};
+
+/**
+ * The location where the surface cannot open a diff. **It is a value, not a
+ * control**: saying where the flag is still helps, and a press that goes
+ * nowhere is worse than no press at all.
+ */
+export const WhereWithNowhereToGo: Story = {
+  args: {
+    citation: "whole",
+    said: "What it flagged",
+    flags: [
+      {
+        pattern: "tautological_test",
+        verb: "a test that passes whatever the code does",
+        cited:
+          "`crates/api/src/tests/served.rs:214` — the assertion compares a value against " +
+          "itself, so it holds for every possible implementation.",
+        at: { file: "crates/api/src/tests/served.rs", line: 214 },
+      },
+    ],
+  },
+};
+
+/**
  * **The whole of #197, in one render.** Two flags with long citations, in the
  * dialog the owner was looking at when he reported it.
  *

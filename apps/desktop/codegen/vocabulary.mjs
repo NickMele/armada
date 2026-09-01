@@ -72,6 +72,7 @@ const WANTED = [
   "criterion_verdict_judge",
   "step_state",
   "advance_gate",
+  "gaming_pattern",
 ];
 
 // `admission_hold` is here because the status bar says which of the four things
