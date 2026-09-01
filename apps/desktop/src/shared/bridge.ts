@@ -6,6 +6,7 @@
 // import path, and this file is the shape of what crosses it.
 
 import type {
+  BridgeIdentity,
   CallRead,
   ClearOutcome,
   Connection,
@@ -34,38 +35,6 @@ import { PROTOCOL_VERSION } from "@armada/protocol";
 
 
 
-/**
- * What every Bridge failure carries that is not about the failure — where the
- * machine log is, and which Fleet is on the other end of the one connection.
- *
- * **No `run_id`, and none is minted.** The envelope makes `run_id` the one id an
- * emitter mints for itself, but nothing in Bridge writes a log line yet, so an
- * id minted here would join to nothing and would read on screen as though it
- * identified the failure. The only real one is the one a `WireError` carries,
- * and that names Fleet's run rather than any single failure.
- *
- * Both fields are facts main holds and the renderer cannot derive — a home
- * directory it cannot resolve, and a connection it does not own — so both are
- * published rather than guessed at.
- */
-export type BridgeIdentity = {
-  /** The machine log. `null` where HOME is not set and no path resolves. */
-  auditPath: string | null;
-  /**
-   * The protocol Fleet speaks, written `5.2`, as the runtime file said it.
-   *
-   * **Here rather than at each failure, because four of the five failures are
-   * handed no connection.** A refusal is the case that made it worth fixing:
-   * Fleet answered it, so Fleet's version is the first thing a reader of the
-   * payload wants, and it was the one payload guaranteed to omit it. Derived
-   * where the connection is published, so nothing re-derives it per failure.
-   *
-   * `null` before a runtime file has been read and believed, and again the
-   * moment the connection is one of the states that never got a version —
-   * which is a fact rather than a gap, and the tail omits the row.
-   */
-  fleetProtocol: string | null;
-};
 
 /**
  * The state with its identity current, which today means Fleet's version.

@@ -92,7 +92,7 @@ import {
   type BoardSort,
   type BoardTab,
 } from "./board";
-import { ClearTerminalControl } from "./ClearTerminal";
+import { ClearTerminalControl } from "@armada/shell";
 import { pressOf, SEARCH_KEY, verbOf } from "./keys";
 import { foldedNote, foldLineages, headlineOf } from "./lineage";
 import { readingOf } from "./reading";

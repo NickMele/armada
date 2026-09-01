@@ -138,3 +138,6 @@ export * from "./compositions/PhaseCard/PhaseCard";
 // dependency only ran one way and a story could not reach the app's copy. Now
 // both depend on this.
 export * from "./generated/vocabulary";
+
+// How the domain is counted in words.
+export * from "./lexicon";

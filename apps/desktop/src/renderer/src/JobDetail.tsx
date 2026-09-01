@@ -68,7 +68,7 @@ import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 import { Acts, StepActs, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type Calls } from "./calls";
 import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
-import { useAtFloor } from "./floor";
+import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
 import { chaptersOf } from "./chapters";
 import { clock, span } from "./duration";

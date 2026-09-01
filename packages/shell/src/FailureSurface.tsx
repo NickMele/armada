@@ -16,7 +16,7 @@ import {
 } from "@armada/components";
 import type { Filing } from "@armada/components";
 
-import type { BridgeIdentity } from "../../shared/bridge";
+import type { BridgeIdentity } from "@armada/protocol";
 import { CopiedToast, useCopied } from "./CopiedToast";
 import type { Caught, Failure } from "./failures";
 import { rendererFailure } from "./failures";

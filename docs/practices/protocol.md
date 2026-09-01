@@ -249,7 +249,7 @@ The banner therefore says the connection is fine and names what it cannot
 reach. It goes in the status bar beside the running dot, as advice on a healthy
 connection, and **not** as a failure notice: a minor gap Bridge can survive is
 not a fault, and drawing it as one tells somebody something is broken when it is
-working. `apps/desktop/src/renderer/src/fleet.ts` carries the sentences and
+working. `packages/shell/src/fleet.ts` carries the sentences and
 `packages/protocol/src/version.ts` carries the rule; `crates/ipc/src/version.rs`
 is the same rule in Rust, where the four readings are tested.
 

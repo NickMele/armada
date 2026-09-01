@@ -68,7 +68,7 @@
 // strip is still a breakdown of what is on screen — and a tab that empties
 // under a search renders no count rather than a `0`.
 
-import { JOB_LIFECYCLE } from "@armada/components";
+import { plural, JOB_LIFECYCLE } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
 import { instant } from "./duration";
@@ -286,11 +286,6 @@ export function countSentence(args: {
 function needsYouClause(count: number): string {
   if (count === 0) return "Nothing needs you.";
   return count === 1 ? "1 job needs you." : `${count} jobs need you.`;
-}
-
-/** "6 jobs", on its own. Lowercase anything countable. */
-export function plural(total: number): string {
-  return `${total} ${total === 1 ? "job" : "jobs"}`;
 }
 
 /**
