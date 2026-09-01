@@ -149,7 +149,8 @@ Some of what the gate refuses: untyped JSON outside the two crates allowed to
 parse it, a vendor's name outside the adapter layer, a design value that is not
 a token, a file over 900 lines, a Storybook story whose title and directory
 disagree, a domain registry row that disagrees with the machine it describes, a
-tool a Drone is offered and not allowed to call, and anything that names a
+tool a Drone is offered and not allowed to call, a generated file that has
+drifted from the registry it was generated from, and anything that names a
 person or a machine.
 
 ### Tests
