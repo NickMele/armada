@@ -182,6 +182,11 @@ async function run() {
   win.destroy();
 }
 
+/* A hidden window still puts an icon in the dock, which is a window as far as
+   anyone watching their screen is concerned. Three appeared during one
+   debugging session. */
+app.dock?.hide();
+
 app.whenReady().then(() =>
   run().then(
     () => app.exit(0),
