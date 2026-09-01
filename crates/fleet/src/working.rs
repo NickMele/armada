@@ -43,8 +43,13 @@ use verification::NotConverging;
 
 /// The Job being worked, and everything holding it up.
 ///
-/// **There is no second one.** It is held in an `Option`, and that `Option`
-/// being `Some` is the whole of what "Fleet is busy" means.
+/// **One of several.** This said there was no second one, and that being held
+/// in an `Option` was the whole of what "Fleet is busy" meant, until #50 gave
+/// Fleet a slot per Job — [`Slots`](crate::slots::Slots) is the roster now, and
+/// how many may run at once is a bound rather than the shape of a type. The
+/// invariant that survives is narrower and belongs to the slot rather than to
+/// the fleet: one Drone, on one step, in one worktree, and the four are put
+/// together once by [`Working::holding`].
 pub(crate) struct Working {
     job: JobId,
     /// The Drone in the slot. The same id its transcript is named by, and what

@@ -4,15 +4,16 @@ This is read before the first line is written, not after review flags something.
 It documents practices that are specific to Armada — not general Rust advice,
 which exists elsewhere and does not need re-stating here.
 
-The workspace today is three crates: `core-model`, `adapter-traits`, `testkit`,
-plus `xtask`. Both `core-model` and `adapter-traits` are deliberately empty —
-they exist to fix a dependency shape before there is anything to put inside it.
-The remaining nine crates of the twelve `.claude/agents/rust-engineer.md` describes are
-not built. Three of them are named elsewhere in this repo, in doc comments and
-in `xtask`'s own rules, and are referenced below as `store`, `ipc` and
-`adapters` because that's what the code that already exists calls them. The
-other six are not named anywhere in the repo and this document does not invent
-names for them.
+The workspace is thirteen crates plus `xtask`: `acceptance`, `adapter-traits`,
+`adapters`, `api`, `armada`, `checks-runner`, `config`, `core-model`, `fleet`,
+`ipc`, `store`, `testkit` and `verification`.
+
+This paragraph said three of them existed and that `core-model` and
+`adapter-traits` were deliberately empty, which was true while the dependency
+shape was being fixed before there was anything to put inside it. `core-model`
+now holds the Job record and both machines. **A count is the kind of sentence
+that rots without anything failing**, which is why the list above is the crate
+directory rather than a number to keep in step.
 
 **Read `cargo xtask verify-foundations` as a delta against a baseline you pinned
 on `main` in the same pass, not as a colour.** A rule whose subject does not
