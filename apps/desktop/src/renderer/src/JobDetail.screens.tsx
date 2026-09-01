@@ -38,9 +38,30 @@ import type { ReactElement } from "react";
 import type { Observed, Watched } from "../../shared/bridge";
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "../../shared/protocol";
 import { JobDetail } from "./JobDetail";
+import type { Render } from "./render";
 
-/** One capture: the mark it pairs by, what to call it, and what to draw. */
-export type Screen = { mark: string; name: string; element: ReactElement };
+/**
+ * One capture: the mark it pairs by, what to call it, and what to draw.
+ *
+ * `width` is the window the screen is drawn in, defaulting to the 1280 Bridge
+ * opens at. **A layout is designed for resize rather than for the size it was
+ * built at**, which is a claim nothing checked until a screen could state a
+ * second width and be looked at in both.
+ */
+export type Screen = {
+  mark: string;
+  name: string;
+  /**
+   * Which of `renderFor`'s arrangements this screen is one of.
+   *
+   * **The gate counts these**, so a render nobody has drawn is a render nobody
+   * has looked at, and it says so. `Render` is the app's own union, which is
+   * what makes the count checkable rather than a list somebody keeps.
+   */
+  render: Render;
+  element: ReactElement;
+  width?: number;
+};
 
 /**
  * Fixed, because a shot has to be the same shot twice. Every elapsed on the
@@ -187,6 +208,7 @@ export const screens: Screen[] = [
   {
     mark: "inside-a-job-evidence-disputed",
     name: "Evidence disputed",
+    render: "stopped",
     // Waiting on a person, so the header's control takes the accent, and Fleet
     // offers a replacement — the lead the drawing names for this state.
     element: screen(
@@ -197,6 +219,7 @@ export const screens: Screen[] = [
   {
     mark: "inside-a-job-out-of-attempts",
     name: "Out of attempts, drone holding",
+    render: "stopped",
     // A live Drone, so killing it is a second act and both kills sit behind the
     // caret. The panel offers the redirect; the header offers neither.
     element: screen(
@@ -207,6 +230,7 @@ export const screens: Screen[] = [
   {
     mark: "inside-a-job-killed",
     name: "Killed",
+    render: "stopped",
     // Terminal: nobody is waiting, so the same control is quiet. The fill is
     // the state and the lead has not moved.
     element: screen(ended("killed"), whole({ job: ended("killed"), stuck: stuck(["redispatch_job"]) })),
@@ -214,13 +238,25 @@ export const screens: Screen[] = [
   {
     mark: "inside-a-job-failed",
     name: "Failed, no replacement offered",
+    render: "stopped",
     // Nothing Fleet will do, so the report is the only act left and a split
     // button with an empty menu is a button.
     element: screen(ended("completed_failed"), whole({ job: ended("completed_failed"), stuck: stuck([]) })),
   },
   {
+    mark: "inside-a-job-evidence-disputed-narrow",
+    name: "Evidence disputed, narrow",
+    render: "stopped",
+    // The same state at a width the window can actually be dragged to. Nothing
+    // about the arrangement is allowed to be a function of 1280, and this is
+    // the shot that says whether it is.
+    width: 900,
+    element: screen(JOB, whole({ stuck: stuck(["redispatch_job", "override_verdict"]) })),
+  },
+  {
     mark: "inside-a-job-running",
     name: "Running",
+    render: "working",
     // The render the split button has no legal lead on: the drawing leads this
     // one with Pilot, which is #250. Captured so the shot before it is on
     // record.
@@ -230,8 +266,28 @@ export const screens: Screen[] = [
     ),
   },
   {
+    mark: "inside-a-job-done",
+    name: "Done",
+    render: "finished",
+    // The one successful terminal status. Nothing is offered and nothing is
+    // waiting: the header carries no control at all, which is a state worth a
+    // shot precisely because there is nothing on it to go wrong loudly.
+    element: screen(ended("completed_success"), whole({ job: ended("completed_success") })),
+  },
+  {
+    mark: "inside-a-job-unrenderable",
+    name: "A status this build has no verb for",
+    render: "unrenderable",
+    // Bridge behind Fleet. The registry has no row for the status, so the badge
+    // cannot be drawn and the screen says so rather than drawing a Job it
+    // cannot describe. Nobody sees this until a protocol moves, which is
+    // exactly when nobody has a shot of it.
+    element: screen(ended("hatched_unbidden"), whole({ job: ended("hatched_unbidden") })),
+  },
+  {
     mark: "inside-a-job-waiting-on-you",
     name: "Awaiting review",
+    render: "reviewing",
     // The decision block under the story, and a header that carries no split
     // button — `Review` is not a header act on this screen, which is the other
     // half of why the drawing's lead table is not all built.

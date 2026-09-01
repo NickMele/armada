@@ -56,6 +56,20 @@ checks:
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
 
+  screens:
+    # The markup half of a Bridge screen, against what is checked in. `.shots/`
+    # is ignored, so without this a rebuilt screen lands in no diff and the only
+    # thing that would have caught it is somebody choosing to look.
+    #
+    # It renders; it does not look. A green here says the screen is the screen
+    # the snapshot describes, never that the screen is right.
+    run: node apps/desktop/screens/build.mjs --check
+    when:
+      - "apps/**"
+      - "packages/**"
+      - "crates/core-model/domain/**"
+      - "protocol-version.toml"
+
   storybook:
     run: pnpm -C packages/components build-storybook
     # Shorter than the two above: nothing under `apps/` concerns it.
