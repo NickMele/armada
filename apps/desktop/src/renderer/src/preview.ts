@@ -21,7 +21,7 @@
 
 import type { WorkflowRailStep } from "@armada/components";
 
-import type { WorkflowStep, WorkflowSummary } from "../../shared/setup";
+import type { WorkflowStep, WorkflowSummary } from "@armada/protocol";
 import { advanceOf, commandOf, coversOf, judgeOf } from "./declared";
 
 /**

@@ -13,10 +13,11 @@
 import { File } from "lucide-react";
 import type { DebugField, DebugPayload, FailureDetail, FailureMachineValue } from "@armada/components";
 
-import type { BridgeIdentity, Connection } from "../../shared/bridge";
-import { PROTOCOL_VERSION } from "../../shared/generated/protocol-version";
-import type { UnreadableJob, WireError } from "../../shared/protocol";
-import { spoken } from "../../shared/version";
+import type { BridgeIdentity } from "../../shared/bridge";
+import type { Connection } from "@armada/protocol";
+import { PROTOCOL_VERSION } from "@armada/protocol";
+import type { UnreadableJob, WireError } from "@armada/protocol";
+import { spoken } from "@armada/protocol";
 import { elapsed } from "./fleet";
 import type { Statement } from "./fleet";
 import type { Uncaught } from "./uncaught";

@@ -20,8 +20,8 @@
 
 import type { ChangedFile } from "@armada/components";
 
-import type { JobFilesChanged } from "../../shared/protocol";
-import type { JobFootprint, TouchedFile } from "../../shared/footprint";
+import type { JobFilesChanged } from "@armada/protocol";
+import type { JobFootprint, TouchedFile } from "@armada/protocol";
 import { filesOf, footprintNote } from "./files";
 
 /** One reading, shaped for the chapter that draws it. */

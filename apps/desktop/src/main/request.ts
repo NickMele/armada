@@ -6,10 +6,10 @@
 // is none of those. Nothing here holds state, so nothing here can drift from
 // what the socket believes.
 
-import type { CallRead, Holdings, Outcome } from "../shared/bridge";
-import type { FleetCapacity, JobSummary, WireError } from "../shared/protocol";
-import type { CallArguments } from "../shared/turn";
-import type { ManifestSummary, ModelChoices, WorkflowSummary } from "../shared/setup";
+import type { CallRead, Holdings, Outcome } from "@armada/protocol";
+import type { FleetCapacity, JobSummary, WireError } from "@armada/protocol";
+import type { CallArguments } from "@armada/protocol";
+import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
 import { HOST } from "./runtime-file";
 
 /** How long a command waits for an answer before it is a transport failure. */

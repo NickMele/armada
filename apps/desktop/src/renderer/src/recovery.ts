@@ -55,14 +55,8 @@
 // `crates/fleet/src/regating.rs` — and that runs out of the Job's own slot, so
 // it co-occurs with a redirect rather than replacing it.
 
-import { JOB_STATUS } from "../../shared/generated/vocabulary";
-import type {
-  JobDetail as JobWhole,
-  JobSummary,
-  RedirectInFlight,
-  StepDetail,
-  Stuck,
-} from "../../shared/protocol";
+import { JOB_STATUS } from "@armada/components";
+import type { JobDetail as JobWhole, JobSummary, RedirectInFlight, StepDetail, Stuck } from "@armada/protocol";
 import type { JobAct } from "./Acts";
 import { clock } from "./duration";
 import { ordered } from "./facts";
@@ -474,7 +468,7 @@ const READING =
  * What the screen says where Fleet served no classification at all.
  *
  * **Never a Fleet that predates the field**: one behind this Bridge is refused
- * at the socket, since `connects()` in `src/shared/version.ts` admits `same`
+ * at the socket, since `connects()` in `@armada/protocol` admits `same`
  * and `fleet_ahead` and nothing else. What is left is a Job Fleet classifies
  * none of — `superseded` is the one it serves, where the work landed elsewhere.
  */

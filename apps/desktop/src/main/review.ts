@@ -23,8 +23,8 @@
 // that made the surface reachable. Re-reading a megabyte on every event would
 // spend the bytes the split exists to save.
 
-import type { Diff, Evidence } from "../shared/bridge";
-import type { JobDiff, JobEvidence, Submitted, Work } from "../shared/work";
+import type { Diff, Evidence } from "@armada/protocol";
+import type { JobDiff, JobEvidence, Submitted, Work } from "@armada/protocol";
 import { JobReader } from "./reader";
 import { ask, type Answer } from "./request";
 

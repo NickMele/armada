@@ -13,9 +13,9 @@
 import { Button, SplitButton, Tooltip } from "@armada/components";
 import type { SplitButtonItem } from "@armada/components";
 
-import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
-import type { Outcome } from "../../shared/bridge";
-import type { FileReport, JobDetail as JobWhole, JobSummary } from "../../shared/protocol";
+import { JOB_LIFECYCLE } from "@armada/components";
+import type { Outcome } from "@armada/protocol";
+import type { FileReport, JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 import { ACT_LABEL, MENU_LABEL, REPORT_LABEL } from "./copy";
 import { OverruleControl } from "./Overrule";
 import { recourseOf } from "./recovery";

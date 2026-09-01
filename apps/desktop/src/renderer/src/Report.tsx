@@ -39,8 +39,8 @@
 import { useState } from "react";
 import { Dialog, Radio, RadioGroup, Select, Textarea } from "@armada/components";
 
-import type { Outcome } from "../../shared/bridge";
-import type { FileReport, JobDetail as JobWhole, Report } from "../../shared/protocol";
+import type { Outcome } from "@armada/protocol";
+import type { FileReport, JobDetail as JobWhole, Report } from "@armada/protocol";
 
 /**
  * The three things a person can be saying, with the words the dialog offers

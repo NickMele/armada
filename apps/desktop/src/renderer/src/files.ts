@@ -20,11 +20,8 @@
 
 import type { ChangedFile } from "@armada/components";
 
-import type {
-  JobFilesChanged,
-  ChangedFile as WireFile,
-} from "../../shared/protocol";
-import type { Footprint } from "../../shared/bridge";
+import type { JobFilesChanged, ChangedFile as WireFile } from "@armada/protocol";
+import type { Footprint } from "@armada/protocol";
 
 /** The rows, in the order the reading found them. Never re-sorted. */
 export function filesOf(reading: JobFilesChanged): ChangedFile[] {

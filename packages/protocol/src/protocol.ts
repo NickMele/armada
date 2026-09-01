@@ -545,7 +545,7 @@ export type CheckRun = {
    * started printed nothing.
    *
    * **Main opens it; the renderer never composes it into a path.** See
-   * `shared/artifacts.ts`, which owns that rule for all three kept records.
+   * `artifacts.ts`, which owns that rule for all three kept records.
    */
   output_path?: string;
 };

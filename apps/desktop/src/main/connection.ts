@@ -25,12 +25,14 @@
 
 import WebSocket from "ws";
 
-import { PROTOCOL_VERSION } from "../shared/generated/protocol-version";
-import { connectedTo, identifying, NOTHING_YET } from "../shared/bridge";
-import { connects, skew } from "../shared/version";
-import type { BridgeState, CallRead, Connection } from "../shared/bridge";
-import type { JobHistory, Recorded } from "../shared/history";
-import type { JobDetail, JobSummary, StreamMessage } from "../shared/protocol";
+import { PROTOCOL_VERSION } from "@armada/protocol";
+import { identifying, NOTHING_YET } from "../shared/bridge";
+import { connectedTo } from "@armada/protocol";
+import { connects, skew } from "@armada/protocol";
+import type { BridgeState } from "../shared/bridge";
+import type { CallRead, Connection } from "@armada/protocol";
+import type { JobHistory, Recorded } from "@armada/protocol";
+import type { JobDetail, JobSummary, StreamMessage } from "@armada/protocol";
 import { JobCommands } from "./command";
 import { ObserveSocket } from "./observe";
 import { JobReader } from "./reader";

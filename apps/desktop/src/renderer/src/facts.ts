@@ -21,12 +21,8 @@
 
 import type { JobDetailField } from "@armada/components";
 
-import type {
-  JobDetail as JobWhole,
-  JobSummary,
-  StepDetail,
-} from "../../shared/protocol";
-import type { WorkflowSummary } from "../../shared/setup";
+import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
+import type { WorkflowSummary } from "@armada/protocol";
 import { span } from "./duration";
 
 /**

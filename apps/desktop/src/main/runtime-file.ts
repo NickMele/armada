@@ -16,8 +16,9 @@ import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
-import type { Absence, BridgeIdentity, FleetIdentity, RuntimeFault } from "../shared/bridge";
-import { versionOf } from "../shared/version";
+import type { BridgeIdentity } from "../shared/bridge";
+import type { Absence, FleetIdentity, RuntimeFault } from "@armada/protocol";
+import { versionOf } from "@armada/protocol";
 
 /** Not `fleet.pid`: it carries four fields, and something would eventually `cat` it. */
 const FILE_NAME = "fleet.json";

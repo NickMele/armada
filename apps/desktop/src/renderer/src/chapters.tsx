@@ -21,9 +21,9 @@ import {
   type StepChapter,
 } from "@armada/components";
 
-import type { Diff, Footprint, Turn } from "../../shared/bridge";
-import type { JobSummary, StepDetail } from "../../shared/protocol";
-import type { JobFootprint } from "../../shared/footprint";
+import type { Diff, Footprint, Turn } from "@armada/protocol";
+import type { JobSummary, StepDetail } from "@armada/protocol";
+import type { JobFootprint } from "@armada/protocol";
 import type { Calls } from "./calls";
 import { DecidedDiff } from "./Decide";
 import { DIFF_CHAPTER, LOG_CHAPTER, namesChapter, type DetailKeys } from "./detail-keys";

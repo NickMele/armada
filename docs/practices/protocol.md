@@ -94,7 +94,8 @@ harmless in review.
    banner a lie and breaks it while a Job runs.
 3. Regenerate the TypeScript with `pnpm --filter @armada/desktop codegen`. It
    needs `pnpm install` to have run and nothing else; it rewrites
-   `apps/desktop/src/shared/generated/` from `protocol-version.toml` and
+   `packages/protocol/src/generated/` and `packages/components/src/generated/`
+   from `protocol-version.toml` and
    `crates/core-model/domain/`, and prints one line per generated file plus any
    registry row it could not render. **It emits the version mirror and the
    enum vocabulary, not the DTO types** — nothing generates those from the
@@ -249,7 +250,7 @@ reach. It goes in the status bar beside the running dot, as advice on a healthy
 connection, and **not** as a failure notice: a minor gap Bridge can survive is
 not a fault, and drawing it as one tells somebody something is broken when it is
 working. `apps/desktop/src/renderer/src/fleet.ts` carries the sentences and
-`apps/desktop/src/shared/version.ts` carries the rule; `crates/ipc/src/version.rs`
+`packages/protocol/src/version.ts` carries the rule; `crates/ipc/src/version.rs`
 is the same rule in Rust, where the four readings are tested.
 
 **The rule is spelled twice, and that is a known cost.** Bridge decides, so the

@@ -33,9 +33,9 @@
 // carries no size the row says nothing about size at all — an old transcript
 // cannot recover one, and a number nobody measured is worse than no number.
 
-import type { Turn } from "../../shared/bridge";
-import type { ChangedFile, CheckRun } from "../../shared/protocol";
-import { CHECK_ADVANCES, CHECK_OUTCOME } from "../../shared/generated/vocabulary";
+import type { Turn } from "@armada/protocol";
+import type { ChangedFile, CheckRun } from "@armada/protocol";
+import { CHECK_ADVANCES, CHECK_OUTCOME } from "@armada/components";
 import { clock } from "./duration";
 
 /** Who wrote the line. The wire's own three, as `LogEntry` spells them. */

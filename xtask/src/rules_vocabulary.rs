@@ -39,15 +39,20 @@ const WRITE: &str = "pnpm --filter @armada/desktop codegen";
 
 /// The outputs that must be in a run's emission.
 ///
-/// The rule compares everything `--emit` prints, so a fourth output is gated
-/// the day it is added. This list is the other direction: an output that stops
-/// being emitted stops being compared, silently, and one of these three is the
-/// copy a story reads — losing it is exactly how a hand-typed verb got into a
+/// The rule compares everything `--emit` prints, so a third output is gated the
+/// day it is added. This list is the other direction: an output that stops
+/// being emitted stops being compared, silently, and the vocabulary is the copy
+/// a story reads — losing it is exactly how a hand-typed verb got into a
 /// fixture in the first place.
+///
+/// **Two files where there were three.** The vocabulary was emitted twice
+/// because the dependency ran one way and a story could not reach the app's
+/// copy; `@armada/protocol` is a package both depend on, so the duplicate
+/// collapsed. The vocabulary itself stayed with the components: a glyph is a
+/// React component, and the wire package imports nothing.
 const REQUIRED: &[&str] = &[
-    "apps/desktop/src/shared/generated/vocabulary.ts",
     "packages/components/src/generated/vocabulary.ts",
-    "apps/desktop/src/shared/generated/protocol-version.ts",
+    "packages/protocol/src/generated/protocol-version.ts",
 ];
 
 /// Rule: the generated vocabulary says what the registries say.

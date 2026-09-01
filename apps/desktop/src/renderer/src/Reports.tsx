@@ -54,8 +54,8 @@ import {
   TableRow,
 } from "@armada/components";
 
-import type { Reports as ReportsRead } from "../../shared/bridge";
-import type { Calibration, Report } from "../../shared/protocol";
+import type { Reports as ReportsRead } from "@armada/protocol";
+import type { Calibration, Report } from "@armada/protocol";
 import { said } from "./copy";
 import { absoluteOf } from "./duration";
 import { claimed, issueOf } from "./Report";

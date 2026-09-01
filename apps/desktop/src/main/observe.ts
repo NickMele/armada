@@ -12,8 +12,8 @@
 
 import WebSocket from "ws";
 
-import type { Observed, Turn, Turns } from "../shared/bridge";
-import type { TurnMessage } from "../shared/turn";
+import type { Observed, Turn, Turns } from "@armada/protocol";
+import type { TurnMessage } from "@armada/protocol";
 import { HOST } from "./runtime-file";
 
 /** Nothing has arrived yet, and nothing has been lost. */

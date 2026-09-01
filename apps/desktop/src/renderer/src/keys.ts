@@ -66,7 +66,7 @@
 // - **A modifier means this map is not the one being addressed.** `⌘K` is the
 //   palette's and `⌘1`–`⌘5` are the rail's; a bare key is this tier's.
 
-import type { JobSummary } from "../../shared/protocol";
+import type { JobSummary } from "@armada/protocol";
 import { BOARD_TABS, type BoardTab } from "./board";
 
 /** The verb a row's one control names. Four, and a row carries exactly one. */

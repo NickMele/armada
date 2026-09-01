@@ -14,8 +14,8 @@
 
 import type { WorkflowRailDeclaration } from "@armada/components";
 
-import { ADVANCE_GATE } from "../../shared/generated/vocabulary";
-import type { DeclaredCheck, DeclaredJudge } from "../../shared/protocol";
+import { ADVANCE_GATE } from "@armada/components";
+import type { DeclaredCheck, DeclaredJudge } from "@armada/protocol";
 
 /**
  * The Check's name, or the built-in's kind where it names none.

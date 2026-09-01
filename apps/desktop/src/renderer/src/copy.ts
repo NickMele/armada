@@ -12,7 +12,7 @@
 
 import type { DialogTone } from "@armada/components";
 
-import type { Outcome } from "../../shared/bridge";
+import type { Outcome } from "@armada/protocol";
 import type { ConfirmableAct, JobAct } from "./JobDetail";
 
 /** What a refusal says. Every one names what happened and what to do. */

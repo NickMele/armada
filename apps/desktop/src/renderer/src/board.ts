@@ -68,9 +68,9 @@
 // strip is still a breakdown of what is on screen — and a tab that empties
 // under a search renders no count rather than a `0`.
 
-import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
-import type { JobSummary } from "../../shared/protocol";
-import type { WorkflowSummary } from "../../shared/setup";
+import { JOB_LIFECYCLE } from "@armada/components";
+import type { JobSummary } from "@armada/protocol";
+import type { WorkflowSummary } from "@armada/protocol";
 import { instant } from "./duration";
 
 /** The five tabs, in the order they are drawn and keyed. */

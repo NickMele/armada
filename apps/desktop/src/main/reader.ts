@@ -13,7 +13,7 @@
 // and a state machine, and a GET under a Job is none of those. No port is held,
 // only passed in, so nothing here can drift from what the socket believes.
 
-import type { JobRead } from "../shared/bridge";
+import type { JobRead } from "@armada/protocol";
 import { ask } from "./request";
 
 /** What one read is: where to send, what to keep, and where the state goes. */

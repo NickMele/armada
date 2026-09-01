@@ -46,8 +46,8 @@
 // in the number of Jobs. The walk here memoises every id it passes, so each
 // chain is climbed once however many members it has.
 
-import { JOB_LIFECYCLE, RESUMPTION } from "../../shared/generated/vocabulary";
-import type { JobSummary } from "../../shared/protocol";
+import { JOB_LIFECYCLE, RESUMPTION } from "@armada/components";
+import type { JobSummary } from "@armada/protocol";
 import { instant } from "./duration";
 
 /** Which dispatch of one piece of work a Job is. */

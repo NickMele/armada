@@ -12,13 +12,20 @@ import type { ProtocolVersion } from "./version";
 
 /** One message on a Job's Observe socket. `crates/ipc/src/turn.rs`. */
 export type TurnMessage =
-  | ({ message: "opened" } & Opened)
+  | ({ message: "opened" } & Opening)
   | ({ message: "row"; ts: string; step?: string; by?: Voice } & Saw)
   | ({ message: "missed" } & Missed)
   | ({ message: "closed" } & Closed);
 
-/** The first message on every connection, before any row. */
-export type Opened = {
+/**
+ * The first message on every connection, before any row.
+ *
+ * **`Opening`, not `Opened`** — `artifacts.ts` has an `Opened` and it is the
+ * one every caller outside this file means. Two types of one name in a package
+ * every other package imports whole is an ambiguity nobody can resolve at the
+ * call site.
+ */
+export type Opening = {
   protocol_version: ProtocolVersion;
   job_id: string;
   /** Whether a Drone was writing when this opened. `false` is ordinary. */

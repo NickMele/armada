@@ -2,7 +2,7 @@
   "name": "@armada/desktop",
   "private": true,
   "version": "0.0.0",
-  "description": "Bridge — the desktop application.",
+  "description": "Bridge \u2014 the desktop application.",
   "main": "./out/main/index.js",
   "scripts": {
     "codegen": "node codegen/vocabulary.mjs",
@@ -26,6 +26,7 @@
   "dependencies": {
     "@armada/brand": "workspace:*",
     "@armada/components": "workspace:*",
+    "@armada/protocol": "workspace:*",
     "@armada/tokens": "workspace:*",
     "lucide-react": "^0.550.0",
     "react": "^19.2.0",

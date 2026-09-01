@@ -48,7 +48,7 @@
 // region is gone: the turns are chapter two, the files are chapter three, and
 // the raw event table is not something this screen needs at all.
 
-import { GAMING_PATTERN } from "../../shared/generated/vocabulary";
+import { GAMING_PATTERN } from "@armada/components";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -61,18 +61,10 @@ import {
   type StepNotice,
 } from "@armada/components";
 
-import type {
-  Diff,
-  Evidence,
-  Footprint,
-  Observed,
-  Outcome,
-  Turn,
-  Watched,
-} from "../../shared/bridge";
-import type { FileReport, JobDetail as JobWhole, JobSummary, StepDetail } from "../../shared/protocol";
-import type { JobFootprint } from "../../shared/footprint";
-import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
+import type { Diff, Evidence, Footprint, Observed, Outcome, Turn, Watched } from "@armada/protocol";
+import type { FileReport, JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
+import type { JobFootprint } from "@armada/protocol";
+import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 import { Acts, StepActs, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type Calls } from "./calls";
 import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";

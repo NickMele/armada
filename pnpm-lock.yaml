@@ -16,6 +16,9 @@ importers:
       '@armada/components':
         specifier: workspace:*
         version: link:../../packages/components
+      '@armada/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@armada/tokens':
         specifier: workspace:*
         version: link:../../packages/tokens
@@ -71,6 +74,9 @@ importers:
 
   packages/components:
     dependencies:
+      '@armada/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@armada/tokens':
         specifier: workspace:*
         version: link:../tokens
@@ -111,6 +117,12 @@ importers:
       vite:
         specifier: ^7.0.0
         version: 7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)
+
+  packages/protocol:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
 
   packages/tokens: {}
 
