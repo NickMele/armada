@@ -471,6 +471,17 @@ export type StepDetail = {
    */
   flagged: Flagged[];
   /**
+   * Every run of this step, oldest first. **`Attempt 1 refused`, `Attempt 2
+   * advanced`** — the rows the run tree draws under a step that was worked
+   * more than once.
+   *
+   * It is the only place an earlier run's outcome survives: `state` and
+   * `last_verdict` are both the latest, so a step that passed on its third try
+   * and one that passed on its first were the same message. Empty on a step
+   * nothing has entered, which is every step a Job has not reached.
+   */
+  attempts: StepAttempt[];
+  /**
    * The Judge call out on this step **right now**, where one is.
    *
    * **Absent is the ordinary case, and it is the point of the field.** A step
@@ -629,6 +640,31 @@ export type Judged = {
    * filesystem. Absent where Fleet kept no brief.
    */
   brief_path?: string;
+};
+
+/**
+ * One run of one step: which run it was, when it began, and what it came to.
+ *
+ * **The outcome is a step state rather than a word of its own.** The inner
+ * machine already names the six places a run can be — `advanced` is the run
+ * that passed, `retrying` is the one that failed inside its budget, `stopped`
+ * is the one that spent it, `awaiting_human` is the one holding for a person —
+ * and a second vocabulary here would be a set no registry declares.
+ */
+export type StepAttempt = {
+  /** Which run this was, counted from one. */
+  attempt: number;
+  /** Where the run got to. `running` while it is still going. */
+  outcome: string;
+  /**
+   * The escalation trigger the run carried out of `running`, where it carried
+   * one. Absent on a run that advanced, which is what makes `Attempt 2
+   * advanced` and `Attempt 1 refused` different sentences.
+   */
+  why?: string;
+  started_at: string;
+  /** Absent is the run still going, and there is at most one of those. */
+  ended_at?: string;
 };
 
 /**

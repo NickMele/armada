@@ -20,7 +20,7 @@ import type { ManifestSummary, ModelChoices, WorkflowSummary } from "./setup";
 import type { Artifact, Opened } from "./artifacts";
 import type { Recorded } from "./history";
 import type { Submitted, Work } from "./work";
-import type { Saw } from "./turn";
+import type { Saw, Voice } from "./turn";
 import { connects, skew, spoken } from "./version";
 import type { ProtocolVersion, Skew } from "./version";
 import { PROTOCOL_VERSION } from "./generated/protocol-version";
@@ -370,6 +370,12 @@ export type Turn = {
    * written before Fleet recorded the field, and nothing recovers which it was.
    */
   step?: string;
+  /**
+   * Whose row this is — Armada, the Drone, or Fleet. Beside `saw` for `step`'s
+   * reason: it is true of every kind. Never absent here, because main fills a
+   * row the wire did not stamp with `drone`, which is what every such row is.
+   */
+  by: Voice;
   saw: Saw;
 };
 

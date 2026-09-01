@@ -101,8 +101,11 @@ export class ObserveSocket {
       // the wire carries it beside the row's kind, `Saw` declares no such
       // field, and a spread would put it on the union at runtime where no
       // reader can see it. It travelled that way, undrawn, until #160.
-      const { message: _tag, ts, step, ...saw } = message;
-      const row: Turn = { ts, seq: this.seq++, step, saw };
+      // `by` is named for `step`'s reason and carries `drone` where it is
+      // absent — every row written before Fleet stamped the field decoded from
+      // a Drone's own output, so the default is the truth rather than a guess.
+      const { message: _tag, ts, step, by, ...saw } = message;
+      const row: Turn = { ts, seq: this.seq++, step, by: by ?? "drone", saw };
       this.turns = { ...this.turns, rows: [...this.turns.rows, row] };
       this.publish({ state: "watching", jobId, turns: this.turns });
       return;

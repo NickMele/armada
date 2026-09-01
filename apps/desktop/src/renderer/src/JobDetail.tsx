@@ -22,14 +22,15 @@
 // redispatch and approve stay in the Job header, which is also where Pilot
 // lands — `#250`, and nothing here has to change to take it.
 //
-// # What is served is drawn, and what is not is named
+// # The story is three chapters and none of them is behind a tab
 //
-// The run is built in `run.ts`, the strip in `phases.ts`, the log in `story.ts`,
-// and each of the three says at its own head what the wire does not carry. Two
-// are worth repeating here because they are visible on every Job: **a per-step
-// attempt count is not served**, so "an attempt is a row, not a counter" cannot
-// be drawn at all; and **the activity log carries the Drone's turns only**,
-// because Fleet's own events are not on the Observe socket.
+// Drone instructions, then Activity log, then Produced, in the order they
+// happened. The log streams while the Job runs and is on the page at every
+// state — it used to be one of four tabs inside a region called *What it left
+// behind*, which the drawing has none of, so the chapter that says what is
+// happening right now was the one thing a person had to go and find. That
+// region is gone: the turns are chapter two, the files are chapter three, and
+// the raw event table is not something this screen needs at all.
 
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
@@ -47,9 +48,9 @@ import type {
   Diff,
   Evidence,
   Footprint,
-  History,
   Observed,
   Outcome,
+  Turn,
   Watched,
 } from "../../shared/bridge";
 import type { FileReport, JobDetail as JobWhole, JobSummary, StepDetail } from "../../shared/protocol";
@@ -59,14 +60,13 @@ import { Decide, DecidedDiff } from "./Decide";
 import { span } from "./duration";
 import { factsOf, ordered } from "./facts";
 import { filesOf, footprintNote, readingFor, whyNoFootprint } from "./files";
+import { Log } from "./Log";
 import { phasesOf } from "./phases";
-import { Record } from "./Record";
 import { recourseOf } from "./recovery";
-import { RECORDS_ITS_OWN_TURNS, escalation, renderFor } from "./render";
+import { escalation, renderFor } from "./render";
 import { runOf } from "./run";
 import { readingOf } from "./reading";
-import { entriesOf, NOT_ONE_STREAM, NOTHING_YET_ON_THIS_STEP, NOT_WATCHING } from "./story";
-import { ActivityLog } from "@armada/components";
+import { entriesOf, NOTHING_YET_ON_THIS_STEP } from "./story";
 import { briefOf, whyNoWork, workOf } from "./work";
 import { stoppedAt } from "./stopped";
 
@@ -114,12 +114,14 @@ export type JobDetailProps = {
   onApproveReview: (jobId: string) => void;
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
-  /** What the second socket has said, where this Job's turns are being read. */
+  /**
+   * What the second socket has said. **Opened for every Job that is open**, not
+   * on a press: the activity log is a chapter of the step's story and a chapter
+   * that filled only after somebody asked is the tab this screen removed.
+   */
   observed: Observed;
-  /** The reads the record's sections and the running footprint draw from. */
+  /** The reads the panel's chapters draw from. */
   recorded: FoldedReads;
-  /** Open or close this Job's turns. Not an act on the Drone. */
-  onObserve: (on: boolean) => void;
   onCopied: (value: string) => void;
 };
 
@@ -145,7 +147,6 @@ export function JobDetail({
   onApproveReview,
   onRequestChanges,
   onReject,
-  onObserve,
   onCopied,
 }: JobDetailProps) {
   // Which step the panel is showing. **The whole of navigation inside a Job**:
@@ -192,7 +193,6 @@ export function JobDetail({
         onApprove={onApprove}
         onReport={onReport}
         onCopied={onCopied}
-        onObserve={RECORDS_ITS_OWN_TURNS.has(render) ? undefined : () => onObserve(true)}
       />
     ),
   };
@@ -222,21 +222,6 @@ export function JobDetail({
       whereAbsent={whyNoWork(watched, job.id)}
       brief={whole === null ? undefined : briefOf(whole)}
       briefAbsent={whyNoBrief(watched, job.id)}
-      record={
-        <Record
-          job={job}
-          whole={whole}
-          observed={observed}
-          history={recorded.history}
-          evidence={recorded.evidence}
-          diff={recorded.diff}
-          // `get_diff` reads the declaration out of the slot this Job's own
-          // Drone holds, and a Job that is over has let go of it.
-          planReadable={render === "working" || render === "reviewing"}
-          onWatchTurns={onObserve}
-          onCopied={onCopied}
-        />
-      }
       step={
         open === undefined
           ? undefined
@@ -274,6 +259,7 @@ export function JobDetail({
                 watching,
                 footprint: recorded.footprint,
                 diff: recorded.diff,
+                live: observed.state === "watching",
               }),
               // Review and reply are one loop: the decision is the block under
               // the story, one scroll from the diff it is made against, never a
@@ -434,71 +420,74 @@ function chaptersOf({
   watching,
   footprint,
   diff,
+  live,
 }: {
   job: JobSummary;
   step: StepDetail;
   render: string;
-  watching: { rows: readonly import("../../shared/bridge").Turn[]; skipped: number } | null;
+  watching: { rows: readonly Turn[]; skipped: number } | null;
   footprint: Footprint;
   diff: Diff;
+  /** Whether the socket is still carrying rows, for the chapter's live mark. */
+  live: boolean;
 }): StepChapter[] {
-  const entries = watching === null ? [] : entriesOf(watching.rows, step.step_id);
+  const rows = watching === null ? [] : entriesOf(watching.rows, step.step_id);
+  const told = rows.filter((row) => row.actor === "armada");
+  const opened = told[0];
   const touched = readingFor(footprint, job.id);
   return [
     {
       id: "instructions",
       ordinal: 1,
       title: "Drone instructions",
-      // **Not served.** Nothing on `StepDetail` carries the brief Armada wrote
-      // for the step; the Job's own brief is above, and this is the turn the
-      // step opened with. Named where it would have gone.
-      summary: "not served",
+      // The turn the step opened with, in the words the Drone was given.
+      // Armada's own turns are on the transcript beside the Drone's, so this
+      // is the same stream chapter two draws, filtered to one voice.
+      summary: opened === undefined ? undefined : opened.at,
       preview:
-        "What Armada told the Drone at the top of this step is not on the wire. The Job's brief is " +
-        "above; this would be the injected turn that opened the step.",
+        opened === undefined ? (
+          <p className="text-2xs text-fg-muted">{NOT_OPENED_YET}</p>
+        ) : (
+          <p className="text-fg-muted">{opened.payload.map((line) => line.text).join("\n")}</p>
+        ),
+      ...(told.length <= 1
+        ? {}
+        : {
+            content: <Log rows={told} emptyNote={NOT_OPENED_YET} />,
+            openLabel: `Everything Armada told it — ${told.length} turns`,
+          }),
     },
     {
       id: "log",
       ordinal: 2,
       title: "Activity log",
-      summary:
-        watching === null
-          ? "not being read"
-          : `${entries.length} ${entries.length === 1 ? "entry" : "entries"} · every line opens`,
-      preview:
-        watching === null ? (
-          NOT_WATCHING
-        ) : (
-          <ActivityLog
-            entries={entries.slice(-PREVIEWED)}
-            emptyNote={NOTHING_YET_ON_THIS_STEP}
-            cut={NOT_ONE_STREAM}
-          />
-        ),
-      ...(watching === null || entries.length <= PREVIEWED
+      // `live` is a word here rather than the running dot the drawing puts
+      // before it: `Chapter` draws that mark and `StepStory` does not compose
+      // `Chapter`, so the claim is made in the only channel this header has.
+      summary: [
+        ...(live ? ["live"] : []),
+        `${rows.length} ${rows.length === 1 ? "entry" : "entries"}`,
+        "every line opens",
+      ].join(" · "),
+      // Always drawn, and never behind a control. The log is what says what is
+      // happening right now, so it is on the page while the Job runs rather
+      // than a thing to go and open.
+      preview: <Log rows={rows.slice(-PREVIEWED)} emptyNote={NOTHING_YET_ON_THIS_STEP} />,
+      ...(rows.length <= PREVIEWED
         ? {}
         : {
-            content: (
-              <ActivityLog
-                entries={entries}
-                emptyNote={NOTHING_YET_ON_THIS_STEP}
-                cut={cutOf(watching.skipped)}
-              />
-            ),
-            openLabel: `Open the log — all ${entries.length} entries`,
+            content: <Log rows={rows} emptyNote={NOTHING_YET_ON_THIS_STEP} />,
+            openLabel: `Open the log — all ${rows.length} entries`,
           }),
     },
     {
       id: "produced",
       ordinal: 3,
       title: "Produced",
-      // **The Job's reading, not the step's.** `job.files_changed` and
-      // `JobDetail.footprint` are the whole Job's, so a per-step file list
-      // would be the same list under every step.
-      summary: touched === undefined ? "not read" : `${touched.files.length} files`,
+      summary: touched === undefined ? undefined : `${touched.files.length} files`,
       preview:
         touched === undefined ? (
-          whyNoFootprint(job.assigned_drone !== undefined)
+          <p className="text-2xs text-fg-muted">{whyNoFootprint(job.assigned_drone !== undefined)}</p>
         ) : (
           <ChangedFiles
             files={filesOf(touched)}
@@ -506,15 +495,12 @@ function chaptersOf({
             note={footprintNote(touched, render === "working")}
           />
         ),
-      // The diff is the expensive read and only the review gate asks for it
-      // here; everywhere else it is a section of the record, which is one place
-      // rather than two.
-      ...(render === "reviewing"
-        ? {
-            content: <DecidedDiff diff={diff} jobId={job.id} />,
-            openLabel: "Open the diff",
-          }
-        : {}),
+      // A produced file opens to what it actually wrote, at every state. The
+      // diff is the expensive read and opening the chapter is what spends it —
+      // which is the whole reason one chapter is open at a time.
+      content: <DecidedDiff diff={diff} jobId={job.id} />,
+      openLabel:
+        touched === undefined ? "Open the diff" : `Open the diff — ${touched.files.length} files`,
     },
   ];
 }
@@ -522,12 +508,8 @@ function chaptersOf({
 /** How many entries the log's collapsed preview shows. The drawing's own five. */
 const PREVIEWED = 5;
 
-/** What the stream left out, where the socket's backfill was bounded. */
-function cutOf(skipped: number): string {
-  return skipped === 0
-    ? NOT_ONE_STREAM
-    : `${NOT_ONE_STREAM} The backfill also left out ${skipped} older rows; the whole transcript is the file named under Where things are.`;
-}
+/** What chapter one says before Armada has opened the step. */
+const NOT_OPENED_YET = "Armada has not opened this step yet.";
 
 /**
  * A reading that found nothing. **Ordinary, and never an error** — a Drone that
@@ -535,10 +517,9 @@ function cutOf(skipped: number): string {
  */
 const NOTHING_TOUCHED = "This drone has not changed anything yet.";
 
-/** The two reads the record and the running footprint draw from. */
+/** The reads the panel's own chapters draw from. */
 export type FoldedReads = {
   footprint: Footprint;
-  history: History;
   evidence: Evidence;
   diff: Diff;
 };
