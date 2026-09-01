@@ -286,3 +286,50 @@ export const NothingButTheSentence: Story = {
     next: "Reload Bridge. If it happens again, quit and reopen.",
   },
 };
+
+/**
+ * **A fault with the code the wire gave it.** The chip is a solid `--error`
+ * fill where a Job status is a 12% tint, and it holds a code where a status
+ * holds a verb — the two channels that keep a failed Job and a failing Armada
+ * apart, since both are the same red.
+ *
+ * The notice takes a leading edge and no box. A red frame reads as a filled
+ * alert, and the solid fill in this treatment belongs to the chip.
+ */
+export const AFaultWithItsCode: Story = {
+  args: {
+    headline: "The job could not be read",
+    code: "job_unreadable",
+    next: "Open another job. This one stays on the board, greyed.",
+    detailsLabel: "What the store answered",
+    details: [{ label: "Job", value: "job_2d90bb" }],
+    values: [{ icon: File, iconLabel: "Log", value: AUDIT, copyValue: AUDIT }],
+    note: "The rest of the board is unaffected. One row failed to read, not the list.",
+    actions: <Acts reload={false} dismiss />,
+  },
+};
+
+/**
+ * **A renderer that threw, which has no wire code.** Bridge must not mint one:
+ * a code invented here is in no manifest and means nothing to the lookup
+ * Bridge does. The chip carries the **region** instead — same solid fill, same
+ * mono, and honest about being a name rather than a code.
+ *
+ * That is the answer to the open half of #228, and it is why the treatment's
+ * separation still holds on a surface the wire never touched.
+ */
+export const ABoundaryFallbackWithNoCode: Story = {
+  args: {
+    headline: "This part of Bridge stopped drawing",
+    region: "Job detail",
+    next: "Reload Bridge. Jobs keep running with the window closed.",
+    detailsLabel: "What threw",
+    details: [
+      { label: "Component", value: "StepPanel" },
+      { label: "Message", value: "Cannot read properties of undefined (reading 'judged')" },
+    ],
+    values: [{ icon: File, iconLabel: "Log", value: AUDIT, copyValue: AUDIT }],
+    note: "Fleet is untouched. This is the window, not the daemon.",
+    actions: <Acts />,
+  },
+};

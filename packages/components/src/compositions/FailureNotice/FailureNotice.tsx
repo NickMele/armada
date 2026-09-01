@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
+import { ErrorCode } from "../../errors/ErrorCode/ErrorCode";
 import { JobLogReference } from "../JobLogReference/JobLogReference";
 
 /**
@@ -15,13 +16,26 @@ import { JobLogReference } from "../JobLogReference/JobLogReference";
  * thing this exists to stop. The caller supplies the sentence, the details and
  * the actions, and every one of the three differs in all three.
  *
- * The escalation hue is not chosen per failure. There is one tone because a
- * failure is one standing condition, and picking a hue per kind would be
- * writing a status by hand for something that is not a Job.
+ * **This is a fault, and it takes the error treatment.** It predated it, and
+ * for a while drew a fault in the escalation hue on a 12% tint inside a box,
+ * carrying no code — four disagreements with a treatment whose whole argument
+ * is that an error and a failed Job are both red and must never be mistaken
+ * for each other. Three are closed here: one red, a leading edge and never a
+ * box, and no tint on a data surface. See #228.
+ *
+ * **A boundary fallback may have no wire code, and the chip still draws.** The
+ * treatment says the code is always shown because `ipc::WireError` guarantees
+ * one; a renderer that threw is built from a caught exception, and
+ * `apps/desktop/src/renderer/src/failures.ts` is right that Bridge must not
+ * mint a code — an invented one is in no manifest and means nothing to the
+ * lookup. So the chip carries the **region** instead: same solid fill, same
+ * mono, same not-a-status claim, and honest about being a name rather than a
+ * code. Where neither is supplied no chip draws, which is the remaining half
+ * of #228 and is a call site's to fix, not this component's.
  *
  * **No glyph.** `triangle-alert` is reserved to Doctor and `octagon-alert` to
- * `stalled`, and the registry carries no mark for a Bridge failure. The
- * headline does the work rather than a glyph that means something else.
+ * `stalled`, and the registry carries no mark for a Bridge failure. The code
+ * and the sentence do the work rather than a glyph that means something else.
  */
 export type FailureDetail = {
   /**
@@ -54,6 +68,20 @@ export type FailureMachineValue = {
 export type FailureNoticeProps = {
   /** What broke, in one sentence. Never what threw, and never an apology. */
   headline: string;
+  /**
+   * The `code` off the wire, where the failure came off the wire. It is what a
+   * person reads back to someone else, so it is shown whenever it exists.
+   */
+  code?: string;
+  /**
+   * What failed, where there is no wire code — `Job board`, `Fleet
+   * connection`. **A name, not a code**, and drawn in the code chip because
+   * the chip's job is to say *error rather than status*, which is true of a
+   * boundary fallback too.
+   *
+   * Ignored when `code` is given: a real code always outranks a region.
+   */
+  region?: string;
   /** What to do. A failure with nothing to do is drawn as the dead end it is. */
   next: string;
   /** The stack, the payload, the component. Present, folded, never in the way. */
@@ -76,6 +104,8 @@ const FOLD_STROKE = 2;
 
 export function FailureNotice({
   headline,
+  code,
+  region,
   next,
   details,
   detailsLabel = "Details",
@@ -97,6 +127,15 @@ export function FailureNotice({
         <span className="armada-failure__headline">{headline}</span>
         <span className="armada-failure__next">{next}</span>
       </div>
+
+      {/* The chip leads nothing and closes nothing — it sits under the copy,
+          where the error treatment puts it, so the sentence is what is read
+          first and the value a person quotes is what is read next. */}
+      {code === undefined && region === undefined ? null : (
+        <div className="armada-failure__code">
+          <ErrorCode kind="fault" code={code ?? (region as string)} />
+        </div>
+      )}
 
       {folded ? (
         <details
