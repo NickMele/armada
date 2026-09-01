@@ -13,6 +13,7 @@ import {
   RUN_RUNNING,
   RUN_STOPPED,
   RUN_WAITING,
+  WAITING_HEADING,
   WHERE,
 } from "./fixtures";
 
@@ -117,12 +118,7 @@ export const WaitingOnYou: Story = {
   render: () => (
     <div className="armada-screen">
       <InsideAJob
-        heading={{
-          ...HEADING,
-          status: "awaiting_review",
-          statusLabel: "Waiting on you",
-          actions: JOB_ACTS,
-        }}
+        heading={{ ...WAITING_HEADING, actions: JOB_ACTS }}
         run={RUN_WAITING}
         runElapsed="13m 47s"
         where={WHERE}

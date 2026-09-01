@@ -31,6 +31,21 @@ const OUT = join(here, "..", "src", "shared", "generated", "vocabulary.ts");
 // main process both read the version, and neither may pull a glyph — a React
 // component — across the process boundary to get at a number.
 const OUT_VERSION = join(here, "..", "src", "shared", "generated", "protocol-version.ts");
+// The same map, emitted a second time into the component library.
+//
+// **Two emitted files are not the second vocabulary this script exists to
+// prevent.** That is a verb typed into a component by hand; this is one
+// generator reading one registry and writing the same answer twice, so the two
+// cannot disagree. It is here because the dependency only runs one way —
+// `apps/desktop` depends on `@armada/components`, so a story cannot import the
+// app's copy — and a screen story that has to draw an escalated Job needs the
+// escalation reason's verb and glyph as much as Bridge does. Before this, it
+// wrote `Needs you` into a fixture and the gallery drew a badge naming no
+// status at all, which is https://github.com/NickMele/armada/issues/294.
+//
+// One file rather than a slice of one: choosing which vocabularies a story may
+// read is a decision, and a generator does not get to make it.
+const OUT_COMPONENTS = join(repo, "packages", "components", "src", "generated", "vocabulary.ts");
 
 // The vocabularies a surface renders. `criterion_verdict_attested` is left out
 // because nothing serves an attestation.
@@ -413,6 +428,8 @@ lines.push("");
 
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, lines.join("\n"));
+mkdirSync(dirname(OUT_COMPONENTS), { recursive: true });
+writeFileSync(OUT_COMPONENTS, lines.join("\n"));
 writeFileSync(
   OUT_VERSION,
   [
