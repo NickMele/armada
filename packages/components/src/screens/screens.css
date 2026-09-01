@@ -549,6 +549,47 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Where things are — the drawing's `.where`. A stack with a hairline gap, so
+   the rows read as one block and each still lights its own hover. The label
+   column, the value and the act are `WhereRow`'s; what lives here is only what
+   a single row cannot know about its neighbours. */
+.armada-inside__where {
+  display: flex;
+  flex-direction: column;
+  gap: var(--border-width);
+  min-width: 0;
+}
+
+/* A row that starts a second group. Inset to the rows' own padding, so it
+   separates the values rather than cutting the column. */
+.armada-inside__where-rule {
+  height: var(--border-width);
+  margin: var(--space-1) var(--space-2);
+  background: var(--border-subtle);
+}
+
+/* Why a path did not open, under the row it was pressed on. A failed open is
+   the one case in this region that has to speak: opening a file behind the
+   window looks exactly like nothing happening. */
+.armada-inside__where-unopened {
+  margin: 0;
+  padding: 0 var(--space-2);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--status-completed-failed);
+  text-wrap: pretty;
+}
+
+/* What the region is for, said once at the foot of it. */
+.armada-inside__where-note {
+  margin: var(--space-1) 0 0;
+  padding: 0 var(--space-2);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
 .armada-inside__brief {
   display: flex;
   flex-direction: column;

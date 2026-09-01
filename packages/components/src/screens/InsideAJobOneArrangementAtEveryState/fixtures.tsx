@@ -1,4 +1,4 @@
-import { CircleDot, Eye, File, Folder, GitBranch, X } from "lucide-react";
+import { CircleDot, Eye, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ActivityLog, type ActivityEntry } from "../../compositions/ActivityLog/ActivityLog";
 import { ChangedFiles } from "../../compositions/ChangedFiles/ChangedFiles";
@@ -18,27 +18,41 @@ import type { StepChapter } from "../../compositions/StepStory/StepStory";
  */
 
 /**
- * The transcript row's glyph has no entry in `packages/icons/icons.toml`. The
- * row renders a channel short rather than reaching for a registered glyph that
- * means something else. Reported.
+ * The transcript row's glyph has no entry in `packages/icons/icons.toml`. It
+ * no longer costs the row anything: the region draws a label column now and the
+ * word `Transcript` is what the glyph was standing in for. Kept because it is
+ * still the honest way to say a glyph is missing. Reported.
  */
 export const NO_GLYPH_IN_REGISTRY = undefined as unknown as LucideIcon;
 
 export const JOB = "job_2d90bb";
 const WORKTREE = `.armada/worktrees/${JOB}`;
+const DRONE = "01M10B1V2A0011VRS6RA2SKPQ7";
 
-/** Where things are. A path opens where it lives; an identifier copies. */
+/**
+ * Where things are. A path opens where it lives; an identifier copies.
+ *
+ * **The drawing's seven rows, and no glyphs.** `icon` and `iconLabel` were the
+ * shape `JobLogReference` needed, where a glyph stood in for a label the region
+ * had no column for. The column is drawn now, so `iconLabel` is the label and
+ * the glyph is gone — the trailing mark says what the row *does*, which is the
+ * only thing on the row a word would be slower than.
+ */
 export const WHERE: JobLogReferenceRow[] = [
-  { icon: Folder, iconLabel: "Worktree", value: WORKTREE, copyValue: WORKTREE },
+  { iconLabel: "Worktree", value: WORKTREE, copyValue: WORKTREE },
   {
-    icon: GitBranch,
     iconLabel: "Branch",
     value: "fix/settings-split-selectors",
     copyValue: "fix/settings-split-selectors",
   },
-  { icon: File, iconLabel: "Manifest", value: "armada.yml", copyValue: "armada.yml" },
+  { iconLabel: "Manifest", value: "armada.yml", copyValue: "armada.yml" },
   {
-    icon: File,
+    iconLabel: "Workflow",
+    value: "bug",
+    copyValue: "bug",
+    meta: "as it was at 14:20",
+  },
+  {
     iconLabel: "Job log",
     value: `.armada/logs/${JOB}.jsonl`,
     copyValue: `.armada/logs/${JOB}.jsonl`,
@@ -49,6 +63,7 @@ export const WHERE: JobLogReferenceRow[] = [
     value: ".armada/transcripts/01M10B1V2A.jsonl",
     copyValue: ".armada/transcripts/01M10B1V2A.jsonl",
   },
+  { iconLabel: "Drone", value: DRONE, copyValue: DRONE },
 ];
 
 export const BRIEF: JobBriefProps = {
