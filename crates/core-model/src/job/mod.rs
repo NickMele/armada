@@ -62,7 +62,7 @@ pub use fields::{
     NotRunDisposition, NotRunReason, Origin, QueuedReason, Resumption, ScopeRevision,
     ScopeRevisionOutcome, Subject, TopLevelOrigin, Urgency, WriteTargets,
 };
-pub use gaming::{DecidedBy, EvidenceRef, GamingCheck, GamingFlag, GamingPattern};
+pub use gaming::{CitedAt, DecidedBy, EvidenceRef, GamingCheck, GamingFlag, GamingPattern};
 pub use guard::Guard;
 pub use ids::{
     BlankModel, BlankTitle, CriterionId, DroneId, JobId, ManifestId, ModelName, RepoPath, StepId,

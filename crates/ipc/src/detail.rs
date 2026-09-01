@@ -670,10 +670,39 @@ impl From<&core_model::Judgment> for Judged {
 pub struct Flagged {
     /// The pattern, spelled as `flag_if` spells it.
     pub pattern: String,
-    /// The file, line or assertion the flag is about. **The whole value of the
-    /// finding** — an uncited flag is unactionable, exactly as an uncited
-    /// refusal is.
+    /// The file, line or assertion the flag is about, as the check worded it.
+    /// **The whole value of the finding** — an uncited flag is unactionable,
+    /// exactly as an uncited refusal is.
     pub cited: String,
+    /// Where [`cited`](Flagged::cited) is, where Fleet established that from
+    /// the patch. **Absent is a real answer**: see [`CitedAt`].
+    pub at: Option<CitedAt>,
+}
+
+/// Where in the change a flag points, for the flags that point anywhere.
+///
+/// **One optional object rather than two optional fields**, so that "there is
+/// nowhere to go" is one thing to read on a row rather than a pair a renderer
+/// has to combine — and so that a line with no file is not a shape the wire
+/// can hold.
+///
+/// **`None` on `Flagged.at` is not a gap Fleet will later fill.** Three
+/// answers cannot carry one and never will: a `no_findings_on_substantial_diff`
+/// flag is a finding about an absence, a citation the check wrote without
+/// quotation marks is about something the change does *not* do, and a flag
+/// stored before this field existed was never located. Drawing "no location"
+/// is right on all three; inventing one is worse than the uncited row it
+/// replaces.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CitedAt {
+    /// Repository-relative, as the patch's post-image side spells it.
+    pub file: String,
+    /// The line in that file **as this change leaves it**, where the flag is
+    /// about a line the change leaves behind. Absent where it is about a line
+    /// the change removed, or about the file as a whole — the file is still
+    /// somewhere to go, and a number pointing into the pre-image would send a
+    /// reader to whatever now sits at it.
+    pub line: Option<u32>,
 }
 
 impl From<&core_model::GamingFlag> for Flagged {
@@ -681,6 +710,16 @@ impl From<&core_model::GamingFlag> for Flagged {
         Flagged {
             pattern: flag.pattern.as_wire().to_string(),
             cited: flag.cited.clone(),
+            at: flag.at.as_ref().map(CitedAt::from),
+        }
+    }
+}
+
+impl From<&core_model::CitedAt> for CitedAt {
+    fn from(at: &core_model::CitedAt) -> CitedAt {
+        CitedAt {
+            file: at.path().as_str().to_string(),
+            line: at.line(),
         }
     }
 }
