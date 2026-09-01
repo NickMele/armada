@@ -482,3 +482,200 @@
   line-height: var(--leading-xs);
   text-wrap: pretty;
 }
+
+/* ---- inside a job: the one arrangement -------------------------------- */
+
+/* The run on the left, the panel on the right, at every state.
+
+   Both tracks are proportional and neither is a fixed width. A fixed track
+   keeps demanding its width in a narrow window and the other one scrolls
+   sideways instead, which is the failure this app was built to escape. Two to
+   three is the drawing's own split at its 1180px width, and it holds down to
+   the window floor with no breakpoint — the tree gets narrower, the
+   directories recede, and the basenames the tree exists to keep never
+   truncate. A breakpoint was drawn first and removed: a media query cannot
+   read a custom property, so it could only be written as a literal, and the
+   proportional pair needs no query at all. `minmax(0, …)` on both is what
+   stops one long path from widening its own column past the pair. */
+.armada-inside {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+.armada-inside__run,
+.armada-inside__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-inside__panel {
+  gap: var(--space-3);
+}
+
+.armada-inside__region-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* The whole run's elapsed. A figure, never a chart. */
+.armada-inside__elapsed {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.armada-inside__brief {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* --- the step's own header ----------------------------------------------- */
+
+.armada-inside__step-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-top: var(--space-2);
+  border-top: var(--border-width) solid var(--border-subtle);
+  min-width: 0;
+}
+
+.armada-inside__step-titles {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+/* The step is the object of attention on this screen, so its name is the
+   panel heading — one step down from the Job's title above it. */
+.armada-inside__step-name {
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+}
+
+.armada-inside__step-name[data-identifier="true"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+}
+
+.armada-inside__step-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-inside__field {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-inside__field-label {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-inside__field-value {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+  white-space: nowrap;
+}
+
+.armada-inside__field-value[data-mono="true"] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The step acts. The accent goes with them, because they act on the object of
+   attention — the Job header keeps the acts that end or replace the Job. */
+.armada-inside__step-acts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* --- the band that says why you are here --------------------------------- */
+
+/* Hue below Job level, only where tokens/status.css declares it — and these
+   are about a step, so they take the step tokens. Amber for waiting is the
+   load-bearing one: everything mechanical has cleared, and red there would
+   make the workflow working look like the workflow failing. */
+.armada-inside__notice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--border-default);
+  background: var(--bg-sunken);
+  min-width: 0;
+}
+
+.armada-inside__notice[data-tone="failed"] {
+  border-color: var(--step-failed);
+  background: var(--step-failed-bg);
+}
+
+.armada-inside__notice[data-tone="stopped"] {
+  border-color: var(--status-escalated);
+  background: var(--step-stopped-bg);
+}
+
+.armada-inside__notice[data-tone="waiting"] {
+  border-color: var(--step-waiting);
+  background: var(--status-awaiting-review-bg);
+}
+
+.armada-inside__notice-title {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+}
+
+.armada-inside__notice-body {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+.armada-inside__before,
+.armada-inside__after {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* A region of the panel the wire cannot fill. Named in place, never blank. */
+.armada-inside__absent {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}

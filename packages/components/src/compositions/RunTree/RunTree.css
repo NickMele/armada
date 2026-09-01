@@ -1,0 +1,329 @@
+/* The run — the workflow as a tree, on the left of job detail. A well, like
+   the rail before it, because it is a record being read rather than a surface
+   being acted on. */
+.armada-run {
+  display: flex;
+  flex-direction: column;
+  /* 2px between rows: enough to separate two rows without a rule, and no gap
+     token spells it. The rail reports the same gap. */
+  gap: calc(var(--space-1) / 2);
+  padding: var(--space-2);
+  margin: 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  list-style: none;
+}
+
+.armada-run__step {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+}
+
+/* A step row. The left edge is --row-focus-bar with its colour dropped to
+   transparent at rest, so the edge adds no width and no row shifts when it
+   appears — the same technique the table row and the rail use. */
+.armada-run__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  border-left: var(--row-focus-bar);
+  border-left-color: transparent;
+}
+
+/* Background states what the row is; the accent left edge states which row you
+   are on. Two activity values carry a surface and they are the two that end a
+   Job — a glyph only holds while its row is selected, and the row that stopped
+   the run has to stay findable while its attempts are read in the panel.
+
+   Waiting takes neither. Amber, no surface: everything mechanical cleared, and
+   a tint would make the workflow working look like the workflow failing. That
+   is the whole of "three kinds of stopped must never look alike". */
+.armada-run__row[data-activity="failed"] {
+  background: var(--step-failed-bg);
+}
+
+.armada-run__row[data-activity="stopped"] {
+  background: var(--step-stopped-bg);
+}
+
+.armada-run__row[data-current] {
+  background: var(--bg-hover);
+  border-left-color: var(--accent);
+}
+
+/* A surface plus the edge: the row you are standing on keeps its own surface,
+   because what the row IS outranks where the cursor is. */
+.armada-run__row[data-current][data-activity="failed"] {
+  background: var(--step-failed-bg);
+}
+
+.armada-run__row[data-current][data-activity="stopped"] {
+  background: var(--step-stopped-bg);
+}
+
+/* --- the two controls on a row ------------------------------------------- */
+
+/* Disclosure, and nothing else. 16px in --fg-muted, chrome rather than data. */
+.armada-run__chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--space-4);
+  height: var(--space-4);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-run__chevron:hover {
+  color: var(--fg-default);
+}
+
+.armada-run__chevron:focus-visible {
+  outline: var(--border-width) solid var(--border-strong);
+  outline-offset: var(--border-width);
+}
+
+/* Step names are labels in sans on every surface. The name is the select
+   control, so it fills the row: a target the width of the word is a target a
+   person misses. */
+.armada-run__name {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.armada-run__name {
+  cursor: pointer;
+}
+
+button.armada-run__name:focus-visible {
+  outline: var(--border-width) solid var(--border-strong);
+  outline-offset: var(--border-width);
+  border-radius: var(--radius-sm);
+}
+
+/* A step that ran is read, not scanned past. */
+.armada-run__row[data-activity="advanced"] .armada-run__name,
+.armada-run__row[data-activity="retrying"] .armada-run__name {
+  color: var(--fg-muted);
+}
+
+.armada-run__row[data-activity="running"] .armada-run__name,
+.armada-run__row[data-activity="awaiting_human"] .armada-run__name,
+.armada-run__row[data-activity="killed"] .armada-run__name,
+.armada-run__row[data-current] .armada-run__name {
+  color: var(--fg-default);
+}
+
+/* The row that stopped or ended the run carries weight as well as a surface. */
+.armada-run__row[data-activity="failed"] .armada-run__name,
+.armada-run__row[data-activity="stopped"] .armada-run__name {
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+}
+
+/* Where a workflow supplies no label, the step_id renders instead — mono,
+   because it is machine-derived, and one step smaller than the sans it
+   replaces. */
+.armada-run__name[data-identifier] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+/* The hard-prerequisite lock. --fg-muted, label only, no action behind it. */
+.armada-run__lock {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  color: var(--fg-muted);
+}
+
+/* How long the step took. Measured, so it stays flat even under a hued row,
+   and tabular so a column of them lines up. A figure, never a bar. */
+.armada-run__elapsed {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.armada-run__row[data-current] .armada-run__elapsed {
+  color: var(--fg-muted);
+}
+
+/* --- the facts the chevron opens ----------------------------------------- */
+
+/* Indented to the step name's left edge: the chevron's slot, the mark's slot
+   and the two gaps, measured from the row's own padding. Alignment, not an
+   arbitrary inset. */
+.armada-run__facts {
+  padding: 0 var(--space-2) var(--space-1) calc(var(--space-4) * 2 + var(--space-2) * 3);
+}
+
+.armada-run__facts[hidden] {
+  display: none;
+}
+
+.armada-run__fact-rows {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A fact is a label and a value on one line, with any paths beneath. The label
+   track is fixed so a column of facts reads down its left edge rather than
+   ragged. 96px — the widest label the drawing carries is `Attempt 2`. */
+.armada-run__fact {
+  display: grid;
+  grid-template-columns: calc(var(--space-12) * 2) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Sans: a fact's name is a word, not a value the system reported. */
+.armada-run__fact-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* Mono: the value is machine-derived, and measured facts speak flatly. */
+.armada-run__fact-value {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Verdict hue is per fact and never sums onto the step or the Job: a refused
+   attempt can sit under a running step without either contradicting the
+   other. */
+.armada-run__fact-value[data-named="failed"],
+.armada-run__fact-value[data-named="refused"] {
+  color: var(--step-failed);
+}
+
+.armada-run__fact-value[data-named="passed"],
+.armada-run__fact-value[data-named="advanced"] {
+  color: var(--step-advanced);
+}
+
+/* --- paths --------------------------------------------------------------- */
+
+/* Under the label rather than beside it: a path is the one value in the tree
+   that must keep its whole basename, so it gets the full column. */
+.armada-run__paths {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.armada-run__path {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-run__path-value {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-run__path-value:hover .armada-run__path-base,
+.armada-run__path-value:hover .armada-run__path-dir {
+  color: var(--accent);
+}
+
+/* The directory recedes and is the only half that truncates. */
+.armada-run__path-dir {
+  min-width: 0;
+  flex: 0 1 auto;
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The filename does not truncate at any width. `flex: none` is the whole
+   rule — a column of paths all reading `…/index.ts` is the defect. */
+.armada-run__path-base {
+  flex: none;
+  color: var(--fg-default);
+  white-space: nowrap;
+}
+
+.armada-run__path-note {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+/* A step the run recorded nothing against. Named, never blank — a fact list
+   that closes up reads as a chevron that failed to open. */
+.armada-run__absent {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+/* The accessible name on the lock. */
+.armada-run__sr {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  padding: 0;
+  margin: calc(var(--border-width) * -1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

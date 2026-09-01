@@ -3,10 +3,15 @@
 //
 // # One surface, because one surface exists
 //
-// The rail carries Active jobs and nothing else. Job Board, Alerts, Reviews,
-// Activity Feed, Doctor, Manifest and Helm are named in the concept page and
-// none of them is built — six disabled rows would be a promise Armada does not
-// keep, so the roster is what exists.
+// The rail carries the Job Board and nothing else. Alerts, Doctor, Manifest
+// and Helm are named in the concept page and none of them is built — four
+// disabled rows would be a promise Armada does not keep, so the roster is
+// what exists.
+//
+// Active Jobs, Reviews and the Activity Feed used to be named here too. They
+// are not surfaces any more: the Board holds every Job with state as a filter,
+// and each of the three is that list under one filter. See
+// `docs/concepts/bridge.md`.
 //
 // # One region of the drawing has no source, and is left out
 //
@@ -26,7 +31,7 @@
 // to be.
 
 import { useEffect, useState, type ReactNode } from "react";
-import { Activity } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 import { Select, TheShell, type FleetState, type StatusBarProps } from "@armada/components";
 
 import type { Connection } from "../../shared/bridge";
@@ -36,8 +41,8 @@ import type { Statement } from "./fleet";
 import { ADMISSION_HOLD } from "../../shared/generated/vocabulary";
 import { plural } from "./board";
 
-/** The one surface in the rail. Its glyph is the registry's for Active jobs. */
-const ACTIVE_JOBS = "active";
+/** The one surface in the rail. Its glyph is the registry's for Job Board. */
+const JOB_BOARD = "board";
 
 export type ShellProps = {
   connection: Connection;
@@ -82,9 +87,9 @@ export function Shell({
   return (
     <TheShell
       surfaces={[
-        { id: ACTIVE_JOBS, label: "Active jobs", icon: Activity, count: jobs.length },
+        { id: JOB_BOARD, label: "Job Board", icon: ClipboardList, count: jobs.length },
       ]}
-      activeId={ACTIVE_JOBS}
+      activeId={JOB_BOARD}
       onSelect={onSurface === undefined ? undefined : () => onSurface()}
       collapsed={collapsed}
       railHeader={

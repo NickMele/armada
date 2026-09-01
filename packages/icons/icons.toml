@@ -30,8 +30,8 @@
   means = "Active jobs"
   group = "Navigation"
   size = "16px"
-  status = "Specified"
-  notes = "The ECG outline reads cleanly at 16px where it would not at 12px."
+  status = "Retired"
+  notes = "Retired 2026-08-31. Active jobs folded into the Job Board when the Board became every Job with state as a filter, so the surface this named no longer exists — see docs/concepts/bridge.md. The glyph is free again. The ECG outline reads cleanly at 16px where it would not at 12px, which is why it was chosen and why it is worth someone else having."
 
 [icons.archive]
   means = "A box with a lid"
@@ -329,8 +329,8 @@
   means = "Activity feed"
   group = "Navigation"
   size = "16px"
-  status = "Specified"
-  notes = "A log. history was rejected as a clock collision."
+  status = "Retired"
+  notes = "Retired 2026-08-31 with the surface. Finished Jobs are the Job Board filtered to what is over, so no feed exists to name. A log; history was rejected as a clock collision, and that reasoning holds for whoever takes it next."
 
 [icons.search]
   means = "search"
@@ -401,7 +401,7 @@
   group = "Navigation"
   size = "16px"
   status = "Specified"
-  notes = "Literal. heart-pulse and activity were rejected as collisions with Active jobs."
+  notes = "Literal. heart-pulse and activity were rejected as collisions with Active jobs, which no longer exists — both are free again, and this row is the reason to re-read that choice rather than assume it still holds."
 
 [icons.terminal]
   means = "A window with a prompt caret inside it"

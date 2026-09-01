@@ -76,3 +76,16 @@
 /* File an issue — the review between an error and a tracker. Appended, per the
    rule above: this list is append-only. */
 @import "./errors/FileAnIssue/FileAnIssue.css";
+
+/* The run — the workflow as a tree on job detail. Appended, per the rule
+   above: this list is append-only. */
+@import "./compositions/RunTree/RunTree.css";
+
+/* Where this step is — the phases and the gate tiers as one progression. */
+@import "./compositions/PhaseStrip/PhaseStrip.css";
+
+/* The activity log — one stream, three voices, every entry opening. */
+@import "./compositions/ActivityLog/ActivityLog.css";
+
+/* The step's story — three chapters, one order, one open at a time. */
+@import "./compositions/StepStory/StepStory.css";

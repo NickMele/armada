@@ -57,19 +57,9 @@ export * from "./compositions/TransitionHistory/TransitionHistory";
 export * from "./compositions/UnifiedDiff/UnifiedDiff";
 export * from "./compositions/WorkflowRail/WorkflowRail";
 
-// Job detail — the three renders a Job's status chooses between. A screen was
-// a story with hardcoded fixtures and nothing else could render it; these take
-// props, and the stories render them with the same fixtures they held.
+// What every job detail render shares. The five screens that took it are gone:
+// job detail is one arrangement, and the five were the defect.
 export * from "./screens/detail";
-export * from "./screens/AFailedJobADeadEndReadAsOne/AFailedJobADeadEndReadAsOne";
-export * from "./screens/AFinishedJobWhatItWasAndWhatItProduced/AFinishedJobWhatItWasAndWhatItProduced";
-export * from "./screens/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop/AJobAwaitingReviewTheDiffAndTheReplyAreOneLoop";
-export * from "./screens/ARunningJob/ARunningJob";
-
-// Observe — one Job's turns, read while they are still being written. A screen
-// rather than a region of job detail: it is opened on one Job deliberately and
-// closed, which is the shape the turn-level detail rule already has.
-export * from "./screens/WatchingADroneWork/WatchingADroneWork";
 
 // The three journey screens, lifted for the reason the job detail three were:
 // a story with hardcoded fixtures is a screen nothing outside Storybook can
@@ -89,3 +79,23 @@ export * from "./screens/TheShell/TheShell";
 export * from "./errors/ErrorCode/ErrorCode";
 export * from "./errors/ErrorNotice/ErrorNotice";
 export * from "./errors/FileAnIssue/FileAnIssue";
+
+// The run — the workflow as a tree on job detail. Not the rail: a rail drew
+// every step's gate rows inline, and a step's gates are the phase strip's now.
+export * from "./compositions/RunTree/RunTree";
+
+// Where this step is. Each stage is a control, and Checks and the Judge are
+// drawn as the different things they are.
+export * from "./compositions/PhaseStrip/PhaseStrip";
+
+// The activity log — the Drone's turns, Armada's injected turns and Fleet's
+// own events, in one stream, every entry naming who.
+export * from "./compositions/ActivityLog/ActivityLog";
+
+// The step's story — Drone instructions, Activity log, Produced. Opening one
+// collapses the others to their header line.
+export * from "./compositions/StepStory/StepStory";
+
+// Inside a job — the one arrangement, at every state. The screen #186 built:
+// the run as a tree, the selected step in the panel, its story in order.
+export * from "./screens/InsideAJobOneArrangementAtEveryState/InsideAJobOneArrangementAtEveryState";

@@ -1,0 +1,407 @@
+import { CircleDot, Eye, File, Folder, GitBranch, X } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { ActivityLog, type ActivityEntry } from "../../compositions/ActivityLog/ActivityLog";
+import { ChangedFiles } from "../../compositions/ChangedFiles/ChangedFiles";
+import type { JobBriefProps } from "../../compositions/JobBrief/JobBrief";
+import type { JobLogReferenceRow } from "../../compositions/JobLogReference/JobLogReference";
+import type { RunTreeStep } from "../../compositions/RunTree/RunTree";
+import type { StepChapter } from "../../compositions/StepStory/StepStory";
+
+/**
+ * The drawing's own Job: Bug, linear, seven steps, escalated at Regression
+ * check with its retries spent. One fixture set, so every story below is the
+ * same Job at a different moment — which is the claim the screen makes, and
+ * six unrelated fixtures could not test it.
+ *
+ * **The header verb comes from the enum→verb map.** It is written in here
+ * because a story has no generated module to read; Bridge reads one.
+ */
+
+/**
+ * The transcript row's glyph has no entry in `packages/icons/icons.toml`. The
+ * row renders a channel short rather than reaching for a registered glyph that
+ * means something else. Reported.
+ */
+export const NO_GLYPH_IN_REGISTRY = undefined as unknown as LucideIcon;
+
+export const JOB = "job_2d90bb";
+const WORKTREE = `.armada/worktrees/${JOB}`;
+
+/** Where things are. A path opens where it lives; an identifier copies. */
+export const WHERE: JobLogReferenceRow[] = [
+  { icon: Folder, iconLabel: "Worktree", value: WORKTREE, copyValue: WORKTREE },
+  {
+    icon: GitBranch,
+    iconLabel: "Branch",
+    value: "fix/settings-split-selectors",
+    copyValue: "fix/settings-split-selectors",
+  },
+  { icon: File, iconLabel: "Manifest", value: "armada.yml", copyValue: "armada.yml" },
+  {
+    icon: File,
+    iconLabel: "Job log",
+    value: `.armada/logs/${JOB}.jsonl`,
+    copyValue: `.armada/logs/${JOB}.jsonl`,
+    separated: true,
+  },
+  {
+    iconLabel: "Transcript",
+    value: ".armada/transcripts/01M10B1V2A.jsonl",
+    copyValue: ".armada/transcripts/01M10B1V2A.jsonl",
+  },
+];
+
+export const BRIEF: JobBriefProps = {
+  facts:
+    "The selectors cannot be tested without constructing the whole store, which makes every " +
+    "settings test an integration test.",
+  criteria: [
+    { text: "Selectors import without the store.", source: "judge" },
+    { text: "No behaviour change in the reducer.", source: "judge" },
+  ],
+};
+
+export const HEADING = {
+  status: "running",
+  statusIcon: CircleDot,
+  statusLabel: "Running",
+  headline: "Split the settings reducer so the selectors can be tested alone",
+  jobId: JOB,
+  fields: [
+    { label: "Workflow", value: "Bug" },
+    {
+      label: "Branch",
+      value: "fix/settings-split-selectors",
+      mono: true,
+      copyValue: "fix/settings-split-selectors",
+    },
+    { label: "Elapsed", value: "11m 03s", mono: true },
+    { label: "Spend, estimated", value: "~$1.80", mono: true },
+    { label: "Dispatched by you" },
+  ],
+};
+
+export const ESCALATED_HEADING = {
+  ...HEADING,
+  status: "escalated",
+  statusIcon: Eye,
+  statusLabel: "Needs you",
+};
+
+export const FAILED_HEADING = {
+  ...HEADING,
+  status: "completed_failed",
+  statusIcon: X,
+  statusLabel: "Failed",
+};
+
+/** The first three steps, which are the same at every state below. */
+const BEHIND: RunTreeStep[] = [
+  {
+    id: "repro",
+    label: "Reproduction",
+    activity: "advanced",
+    status: "advanced",
+    elapsed: "1m 12s",
+    facts: [
+      {
+        label: "Produced",
+        paths: [{ directory: "packages/settings/test/", basename: "useColumnSelectors.test.ts" }],
+      },
+      { label: "Cleared", value: "test", named: "passed" },
+    ],
+  },
+  {
+    id: "root_cause",
+    label: "Root cause",
+    activity: "advanced",
+    status: "advanced",
+    elapsed: "3m 40s",
+    facts: [
+      { label: "Attempt 1", value: "refused", named: "refused" },
+      { label: "Attempt 2", value: "advanced", named: "advanced" },
+      {
+        label: "Produced",
+        paths: [{ directory: `.armada/artifacts/${JOB}/`, basename: "root_cause.md" }],
+      },
+    ],
+  },
+];
+
+/** The three steps ahead, which nothing has reached at any state below. */
+const AHEAD: RunTreeStep[] = [
+  {
+    id: "consumers",
+    label: "Check the consumers still compile",
+    activity: "not_started",
+    facts: [],
+    factsAbsent: "This step has not run, so it has produced nothing.",
+  },
+  {
+    id: "land",
+    label: "Land",
+    activity: "not_started",
+    locked: true,
+    facts: [],
+    factsAbsent: "This step has not run, so it has produced nothing.",
+  },
+];
+
+/** The run while the Drone is working on Fix. */
+export const RUN_RUNNING: RunTreeStep[] = [
+  ...BEHIND,
+  {
+    id: "fix",
+    label: "Fix",
+    activity: "running",
+    status: "running",
+    elapsed: "6m 11s",
+    current: true,
+    factsOpen: true,
+    facts: [
+      { label: "Produced", value: "3 files · +94 −31" },
+      { label: "Checks", value: "not run" },
+      { label: "Judge", value: "2 criteria" },
+    ],
+  },
+  {
+    id: "regression_verify",
+    label: "Regression check",
+    activity: "not_started",
+    facts: [],
+    factsAbsent: "This step has not run, so it has produced nothing.",
+  },
+  ...AHEAD,
+];
+
+/** The run once Regression check has cleared everything mechanical. */
+export const RUN_WAITING: RunTreeStep[] = [
+  ...BEHIND,
+  { id: "fix", label: "Fix", activity: "advanced", status: "advanced", elapsed: "6m 11s", facts: [] },
+  {
+    id: "regression_verify",
+    label: "Regression check",
+    activity: "awaiting_human",
+    status: "waiting on you",
+    elapsed: "2m 04s",
+    current: true,
+    factsOpen: true,
+    facts: [
+      { label: "Checks", value: "2 of 2 passed", named: "passed" },
+      { label: "Judge", value: "2 of 2 met", named: "passed" },
+      { label: "Waiting", value: "on you · 2m 04s" },
+    ],
+  },
+  ...AHEAD,
+];
+
+/** The run while a failed Check is being repaired by the Drone that caused it. */
+export const RUN_REPAIRING: RunTreeStep[] = [
+  ...BEHIND,
+  { id: "fix", label: "Fix", activity: "advanced", status: "advanced", elapsed: "6m 11s", facts: [] },
+  {
+    id: "regression_verify",
+    label: "Regression check",
+    activity: "retrying",
+    status: "retrying",
+    elapsed: "1m 09s",
+    current: true,
+    factsOpen: true,
+    facts: [
+      { label: "Attempt 1", value: "test failed · exit 101", named: "failed" },
+      { label: "Attempt 2", value: "running" },
+      { label: "Checks", value: "1 of 2 failed", named: "failed" },
+    ],
+  },
+  ...AHEAD,
+];
+
+/** The run once three attempts at the same failure are spent. */
+export const RUN_STOPPED: RunTreeStep[] = [
+  ...BEHIND,
+  { id: "fix", label: "Fix", activity: "advanced", status: "advanced", elapsed: "6m 11s", facts: [] },
+  {
+    id: "regression_verify",
+    label: "Regression check",
+    activity: "stopped",
+    status: "retries spent",
+    elapsed: "6m 40s",
+    current: true,
+    factsOpen: true,
+    facts: [
+      { label: "Attempt 1", value: "same failure", named: "failed" },
+      { label: "Attempt 2", value: "same failure", named: "failed" },
+      { label: "Attempt 3", value: "same failure", named: "failed" },
+      { label: "Held", value: "retries spent · waiting on you" },
+    ],
+  },
+  ...AHEAD,
+];
+
+/** The run where the Check ended the Job. Nothing below it ever ran. */
+export const RUN_FAILED: RunTreeStep[] = [
+  ...BEHIND,
+  { id: "fix", label: "Fix", activity: "advanced", status: "advanced", elapsed: "6m 11s", facts: [] },
+  {
+    id: "regression_verify",
+    label: "Regression check",
+    activity: "failed",
+    status: "failed",
+    elapsed: "2m 51s",
+    current: true,
+    factsOpen: true,
+    facts: [
+      { label: "Checks", value: "test failed · exit 101", named: "failed" },
+      { label: "Judge", value: "not reached" },
+      { label: "Job", value: "completed_failed", named: "failed" },
+    ],
+  },
+];
+
+const PREVIEW: ActivityEntry[] = [
+  { id: "1", at: "14:22:07", actor: "armada", summary: "Go on to Implement." },
+  {
+    id: "2",
+    at: "14:26:31",
+    actor: "drone",
+    summary: "Edit",
+    subject: "packages/settings/src/selectors.ts",
+  },
+  {
+    id: "3",
+    at: "14:29:40",
+    actor: "drone",
+    summary: "Bash",
+    subject: "cargo build --workspace --locked",
+    output: [
+      "$ cargo build --workspace --locked",
+      "   Compiling armada-settings v0.1.0 (packages/settings)",
+      "   Compiling armada-fleet v0.1.0 (crates/fleet)",
+      "    Finished `dev` profile [unoptimized] in 47.61s",
+    ].join("\n"),
+    ran: `exit 0 · 47.61s · in ${WORKTREE}`,
+  },
+  {
+    id: "4",
+    at: "14:30:28",
+    actor: "fleet",
+    summary: "Heartbeat — the Drone has been quiet for 48 seconds",
+  },
+  { id: "5", at: "14:31:58", actor: "drone", summary: "thinking" },
+];
+
+const WHOLE: ActivityEntry[] = [
+  PREVIEW[0]!,
+  {
+    id: "1b",
+    at: "14:22:44",
+    actor: "drone",
+    summary:
+      "Splitting the selector block into its own module so the tests can import it without the store.",
+  },
+  { id: "1c", at: "14:23:11", actor: "drone", summary: "Read", subject: "packages/settings/src/reducer.ts" },
+  ...PREVIEW.slice(1),
+];
+
+const PRODUCED = (
+  <ChangedFiles
+    emptyNote="This drone has not changed anything yet."
+    files={[
+      { path: "packages/settings/src/selectors.ts", change: "modified" },
+      { path: "packages/settings/src/reducer.ts", change: "modified" },
+      { path: "packages/settings/src/index.ts", change: "added" },
+    ]}
+  />
+);
+
+/**
+ * The story, in the order it happened. **Same three chapters at every state** —
+ * what changes is which one is the reason you are here.
+ */
+export const CHAPTERS: StepChapter[] = [
+  {
+    id: "instructions",
+    ordinal: 1,
+    title: "Drone instructions",
+    summary: "14:22:07 · 2 criteria and what it was given",
+    preview:
+      "Move the selector block into its own module so the tests can import it without constructing " +
+      "the store. Do not change reducer behaviour.",
+  },
+  {
+    id: "log",
+    ordinal: 2,
+    title: "Activity log",
+    summary: "live · 47 entries · every line opens",
+    preview: <ActivityLog entries={PREVIEW} />,
+    content: <ActivityLog entries={WHOLE} />,
+    openLabel: "Open the log — all 47 entries",
+  },
+  {
+    id: "produced",
+    ordinal: 3,
+    title: "Produced",
+    summary: "3 files · +94 −31 · all inside the plan",
+    preview: PRODUCED,
+    content: PRODUCED,
+    openLabel: "Open the diff — 3 files",
+  },
+];
+
+/** The stream on the step whose Check failed, with Fleet's own hand-back in it. */
+export const REPAIR_CHAPTERS: StepChapter[] = [
+  {
+    id: "instructions",
+    ordinal: 1,
+    title: "Drone instructions",
+    summary: "14:44:20",
+    preview: "Run the regression suite and fix anything it turns up.",
+  },
+  {
+    id: "log",
+    ordinal: 2,
+    title: "Activity log",
+    summary: "88 entries · ended 14:47:11",
+    openLabel: "Open the log — all 88 entries",
+    preview: (
+      <ActivityLog
+        entries={[
+          {
+            id: "r1",
+            at: "14:46:02",
+            actor: "drone",
+            summary: "Bash",
+            subject: "cargo nextest run --workspace",
+          },
+          {
+            id: "r2",
+            at: "14:47:09",
+            actor: "fleet",
+            summary: "Check failed — 3 of 2034 tests. Handed back to the Drone, attempt 2 of 3.",
+            subject: "test",
+            named: "failed",
+            output: [
+              "FAIL settings::selectors::visible_manifests_memoises",
+              "  expected the same reference on repeat calls, got a new object",
+              "and 2 more",
+            ].join("\n"),
+            ran: `exit 101 · 1m 22s · in ${WORKTREE}`,
+          },
+        ]}
+        openId="r2"
+      />
+    ),
+    content: <ActivityLog entries={WHOLE} />,
+  },
+  {
+    id: "produced",
+    ordinal: 3,
+    title: "Produced",
+    summary: "4 files · being repaired",
+    preview:
+      "The work is on fix/settings-split-selectors and the Drone is editing it now. Nothing was " +
+      "thrown away and nothing was rolled back.",
+    content: PRODUCED,
+    openLabel: "Open the diff — 4 files",
+  },
+];
