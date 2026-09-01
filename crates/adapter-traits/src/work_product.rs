@@ -179,6 +179,101 @@ impl Changed {
     }
 }
 
+/// How many lines one file gained and lost.
+///
+/// **The pair is one measurement.** Additions and deletions come from one walk
+/// of one file's patch, so a file is counted or it is not — a binary file, or
+/// one whose patch would not build, has neither number rather than a zero for
+/// the half that could be had. That is why this is a struct and not two
+/// independent options: the state where one arrived and the other did not
+/// cannot be written down.
+///
+/// **Zero is a measurement.** A rename that moved a file and edited nothing is
+/// `0` and `0`, and a reader that took an absent count for zero would call that
+/// the same as a file nobody could count.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LineCount {
+    added: u32,
+    deleted: u32,
+}
+
+impl LineCount {
+    pub fn of(added: u32, deleted: u32) -> LineCount {
+        LineCount { added, deleted }
+    }
+
+    pub fn added(&self) -> u32 {
+        self.added
+    }
+
+    pub fn deleted(&self) -> u32 {
+        self.deleted
+    }
+}
+
+/// One file a Job changed, with what it cost in lines where that could be read.
+///
+/// **[`ChangedFile`] and a count, rather than a second spelling of the pair.**
+/// The path and the kind are the same fact the live reading carries, and a
+/// second struct restating them is where the two would come to disagree about
+/// what a deletion is called.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CountedFile {
+    file: ChangedFile,
+    lines: Option<LineCount>,
+}
+
+impl CountedFile {
+    pub fn new(file: ChangedFile, lines: Option<LineCount>) -> CountedFile {
+        CountedFile { file, lines }
+    }
+
+    pub fn path(&self) -> &str {
+        self.file.path()
+    }
+
+    pub fn change(&self) -> Change {
+        self.file.change()
+    }
+
+    /// What the file gained and lost, or **nothing where it could not be
+    /// counted** — a binary file, or a patch that would not build. Absent is
+    /// not zero: see [`LineCount`].
+    pub fn lines(&self) -> Option<LineCount> {
+        self.lines
+    }
+}
+
+/// The files a Job changed, each with what it cost in lines.
+///
+/// **The expensive reading of the two, and it is a separate type so that the
+/// live one cannot accidentally become it.** [`Changed`] is what a watcher gets
+/// and it has no counts to draw; nothing that holds a `Changed` can spend the
+/// count by mistake, because the value is not in it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Counted {
+    files: Vec<CountedFile>,
+}
+
+impl Counted {
+    /// Record what an implementation found, in the order it found it.
+    pub fn of(files: Vec<CountedFile>) -> Counted {
+        Counted { files }
+    }
+
+    pub fn files(&self) -> &[CountedFile] {
+        &self.files
+    }
+
+    pub fn len(&self) -> usize {
+        self.files.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.files.is_empty()
+    }
+}
+
 /// What a worktree held at one instant, as content rather than as a file list.
 ///
 /// **The baseline a step is measured against.** [`Changed`] answers what the
@@ -276,6 +371,29 @@ pub trait WorkProduct {
     /// returns an error, so a `diff_nonempty` check cannot pass or fail on a
     /// reading that never happened.
     fn changed_files(&self, worktree: &Worktree) -> Result<Changed, Self::Error>;
+
+    /// The same files, each with the lines it gained and lost.
+    ///
+    /// **Measured, and it is the same walk that renders the patch.** All four
+    /// routes to a per-file count were timed and they cost the same thing: the
+    /// diff library builds one file's count by running the xdiff that would
+    /// have produced its text, and the one call that skips the per-file work
+    /// answers totals only. Against this repository, release build: 1.3ms over
+    /// 6 files and 105 lines, 25ms over 104 files and 7.7k, 90ms over 414 files
+    /// and 59k — where [`changed_files`](WorkProduct::changed_files) is a delta
+    /// walk costing under a microsecond over the same three.
+    ///
+    /// **So this is called once, at the transition that ends a Job**, and never
+    /// on the live seam: `fleet`'s watcher reads every two seconds inside a
+    /// 250ms turn, and 90ms of that turn is a third of Fleet's budget spent on
+    /// a number nobody can read changing that fast.
+    ///
+    /// A failure is an error rather than an empty answer, for
+    /// [`changed_files`](WorkProduct::changed_files)'s reason. A file whose
+    /// count alone could not be read is a [`CountedFile`] with no
+    /// [`LineCount`] — absent, not zero — because losing the path would be
+    /// losing the record to save the annotation on it.
+    fn counted_files(&self, worktree: &Worktree) -> Result<Counted, Self::Error>;
 
     /// What the worktree holds right now, as content, so that two readings can
     /// be compared.

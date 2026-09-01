@@ -7,6 +7,14 @@
 //! the whole risk in this capability is a repository read on a 250ms loop that
 //! nobody asked for and nobody is reading.
 //!
+//! # Over 500 lines, and it stays one file
+//!
+//! The live reading and the kept record are one subject: what makes the record
+//! affordable is precisely that the live seam does not take it, and the test
+//! that proves the count happens once counts the live readings in the same
+//! Fleet to say so. Splitting them would put the two halves of one claim in two
+//! files and leave neither able to state it.
+//!
 //! # The clock is held rather than ticking
 //!
 //! `Ticking` answers a later second on every call and a turn calls it more than
@@ -449,5 +457,117 @@ async fn a_drone_that_changed_nothing_is_recorded_as_having_changed_nothing() {
     assert!(
         footprint.files.is_empty(),
         "present and empty, which is not the same sentence as absent"
+    );
+}
+
+/// A worktree whose files carry what each gained and lost — and one that
+/// nothing could count, which is the row that must not read as a zero.
+fn three_counted() -> FakeWorkProduct {
+    FakeWorkProduct::counting(&[
+        ("src/parse.rs", Change::Modified, Some((61, 4))),
+        ("src/tokens.rs", Change::Added, Some((33, 0))),
+        ("assets/logo.png", Change::Added, None),
+    ])
+}
+
+/// **The cost claim, asserted rather than inherited.** Counting is the walk
+/// that renders the patch — 25ms over a hundred files — so it is paid once, at
+/// the transition that ends the Job, however long anybody watched. The live
+/// readings in the same run are what give the number something to be one
+/// against.
+#[tokio::test]
+async fn the_lines_are_counted_once_when_the_job_stops_and_never_on_a_turn() {
+    let home = TempDir::new();
+    let clock = Held::at_nine();
+    let fleet = a_fleet_reading(&home, three_counted(), Arc::clone(&clock), None);
+    let _watching = fleet.events().subscribe();
+    let job = started(&fleet, &home).await;
+
+    for _ in 0..4 {
+        clock.advance(10);
+        fleet.turn().await.expect("a turn");
+    }
+    assert_eq!(fleet.work().listed().len(), 4, "four live readings");
+    assert!(
+        fleet.work().counted().is_empty(),
+        "and not one of them counted a line"
+    );
+
+    fleet.kill_job(&job).await.expect("a terminal status");
+
+    assert_eq!(
+        fleet.work().counted().len(),
+        1,
+        "once per Job, on the transition that ended it"
+    );
+    assert_eq!(
+        fleet.work().listed().len(),
+        4,
+        "and the terminal reading is not a live one"
+    );
+}
+
+/// **What the counts are for.** A finished Job's footprint says how much of
+/// each file moved, and the file nothing could count carries no numbers rather
+/// than zeroes — which is what lets a surface draw a real zero at all.
+#[tokio::test]
+async fn a_finished_jobs_record_says_what_each_file_gained_and_lost() {
+    let home = TempDir::new();
+    let clock = Held::at_nine();
+    let fleet = a_fleet_reading(&home, three_counted(), Arc::clone(&clock), None);
+    let job = started(&fleet, &home).await;
+
+    fleet.kill_job(&job).await.expect("a terminal status");
+
+    let detail = fleet
+        .get_job(ipc::JobId::from(&job))
+        .await
+        .expect("the Job is served");
+    let footprint = detail.footprint.expect("a footprint was recorded");
+    assert_eq!(
+        footprint
+            .files
+            .iter()
+            .map(|file| (file.path.as_str(), file.lines))
+            .collect::<Vec<(&str, Option<ipc::LineCount>)>>(),
+        vec![
+            (
+                "src/parse.rs",
+                Some(ipc::LineCount {
+                    added: 61,
+                    deleted: 4
+                })
+            ),
+            (
+                "src/tokens.rs",
+                Some(ipc::LineCount {
+                    added: 33,
+                    deleted: 0
+                })
+            ),
+            ("assets/logo.png", None),
+        ]
+    );
+}
+
+/// **The live seam is unchanged, and that is a property rather than an
+/// omission.** A watcher gets paths and change kinds; the counts are on the
+/// record and nowhere else, because the reading that carries them costs the
+/// patch.
+#[tokio::test]
+async fn the_live_event_carries_no_counts() {
+    let home = TempDir::new();
+    let clock = Held::at_nine();
+    let fleet = a_fleet_reading(&home, three_counted(), Arc::clone(&clock), None);
+    let mut watching = fleet.events().subscribe();
+    started(&fleet, &home).await;
+
+    fleet.turn().await.expect("a turn");
+    let published = drained(&mut watching).await;
+
+    assert_eq!(published[0].files.len(), 3);
+    assert!(
+        fleet.work().counted().is_empty(),
+        "the event was assembled without ever asking what a line cost"
     );
 }

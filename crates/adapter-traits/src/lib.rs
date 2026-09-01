@@ -52,7 +52,9 @@ pub use harness::{
 };
 pub use judge::{Ask, JudgeCall, ModelClient};
 pub use secret::Secret;
-pub use work_product::{Change, Changed, ChangedFile, Footprint, Patch, WorkProduct};
+pub use work_product::{
+    Change, Changed, ChangedFile, Counted, CountedFile, Footprint, LineCount, Patch, WorkProduct,
+};
 pub use worktree::{derived, Worktree, WorktreeSpec, WorktreeSpecRefused};
 
 /// The agent harness: what a Drone is started as, and what its output means.

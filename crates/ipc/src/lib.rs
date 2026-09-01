@@ -95,6 +95,6 @@ pub use turn::{
 pub use version::{ProtocolVersion, Skew, PROTOCOL_VERSION};
 pub use waiting::{AskedOption, ChosenAnswer, QuestionInFlight, RedirectInFlight, RedirectWaiting};
 pub use work::{
-    ChangesRequested, DeclaredPlan, JobDiff, JobEvidence, JobFootprint, Overruled, Submitted,
-    TouchedFile, Work,
+    ChangesRequested, DeclaredPlan, JobDiff, JobEvidence, JobFootprint, LineCount, Overruled,
+    Submitted, TouchedFile, Work,
 };

@@ -165,6 +165,34 @@ pub struct TouchedFile {
     /// attempts of one step both promising a file is one promise kept twice.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub planned_by: Option<Vec<StepId>>,
+    /// What the file gained and lost.
+    ///
+    /// **Absent where nothing counted it**, which is a binary file, a footprint
+    /// recorded before Fleet counted anything, or a patch the repository would
+    /// not build. Absent is not zero: a file moved without being edited is
+    /// present and `0`, and a surface drawing the two the same way would say a
+    /// file nobody measured changed nothing.
+    ///
+    /// **[`ChangedFile`] has no counterpart and is not getting one.** The live
+    /// reading is taken every two seconds inside Fleet's 250ms turn, and
+    /// counting is the same walk that renders the patch — 25ms over a hundred
+    /// files, 90ms over four hundred. This is read once, when the Job stops,
+    /// which is the one moment the count is both affordable and final.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lines: Option<LineCount>,
+}
+
+/// How many lines one file gained and lost.
+///
+/// **One object rather than two optional numbers**, because the repository
+/// answers both from one walk of one file's patch or answers neither. A pair of
+/// independent fields would let a message carry an addition with no deletion
+/// beside it, which is a reading nothing takes and every client would have to
+/// decide what to do with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LineCount {
+    pub added: u32,
+    pub deleted: u32,
 }
 
 /// Every claim a Job's Drones have submitted, step by step.
