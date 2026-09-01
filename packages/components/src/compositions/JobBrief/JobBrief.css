@@ -1,13 +1,17 @@
-/* Job brief — what the Job was told, and what done means for it. Sits inside
-   the region that names where the work is, above the paths. */
+/* Job brief — what the Job was told, and what done means for it. Sits on
+   whatever surface holds it and carries none of its own.
+
+   It had a well, and job detail drew that well inside a region already
+   labelled BRIEF: a caption over a darker card holding one sentence, where the
+   drawing has the label inline and the sentence beside it on the panel's own
+   surface. A brief is not a record being read against the thing it describes —
+   it *is* the thing the rest of the screen is read against — so there is
+   nothing for a second surface to separate it from. */
 .armada-job-brief {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--bg-sunken);
 }
 
 .armada-job-brief__block {

@@ -58,6 +58,12 @@ export type JobBriefProps = {
    * before the brief it is about to become part of.
    */
   waiting?: ReactNode;
+  /**
+   * The sub-label over each half. **`null` draws no element at all**, not an
+   * empty one: job detail names the region `Brief` and puts the sentence
+   * beside it, and a blank span there is a line box of dead space above the
+   * one line the region exists to show.
+   */
   criteriaLabel?: ReactNode;
   factsLabel?: ReactNode;
   waitingLabel?: ReactNode;
@@ -94,14 +100,14 @@ export function JobBrief({
           is sitting unread. */}
       {waiting === undefined ? null : (
         <div className="armada-job-brief__block" data-waiting>
-          <span className="armada-job-brief__label">{waitingLabel}</span>
+          <Label>{waitingLabel}</Label>
           <p className="armada-job-brief__facts">{waiting}</p>
         </div>
       )}
 
       {only === "facts" ? null : (
         <div className="armada-job-brief__block">
-          <span className="armada-job-brief__label">{criteriaLabel}</span>
+          <Label>{criteriaLabel}</Label>
           {criteria.length === 0 ? (
             <p className="armada-job-brief__note">{criteriaAbsent}</p>
           ) : (
@@ -124,7 +130,7 @@ export function JobBrief({
 
       {only === "criteria" ? null : (
         <div className="armada-job-brief__block">
-          <span className="armada-job-brief__label">{factsLabel}</span>
+          <Label>{factsLabel}</Label>
           {facts === undefined ? (
             <p className="armada-job-brief__note">{factsAbsent}</p>
           ) : (
@@ -134,4 +140,14 @@ export function JobBrief({
       )}
     </div>
   );
+}
+
+/**
+ * A half's sub-label, or nothing where the caller passed `null`. The element
+ * goes with the text: an empty span still occupies its line box, which is the
+ * gap job detail had between the region's own label and the sentence under it.
+ */
+function Label({ children }: { children: ReactNode }) {
+  if (children === null) return null;
+  return <span className="armada-job-brief__label">{children}</span>;
 }

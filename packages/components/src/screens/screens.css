@@ -588,10 +588,31 @@
   text-wrap: pretty;
 }
 
+/* The Job's brief, at the top of the panel. **A line, not a card**: the label
+   inline and the sentence beside it, on the panel's own surface.
+
+   It was a caption stacked over `JobBrief`'s well, which put a darker card
+   inside a region already labelled BRIEF — a second surface the drawing does
+   not have, holding one sentence. Baseline-aligned so the caps label sits on
+   the sentence's first line however far the sentence wraps, and the label is
+   `flex: none` so the prose takes every remaining pixel. */
 .armada-inside__brief {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-inside__brief > .armada-screen__eyebrow {
+  flex: none;
+}
+
+/* The brief itself, or the sentence saying why there is none. `minmax(0, 1fr)`
+   in flex terms: it absorbs every pixel the label does not take, and `min-width:
+   0` is what lets a long unbroken word wrap rather than push the pair wider
+   than the panel. */
+.armada-inside__brief > :not(.armada-screen__eyebrow) {
+  flex: 1;
   min-width: 0;
 }
 

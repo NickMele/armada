@@ -66,14 +66,22 @@ export const WHERE: JobLogReferenceRow[] = [
   { iconLabel: "Drone", value: DRONE, copyValue: DRONE },
 ];
 
+/**
+ * The brief the panel opens with — one line, on the panel's own surface.
+ *
+ * **`only: "facts"` and no label**, which is what the surface passes: the
+ * region is called `Brief` and the sentence follows it, so a second heading
+ * over one line is the sub-heading this screen removed. The criteria are what
+ * the Judge stage of the phase strip opens to, with each one's verdict beside
+ * it, which is one place rather than two.
+ */
 export const BRIEF: JobBriefProps = {
   facts:
     "The selectors cannot be tested without constructing the whole store, which makes every " +
     "settings test an integration test.",
-  criteria: [
-    { text: "Selectors import without the store.", source: "judge" },
-    { text: "No behaviour change in the reducer.", source: "judge" },
-  ],
+  criteria: [],
+  only: "facts",
+  factsLabel: null,
 };
 
 export const HEADING = {

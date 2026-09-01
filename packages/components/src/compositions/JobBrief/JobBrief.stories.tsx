@@ -67,3 +67,18 @@ export const CriteriaOnly: Story = {
 export const FactsOnly: Story = {
   args: { criteria: [], facts, only: "facts" },
 };
+
+/**
+ * The shape job detail draws — the sentence alone, with no label of its own.
+ *
+ * **The region is called `Brief` and the sentence follows it**, so a second
+ * heading over one line is the sub-heading that screen removed. `null` draws no
+ * element rather than an empty one: a blank span still occupies its line box,
+ * which put dead space between the region's label and the one line under it.
+ *
+ * There is no surface here. The panel is the surface, and a card inside a
+ * region already labelled BRIEF is the nested well the drawing does not have.
+ */
+export const AsALine: Story = {
+  args: { criteria: [], facts, only: "facts", factsLabel: null },
+};
