@@ -635,7 +635,7 @@ a modifier.
 
 ```
 j / k / ↓ / ↑  move focus
-Enter          open the focused job. Acts on nothing
+Enter          open the focused job. Acts on nothing   (list only)
 o              open. The same act, named so the palette can display it
 r              review
 t              attest

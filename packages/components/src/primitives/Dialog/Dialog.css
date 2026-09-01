@@ -23,8 +23,8 @@
   --armada-dialog-width: var(--w-dialog-wide);
 }
 
-/* No --scrim token either. Mixed from --bg-sunken rather than written as a
- * literal, so the value at least tracks the ground it sits over. */
+/* --scrim carries the value now. It was mixed here and in Sheet, which is
+ * two copies of one ground. */
 .armada-dialog-scrim {
   position: fixed;
   inset: 0;
@@ -33,7 +33,7 @@
   align-items: center;
   justify-content: center;
   padding: var(--space-6);
-  background: color-mix(in srgb, var(--bg-sunken) 62%, transparent);
+  background: var(--scrim);
 }
 
 /* max-height is the scrim's content box, which is the window less its inset —
