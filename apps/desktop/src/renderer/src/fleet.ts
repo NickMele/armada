@@ -11,9 +11,9 @@
 // This was `FleetBar.tsx` and drew the bar itself. The bar is
 // `Compositions/Status bar` now, so what is left is the reading.
 
-import type { Connection } from "../../shared/bridge";
-import { PROTOCOL_VERSION } from "../../shared/generated/protocol-version";
-import { spoken } from "../../shared/version";
+import type { Connection } from "@armada/protocol";
+import { PROTOCOL_VERSION } from "@armada/protocol";
+import { spoken } from "@armada/protocol";
 
 /** Sentence, detail and hue. The detail is machine-derived and renders in mono. */
 export type Statement = {

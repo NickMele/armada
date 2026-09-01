@@ -33,14 +33,9 @@ import type { ReactNode } from "react";
 import { Button } from "@armada/components";
 import type { PhaseStage, PhaseStageRow, PhaseStripProps } from "@armada/components";
 
-import {
-  ADVANCE_GATE,
-  CHECK_ADVANCES,
-  CHECK_OUTCOME,
-  CRITERION_VERDICT_JUDGE,
-} from "../../shared/generated/vocabulary";
-import type { CheckRun, Criterion, Judged, StepDetail } from "../../shared/protocol";
-import type { Kept } from "../../shared/artifacts";
+import { ADVANCE_GATE, CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_JUDGE } from "@armada/components";
+import type { CheckRun, Criterion, Judged, StepDetail } from "@armada/protocol";
+import type { Kept } from "@armada/protocol";
 import { commandOf, nameOf } from "./declared";
 import { openArtifact } from "./opening";
 

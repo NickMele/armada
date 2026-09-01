@@ -14,17 +14,9 @@
 // **Bridge never talks to a Drone.** Every act below names Fleet — which is
 // what makes "kill the Drone" a request to the daemon that spawned it.
 
-import type { BridgeState, ClearOutcome, Draft, Outcome } from "../shared/bridge";
-import type {
-  ChosenAnswer,
-  FileReport,
-  JobSummary,
-  Overruled,
-  ProposeJob,
-  Redirection,
-  Redispatched,
-  Report,
-} from "../shared/protocol";
+import type { BridgeState } from "../shared/bridge";
+import type { ClearOutcome, Draft, Outcome } from "@armada/protocol";
+import type { ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report } from "@armada/protocol";
 import { ask, isJobSummary, type Answer } from "./request";
 import { decide, type Decision } from "./review";
 

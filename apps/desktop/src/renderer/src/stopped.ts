@@ -11,8 +11,8 @@
 // which Check ended it. Every part of it is served — the step's label, the
 // run's outcome, and the file it wrote.
 
-import { CHECK_ADVANCES, CHECK_OUTCOME } from "../../shared/generated/vocabulary";
-import type { CheckRun, JobDetail as JobWhole } from "../../shared/protocol";
+import { CHECK_ADVANCES, CHECK_OUTCOME } from "@armada/components";
+import type { CheckRun, JobDetail as JobWhole } from "@armada/protocol";
 import { ordered } from "./facts";
 
 /** Where a Job that is over stopped, and what the gate found there. */

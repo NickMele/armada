@@ -34,11 +34,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ClipboardList } from "lucide-react";
 import { Select, TheShell, type FleetState, type StatusBarProps } from "@armada/components";
 
-import type { Connection } from "../../shared/bridge";
-import type { FleetCapacity, JobSummary } from "../../shared/protocol";
-import type { ManifestSummary } from "../../shared/setup";
+import type { Connection } from "@armada/protocol";
+import type { FleetCapacity, JobSummary } from "@armada/protocol";
+import type { ManifestSummary } from "@armada/protocol";
 import type { Statement } from "./fleet";
-import { ADMISSION_HOLD } from "../../shared/generated/vocabulary";
+import { ADMISSION_HOLD } from "@armada/components";
 import { plural } from "./board";
 
 /** The one surface in the rail. Its glyph is the registry's for Job Board. */

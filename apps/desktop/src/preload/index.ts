@@ -1,11 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 import { CHANNELS } from "../shared/bridge";
-import type { BridgeApi, BridgeState, CallRead, ClearOutcome, Draft, Outcome } from "../shared/bridge";
-import type { FileReport } from "../shared/protocol";
-import type { Artifact, Opened } from "../shared/artifacts";
-import type { ProtocolVersion } from "../shared/version";
-import { PROTOCOL_VERSION } from "../shared/generated/protocol-version";
+import type { BridgeApi, BridgeState } from "../shared/bridge";
+import type { CallRead, ClearOutcome, Draft, Outcome } from "@armada/protocol";
+import type { FileReport } from "@armada/protocol";
+import type { Artifact, Opened } from "@armada/protocol";
+import type { ProtocolVersion } from "@armada/protocol";
+import { PROTOCOL_VERSION } from "@armada/protocol";
 
 // The whole surface the renderer is allowed to see.
 //

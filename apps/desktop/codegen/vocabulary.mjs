@@ -28,26 +28,14 @@ const FIELDS = join(repo, "crates", "core-model", "domain", "job-fields.toml");
 const STATUSES = join(repo, "crates", "core-model", "domain", "job-statuses.toml");
 const OUTCOMES = join(repo, "crates", "core-model", "domain", "check-outcomes.toml");
 const VERSION = join(repo, "protocol-version.toml");
-const OUT = join(here, "..", "src", "shared", "generated", "vocabulary.ts");
+// The vocabulary is a rendering and not a wire type: it carries the glyph each
+// variant draws as, so it imports `lucide-react`. It belongs with the
+// components that render it, and `@armada/protocol` stays dependency-free.
+const OUT = join(repo, "packages", "components", "src", "generated", "vocabulary.ts");
 // Its own file, and not a second export from the one above: the preload and the
 // main process both read the version, and neither may pull a glyph — a React
 // component — across the process boundary to get at a number.
-const OUT_VERSION = join(here, "..", "src", "shared", "generated", "protocol-version.ts");
-// The same map, emitted a second time into the component library.
-//
-// **Two emitted files are not the second vocabulary this script exists to
-// prevent.** That is a verb typed into a component by hand; this is one
-// generator reading one registry and writing the same answer twice, so the two
-// cannot disagree. It is here because the dependency only runs one way —
-// `apps/desktop` depends on `@armada/components`, so a story cannot import the
-// app's copy — and a screen story that has to draw an escalated Job needs the
-// escalation reason's verb and glyph as much as Bridge does. Before this, it
-// wrote `Needs you` into a fixture and the gallery drew a badge naming no
-// status at all, which is https://github.com/NickMele/armada/issues/294.
-//
-// One file rather than a slice of one: choosing which vocabularies a story may
-// read is a decision, and a generator does not get to make it.
-const OUT_COMPONENTS = join(repo, "packages", "components", "src", "generated", "vocabulary.ts");
+const OUT_VERSION = join(repo, "packages", "protocol", "src", "generated", "protocol-version.ts");
 
 // The vocabularies a surface renders. `criterion_verdict_attested` is left out
 // because nothing serves an attestation.
@@ -438,7 +426,7 @@ const versionModule = [
   "// file changes.",
   "//",
   "// Which number moved decides what a mismatch does — `skew` in",
-  "// `src/shared/version.ts` is the only comparison, and there is no bare number",
+  "// `version.ts` beside this file is the only comparison, and there is no bare",
   "// here to spell `!==` against.",
   "",
   `export const PROTOCOL_VERSION = { major: ${majorMatch[1]}, minor: ${minorMatch[1]} };`,
@@ -453,7 +441,6 @@ const versionModule = [
 // fifth.
 const EMITTED = [
   [OUT, vocabularyModule],
-  [OUT_COMPONENTS, vocabularyModule],
   [OUT_VERSION, versionModule],
 ];
 

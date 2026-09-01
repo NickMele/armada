@@ -22,8 +22,9 @@ import { useEffect, useState } from "react";
 import { Alert, Button, Dialog } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
-import type { BridgeState, Draft, Outcome } from "../../shared/bridge";
-import type { FileReport } from "../../shared/protocol";
+import type { BridgeState } from "../../shared/bridge";
+import type { Draft, Outcome } from "@armada/protocol";
+import type { FileReport } from "@armada/protocol";
 import { Boundary } from "./Boundary";
 import { CopiedToast, SaidToast, useCopied, useSaid } from "./CopiedToast";
 import { FailureBlock } from "./FailureSurface";

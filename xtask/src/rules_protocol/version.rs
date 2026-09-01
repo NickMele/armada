@@ -23,7 +23,7 @@ use std::path::Path;
 use crate::Report;
 
 const SOURCE: &str = "protocol-version.toml";
-const MIRROR: &str = "apps/desktop/src/shared/generated/protocol-version.ts";
+const MIRROR: &str = "packages/protocol/src/generated/protocol-version.ts";
 const CODEGEN: &str = "pnpm --filter @armada/desktop codegen";
 
 /// The keys the source file defines. It carries these two under no table, and

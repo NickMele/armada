@@ -73,9 +73,9 @@
 import { ActiveJobsList, BoardControls, BoardEmptyState, Button } from "@armada/components";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
-import type { JobSummary } from "../../shared/protocol";
-import type { WorkflowSummary } from "../../shared/setup";
+import { JOB_LIFECYCLE } from "@armada/components";
+import type { JobSummary } from "@armada/protocol";
+import type { WorkflowSummary } from "@armada/protocol";
 import {
   BOARD_SORTS,
   BOARD_TABS,

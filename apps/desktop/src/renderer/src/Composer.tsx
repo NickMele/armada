@@ -53,9 +53,9 @@ import {
   WorkflowRail,
 } from "@armada/components";
 
-import { URGENCIES } from "../../shared/generated/vocabulary";
-import type { Draft } from "../../shared/bridge";
-import type { ManifestSummary, ModelChoices, WorkflowSummary } from "../../shared/setup";
+import { URGENCIES } from "@armada/components";
+import type { Draft } from "@armada/protocol";
+import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
 import { previewOf } from "./preview";
 
 /** One staged file, as the composer holds it before `propose()` sends it on. */

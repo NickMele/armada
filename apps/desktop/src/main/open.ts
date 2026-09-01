@@ -27,11 +27,11 @@ import { shell } from "electron";
 import { stat } from "node:fs/promises";
 
 import type { BridgeState } from "../shared/bridge";
-import { artifactPath, isKept, repoOf } from "../shared/artifacts";
-import type { Artifact, Opened } from "../shared/artifacts";
+import { artifactPath, isKept, repoOf } from "@armada/protocol";
+import type { Artifact, Opened } from "@armada/protocol";
 import { chooseEditor, startEditor, whereIs } from "./editor";
 import type { Editor } from "./editor";
-import type { JobSummary } from "../shared/protocol";
+import type { JobSummary } from "@armada/protocol";
 
 /**
  * The Job by that id, from what main last published.

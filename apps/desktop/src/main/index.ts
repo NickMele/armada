@@ -5,9 +5,10 @@ import { join } from "node:path";
 
 import tokens from "@armada/tokens/tokens.json";
 import { CHANNELS, NOTHING_YET } from "../shared/bridge";
-import type { BridgeState, Draft } from "../shared/bridge";
-import type { FileReport } from "../shared/protocol";
-import type { Artifact } from "../shared/artifacts";
+import type { BridgeState } from "../shared/bridge";
+import type { Draft } from "@armada/protocol";
+import type { FileReport } from "@armada/protocol";
+import type { Artifact } from "@armada/protocol";
 import { FleetConnection } from "./connection";
 import { openArtifact } from "./open";
 

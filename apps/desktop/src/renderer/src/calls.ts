@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { CallRead } from "../../shared/bridge";
+import type { CallRead } from "@armada/protocol";
 
 /**
  * What one call's arguments are, as this window has them.

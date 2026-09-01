@@ -23,9 +23,9 @@
 import { useEffect, useState } from "react";
 import { Dialog, ReviewDecision, UnifiedDiff, type UnifiedDiffProps } from "@armada/components";
 
-import type { Diff, Evidence } from "../../shared/bridge";
-import type { JobSummary } from "../../shared/protocol";
-import type { Work } from "../../shared/work";
+import type { Diff, Evidence } from "@armada/protocol";
+import type { JobSummary } from "@armada/protocol";
+import type { Work } from "@armada/protocol";
 import {
   CHANGED_NOTHING,
   CONFIRM_REJECT,

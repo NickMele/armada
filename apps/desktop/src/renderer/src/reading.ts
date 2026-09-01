@@ -12,9 +12,9 @@
 
 import type { LucideIcon } from "lucide-react";
 
-import { ESCALATION_REASON, JOB_STATUS, QUEUED_REASON } from "../../shared/generated/vocabulary";
-import type { Rendering } from "../../shared/generated/vocabulary";
-import type { JobSummary } from "../../shared/protocol";
+import { ESCALATION_REASON, JOB_STATUS, QUEUED_REASON } from "@armada/components";
+import type { Rendering } from "@armada/components";
+import type { JobSummary } from "@armada/protocol";
 
 export type Reading =
   /** Everything the badge needs. The only shape that renders as a pill. */

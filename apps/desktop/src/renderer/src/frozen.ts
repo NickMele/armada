@@ -13,7 +13,7 @@
 
 import type { StepActivity } from "@armada/components";
 
-import { JOB_LIFECYCLE, JOB_STATUS } from "../../shared/generated/vocabulary";
+import { JOB_LIFECYCLE, JOB_STATUS } from "@armada/components";
 
 /**
  * The step states that claim the Job is still moving — being worked, or owed a

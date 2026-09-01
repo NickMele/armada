@@ -5,7 +5,7 @@
 //
 // `branch` is served. Where the work sits on disk is **derived**, from the
 // Job's id and the repository its Manifest was read from — see
-// `shared/artifacts.ts`, which owns that arithmetic for both sides. The
+// `@armada/protocol`'s `artifacts.ts`, which owns that arithmetic for both sides. The
 // architecture fixes the layout, says it is not configurable, and says any path
 // Fleet needs is derived rather than stored, so a path derived on this side is
 // the same path and not a guess.
@@ -37,12 +37,12 @@
 import { File, Folder, GitBranch } from "lucide-react";
 import type { JobBriefProps, JobLogReferenceRow, NotOpened } from "@armada/components";
 
-import type { Watched } from "../../shared/bridge";
-import { artifactPath, repoOf } from "../../shared/artifacts";
-import type { Artifact } from "../../shared/artifacts";
+import type { Watched } from "@armada/protocol";
+import { artifactPath, repoOf } from "@armada/protocol";
+import type { Artifact } from "@armada/protocol";
 import { openArtifact } from "./opening";
-import type { JobDetail as JobWhole, JobSummary } from "../../shared/protocol";
-import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
+import type { JobDetail as JobWhole, JobSummary } from "@armada/protocol";
+import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 
 export { repoOf };
 

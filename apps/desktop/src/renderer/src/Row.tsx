@@ -74,9 +74,9 @@ import { Button, JobRowStacked, SplitButton, StepBar } from "@armada/components"
 import type { JobRowField } from "@armada/components";
 import { GitBranch, Layers } from "lucide-react";
 
-import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
-import type { JobSummary } from "../../shared/protocol";
-import type { WorkflowSummary } from "../../shared/setup";
+import { JOB_LIFECYCLE } from "@armada/components";
+import type { JobSummary } from "@armada/protocol";
+import type { WorkflowSummary } from "@armada/protocol";
 import { absoluteOf, span } from "./duration";
 import { activityFor } from "./frozen";
 import { ROW_VERBS, verbOf } from "./keys";

@@ -1,0 +1,14 @@
+{
+  "name": "@armada/protocol",
+  "private": true,
+  "version": "0.0.0",
+  "description": "The Fleet wire, in TypeScript. Generated from the Rust domain; imports nothing.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}

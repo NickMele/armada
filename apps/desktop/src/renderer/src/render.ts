@@ -5,8 +5,8 @@
 // another. The choice is the one thing all three agree on, so it lives where
 // none of them owns it.
 
-import { ESCALATION_REASON, JOB_LIFECYCLE, JOB_STATUS } from "../../shared/generated/vocabulary";
-import type { JobSummary } from "../../shared/protocol";
+import { ESCALATION_REASON, JOB_LIFECYCLE, JOB_STATUS } from "@armada/components";
+import type { JobSummary } from "@armada/protocol";
 
 /**
  * Which render a Job takes. Four, because a Job waiting on a person to take its

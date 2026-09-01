@@ -6,104 +6,33 @@
 // import path, and this file is the shape of what crosses it.
 
 import type {
-  FileReport,
-  FleetCapacity,
-  JobDetail,
-  JobFilesChanged,
-  JobSummary,
-  Report,
-  ReportList,
-  UnreadableJob,
-  WireError,
-} from "./protocol";
-import type { ManifestSummary, ModelChoices, WorkflowSummary } from "./setup";
-import type { Artifact, Opened } from "./artifacts";
-import type { Recorded } from "./history";
-import type { Submitted, Work } from "./work";
-import type { CallArguments, Saw, Voice } from "./turn";
-import { connects, skew, spoken } from "./version";
-import type { ProtocolVersion, Skew } from "./version";
-import { PROTOCOL_VERSION } from "./generated/protocol-version";
+  CallRead,
+  ClearOutcome,
+  Connection,
+  Diff,
+  Draft,
+  Evidence,
+  Footprint,
+  History,
+  Holdings,
+  Observed,
+  Outcome,
+  ProtocolVersion,
+  Reports,
+  Skew,
+  Watched,
+  connectedTo,
+} from "@armada/protocol";
+import type { FileReport, FleetCapacity, JobDetail, JobFilesChanged, JobSummary, Report, ReportList, UnreadableJob, WireError } from "@armada/protocol";
+import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
+import type { Artifact, Opened } from "@armada/protocol";
+import type { Recorded } from "@armada/protocol";
+import type { Submitted, Work } from "@armada/protocol";
+import type { CallArguments, Saw, Voice } from "@armada/protocol";
+import { connects, skew, spoken } from "@armada/protocol";
+import { PROTOCOL_VERSION } from "@armada/protocol";
 
-/** Fleet, as its runtime file names it. Loopback plus `port` is the address. */
-export type FleetIdentity = {
-  /** Both numbers. Which one differs from Bridge's decides what happens. */
-  protocolVersion: ProtocolVersion;
-  pid: number;
-  port: number;
-  /** `ps -o lstart=` as it read when Fleet published the file. */
-  startedAt: string;
-};
 
-/**
- * Why the runtime file does not describe a live Fleet.
- *
- * Three, not one. Bridge renders the first two as "Fleet is not running" and
- * says which under it, because the third — a pid something else now holds — is
- * the case a bare liveness check gets wrong, and the consequence is a socket
- * opened against a port an unrelated program owns.
- */
-export type Absence =
-  | { why: "no_runtime_file"; path: string }
-  | { why: "pid_dead"; path: string; pid: number }
-  | { why: "pid_held_by_another"; path: string; pid: number; wrote: string; holder: string };
-
-/**
- * Why the runtime file could not be read at all. **None of these is "not
- * running"** — that is a fact about the world, and folding a failed read into
- * it tells a person Fleet is down on no evidence.
- */
-export type RuntimeFault =
-  | { why: "unreadable"; path: string; detail: string }
-  | { why: "undecodable"; path: string; detail: string }
-  | { why: "probe_failed"; path: string; pid: number; detail: string };
-
-/** Where Bridge's one connection is. */
-export type Connection =
-  | { state: "reading" }
-  | { state: "not_running"; absence: Absence }
-  | { state: "runtime_file_refused"; fault: RuntimeFault }
-  | { state: "connecting"; fleet: FleetIdentity }
-  /** The pid checks out and the socket does not answer. A different thing to do. */
-  | { state: "unreachable"; fleet: FleetIdentity; detail: string; sinceMs: number }
-  /**
-   * Fleet speaks a protocol Bridge will not connect over. Two readings, and
-   * they need different sentences: `incompatible` is a different protocol,
-   * `fleet_behind` is the same protocol missing additions Bridge now expects.
-   */
-  | {
-      state: "version_skew";
-      fleet: FleetIdentity;
-      why: Extract<Skew, "fleet_behind" | "incompatible">;
-      speaks: ProtocolVersion;
-      expected: ProtocolVersion;
-    }
-  /**
-   * Connected, and `skew` says whether there is a caveat on it.
-   *
-   * `fleet_ahead` is **not a failure** and must not render as one: everything
-   * Bridge draws is current and correct, and the only fact is that Fleet knows
-   * things this Bridge was built too early to ask about. Decided here, once, so
-   * no surface re-derives it.
-   */
-  | {
-      state: "connected";
-      fleet: FleetIdentity;
-      cursor: number;
-      skew: Extract<Skew, "same" | "fleet_ahead">;
-    };
-
-/**
- * A live connection, saying which of the two readings it is.
- *
- * Here rather than at the call site so nothing can publish `connected` without
- * deciding whether Fleet is ahead — and narrowed rather than cast, because the
- * two readings that refuse never reach a socket.
- */
-export function connectedTo(fleet: FleetIdentity, cursor: number): Connection {
-  const reading = skew({ fleet: fleet.protocolVersion, bridge: PROTOCOL_VERSION });
-  return { state: "connected", fleet, cursor, skew: connects(reading) ? reading : "same" };
-}
 
 /**
  * What every Bridge failure carries that is not about the failure — where the
@@ -260,225 +189,7 @@ export type BridgeState = {
   reports: Reports;
 };
 
-/**
- * `GET /reports`, where a surface asked for it.
- *
- * **Its own shape rather than a `JobRead`**, because it is not a read of a Job:
- * there is no id to check an answer against, which is the whole of what that
- * type exists to do. The four states are the same four, for the same reason —
- * "nobody asked" and "the read failed" are different things to draw.
- */
-export type Reports =
-  | { state: "none" }
-  | { state: "reading" }
-  | { state: "read"; list: ReportList }
-  | { state: "failed"; outcome: Outcome };
 
-/**
- * The last `job.files_changed` reading for the open Job.
- *
- * Two states and not four: nothing is fetched, so there is no reading and no
- * failed read. The event either arrived or it has not, and a surface says which
- * in its own words rather than sharing one sentence with a failed query.
- */
-export type Footprint =
-  | { state: "none" }
-  | { state: "read"; jobId: string; reading: JobFilesChanged };
-
-/**
- * One read of one route under one Job, in the four states every such read has.
- * `Read` is what the answer carries; the other three states carry no answer.
- *
- * **Four, because "nobody asked" and "the read failed" are different things to
- * draw** — a surface with one state for both says a Job has nothing where what
- * is true is that nothing was read.
- *
- * `main/reader.ts` is the only thing that moves a read through these, and the
- * reason this shape is named once rather than written out per read.
- */
-export type JobRead<Read> =
-  | { state: "none" }
-  | { state: "reading"; jobId: string }
-  | ({ state: "read"; jobId: string } & Read)
-  | { state: "failed"; jobId: string; outcome: Outcome };
-
-/**
- * `GET /jobs/:job_id/events` for one Job.
- *
- * **The rows are rendered, never replayed.** `crates/store/src/fold.rs` owns
- * the machine and is the only thing that may put an event back through
- * `Job::transition`; nothing on this side of the wire does.
- */
-export type History = JobRead<{ moves: Recorded[] }>;
-
-/**
- * `GET /jobs/:job_id/evidence` for one Job. **Empty is a real answer** rather
- * than `none`: no step submitted anything is a fact about the Job, not about
- * the read.
- */
-export type Evidence = JobRead<{ steps: Submitted[] }>;
-
-/**
- * `GET /jobs/:job_id/diff` for one Job.
- *
- * **`work` stays optional on `read`, keeping the wire's distinction.** Absent is
- * a Job with no worktree; present with an empty `files` is a Drone that changed
- * nothing. A shape that could not tell them apart would report a Job at the
- * approval gate as a Drone that wrote nothing.
- */
-export type Diff = JobRead<{ work?: Work }>;
-
-/**
- * One Job's turns, as `GET /jobs/:job_id/observe` answered.
- *
- * **Read-only, all the way down.** Nothing here has a command beside it and
- * nothing here can reach the Drone: observing changes nothing about the Job,
- * which is the whole difference between this and Pilot.
- */
-export type Observed =
-  | { state: "none" }
-  | { state: "opening"; jobId: string }
-  | { state: "watching"; jobId: string; turns: Turns }
-  /** The socket ended. The rows are kept — a closed transcript is still a record. */
-  | { state: "ended"; jobId: string; turns: Turns; because: string }
-  | { state: "failed"; jobId: string; detail: string };
-
-/** What one Observe connection has said so far. */
-export type Turns = {
-  /** Whether a Drone was writing when the socket opened. `false` is ordinary. */
-  live: boolean;
-  /** Older rows the bounded backfill left out, from `opened`. */
-  skipped: number;
-  /** Rows this viewer fell behind and lost. **Not the sink's losses.** */
-  missed: number;
-  rows: Turn[];
-};
-
-/**
- * One row, with the instant Fleet's line loop saw it.
- *
- * `Called` and `Answered` stay two rows on the wire and are joined in the
- * view: joining them in Fleet would mean holding a call open until its result
- * arrived, which is unbounded buffering in the path that must never block.
- */
-export type Turn = {
-  ts: string;
-  seq: number;
-  /**
-   * The `step_id` that was running when Fleet saw the row — beside `saw`, since
-   * it is true of every kind. **Absent is not the first step**: it is a row
-   * written before Fleet recorded the field, and nothing recovers which it was.
-   */
-  step?: string;
-  /**
-   * Whose row this is — Armada, the Drone, or Fleet. Beside `saw` for `step`'s
-   * reason: it is true of every kind. Never absent here, because main fills a
-   * row the wire did not stamp with `drone`, which is what every such row is.
-   */
-  by: Voice;
-  saw: Saw;
-};
-
-/**
- * What one call's arguments came back as.
- *
- * **Answered to the caller rather than published as state.** Every other read
- * here is held by main and republished as events arrive, because a Job that
- * moves has to redraw. A recorded argument never moves: it is fetched once, by
- * the person who opened one row, and it is theirs. Putting it in `BridgeState`
- * would make one reader's gesture part of what every surface re-renders on.
- *
- * A refusal is the row's own, never the screen's — `refused` on this route is
- * the Job standing and the call not being in its transcripts, which is a thing
- * to say inside the payload and not an error state for the Job.
- */
-export type CallRead =
-  | { ok: true; call: CallArguments }
-  | { ok: false; outcome: Outcome };
-
-/** `GET /jobs/:job_id` for the open Job. */
-export type Watched = JobRead<{ detail: JobDetail }>;
-
-/** The values a proposal may name. Empty until the connection answers. */
-export type Holdings = {
-  workflows: WorkflowSummary[];
-  manifests: ManifestSummary[];
-  /** `null` until read: an empty roster and an unread one are not the same. */
-  models: ModelChoices | null;
-};
-
-/** What a command answered. A refusal names itself; it never renders as silence. */
-export type Outcome =
-  /**
-   * `jobId` is the Job the caller should open next, where the act produced one
-   * that is not the Job it was called on. Redispatch is the only one: it mints
-   * a replacement, so the id that came back is not the id that went in.
-   *
-   * `report` rides along on the same terms: filing produces a record the caller
-   * needs next, and it is not app state — nothing on the board changes and the
-   * surface that asked is the only one that shows it, so keeping it here would
-   * leave a filed report on screen after the dialog that filed it closed.
-   */
-  | { ok: true; jobId?: string; report?: Report }
-  | { ok: false; why: "not_connected" }
-  | { ok: false; why: "empty_brief" }
-  | { ok: false; why: "empty_title" }
-  | { ok: false; why: "no_workflow" }
-  | { ok: false; why: "no_manifest" }
-  | { ok: false; why: "already_approving" }
-  | { ok: false; why: "already_redispatching" }
-  | { ok: false; why: "already_killing" }
-  | { ok: false; why: "already_forgetting" }
-  | { ok: false; why: "already_redirecting" }
-  | { ok: false; why: "already_restarting" }
-  | { ok: false; why: "already_overruling" }
-  | { ok: false; why: "already_rereading" }
-  | { ok: false; why: "already_reporting" }
-  | { ok: false; why: "empty_instruction" }
-  | { ok: false; why: "empty_reason" }
-  | { ok: false; why: "empty_report" }
-  | { ok: false; why: "already_deciding" }
-  | { ok: false; why: "already_answering" }
-  | { ok: false; why: "empty_note" }
-  | { ok: false; why: "refused"; error: WireError }
-  | { ok: false; why: "transport"; detail: string };
-
-/**
- * What `clearTerminalJobs` answered. **Not `Outcome`**: there is no bulk
- * `forget_job`, so this is one call per id and some can refuse while others
- * land — a status that moved between the press and the call, or an id Fleet
- * no longer holds. `cleared` is folded into the board as each call answers;
- * `failed` is what the caller has to say something about.
- */
-export type ClearOutcome = {
-  cleared: string[];
-  failed: { jobId: string; outcome: Outcome }[];
-};
-
-/** What the create form collects, before it becomes a `ProposeJob`. */
-export type Draft = {
-  /** What the Job is called. Refused empty before the Job is created. */
-  title: string;
-  workflowId: string;
-  manifestId: string;
-  origin: string;
-  urgency: string;
-  /**
-   * Which model the Drone is spawned as. The picker starts on the configured
-   * default, so the common path is one click and this is rarely empty — and
-   * empty is still legal on the wire, where Fleet fills it in.
-   */
-  model: string;
-  atomic: boolean;
-  /** Free text. Refused empty before the Job is created. */
-  brief: string;
-  /**
-   * Files staged through `stageAttachment` before this Job exists. Empty is
-   * the ordinary case and is sent as such — unlike `model`, there is no
-   * absent-vs-empty distinction here for Fleet to fill in.
-   */
-  attachments: { path: string; filename: string; mimeType: string }[];
-};
 
 /** The whole preload surface, and therefore everything the renderer can reach. */
 export type BridgeApi = {

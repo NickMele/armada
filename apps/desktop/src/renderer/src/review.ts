@@ -25,9 +25,9 @@
 import { FileCheck } from "lucide-react";
 import type { DiffFile, DiffLine, EvidenceTrailEntry } from "@armada/components";
 
-import type { Diff, Evidence } from "../../shared/bridge";
-import type { JobDetail as JobWhole } from "../../shared/protocol";
-import type { Submitted, Work } from "../../shared/work";
+import type { Diff, Evidence } from "@armada/protocol";
+import type { JobDetail as JobWhole } from "@armada/protocol";
+import type { Submitted, Work } from "@armada/protocol";
 
 /**
  * How many lines of a patch are drawn before it is cut.

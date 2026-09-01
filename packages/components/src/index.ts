@@ -125,3 +125,16 @@ export * from "./compositions/LogEntry/LogEntry";
 // waiting on and where it stands. The standing sentence for each tier lives
 // here, written once, because it is the same on every Job.
 export * from "./compositions/PhaseCard/PhaseCard";
+
+// The vocabulary: the verb, the glyph and the status token each variant of the
+// domain renders as, generated from `crates/core-model/domain/`.
+//
+// **It lives here and not in `@armada/protocol` because it is a rendering.** A
+// glyph is a React component, so the vocabulary imports `lucide-react`, and the
+// wire package is the one thing every other package depends on and imports
+// nothing. The wire says `escalated`; this says how to draw it.
+//
+// Emitted once. It was written twice — here and into the app — because the
+// dependency only ran one way and a story could not reach the app's copy. Now
+// both depend on this.
+export * from "./generated/vocabulary";

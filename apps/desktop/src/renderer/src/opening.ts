@@ -11,11 +11,11 @@
 // # The renderer never builds the path
 //
 // It hands back the Job id and either one of three words or the exact string
-// Fleet put on the wire. `shared/artifacts.ts` owns why that is safe and
+// Fleet put on the wire. `@armada/protocol`'s `artifacts.ts` owns why that is safe and
 // `main/open.ts` is what enforces it; nothing here concatenates anything.
 
-import type { Artifact, Opened } from "../../shared/artifacts";
-import { isKept } from "../../shared/artifacts";
+import type { Artifact, Opened } from "@armada/protocol";
+import { isKept } from "@armada/protocol";
 
 /** What each kept record is called, in the sentence a failure writes. */
 const CALLED = {

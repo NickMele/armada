@@ -6,7 +6,7 @@
 // file changes.
 //
 // Which number moved decides what a mismatch does — `skew` in
-// `src/shared/version.ts` is the only comparison, and there is no bare number
+// `version.ts` beside this file is the only comparison, and there is no bare
 // here to spell `!==` against.
 
 export const PROTOCOL_VERSION = { major: 6, minor: 4 };

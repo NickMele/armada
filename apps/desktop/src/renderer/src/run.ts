@@ -23,20 +23,9 @@
 
 import type { RunTreeFact, RunTreePath, RunTreeStep, StepActivity } from "@armada/components";
 
-import type { Turn } from "../../shared/bridge";
-import {
-  CHECK_ADVANCES,
-  CHECK_OUTCOME,
-  ESCALATION_REASON,
-  STEP_STATE,
-} from "../../shared/generated/vocabulary";
-import type {
-  ChangedFile,
-  CheckRun,
-  JobDetail as JobWhole,
-  StepAttempt,
-  StepDetail,
-} from "../../shared/protocol";
+import type { Turn } from "@armada/protocol";
+import { CHECK_ADVANCES, CHECK_OUTCOME, ESCALATION_REASON, STEP_STATE } from "@armada/components";
+import type { ChangedFile, CheckRun, JobDetail as JobWhole, StepAttempt, StepDetail } from "@armada/protocol";
 import { span } from "./duration";
 import { ordered } from "./facts";
 import { frozenBeneath } from "./frozen";

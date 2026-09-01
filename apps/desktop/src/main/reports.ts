@@ -26,8 +26,8 @@
 // a finding about. That is affordable while the list is read deliberately and
 // dropped when it closes, and it is why this is asked for rather than held.
 
-import type { Reports } from "../shared/bridge";
-import type { ReportList } from "../shared/protocol";
+import type { Reports } from "@armada/protocol";
+import type { ReportList } from "@armada/protocol";
 import { ask } from "./request";
 
 /** One read of `GET /reports`, held for as long as a surface wants it. */

@@ -18,9 +18,9 @@
 import { ActivityLogSheet, JobDiffSheet, type JobDiffFile } from "@armada/components";
 import type { ReactNode } from "react";
 
-import type { Diff, Footprint, Observed } from "../../shared/bridge";
-import type { JobDetail as JobWhole, JobSummary, StepDetail } from "../../shared/protocol";
-import type { JobFootprint } from "../../shared/footprint";
+import type { Diff, Footprint, Observed } from "@armada/protocol";
+import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
+import type { JobFootprint } from "@armada/protocol";
 import type { Calls } from "./calls";
 import { DecidedDiff } from "./Decide";
 import { clock } from "./duration";
