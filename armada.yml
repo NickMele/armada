@@ -42,7 +42,14 @@ checks:
     # transpiles per file and typechecks none of it, and desktop's own pass
     # reaches only the components it imports, never a story. A `ShieldMinus`
     # used without importing it threw on render, on main, until #235.
-    run: pnpm -C apps/desktop typecheck && pnpm -C packages/components typecheck
+    #
+    # **The names are in a `package.json` script and not here, because a `run`
+    # gets no shell.** This line was `pnpm -C … && pnpm -C …`; the runner
+    # passed `&&` as an argument and `tsc` died on `Unknown build option
+    # '-C'`, so the Check could never pass and every Job dispatched against
+    # this repository failed on it. A script is where a chain of commands can
+    # be written, and the list stays explicit inside it.
+    run: pnpm typecheck
     # `domain/**` and `protocol-version.toml`: codegen emits TypeScript from
     # them, so a change there is a change to compiled code.
     when:

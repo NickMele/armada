@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "scripts/dev",
-    "gate": "cargo xtask verify-foundations"
+    "gate": "cargo xtask verify-foundations",
+    "typecheck": "pnpm -C packages/protocol typecheck && pnpm -C packages/components typecheck && pnpm -C apps/desktop typecheck"
   }
 }
