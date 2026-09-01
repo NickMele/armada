@@ -79,6 +79,21 @@ A Job marked `urgency: incident` has its approval surfaced sooner — it interru
 
 Sub-dispatches inside an already-approved Job need no separate approval — see [Workflow](workflow.md), Dispatch Approval, Two Levels. Away-from-desk pre-authorized batches are supported.
 
+#### Sub-dispatch and the Job proposer are two routes, and they do not converge
+
+Both turn one thing into several Jobs, and the difference between them is the approval gate — which is why folding them together was rejected rather than deferred.
+
+| | Job proposer | Sub-dispatch |
+|---|---|---|
+| Who asks | A person describing work | The Drone of an approved Job, on its dispatching step |
+| What comes back | Top-level Jobs at `awaiting_approval` | Children at `queued` |
+| Who approves | A person, **each Job in turn** | A person, **once, on the plan** — before any child exists |
+| What was read | The request, as it was typed | An artifact under `.armada/artifacts/`, written by a Drone that read the epic |
+
+**One path is the gate and the other is the exemption from it.** The approval gate is the primary control on Fleet's autonomy; the sub-dispatched case is the one thing that gets past it, and it gets past because a person already approved the split the children came out of. A shared path would put the exemption one refactor away from the rule, and the thing that keeps them apart is that they reach different constructors — `create_top_level` enters at `awaiting_approval` and `create_sub_dispatched` enters at `queued`, and neither takes a status.
+
+**The saving that would have justified converging them is not there.** What the two share is drafting a proposal into a Job, and they already share it: both go through the same refusals for a blank title, a workflow nothing holds and a Manifest that is not this one. What differs is everything about who decided and what they read.
+
 ### Concurrency gating (resources)
 
 **Fleet reads CPU, memory and disk headroom before spawning each Drone.** If capacity is unavailable the Job queues and shows "waiting" on the [Job Board](job-board.md). This determines resource eligibility only; the approval gate above determines whether a Drone starts at all.
