@@ -255,7 +255,7 @@ impl StepState {
             StepState::Advanced => JobStatus::ALL,
             StepState::AwaitingHuman => &[JobStatus::AwaitingReview],
             StepState::NotStarted => NOT_UNDER_COMPLETED_SUCCESS,
-            StepState::Retrying => &[JobStatus::Running],
+            StepState::Retrying => NOT_UNDER_COMPLETED_SUCCESS,
             StepState::Running => NOT_UNDER_COMPLETED_SUCCESS,
             StepState::Stopped => NOT_UNDER_COMPLETED_SUCCESS,
         }

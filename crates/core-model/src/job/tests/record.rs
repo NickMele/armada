@@ -323,6 +323,7 @@ fn a_step_state_the_machine_reaches_is_seen_beneath_every_status_but_the_guarded
     for state in [
         StepState::Stopped,
         StepState::NotStarted,
+        StepState::Retrying,
         StepState::Running,
     ] {
         assert!(
@@ -337,12 +338,14 @@ fn a_step_state_the_machine_reaches_is_seen_beneath_every_status_but_the_guarded
             state.as_wire()
         );
     }
-    // The two nothing reaches yet are where their design puts them.
+    // The one nothing reaches yet is where its design puts it. `retrying`
+    // was beside it here and does not belong: `Running -> Retrying` is a
+    // real edge, so a step between attempts is carried across an unguarded
+    // status edge like any other frozen step, and it is in the loop above.
     assert_eq!(
         StepState::AwaitingHuman.seen_under(),
         &[JobStatus::AwaitingReview]
     );
-    assert_eq!(StepState::Retrying.seen_under(), &[JobStatus::Running]);
 }
 
 #[test]

@@ -15,7 +15,7 @@
 # `cargo xtask verify-foundations`. Both halves had gone stale before anything
 # read either. Why nearly every state is seen beneath nearly every status is on
 # job-statuses.toml's own header: a frozen step crosses an unguarded edge
-# holding what it held. `completed_success` is absent from three of these rows
+# holding what it held. `completed_success` is absent from four of these rows
 # because every edge arriving there is guarded on `every_step_advanced`, so a
 # step in any other state cannot be carried across one.
 #
@@ -43,8 +43,9 @@ in_code = "Not yet"
 
 [states.retrying]
 meaning = "The step failed and is being reattempted inside its retry budget"
-seen_under = ["running"]
+seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_review", "completed_failed", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
 in_code = "Not yet"
+notes = "This row said `running` alone until the transpose was read against the machine. A Job does not stop moving because a step is between attempts: whatever freezes it — a kill, an escalation, an approval sent back — freezes the step mid-retry, and a frozen step is never cleared. See job-statuses.toml's header."
 
 [states.running]
 meaning = "The step is being worked"
