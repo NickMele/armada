@@ -102,10 +102,20 @@ section { margin-bottom: var(--space-12); }
 h2 { font-size: var(--text-lg); font-weight: var(--weight-heading); margin: 0 0 var(--space-4); padding-bottom: var(--space-2); border-bottom: var(--border-width) solid var(--border-subtle); }
 figure { margin: 0 0 var(--space-6); }
 figcaption { color: var(--fg-muted); font-size: var(--text-xs); margin-bottom: var(--space-2); }
-/* The stage is the captured box, so it carries the surface the screen sits on
-   and nothing else. A shot of a control on no ground is a shot of a control
-   whose contrast nobody can read. */
-.stage { display: flex; align-items: flex-start; gap: var(--space-2); width: fit-content; min-width: var(--sidebar-default); padding: var(--pad-card); border-radius: var(--radius-md); background: var(--bg-raised); }
+/* The stage is the captured box, and it is the size of Bridge's own window:
+   main opens 1280x800, and a screen shot at some other width is a screen whose
+   layout nobody is looking at. The height is a floor rather than a fix — a
+   screen taller than the window is captured whole, which is the part a person
+   would have to scroll to.
+   **A clipped right edge is a finding, not an artifact.** The stage is the
+   window, so a screen whose content will not shrink below the window is cut
+   here exactly as it is cut there. Measured with width:fit-content, job
+   detail's stopped render wants 1408px and its terminal ones 1322px; only the
+   running and at-review renders come in at 1280. That is job detail's own
+   minimum width and it is nothing to do with the header's acts — the running
+   render carries two buttons and fits.
+   No backticks in here: this block is inside the page's template literal. */
+.stage { width: 1280px; min-height: 800px; overflow: hidden; background: var(--bg-base); }
 </style>
 ${body}
 `,
