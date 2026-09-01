@@ -3,27 +3,35 @@
 // **Not `rail.ts` with a different component.** The rail drew every step's gate
 // rows inline; a step's gates are the phase strip's now, in the panel, so what
 // this builds is what a step *produced*, *cleared* and *came to* — short facts,
-// behind a chevron. The two files share the vocabulary and nothing else, and
-// `rail.ts` is still what the fold-out record's own rail is built from.
+// behind a chevron.
 //
-// # What the wire does not carry, and where that shows
+// # An attempt is a row, not a counter
 //
-// **A per-step attempt count is not served.** `StepDetail` carries `state`,
-// `last_verdict` and `judged` and nothing that says how many times the step has
-// been tried, so "an attempt is a row, not a counter" cannot be built from this
-// seam at all — not as rows, and not even as the counter it is meant to replace.
-// The panel names it once per step rather than this file writing a row per step
-// that says the same thing seven times.
+// `StepDetail.attempts` is every run of the step, oldest first, so a step
+// worked twice draws `Attempt 1 refused` and `Attempt 2 advanced` rather than
+// one number. It is the only place an earlier run's outcome survives: `state`
+// and `last_verdict` are both the latest, so a step that passed on its third
+// try and one that passed on its first were the same message on the wire.
 //
-// **What a step produced is not served either.** `job.files_changed` and
-// `JobDetail.footprint` are the whole Job's, not the step's, so a `Produced`
-// fact per step would be the same file list under every row. The Produced
-// chapter in the panel is where the Job's own reading is drawn, once.
+// # What a step produced is per step, and comes off the socket
+//
+// `job.files_changed` and `JobDetail.footprint` are the whole Job's, so a
+// `Produced` fact built from either would be the same file list under every
+// row. The transcript's own reading — taken at the step boundary, stamped with
+// its step like every other row — is the per-step answer, and it is what the
+// tree draws.
 
-import type { RunTreeFact, RunTreeStep, StepActivity } from "@armada/components";
+import type { RunTreeFact, RunTreePath, RunTreeStep, StepActivity } from "@armada/components";
 
+import type { Turn } from "../../shared/bridge";
 import { CHECK_ADVANCES, CHECK_OUTCOME, STEP_STATE } from "../../shared/generated/vocabulary";
-import type { CheckRun, JobDetail as JobWhole, StepDetail } from "../../shared/protocol";
+import type {
+  ChangedFile,
+  CheckRun,
+  JobDetail as JobWhole,
+  StepAttempt,
+  StepDetail,
+} from "../../shared/protocol";
 import { span } from "./duration";
 import { ordered } from "./facts";
 import { frozenBeneath } from "./frozen";
@@ -44,12 +52,18 @@ import { frozenBeneath } from "./frozen";
  * workflow with every step expanded fits no screen; after that the tree holds
  * whatever the reader opened, which is `RunTree`'s own rule.
  */
-export function runOf(whole: JobWhole, now: number, selected: string | undefined): RunTreeStep[] {
+export function runOf(
+  whole: JobWhole,
+  now: number,
+  selected: string | undefined,
+  rows: readonly Turn[],
+): RunTreeStep[] {
+  const wrote = producedBy(rows);
   return ordered(whole).map((step) => {
     const frozen = frozenBeneath(whole.job.status, step.state);
     const activity = frozen?.activity ?? activityOf(step.state);
     const current = step.step_id === (selected ?? whole.job.current_step_id);
-    const facts = factsOfStep(step, activity);
+    const facts = factsOfStep(step, activity, wrote.get(step.step_id) ?? []);
     return {
       id: step.step_id,
       label: step.label,
@@ -78,8 +92,20 @@ const NOTHING_RECORDED = "Nothing is recorded against this step yet.";
  * **A fact is a value, never a sentence.** Anything that reads as prose is the
  * panel's, which is the division the tree exists to hold.
  */
-function factsOfStep(step: StepDetail, activity: StepActivity): RunTreeFact[] {
+function factsOfStep(
+  step: StepDetail,
+  activity: StepActivity,
+  wrote: ChangedFile[],
+): RunTreeFact[] {
   const facts: RunTreeFact[] = [];
+
+  // The runs, oldest first, one row each. **Never on a step run once** — a
+  // single `Attempt 1 advanced` beneath every row in the tree is a column of
+  // noise saying what the mark already says.
+  if (step.attempts.length > 1) facts.push(...step.attempts.map(attemptFact));
+
+  const produced = producedFact(wrote);
+  if (produced !== undefined) facts.push(produced);
 
   const checks = checksFact(step);
   if (checks !== undefined) facts.push(checks);
@@ -104,6 +130,76 @@ function factsOfStep(step: StepDetail, activity: StepActivity): RunTreeFact[] {
   if (stands !== undefined) facts.push(stands);
 
   return facts;
+}
+
+/**
+ * One run of the step: which it was, and what it came to.
+ *
+ * **The outcome is the wire's own step state.** `enum-verbs.toml` carries no
+ * `step_state` rows, so the spelling renders — and the escalation trigger the
+ * run carried out of `running` rides beside it, because `refused` and
+ * `refused · gate_failure` are different amounts of help and the second costs
+ * nothing.
+ */
+function attemptFact(attempt: StepAttempt): RunTreeFact {
+  const outcome = STEP_STATE[attempt.outcome]?.verb ?? attempt.outcome;
+  const advanced = attempt.outcome === "advanced";
+  return {
+    label: `Attempt ${attempt.attempt}`,
+    value: attempt.why === undefined ? outcome : `${outcome} · ${attempt.why}`,
+    named: advanced ? "advanced" : attempt.outcome === "running" ? undefined : "refused",
+  };
+}
+
+/**
+ * What this step wrote, as paths that keep their filenames.
+ *
+ * **Bounded to what fits a narrow column.** Past three the fact counts the
+ * rest: a step that wrote thirty files is a step whose file list belongs in the
+ * panel's Produced chapter, where there is room for it.
+ */
+function producedFact(wrote: ChangedFile[]): RunTreeFact | undefined {
+  if (wrote.length === 0) return undefined;
+  const paths: RunTreePath[] = wrote.slice(0, SHOWN).map((file) => split(file.path));
+  const rest = wrote.length - paths.length;
+  return {
+    label: "Produced",
+    value: rest > 0 ? `+${rest} more` : undefined,
+    paths,
+  };
+}
+
+/** How many produced paths the tree draws before it counts the rest. */
+const SHOWN = 3;
+
+/**
+ * A path split into the part that may truncate and the part that never does.
+ * **The separator belongs to the directory** — without it `src` and
+ * `selectors.ts` read as two names rather than one path.
+ */
+function split(path: string): RunTreePath {
+  const cut = path.lastIndexOf("/");
+  return cut < 0
+    ? { basename: path }
+    : { directory: path.slice(0, cut + 1), basename: path.slice(cut + 1) };
+}
+
+/**
+ * What each step wrote, folded out of the transcript.
+ *
+ * **The last reading per step wins.** Fleet takes one at every ruling, so a
+ * step submitted three times has three rows and only the newest describes the
+ * work as it stands. A row with no step is skipped rather than attributed:
+ * nothing recovers which step an unstamped row ran under, and guessing would
+ * put one step's files under another's name.
+ */
+function producedBy(rows: readonly Turn[]): Map<string, ChangedFile[]> {
+  const wrote = new Map<string, ChangedFile[]>();
+  for (const row of rows) {
+    if (row.saw.event !== "produced" || row.step === undefined) continue;
+    wrote.set(row.step, row.saw.files);
+  }
+  return wrote;
 }
 
 /**

@@ -212,7 +212,7 @@ export function JobDetail({
   return (
     <InsideAJob
       heading={heading}
-      run={whole === null ? [] : runOf(whole, now, selected ?? undefined)}
+      run={whole === null ? [] : runOf(whole, now, selected ?? undefined, watching?.rows ?? [])}
       runElapsed={span(job.created_at, now) ?? undefined}
       runAbsent={whyNoSteps(watched, job.id)}
       // One animated mark per screen, on the thing being read — and nothing
@@ -309,10 +309,10 @@ const NAMED_NOT_NEEDED =
  * The step's own short facts. **Figures, never a chart** — a filled bar reads
  * as progress and a step has no percentage.
  *
- * **The attempt count is named as missing rather than left out.** The design
- * draws attempts as rows, and `StepDetail` carries nothing that counts them —
- * no `retry_count`, no attempt list — so the field says what is not served
- * rather than the panel quietly having one fewer fact than the drawing.
+ * **The attempt is which run this is**, from `attempts`, and it is absent on a
+ * step nothing has entered rather than drawn as a zero. A step run once still
+ * says `Attempt 1`, because the drawing does and because it is the fact a
+ * person checks before deciding a Drone is going in circles.
  */
 function fieldsOf(step: StepDetail, now: number): JobDetailField[] {
   const running = step.state === "running" || step.state === "retrying";
@@ -325,7 +325,9 @@ function fieldsOf(step: StepDetail, now: number): JobDetailField[] {
     ...(elapsed === undefined
       ? []
       : [{ label: running ? "Running for" : "Took", value: elapsed, mono: true }]),
-    { label: "Attempts", value: "not served" },
+    ...(step.attempts.length === 0
+      ? []
+      : [{ label: "Attempt", value: String(step.attempts.length), mono: true }]),
   ];
 }
 
