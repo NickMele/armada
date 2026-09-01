@@ -14,6 +14,8 @@ Design fidelity: Full now — design this one completely, ahead of everything el
 
 **Design file:** `Journey 1 - Dispatch a job.dc.html` in the Armada Mockups project. One file per journey; this document is the record, the file is the drawing.
 
+**Drawn against** `docs/contracts/design-system.md` and `docs/contracts/workflow-design-system.md`.
+
 **Milestone design file:** `M1 - Dogfood.dc.html`, block `1c`. Added 2026-08-23. The full approval flow and the M1 subset are drawn side by side there, with the subset marked by dimming everything M1 does not render — the Job Board, pre-approval, pattern learning and the criteria editor. M1's reduced card keeps the glance strip with the two values it can measure before dispatch, workflow length and which Checks gate it, because a card whose whole design is a forced glance cannot ship with nothing to glance at.
 
 Analysis: Complete. UI/UX design: In progress.

@@ -6,15 +6,14 @@ description: How Armada's written record is organised and how a document is writ
 # Armada's written record
 
 Everything an agent reads while writing code is a file in this repository. The
-roadmap is GitHub issues. The design project draws, and holds the original of
-nothing.
+roadmap is GitHub issues.
 
 | Holds | Home |
 |---|---|
 | Contracts, practices, concepts, journeys, spikes, open questions | `docs/` |
 | Registries code reads — tokens, icons, settings, the domain model | `packages/`, `crates/` |
 | What is being built and in what order | GitHub issues and milestones |
-| Mockups, the component sheet, the canvas | The design project |
+| A component as built, and how it is agreed | Storybook, `packages/components` |
 
 **The test when it is not obvious:** does an agent need this while writing code?
 If yes it is a file here, because a subagent cannot follow a link out.

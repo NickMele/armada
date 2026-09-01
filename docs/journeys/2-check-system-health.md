@@ -14,6 +14,8 @@ Design fidelity: not set. Analysis: Complete. UI/UX design: In progress.
 
 **Design file:** `Journey 2 - Check system health.dc.html` in the Armada Mockups project. One file per journey; this document is the record, the file is the drawing.
 
+**Drawn against** `docs/contracts/design-system.md` and `docs/contracts/system-architecture.md`.
+
 ## Settled in design, 2026-08-21
 
 - **A result is a word, not a glyph.** `pass` / `warn` / `fail` in the status colour, no icon. Ten rows of `pass` read as a column you scan in one movement; ten circle glyphs read as decoration, and Iconography's first rule is to default to no icon. The word also survives greyscale, which colour alone does not. This also dissolves a glyph collision: `circle-check` and `circle-x` were reserved to Judge criterion verdicts on 21 Aug, so Doctor cannot own them too. Dropping the glyph resolves it without inventing a fourth family or taking anything back.

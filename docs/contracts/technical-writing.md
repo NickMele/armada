@@ -71,6 +71,6 @@ loss it is meant to prevent.
 `packages/icons/icons.toml` is a document in a field, and the same rules apply
 to it — one mode, no decision history, no date stamps, a table when it grows.
 
-**`docs/instructions/` is not exempt.** Those files are pasted into the desktop
-app and the design project, so reducing them means re-pasting both. They are
-documents here and the contract governs them.
+**`docs/instructions/` is not exempt.** A file there is pasted into the desktop
+app, so reducing it means re-pasting it. They are documents here and the
+contract governs them.

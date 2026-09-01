@@ -1,28 +1,21 @@
 # Design System — UI & Voice
 
 **Kind:** contract. **Governs:** static UI chrome, tokens, and the Voice &
-Copy contract — pasted into every design session as the parent contract
-that nothing else may contradict.
+Copy contract — the parent contract that nothing else may contradict.
 
-Read by Claude Design, or any design tool, before generating an Armada
-screen.
+Read before building a screen or component in `packages/components`.
 
 ---
 
-The single contract handed to Claude Design, or any design tool, before
-generating an Armada screen. Constraining the input is what makes output
-drop into the Electron app without restyling — this replaces per-screen
-conversion work.
+Constraining what a surface may spell is what makes it drop into the
+Electron app without restyling. A value or a word this document does not
+sanction is a finding, not a judgement call.
 
-Paste this document's contents at the top of a design session. Design Job
-Board first; it is the densest screen and therefore the real test of the
-density and status tokens.
-
-Complete. UI tokens and the Voice & Copy contract are both in force. Two
-sibling documents carry what a design session does not need: the [Agent
-Copy Contract](agent-copy.md) (text written at runtime by Drones, Judge
-and Helm, with its surfaces and their samples in Armada Copy) and the
-[Voice Contract — Engineering Requirements](voice-engineering.md).
+UI tokens and the Voice & Copy contract are both in force. Two sibling
+documents carry what building a surface does not need: the [Agent Copy
+Contract](agent-copy.md) (text written at runtime by Drones, Judge and
+Helm, with its surfaces and their samples in Armada Copy) and the [Voice
+Contract — Engineering Requirements](voice-engineering.md).
 
 ---
 
@@ -213,8 +206,7 @@ reasoning, and deliberately does not restate the roster, because an
 enumeration here went stale twice.
 
 Every value **aliases** its Job counterpart rather than introducing a
-new one. The mapping is declared, so a design session reads it instead
-of inferring it.
+new one. The mapping is declared, so it is read rather than inferred.
 
 ```
 --step-advanced    var(--status-completed-success)
@@ -339,6 +331,11 @@ once.
 
 Every one of those is a token in `tokens/spacing.css`, which is the
 authority on the value. Read it rather than retyping a number from here.
+
+**A row height token is a floor, not a cap.** Rows are padding-driven
+where content can grow, so the token keeps rows aligned down a column
+without truncating one that needs more. Labels align with their fields,
+and content left edges align with their header's left edge.
 
 ```
 --radius-sm  3px    badges, small controls
@@ -667,10 +664,10 @@ entry, so an unreconciled map is a palette that cannot be drawn.
 
 **Both blocks are transcribed from
 `crates/core-model/domain/actions.toml`**, which is the artifact above
-and the authority. They stay here because this document is pasted whole
-into a design session, where a pointer resolves to nothing; the gate
-reads both and fails where they disagree, on the binding, the verb and
-the annotations in brackets.
+and the authority. They stay here because a binding is read beside the
+rule that governs it rather than followed to a data file; the gate reads
+both and fails where they disagree, on the binding, the verb and the
+annotations in brackets.
 
 **Job detail's bindings are in the map before the screen is rebuilt.**
 The run tree, the chapters, the produced files and the phase strip each
@@ -821,8 +818,9 @@ width and position and focus rendered as nothing — a resting edge and a
 focus ring must differ on all three. Control focus now matches row
 focus, and the accent already carried the keyboard focus edge. Disabled
 is `--fg-subtle` text with hover suppressed — never reduced opacity,
-which muddies status colors. Every interactive element transitions on
-`--duration-fast`.
+which muddies status colors. **Dimming is a token, not an alpha** — a
+de-emphasised row steps down to `--border-subtle` and `--fg-subtle`.
+Every interactive element transitions on `--duration-fast`.
 
 ### Table — the Job Board row
 
@@ -886,6 +884,16 @@ the only channel. Full specification on [Iconography](iconography.md).
 12px is an exact half-scale and a stroke of 2 lands on exactly 1px. 11px
 scales to 0.917px and antialiases into fuzz on a dark ground.
 
+**A bordered pill is a Job state and nothing else.** An origin tag,
+drift states and provenance are plain sans in `--fg-muted`. Two chips in
+one row separated only by colour makes a reader learn a rule the screen
+never states.
+
+**The badge carries no leading dot.** Its job was telling a status chip
+from a bordered pill that is not one; origin no longer carries a chip,
+and with an icon mandatory on every state the dot is a second marker for
+one claim.
+
 ### Button
 
 | Variant | Rest | Hover | Use |
@@ -900,6 +908,24 @@ height   36px default · 32px sm (use sm inside table rows)
 padding  16px default · 8px sm
 type     --text-sm · weight 500 · --radius-md
 ```
+
+**Emphasis comes from fill, not size.** A primary action is `--accent`
+fill at the normal 36px control height; a call to action is never scaled
+up to make it matter. **A list row never takes one** — every row carries
+one secondary control, because fourteen rows offering a decision would
+be fourteen accent blocks. Urgency on a list is carried by the badge and
+the ordering, and the accent is spent on the detail screen, where the
+object of attention is one thing.
+
+**Every button in a group is the same height.** A ghost action recedes
+by losing its fill and dropping to `--fg-muted`, never by shrinking.
+Mixed heights in one row read as a rendering bug.
+
+**A secondary is filled one surface step from its ground** —
+`--bg-sunken` on a card, `--bg-raised` on a sunken or overlay row. A
+button filled the colour of the surface behind it shows only its text,
+so it looks shorter than the primary beside it even where the boxes
+match exactly.
 
 Destructive stays outlined because a solid red button reads as an error
 state rather than an action, and `--status-completed-failed` is already
@@ -1467,10 +1493,9 @@ visible, and removing it from the row breaks that trade.
 
 **Layout consequence — the spend column is sized for both modes, not
 one.** The two billing modes produce strings of very different width
-and shape: `68% quota` against `~$2.40 of $20`. A design session must
-size this column for the wider of the two and confirm the row survives
-both, rather than fitting it to whichever example appears first in this
-document. The same applies to the status bar's trailing segment.
+and shape: `68% quota` against `~$2.40 of $20`. The column is sized for
+the wider of the two and the row survives both, rather than fitting
+whichever example appears first in this document. The same applies to the status bar's trailing segment.
 Neither mode is the default — which one renders depends on the machine,
 and both are first-class.
 

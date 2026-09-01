@@ -45,7 +45,6 @@ us "me" was.
 |---|---|
 | **Human** | A decision, a handoff, or something only he can run |
 | **Claude Code** | Work in this repository — me, or an agent I dispatch |
-| **Claude Design** | A drawing, or a correction to one |
 | **Fleet** | A Job dispatched through Armada itself — the answer whenever the work could be one |
 
 Where a row is with something already running, say so — **Claude Code

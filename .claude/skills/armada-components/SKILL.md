@@ -6,24 +6,23 @@ description: How to build or change an Armada component — where it lives, what
 # Changing a component
 
 **Storybook is the source of truth for what a component is.** Its geometry, its
-states and its props live beside its code in `packages/components`. The
-component sheet in the design workspace is where a component was agreed while
-looking at a rendering; it is frozen when the component lands, and drift between
-the two is not reconciled — Storybook is right.
+states and its props live beside its code in `packages/components`. A component
+is agreed in its story, against a real rendering, and iterated there — there is
+no second drawing of it to reconcile against.
 
 ## Read before writing a line
 
 | For | Read |
 |---|---|
-| The spec | `docs/contracts/design-system.md`, especially `## Component → token mapping` |
-| The rules that are broken most | `docs/instructions/claude-design.md` — Hard rules, and The things I keep getting wrong |
+| The spec | `docs/contracts/design-system.md` — `## Hard rules` and `## Component → token mapping` |
+| The rules broken most | `docs/contracts/iconography.md` — default to no icon, the two sizes, the contrast floor |
 | The tokens | `packages/tokens/src/*.css`. Read the comments; several carry the argument for a value |
 | The glyphs | `packages/icons/icons.toml` |
 | The states a status can hold | `crates/core-model/domain/enum-verbs.toml` |
 
-**Where the contract and the sheet disagree, the contract wins** — and the
-disagreement is a finding worth reporting, not a coin toss. Four were found in
-one night: badge type step, badge padding, table cell padding, table header
+**Where the contract and a built component disagree, the contract wins** — and
+the disagreement is a finding worth reporting, not a coin toss. Four were found
+in one night: badge type step, badge padding, table cell padding, table header
 colour.
 
 ## Where a component lives
@@ -77,10 +76,10 @@ subtly wrong rather than one of them saying the token was missing.
 
 | What you found | What to do |
 |---|---|
-| A value with no token | Name it in your report. A value the sheet already draws is named, not decided — say so |
+| A value with no token | Name it in your report. Do not decide it in a story |
 | A state with no glyph or no token | Write the story, let it fail, report the variant |
-| The contract and the sheet disagree | Follow the contract, report the disagreement |
-| A component the registry does not have | Propose it. Do not invent one on the spot |
+| The contract and a built component disagree | Follow the contract, report the disagreement |
+| A component no story exists for | Propose it as an issue. Do not invent one on the spot |
 
 **A second vocabulary is a defect, not a shortcut.** A verb, a glyph or a status
 token is imported from where it is generated, never retyped. `lib/job-states.js`
@@ -103,5 +102,5 @@ From the repository root:
 
 A component changing is a change to what the app renders, so say what moved and
 what it was measured against. Where a change came from a disagreement between
-the contract and the sheet, **say which won and why** — the next person will
-find the same disagreement.
+the contract and what was built, **say which won and why** — the next person
+will find the same disagreement.

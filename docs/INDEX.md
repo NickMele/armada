@@ -85,16 +85,14 @@ not override, **spec** is a designed artifact, **reference** is lookup material.
 
 ## Pasted elsewhere
 
-Two surfaces are not this repository and neither reads a file from it. The
-canonical text is here so the three sets say the same thing rather than three
+One surface is not this repository and does not read a file from it. The
+canonical text is here so the two sets say the same thing rather than two
 approximations.
 
-- [`instructions/README.md`](instructions/README.md) — what all three must
-  agree on, and where each is pasted.
+- [`instructions/README.md`](instructions/README.md) — what both must agree on,
+  and where it is pasted.
 - [`instructions/claude-desktop.md`](instructions/claude-desktop.md) — the
   desktop app's project instructions.
-- [`instructions/claude-design.md`](instructions/claude-design.md) — the design
-  project's session contract.
 
 ## Concepts
 

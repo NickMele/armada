@@ -93,7 +93,8 @@ The row shape and what is in it belong to [Observe](observe.md). This document o
 
 ## Where it surfaces
 
-**The first surface is in the M1 — Dogfood mockups.**
+**The first surface is the `Compositions/Job log reference` story**, in
+`packages/components/src/compositions/JobLogReference/`.
 
 **Bridge names a job's log on every job from dispatch** — running, failed and finished. Why: the job worth reading a log for is usually the one still running badly, and a failed job has already stopped, so its log is a post-mortem.
 
@@ -102,8 +103,6 @@ The treatment is a path in mono that copies on click, the line count and the err
 - **No viewer, no level filter, no tail.** The Check output pane answers what the suite said; the log answers what Fleet, the drone and Bridge each did, joined on `job_id`. A reader is a later milestone's problem; knowing where the file is, is not.
 - **UI copy says "log".** Never "Log Envelope" — the name is outside the sanctioned lexicon (see Open questions below), and a surface is not the place to settle it.
 - **The `file-*` glyph family is reserved to evidence,** so the log row takes the plain page outline rather than a new glyph.
-
-Component row: **Job log reference**, in the Components registry.
 
 ## Open questions
 
