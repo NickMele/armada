@@ -55,16 +55,56 @@ list assembled by the tool: the renderer imports Tailwind between the tokens and
 the components, so a page that followed only the component stylesheets had no
 `box-sizing: border-box` and every screen overflowed by its own padding. That
 looked exactly like a layout defect in the app and was reported as one. **Check
-the page loads what the app loads before believing what it shows.** The screens are declared in
-`*.screens.tsx` beside the code they draw: a file exports a `title` and a
-`screens` array, and each entry states its own `data-shot` mark, the name to
-print, and one element. Fixtures are written in the file — enough of the wire's
-shape for the composition to decide what it draws, and nothing else. Nothing
-runs; a screen that needed a Fleet is a screen nobody captures.
+the page loads what the app loads before believing what it shows.**
 
-**A mark is written by hand here rather than derived.** There is no story export
-name to derive one from, and a mark that a drawing has to match is not something
-to leave to a transform. Two screens claiming one mark is refused at build.
+### Adding or changing a Bridge screen
+
+A screen lives in a `*.screens.tsx` beside the code it draws. The file exports
+`title` and `screens`; each entry is a mark, a name, the render it is one of,
+and one element. Nothing runs — a screen that needed a Fleet is a screen nobody
+captures — so a fixture is the values the wire would carry, written down.
+
+```tsx
+export const title = "Inside a job";
+
+export const screens: Screen[] = [
+  {
+    mark: "inside-a-job-killed",   // what it pairs by. Chosen, not derived
+    name: "Killed",                // what the page prints above it
+    render: "stopped",             // which of renderFor's arrangements
+    width: 900,                    // optional. 1280, Bridge's own, otherwise
+    element: <JobDetail job={...} watched={...} {...INERT} />,
+  },
+];
+```
+
+Then:
+
+```sh
+pnpm shoot --bridge            # capture, and rewrite the snapshots
+```
+
+**Look at the PNGs it names.** That is the step; everything else exists to make
+it cheap. The snapshots are a diff, not a substitute — markup says what is
+there, and only the image says whether it is drawn right.
+
+**A mark is written by hand rather than derived.** There is no story export name
+to derive one from, and a mark that a drawing has to match is not something to
+leave to a transform. Two screens claiming one mark is refused at build.
+
+### What keeps it current
+
+**`.shots/` is ignored, so the images are not a baseline.** Two things stand in
+for one:
+
+| | Catches | Where it runs |
+|---|---|---|
+| `apps/desktop/screens/snapshots/` | A screen that changed. The markup is checked in, so a rebuilt header is a changed file on the pull request whether or not anybody ran the tool | `pnpm shoot --bridge` writes them; `--check` fails on drift without writing |
+| The gate rule | A screen that does not exist. Every variant of `Render` has a screen, every screen has a snapshot, and neither list is one somebody maintains — `Render` is the app's own union | `cargo xtask verify-foundations` |
+
+**Neither of them looks at anything.** They make an unlooked-at change visible;
+a person or an agent still has to open the image. Two of the five renders had no
+screen at all when the rule was written, and nobody had noticed.
 
 **Everything it writes is under `.shots/`, which is ignored.** Regenerating both
 sides takes about a minute.

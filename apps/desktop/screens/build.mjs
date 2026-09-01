@@ -15,9 +15,9 @@
    So this builds the renderer and inlines what it emitted. The build is the
    cost of being right about what Bridge looks like. */
 import { build } from "vite";
-import { readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { spawn } from "node:child_process";
-import { join, dirname } from "node:path";
+import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -137,5 +137,54 @@ ${body}
   "utf8",
 );
 
+/* The snapshots, which are the part that survives the run.
+ *
+ * **`.shots/` is ignored, so the PNGs are not a baseline.** Nothing in a diff
+ * says a screen changed; you have to have chosen to look, which is the same
+ * problem the tool was built to fix one level down. The markup is the cheap
+ * half of a shot and it is text, so it is checked in and read in review: a
+ * header rebuilt shows up as a changed snapshot on the PR whether or not
+ * anybody ran this.
+ *
+ * It is not a substitute for looking. Markup says what is there; only the
+ * image says whether it is drawn right. */
+const snaps = join(here, "snapshots");
+mkdirSync(snaps, { recursive: true });
+
+const written = new Map();
+for (const g of groups)
+  for (const s of g.shots)
+    written.set(s.mark, `<!-- ${g.title} — ${s.name} — render: ${s.render} -->\n${s.html}\n`);
+
+const checking = process.argv.includes("--check");
+const stale = [];
+const gone = readdirSync(snaps).filter((f) => f.endsWith(".html") && !written.has(f.slice(0, -5)));
+
+for (const [mark, body] of written) {
+  const file = join(snaps, `${mark}.html`);
+  let held = null;
+  try {
+    held = readFileSync(file, "utf8");
+  } catch {
+    held = null;
+  }
+  if (held === body) continue;
+  if (checking) stale.push(held === null ? `${mark} — no snapshot` : `${mark} — changed`);
+  else writeFileSync(file, body, "utf8");
+}
+
+if (!checking) for (const f of gone) rmSync(join(snaps, f));
+
+if (checking && (stale.length || gone.length)) {
+  console.error("The screens do not match their snapshots:");
+  for (const line of stale) console.error(`  ${line}`);
+  for (const f of gone) console.error(`  ${f.slice(0, -5)} — a snapshot for a screen that is gone`);
+  console.error("\nRun `pnpm shoot --bridge` to bring them up to date, then look at the images.");
+  process.exit(1);
+}
+
 const total = groups.reduce((n, g) => n + g.shots.length, 0);
-console.log(`screens.html — ${total} screen${total === 1 ? "" : "s"} from ${groups.length} file(s)`);
+console.log(
+  `screens.html — ${total} screen${total === 1 ? "" : "s"} from ${groups.length} file(s)` +
+    (checking ? ", snapshots current" : `, snapshots in ${relative(app, snaps)}`),
+);
