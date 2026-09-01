@@ -217,6 +217,14 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.readDiff, (_event, jobId: string | null) =>
     connection?.readDiff(jobId),
   );
+  // The rest of one cut row, fetched by the person who opened it. Its own
+  // channel and not part of `observeJob`: the socket is bounded on purpose, and
+  // an argument big enough to need this is the payload that would evict the
+  // rows somebody is reading. It answers rather than publishing, so nothing on
+  // the board re-renders because one reader opened a row.
+  ipcMain.handle(CHANNELS.readCall, (_event, jobId: string, callId: string) =>
+    connection?.readCall(jobId, callId),
+  );
   // Every report a person has filed, and the counts they are read beside. The
   // one read here that names no Job: a report outlives the Job it is about, so
   // a listing reached through one would lose the reports that most need

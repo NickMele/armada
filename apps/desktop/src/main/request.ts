@@ -6,8 +6,9 @@
 // is none of those. Nothing here holds state, so nothing here can drift from
 // what the socket believes.
 
-import type { Holdings, Outcome } from "../shared/bridge";
+import type { CallRead, Holdings, Outcome } from "../shared/bridge";
 import type { FleetCapacity, JobSummary, WireError } from "../shared/protocol";
+import type { CallArguments } from "../shared/turn";
 import type { ManifestSummary, ModelChoices, WorkflowSummary } from "../shared/setup";
 import { HOST } from "./runtime-file";
 
@@ -111,4 +112,33 @@ export async function holdingsOf(port: number, held: Holdings): Promise<Holdings
 export async function capacityOf(port: number): Promise<FleetCapacity | null> {
   const answer = await ask(port, "GET", "/capacity");
   return answer.ok === true ? (answer.body as FleetCapacity) : null;
+}
+
+/**
+ * One recorded tool call's arguments.
+ *
+ * **A read that answers rather than one that is held.** `reader.ts` exists for
+ * the reads a Job moving invalidates, and its whole job is dropping an answer
+ * whose id moved while it was in flight. A recorded argument cannot move and is
+ * asked for by one reader about one row, so there is no id to check it against
+ * and nothing to keep — which is why this sits here beside `capacityOf` rather
+ * than becoming a fifth `JobReader`.
+ *
+ * The refusal is carried through whole. On this route it is either the Job
+ * being gone, which the panel is already saying, or the call not being in its
+ * transcripts, which is the row's own business — so the caller decides what to
+ * say and nothing here turns one into a screen.
+ */
+export async function callArgumentsOf(
+  port: number,
+  jobId: string,
+  callId: string,
+): Promise<CallRead> {
+  const answer = await ask(
+    port,
+    "GET",
+    `/jobs/${encodeURIComponent(jobId)}/calls/${encodeURIComponent(callId)}`,
+  );
+  if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
+  return { ok: true, call: answer.body as CallArguments };
 }
