@@ -1,5 +1,6 @@
-import { CircleDot, Eye, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { ESCALATION_REASON, JOB_STATUS } from "../../generated/vocabulary";
+import { badgeOf } from "../badge";
 import { Button } from "../../primitives/Button/Button";
 import { Kbd } from "../../primitives/Kbd/Kbd";
 import { ActivityLog, type ActivityEntry } from "../../compositions/ActivityLog/ActivityLog";
@@ -19,8 +20,10 @@ import type { StepChapter } from "../../compositions/StepStory/StepStory";
  * same Job at a different moment — which is the claim the screen makes, and
  * six unrelated fixtures could not test it.
  *
- * **The header verb comes from the enum→verb map.** It is written in here
- * because a story has no generated module to read; Bridge reads one.
+ * **The header verb comes from the enum→verb map**, now emitted into this
+ * package at `src/generated/vocabulary.ts` by the generator that writes
+ * Bridge's copy. The sentence that stood here said a story had no generated
+ * module to read, and that is what let `Needs you` be typed into a badge.
  */
 
 /**
@@ -91,9 +94,7 @@ export const BRIEF: JobBriefProps = {
 };
 
 export const HEADING = {
-  status: "running",
-  statusIcon: CircleDot,
-  statusLabel: "Running",
+  ...badgeOf("running", JOB_STATUS),
   headline: "Split the settings reducer so the selectors can be tested alone",
   jobId: JOB,
   fields: [
@@ -110,19 +111,34 @@ export const HEADING = {
   ],
 };
 
-export const ESCALATED_HEADING = {
+/**
+ * An escalated Job's header, which reads by the reason it escalated.
+ * **`escalated` carries `verb: null, icon: null` deliberately** — the
+ * vocabulary refusing to render the status so the reason renders instead,
+ * because nobody says a Job escalated at step 3. So the reason is the argument
+ * and the badge is `ESCALATION_REASON`'s answer: `gate_failure` reads *Stopped
+ * at the gate*, `evidence_suspect` reads *Evidence disputed*, and neither
+ * string exists here. It replaces `Needs you`, which is `who_is_acting ==
+ * Person` — true of three other statuses, so a correct Board filter and a badge
+ * that could not name the status it sat on. #294.
+ */
+export const escalatedHeading = (reason: string) => ({
   ...HEADING,
-  status: "escalated",
-  statusIcon: Eye,
-  statusLabel: "Needs you",
-};
+  ...badgeOf(reason, ESCALATION_REASON),
+});
 
-export const FAILED_HEADING = {
-  ...HEADING,
-  status: "completed_failed",
-  statusIcon: X,
-  statusLabel: "Failed",
-};
+/** The Judge refused with the retries spent: the gate is what stopped it. */
+export const ESCALATED_HEADING = escalatedHeading("gate_failure");
+
+export const FAILED_HEADING = { ...HEADING, ...badgeOf("completed_failed", JOB_STATUS) };
+
+/**
+ * `Waiting on you` stood here beside the wire spelling `awaiting_review`, so
+ * the badge asked for a hue token that does not exist and said a thing three
+ * other statuses say too. The badge names the status; the decision block below
+ * it is where the screen asks something of you. Same defect as #294.
+ */
+export const WAITING_HEADING = { ...HEADING, ...badgeOf("awaiting_review", JOB_STATUS) };
 
 /** The first three steps, which are the same at every state below. */
 const BEHIND: RunTreeStep[] = [

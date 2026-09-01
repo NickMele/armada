@@ -133,7 +133,10 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             ("build", "cargo build --workspace --locked"),
             ("test", "cargo nextest run --workspace --exclude acceptance"),
             ("format", "cargo fmt --all --check"),
-            ("typecheck", "pnpm -C apps/desktop typecheck"),
+            (
+                "typecheck",
+                "pnpm -C apps/desktop typecheck && pnpm -C packages/components typecheck",
+            ),
             ("bridge_build", "pnpm -C apps/desktop build"),
             ("storybook", "pnpm -C packages/components build-storybook"),
         ]
