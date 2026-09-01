@@ -595,12 +595,26 @@ click is unusable at speed.
 
 ### One artifact, three columns
 
-Every action carries a **verb**, an **icon**, and a **shortcut** —
-generated from one source with a test asserting no entry is missing any
-of the three. This is the same discipline already applied to the
-enum→verb map and the icon map, extended one column. A new action cannot
-ship with no shortcut, and a shortcut cannot exist without a label to
-display next to it.
+Every action carries a **verb**, an **icon**, and a **shortcut**. The
+source is `crates/core-model/domain/actions.toml` and the test is the
+gate rule over it, which fails where an entry is missing any of the
+three. This is the same discipline already applied to the enum→verb map
+and the icon map, extended one column. A new action cannot ship with no
+shortcut, and a shortcut cannot exist without a label to display next to
+it.
+
+**The glyph is named, never redrawn.** An entry's icon is a key in
+`packages/icons/icons.toml`, which stays the authority on what a
+silhouette may mean; the gate refuses one that is unregistered or
+banned.
+
+**A blank glyph column says why it is blank, and the gate counts the
+blanks.** Copy debug info carries none by decision, for the reason the
+error treatment gives below. Several acts carry none because no
+registered glyph means them and assigning one is a decision for
+[Iconography](iconography.md). An entry that leaves the column empty and
+says nothing fails — which is the closure working, since the alternative
+is the back-fill by hand that this section existed to prevent.
 
 ### Two tiers
 
@@ -633,6 +647,7 @@ x              kill                (confirms)
 n              new job
 /              search the current list
 1–5            state filter        (Job Board only, in tab order)
+a              approve             (dispatch card only)
 v              observe             (detail only)
 u              submit for verification  (piloted job only)
 e              redispatch
@@ -642,6 +657,13 @@ e              redispatch
 Board and the command palette together, which is what forced the two
 halves into one artifact — the palette displays a binding beside every
 entry, so an unreconciled map is a palette that cannot be drawn.
+
+**Both blocks are transcribed from
+`crates/core-model/domain/actions.toml`**, which is the artifact above
+and the authority. They stay here because this document is pasted whole
+into a design session, where a pointer resolves to nothing; the gate
+reads both and fails where they disagree, on the binding, the verb and
+the annotations in brackets.
 
 Three reversals against what stood before, each with a reason:
 
