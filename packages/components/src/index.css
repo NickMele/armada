@@ -88,3 +88,6 @@
 
 /* One row of the run, and the facts it opens. */
 @import "./compositions/StepRow/StepRow.css";
+
+/* One row of Where things are — a path that opens, an identifier that copies. */
+@import "./compositions/WhereRow/WhereRow.css";

@@ -109,3 +109,7 @@ export * from "./compositions/PathChip/PathChip";
 // One row of the run — the step, its mark, its elapsed figure, and the short
 // facts the chevron opens. The tree composes these; it does not draw a row.
 export * from "./compositions/StepRow/StepRow";
+
+// One row of Where things are. A path opens where it lives; an identifier
+// copies; and the label column says which is which before the value is read.
+export * from "./compositions/WhereRow/WhereRow";
