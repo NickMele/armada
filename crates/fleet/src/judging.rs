@@ -547,7 +547,7 @@ pub(crate) async fn gaming(
                 },
             );
             let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
-            flags.extend(brief.read(&said).map_err(CallFailed::Unreadable)?);
+            flags.extend(brief.read(&said, patch).map_err(CallFailed::Unreadable)?);
         }
     }
     Ok(Flagged::among(flags))

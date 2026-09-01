@@ -36,7 +36,21 @@
 /// **Raising it would not have caught the fabrication.** #171's invented span
 /// is ten words and the two honest ones are nineteen and twenty-nine, so every
 /// threshold that lets those through lets the fabrication through first.
-const A_CITATION: usize = 4;
+pub(crate) const A_CITATION: usize = 4;
+
+/// Every quoted span in a citation, in the order it wrote them.
+///
+/// **Attribution is not asked for here**, unlike [`invented`]. Attribution is
+/// what makes a quotation a claim *about the material*, which is the question
+/// containment answers; [`located`](mod@crate::located) is asking a different
+/// one — where these words are — and words the patch holds are somewhere
+/// whether or not the sentence around them said where they came from.
+pub(crate) fn spans(cited: &str) -> Vec<String> {
+    quotations(cited)
+        .into_iter()
+        .map(|quotation| quotation.span)
+        .collect()
+}
 
 /// The first quoted span in `cited` that is attributed to a source and appears
 /// nowhere in `shown`.
@@ -218,7 +232,7 @@ fn after(cited: &str, at: usize) -> usize {
 ///
 /// Padding is what makes `contains` a word-boundary test: without it `"the ipc"`
 /// would be found inside `the ipcs`.
-fn words(text: &str) -> String {
+pub(crate) fn words(text: &str) -> String {
     let mut said = String::with_capacity(text.len() + 2);
     said.push(' ');
     for character in text.chars() {

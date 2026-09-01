@@ -12,6 +12,8 @@
 //! mid-step look, which gates nothing and holds the same two rules anyway.
 //! [`quoted`] is the reading under a citation — whether the words a refusal
 //! puts in quotation marks are in what the call was shown, or in nothing.
+//! [`located`] is where a gaming flag says it found what it found, and which
+//! half of a location each pattern can establish.
 //! [`answered`] is the Check tier of a brief — the two outcomes a Judge can
 //! actually be shown, and the bound on how much of a run travels with them.
 
@@ -20,6 +22,7 @@ mod converging;
 mod gaming;
 mod gate;
 mod judge;
+mod located;
 mod product;
 mod quoted;
 mod request;

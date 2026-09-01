@@ -26,7 +26,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::job::ids::StepId;
+use crate::job::ids::{RepoPath, StepId};
 
 /// Who answers a pattern.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -260,6 +260,50 @@ impl GamingCheck {
     }
 }
 
+/// Where in the change a flag points, for a flag that points anywhere.
+///
+/// **`line` is a post-image coordinate** — where the line sits in the file as
+/// this change leaves it. So a citation quoting a line the change *removed*
+/// carries the file and no line: the words it quotes are not in that file any
+/// more, and answering with where they used to be would send a person to a
+/// line now holding something else.
+///
+/// **Two constructors rather than one taking an `Option`.** Having a file and
+/// having a line in it are different facts about how much was established, and
+/// a caller holding only the file has to say so rather than pass `None` by
+/// forgetting the argument. There is no constructor taking a line alone: a
+/// line number with nothing to number is unnavigable, which is the shape an
+/// uncited flag already has and the whole thing this type exists to end.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CitedAt {
+    file: RepoPath,
+    line: Option<u32>,
+}
+
+impl CitedAt {
+    /// The file, where nothing narrower was established. A whole file is a
+    /// place a person can go.
+    pub fn in_file(file: RepoPath) -> CitedAt {
+        CitedAt { file, line: None }
+    }
+
+    /// A file and the line in it, numbered as the change leaves the file.
+    pub fn at_line(file: RepoPath, line: u32) -> CitedAt {
+        CitedAt {
+            file,
+            line: Some(line),
+        }
+    }
+
+    pub fn path(&self) -> &RepoPath {
+        &self.file
+    }
+
+    pub fn line(&self) -> Option<u32> {
+        self.line
+    }
+}
+
 /// One pattern found, and what it was found in.
 ///
 /// **Never a verdict.** A flag says the evidence is suspect; it does not say
@@ -271,4 +315,15 @@ pub struct GamingFlag {
     /// value of the flag** — an uncited one is unactionable for the person it
     /// is escalated to, exactly as an uncited refusal is.
     pub cited: String,
+    /// Where in the change [`cited`](GamingFlag::cited) is, where that was
+    /// established from the patch rather than asserted.
+    ///
+    /// **`None` is a real answer and not a gap to be filled later.**
+    /// `no_findings_on_substantial_diff` is a finding *about an absence* and
+    /// can never have one, and any pattern whose citation is written unquoted
+    /// — the escape `GamingBrief` grants a finding with no single line behind
+    /// it — has nothing to look up. Inventing a plausible location here would
+    /// be worse than leaving it empty: an uncited flag is unactionable, and a
+    /// wrongly cited one sends a person to the wrong file believing it.
+    pub at: Option<CitedAt>,
 }

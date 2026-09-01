@@ -30,6 +30,7 @@ mod drift;
 mod gaming;
 mod gate;
 mod judge;
+mod located;
 mod mechanical;
 mod outcome;
 mod product;

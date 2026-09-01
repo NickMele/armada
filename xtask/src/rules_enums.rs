@@ -79,6 +79,10 @@ const ENUMS: &[EnumSource] = &[
         name: "Guard",
         path: "crates/core-model/src/job/guard.rs",
     },
+    EnumSource {
+        name: "GamingPattern",
+        path: "crates/core-model/src/job/gaming.rs",
+    },
 ];
 
 /// A registry table, and the enum whose wire spellings its keys must be.
@@ -172,6 +176,16 @@ const PAIRINGS: &[Pairing] = &[
         prefix: "verbs.origin.",
         enum_name: "Origin",
     },
+    // Which shape of gaming one flag found, and it has no registry file of its
+    // own either: the set is what a workflow's `flag_if` may name, and the
+    // verbs are the only place it is spelled key by key. Job detail draws one
+    // of these words per flag, so an unpaired tenth value is the wire spelling
+    // printed at a person — which is how the vocabulary came to be registered.
+    Pairing {
+        registry: "enum-verbs.toml",
+        prefix: "verbs.gaming_pattern.",
+        enum_name: "GamingPattern",
+    },
 ];
 
 /// The vocabularies `enum-verbs.toml` declares in its own header.
@@ -193,6 +207,7 @@ const VOCABULARIES: &[&str] = &[
     "criterion_verdict_check",
     "criterion_verdict_judge",
     "criterion_verdict_attested",
+    "gaming_pattern",
     "origin",
 ];
 
