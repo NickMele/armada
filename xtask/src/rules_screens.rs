@@ -76,7 +76,11 @@ pub fn every_render_has_a_screen(root: &Path) -> Report {
 
     let held: BTreeSet<String> = files_with_ext(root, &root.join(SNAPSHOTS), &["html"])
         .iter()
-        .filter_map(|p| p.rsplit('/').next().map(|f| f.trim_end_matches(".html").to_string()))
+        .filter_map(|p| {
+            p.rsplit('/')
+                .next()
+                .map(|f| f.trim_end_matches(".html").to_string())
+        })
         .collect();
 
     for (mark, _) in &screens {
@@ -102,7 +106,9 @@ pub fn every_render_has_a_screen(root: &Path) -> Report {
 /// The arrangements, read off the union rather than listed here.
 fn renders_of(root: &Path, report: &mut Report) -> BTreeSet<String> {
     let Ok(text) = fs::read_to_string(root.join(RENDER)) else {
-        report.fail(format!("{RENDER} — not readable, so no render can be counted"));
+        report.fail(format!(
+            "{RENDER} — not readable, so no render can be counted"
+        ));
         return BTreeSet::new();
     };
     // `export type Render = "working" | "reviewing" | ...`, which may wrap.
@@ -116,7 +122,9 @@ fn renders_of(root: &Path, report: &mut Report) -> BTreeSet<String> {
     let end = rest.find(';').unwrap_or(rest.len());
     let found = quoted(&rest[..end]);
     if found.is_empty() {
-        report.fail(format!("{RENDER} — `Render` names no arrangement this rule could read"));
+        report.fail(format!(
+            "{RENDER} — `Render` names no arrangement this rule could read"
+        ));
     }
     found
 }
