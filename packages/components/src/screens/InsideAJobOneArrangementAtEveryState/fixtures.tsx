@@ -347,7 +347,10 @@ export const CHAPTERS: StepChapter[] = [
     id: "log",
     ordinal: 2,
     title: "Activity log",
-    summary: "live · 47 entries · every line opens",
+    // `live` is the running dot, not the word. A count says how many entries
+    // there are and only the dot says they are still arriving.
+    live: true,
+    summary: "47 entries · every line opens",
     preview: <ActivityLog entries={PREVIEW} />,
     content: <ActivityLog entries={WHOLE} />,
     openLabel: "Open the log — all 47 entries",

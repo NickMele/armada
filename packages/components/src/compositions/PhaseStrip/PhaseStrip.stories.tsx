@@ -239,3 +239,22 @@ export const NoGateAtAll: Story = {
     ],
   },
 };
+
+/**
+ * Held by the caller. `pinnedStage` is the whole of what is pinned and clicking
+ * a chip only reports — **the pin in this story does not move**, because that
+ * is what a controlled component does when nobody holds the other end. Hover
+ * still opens a card: hovering is a reading of the pointer's position, not a
+ * held decision, and a caller holding it would be told about every crossing.
+ *
+ * It exists for a keyboard map that has to open a stage by id. The alternative
+ * it replaces is a caller reaching into the DOM for
+ * `button.armada-phases__control`, which works until this component renames a
+ * class.
+ */
+export const HeldByTheCaller: Story = {
+  args: {
+    ...WithYouPresent.args,
+    pinnedStage: "judge",
+  },
+};

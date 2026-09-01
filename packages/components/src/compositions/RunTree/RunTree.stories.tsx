@@ -246,3 +246,17 @@ export const NoHumanName: Story = {
 export const ReadOnly: Story = {
   args: { steps: BUG },
 };
+
+/**
+ * Held by the caller. `openSteps` is the whole of what is open and the chevrons
+ * only report — **this story is deliberately inert**, because that is what a
+ * controlled component does when nobody holds the other end.
+ *
+ * It exists for a keyboard map that has to open a step's facts by id. The
+ * alternative it replaces is a caller reaching into the DOM for
+ * `.armada-srow__chevron` and clicking it, which works until this component
+ * renames a class.
+ */
+export const HeldByTheCaller: Story = {
+  args: { steps: BUG, onSelect: () => {}, openSteps: ["root_cause", "fix"] },
+};

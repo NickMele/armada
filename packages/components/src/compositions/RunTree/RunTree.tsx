@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { FactChip, type FactChipNamed } from "../FactChip/FactChip";
 import { PathChip } from "../PathChip/PathChip";
 import { StepRow } from "../StepRow/StepRow";
@@ -152,9 +152,22 @@ export type RunTreeProps = {
    */
   onSelect?: (stepId: string) => void;
   /**
+   * Which steps have their facts open, held by the caller. **Present makes the
+   * tree controlled**: it draws exactly these and opens nothing itself, and
+   * `onOpen` is the only way the set moves. `[]` is a tree with every step
+   * closed, which is not the same as absent.
+   *
+   * This exists so a keyboard map can open a step's facts by id instead of
+   * finding the chevron by the class this component happens to ship. Absent
+   * leaves the tree uncontrolled and `factsOpen` seeds it, which is what every
+   * caller that only clicks wants.
+   */
+  openSteps?: readonly string[];
+  /**
    * Told when a step's facts are opened or closed, for a caller that wants to
-   * remember it across a remount. **The tree does not need it** — it holds its
-   * own open set, because the alternative is every screen holding one.
+   * remember it across a remount. **An uncontrolled tree does not need it** —
+   * it holds its own open set, because the alternative is every screen holding
+   * one. A controlled tree does: nothing else moves the set.
    */
   onOpen?: (stepId: string, open: boolean) => void;
   /** A clipboard write is silent, so the surface confirms every one. */
@@ -175,22 +188,42 @@ export type RunTreeProps = {
  * than only in a commit, because the next person to touch selection will reach
  * for the same default.
  */
-export function RunTree({ steps, pulsing = false, onSelect, onOpen, onCopied }: RunTreeProps) {
-  const [open, setOpen] = useState<ReadonlySet<string>>(
+export function RunTree({
+  steps,
+  pulsing = false,
+  onSelect,
+  openSteps,
+  onOpen,
+  onCopied,
+}: RunTreeProps) {
+  const [held, setHeld] = useState<ReadonlySet<string>>(
     () => new Set(steps.filter((step) => step.factsOpen).map((step) => step.id)),
   );
+  // Controlled by presence, not by a flag: a caller either holds the set or it
+  // does not, and a boolean beside it is a second answer that can disagree.
+  const controlled = openSteps !== undefined;
+  const open = useMemo(
+    () => (openSteps === undefined ? held : new Set(openSteps)),
+    [openSteps, held],
+  );
 
+  // `onOpen` is called here rather than inside the updater. A state updater
+  // runs twice under StrictMode and must be pure; a caller told twice that one
+  // chevron was pressed is a caller that recorded it twice.
   const toggle = useCallback(
     (stepId: string) => {
-      setOpen((held) => {
-        const next = new Set(held);
-        if (next.has(stepId)) next.delete(stepId);
-        else next.add(stepId);
-        onOpen?.(stepId, next.has(stepId));
-        return next;
-      });
+      const next = !open.has(stepId);
+      if (!controlled) {
+        setHeld((was) => {
+          const now = new Set(was);
+          if (next) now.add(stepId);
+          else now.delete(stepId);
+          return now;
+        });
+      }
+      onOpen?.(stepId, next);
     },
-    [onOpen],
+    [controlled, onOpen, open],
   );
 
   return (

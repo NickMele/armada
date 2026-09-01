@@ -82,6 +82,14 @@ export type StepPanel = {
   /** Which chapter is open on mount. */
   openChapter?: string;
   /**
+   * Which chapter is open, held by the surface. Present makes the story
+   * controlled — see `StepStoryProps.openChapter`. It is here so a keyboard map
+   * can name a chapter rather than find one by the class the story ships.
+   */
+  openChapterId?: string | null;
+  /** Told when a chapter is opened or closed. */
+  onOpenChapter?: (chapterId: string | null) => void;
+  /**
    * After the story — the decision, on a step waiting for one. **At the end
    * rather than in the header**, because you make it after reading; the header
    * is for acts that change what a Drone is doing.
@@ -120,6 +128,15 @@ export type InsideAJobProps = {
    */
   pulsing?: boolean;
   onSelectStep?: (stepId: string) => void;
+  /**
+   * Which steps have their facts open, held by the surface. Present makes the
+   * tree controlled — see `RunTreeProps.openSteps`. It is here so a keyboard
+   * map can name a step rather than find its chevron by the class the tree
+   * ships.
+   */
+  openSteps?: readonly string[];
+  /** Told when a step's facts are opened or closed. */
+  onOpenStep?: (stepId: string, open: boolean) => void;
   /**
    * Where things are — the worktree, the branch, the Manifest, the workflow,
    * the log, the transcript, the Drone. **A path opens where it lives; an
@@ -162,6 +179,8 @@ export function InsideAJob({
   runAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
   pulsing = true,
   onSelectStep,
+  openSteps,
+  onOpenStep,
   where,
   whereLabel = "Where things are",
   whereNote,
@@ -196,6 +215,8 @@ export function InsideAJob({
               steps={run}
               pulsing={pulsing}
               onSelect={onSelectStep}
+              openSteps={openSteps}
+              onOpen={onOpenStep}
               onCopied={onCopied}
             />
           )}
@@ -299,7 +320,12 @@ export function InsideAJob({
                 <div className="armada-inside__before">{step.before}</div>
               )}
 
-              <StepStory chapters={step.chapters} openId={step.openChapter} />
+              <StepStory
+                chapters={step.chapters}
+                openId={step.openChapter}
+                openChapter={step.openChapterId}
+                onOpen={step.onOpenChapter}
+              />
 
               {step.after === undefined ? null : (
                 <div className="armada-inside__after">{step.after}</div>

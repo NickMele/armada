@@ -96,6 +96,18 @@ export type PhaseStripProps = {
   note?: ReactNode;
   /** Which stage is pinned on mount. After that the strip holds its own. */
   pinnedId?: string;
+  /**
+   * Which stage is pinned, held by the caller. **Present makes the strip
+   * controlled**: it draws what this says and pins nothing itself, and `onPin`
+   * is the only way the value moves — including `Escape`, which reports rather
+   * than unpins. `null` is a strip with nothing pinned.
+   *
+   * This exists so a keyboard map can open a stage by id instead of finding the
+   * chip by the class this component happens to ship. Hover is untouched by it:
+   * hovering is a reading of the pointer's position, not a held decision, and a
+   * caller holding it would have to be told about every mouse crossing.
+   */
+  pinnedStage?: string | null;
   /** Told when a stage is pinned or unpinned, for a caller that records it. */
   onPin?: (stageId: string | null) => void;
 };
@@ -109,10 +121,15 @@ export function PhaseStrip({
   label = "Where this step is",
   note,
   pinnedId,
+  pinnedStage,
   onPin,
 }: PhaseStripProps) {
-  const [pinned, setPinned] = useState<string | null>(pinnedId ?? null);
+  const [held, setHeld] = useState<string | null>(pinnedId ?? null);
   const [hovered, setHovered] = useState<string | null>(null);
+  // Controlled by presence, not by a flag: a caller either holds the value or
+  // it does not, and a boolean beside it is a second answer that can disagree.
+  const controlled = pinnedStage !== undefined;
+  const pinned = controlled ? pinnedStage : held;
   // Two strips on one page is the gallery, every day. A fixed id would point
   // every stage on the second strip at the first strip's card.
   const panelId = useId();
@@ -120,29 +137,32 @@ export function PhaseStrip({
   const open = pinned ?? hovered;
   const shown = stages.find((stage) => stage.id === open) ?? null;
 
+  // `onPin` is called here rather than inside the updater. A state updater runs
+  // twice under StrictMode and must be pure; a caller told twice that one chip
+  // was clicked is a caller that recorded it twice.
   const pin = useCallback(
     (stageId: string) => {
-      setPinned((was) => {
-        const next = was === stageId ? null : stageId;
-        onPin?.(next);
-        return next;
-      });
+      const next = pinned === stageId ? null : stageId;
+      if (!controlled) setHeld(next);
+      onPin?.(next);
     },
-    [onPin],
+    [controlled, onPin, pinned],
   );
 
   // Escape unpins. A card held open over the strip is covering the thing it
   // explains, and the way out of it should not be finding the same chip again.
+  // A controlled strip is told rather than unpinned: the caller holds the value
+  // and this would otherwise be a second hand on it.
   useEffect(() => {
     if (pinned === null) return;
     function onKey(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
-      setPinned(null);
+      if (!controlled) setHeld(null);
       onPin?.(null);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pinned, onPin]);
+  }, [controlled, pinned, onPin]);
 
   return (
     <section className="armada-phases">
