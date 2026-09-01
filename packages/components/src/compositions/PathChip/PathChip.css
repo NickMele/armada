@@ -9,12 +9,32 @@
   min-width: 0;
   max-width: 100%;
   padding: var(--border-width) calc(var(--space-1) + var(--space-1) / 2);
+  border: 0;
   border-radius: var(--radius-sm);
   background: var(--bg-raised);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   vertical-align: baseline;
+  text-align: left;
+}
+
+/* A chip that copies is a control. No copy glyph: a mono value that brightens
+   under the cursor is the convention this app already uses for a value that
+   goes to the clipboard, and a glyph on every produced path in a six-row
+   column is six glyphs saying one thing. */
+button.armada-path {
+  cursor: pointer;
+}
+
+button.armada-path:hover .armada-path__base,
+button.armada-path:focus-visible .armada-path__base {
+  color: var(--fg-default);
+}
+
+button.armada-path:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 /* The half that gives way. `direction: rtl` puts the overflow end at the

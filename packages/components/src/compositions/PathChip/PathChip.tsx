@@ -46,12 +46,22 @@ export type PathChipProps = {
    * in full, and hovering it is the cheapest place.
    */
   title?: string;
+  /**
+   * Copy the whole path. **What goes on the clipboard is the whole value, never
+   * what fits** — a copy truncated with the display would be worse than the
+   * overflow it fixed.
+   *
+   * Absent draws the chip as a value rather than as a control, which is what a
+   * path in a read-only record is.
+   */
+  onCopy?: (path: string) => void;
 };
 
-export function PathChip({ directory, basename, note, title }: PathChipProps) {
+export function PathChip({ directory, basename, note, title, onCopy }: PathChipProps) {
   const whole = title ?? `${directory ?? ""}${basename}`;
-  return (
-    <span className="armada-path" title={whole}>
+
+  const body = (
+    <>
       {directory === undefined || directory === "" ? null : (
         // `dir="ltr"` inside an `rtl` box: the characters stay in reading
         // order and only the overflow end moves. Without it a path renders
@@ -62,6 +72,36 @@ export function PathChip({ directory, basename, note, title }: PathChipProps) {
       )}
       <span className="armada-path__base">{basename}</span>
       {note === undefined ? null : <span className="armada-path__note">{note}</span>}
-    </span>
+    </>
+  );
+
+  if (onCopy === undefined) {
+    return (
+      <span className="armada-path" title={whole}>
+        {body}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="armada-path"
+      title={whole}
+      // A tree row selects a step and the chip inside it copies a path. Without
+      // this the copy would select the step as well, which is the one gesture
+      // a person doing the other one did not want.
+      onClick={(event) => {
+        event.stopPropagation();
+        void navigator.clipboard.writeText(whole).then(
+          // A failed clipboard write is otherwise indistinguishable from a
+          // dead element, so the surface is told either way.
+          () => onCopy(whole),
+          () => onCopy(whole),
+        );
+      }}
+    >
+      {body}
+    </button>
   );
 }

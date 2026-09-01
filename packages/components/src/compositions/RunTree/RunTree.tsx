@@ -1,7 +1,9 @@
-import { ChevronDown, ChevronRight, Lock } from "lucide-react";
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useCallback, useState } from "react";
-import { StepActivityMark, type StepActivity } from "../StepActivityMark/StepActivityMark";
+import { FactChip, type FactChipNamed } from "../FactChip/FactChip";
+import { PathChip } from "../PathChip/PathChip";
+import { StepRow } from "../StepRow/StepRow";
+import type { StepActivity } from "../StepActivityMark/StepActivityMark";
 
 /**
  * The run — the workflow as a tree, on the left of job detail.
@@ -31,6 +33,13 @@ import { StepActivityMark, type StepActivity } from "../StepActivityMark/StepAct
  * tried and cannot get further, failed is over. `StepActivityMark` owns the
  * glyphs and the stylesheet owns the surfaces; both are the same values the
  * rail uses, so a step renders the same way on either.
+ *
+ * **The tree does not draw a row.** `StepRow` does, `FactChip` and `PathChip`
+ * draw what is under it, and this holds the well and the order. It drew all
+ * three itself while those components were also drawing them, which is two
+ * answers to one question — and it passed a list number to a step that had not
+ * run, where the drawing gives a hollow ring. In a tree of six rows a column
+ * of numbers says only that the tree has six rows.
  */
 
 /**
@@ -152,12 +161,6 @@ export type RunTreeProps = {
   onCopied?: (value: string) => void;
 };
 
-/** Chevrons are 16px — disclosure is chrome, and chrome runs at 16. */
-const CHEVRON = 16;
-/** Every mark below Job level is 12px at strokeWidth 2. */
-const MARK_ICON = 12;
-const MARK_STROKE = 2;
-
 /**
  * **Facts stay as the reader left them; selecting a step does not open them.**
  *
@@ -190,150 +193,47 @@ export function RunTree({ steps, pulsing = false, onSelect, onOpen, onCopied }: 
     [onOpen],
   );
 
-  const copy = useCallback(
-    (event: MouseEvent<HTMLElement>, value: string) => {
-      event.stopPropagation();
-      void navigator.clipboard.writeText(value).then(
-        // A failed clipboard write is otherwise indistinguishable from a dead
-        // element, so the surface is told either way.
-        () => onCopied?.(value),
-        () => onCopied?.(value),
-      );
-    },
-    [onCopied],
-  );
-
   return (
     <ol className="armada-run">
-      {steps.map((step, i) => {
-        const facts = step.facts ?? [];
-        const shown = open.has(step.id);
-        const panelId = `armada-run-facts-${step.id}`;
-        return (
-          <li className="armada-run__step" key={step.id}>
-            <div
-              className="armada-run__row"
-              data-activity={step.activity}
-              data-current={step.current || undefined}
-            >
-              {/* The chevron and the row are two controls, not one. A button
-                  inside a button is not a thing the DOM has, and the two do
-                  different work: this opens the facts, the name selects. */}
-              <button
-                type="button"
-                className="armada-run__chevron"
-                aria-expanded={shown}
-                aria-controls={panelId}
-                aria-label={shown ? "Close this step's facts" : "Open this step's facts"}
-                onClick={() => toggle(step.id)}
-              >
-                {shown ? (
-                  <ChevronDown size={CHEVRON} strokeWidth={MARK_STROKE} aria-hidden />
-                ) : (
-                  <ChevronRight size={CHEVRON} strokeWidth={MARK_STROKE} aria-hidden />
-                )}
-              </button>
-
-              <StepActivityMark
-                activity={step.activity}
-                label={step.status ?? step.activity}
-                ordinal={i + 1}
-                pulsing={pulsing && step.current}
-              />
-
-              {onSelect === undefined ? (
-                <span
-                  className="armada-run__name"
-                  data-identifier={step.labelIsAnIdentifier || undefined}
-                >
-                  {step.label}
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  className="armada-run__name"
-                  data-identifier={step.labelIsAnIdentifier || undefined}
-                  aria-current={step.current ? "true" : undefined}
-                  onClick={() => onSelect(step.id)}
-                >
-                  {step.label}
-                </button>
-              )}
-
-              {/* Label only, and no action behind it. A hard prerequisite is a
-                  property of the workflow definition rather than of this run,
-                  so it takes the quietest treatment that survives being
-                  repeated three times on one tree. */}
-              {step.locked ? (
-                <span
-                  className="armada-run__lock"
-                  title={step.lockedLabel ?? "Cannot be skipped, even on retry"}
-                >
-                  <Lock size={MARK_ICON} strokeWidth={MARK_STROKE} aria-hidden />
-                  <span className="armada-run__sr">
-                    {step.lockedLabel ?? "Cannot be skipped, even on retry"}
-                  </span>
-                </span>
-              ) : null}
-
-              {step.elapsed ? <span className="armada-run__elapsed">{step.elapsed}</span> : null}
-            </div>
-
-            {/* Kept in the document while closed so the row's `aria-controls`
-                names something. Hidden, not unmounted — a reference to an
-                element that is not there is worse than no reference. */}
-            <div className="armada-run__facts" id={panelId} hidden={!shown}>
-              {facts.length === 0 ? (
-                <p className="armada-run__absent">
-                  {step.factsAbsent ?? "Nothing was recorded against this step."}
-                </p>
-              ) : (
-                <ul className="armada-run__fact-rows">
-                  {facts.map((fact, f) => (
-                    <li className="armada-run__fact" key={f}>
-                      <span className="armada-run__fact-label">{fact.label}</span>
-                      {fact.value === undefined ? null : (
-                        <span className="armada-run__fact-value" data-named={fact.named}>
-                          {fact.value}
-                        </span>
-                      )}
-                      {fact.paths === undefined || fact.paths.length === 0 ? null : (
-                        <ul className="armada-run__paths">
-                          {fact.paths.map((path, p) => {
-                            const whole = `${path.directory ?? ""}${path.basename}`;
-                            return (
-                              <li className="armada-run__path" key={p}>
-                                {/* The whole path is on the clipboard and in
-                                    the title however narrow the column gets:
-                                    a copy truncated with the display would be
-                                    worse than the overflow it fixed. */}
-                                <span
-                                  className="armada-run__path-value"
-                                  title={whole}
-                                  data-copies="true"
-                                  onClick={(event) => copy(event, whole)}
-                                >
-                                  {path.directory ? (
-                                    <span className="armada-run__path-dir">{path.directory}</span>
-                                  ) : null}
-                                  <span className="armada-run__path-base">{path.basename}</span>
-                                </span>
-                                {path.note === undefined ? null : (
-                                  <span className="armada-run__path-note">{path.note}</span>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </li>
+      {steps.map((step) => (
+        <li className="armada-run__step" key={step.id}>
+          <StepRow
+            label={step.label}
+            labelIsAnIdentifier={step.labelIsAnIdentifier}
+            activity={step.activity}
+            status={step.status ?? step.activity}
+            elapsed={step.elapsed}
+            selected={step.current}
+            open={open.has(step.id)}
+            onToggle={() => toggle(step.id)}
+            onSelect={onSelect === undefined ? undefined : () => onSelect(step.id)}
+            locked={step.locked}
+            lockedLabel={step.lockedLabel}
+            pulsing={pulsing && (step.current ?? false)}
+            factsId={`armada-run-facts-${step.id}`}
+            factsAbsent={step.factsAbsent}
+            facts={(step.facts ?? []).map((fact) => ({
+              label: fact.label,
+              value: (
+                <>
+                  {fact.value === undefined ? null : (
+                    <FactChip named={fact.named as FactChipNamed | undefined}>{fact.value}</FactChip>
+                  )}
+                  {(fact.paths ?? []).map((path, p) => (
+                    <PathChip
+                      key={p}
+                      directory={path.directory}
+                      basename={path.basename}
+                      note={path.note}
+                      onCopy={onCopied}
+                    />
                   ))}
-                </ul>
-              )}
-            </div>
-          </li>
-        );
-      })}
+                </>
+              ),
+            }))}
+          />
+        </li>
+      ))}
     </ol>
   );
 }
