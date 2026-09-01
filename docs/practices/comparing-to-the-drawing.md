@@ -20,7 +20,7 @@ beside the drawing.
 | `pnpm shoot --bridge` | Builds Bridge's own screens from `apps/desktop`, captures them to `.shots/bridge/` |
 | `pnpm shoot --design <file.dc.html>` | Captures every marked frame of a drawing to `.shots/design/`, caching the drawing beside them |
 | `pnpm shoot --design <file> --suggest` | Proposes a mark for each unmarked frame instead of refusing |
-| `pnpm shoot --sheet` | Pairs what has been captured into `.shots/sheet.html` and `.shots/pairs/` |
+| `pnpm shoot --sheet [pair]` | Pairs two captured sides into `.shots/sheet.html` and `.shots/pairs/`. `design:app` by default, or `design:bridge`, or `app:bridge` |
 
 **It needs nothing but an installed workspace.** No network, no running Fleet,
 no built app. The browser is Bridge's own Electron.
@@ -45,9 +45,17 @@ app's own code from one fixture, the way it is derived from one wire read at
 runtime. A shot of a control in isolation proves the control and says nothing
 about the screen, which is the question this side exists to answer.
 
-**The stage is Bridge's own window, 1280×800, and it clips.** A right edge cut
-off is a finding rather than an artifact: it is a screen whose content will not
-shrink to the window it ships in. The screens are declared in
+**The stage is Bridge's own window, 1280×800, and a screen may name a second
+width.** `width` on a screen entry draws the same composition at another size,
+which is how "designed for resize rather than for the size it was built at"
+stops being a claim nobody checks.
+
+**The page loads the stylesheet Bridge ships, read out of its own build.** Not a
+list assembled by the tool: the renderer imports Tailwind between the tokens and
+the components, so a page that followed only the component stylesheets had no
+`box-sizing: border-box` and every screen overflowed by its own padding. That
+looked exactly like a layout defect in the app and was reported as one. **Check
+the page loads what the app loads before believing what it shows.** The screens are declared in
 `*.screens.tsx` beside the code they draw: a file exports a `title` and a
 `screens` array, and each entry states its own `data-shot` mark, the name to
 print, and one element. Fixtures are written in the file — enough of the wire's
@@ -118,9 +126,17 @@ person's job or an agent's.
 A split button is captured closed, so what its menu holds is not on the shot —
 read that in the markup or in the code.
 
-**`--bridge` captures and does not pair.** `--sheet` pairs the drawing against
-`app`. Pairing a drawing against `bridge` needs the drawing's frames to carry
-the same marks, and no drawing does yet.
+**A sheet is two sides, named, and never three.** A state the gallery and Bridge
+both render has three pictures, and a sheet that silently dropped one would
+rebuild the blind spot this exists to end. So the pair is chosen: the third
+picture is a second run away.
+
+**`app:bridge` needs no drawing at all.** It asks whether the gallery's
+arrangement of a screen and the app's assembly of it are the same screen —
+which is the question nobody could ask when a story's fixture said `Needs you`
+and the pair beside it agreed, because both halves came from the gallery.
+Neither side of that pair is the authority, so it reports drift rather than
+refusing anything.
 
 **It pairs one drawing at a time.** `--design` replaces `.shots/design/`.
 
