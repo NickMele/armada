@@ -16,7 +16,8 @@ use ipc::{
 };
 use store::{LoadJobError, Moved, RecordedEvent, Store};
 
-use crate::adrift::{Adrift, NotSubmitted};
+use crate::adrift::Adrift;
+use crate::evidence::NotSubmitted;
 use crate::judging::Aloft;
 
 /// The wire shape of one declared Check.

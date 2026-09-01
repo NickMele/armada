@@ -21,12 +21,12 @@ use verification::{
     CheckFailed, Claimed, NotClaimed, OutsideScope, Request, ShownBy, DECLARED_PLAN_DRIFT,
 };
 
-use crate::adrift::NotDeclared;
 use crate::at_step::AtStep;
 use crate::daemon::Fleet;
 use crate::evidence::Call;
 use crate::gate::{apply, rule_on, Ruling};
 use crate::judging::Judging;
+use crate::scope::NotDeclared;
 use crate::tests::briefing::turns_sent;
 use crate::tests::daemon::{a_fleet_holding, a_fleet_judged_by, a_proposal, worktree_directory};
 use crate::tests::gate::{

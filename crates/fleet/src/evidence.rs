@@ -25,15 +25,16 @@
 //! on both sides of the inbox: the tool, the queue, and Fleet's answering half.
 
 use std::collections::{BTreeMap, VecDeque};
+use std::error::Error;
+use std::fmt;
 use std::sync::Mutex;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use config::EvidenceType;
-use core_model::{JobId, JobStatus, Timestamp};
+use core_model::{JobId, JobStatus, StepId, Timestamp};
 use ipc::mcp::SubmitEvidence;
 use verification::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};
 
-use crate::adrift::NotSubmitted;
 use crate::daemon::Fleet;
 
 /// The receipt. **One word, and no way to make it say anything else.**
@@ -467,5 +468,86 @@ where
             dropped += 1;
         }
         dropped
+    }
+}
+
+/// Why a submission was not taken. **Beside the act it refuses**, which is
+/// `dry_run`'s argument for [`NotRun`](crate::dry_run::NotRun) applied to the
+/// two refusals that stayed behind in `adrift` when it was made: a module
+/// every refusal has to be opened to add one to is a module two changes
+/// collide in, and this one is raised nowhere but here.
+///
+/// **Neither variant is a gate failure.** Nothing has been verified and nothing
+/// has failed: the tool call was malformed, or there is no Job for it to be
+/// about.
+#[derive(Debug)]
+pub enum NotSubmitted {
+    /// No Job is being worked, so there is no step the submission could be
+    /// against. The Evidence tool is bound to a Job at construction, so this is
+    /// a call that arrived after its Drone's Job ended.
+    NothingIsWorking,
+    /// The Job is standing at a step its frozen workflow does not name. **A
+    /// fault in Fleet, not in the call**, and nothing the Drone can do about it.
+    NoSuchStep { step: StepId },
+    /// The step declares no work product, so there is no type for Fleet to
+    /// record the submission under. A Drone cannot supply one — the tool has no
+    /// parameter for it, because a Drone is never told what its step declared.
+    StepDeclaresNothing { step: StepId },
+    /// Evidence for this step is already waiting for the gate.
+    ///
+    /// **This is the "already advanced" refusal**, arriving one moment earlier
+    /// than the phrase suggests: the tool names no step, so a submission that
+    /// beats the gate and one that follows it are the same bytes, and the
+    /// distinguishable case is the second call rather than the stale step.
+    /// Refused rather than queued — a second submission would be ruled on
+    /// against whatever step the first one advanced the Job to.
+    AlreadyWaiting { step: StepId },
+    /// The call itself was not a submission — an empty `claimed`, an empty
+    /// `shown_by`.
+    Malformed(verification::NotASubmission),
+}
+
+impl fmt::Display for NotSubmitted {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            NotSubmitted::NothingIsWorking => out.write_str(
+                "no Job is being worked, so there is no step for this submission \
+                 to be against. Stop — the Job this Drone was started for has \
+                 already ended",
+            ),
+            NotSubmitted::NoSuchStep { step } => write!(
+                out,
+                "the Job is standing at step `{}`, which its workflow does not \
+                 name. This is a fault in Fleet and not in the submission",
+                step.as_str()
+            ),
+            NotSubmitted::StepDeclaresNothing { step } => write!(
+                out,
+                "step `{}` declares no work product, so there is nothing for a \
+                 submission to be recorded as. This is a fault in the workflow \
+                 and not in the submission",
+                step.as_str()
+            ),
+            NotSubmitted::AlreadyWaiting { step } => write!(
+                out,
+                "the submission already made for step `{}` has not been checked \
+                 yet. Wait for the outcome — it arrives as a later turn, and a \
+                 second submission is not read",
+                step.as_str()
+            ),
+            NotSubmitted::Malformed(cause) => write!(out, "{cause}"),
+        }
+    }
+}
+
+impl Error for NotSubmitted {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            NotSubmitted::NothingIsWorking
+            | NotSubmitted::NoSuchStep { .. }
+            | NotSubmitted::StepDeclaresNothing { .. }
+            | NotSubmitted::AlreadyWaiting { .. } => None,
+            NotSubmitted::Malformed(cause) => Some(cause),
+        }
     }
 }

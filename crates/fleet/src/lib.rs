@@ -75,6 +75,7 @@ mod review;
 pub mod reviewing;
 mod ruling;
 pub mod runtime;
+pub mod saying;
 pub mod scope;
 pub mod serving;
 pub mod session;
@@ -96,7 +97,7 @@ pub mod working;
 #[cfg(test)]
 mod tests;
 
-pub use adrift::{Adrift, NotDeclared, NotSubmitted};
+pub use adrift::Adrift;
 pub use allowance::{Allowance, Micros, Overspent};
 pub use asked::Asked;
 pub use at_step::AtStep;
@@ -110,7 +111,9 @@ pub use drone::{
     aftermath, environment, Aftermath, DroneNotStarted, Ending, HostPaths, Left, Started,
 };
 pub use dry_run::{DryRuns, NotRun};
-pub use evidence::{Call, Decline, EvidenceInbox, EvidenceTool, Landed, Recorded, Standing};
+pub use evidence::{
+    Call, Decline, EvidenceInbox, EvidenceTool, Landed, NotSubmitted, Recorded, Standing,
+};
 pub use gate::{apply, rule_on, CheckBudget, CheckOutput, Ruling};
 pub use headroom::{Bytes, Headroom, InUse, Machine, Polling, Reading, Short, Spare, TheMachine};
 pub use judging::{Aloft, CallFailed, JudgeBudget, Judging, Look, Marking};
@@ -130,7 +133,7 @@ pub use runtime::{
     machine_path, provisional_address, Presence, PublishError, Published, ReadError, RuntimeFile,
     Staleness, Vacancy, FILE_NAME, PROVISIONAL_PORT,
 };
-pub use scope::{Declared, Drifting};
+pub use scope::{Declared, Drifting, NotDeclared};
 pub use session::{DroneSession, LiveSession, Turn};
 pub use settling::Settled;
 pub use silence::{Liveness, Poke, Quiet, Vigil};

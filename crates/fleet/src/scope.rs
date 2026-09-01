@@ -21,12 +21,14 @@
 //! for free. What changed is [`WorkProduct::changed_files`], Fleet's own
 //! reading — the rule `diff_nonempty` already follows.
 
+use std::error::Error;
+use std::fmt;
+
 use adapter_traits::{AgentHarness, Changed, Delivery, Vcs, WorkProduct};
 use core_model::{Component, DeclaredPaths, Envelope, FieldValue, JobId, Level, RepoPath, StepId};
 use ipc::mcp::DeclareScope;
 use verification::{drifted, InScope, OutsideScope};
 
-use crate::adrift::NotDeclared;
 use crate::briefing::Redeclaring;
 use crate::daemon::Fleet;
 use crate::session::{LiveSession, Occasion};
@@ -278,5 +280,66 @@ where
         // A log line that will not write does not stop the Job: the drift is
         // still on the slot, and the gate reads the footprint for itself.
         let _ = transcript::note(&self.host().repo_root, job, &envelope);
+    }
+}
+
+/// Why a scope declaration was not taken. **Beside the act it refuses**, for
+/// the reason `dry_run` gives for [`NotRun`](crate::dry_run::NotRun): a module
+/// every refusal has to be opened to add one to is a module two changes
+/// collide in, and this one is raised nowhere but here.
+///
+/// **No variant is a gate failure.** Nothing has been verified: the call was
+/// aimed at nothing, at a step that asks for no scope, or at paths the step's
+/// own denylist refuses.
+#[derive(Debug)]
+pub enum NotDeclared {
+    /// No Job is being worked. The tool is bound to a Job at construction, so
+    /// this is a call that arrived after its Drone's Job ended.
+    NothingIsWorking,
+    /// The Job is standing at a step its frozen workflow does not name. **A
+    /// fault in Fleet, not in the call.**
+    NoSuchStep { step: StepId },
+    /// The step declares no evidence scope, so there is nothing a declaration
+    /// would be measured against. Refused rather than stored: a plan nothing
+    /// reads is a plan the Drone believes is being checked.
+    StepHasNoScope { step: StepId },
+    /// The declaration names paths the step's `exclude_paths` denies.
+    Outside(verification::OutsideScope),
+}
+
+impl fmt::Display for NotDeclared {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            NotDeclared::NothingIsWorking => out.write_str(
+                "no Job is being worked, so there is no step for this declaration \
+                 to be about. Stop — the Job this Drone was started for has \
+                 already ended",
+            ),
+            NotDeclared::NoSuchStep { step } => write!(
+                out,
+                "the Job is standing at step `{}`, which its workflow does not \
+                 name. This is a fault in Fleet and not in the declaration",
+                step.as_str()
+            ),
+            NotDeclared::StepHasNoScope { step } => write!(
+                out,
+                "step `{}` declares no evidence scope, so a declaration would be \
+                 measured against nothing. Get on with the work and submit when \
+                 it is done",
+                step.as_str()
+            ),
+            NotDeclared::Outside(why) => write!(out, "{why}. Declare again without them"),
+        }
+    }
+}
+
+impl Error for NotDeclared {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            NotDeclared::NothingIsWorking
+            | NotDeclared::NoSuchStep { .. }
+            | NotDeclared::StepHasNoScope { .. } => None,
+            NotDeclared::Outside(why) => Some(why),
+        }
     }
 }
