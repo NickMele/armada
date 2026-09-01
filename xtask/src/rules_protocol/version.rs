@@ -73,10 +73,20 @@ pub fn check(source: &str, mirror: &str, report: &mut Report) {
         return;
     };
     if want != have {
+        // What the drift costs depends on which number moved, and saying the
+        // worse one for both teaches a person to discount the message. A major
+        // apart is a refusal; a minor apart is Fleet ahead of a Bridge that
+        // connects and reads fewer fields than it is sent.
+        let cost = if want.major == have.major {
+            "so Fleet is ahead of the Bridge built beside it: it connects, carries a skew banner, \
+             and does not read every field it is sent"
+        } else {
+            "so a Fleet and a Bridge built from this commit refuse each other and Bridge drops to \
+             the v0 lifeboat"
+        };
         report.fail(format!(
-            "{SOURCE} is {want} and {MIRROR} is {have}. Bridge reads the generated constant, so \
-             a Fleet and a Bridge built from this commit refuse each other and Bridge drops to \
-             the v0 lifeboat. `{CODEGEN}` writes the file — run it and commit what it emits"
+            "{SOURCE} is {want} and {MIRROR} is {have}. Bridge reads the generated constant, \
+             {cost}. `{CODEGEN}` writes the file — run it and commit what it emits"
         ));
     }
 }
