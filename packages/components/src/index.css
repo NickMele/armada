@@ -122,3 +122,6 @@
    component as a vertical stack, which is exactly what a sheet must not be. */
 @import "./compositions/ActivityLogSheet/ActivityLogSheet.css";
 @import "./compositions/JobDiffSheet/JobDiffSheet.css";
+
+/* The token specimens. They read the sheet above rather than restating it. */
+@import "./foundations/Tokens/Tokens.css";

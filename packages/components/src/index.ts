@@ -141,3 +141,6 @@ export * from "./generated/vocabulary";
 
 // How the domain is counted in words.
 export * from "./lexicon";
+
+// The token specimens: what a value looks like, read off the running sheet.
+export * from "./foundations/Tokens/Tokens";
