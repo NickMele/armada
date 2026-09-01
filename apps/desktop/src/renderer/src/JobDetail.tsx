@@ -175,10 +175,13 @@ export function JobDetail({
   const heading: JobDetailHeading = {
     status: reading.status,
     statusIcon: reading.icon,
-    statusLabel: reading.verb,
+    // The registry's own verb, opening a line. `enum-verbs.toml` spells it
+    // lowercase because most of its readings are mid-sentence; here it is the
+    // first word in the badge, and the badge is the header.
+    statusLabel: leading(reading.verb),
     headline: job.title,
     jobId: job.id,
-    fields: factsOf(job, whole, workflow, manifest, now),
+    fields: factsOf(job, whole, workflow, now),
     // The acts that end or replace the Job. **Pilot's slot is this one**, left
     // of the kill group — #250, and it lands without this line changing.
     actions: (
@@ -217,7 +220,7 @@ export function JobDetail({
       // is making.
       pulsing={render === "working"}
       onSelectStep={setSelected}
-      where={whole === null ? undefined : workOf(job, whole, manifest, render === "working")?.rows}
+      where={workOf(job, whole, manifest, workflow)}
       whereNote={NAMED_NOT_NEEDED}
       whereAbsent={whyNoWork(watched, job.id)}
       brief={whole === null ? undefined : briefOf(whole)}
@@ -283,6 +286,18 @@ export function JobDetail({
       onCopied={onCopied}
     />
   );
+}
+
+/**
+ * A registry verb, opening a line.
+ *
+ * **The word is still the registry's.** `enum-verbs.toml` spells its verbs for
+ * the sentence they usually sit in the middle of; capitalising the first letter
+ * where one leads a label is presentation, not a second spelling — nothing here
+ * chooses, shortens or rewrites the word.
+ */
+function leading(verb: string): string {
+  return verb.charAt(0).toUpperCase() + verb.slice(1);
 }
 
 /** What the pointers under the run are for, said once. */
