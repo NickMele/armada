@@ -562,7 +562,7 @@ function chaptersOf({
           <ChangedFiles
             files={filesOf(touched)}
             emptyNote={NOTHING_TOUCHED}
-            note={footprintNote(touched, render === "working")}
+            note={footprintNote(touched)}
           />
         ),
       // A produced file opens to what it actually wrote, at every state. The
@@ -607,12 +607,16 @@ function whyNoSteps(watched: Watched, jobId: string): string | undefined {
   return "Reading this Job.";
 }
 
-/** Why there is no brief, which is never the same sentence twice. */
+/**
+ * Why there is no brief. **Two sentences, and neither describes the wire** —
+ * one is a Job that has not arrived and one is a Job Fleet would not answer
+ * for, which are different things to do next.
+ */
 function whyNoBrief(watched: Watched, jobId: string): string {
   if (watched.state === "failed" && watched.jobId === jobId) {
-    return "Fleet did not answer for this job, so what done meant for it is unknown.";
+    return "Fleet did not answer for this job.";
   }
-  return "Reading this Job.";
+  return "Reading this job.";
 }
 
 /**

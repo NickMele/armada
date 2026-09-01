@@ -1,44 +1,28 @@
-// What a Drone has changed in its worktree — the live readings main holds from
-// `job.files_changed`, and the record Fleet wrote down when the Job stopped.
+// What a Drone has changed, as the Produced chapter draws it.
 //
-// **They are two answers and this module keeps them apart.** A live reading is
-// what a working Drone has touched so far and is marked against the plan the
-// step being watched declared; a record is the Job's whole work since the
-// branch was cut, and it is marked against every plan any step declared, which
-// Fleet keeps beside it. The pair below each other's names —
-// `filesOf`/`footprintNote` for the first, `touchedOf`/`recordNote` for the
-// second — rather than one function taking a flag, because the sentences they
-// produce have nothing in common.
-//
-// **The record's mark is absent, not false, where no plan is recorded.** A path
-// on a Job whose record carries no declaration was not measured and found
-// clean; it was not measured. `planned_by` carries that as three readings and
-// this module never collapses them to two.
-//
-// **An empty `plans` is a gap in the record and never a claim about the
-// steps.** `crates/ipc/src/work.rs` says it plainly: a Job whose steps never
-// declared, and a Job that stopped before Fleet kept declarations, both come
-// back with none. So no sentence here reports the second as the first — the
-// conflation `#157` fixed for the diff's note, one file over.
-//
-// **Nothing here reads a worktree.** The paths arrive as a named event like
-// everything else, and Bridge does not open a directory to check them. Nor is
-// anything counted that Fleet did not send: there are no line counts here,
-// because the patch is the expensive read and it is not on this seam.
+// **Nothing here reads a directory.** The paths arrive as a named event like
+// everything else. Nor is anything counted that Fleet did not send: there are
+// no line counts here, because the patch is the expensive read and it is not on
+// this seam.
 //
 // **The change kind renders as the wire spelled it.** `enum-verbs.toml` carries
 // no `change_kind` rows, so there is no verb, glyph or hue for one — the same
-// fallback a step state takes, and for the same reason. A word chosen here
-// would be the second vocabulary the generated module exists to prevent.
-// Reported.
+// fallback a step state takes. A word chosen here would be the second
+// vocabulary the generated module exists to prevent. Reported.
+//
+// # The note says what is in front of a reader, not where it came from
+//
+// It used to open with which of two readings this was and what the other one
+// would have been — three sentences of epistemology in a region whose job is to
+// show what the step produced. A surface shows what it has. What is worth
+// saying about a list of paths is whether any of them went outside what the
+// step promised, and that is the whole of what the note says now.
 
 import type { ChangedFile } from "@armada/components";
 
 import type {
   JobFilesChanged,
-  JobFootprint,
   ChangedFile as WireFile,
-  TouchedFile,
 } from "../../shared/protocol";
 import type { Footprint } from "../../shared/bridge";
 
@@ -54,38 +38,22 @@ export function filesOf(reading: JobFilesChanged): ChangedFile[] {
 }
 
 /**
- * What the list says about itself: where the reading came from, and what the
- * drift mark does or does not mean on it.
+ * What the list says about itself: whether anything went outside what the step
+ * promised.
  *
  * **`plan_declared` false is "there is no plan", not "nothing drifted."** A
  * note that stayed silent about it would let an unscoped step read as a step
- * perfectly on plan, which is the one thing this field exists to prevent.
+ * perfectly on plan, which is the one thing this field exists to prevent — so
+ * that case says the step scoped nothing, which is a fact about the step rather
+ * than about the reading.
  */
-export function footprintNote(reading: JobFilesChanged, live: boolean): string {
-  const read = live
-    ? "Read from the worktree while the drone is working."
-    : "The last reading taken while the drone was working, and not the record. The record is what fleet wrote down when the job stopped.";
-  if (!reading.plan_declared) {
-    return `${read} This step declared no plan, so no row is marked.`;
-  }
+export function footprintNote(reading: JobFilesChanged): string {
+  if (!reading.plan_declared) return "This step declared no plan, so nothing here is measured against one.";
   const outside = reading.files.filter((file) => file.outside_plan === true).length;
   const total = reading.files.length;
   return outside === 0
-    ? `${read} Every path is inside the plan this step declared.`
-    : `${read} ${outside} of ${total} paths are outside the plan this step declared.`;
-}
-
-/**
- * The one-line answer for the outcome row: how many files, and how many of them
- * drifted. **Counts of what arrived, never of what was measured** — no line
- * count appears here, because nothing serves one.
- */
-export function footprintSummary(reading: JobFilesChanged): { value: string; meta?: string } {
-  const total = reading.files.length;
-  const value = total === 1 ? "1 file" : `${total} files`;
-  if (!reading.plan_declared) return { value };
-  const outside = reading.files.filter((file) => file.outside_plan === true).length;
-  return outside === 0 ? { value } : { value, meta: `${outside} outside plan` };
+    ? "Every path is inside the plan this step declared."
+    : `${outside} of ${total} paths are outside the plan this step declared.`;
 }
 
 /** The reading for this Job, or nothing. A footprint belongs to one Job. */
@@ -94,146 +62,15 @@ export function readingFor(footprint: Footprint, jobId: string): JobFilesChanged
 }
 
 /**
- * Why there is no footprint, which is never the same sentence twice.
+ * What the chapter says while there is nothing to draw.
  *
  * **A Drone that has not reported yet and a Job with no Drone on it are two
- * different facts.** `job.files_changed` is published by a working Drone, so
- * the first says wait and the second says nothing is coming — and one sentence
- * for both would leave a Job at the approval gate looking like it had stalled.
- * The third case, a Job that is over, is `NO_FOOTPRINT_RECORDED`.
+ * different facts.** The first says wait and the second says nothing is coming,
+ * and one sentence for both would leave a Job at the approval gate looking like
+ * it had stalled.
  */
 export function whyNoFootprint(hasDrone: boolean): string {
   return hasDrone
-    ? "This drone has not reported its changed files yet. The first reading arrives as it works."
-    : "No drone is on this job, so nothing is reading its worktree.";
+    ? "Nothing has been written yet."
+    : "No drone is on this job yet.";
 }
-
-/**
- * Named once, because the outcome row and both record sections say it.
- *
- * **It is the older-job sentence now, not the shape of the seam.** Fleet writes
- * a footprint down at *every* terminal transition — `crates/fleet/src/dispatch.rs`,
- * a killed Job included — and serves it on `JobDetail`, so a Job with none
- * either stopped before that existed or had a worktree that would not open when
- * it did, and the Job's own log says which. Not `WHEN_FINISHED`, because the
- * stopped record says it too and a name that claimed otherwise is how the
- * failed side went unread.
- */
-export const NO_FOOTPRINT_RECORDED =
-  "No footprint was recorded when this job stopped. It ended before fleet kept one, or its " +
-  "worktree could not be read at the time — the job's log says which.";
-
-// ------------------------------------------- the record, not the last reading
-
-/** The rows, in the order the reading found them. Never re-sorted. */
-export function touchedOf(footprint: JobFootprint): ChangedFile[] {
-  return footprint.files.map((file: TouchedFile) => ({
-    path: file.path,
-    change: file.change,
-    // Marked only where a measurement was made and came back with nothing:
-    // `planned_by` present and empty is a path outside every plan any step
-    // declared. Absent is a path nothing was declared for, and it stays
-    // `undefined` rather than becoming `false`, which the row would draw the
-    // same way but a later reader would take for "inside the plan".
-    outsidePlan: outside(file) || undefined,
-  }));
-}
-
-/** Whether this path was measured against a plan and fell outside every one. */
-function outside(file: TouchedFile): boolean {
-  return file.planned_by !== undefined && file.planned_by.length === 0;
-}
-
-/**
- * Every step that declared a plan on this job, in the order they declared, each
- * named once however many runs of it declared.
- *
- * **A step worked twice declares twice and is still one step to a reader.** The
- * run ordinal is on the wire and is what keeps the two promises apart in the
- * record; it is not what a sentence naming who promised is about.
- */
-export function declaringSteps(footprint: JobFootprint): string[] {
-  const named: string[] = [];
-  for (const plan of footprint.plans ?? []) {
-    if (!named.includes(plan.step_id)) named.push(plan.step_id);
-  }
-  return named;
-}
-
-/** How many paths were measured against a plan and fell outside every one. */
-export function outsideCount(footprint: JobFootprint): number {
-  return footprint.files.filter(outside).length;
-}
-
-/**
- * Whether this record carries a declaration to measure against at all.
- *
- * **The one question every sentence and every count here turns on**, named once
- * so no caller re-derives it from `plans.length` and phrases the answer as a
- * claim about the steps. It is not one: an empty list is a Job whose steps
- * declared nothing *or* a Job that stopped before Fleet kept declarations, and
- * the wire cannot tell them apart. What it does settle is that nothing in this
- * record was measured.
- */
-export function planRecorded(footprint: JobFootprint): boolean {
-  return declaringSteps(footprint).length > 0;
-}
-
-/**
- * What the record says about itself: that it is a record, and what its marks do
- * or do not mean.
- *
- * **The second sentence is the point, and it is a different sentence now.** A
- * reader deciding whether to take the work is owed either the drift or the fact
- * that nothing measured it — and the one thing they must never be left to infer
- * is that unmarked means in scope.
- *
- * **The silent case reports the record and not the Drone.** It said "no step
- * declared a plan for this job", which is a claim about what the steps did, and
- * every Job that ran before declarations were kept was told its steps scoped
- * nothing. The two are one empty list on the wire, so the sentence names the
- * gap, offers both readings of it, and closes off the inference that unmarked
- * means inside a plan — `PLAN_NOT_READABLE` in `review.ts` is the same shape,
- * for the same reason.
- */
-export function recordNote(footprint: JobFootprint): string {
-  const read =
-    "Read from this job's worktree when the job stopped, and kept — so it says the same thing " +
-    "whether or not anyone was watching.";
-  const steps = declaringSteps(footprint);
-  if (steps.length === 0) {
-    return (
-      `${read} No plan is recorded against it, so no path is marked. Either no step declared ` +
-      "one, or this job stopped before declarations were kept. An unmarked path here is not a " +
-      "path that was inside a plan."
-    );
-  }
-  const promised = `Measured against what ${steps.join(", ")} declared.`;
-  const drifted = outsideCount(footprint);
-  const total = footprint.files.length;
-  return drifted === 0
-    ? `${read} ${promised} Every path is inside one of those plans.`
-    : `${read} ${promised} ${drifted} of ${total} paths are outside all of them.`;
-}
-
-/**
- * The one-line answer for the outcome row: how many files, and how many of them
- * went outside every declared plan.
- *
- * **No drift count where no plan is recorded**, which is the whole of why the
- * meta is conditional: a `0 outside plan` on a job with no declaration in its
- * record would be a measurement nobody made.
- */
-export function recordSummary(footprint: JobFootprint): { value: string; meta?: string } {
-  const total = footprint.files.length;
-  const value = total === 1 ? "1 file" : `${total} files`;
-  if (!planRecorded(footprint)) return { value };
-  const drifted = outsideCount(footprint);
-  return drifted === 0 ? { value } : { value, meta: `${drifted} outside plan` };
-}
-
-/** What a record with no rows in it says. Ordinary, and never an error. */
-export const TOUCHED_NOTHING =
-  "This job's worktree was read when it stopped and held no change against the branch it was " +
-  "cut from. That is what a diff_nonempty check refuses, and it is not the same as a job whose " +
-  "footprint was never recorded.";
