@@ -180,6 +180,8 @@ Two facts bound it rather than a mechanism. The view is local, on the operator's
 
 **Carrying a call's arguments widens what is inside that bound, and does not move the bound.** The socket already carries `Said` — the Drone's own prose, which can hold anything it read — and `Unreadable`, which is raw. So arguments are not a new category. What is new is the path: a credential in a command line now reaches a row because the Drone *used* it, where before it reached one only if the Drone *talked about* it. The answer is still loopback-only and a viewer who is the operator, and this makes attaching a transcript to anything more costly rather than less — see Open questions.
 
+**Armada's own turns widen nothing.** A brief is rendered from the Job's facts, its acceptance criteria and its frozen workflow, and `get_job` already serves all three in full to the same viewer — `crates/ipc/src/detail.rs` argues that case for `facts` on its own terms. What is new here is that the rendering itself is readable, not that a value reaches a reader who could not already ask for it.
+
 ## Neither a Doctor row nor an Alert
 
 **Observe earns no [Doctor](doctor.md) row.** Why: a row exists where Armada depends on a thing and that thing can be up or down, and a view is neither depended on nor a service.
