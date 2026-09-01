@@ -74,21 +74,17 @@ fn this_repositorys_own_setup_loads_and_resolves() {
             "bridge_build".to_string(),
             "build".to_string(),
             "format".to_string(),
-            "screens".to_string(),
             "storybook".to_string(),
             "test".to_string(),
             "typecheck".to_string(),
         ],
-        "the seven Checks this workspace is built and tested with — two for the \
+        "the six Checks this workspace is built and tested with — two for the \
          Rust half and three for the Bridge, which is #200: every Check used to \
          compile Rust, so a Job that changed only `apps/` was verified entirely \
          on the code it had not touched. `format` is the sixth and is the same \
          defect one lint over: PR #199 also merged nine unformatted files, \
-         because `cargo fmt --check` was not a Check. `screens` is the seventh \
-         and is that defect once more, in markup: `.shots/` is ignored, so a \
-         rebuilt screen landed in no diff and only somebody choosing to look \
-         would have caught it. There is no `clippy` — `[clippy-as-a-check]` in \
-         `docs/OPEN.md` says why"
+         because `cargo fmt --check` was not a Check. There is no `clippy` — \
+         `[clippy-as-a-check]` in `docs/OPEN.md` says why"
     );
     assert_eq!(bug(&setup).name(), "bug");
     let steps: Vec<&str> = bug(&setup)

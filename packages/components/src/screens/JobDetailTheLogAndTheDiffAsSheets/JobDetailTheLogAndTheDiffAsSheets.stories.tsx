@@ -354,7 +354,7 @@ const BEHIND_THE_CARET = [
  * could not draw both. #294.
  *
  * **The menu is closed and the drawing draws it open.** Not a disagreement to
- * fix here: `shoot` captures resting states, and the menu is a fixed layer
+ * fix here: a screenshot captures resting states, and the menu is a fixed layer
  * anchored to its control, so an open one resolves against the window and lands
  * outside the figure rather than under the button. What it holds is in `items`.
  */

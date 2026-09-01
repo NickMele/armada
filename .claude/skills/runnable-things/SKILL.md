@@ -77,9 +77,6 @@ Written down so the next person does not have to measure it again.
   the gate, Storybook, the desktop build, its typecheck and its codegen do not.
 - `apps/desktop/codegen/vocabulary.mjs`, which generates the vocabulary the
   renderer imports. It is named in no document.
-- `packages/components/gallery/build.mjs`, which renders every story to one
-  page. It is in a skill, which is where an agent finds it and a person does
-  not.
 
 **A flag that is not obvious and is not written down:** `pnpm storybook` prompts
 when its port is taken, which makes it unusable from an agent. `--ci` is the

@@ -55,11 +55,6 @@ you invented.
 fail visibly.** A missing thing that renders as an error is a finding; a missing
 thing that is silently absent is a gap nobody sees.
 
-The gallery renders every story to one page. Regenerate it with
-`node gallery/build.mjs` from `packages/components`; it writes to `dist/`, which
-the gate skips because a generated file inlines the whole token set and every
-hex in it reads as an off-contract literal.
-
 ## The hard rules, and what enforces them
 
 - **No arbitrary values.** No raw hex, no off-scale px, no Tailwind `-[…]`.

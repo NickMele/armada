@@ -10,7 +10,6 @@
   },
   "scripts": {
     "dev": "scripts/dev",
-    "gate": "cargo xtask verify-foundations",
-    "shoot": "node scripts/shoot/shoot.mjs"
+    "gate": "cargo xtask verify-foundations"
   }
 }

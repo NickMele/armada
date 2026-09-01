@@ -7,8 +7,8 @@ description: Starting, checking and stopping a local Fleet, cleaning up after Jo
 
 **An agent may launch Bridge to look at its own work.** A change to a screen
 that nobody looked at is a change nobody verified, and no gate in this
-repository can see a layout — `pnpm shoot` exists because a screen shipped
-about thirty differences from its drawing with every gate green.
+repository can see a layout — a screen once shipped about thirty differences
+from its drawing with every gate green.
 
 **What is not yours is the owner's attention.** Bridge is a windowed Electron
 process and it comes up in front of whatever he is doing, so launching it is
@@ -27,14 +27,11 @@ agents stopped verifying screens at all.
 - **Never leave a dialog up.** Dismiss it, or quit the app. A modal an agent
   cannot dismiss is the whole of the incident above.
 
-**Prefer a hidden window wherever one will answer.** `pnpm shoot` drives
-Bridge's own Electron with nothing on screen and writes PNGs an agent can read
-back — `docs/practices/comparing-to-the-drawing.md`. **It captures the
-components gallery and not Bridge**, so a screen assembled in `apps/desktop`
-is outside it: the gallery's `Screens/Inside a job` hand-builds its own header
-rather than rendering the app's. Bridge itself has no hidden path —
-`createWindow` shows on `ready-to-show` and takes no flag — so until it has
-one, seeing a real Bridge screen means taking the screen.
+**There is no hidden-window path.** `createWindow` shows the window on
+`ready-to-show` and takes no flag to suppress it, so seeing a real Bridge
+screen means taking the owner's screen for as long as Bridge is up. Launch it
+for a question that is already written down, and quit it when the question is
+answered.
 
 **`scripts/dev` and `pnpm dev` are still not yours.** Not because they start
 Bridge, but because they reinstall `armada` and kill the Fleet the owner is

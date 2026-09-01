@@ -2,14 +2,13 @@
 //!
 //! `PhaseStrip.css` was written and never appended to `index.css`. Nothing
 //! loaded it, `.armada-phases` fell to the browser's `display: block`, and the
-//! strip drew as a vertical stack. Storybook built, the gallery built, the
-//! typecheck, the suite, `verify-docs` and `verify-tokens` were all green — it
+//! strip drew as a vertical stack. Storybook built, the typecheck, the suite,
+//! `verify-docs` and `verify-tokens` were all green — it
 //! was found by launching the app and reading a computed style. `RunTree.css`,
 //! `StepStory.css` and `ActivityLog.css` were in the same state.
 //!
 //! **Nothing else sees it.** A story imports its own component's stylesheet, so
-//! the component is styled in Storybook and bare in the app; the gallery reads
-//! the tree rather than this file, so it is styled there too. `index.css` is
+//! the component is styled in Storybook and bare in the app. `index.css` is
 //! the only place the app's sheet is assembled, and a component missing from it
 //! renders with its class names on the elements and no rules behind them, which
 //! reads as a component drawn wrong rather than one never registered.
@@ -46,9 +45,8 @@ struct Import {
 ///
 /// No list of trees and no assumption about depth — the subject is every `.css`
 /// the walk finds, so a stylesheet in a tree nobody has invented yet is covered
-/// on the day it lands. That is the failure this is guarding: `gallery/build.mjs`
-/// carries a hand-written list of the three trees it inlines, and a tree left
-/// off it renders unstyled with nothing said.
+/// on the day it lands. A hand-written list of trees is the shape this guards
+/// against: a tree left off one renders unstyled with nothing said.
 pub fn every_stylesheet_reaches_the_sheet_the_app_loads(root: &Path) -> Report {
     let mut report = Report::new("every component stylesheet is imported by index.css");
 
