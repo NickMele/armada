@@ -31,6 +31,10 @@
 #   criterion_verdict_check    - one criterion, as a mechanical Check saw it
 #   criterion_verdict_judge    - one criterion, as the Judge saw it
 #   criterion_verdict_attested - one criterion, as a person attested it
+#   gaming_pattern             - which shape of evidence gaming one flag found.
+#                                No registry file of its own either: the set is
+#                                what a workflow's `flag_if` may name, and
+#                                whether it is fixed at all is open
 #   origin                     - where a Job came from. Keys match the `origin`
 #                                row of job-fields.toml, which has no registry
 #                                file of its own
@@ -503,6 +507,78 @@ status_token = "--status-not-started"
 vocabulary = "Check outcome"
 in_code = "In code"
 notes = "Its own glyph, and that is the whole point of the row. Reusing never_ran's shield-minus would draw a Check nobody asked to run identically to a Check whose command is missing, and one of those is a failure. The verb is \"not run\" rather than \"skipped\": skipped reads as something being got away with, and this is the gate declining to spend a Check on paths the step did not touch. The token is not-started for never_ran's reason — nothing measured, so neither green nor red is true."
+
+[verbs.gaming_pattern.assertion_weakened]
+verb = "an assertion now asserts less"
+icon = ""
+status_token = ""
+vocabulary = "Gaming pattern"
+in_code = ""
+notes = "Neither glyph nor token, and that is the vocabulary's decision rather than this row's. A flag is not a status: the Job is escalated with `evidence_suspect` on it, and that badge already carries the hue and the mark, so nine more silhouettes would draw one claim nine times over. `flag` is the obvious candidate and cannot be lent — packages/icons/icons.toml reserves it to a stopped step and says nothing else in Armada may use it. The verb says what happened to the assertion rather than naming the pattern, because the reader is looking at the cited line beside it."
+
+[verbs.gaming_pattern.test_scope_narrowed]
+verb = "the tests cover less than they did"
+icon = ""
+status_token = ""
+vocabulary = "Gaming pattern"
+in_code = ""
+notes = "Both halves are a comparison, because that is what the check makes: the yardstick is the baseline step's evidence and not a reading of the tests on their own. Neither glyph nor token, for `assertion_weakened`'s reason."
+
+[verbs.gaming_pattern.tautological_test]
+verb = "a test that passes whatever the code does"
+icon = ""
+status_token = ""
+vocabulary = "Gaming pattern"
+in_code = ""
+notes = "The enum's word is the one a reader is least likely to know, so the verb spells out what tautological means here instead of shortening it. It also holds the line against `assertion_weakened`: this is a test that cannot fail, not an assertion that asks for less. Neither glyph nor token, for `assertion_weakened`'s reason."
+
+[verbs.gaming_pattern.test_skipped]
+verb = "a test that ran is now skipped"
+icon = ""
+status_token = ""
+vocabulary = "Gaming pattern"
+in_code = ""
+notes = "`is now skipped` rather than `was skipped`, which reads as the runner having passed over it. The change added the marker, and that a test used to run is the whole finding — one skipped before this change is not flagged. Neither glyph nor token, for `assertion_weakened`'s reason."
+
+[verbs.gaming_pattern.test_deleted]
+verb = "a test file was removed whole"
+icon = ""
+status_token = ""
+vocabulary = "Gaming pattern"
+in_code = ""
+notes = "`whole` is load-bearing and says exactly what the scan answers — a `deleted file mode` line on a path that reads as a test. A test taken out from inside a file is not this, and a verb without the word would claim it was. Neither glyph nor token, for `assertion_weakened`'s reason."
+
+[verbs.gaming_pattern.check_config_edited]
+verb = "the change edits what a Check runs through"
+icon = ""
+status_token = ""
+vocabulary = "Gaming pattern"
+in_code = ""
+notes = "Names what the file does rather than the file, which is already in the citation beside it. This is the pattern that honours a frozen `run:` string exactly while narrowing what it runs, so the verb reads as an edit and not as a failure — a legitimate edit lands here too, and the row has to be readable by the person who made one. Neither glyph nor token, for `assertion_weakened`'s reason."
+
+[verbs.gaming_pattern.no_findings_on_substantial_diff]
+verb = "a review that found nothing in a substantial change"
+icon = ""
+status_token = ""
+vocabulary = "Gaming pattern"
+in_code = ""
+notes = "The one pattern whose finding is an absence, which is also why it is the one that can never carry a file or a line: there is no place in a diff where nothing was said. `substantial` stays one word rather than becoming a threshold, because there is no measured threshold to make it into. Neither glyph nor token, for `assertion_weakened`'s reason."
+
+[verbs.gaming_pattern.findings_not_tied_to_changed_lines]
+verb = "findings that name nothing this change touched"
+icon = ""
+status_token = ""
+vocabulary = "Gaming pattern"
+in_code = ""
+notes = "A claim about the findings and never about whoever wrote them, which is the same restraint every escalation reason keeps. Neither glyph nor token, for `assertion_weakened`'s reason."
+
+[verbs.gaming_pattern.findings_generic]
+verb = "findings that would fit any change"
+icon = ""
+status_token = ""
+vocabulary = "Gaming pattern"
+in_code = ""
+notes = "The question's own test, kept as the verb: would these read the same written about a different diff. `generic` is the enum's word and tells a reader nothing on its own. Neither glyph nor token, for `assertion_weakened`'s reason."
 
 [verbs.origin.auto_detected]
 verb = "Found by Fleet"
