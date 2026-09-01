@@ -1,4 +1,4 @@
-//! The route table, by hand, and the handlers under it.
+//! The route table, by hand, and the state every handler is given.
 //!
 //! # Hand-written, and that is the accepted cost
 //!
@@ -13,26 +13,32 @@
 //! # One listener
 //!
 //! The WebSocket upgrade is an extractor in this same `Router`. There is no
-//! second port and no assembly step: queries and commands answer over HTTP
-//! because they are request-response, and only the unsolicited push needs the
-//! socket. Who initiates is the whole rule.
+//! second port: queries and commands answer over HTTP because they are
+//! request-response, and only the unsolicited push needs the socket.
+//!
+//! # The handlers are next door
+//!
+//! `crate::queries` reads, `crate::commands` writes, `crate::sockets` upgrades.
+//! **The table and the router stay here together**, because the rule comparing
+//! them to the inventory reads this file.
 
-use axum::body::Bytes;
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Path, State};
-use axum::http::{header, StatusCode};
-use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
-use ipc::{
-    ChangesRequested, ChosenAnswer, FileReport, JobId, JobRequest, Missed, Overruled, ProposeJob,
-    Redirection, Resync, RunId, StreamMessage, WireError, PROTOCOL_VERSION,
-};
-use serde::Serialize;
+use ipc::RunId;
 use std::sync::Arc;
 
-use crate::daemon::{Daemon, Refusal};
-use crate::stream::{Broadcaster, Next};
+use crate::commands::{
+    answer_question, approve_dispatch, approve_review, file_report, forget_job, kill_drone,
+    kill_job, override_verdict, propose_from_request, propose_job, redirect_drone, redispatch_job,
+    reject_job, request_changes, rerun_gate, restart_step,
+};
+use crate::daemon::Daemon;
+use crate::queries::{
+    get_call, get_capacity, get_diff, get_evidence, get_job, get_job_events, list_jobs,
+    list_manifests, list_models, list_reports, list_workflows,
+};
+use crate::sockets::{events, observe_job};
+use crate::stream::Broadcaster;
 
 /// One operation, and where it is served.
 ///
@@ -98,6 +104,15 @@ pub const SERVED: &[Route] = &[
         operation: "get_diff",
         method: "GET",
         path: "/jobs/:job_id/diff",
+    },
+    // One call's arguments, and a member read rather than an act — the same
+    // shape as `get_job` under `/jobs`, which is why the last segment is the id
+    // and not the key. The socket sends the line and the size; this is what a
+    // person opening that row asks for, once, about one call.
+    Route {
+        operation: "get_call",
+        method: "GET",
+        path: "/jobs/:job_id/calls/:call_id",
     },
     Route {
         operation: "list_workflows",
@@ -268,16 +283,6 @@ pub const SERVED: &[Route] = &[
     },
 ];
 
-/// A request body that would not parse.
-///
-/// The code is declared beside the thing that raises it, which is what makes
-/// the set closed by collection rather than by a registry somebody has to keep.
-const UNDECODABLE_REQUEST: &str = "api.undecodable_request";
-
-/// A response that would not serialise. Unreachable for plain data, and
-/// answered rather than panicked: a panic here drops a socket mid-Job.
-const UNENCODABLE_RESPONSE: &str = "api.unencodable_response";
-
 /// Everything a handler needs. Cloned per request, so nothing here may be
 /// expensive to clone.
 pub struct Served<D> {
@@ -327,6 +332,12 @@ impl<D> Served<D> {
     pub(crate) fn daemon(&self) -> &D {
         &self.daemon
     }
+
+    /// **This process's** run id, which every error the transport raises
+    /// carries. Read by the handlers next door and by nothing outside.
+    pub(crate) fn run_id(&self) -> &RunId {
+        &self.run_id
+    }
 }
 
 impl<D> Clone for Served<D> {
@@ -352,6 +363,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/events", get(get_job_events::<D>))
         .route("/jobs/:job_id/evidence", get(get_evidence::<D>))
         .route("/jobs/:job_id/diff", get(get_diff::<D>))
+        .route("/jobs/:job_id/calls/:call_id", get(get_call::<D>))
         .route("/jobs/:job_id/approve_review", post(approve_review::<D>))
         .route("/jobs/:job_id/request_changes", post(request_changes::<D>))
         .route("/jobs/:job_id/reject", post(reject_job::<D>))
@@ -380,521 +392,4 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         // one, and the inventory this table is checked against is Bridge's.
         .merge(crate::mcp::mounted::<D>())
         .with_state(served)
-}
-
-// ------------------------------------------------------------------ queries
-
-async fn list_jobs<D: Daemon>(State(served): State<Served<D>>) -> Response {
-    match served.daemon.list_jobs().await {
-        Ok(jobs) => answer(StatusCode::OK, &jobs, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// The bound, what is occupying it, and what holds the next Drone back.
-///
-/// **Its own route rather than a field on `/jobs`.** That read is a list of
-/// Jobs and is made on every Board refresh; this is three values about Fleet,
-/// asked for by the surface that draws Fleet's state.
-async fn get_capacity<D: Daemon>(State(served): State<Served<D>>) -> Response {
-    match served.daemon.get_capacity().await {
-        Ok(capacity) => answer(StatusCode::OK, &capacity, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// One Job in full. **The Board row plus what the list redacts** — the steps
-/// and where each got to, the criteria, the branch, the brief.
-async fn get_job<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-) -> Response {
-    match served.daemon.get_job(JobId::carried(job_id)).await {
-        Ok(detail) => answer(StatusCode::OK, &detail, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// Every move one Job made, oldest first. **The path taken**, which `get_job`
-/// answers nothing about — it says where a Job is, and this says how it got
-/// there.
-///
-/// Its own route because a history has no bound and a detail view is fetched to
-/// draw a summary. Nothing here folds: the rows are read and rendered, and
-/// `crates/store/src/fold.rs` stays the only thing that replays them.
-async fn get_job_events<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-) -> Response {
-    match served.daemon.get_job_events(JobId::carried(job_id)).await {
-        Ok(history) => answer(StatusCode::OK, &history, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// Every claim a Job's Drones have submitted. **What the work says about
-/// itself**, which the gate ruled on and a person reads before deciding.
-///
-/// Its own route beside the diff rather than folded into it: this is a few
-/// sentences per step and that is however large the work is.
-async fn get_evidence<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-) -> Response {
-    match served.daemon.get_evidence(JobId::carried(job_id)).await {
-        Ok(evidence) => answer(StatusCode::OK, &evidence, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// One Job's whole patch. **The expensive read, on the one route that asks for
-/// it** — `get_job` is fetched on every open to draw a summary, and the bytes
-/// are what a person reading a diff needs and nothing else does.
-async fn get_diff<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-) -> Response {
-    match served.daemon.get_diff(JobId::carried(job_id)).await {
-        Ok(diff) => answer(StatusCode::OK, &diff, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// The workflows a proposal may name. **The set Fleet will accept**, which is
-/// why it is served rather than left to a caller to know.
-async fn list_workflows<D: Daemon>(State(served): State<Served<D>>) -> Response {
-    match served.daemon.list_workflows().await {
-        Ok(workflows) => answer(StatusCode::OK, &workflows, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-async fn list_manifests<D: Daemon>(State(served): State<Served<D>>) -> Response {
-    match served.daemon.list_manifests().await {
-        Ok(manifests) => answer(StatusCode::OK, &manifests, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-async fn list_models<D: Daemon>(State(served): State<Served<D>>) -> Response {
-    match served.daemon.list_models().await {
-        Ok(models) => answer(StatusCode::OK, &models, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-// ----------------------------------------------------------------- commands
-
-async fn propose_job<D: Daemon>(State(served): State<Served<D>>, body: Bytes) -> Response {
-    let proposal: ProposeJob = match ipc::decode("proposed Job", &body) {
-        Ok(proposal) => proposal,
-        // 400 is the transport's own refusal and never the daemon's — the
-        // bytes did not become a request, so nothing downstream was asked.
-        Err(why) => return undecodable(&why.to_string(), &served.run_id),
-    };
-    match served.daemon.propose_job(proposal).await {
-        // 201: the Job now exists, at the approval gate. It is not running, and
-        // nothing here approves it.
-        Ok(job) => answer(StatusCode::CREATED, &job, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// The other way a Job reaches the gate: a person describes the work and the
-/// proposer reads it. **The same 201 and the same gate** — what differs is who
-/// filled the workflow in, and that one request can be several Jobs.
-async fn propose_from_request<D: Daemon>(State(served): State<Served<D>>, body: Bytes) -> Response {
-    let request: JobRequest = match ipc::decode("request", &body) {
-        Ok(request) => request,
-        Err(why) => return undecodable(&why.to_string(), &served.run_id),
-    };
-    match served.daemon.propose_from_request(request).await {
-        Ok(job) => answer(StatusCode::CREATED, &job, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-async fn approve_dispatch<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-) -> Response {
-    match served.daemon.approve_dispatch(JobId::carried(job_id)).await {
-        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// The person takes the work. **The counterpart to `approve_dispatch`**, at the
-/// other end of the Job: that is the gate before anything runs, and this is the
-/// decision after it has.
-///
-/// 409 anywhere but `awaiting_review`, which is what keeps it from becoming the
-/// dispatch gate under a second name.
-async fn approve_review<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-) -> Response {
-    match served.daemon.approve_review(JobId::carried(job_id)).await {
-        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// Send the work back with a note. **The Job comes back `running`**, at the
-/// same step, with the same Drone — nothing was thrown away and nothing was
-/// spawned.
-///
-/// 409 where the Drone is gone: there is nobody to tell.
-async fn request_changes<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-    body: Bytes,
-) -> Response {
-    let note: ChangesRequested = match ipc::decode("a review note", &body) {
-        Ok(note) => note,
-        Err(why) => return undecodable(&why.to_string(), &served.run_id),
-    };
-    match served
-        .daemon
-        .request_changes(JobId::carried(job_id), note)
-        .await
-    {
-        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// A verdict on the work, and the Job is over. **Terminal**, which is what
-/// separates it from `request_changes` — and it is not `kill_job`, which clears
-/// the Board and carries no verdict at all.
-async fn reject_job<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-) -> Response {
-    match served.daemon.reject_job(JobId::carried(job_id)).await {
-        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// The Judge refused, a person disagrees, and the step advances anyway. **The
-/// Job comes back `running`** at the step that follows, with everything the
-/// refused Drone did still on the branch.
-///
-/// 409 anywhere but an `escalated` Job stopped on `gate_failure`: a gate that
-/// never weighed the work and a gaming flag are not opinions to be overruled,
-/// and a failed mechanical Check is terminal and reaches this route as a Job
-/// with no stopped step. 422 on a blank reason.
-async fn override_verdict<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-    body: Bytes,
-) -> Response {
-    let overruling: Overruled = match ipc::decode("an override", &body) {
-        Ok(overruling) => overruling,
-        Err(why) => return undecodable(&why.to_string(), &served.run_id),
-    };
-    match served
-        .daemon
-        .override_verdict(JobId::carried(job_id), overruling)
-        .await
-    {
-        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// The gate could not decide, and a person asks it again on the evidence the
-/// step already submitted. **The Job comes back wherever the second reading
-/// left it** — running at the next step where it ruled, escalated again where
-/// it could not.
-///
-/// No body, because nothing is being disagreed with. 409 anywhere but an
-/// `escalated` Job stopped on `gate_undecided`, and 409 again on a Job this
-/// Fleet is no longer standing at, where the baseline the first reading used
-/// went with the slot and `restart_step` is what applies.
-async fn rerun_gate<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-) -> Response {
-    match served.daemon.rerun_gate(JobId::carried(job_id)).await {
-        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// The process, not the unit of work. What comes back is the Job the Drone was
-/// on, which is still there.
-async fn kill_drone<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-) -> Response {
-    match served.daemon.kill_drone(JobId::carried(job_id)).await {
-        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// The unit of work, not the process. A separate operation from `kill_drone`
-/// because two of the edges into `killed` leave a status no
-/// Drone has ever existed under, and neither one can be spelled as killing a
-/// Drone.
-async fn kill_job<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-) -> Response {
-    match served.daemon.kill_job(JobId::carried(job_id)).await {
-        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// Delete the Job's whole record. **Real deletion, not a status** — the row
-/// and everything beneath it are gone, and there is no undo.
-///
-/// 409 where the Job is not yet terminal: `kill_job` is the act that ends one
-/// still in flight, and this only clears a Board of work that has already
-/// finished. It does not touch the worktree or the branch — `armada clean`
-/// keeps that concern.
-async fn forget_job<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-) -> Response {
-    match served.daemon.forget_job(JobId::carried(job_id)).await {
-        Ok(forgotten) => answer(StatusCode::OK, &forgotten, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// Mint a replacement for a stopped Job. **Two Jobs come back**, and
-/// the answer is 200 rather than 201 because the act a caller asked for is the
-/// recovery, not the creation — the new Job's id is in the body.
-async fn redispatch_job<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-) -> Response {
-    match served.daemon.redispatch_job(JobId::carried(job_id)).await {
-        Ok(both) => answer(StatusCode::OK, &both, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// Say something to the Drone that is there. **The Job comes back `running`**,
-/// at the same step, with the same Drone — nothing was spawned and nothing was
-/// thrown away.
-///
-/// 409 where the Drone is gone, naming `restart_step` as the act that applies.
-async fn redirect_drone<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-    body: Bytes,
-) -> Response {
-    let instruction: Redirection = match ipc::decode("a redirect", &body) {
-        Ok(instruction) => instruction,
-        Err(why) => return undecodable(&why.to_string(), &served.run_id),
-    };
-    match served
-        .daemon
-        .redirect_drone(JobId::carried(job_id), instruction)
-        .await
-    {
-        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// Answer the question a Drone asked. **The Job comes back unchanged**: what
-/// moved is the Drone, handed the answer as a turn. 409 where nothing waits,
-/// where the id names an answered question, or where the label was not offered.
-async fn answer_question<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-    body: Bytes,
-) -> Response {
-    let chosen: ChosenAnswer = match ipc::decode("an answer", &body) {
-        Ok(chosen) => chosen,
-        Err(why) => return undecodable(&why.to_string(), &served.run_id),
-    };
-    let job_id = JobId::carried(job_id);
-    match served.daemon.answer_question(job_id, chosen).await {
-        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// A body that would not parse, as the 400 it is. **Written once**: this arm
-/// was spelled out at seven commands, each four lines of `WireError` that had to
-/// agree with the other six, and the eighth is what made it a function.
-fn undecodable(why: &str, run_id: &RunId) -> Response {
-    problem(
-        StatusCode::BAD_REQUEST,
-        &WireError::raised(UNDECODABLE_REQUEST, why.to_string(), run_id.clone())
-            .caused_by(vec![why.to_string()]),
-    )
-}
-
-/// Put a new Drone on the worktree the last one left. **One Job comes back**,
-/// not two — this is the same Job resuming, which is the whole of what makes it
-/// different from a redispatch.
-///
-/// 409 where the Drone is alive, and where the worktree is gone.
-async fn restart_step<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-) -> Response {
-    match served.daemon.restart_step(JobId::carried(job_id)).await {
-        Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// A person says this Job failed in error. **201, because a report now
-/// exists** — and nothing else does: no Job is proposed, no Drone is spawned,
-/// and the Job it names is exactly where it was.
-///
-/// 422 on a blank sentence. The record was already served by three other
-/// routes before anybody pressed anything, so a filing with the bundle and no
-/// sentence has added nothing at all.
-async fn file_report<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-    body: Bytes,
-) -> Response {
-    let filing: FileReport = match ipc::decode("a report", &body) {
-        Ok(filing) => filing,
-        Err(why) => return undecodable(&why.to_string(), &served.run_id),
-    };
-    match served
-        .daemon
-        .file_report(JobId::carried(job_id), filing)
-        .await
-    {
-        Ok(report) => answer(StatusCode::CREATED, &report, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-/// Every report filed, newest first, with the counts they are read beside.
-///
-/// **Not under `/jobs`**, and that is the shape of the claim: a report survives
-/// `armada clean` taking its Job away, so it is a record of its own rather than
-/// a row beneath one.
-async fn list_reports<D: Daemon>(State(served): State<Served<D>>) -> Response {
-    match served.daemon.list_reports().await {
-        Ok(reports) => answer(StatusCode::OK, &reports, &served.run_id),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-// ------------------------------------------------------------- the upgrade
-
-/// The event stream. **Global, and a client subscribes to nothing** — one
-/// socket carries every Job, because Bridge holds exactly one connection.
-///
-/// Nothing is read from the socket. The stream is one-directional by design:
-/// there is no subscribe message to read, and a connection that carried state
-/// would be a connection that is expensive to drop and remake.
-/// One Job's turns. **Per-Job, and not on `/events`** — that stream is one
-/// drop-oldest channel carrying every Job, and a transcript row on it would
-/// evict the state changes a Board is drawn from.
-///
-/// The daemon is asked **before** the upgrade, so a Job that does not exist is
-/// a 404 the caller reads at the moment they asked rather than a socket that
-/// opens and says nothing. What comes back already holds the subscription and
-/// the history, in that order.
-async fn observe_job<D: Daemon>(
-    State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
-    upgrade: WebSocketUpgrade,
-) -> Response {
-    match served.daemon.observe_job(JobId::carried(job_id)).await {
-        Ok(observed) => upgrade.on_upgrade(move |socket| crate::observing::relay(socket, observed)),
-        Err(refusal) => refused(refusal),
-    }
-}
-
-async fn events<D: Daemon>(State(served): State<Served<D>>, upgrade: WebSocketUpgrade) -> Response {
-    upgrade.on_upgrade(move |socket| watch(socket, served))
-}
-
-async fn watch<D: Daemon>(mut socket: WebSocket, served: Served<D>) {
-    // Subscribe first, then snapshot. The other order drops whatever lands in
-    // between; this order can only repeat, and a repeat is detectable.
-    let mut subscription = served.events.subscribe();
-    if !resync(&mut socket, &served).await {
-        return;
-    }
-    while let Some(next) = subscription.next().await {
-        let delivered = match next {
-            Next::Send(delivered) => send(&mut socket, &StreamMessage::Event(delivered)).await,
-            // The count alone cannot repair what the client holds, so the drop
-            // is always followed by current state.
-            Next::Missed(dropped) => {
-                send(&mut socket, &StreamMessage::Missed(Missed { dropped })).await
-                    && resync(&mut socket, &served).await
-            }
-        };
-        if !delivered {
-            return;
-        }
-    }
-}
-
-/// Current state, whole. `false` where the socket or the daemon is gone, and
-/// the caller stops.
-///
-/// A daemon that cannot answer closes the socket rather than sending a partial
-/// snapshot: there is no error message on this stream, and a client that
-/// reconnects gets a whole answer or none.
-async fn resync<D: Daemon>(socket: &mut WebSocket, served: &Served<D>) -> bool {
-    let cursor = served.events.cursor();
-    let Ok(jobs) = served.daemon.list_jobs().await else {
-        return false;
-    };
-    send(
-        socket,
-        &StreamMessage::Resync(Resync {
-            protocol_version: PROTOCOL_VERSION,
-            cursor,
-            jobs,
-        }),
-    )
-    .await
-}
-
-async fn send(socket: &mut WebSocket, message: &StreamMessage) -> bool {
-    let Ok(text) = ipc::encode(message) else {
-        return false;
-    };
-    // Awaited, not queued: this is what makes a slow client slow *this* task
-    // rather than Fleet's memory, so the bound upstream is the thing that gives.
-    socket.send(Message::Text(text)).await.is_ok()
-}
-
-// ------------------------------------------------------------------ answers
-
-fn answer<T: Serialize>(status: StatusCode, value: &T, run_id: &RunId) -> Response {
-    match ipc::encode(value) {
-        Ok(body) => (status, [(header::CONTENT_TYPE, "application/json")], body).into_response(),
-        Err(why) => problem(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            &WireError::raised(UNENCODABLE_RESPONSE, why.to_string(), run_id.clone())
-                .caused_by(vec![why.to_string()]),
-        ),
-    }
-}
-
-fn refused(refusal: Refusal) -> Response {
-    let status =
-        StatusCode::from_u16(refusal.status()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-    problem(status, refusal.error())
-}
-
-fn problem(status: StatusCode, error: &WireError) -> Response {
-    match ipc::encode(error) {
-        Ok(body) => (status, [(header::CONTENT_TYPE, "application/json")], body).into_response(),
-        // The error would not serialise, which leaves nothing true to say with
-        // a body. The status is still the answer.
-        Err(_) => status.into_response(),
-    }
 }

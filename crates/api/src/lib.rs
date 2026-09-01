@@ -23,10 +23,14 @@
 //! neither seam above: a Drone's Evidence tool, deliberately absent from
 //! [`SERVED`]. See `mcp`.
 
+mod answers;
+mod commands;
 mod daemon;
 mod mcp;
 mod observing;
+mod queries;
 mod routes;
+mod sockets;
 mod stream;
 
 #[cfg(test)]

@@ -55,6 +55,25 @@ A route of its own rather than a field on `list_jobs`, which is read on every Bo
 `helm_access` is `Yes` for the reason the other queries have it: reading how full the fleet is costs three integers and tells Helm why the Job it dispatched has not started.
 """
 
+[operations.get_call]
+kind = "query"
+transport = "HTTP"
+helm_access = "No"
+description = "One tool call's arguments, whole"
+notes = """
+**The other end of a row that was cut.** A `called` row on `observe_job` carries one line of what a call was on and how many characters the argument had, so opening it reads *showing 200 of 14,320 characters*; this is where the rest comes from. Without it the flag on that row was a dead end — a surface could say the argument was cut and nothing more, which is how the activity log came to render an apology in the one place whose entire purpose is showing the payload.
+
+The split is `get_diff`'s against `job.files_changed`, made against the same measurement. `observe_job` is bounded and lossy under backpressure by design — `docs/contracts/error-contract.md`, *Errors under backpressure* — and the backfill holds its window of rows in memory while it writes them to a socket. A `called` row carrying a whole heredoc would make both of those bounds bounds on nothing, and a row large enough to evict its neighbours takes its own short form down with it. So the cheap fact streams and the argument is fetched, once, by the one person who opened that row.
+
+**The transcript file keeps what the socket does not.** `ipc::Shown` drops the argument as a row is narrowed for a viewer, which is the same shape the withheld kinds already have and is why no caller can put one on the wire by oversight. What the file holds is the record; what the socket carries is a line.
+
+`whole` is stated rather than inferred from the two lengths agreeing. A row written before the file kept the argument answers with the bounded line, `whole` false and `length` absent — the record itself is short, which is a fact about the record and not about the transport, and a reader inferring completeness from a missing count would call that answer whole.
+
+A member read, so the path is `/jobs/:job_id/calls/:call_id` and names no act — the shape `get_job` has under `/jobs`, and the one exception on that table besides it.
+
+`helm_access` is `No` for the reason `observe_job` and `get_diff` have it: an argument the size of a file pulled into a Helm session stays in that session for its remainder, and the viewer this exists for is a person who clicked a row.
+"""
+
 [operations.get_diff]
 kind = "query"
 transport = "HTTP"

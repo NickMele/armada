@@ -30,9 +30,10 @@ use ipc::mcp::{
     AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, SubmitEvidence,
 };
 use ipc::{
-    ChangesRequested, ChosenAnswer, FileReport, FleetCapacity, JobDetail, JobDiff, JobEvidence,
-    JobForgotten, JobHistory, JobId, JobList, JobSummary, ManifestSummary, ModelChoices,
-    ProposeJob, Redirection, Redispatched, Report, ReportList, WireError, WorkflowSummary,
+    CallArguments, ChangesRequested, ChosenAnswer, FileReport, FleetCapacity, JobDetail, JobDiff,
+    JobEvidence, JobForgotten, JobHistory, JobId, JobList, JobSummary, ManifestSummary,
+    ModelChoices, ProposeJob, Redirection, Redispatched, Report, ReportList, WireError,
+    WorkflowSummary,
 };
 
 /// The request-response operations M1 serves.
@@ -135,6 +136,29 @@ pub trait Daemon: Send + Sync + 'static {
     /// as one that did nothing. A worktree that will not open is
     /// [`Refusal::Fault`], never an empty patch.
     fn get_diff(&self, job_id: JobId) -> impl Future<Output = Result<JobDiff, Refusal>> + Send;
+
+    /// `get_call` — one tool call's arguments, as the record holds them.
+    ///
+    /// **The other end of a cut row.** `Saw::Called` carries a line and how
+    /// many characters the argument had; this carries the argument. The split
+    /// is [`Daemon::get_diff`]'s against `job.files_changed`, made for the same
+    /// reason: `observe_job` is bounded and lossy under backpressure by design,
+    /// so an unbounded payload on it would evict the rows a person is reading.
+    ///
+    /// **A person's gesture is what pays for it.** Opening a row asks about one
+    /// call, so an implementation looks for one call id rather than
+    /// materialising a history.
+    ///
+    /// [`Refusal::NoSuchJob`] where the id names no Job.
+    /// [`Refusal::Unacceptable`] where the Job is there and nothing in its
+    /// transcripts carries that call — a well-formed request naming something
+    /// that is not in the record, which is not the same answer as the Job being
+    /// absent and must not be drawn as one.
+    fn get_call(
+        &self,
+        job_id: JobId,
+        call_id: String,
+    ) -> impl Future<Output = Result<CallArguments, Refusal>> + Send;
 
     /// `list_workflows` — the workflows Fleet holds, with their steps.
     ///

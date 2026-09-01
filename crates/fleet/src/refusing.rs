@@ -140,6 +140,7 @@ where
             | Adrift::NotFileable { .. }
             | Adrift::NoSuchWorkflow { .. }
             | Adrift::NoSuchManifest { .. }
+            | Adrift::NoSuchCall { .. }
             | Adrift::Modelless
             | Adrift::NothingToPropose
             | Adrift::AttachmentUnreadable { .. } => {
