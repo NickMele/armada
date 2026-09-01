@@ -506,19 +506,11 @@
    rather than 24 plus a rule plus another 24. */
 .armada-inside {
   display: grid;
-  grid-template-columns: var(--w-run-column) var(--border-width) minmax(0, 1fr);
-  column-gap: var(--space-3);
+  grid-template-columns: var(--w-run-column) minmax(0, 1fr);
+  column-gap: var(--space-6);
   row-gap: var(--space-4);
   align-items: start;
   min-width: 0;
-}
-
-/* The rule between the columns. `align-self: stretch` against the grid's
-   `align-items: start`, because a zero-height element is what a start-aligned
-   hairline is. */
-.armada-inside__rule {
-  align-self: stretch;
-  background: var(--border-subtle);
 }
 
 .armada-inside__run,
@@ -529,8 +521,14 @@
   min-width: 0;
 }
 
+/* The panel is a card, which is what separates the two columns — the drawing
+   carries no rule between them, only this surface against the 24px gutter. */
 .armada-inside__panel {
   gap: var(--space-3);
+  padding: var(--pad-card);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
 }
 
 .armada-inside__region-head {
