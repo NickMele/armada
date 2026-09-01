@@ -100,3 +100,8 @@ export * from "./compositions/StepStory/StepStory";
 // Inside a job — the one arrangement, at every state. The screen #186 built:
 // the run as a tree, the selected step in the panel, its story in order.
 export * from "./screens/InsideAJobOneArrangementAtEveryState/InsideAJobOneArrangementAtEveryState";
+
+// The two chips a step's facts are made of. A fact is a value; a path is the
+// one value that keeps its filename at every width.
+export * from "./compositions/FactChip/FactChip";
+export * from "./compositions/PathChip/PathChip";

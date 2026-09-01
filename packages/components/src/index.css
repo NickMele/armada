@@ -79,3 +79,9 @@
 
 /* A drone asking a person a question. Appended, per the same rule. */
 @import "./compositions/DroneQuestion/DroneQuestion.css";
+
+/* Job detail's two chips — a fact and a path. Two files because they are two
+   components: the path's whole reason to exist is the half of it that refuses
+   to truncate, and folding it into the fact chip would lose that. */
+@import "./compositions/FactChip/FactChip.css";
+@import "./compositions/PathChip/PathChip.css";
