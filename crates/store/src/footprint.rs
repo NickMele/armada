@@ -20,14 +20,9 @@
 //! made where the two are served and is stored in neither, for
 //! [`crate::attempt`]'s reason.
 //!
-//! # The counts are here and on no live seam
-//!
-//! `added` and `deleted` arrived in [`V25`], because counting a file costs the
-//! xdiff that renders its patch — 25ms over a hundred files, 90ms over four
-//! hundred, against under a microsecond for the path list. That is affordable
-//! once, on the transition that ends a Job, and it is not affordable on a
-//! reading taken every two seconds inside a 250ms turn. So the record carries
-//! them and `job.files_changed` does not.
+//! **The counts are on this record and on no live seam.** Counting costs the
+//! xdiff that renders the patch — 25ms over a hundred files, against under a
+//! microsecond for the path list — so [`V25`] is read once, when a Job stops.
 
 use adapter_traits::{Change, ChangedFile, Counted, CountedFile, LineCount};
 use core_model::{JobId, Timestamp};

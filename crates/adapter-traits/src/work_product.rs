@@ -181,12 +181,12 @@ impl Changed {
 
 /// How many lines one file gained and lost.
 ///
-/// **The pair is one measurement.** libgit2 answers additions and deletions
-/// from one walk of one file's patch, so a file is counted or it is not — a
-/// binary file, or one whose patch would not build, has neither number rather
-/// than a zero for the half that could be had. That is why this is a struct and
-/// not two independent options: the state where one arrived and the other did
-/// not cannot be written down.
+/// **The pair is one measurement.** Additions and deletions come from one walk
+/// of one file's patch, so a file is counted or it is not — a binary file, or
+/// one whose patch would not build, has neither number rather than a zero for
+/// the half that could be had. That is why this is a struct and not two
+/// independent options: the state where one arrived and the other did not
+/// cannot be written down.
 ///
 /// **Zero is a measurement.** A rename that moved a file and edited nothing is
 /// `0` and `0`, and a reader that took an absent count for zero would call that
@@ -237,7 +237,7 @@ impl CountedFile {
     }
 
     /// What the file gained and lost, or **nothing where it could not be
-    /// counted** — a binary file, or a patch libgit2 would not build. Absent is
+    /// counted** — a binary file, or a patch that would not build. Absent is
     /// not zero: see [`LineCount`].
     pub fn lines(&self) -> Option<LineCount> {
         self.lines
@@ -374,14 +374,14 @@ pub trait WorkProduct {
 
     /// The same files, each with the lines it gained and lost.
     ///
-    /// **Measured, and it is the same walk that renders the patch.** libgit2
-    /// has no cheaper door to a per-file count: `git_diff_get_stats` costs what
-    /// this costs and answers totals only, and building one file's patch is the
-    /// xdiff run that would have produced its text. Against this repository,
-    /// release build: 1.3ms over 6 files and 105 lines, 25ms over 104 files and
-    /// 7.7k, 90ms over 414 files and 59k — where
-    /// [`changed_files`](WorkProduct::changed_files) is a delta walk costing
-    /// under a microsecond over the same three.
+    /// **Measured, and it is the same walk that renders the patch.** All four
+    /// routes to a per-file count were timed and they cost the same thing: the
+    /// diff library builds one file's count by running the xdiff that would
+    /// have produced its text, and the one call that skips the per-file work
+    /// answers totals only. Against this repository, release build: 1.3ms over
+    /// 6 files and 105 lines, 25ms over 104 files and 7.7k, 90ms over 414 files
+    /// and 59k — where [`changed_files`](WorkProduct::changed_files) is a delta
+    /// walk costing under a microsecond over the same three.
     ///
     /// **So this is called once, at the transition that ends a Job**, and never
     /// on the live seam: `fleet`'s watcher reads every two seconds inside a

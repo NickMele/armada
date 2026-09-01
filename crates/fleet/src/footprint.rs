@@ -193,7 +193,11 @@ where
             Ok(None) => return,
             Err(why) => return self.noted_unfootprinted(job.id(), &why.to_string()),
         };
-        let changed = match self.work().changed_files(&worktree) {
+        // The one counted reading in the process, and what lets a finished
+        // Job say `+94 −31` where a running one says only how many files.
+        // `WorkProduct::counted_files` measures what it costs: the patch that
+        // would render the diff, which is affordable once and not on a turn.
+        let changed = match self.work().counted_files(&worktree) {
             Ok(changed) => changed,
             Err(cause) => return self.noted_unfootprinted(job.id(), &cause.to_string()),
         };
@@ -281,6 +285,10 @@ pub(crate) fn kept(
                 path: file.path().to_string(),
                 change: kind(file.change()),
                 planned_by: promised(plans, file.path()),
+                lines: file.lines().map(|lines| ipc::LineCount {
+                    added: lines.added(),
+                    deleted: lines.deleted(),
+                }),
             })
             .collect(),
         recorded_at: (&recorded.recorded_at).into(),
