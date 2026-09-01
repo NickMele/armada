@@ -30,7 +30,7 @@
    * you misclick. */
   align-items: flex-start;
   padding-top: 20vh;
-  background: color-mix(in srgb, var(--bg-sunken) 62%, transparent);
+  background: var(--scrim);
 }
 
 .armada-palette {

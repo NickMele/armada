@@ -78,13 +78,17 @@ pub fn against_the_contract(
     map: &[MapLine],
     report: &mut Report,
 ) {
-    let by_key: BTreeMap<&str, (&String, &Entry)> = entries
-        .iter()
-        .map(|(id, e)| (e.get("shortcut"), (id, e)))
-        .collect();
+    // One key can be two acts on two surfaces — `Enter` opens a focused job on a
+    // list and the step's log on detail — so a shortcut does not name a row on
+    // its own. Rows are gathered per shortcut and the line picks between them by
+    // the scope it states, which is where the map already carries it.
+    let mut by_key: BTreeMap<&str, Vec<(&String, &Entry)>> = BTreeMap::new();
+    for (id, e) in entries {
+        by_key.entry(e.get("shortcut")).or_default().push((id, e));
+    }
 
     for line in map {
-        let Some((id, entry)) = by_key.get(line.keys.as_str()) else {
+        let Some(rows) = by_key.get(line.keys.as_str()) else {
             report.fail(format!(
                 "{CONTRACT}:{} — `{}` is bound in the key map and has no row in {REGISTRY}. \
                  The registry is the source the map is transcribed from",
@@ -93,6 +97,22 @@ pub fn against_the_contract(
             continue;
         };
         let rest = line.rest.to_lowercase();
+        // With one row the shortcut is unambiguous. With several, the line says
+        // which surface it is about — and a line that does not is the real
+        // fault, because a reader cannot tell either.
+        let Some((id, entry)) = (match rows.as_slice() {
+            [only] => Some(only),
+            many => many.iter().find(|(_, e)| rest.contains(&e.get("scope").to_lowercase())),
+        }) else {
+            report.fail(format!(
+                "{CONTRACT}:{} — `{}` is bound to {} acts in {REGISTRY} and this line names no \
+                 scope, so it cannot say which. Name the scope the way the other lines do",
+                line.line,
+                line.keys,
+                rows.len()
+            ));
+            continue;
+        };
         if !rest.contains(&entry.get("verb").to_lowercase()) {
             report.fail(format!(
                 "{CONTRACT}:{} — `{}` reads `{}` here and `{}` in {REGISTRY}. One verb per act",

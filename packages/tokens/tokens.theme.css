@@ -131,6 +131,7 @@
   --spacing-tooltip: var(--w-tooltip);
   --spacing-toast: var(--w-toast);
   --spacing-dot: var(--dot);
+  --color-scrim: var(--scrim);
   --ease-base: var(--ease);
   --color-surface-canvas: var(--surface-canvas);
   --color-surface-card: var(--surface-card);

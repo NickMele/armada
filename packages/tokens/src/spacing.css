@@ -170,4 +170,14 @@
 
   /* Shadows are legal on floating layers only */
   --shadow-overlay: 0 8px 24px -6px rgb(0 0 0 / 0.55), 0 2px 6px -2px rgb(0 0 0 / 0.4);
+  /* The ground behind a floating layer. Dialog and Sheet each mixed this from
+     --bg-sunken at 62% and each said in a comment that no token carried it, so
+     the value was written twice and owned nowhere. Declared here, from what
+     they already used — not a value invented in a mockup.
+
+     It is a mix rather than a flat colour because it sits over whatever the
+     surface beneath it is, and the rule that dimming is a token and never an
+     alpha is about a component reaching for opacity: this is the token that
+     rule sends it to. */
+  --scrim: color-mix(in srgb, var(--bg-sunken) 62%, transparent);
 }
