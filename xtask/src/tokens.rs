@@ -192,9 +192,14 @@ pub const THEME: &[(&str, Slot)] = &[
         "--window-floor",
         Slot::CssOnly("a window bound the main process reads"),
     ),
+    // The two collapse points, in the namespace Tailwind reads for responsive
+    // variants. They are not CSS-only: a component that spells `lg:` resolves
+    // from here, which is what stops it writing an `@media` that cannot read a
+    // custom property anyway.
+    ("--layout-breakpoint", Slot::Named("breakpoint", "wide")),
     (
-        "--layout-breakpoint",
-        Slot::CssOnly("a media query bound, not a utility"),
+        "--layout-breakpoint-narrow",
+        Slot::Named("breakpoint", "narrow"),
     ),
 ];
 

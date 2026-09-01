@@ -12,6 +12,7 @@
    would otherwise compile clean. */
 
 @theme inline {
+  --breakpoint-*: initial;
   --color-*: initial;
   --ease-*: initial;
   --font-weight-*: initial;
@@ -118,6 +119,8 @@
   --spacing-min: var(--sidebar-min);
   --spacing-max: var(--sidebar-max);
   --spacing-rail: var(--sidebar-rail);
+  --breakpoint-wide: var(--layout-breakpoint);
+  --breakpoint-narrow: var(--layout-breakpoint-narrow);
   --spacing-run-column: var(--w-run-column);
   --spacing-width: var(--palette-width);
   --spacing-max-height: var(--palette-max-height);
@@ -156,7 +159,6 @@
 
 /* Read from CSS as var(--token). No namespace carries them:
    --window-floor — a window bound the main process reads
-   --layout-breakpoint — a media query bound, not a utility
    --z-menu — a stacking order, not a scale value
    --z-tooltip — a stacking order, not a scale value
    --z-modal — a stacking order, not a scale value
