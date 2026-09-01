@@ -10,7 +10,7 @@
 // hold one act and what it asks a person for before it sends. What stays here
 // is which of them a state offers. The words on every button are `copy.ts`'s.
 
-import { Button } from "@armada/components";
+import { Button, Tooltip } from "@armada/components";
 
 import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
 import type { Outcome } from "../../shared/bridge";
@@ -232,6 +232,13 @@ export function Acts({
  * the side that can see the worktree, and a restart offered without that answer
  * was refused on the press every time the worktree had been reclaimed. Moving
  * the controls did not move that decision.
+ *
+ * **What each one does is on its own tooltip, with its binding.** The journey
+ * says it plainly — a step's help text is a tooltip carrying its binding, shown
+ * on hover and on focus — and the four sentences were being concatenated into
+ * one paragraph above the buttons, which described the menu rather than the
+ * step and put every sentence out of reach of the control it was about. What a
+ * destructive act costs is still stated again in its confirmation.
  */
 export function StepActs({
   job,
@@ -282,12 +289,17 @@ export function StepActs({
           primary: an override that looked like an approval would be claiming
           the work was right rather than that the Judge was wrong. */}
       {overrule === undefined ? null : (
-        <OverruleControl
-          jobId={job.id}
-          overrule={overrule}
-          disabled={acting || stale}
-          onOverrule={onOverrule}
-        />
+        // No binding on the tooltip: `actions.toml` registers none for the
+        // override, and a tooltip promising a key the map does not hold is
+        // worse than one with no key at all.
+        <Tooltip label={recourse?.says.override_verdict ?? ACT_LABEL.override_verdict}>
+          <OverruleControl
+            jobId={job.id}
+            overrule={overrule}
+            disabled={acting || stale}
+            onOverrule={onOverrule}
+          />
+        </Tooltip>
       )}
       {/* Where nothing ruled, in the place the override would be: the two are
           mutually exclusive, and both keep the step's work. **No dialog and no
@@ -295,25 +307,40 @@ export function StepActs({
           commits nothing, so stopping to ask would claim a cost Fleet does not
           charge. */}
       {reread === undefined ? null : (
-        <Button variant="secondary" disabled={acting || stale} onClick={() => onRerun(job.id)}>
-          {ACT_LABEL.rerun_gate}
-        </Button>
+        <Tooltip label={recourse?.says.rerun_gate ?? ACT_LABEL.rerun_gate}>
+          <Button variant="secondary" disabled={acting || stale} onClick={() => onRerun(job.id)}>
+            {ACT_LABEL.rerun_gate}
+          </Button>
+        </Tooltip>
       )}
       {/* Neither ends the Job, so neither is a plain-red act. The dialog a
           redirect opens is itself the confirmation — a person who cancels it
           has sent nothing. */}
       {canRedirect ? (
-        <RedirectControl jobId={job.id} disabled={acting || stale} onRedirect={onRedirect} />
+        <Tooltip label={recourse?.says.redirect ?? ACT_LABEL.redirect} shortcut={REDIRECT_KEY}>
+          <RedirectControl jobId={job.id} disabled={acting || stale} onRedirect={onRedirect} />
+        </Tooltip>
       ) : null}
       {canRestart ? (
-        <Button
-          variant="secondary"
-          disabled={acting || stale}
-          onClick={() => onAct("restart_step", job.id)}
-        >
-          {ACT_LABEL.restart_step}
-        </Button>
+        <Tooltip label={recourse?.says.restart_step ?? ACT_LABEL.restart_step} shortcut={RESTART_KEY}>
+          <Button
+            variant="secondary"
+            disabled={acting || stale}
+            onClick={() => onAct("restart_step", job.id)}
+          >
+            {ACT_LABEL.restart_step}
+          </Button>
+        </Tooltip>
       ) : null}
     </>
   );
 }
+
+/**
+ * The bindings the two step acts carry, from `actions.toml`'s contextual tier —
+ * `d` redirect, `s` restart step. Written beside the tooltip that displays
+ * them, because a tooltip promising a key the map does not hold is worse than
+ * one with no key at all.
+ */
+const REDIRECT_KEY = "d";
+const RESTART_KEY = "s";

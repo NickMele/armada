@@ -24,7 +24,12 @@
 import type { RunTreeFact, RunTreePath, RunTreeStep, StepActivity } from "@armada/components";
 
 import type { Turn } from "../../shared/bridge";
-import { CHECK_ADVANCES, CHECK_OUTCOME, STEP_STATE } from "../../shared/generated/vocabulary";
+import {
+  CHECK_ADVANCES,
+  CHECK_OUTCOME,
+  ESCALATION_REASON,
+  STEP_STATE,
+} from "../../shared/generated/vocabulary";
 import type {
   ChangedFile,
   CheckRun,
@@ -113,13 +118,7 @@ function factsOfStep(
   const judge = judgeFact(step);
   if (judge !== undefined) facts.push(judge);
 
-  if (step.last_verdict !== undefined) {
-    facts.push({
-      label: "Verdict",
-      value: step.last_verdict.named,
-      named: step.last_verdict.named,
-    });
-  }
+  if (step.last_verdict !== undefined) facts.push(verdictFact(step.last_verdict));
 
   // Served as a field rather than left as a pair to notice: a step reading
   // `advanced` beside a failed verdict is one a person overruled, and a tree
@@ -130,6 +129,24 @@ function factsOfStep(
   if (stands !== undefined) facts.push(stands);
 
   return facts;
+}
+
+/**
+ * What the last gate ruled.
+ *
+ * **`failed` is the wrong word for most of what carries it.** The verdict says
+ * the gate stopped; the trigger says what stopped it, and the registry has a
+ * verb for every trigger — `evidence disputed`, `the gate could not decide`,
+ * `stopped at the gate`. A step where every Check passed and every criterion
+ * was met, reading `Verdict failed`, is a screen a person can only conclude is
+ * broken, and the trigger is the word that reconciles it.
+ */
+function verdictFact(verdict: { named: string; trigger?: string }): RunTreeFact {
+  const said =
+    verdict.trigger === undefined
+      ? verdict.named
+      : (ESCALATION_REASON[verdict.trigger]?.verb ?? verdict.trigger);
+  return { label: "Verdict", value: said, named: verdict.named };
 }
 
 /**

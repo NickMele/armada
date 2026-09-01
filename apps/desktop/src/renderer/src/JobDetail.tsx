@@ -37,6 +37,7 @@ import type { ReactNode } from "react";
 import {
   ChangedFiles,
   DroneQuestion,
+  GamingFlags,
   InsideAJob,
   type JobDetailField,
   type JobDetailHeading,
@@ -248,7 +249,7 @@ export function JobDetail({
               // A question outranks the render's own notice: nothing else on
               // this step is what a person is here for while one is open, and
               // the two would otherwise both claim the band.
-              notice: askingOf(whole) ?? noticeOf(job, whole, render),
+              notice: askingOf(whole) ?? noticeOf(job, whole, render, open),
               // **The question sits where the redirect box does** — between the
               // strip and the story, because it is the same kind of thing: a
               // box a person acts in about the step they are looking at.
@@ -399,7 +400,30 @@ function questionOf(
   );
 }
 
-function noticeOf(job: JobSummary, whole: JobWhole | null, render: string): StepNotice | undefined {
+/**
+ * The band above the story: what stopped this step, and what the machine that
+ * stopped it actually found.
+ *
+ * **`flagged` renders here, and it is the whole point of the band on a step
+ * where the evidence was disputed.** Everything mechanical can pass, every
+ * criterion can be met, and the step still stop — and a person reading
+ * `7 of 7 passed`, `2 of 2 met` and a stopped step, with nothing reconciling
+ * them, can only conclude the app is broken. The gaming check's finding is
+ * what reconciles them, and it was reachable only by pressing *Overrule the
+ * flag* and reading it in the dialog that confirms the act it exists to
+ * inform.
+ *
+ * **What each act does is not here.** That was ninety words describing four
+ * acts, in the imperative, detached from every control it named. Each sentence
+ * is on its act's tooltip now, with its binding, and the band says where the
+ * step stands.
+ */
+function noticeOf(
+  job: JobSummary,
+  whole: JobWhole | null,
+  render: string,
+  step: StepDetail,
+): StepNotice | undefined {
   if (render === "reviewing") {
     return {
       tone: "waiting",
@@ -416,14 +440,29 @@ function noticeOf(job: JobSummary, whole: JobWhole | null, render: string): Step
     at?.check,
     at?.outputPath,
   ].filter((part) => part != null);
+  const recourse = recourseOf(job, whole);
+  const flagged = step.flagged;
   return {
     // A Job that is over is red; one holding with a live Drone is not, because
     // a person deciding what happens next is not a failure.
     tone: job.status === "escalated" ? "stopped" : "failed",
     title: said.length === 0 ? "This Job stopped." : said.join(" · "),
-    children: recourseOf(job, whole).note,
+    children: (
+      <>
+        {flagged.length === 0 ? null : (
+          <GamingFlags flags={flagged} said={WHAT_THE_CHECK_FOUND} citation="whole" />
+        )}
+        <span>{recourse.stands}</span>
+        {recourse.withheld === undefined ? null : (
+          <span className="text-fg-subtle">{recourse.withheld}</span>
+        )}
+      </>
+    ),
   };
 }
+
+/** What the flag rows are, said once over them rather than once on each. */
+const WHAT_THE_CHECK_FOUND = "What the gaming check found, and where:";
 
 /**
  * The story: Drone instructions, then Activity log, then Produced. **The same

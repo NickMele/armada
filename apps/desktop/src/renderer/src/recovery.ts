@@ -63,6 +63,7 @@ import type {
   StepDetail,
   Stuck,
 } from "../../shared/protocol";
+import type { JobAct } from "./Acts";
 import { clock } from "./duration";
 import { ordered } from "./facts";
 
@@ -107,7 +108,28 @@ export type Recourse = {
    * still holds the workflow, and whether a person raised the Job.
    */
   redispatch: boolean;
-  note: string;
+  /**
+   * One sentence per act on offer, keyed by the act — **for that act's own
+   * tooltip, on hover and on focus**, which is where the journey puts a step's
+   * help text.
+   *
+   * They were concatenated into one ninety-word paragraph above the controls,
+   * describing four acts in the imperative — *Overrule the verdict.* *Redirect
+   * the drone.* — to a person who then had to find the matching button
+   * elsewhere on the screen. The sentences are good and were in the wrong
+   * place. Which acts apply is still decided here; what changed is that the
+   * reading reaches a person through the control it is about.
+   */
+  says: Partial<Record<JobAct, string>>;
+  /**
+   * Why an act a person is looking for is not here. **One line, and only where
+   * the absence is the interesting fact** — a restart withheld because the
+   * Drone is alive, or an act this Fleet offers and this Bridge has no control
+   * for.
+   */
+  withheld?: string;
+  /** Where the step stands, in the panel's own voice. Never a menu. */
+  stands: string;
 };
 
 /**
@@ -160,9 +182,9 @@ export type Overruled = "gate_failure" | "evidence_suspect";
  * naming a Job's acts off the row is the derivation this stopped doing.
  */
 export function recourseOf(job: JobSummary, whole: JobWhole | null): Recourse {
-  if (whole === null) return { redispatch: false, note: READING };
+  if (whole === null) return { redispatch: false, says: {}, stands: READING };
   const stuck = whole.stuck;
-  if (stuck === undefined) return { redispatch: false, note: UNCLASSIFIED };
+  if (stuck === undefined) return { redispatch: false, says: {}, stands: UNCLASSIFIED };
   const offered = new Set(stuck.recourse);
   const overrule = offered.has(OVERRIDE_VERDICT) ? overruleOf(whole, stuck) : undefined;
   const reread = offered.has(RERUN_GATE) ? rereadOf(whole, stuck) : undefined;
@@ -180,22 +202,54 @@ export function recourseOf(job: JobSummary, whole: JobWhole | null): Recourse {
   // take nothing away and the other two do — `docs/concepts/job.md` orders the
   // acts on an escalated Job that way. **Never both**: the two triggers
   // partition, so at most one of these two sentences is here.
-  const said = overrule === undefined ? "" : `${overruling(overrule)} `;
-  const asked = reread === undefined ? "" : `${REREAD} `;
+  const says: Partial<Record<JobAct, string>> = {
+    ...(overrule === undefined ? {} : { override_verdict: overruling(overrule) }),
+    ...(reread === undefined ? {} : { rerun_gate: REREAD }),
+    ...(act === "redirect" ? { redirect: REDIRECT } : {}),
+    ...(act === "restart_step" ? { restart_step: RESTART } : {}),
+  };
+  const drew: Recourse = { act, overrule, reread, redispatch, says, stands: "" };
   // **The answer to the last press leads.** A redirect that is waiting and one
   // that never arrived are the same escalated Job, and the person reading this
-  // sentence is usually the person who just sent one — so what happened to it
-  // comes before what may be done next.
+  // is usually the person who just sent one — so what happened to it comes
+  // before where the step stands.
   const sent =
     act === "redirect" && whole.redirecting !== undefined ? `${waiting(whole.redirecting)} ` : "";
-  const applies =
-    act === "redirect" ? REDIRECT : act === "restart_step" ? RESTART : stalled(job, stuck);
-  const drew: Recourse = { act, overrule, reread, redispatch, note: "" };
   return {
     ...drew,
-    note: `${sent}${said}${asked}${applies} ${replacement(redispatch)}${unreachable(stuck, drew)}`,
+    withheld: withheldBy(stuck, drew),
+    stands: act === undefined ? `${sent}${stalled(job, stuck)}` : `${sent}${HOLDING}`,
   };
 }
+
+/**
+ * What the step is doing while it waits for a person, where something can still
+ * be done to it. **One sentence about the state**, because what each act does
+ * is on that act's own tooltip and a paragraph naming all of them above the
+ * buttons is the block this replaced.
+ */
+const HOLDING =
+  "The drone is holding at this step. Nothing advances until you decide what happens next.";
+
+/**
+ * Why an act a person is looking for is not on offer. **At most one line**: an
+ * absence a reader can see for themselves needs no sentence, and the two worth
+ * stating are the restart Fleet refuses while a Drone is alive, and an act this
+ * Fleet offers that this Bridge cannot draw.
+ */
+function withheldBy(stuck: Stuck, made: Recourse): string | undefined {
+  const cannot = unreachable(stuck, made);
+  if (cannot !== undefined) return cannot;
+  return made.act === "redirect" ? RESTART_WITHHELD : undefined;
+}
+
+/**
+ * `DroneStillThere`, from the other side: why the act a person may be reaching
+ * for is not here. It was the fourth sentence of a paragraph about Redirect,
+ * which is where a reason for an absent act is least likely to be read.
+ */
+const RESTART_WITHHELD =
+  "Restart is not offered while the drone is alive: a restart throws that session away.";
 
 /**
  * The words one trigger's override is offered in. **Five, because five places
@@ -330,7 +384,7 @@ function worded(trigger: string | undefined): trigger is Overruled {
  * other side. The spelling arrives as it is, because a label invented for an
  * act this build does not know would be inventing what it does.
  */
-function unreachable(stuck: Stuck, made: Recourse): string {
+function unreachable(stuck: Stuck, made: Recourse): string | undefined {
   const drawn = new Set<string>();
   if (made.overrule !== undefined) drawn.add(OVERRIDE_VERDICT);
   if (made.reread !== undefined) drawn.add(RERUN_GATE);
@@ -339,8 +393,8 @@ function unreachable(stuck: Stuck, made: Recourse): string {
   if (made.redispatch) drawn.add(REDISPATCH_JOB);
   const undrawn = stuck.recourse.filter((named) => !drawn.has(named));
   return undrawn.length === 0
-    ? ""
-    : ` This fleet also offers ${undrawn.join(", ")}, which this bridge has no control for. ` +
+    ? undefined
+    : `This fleet also offers ${undrawn.join(", ")}, which this bridge has no control for. ` +
         "The act is fleet's and it stands; a bridge built from the same commit draws it.";
 }
 
@@ -462,18 +516,13 @@ function waiting(sent: RedirectInFlight): string {
  * re-run of any other one.
  */
 const REREAD =
-  "Ask the gate again. It could not decide: something it needed to read was not readable, so " +
-  "no verdict was reached in either direction and there is nothing to overrule. Asking again " +
-  "runs the same gate over the evidence the drone already submitted — no drone works, nothing " +
-  "it did is redone, and this spends none of the step's retries. Where the cause has not gone " +
-  "away the gate is undecided again and the job does not move. Fleet refuses this where it is " +
-  "no longer standing at this step, and that answer comes on the press.";
+  "The gate could not decide, so there is nothing to overrule. Asking again runs it over the " +
+  "evidence already submitted — no drone works, nothing is redone, and no retry is spent.";
 
 /** `DroneStillThere` stated as the act it points at rather than as a refusal. */
 const REDIRECT =
-  "Redirect the drone. Its session, its worktree and every step so far are still held, so an " +
-  "instruction reaches it as a new turn at the step above. Fleet refuses a restart while a " +
-  "drone is alive, because a restart throws that session away.";
+  "Its session, its worktree and every step so far are still held, so an instruction reaches " +
+  "it as a new turn at the step above.";
 
 /**
  * `NoDroneToRedirect` stated the same way, and the worktree stated as the
@@ -486,10 +535,8 @@ const REDIRECT =
  * act is never refused for that; it stopped claiming the drone is already there.
  */
 const RESTART =
-  "Restart the step. The drone is gone, so the job goes back in the queue and a fresh one " +
-  "takes over the worktree at the step above when there is room, resolving its toolset, " +
-  "model and environment again. Fleet read the worktree before offering this, so it is " +
-  "there to take over.";
+  "The drone is gone, so the job goes back in the queue and a fresh one takes over at the step " +
+  "above when there is room, resolving its toolset, model and environment again.";
 
 /** What replaces a Job that nothing resumes, or that nothing replaces either. */
 function replacement(redispatch: boolean): string {
