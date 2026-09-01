@@ -49,14 +49,22 @@ const AT_REVIEW = "--status-awaiting-review";
 /**
  * The renders that hold the Drone's turns as a section of their own record.
  *
+ * **Every one of them, since job detail became one arrangement.** It held two —
+ * the finished and stopped renders folded the turns into a record and the other
+ * two sent you to a screen of your own. That was the fifth arrangement job
+ * detail had, and it is gone: the record region is in the same place on a
+ * running Job as on a dead one, and the step's activity log is in the panel.
+ *
  * **Two things follow from it, and they are in two files, which is why it is in
- * neither.** The header does not offer "Watch the turns" on these, because one
- * route to a thing is enough; and the board does not put the turns screen up
- * when the socket opens on one, because the socket being open there means a tab
- * was pressed on the page a person is reading. A screen that swapped away under
- * them is the surface this app was built to escape.
+ * neither.** The header does not offer "Watch the turns", because one route to
+ * a thing is enough; and the board does not put a turns screen up when the
+ * socket opens, because the socket being open means a tab was pressed on the
+ * page a person is reading. A screen that swapped away under them is the
+ * surface this app was built to escape.
  */
 export const RECORDS_ITS_OWN_TURNS: ReadonlySet<Render> = new Set<Render>([
+  "working",
+  "reviewing",
   "finished",
   "stopped",
 ]);

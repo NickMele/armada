@@ -116,9 +116,6 @@ export function Acts({
   approving,
   stale,
   onAct,
-  onRedirect,
-  onOverrule,
-  onRerun,
   onApprove,
   onObserve,
   onReport,
@@ -137,18 +134,6 @@ export function Acts({
   approving: boolean;
   stale: boolean;
   onAct: (act: ConfirmableAct, jobId: string) => void;
-  onRedirect: (jobId: string, instruction: string) => void;
-  /**
-   * Overrule the verdict, with the reason. Straight through like a redirect —
-   * the dialog that collected the reason is the confirmation.
-   */
-  onOverrule: (jobId: string, reason: string) => void;
-  /**
-   * Ask the gate again on a step it could not decide. **Straight through like a
-   * redirect, and for a different reason** — that one already confirmed in its
-   * own dialog, and this one has nothing to confirm.
-   */
-  onRerun: (jobId: string) => void;
   onApprove: (jobId: string) => void;
   /**
    * Open this Job's turns as a view of their own. **Omitted on the finished
@@ -182,18 +167,6 @@ export function Acts({
     ...(job.assigned_drone === undefined ? [] : (["kill_drone"] as ConfirmableAct[])),
     ...(over ? [] : (["kill_job"] as ConfirmableAct[])),
   ];
-  // Which of redirect and restart applies, or neither. **Fleet's reading, drawn
-  // rather than repeated**: it is the side that can see the worktree, and a
-  // restart offered without that answer was refused on the press every time the
-  // worktree had been reclaimed.
-  const canRedirect = recourse?.act === "redirect";
-  const canRestart = recourse?.act === "restart_step";
-  // Beside the two rather than instead of one: which trigger stopped the step
-  // decides these, and whether a Drone is there decides those. **Never both of
-  // them**, because the two triggers partition — `recovery.ts` says so, and
-  // this only draws whichever came back.
-  const overrule = recourse?.overrule;
-  const reread = recourse?.reread;
   // What the state calls for goes on the face: replacing a Job that stopped, and
   // otherwise the kill that ends it. Never the milder kill — the act with the
   // larger consequence does not hide behind a caret.
@@ -231,50 +204,6 @@ export function Acts({
           onReport={onReport}
           onCopied={onCopied}
         />
-      ) : null}
-      {/* First of the acts that resume, because it is the one that takes
-          nothing away — the refused step's own work is kept. Secondary and not
-          primary: the one accent fill this header carries belongs to approving
-          a dispatch, and an override that looked like an approval would be
-          claiming the work was right rather than that the judge was wrong. */}
-      {overrule === undefined ? null : (
-        <OverruleControl
-          jobId={job.id}
-          overrule={overrule}
-          disabled={acting || stale}
-          onOverrule={onOverrule}
-        />
-      )}
-      {/* Where nothing ruled, in the place the override would be: the two are
-          mutually exclusive, and both are the act that keeps the step's work.
-          **No dialog and no confirmation** — a re-run destroys nothing,
-          overrules nothing and commits nothing, so a screen that stopped to ask
-          would be claiming a cost Fleet does not charge. Secondary like the
-          override, and never primary: this asks a machine a question, it does
-          not approve anything. */}
-      {reread === undefined ? null : (
-        <Button
-          variant="secondary"
-          disabled={acting || stale}
-          onClick={() => onRerun(job.id)}
-        >
-          {ACT_LABEL.rerun_gate}
-        </Button>
-      )}
-      {/* Neither ends the Job, so neither is a plain-red act. The dialog it
-          opens is itself the confirmation — a person who cancels the dialog
-          has sent nothing. */}
-      {canRedirect ? (
-        <RedirectControl jobId={job.id} disabled={acting || stale} onRedirect={onRedirect} />
-      ) : null}
-      {canRestart ? (
-        <Button
-          variant="secondary"
-          disabled={acting || stale}
-          onClick={() => onAct("restart_step", job.id)}
-        >
-          {ACT_LABEL.restart_step}
-        </Button>
       ) : null}
       {face === undefined ? null : menu.length === 0 ? (
         // A split button with nothing in its menu is a button. Outlined, because
@@ -317,3 +246,109 @@ export function Acts({
 
 /** Which act takes the split button's face, in preference order. */
 const FACE: readonly ConfirmableAct[] = ["redispatch", "kill_job"];
+
+/**
+ * The four acts that change a step rather than the Job, in the panel header
+ * beside the step they act on.
+ *
+ * **They were rendered at Job level and four of the eight do not act on the
+ * Job.** Redirecting a Drone, restarting a step, overruling the verdict on a
+ * step and asking a step's gate again all leave the Job exactly where it is —
+ * only the step moves. Drawn in the Job header they read as peers of the two
+ * kills, which is the reading job detail was redrawn to end.
+ *
+ * **The accent goes with them.** The object of attention on this screen is the
+ * open step, and the Job header keeps only the acts that end or replace the
+ * Job. Which one takes the fill is the caller's, because it depends on which
+ * act the state calls for — nothing here decides emphasis for a state it cannot
+ * see.
+ *
+ * **Which of the four is offered is `recovery.ts`'s reading, unchanged.** It is
+ * the side that can see the worktree, and a restart offered without that answer
+ * was refused on the press every time the worktree had been reclaimed. Moving
+ * the controls did not move that decision.
+ */
+export function StepActs({
+  job,
+  whole,
+  render,
+  acting,
+  stale,
+  onAct,
+  onRedirect,
+  onOverrule,
+  onRerun,
+}: {
+  job: JobSummary;
+  whole: JobWhole | null;
+  render: Render;
+  acting: boolean;
+  stale: boolean;
+  onAct: (act: ConfirmableAct, jobId: string) => void;
+  onRedirect: (jobId: string, instruction: string) => void;
+  /**
+   * Overrule the verdict, with the reason. Straight through like a redirect —
+   * the dialog that collected the reason is the confirmation.
+   */
+  onOverrule: (jobId: string, reason: string) => void;
+  /**
+   * Ask the gate again on a step it could not decide. **Straight through like a
+   * redirect, and for a different reason** — that one already confirmed in its
+   * own dialog, and this one has nothing to confirm.
+   */
+  onRerun: (jobId: string) => void;
+}) {
+  // Fleet's answer, on the render that carries one. A Job nothing is wrong with
+  // has no `stuck` and so offers none of these — which is the wire's reading
+  // and not a rule written here.
+  const recourse = render === "stopped" ? recourseOf(job, whole) : undefined;
+  const canRedirect = recourse?.act === "redirect";
+  const canRestart = recourse?.act === "restart_step";
+  // Beside the two rather than instead of one: which trigger stopped the step
+  // decides these, and whether a Drone is there decides those. **Never both**,
+  // because the two triggers partition — `recovery.ts` says so.
+  const overrule = recourse?.overrule;
+  const reread = recourse?.reread;
+
+  return (
+    <>
+      {/* First of the acts that resume, because it is the one that takes
+          nothing away — the refused step's own work is kept. Secondary and not
+          primary: an override that looked like an approval would be claiming
+          the work was right rather than that the Judge was wrong. */}
+      {overrule === undefined ? null : (
+        <OverruleControl
+          jobId={job.id}
+          overrule={overrule}
+          disabled={acting || stale}
+          onOverrule={onOverrule}
+        />
+      )}
+      {/* Where nothing ruled, in the place the override would be: the two are
+          mutually exclusive, and both keep the step's work. **No dialog and no
+          confirmation** — a re-run destroys nothing, overrules nothing and
+          commits nothing, so stopping to ask would claim a cost Fleet does not
+          charge. */}
+      {reread === undefined ? null : (
+        <Button variant="secondary" disabled={acting || stale} onClick={() => onRerun(job.id)}>
+          {ACT_LABEL.rerun_gate}
+        </Button>
+      )}
+      {/* Neither ends the Job, so neither is a plain-red act. The dialog a
+          redirect opens is itself the confirmation — a person who cancels it
+          has sent nothing. */}
+      {canRedirect ? (
+        <RedirectControl jobId={job.id} disabled={acting || stale} onRedirect={onRedirect} />
+      ) : null}
+      {canRestart ? (
+        <Button
+          variant="secondary"
+          disabled={acting || stale}
+          onClick={() => onAct("restart_step", job.id)}
+        >
+          {ACT_LABEL.restart_step}
+        </Button>
+      ) : null}
+    </>
+  );
+}

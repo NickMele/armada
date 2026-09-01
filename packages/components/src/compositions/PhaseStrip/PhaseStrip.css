@@ -1,0 +1,238 @@
+/* Where this step is — the phases and the gate tiers as one progression. */
+.armada-phases {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-phases__label {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--fg-subtle);
+}
+
+/* The strip wraps rather than scrolls. A step with three Checks and a Judge is
+   six stages, and a horizontally scrolling progression hides the end of itself
+   — which is where the step actually is. */
+.armada-phases__strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-phases__stage {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* A stage is a control, so it looks like one — but not like a button: the strip
+   is a progression a person reads first and presses second, and six filled
+   buttons in a row would read as six decisions. A tint, a hairline and the
+   hue of where it stands. */
+.armada-phases__control {
+  display: inline-flex;
+  align-items: center;
+  height: var(--h-badge);
+  padding: 0 var(--space-2);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--fg-subtle);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease);
+}
+
+.armada-phases__control:hover {
+  border-color: var(--border-default);
+  color: var(--fg-default);
+}
+
+.armada-phases__control:focus-visible {
+  outline: var(--border-width) solid var(--border-strong);
+  outline-offset: var(--border-width);
+}
+
+/* Hue below Job level, only where tokens/status.css declares it. A stage still
+   ahead takes none: it is a position, not a state. */
+.armada-phases__control[data-state="cleared"] {
+  color: var(--step-advanced);
+  border-color: var(--step-advanced);
+}
+
+.armada-phases__control[data-state="current"] {
+  color: var(--step-running);
+  border-color: var(--step-running);
+}
+
+/* Amber, not red. It is waiting on you, not broken — the one shape that must
+   never read as a failure. */
+.armada-phases__control[data-state="waiting"] {
+  color: var(--step-waiting);
+  border-color: var(--step-waiting);
+}
+
+.armada-phases__control[data-state="failed"] {
+  color: var(--step-failed);
+  border-color: var(--step-failed);
+  background: var(--step-failed-bg);
+}
+
+/* The open stage takes the accent edge, which says where you are rather than
+   what the stage is — the same split the tree makes between surface and edge. */
+.armada-phases__control[data-open] {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--fg-default);
+}
+
+/* --- what an opened stage says ------------------------------------------- */
+
+.armada-phases__open {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  min-width: 0;
+}
+
+.armada-phases__open[hidden] {
+  display: none;
+}
+
+.armada-phases__open-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-phases__open-name {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+  min-width: 0;
+}
+
+/* Where it stands. Mono, because it is what the system reported. */
+.armada-phases__open-stands {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.armada-phases__open-stands[data-state="cleared"] {
+  color: var(--step-advanced);
+}
+
+.armada-phases__open-stands[data-state="waiting"] {
+  color: var(--step-waiting);
+}
+
+.armada-phases__open-stands[data-state="failed"] {
+  color: var(--step-failed);
+}
+
+/* What the tier is. Standing copy, so it is a sentence in sans and reads at
+   body weight one step down — it is read once and then skipped. */
+.armada-phases__said {
+  margin: 0;
+  max-width: 88ch;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+.armada-phases__rows {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-phases__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* A criterion is a sentence somebody wrote, so it is sans; a Check is a
+   command, so `data-mono` makes it mono. Sans names work, mono names
+   machinery. */
+.armada-phases__row-label {
+  min-width: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-phases__row-label[data-mono="true"] {
+  font-family: var(--font-mono);
+}
+
+/* An exit code is measured, so it speaks flatly unless it is a verdict. */
+.armada-phases__row-result {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+.armada-phases__row-result[data-named="passed"],
+.armada-phases__row-result[data-named="met"] {
+  color: var(--verdict-met);
+}
+
+.armada-phases__row-result[data-named="failed"],
+.armada-phases__row-result[data-named="not_met"] {
+  color: var(--verdict-not-met);
+}
+
+.armada-phases__detail {
+  min-width: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+/* Where the step stands overall, and what advances an ungated step. Brighter
+   than the standing copy because it is about this run rather than about the
+   product. */
+.armada-phases__note {
+  margin: 0;
+  max-width: 88ch;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}

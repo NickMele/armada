@@ -22,7 +22,6 @@ import { Button, Kbd } from "@armada/components";
 /** The four views one head serves, and everything each needs to draw it. */
 export type HeadProps = {
   /** One Job's turns, as a screen of their own. Leaves to the Job. */
-  watching: boolean;
   /** One Job, read whole. Leaves to the list. */
   reading: boolean;
   /** The composer. Leaves to the list. */
@@ -40,7 +39,6 @@ export type HeadProps = {
   live: boolean;
   /** A re-read in flight, so a second press does not send a second one. */
   refreshing: boolean;
-  onCloseTurns: () => void;
   onCloseJob: () => void;
   onCloseComposer: () => void;
   onCompose: () => void;
@@ -53,13 +51,11 @@ export type HeadProps = {
 export type Head = { title: string; summary?: string; actions: ReactNode };
 
 export function headOf({
-  watching,
   reading,
   composing,
   auditing,
   live,
   refreshing,
-  onCloseTurns,
   onCloseJob,
   onCloseComposer,
   onCompose,
@@ -76,22 +72,6 @@ export function headOf({
         <>
           <Button variant="ghost" size="sm" onClick={onCloseReports}>
             Back to the list
-          </Button>
-          <Kbd>Esc</Kbd>
-        </>
-      ),
-    };
-  }
-  if (watching) {
-    return {
-      title: "Active jobs",
-      actions: (
-        <>
-          {/* Leaves the pane. **Never an act on the Drone** — closing this ends
-              the watching and nothing else, which is the whole difference
-              between observing and taking over. */}
-          <Button variant="ghost" size="sm" onClick={onCloseTurns}>
-            Back to the job
           </Button>
           <Kbd>Esc</Kbd>
         </>
