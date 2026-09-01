@@ -93,3 +93,7 @@ export * from "./errors/FileAnIssue/FileAnIssue";
 // The run — the workflow as a tree on job detail. Not the rail: a rail drew
 // every step's gate rows inline, and a step's gates are the phase strip's now.
 export * from "./compositions/RunTree/RunTree";
+
+// Where this step is. Each stage is a control, and Checks and the Judge are
+// drawn as the different things they are.
+export * from "./compositions/PhaseStrip/PhaseStrip";

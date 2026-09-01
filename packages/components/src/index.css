@@ -80,3 +80,6 @@
 /* The run — the workflow as a tree on job detail. Appended, per the rule
    above: this list is append-only. */
 @import "./compositions/RunTree/RunTree.css";
+
+/* Where this step is — the phases and the gate tiers as one progression. */
+@import "./compositions/PhaseStrip/PhaseStrip.css";
