@@ -43,7 +43,7 @@ use tokio::task::JoinHandle;
 use crate::clock::Clock;
 use row::Line;
 
-pub use backfill::{history, HISTORY};
+pub use backfill::{arguments, history, HISTORY};
 
 /// How many rows may be waiting to be written.
 ///
@@ -208,6 +208,12 @@ impl Recording {
 
 /// A viewer's end of the tee. **Nothing durable** — the file is the record, and
 /// this is a copy of it going to whoever is watching right now.
+///
+/// **It is also narrower than the record.** Rows go through
+/// `TranscriptRow::for_a_viewer` before they are offered, so the whole of a
+/// long call argument never enters a channel whose whole purpose is a fixed
+/// bound. `ipc::Shown` would drop it at the far end regardless; doing it here
+/// is what stops a thousand buffered arguments being held to be dropped later.
 pub struct Live {
     feed: api::Feed,
     /// Its own, because a `Feed` is `api`'s type and cannot hold a `Clock`.
@@ -226,13 +232,13 @@ impl Tap for Live {
         let at = self.clock.now();
         let step = self.step.now();
         for event in events {
-            self.feed.offer(row::seen(&at, &step, event));
+            self.feed.offer(row::seen(&at, &step, event).for_a_viewer());
         }
     }
 
     fn noted(&self, by: Voice, saw: Saw) {
         self.feed
-            .offer(row::authored(&self.clock.now(), &self.step.now(), by, saw));
+            .offer(row::authored(&self.clock.now(), &self.step.now(), by, saw).for_a_viewer());
     }
 }
 
