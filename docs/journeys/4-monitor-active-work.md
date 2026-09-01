@@ -44,6 +44,12 @@ Open Bridge → Active Jobs → lightweight heartbeat per active Drone: status, 
 
 **Opening one chapter collapses the others to their header line.** Why: the order stays readable while one part of it is long.
 
+**A chapter whose content has no end opens as a trailing sheet instead.** The activity log runs to 1676 entries on a real Job and the diff is the Job's whole patch across several files — neither is a longer version of something the panel can hold, so the panel stops trying. The header line stays where it was and is the way back. `Esc` closes it, which is what `Esc` already means; what the map gains is the opening, `Enter` on detail, where nothing was bound before.
+
+**One sheet at a time.** Opening the diff while the log is open replaces it, and `Esc` returns to the panel rather than to the previous sheet. Why: a layer that pops back to another layer makes one key mean two depths of *back*.
+
+**This supersedes the inline expander for those two chapters, which is built.** `StepStory` opens all three in place today, and `apps/desktop/src/renderer/src/JobDetail.tsx` holds the open chapter for the step. Drone instructions keeps that treatment and the collapse rule above; the other two leave the panel. `#286` builds the sheets.
+
 **The Job's brief sits above the step, on the panel's raised surface.** Why: every step is read against it.
 
 ### Produced states line counts on a Job that has stopped, and not on one that is running
@@ -86,6 +92,8 @@ Two tiers, and drawing them as one row of chips risks reading as one kind of thi
 **One stream carries the Drone's turns, Armada's injected turns and Fleet's own events.** Every entry names who.
 
 **Every entry opens to its payload.** A command opens to its full text, its output, its exit code and where it ran.
+
+**An opened log holds its position and does not follow the tail.** Why: a person opening 1676 entries is looking for one of them, and a followed tail pulls it out from under them. *Jump to now* carries the count of what arrived, and the held strip states where the reading is.
 
 ### Acts
 
@@ -138,6 +146,7 @@ Two tiers, and drawing them as one row of chips risks reading as one kind of thi
 
 - **The origin tag takes plain words and no chip.** "Dispatched by you" / "Found by Fleet" / "Drafted in Helm," replacing "Manual" / "Auto-detected" / "Helm-drafted" — settings vocabulary naming modes the lexicon does not have. **Amended 2026-08-21: origin loses the chip entirely.** It was a bordered pill the same height, radius and padding as the status badge beside it, separated only by colour, and the rule that the outlined one is never a status appeared nowhere on screen. **A chip is a status.** Origin is plain sans text in `--fg-muted`, which finishes the sentence the contract had already started — not a Job state, so not a hue, and not a chip either. Three treatments now do three jobs: chip for the state, sans for who and what, mono for machine values. **The leading dot is mandatory on a status badge** and forbidden elsewhere, fixing an inconsistency the kit already had. The cost is real — origin gets quieter, and it was already the thing people miss; if that becomes a problem the fix is giving it somewhere with room, not a shape that lies about what it is. Moving origin into an attribution sentence under the title was drawn and rejected earlier: it reads better on a detail screen and does not fit a list row.
 - **A list row never takes an accent fill, and carries exactly one control.** Settled 2026-08-21 while drawing Active Jobs. Every row has one secondary split button whose label is the act its state calls for — `Pilot` on an escalated Job, `Approve` on one waiting for you, `Open` on one that is simply running — with the alternatives behind the caret. Clicking the row does the same as Open; the button exists so the column reads consistently and the action is always named rather than guessed from the row being clickable. No ellipsis: it names nothing, so a person has to open it to learn whether it holds Kill or Redirect. None takes a fill, because fourteen awaiting-review Jobs would be fourteen accent blocks — the same failure as the pulse. Urgency is carried by the badge and the ordering; the accent is spent on job detail, where the object of attention is a single Job.
+- **The Job's diff is the Job's, and a step only chooses where it opens.** Fleet commits once at the end, so there is no per-step patch to show. The sheet header names the branch rather than the step, and the file rail carries the only step-scoped fact a diff has — which step wrote each file.
 
 ## Settled since — Redirect, Kill, Pause and Judge scope
 
@@ -155,6 +164,7 @@ Two questions this journey once carried open are now decided, and both are recor
 - **A workflow step has no human name.** Found by drawing Active Jobs, where rows read `regression_verify` in mono. That is honest — it is machine-derived — but it is a schema identifier on a surface a person scans, and it tells them nothing. `step_id` is the only name a step has in the Bug sample, and the enum→verb table covers Job states rather than workflow steps, so there is no map to look it up in. See Open questions below.
 - **Whether the rail shows the label, the `step_id`, or both** — **settled 2026-08-21: the label, everywhere.** Step names are labels in sans on every surface, including the rail on job detail. Nouns naming the artifact: *Reproduction*, *Root cause*, *Fix*, *Regression check*. A step is a unit of work with a name, so it reads as one; the gate rows beneath it keep mono identifiers, because a Check is a command. **Sans names work, mono names machinery.** The `step_id` survives only where a machine reference is genuinely the point — in citations, and in prose that names the schema explicitly.
 - **The running pulse does not scale to a list** — **settled 2026-08-21: the pulse is scoped to the current step of the focused Job**, one on screen at a time, wherever the rail or the list appears. It was scoped per rail, where one row is current by definition; a list has one per running Job, and at fourteen it is what the motion tokens forbid outright.
+- **The pulse moves with the reading, not with the rail.** Still one running mark per screen, now on the thing being read. With a sheet open the tree's current step is behind the layer, so the sheet's live mark takes the pulse and the tree's stops — and it stops entirely once the Job is no longer running.
 - **The stopped surface competes with the focused row.** A stopped Job carries `--step-stopped-bg` and the focused row carries `--bg-hover` with the accent bar. Two tinted rows in one list saying different things. It holds at one stopped Job because the accent edge does the work; three would read as three focus rows.
 - **A Convoy has no single workspace**, so its row names its first write target and counts the rest. Settled on the Board's row, which this list reuses — see [Job Board](../concepts/job-board.md).
 - **Redirect, Kill and Pause on a healthy, non-escalated Drone** — settled, see above.
