@@ -29,7 +29,7 @@ use verification::{drifted, InScope, OutsideScope};
 use crate::adrift::NotDeclared;
 use crate::briefing::Redeclaring;
 use crate::daemon::Fleet;
-use crate::session::LiveSession;
+use crate::session::{LiveSession, Occasion};
 use crate::transcript;
 use crate::working::Working;
 
@@ -238,7 +238,10 @@ where
     /// was never told" is the defect this whole path was built to close.
     async fn tell_of_drift(&self, working: &Option<Working>, notice: &Redeclaring) -> bool {
         match working.as_ref() {
-            Some(at_work) => at_work.session().notice(notice).await.is_ok(),
+            Some(at_work) => {
+                at_work.instructed(Occasion::Drift, notice.text());
+                at_work.session().notice(notice).await.is_ok()
+            }
             None => false,
         }
     }

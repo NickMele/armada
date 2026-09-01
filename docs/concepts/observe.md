@@ -87,6 +87,8 @@ It used to be forced: one Drone worked a Job's steps in turn, so a step read at 
 
 **The rows are `DroneEvent`, not `stream-json`.** The vocabulary in `crates/adapter-traits/src/event.rs` is already the distinction a reader wants — a call, its answer, prose, a refusal — so Bridge is handed named events and never raw transcript.
 
+**Three rows are not a `DroneEvent` at all, and they are the other two voices.** A step is Armada opening it, the Drone working, and Fleet running the Checks and reading what came out. Only the middle one was written down, so a surface drawing the activity log had the Drone's turns and nothing about what it had been asked or what was made of it. Every row carries a `by` saying which of the three it is; a row written before that field existed is a Drone's, which is what the default says rather than guesses.
+
 | Row | Carries | Reads as |
 | --- | --- | --- |
 | `Called` | The tool, the call's id, and what the call was on — a path, a command, a pattern — with a flag saying whether it was cut | The Drone reached for something, and what it did with it |
@@ -97,8 +99,15 @@ It used to be forced: one Drone worked a Job's steps in turn, so a step read at 
 | `Unrecognised` | The kind | The stream carried something the vocabulary has no variant for — a new event, or the Drone's reasoning |
 | `Unreadable` | The line as the decoder saw it, and why | A line that did not decode |
 | `Ended` | The turn count, what the run cost, and how many turns the harness refused | The Drone stopped, and what it spent getting there |
+| `Instructed` | Which turn it was, and what Armada told the Drone, whole | Armada spoke into the session |
+| `Checked` | One declared Check, as Fleet ran it — the same `CheckRun` a step's panel carries | Fleet ran something the Drone never can |
+| `Produced` | What the worktree held, by name and change kind | Fleet read what the step made |
 
 **`Missed` is the one row that is not a `DroneEvent`.** It is the sink saying how much of the record is not there, which the vocabulary has no way to say. It is written to the file and is not shown to a viewer, whose losses are the subscription's rather than the sink's.
+
+**What Armada said is carried whole and is not bounded.** Why: it is Fleet's own rendering of a template Fleet holds, not something a Drone chose the size of — the bound `CallDetail` puts on a call's arguments exists because a `Write` argument is a whole file, and no such hazard is here. Truncating the one thing the step was asked to do would make the row unreadable for exactly the question it answers.
+
+**A Check row is written where the ruling is, and the reading of the worktree beside it.** Why: that is once per submission rather than once per turn, and it is the moment both are true — the Check has an outcome and the worktree holds what the step made. A worktree that will not open writes no row and fails no ruling, which is the rule the live footprint reading already follows.
 
 **A tool call and its result are one row, joined on the call id.** Why: `Called` and `Answered` arrive as separate events with a gap between them that is the tool running, and two rows would separate a command from its output by everything that happened while it ran.
 

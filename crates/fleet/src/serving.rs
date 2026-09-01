@@ -142,16 +142,12 @@ where
             let flagged = store
                 .step_gaming_flags(job.id())
                 .map_err(|why| self.refusal(Adrift::Reading(why)))?;
-            // The same rows `get_job_events` serves, narrowed to the step
-            // moves. **Read on every open, unlike the history**: what comes
-            // back from here is one entry per run of one step rather than a row
-            // per move, so a rail can say `Attempt 1 refused` without the
-            // unbounded read `history.rs` keeps off this call.
-            let moves = step_moves(
-                &store
-                    .events_for(job.id())
-                    .map_err(|why| self.refusal(Adrift::Reading(LoadJobError::Unreadable(why))))?,
-            );
+            // The rows `get_job_events` serves, narrowed to the step moves.
+            // **Read on every open, unlike the history**: one entry per run of
+            // a step rather than a row per move, so a rail can say `Attempt 1
+            // refused` without the unbounded read `history.rs` keeps off this.
+            let moves =
+                step_moves(&store, job.id()).map_err(|why| self.refusal(Adrift::Reading(why)))?;
             (ran, judged, flagged, moves)
         };
         // The plans are read with the footprint and only with it: they are what

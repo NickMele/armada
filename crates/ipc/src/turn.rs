@@ -23,12 +23,29 @@
 //! cost and turn count were held back because the Job's rail was said to state
 //! them, no rail ever did, and nothing else on the wire carries either — so
 //! what a Drone spent was reachable from nowhere.
+//!
+//! # Three voices, because the record was always three and carried one
+//!
+//! A step is a conversation: Armada opens it with an instruction, the Drone
+//! works, and Fleet runs the Checks and reads what came out. Only the middle
+//! one was written down, so a surface drawing the step's story could say what
+//! the Drone did and nothing about what it had been asked or what was made of
+//! it. [`Voice`] is which of the three a row is, and the rows Fleet authors
+//! itself are [`Saw::Instructed`], [`Saw::Checked`] and [`Saw::Produced`].
+//!
+//! **The transcript is where they go, and not a new channel.** It is already
+//! per-step and per-Drone, already durable, and already read back in order by
+//! the backfill — so an instruction and the turns it produced arrive
+//! interleaved, which is the whole of what a reader is trying to see. A second
+//! record would have to be merged against this one by instant, and two clocks
+//! is how the merge goes wrong.
 
 use core::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::event::Missed;
+use crate::checks::CheckRun;
+use crate::event::{ChangedFile, Missed};
 use crate::ids::{Instant, JobId, StepId};
 use crate::version::ProtocolVersion;
 
@@ -50,8 +67,41 @@ pub struct TranscriptRow {
     /// nothing relabels it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub step: Option<StepId>,
+    /// Whose row this is.
+    ///
+    /// **Defaulted rather than optional, and the default is the truth.** Every
+    /// row written before this field existed decoded from a Drone's own output,
+    /// so a file read back without it is read back correctly — which is not a
+    /// convenience, it is the reason a `bool`-style absence is safe here where
+    /// [`step`](TranscriptRow::step)'s is not. It is always written, so nothing
+    /// on the wire has to guess.
+    #[serde(default)]
+    pub by: Voice,
     #[serde(flatten)]
     pub saw: Saw,
+}
+
+/// Who a row is. The three actors a step's story has.
+///
+/// **Not [`Actor`](crate::Actor).** That one names who caused a *transition* —
+/// a person, Helm or Fleet — and is the answer to "who is accountable". This
+/// names who is speaking in a transcript, where the interesting distinction is
+/// between what Armada told the Drone and what Fleet did about the result. A
+/// registry declares neither set as this one, so it is a plain enum for
+/// [`Silence`]'s reason.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Voice {
+    /// Armada speaking into the Drone's session: the instruction a step opened
+    /// with, a person's redirect carried in, an answer to a question, a nudge.
+    Armada,
+    /// The Drone's own output, decoded. **The default**, because every row
+    /// written before this field existed is one.
+    #[default]
+    Drone,
+    /// Fleet acting on the Job around the Drone: a Check it ran, the reading it
+    /// took of the worktree.
+    Fleet,
 }
 
 /// The row vocabulary. Tagged `event` rather than `kind`, because
@@ -108,6 +158,59 @@ pub enum Saw {
         turns: u32,
         cost_micros: u64,
         refusals: usize,
+    },
+    /// A turn Armada put into the Drone's session, whole.
+    ///
+    /// **Chapter one of a step's story, and it was reachable from nowhere.**
+    /// `session::Turn` is the only shape that goes down the pipe and it was
+    /// written and dropped, so what a step opened with — the brief, the
+    /// deliverable, what moved on the base — existed on this machine only
+    /// inside a process that had already exited.
+    ///
+    /// The text is not bounded. It is Fleet's own rendering of a template it
+    /// holds, not something a Drone chose the size of, and truncating the one
+    /// thing the Drone was asked to do would make the row unreadable for
+    /// exactly the question it exists to answer.
+    Instructed {
+        /// Which turn this was — `opening`, `outcome`, `redirect`, `answer`,
+        /// `drift`, `report`, `poke` — spelled as `crates/fleet/src/session.rs`
+        /// names the constructor that built it.
+        ///
+        /// A string rather than a closed set, for the reason
+        /// [`JudgeInFlight::look`](crate::JudgeInFlight) is one: **no registry
+        /// declares this set.** It is decided by the code that sends the turns,
+        /// and a mirrored enum here would be a second authority for a list that
+        /// has exactly one.
+        occasion: String,
+        /// What the Drone was told, exactly as it was told it.
+        text: String,
+    },
+    /// One declared Check, as Fleet ran it.
+    ///
+    /// **The Drone never runs these and that is the point of them** — a Drone
+    /// reporting its own tests is a claim rather than a result — so a Check
+    /// appears nowhere in a Drone's own output and the activity log had no way
+    /// to show that anything mechanical had happened at all.
+    ///
+    /// It carries a [`CheckRun`], which is the same value
+    /// [`StepDetail::check_runs`](crate::StepDetail) carries: one vocabulary
+    /// for what a Check did, whether it is read on the step panel or in the log.
+    Checked {
+        run: CheckRun,
+    },
+    /// What the step's work came to, as Fleet read the worktree.
+    ///
+    /// **A reading taken at a step boundary, and the only per-step one there
+    /// is.** `JobFootprint` is the Job's whole work at the instant it stopped
+    /// and `job.files_changed` is a live reading with no boundary attached, so
+    /// neither could say which step produced what. This row is stamped with its
+    /// step like every other, which is what makes the answer per-step without a
+    /// column for it.
+    ///
+    /// **The names, never the bytes** — [`ChangedFile`]'s own rule. What
+    /// changed inside a file is `get_diff`, on the one route that spends it.
+    Produced {
+        files: Vec<ChangedFile>,
     },
     Unrecognised {
         kind: String,
@@ -169,6 +272,9 @@ impl TryFrom<TranscriptRow> for Shown {
             | Saw::Said { .. }
             | Saw::Refused { .. }
             | Saw::Ended { .. }
+            | Saw::Instructed { .. }
+            | Saw::Checked { .. }
+            | Saw::Produced { .. }
             | Saw::Unrecognised { .. }
             | Saw::Unreadable { .. } => Ok(Shown(row)),
         }

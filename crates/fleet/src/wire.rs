@@ -14,7 +14,7 @@ use ipc::{
     CheckRun, DeclaredCheck, DeclaredJudge, Flagged, Judged, StepFacts, StepId, Submitted,
     WorkflowStep,
 };
-use store::{LoadJobError, Moved, RecordedEvent};
+use store::{LoadJobError, Moved, RecordedEvent, Store};
 
 use crate::adrift::{Adrift, NotSubmitted};
 use crate::judging::Aloft;
@@ -233,7 +233,16 @@ pub(crate) struct StepMove {
 /// rather than folded per step: a Job with four steps would otherwise walk the
 /// log four times. Nothing replays — `crates/store/src/fold.rs` has already
 /// done that by the time this runs, exactly as [`recorded`] says.
-pub(crate) fn step_moves(events: &[RecordedEvent]) -> Vec<StepMove> {
+pub(crate) fn step_moves(
+    store: &Store,
+    job: &core_model::JobId,
+) -> Result<Vec<StepMove>, LoadJobError> {
+    Ok(narrowed(
+        &store.events_for(job).map_err(LoadJobError::Unreadable)?,
+    ))
+}
+
+fn narrowed(events: &[RecordedEvent]) -> Vec<StepMove> {
     events
         .iter()
         .filter_map(|event| match event.moved() {

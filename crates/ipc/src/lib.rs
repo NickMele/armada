@@ -115,7 +115,7 @@ pub use job::{
 pub use overlap::{ScopeOverlap, SharedPath};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
-pub use turn::{Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage, Withheld};
+pub use turn::{Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage, Voice, Withheld};
 pub use version::{ProtocolVersion, Skew, PROTOCOL_VERSION};
 pub use waiting::{AskedOption, ChosenAnswer, QuestionInFlight, RedirectInFlight, RedirectWaiting};
 pub use work::{

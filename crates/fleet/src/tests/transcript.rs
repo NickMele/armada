@@ -85,6 +85,11 @@ impl Tap for Counting {
             .expect("not poisoned")
             .extend(events.iter().cloned());
     }
+
+    /// This stand-in counts what a Drone said, which is what the tee is being
+    /// tested for. A row Fleet authored is not a `DroneEvent` and there is
+    /// nowhere here to put one.
+    fn noted(&self, _by: ipc::Voice, _saw: ipc::Saw) {}
 }
 
 /// Read a Drone that says three things, through a tee with these taps on it.
@@ -137,9 +142,9 @@ async fn a_drone_is_handed_to_a_consumer_as_rows_and_never_as_the_wire_shape() {
     assert_eq!(
         rows(&at, drone).lines().take(3).collect::<Vec<_>>(),
         vec![
-            r#"{"ts":"2026-08-26T09:00:01.000Z","step":"implement","event":"said","text":"one"}"#,
-            r#"{"ts":"2026-08-26T09:00:02.000Z","step":"implement","event":"said","text":"two"}"#,
-            r#"{"ts":"2026-08-26T09:00:03.000Z","step":"implement","event":"said","text":"three"}"#,
+            r#"{"ts":"2026-08-26T09:00:01.000Z","step":"implement","by":"drone","event":"said","text":"one"}"#,
+            r#"{"ts":"2026-08-26T09:00:02.000Z","step":"implement","by":"drone","event":"said","text":"two"}"#,
+            r#"{"ts":"2026-08-26T09:00:03.000Z","step":"implement","by":"drone","event":"said","text":"three"}"#,
         ]
     );
 }
@@ -462,6 +467,74 @@ async fn a_row_written_after_a_step_advances_carries_the_step_it_was_written_und
         "a row written after the advance says which step it was written under, \
          and saying `implement` for the whole life of the Job is the bug: {steps:?}"
     );
+}
+
+/// **A step is a conversation and the record held one side of it.** Armada
+/// opens the step, the Drone works, Fleet runs the Checks and reads what came
+/// out — and only the middle one was written down, so the activity log the
+/// drawing draws with three actors could be drawn with one.
+///
+/// Driven through a real Fleet for `steps_until`'s reason: the sinks are held
+/// by the reader task, and a row offered to a copy nothing holds passes a unit
+/// test and reaches no file.
+#[tokio::test]
+async fn the_record_carries_what_armada_said_and_what_fleet_did_beside_the_drone() {
+    let home = TempDir::new();
+    let fleet = crate::tests::daemon::a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let job = fleet
+        .propose(crate::tests::daemon::a_proposal("advance once"))
+        .await
+        .expect("a proposal Fleet holds everything for");
+    crate::tests::daemon::worktree_directory(&home, job.id());
+    fleet
+        .approve(job.id())
+        .await
+        .expect("approval puts a Drone on `implement`");
+
+    let opening = voiced_until(&home, job.id(), ipc::Voice::Armada).await;
+    assert!(
+        opening.iter().any(|saw| matches!(
+            saw,
+            ipc::Saw::Instructed { occasion, text } if occasion == "opening" && !text.is_empty()
+        )),
+        "the brief a step opened with is the first thing in its record: {opening:?}"
+    );
+
+    submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
+        .await
+        .expect("the step's evidence");
+    fleet.turn().await.expect("the gate rules");
+
+    let fleets = voiced_until(&home, job.id(), ipc::Voice::Fleet).await;
+    assert!(
+        fleets
+            .iter()
+            .any(|saw| matches!(saw, ipc::Saw::Produced { .. })),
+        "and what the step produced is read once per ruling, in Fleet's own \
+         voice, because a Drone never reads its own worktree: {fleets:?}"
+    );
+}
+
+/// Every row one voice wrote, once that voice has written at least one.
+///
+/// Polled for `steps_until`'s reason: the writer drains on a task of its own,
+/// so a row is on disk some time after the call that produced it returned.
+async fn voiced_until(home: &TempDir, job: &JobId, by: ipc::Voice) -> Vec<ipc::Saw> {
+    let root = home.path().to_string_lossy().to_string();
+    let mut seen = Vec::new();
+    for _ in 0..400 {
+        let (rows, _) = history(&root, job).await;
+        seen = rows
+            .iter()
+            .filter(|row| row.by == by)
+            .map(|row| row.saw.clone())
+            .collect();
+        if !seen.is_empty() {
+            return seen;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    seen
 }
 
 /// One tool call, as the transcript carries it.

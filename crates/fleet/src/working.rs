@@ -35,8 +35,8 @@ use crate::converging::{elapsed, Chain};
 use crate::drone::{Ending, Started};
 use crate::footprint::Publishing;
 use crate::questioning::Question;
-use crate::session::{DroneSession, LiveSession};
-use crate::transcript::Taps;
+use crate::session::{DroneSession, LiveSession, Occasion};
+use crate::transcript::{Tap, Taps};
 use crate::watch::Watching;
 use store::DroneSpend;
 use verification::NotConverging;
@@ -62,6 +62,17 @@ pub(crate) struct Working {
     worktree: Worktree,
     session: DroneSession,
     transcript: Watching,
+    /// The same sinks the reader task fans a Drone's lines out to, held here so
+    /// that what **Armada and Fleet** did reaches the record too.
+    ///
+    /// **A second handle rather than a second channel.** The rows belong in the
+    /// transcript beside the turns they caused — an instruction and what the
+    /// Drone did with it are one story — and a record of Fleet's own acts kept
+    /// anywhere else would have to be merged back against this one by instant.
+    ///
+    /// It is a clone of the list the reader holds, not a share of it: nothing
+    /// here is mutable, and both ends offer to the same `Arc`.
+    taps: Vec<Arc<dyn Tap>>,
     /// Whatever the CLI complains about. **Never parsed**, and held rather than
     /// dropped: dropping it closes the pipe, and a Drone writing to a closed
     /// stderr takes a signal for it.
@@ -248,13 +259,15 @@ impl Working {
     where
         H: AgentHarness + Send + Sync + 'static,
     {
+        let each = taps.each();
         Working {
             job,
             drone,
             step,
             worktree,
             session: started.session,
-            transcript: Watching::reading(started.transcript, harness, taps.each()),
+            transcript: Watching::reading(started.transcript, harness, each.clone()),
+            taps: each,
             _complaints: started.complaints,
             declared: None,
             drifted: Vec::new(),
@@ -665,6 +678,40 @@ impl Working {
 
     pub(crate) fn session(&self) -> &DroneSession {
         &self.session
+    }
+
+    /// Write down something Armada or Fleet did, into this step's own record.
+    ///
+    /// **Never awaits and never fails**, for the reason
+    /// [`Tap`](crate::transcript::Tap) says: this is called from the loop that
+    /// advances the Job, and a record that could hold it up would make watching
+    /// a Job change its outcome. A row the sinks will not take is counted as
+    /// missed exactly as a Drone's is.
+    ///
+    /// **It is not a send.** Nothing here reaches the Drone; the caller has
+    /// already spoken to the session, or has decided not to, and this says what
+    /// happened. Pairing the two in one method was rejected on the failure it
+    /// hides — a turn that did not go down the pipe still belongs in the record,
+    /// and `crate::silence` counts a poke that failed to write as spent.
+    pub(crate) fn told(&self, by: ipc::Voice, saw: ipc::Saw) {
+        for tap in &self.taps {
+            tap.noted(by, saw.clone());
+        }
+    }
+
+    /// Write down a turn Armada put into this session, whole.
+    ///
+    /// The one caller shape: every send site has the rendered text in hand and
+    /// drops it, which is why the brief a step opened with was recoverable from
+    /// nowhere once the process had gone.
+    pub(crate) fn instructed(&self, occasion: Occasion, text: &str) {
+        self.told(
+            ipc::Voice::Armada,
+            ipc::Saw::Instructed {
+                occasion: occasion.as_wire().to_string(),
+                text: text.to_string(),
+            },
+        );
     }
 
     pub(crate) fn transcript_ended(&self) -> bool {

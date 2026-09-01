@@ -263,8 +263,14 @@ A step was a bare id until `mechanical_checks` was added to it. Bridge printed "
 kind = "query"
 transport = "WebSocket"
 helm_access = "No"
-description = "One Job's turns, the history and then the live ones, on a socket of its own"
+description = "One Job's activity, the history and then the live rows, in three voices, on a socket of its own"
 notes = """
+**Three voices, and it carried one.** A step is Armada opening it, the Drone working, and Fleet running the Checks and reading what came out — and only the middle one was written down, so a surface drawing the activity log had the Drone's turns and nothing about what it had been asked or what was made of it. `Voice` is which of the three a row is; `instructed`, `checked` and `produced` are the rows Fleet authors. They travel here rather than on a channel of their own because they belong beside the turns they caused, in one order, stamped by one clock.
+
+`instructed` is where **what Armada told the Drone at the top of a step** finally lives. `session::Turn` is the one shape that goes down the pipe, and it was rendered and dropped — so the brief a step opened with survived only inside a process that had already exited.
+
+`produced` is the only **per-step** reading of the worktree there is. `get_diff` is the Job's whole patch and `job.files_changed` is a live reading with no boundary attached, so neither could say which step made what. It carries the names and never the bytes, which is `ChangedFile`'s own rule: the diff is `get_diff`, on the one route that spends it.
+
 The one query on the socket, and the row that makes `kind` decide `transport` a rule with an exception rather than a law. Who initiates is still the whole rule — a viewer opens this deliberately on one Job — but the answer does not end: it is the turns already taken followed by the ones that follow, which no request-response shape carries. A poll would have to choose between missing rows between calls and re-sending them.
 
 It does not travel `/events`. That stream is one drop-oldest channel of fixed capacity carrying every Job, so transcript rows at Drone speed would evict the state changes Bridge draws the Board from — and an eviction there is not a lost row but a full resync of every Job, paid continuously for as long as anybody is watching anything.

@@ -55,7 +55,7 @@ use verification::OutcomeTurn;
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::resume::Redirection;
-use crate::session::LiveSession;
+use crate::session::{LiveSession, Occasion};
 use crate::transcript;
 
 impl<H, V, W> Fleet<H, V, W>
@@ -354,6 +354,7 @@ where
                 job: job_id.clone(),
             });
         };
+        at_work.instructed(Occasion::Redirect, note.text());
         at_work
             .session()
             .redirect(note)

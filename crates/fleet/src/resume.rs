@@ -34,7 +34,7 @@ use core_model::{
 use crate::adrift::Adrift;
 use crate::briefing::Stopped;
 use crate::daemon::Fleet;
-use crate::session::LiveSession;
+use crate::session::{LiveSession, Occasion};
 use crate::transcript;
 use crate::working::Working;
 
@@ -423,6 +423,7 @@ where
                 job: job_id.clone(),
             });
         };
+        at_work.instructed(Occasion::Redirect, instruction.text());
         at_work
             .session()
             .redirect(instruction)
