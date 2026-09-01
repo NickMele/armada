@@ -1,17 +1,52 @@
 ---
 name: armada-local
-description: Starting, checking and stopping a local Fleet, and cleaning up after Jobs. Load before running the armada binary in this repository. An agent never launches Bridge.
+description: Starting, checking and stopping a local Fleet, cleaning up after Jobs, and looking at Bridge without stranding it on the owner's screen. Load before running the armada binary in this repository.
 ---
 
 # Running Armada in this repository
 
-**An agent never launches Bridge.** It is a windowed Electron process — one
-agent already put a modal dialog on the owner's screen, in front of whatever he
-was doing, with no way for the agent to dismiss it. **The agent starts Fleet;
-the owner starts Bridge.** If a task needs Bridge running, say so and stop.
+**An agent may launch Bridge to look at its own work.** A change to a screen
+that nobody looked at is a change nobody verified, and no gate in this
+repository can see a layout — `pnpm shoot` exists because a screen shipped
+about thirty differences from its drawing with every gate green.
 
-That rule applies to `pnpm --filter @armada/desktop dev`, `pnpm storybook`,
-`open`, and anything else that opens a window or a browser.
+**What is not yours is the owner's attention.** Bridge is a windowed Electron
+process and it comes up in front of whatever he is doing, so launching it is
+taking the screen for as long as it is up. That is a cost worth paying to
+answer a question and never worth paying to have a look around.
+
+Three rules, and all three come from one incident: an agent left a modal dialog
+on the owner's screen with no way to dismiss it. **The ban this file used to
+carry was wider than what happened**, and it cost more than the dialog did —
+agents stopped verifying screens at all.
+
+- **Write down the question before you launch.** Which screen, which state,
+  what would tell you it is wrong. A launch with no question is a look around.
+- **Quit what you launched**, and say you did. A window left running is one the
+  owner has to find and close.
+- **Never leave a dialog up.** Dismiss it, or quit the app. A modal an agent
+  cannot dismiss is the whole of the incident above.
+
+**Prefer a hidden window wherever one will answer.** `pnpm shoot` drives
+Bridge's own Electron with nothing on screen and writes PNGs an agent can read
+back — `docs/practices/comparing-to-the-drawing.md`. **It captures the
+components gallery and not Bridge**, so a screen assembled in `apps/desktop`
+is outside it: the gallery's `Screens/Inside a job` hand-builds its own header
+rather than rendering the app's. Bridge itself has no hidden path —
+`createWindow` shows on `ready-to-show` and takes no flag — so until it has
+one, seeing a real Bridge screen means taking the screen.
+
+**`scripts/dev` and `pnpm dev` are still not yours.** Not because they start
+Bridge, but because they reinstall `armada` and kill the Fleet the owner is
+using. Start Bridge alone against a Fleet that is already up:
+
+```sh
+pnpm --filter @armada/desktop build && pnpm --filter @armada/desktop start
+```
+
+The build is not optional — `start` previews what is in `out/`, and main always
+loads the built renderer rather than a dev server. Bridge finds Fleet through
+the runtime file, so nothing here needs a port.
 
 ## Build it first
 
@@ -121,8 +156,9 @@ recoverable**, so do not discard the output.
 
 | | |
 |---|---|
-| Launch Bridge, Storybook, a browser or anything windowed | The owner's screen is not yours. Say what you need and stop |
-| Run `pnpm dev` or `scripts/dev` | **It starts Bridge.** It is the owner's loop, not yours — and it reinstalls `armada` and kills the Fleet he is using |
+| Leave Bridge, Storybook or a browser running after you looked | The owner has to find the window and close it. Quit it, and say you did |
+| Leave a dialog up in anything you launched | Dismiss it or quit the app. An agent that cannot dismiss its own modal has taken the screen and not given it back |
+| Run `pnpm dev` or `scripts/dev` | It is the owner's loop: it reinstalls `armada` and kills the Fleet he is using. Start Bridge on its own instead |
 | `git branch -D` over the `armada/` namespace | `armada clean` derives what it deletes. A glob does not |
 | `rm -rf` a worktree | git keeps an administrative record under `.git/worktrees/<name>` that outlives the directory and refuses the branch delete afterwards. `armada clean` does it in the order git needs |
 | Reinstall the binary from a hook | v1's cold build was four minutes because a hook ran `cargo install` on every merge. `docs/practices/rust.md` section 8 |
