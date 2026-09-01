@@ -22,6 +22,22 @@
 // redispatch and approve stay in the Job header, which is also where Pilot
 // lands — `#250`, and nothing here has to change to take it.
 //
+// # Two chapters leave the panel
+//
+// The activity log holds 1676 entries on a real Job and the diff is the Job's
+// whole patch. Neither is a longer version of something a chapter can hold — an
+// expander pushes everything under it off the screen and gives a patch a 602px
+// column — so both open as a trailing sheet instead, and the panel stays
+// exactly as it was underneath. #286, and Journey 4's frames 4i-4m.
+//
+// **One sheet at a time.** Opening the diff while the log is open replaces it,
+// and `Esc` returns to the panel rather than to the previous sheet: a layer
+// that pops back to another layer makes one key mean two depths of *back*.
+//
+// **Two exits and no third.** The labelled control and `Esc`. A click on the
+// screen behind does not close a sheet — a 1676-entry read must not be
+// dismissed by a stray click, and `Sheet` is where that is held.
+//
 // # The story is three chapters and none of them is behind a tab
 //
 // Drone instructions, then Activity log, then Produced, in the order they
@@ -36,16 +52,13 @@ import { GAMING_PATTERN } from "../../shared/generated/vocabulary";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
-  ChangedFiles,
   DroneQuestion,
   GamingFlags,
   InsideAJob,
   type JobDetailField,
   type JobDetailHeading,
   type RunTreeStep,
-  type StepChapter,
   type StepNotice,
-  changedFilesSummary,
 } from "@armada/components";
 
 import type {
@@ -62,19 +75,19 @@ import type { JobFootprint } from "../../shared/footprint";
 import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
 import { Acts, StepActs, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type Calls } from "./calls";
-import { Decide, DecidedDiff } from "./Decide";
-import { DIFF_CHAPTER, namesStep, useDetailKeys, type DetailKeys } from "./detail-keys";
-import { span } from "./duration";
+import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
+import { useAtFloor } from "./floor";
+import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
+import { chaptersOf } from "./chapters";
+import { clock, span } from "./duration";
+import { Decide } from "./Decide";
 import { factsOf, ordered } from "./facts";
-import { readingFor, whyNoFootprint } from "./files";
-import { producedIn } from "./produced";
-import { Log } from "./Log";
 import { phasesOf } from "./phases";
 import { recourseOf } from "./recovery";
 import { escalation, renderFor } from "./render";
 import { runOf } from "./run";
+import { entriesOf } from "./story";
 import { readingOf } from "./reading";
-import { entriesOf, NOTHING_YET_ON_THIS_STEP } from "./story";
 import { briefOf, whyNoWork, workOf } from "./work";
 import { stoppedAt } from "./stopped";
 
@@ -165,6 +178,18 @@ export function JobDetail({
   // would name a step that Job may not have.
   useEffect(() => setSelected(null), [job.id]);
 
+  // Which sheet is open, or none. **One value rather than two booleans**: the
+  // two cannot both be open, and a pair of flags is a state that says they can.
+  // Dropped with the Job, as every reading of one Job is.
+  const [sheet, setSheet] = useState<OpenSheet>(null);
+  useEffect(() => setSheet(null), [job.id]);
+
+  // Where the log's reading was held, and what has arrived since. **The tail is
+  // not followed while a sheet is open**: a stream that scrolls itself cannot
+  // be read. `held` is how many rows the step had when the reading was taken,
+  // and `Jump to now` takes it again.
+  const [held, setHeld] = useState<HeldAt | null>(null);
+
   // Whether the report dialog is up. **Here rather than in `Acts`**, because
   // two controls open it — the Job header's menu entry and `b` — and the
   // keyboard is bound at this level. Dropped with the Job for the reason a
@@ -183,6 +208,11 @@ export function JobDetail({
       void window.armada.readDiff(null);
     };
   }, [job.id]);
+
+  // Whether the window is at `--window-floor`. Read from the token rather than
+  // from a media query, which cannot see one — `floor.ts` carries the whole of
+  // why, and the measurement behind it.
+  const floor = useAtFloor();
 
   const reading = readingOf(job);
   const render = renderFor(job);
@@ -218,6 +248,12 @@ export function JobDetail({
     run,
     chapters: () => chapters,
     stages: phases?.stages,
+    // `f`, from `actions.toml` — `open_diff`, scope `detail`. It opens the
+    // layer now rather than a chapter: the patch stopped being something the
+    // panel draws. `Enter` needs nothing here, because `[` `]` land focus on
+    // the chapter's own control and Enter is what a focused control already
+    // answers — which is the reading `open_log`'s registry row gives it.
+    onOpenSheet: () => openSheet("diff"),
     // `b`, on the one render that offers the act. Elsewhere the shape carries
     // nothing and the press is left alone rather than answered with a dialog
     // the header is not offering.
@@ -229,6 +265,30 @@ export function JobDetail({
   // the same row twice — chapter one's turns and chapter two's preview — and a
   // fetch made in one is the same argument in the other.
   const calls = useCallArguments(job.id);
+
+  const rows = watching === null || open === undefined ? [] : entriesOf(watching.rows, open.step_id);
+
+  /**
+   * Open a sheet. **The second one replaces the first** rather than stacking on
+   * it, and opening the log takes the reading's position: from here on the tail
+   * is not followed, and what arrives is counted rather than scrolled to.
+   */
+  function openSheet(which: "log" | "diff"): void {
+    setSheet(which);
+    if (which === "log") setHeld(holdOf(now, rows.length));
+  }
+
+  /**
+   * Close it, and put focus back where it came from. **The chapter line is the
+   * way back** — `4k`'s third still — so `[` `]` carry on from the chapter the
+   * reader opened rather than from the top of the story.
+   */
+  function closeSheet(): void {
+    const was = sheet;
+    setSheet(null);
+    setHeld(null);
+    if (was !== null) keys.onFocusChapter(was === "log" ? LOG_CHAPTER : DIFF_CHAPTER);
+  }
 
   const chapters =
     open === undefined
@@ -244,6 +304,8 @@ export function JobDetail({
           live: observed.state === "watching",
           log: keys.inLog,
           calls,
+          sheet,
+          onOpenSheet: openSheet,
         });
 
   // The badge is the header, so a Job the registry has no glyph or verb for
@@ -290,8 +352,10 @@ export function JobDetail({
       runAbsent={whyNoSteps(watched, job.id)}
       // One animated mark per screen, on the thing being read — and nothing
       // pulses on a Job that is over, where "still working" is a claim no step
-      // is making.
-      pulsing={render === "working"}
+      // is making. **The pulse moves with the reading**: with a sheet open the
+      // tree's current step is behind the layer, so its mark stops and the
+      // sheet's live mark takes it.
+      pulsing={render === "working" && sheet === null}
       onSelectStep={setSelected}
       // The tree draws exactly what the keyboard holds. **Selecting a step
       // still does not open its facts** — that is `RunTree`'s rule and it is
@@ -361,6 +425,29 @@ export function JobDetail({
             }
       }
       stepAbsent={whyNoSteps(watched, job.id)}
+      sheet={
+        open === undefined ? null : (
+          <DetailSheet
+            which={sheet}
+            job={job}
+            whole={whole}
+            step={open}
+            rows={rows}
+            observed={observed}
+            footprint={recorded.footprint}
+            diff={recorded.diff}
+            calls={calls}
+            // Its own name, so a row opened in the sheet is not a row opened in
+            // the chapter's preview. Two logs over one stream hold equal ids.
+            log={keys.inLog("sheet")}
+            held={held}
+            onHold={setHeld}
+            now={now}
+            floor={floor}
+            onClose={closeSheet}
+          />
+        )
+      }
       onCopied={onCopied}
     />
   );
@@ -575,160 +662,6 @@ function noticeOf(
 
 /** What the flag rows are, said once over them rather than once on each. */
 const WHAT_THE_CHECK_FOUND = "What the gaming check found, and where:";
-
-/**
- * The story: Drone instructions, then Activity log, then Produced. **The same
- * three chapters in the same order at every state** — what changes is which one
- * is the reason you are here.
- */
-function chaptersOf({
-  job,
-  step,
-  render,
-  watching,
-  footprint,
-  kept,
-  diff,
-  live,
-  log,
-  calls,
-}: {
-  job: JobSummary;
-  step: StepDetail;
-  render: string;
-  watching: { rows: readonly Turn[]; skipped: number } | null;
-  footprint: Footprint;
-  /**
-   * What this Job's own detail says it touched, where it has stopped. **Fleet
-   * serves it on a terminal Job and on no other**, so its presence is what
-   * chooses between the record and the live reading — see `produced.ts`.
-   */
-  kept: JobFootprint | undefined;
-  diff: Diff;
-  /** Whether the socket is still carrying rows, for the chapter's live mark. */
-  live: boolean;
-  /**
-   * What one log takes, by name. Held by `detail-keys` for the reason the
-   * chapters and the strip are: `h`/`l` open a row, and a keyboard and a
-   * pointer disagreeing about which row is open is two answers to one question.
-   * **By name, because a story draws two logs over one stream** — chapter one's
-   * turns are also chapter two's rows, so a row is named with its log.
-   */
-  log: DetailKeys["inLog"];
-  /**
-   * The arguments this Job's cut rows have been opened to, and how to ask for
-   * one. **Passed to every log rather than to the one that streams**, because
-   * chapter one draws Armada's turns out of the same rows and a cut call can
-   * land in either.
-   */
-  calls: Calls;
-}): StepChapter[] {
-  const rows = watching === null ? [] : entriesOf(watching.rows, step.step_id);
-  const told = rows.filter((row) => row.actor === "armada");
-  const opened = told[0];
-  const produced = producedIn(kept, readingFor(footprint, job.id));
-  return [
-    {
-      id: "instructions",
-      ordinal: 1,
-      title: "Drone instructions",
-      // The turn the step opened with, in the words the Drone was given.
-      // Armada's own turns are on the transcript beside the Drone's, so this
-      // is the same stream chapter two draws, filtered to one voice.
-      summary: opened === undefined ? undefined : opened.at,
-      preview:
-        opened === undefined ? (
-          <p className="text-2xs text-fg-muted">{NOT_OPENED_YET}</p>
-        ) : (
-          <p className="text-fg-muted">{opened.payload.map((line) => line.text).join("\n")}</p>
-        ),
-      ...(told.length <= 1
-        ? {}
-        : {
-            content: (
-              <Log rows={told} emptyNote={NOT_OPENED_YET} calls={calls} {...log("instructions")} />
-            ),
-            openLabel: `Everything Armada told it — ${told.length} turns`,
-          }),
-    },
-    {
-      id: "log",
-      ordinal: 2,
-      title: "Activity log",
-      // The dot, not the word. `StepStory` composes `Chapter` now, so the
-      // running mark has its own channel and the summary carries only counts.
-      live,
-      summary: [
-        `${rows.length} ${rows.length === 1 ? "entry" : "entries"}`,
-        "every line opens",
-      ].join(" · "),
-      // Always drawn, and never behind a control. The log is what says what is
-      // happening right now, so it is on the page while the Job runs rather
-      // than a thing to go and open.
-      preview: (
-        <Log
-          rows={rows.slice(-PREVIEWED)}
-          emptyNote={NOTHING_YET_ON_THIS_STEP}
-          calls={calls}
-          {...log("log")}
-        />
-      ),
-      ...(rows.length <= PREVIEWED
-        ? {}
-        : {
-            content: (
-              <Log
-                rows={rows}
-                emptyNote={NOTHING_YET_ON_THIS_STEP}
-                calls={calls}
-                {...log("log")}
-              />
-            ),
-            openLabel: `Open the log — all ${rows.length} entries`,
-          }),
-    },
-    {
-      id: DIFF_CHAPTER,
-      ordinal: 3,
-      title: "Produced",
-      // The header carries the summary, so a collapsed chapter still says what
-      // the step produced. `changedFilesSummary` is the one reading of it —
-      // the body draws the same files from the same answer. On a finished Job
-      // that summary carries `+94 −31`, because the record it draws from is the
-      // one reading anybody counted.
-      summary:
-        produced === undefined
-          ? undefined
-          : changedFilesSummary(produced.files, produced.planDeclared),
-      preview:
-        produced === undefined ? (
-          <p className="text-2xs text-fg-muted">{whyNoFootprint(job.assigned_drone !== undefined)}</p>
-        ) : (
-          <ChangedFiles files={produced.files} emptyNote={NOTHING_TOUCHED} note={produced.note} />
-        ),
-      // A produced file opens to what it actually wrote, at every state. The
-      // diff is the expensive read and opening the chapter is what spends it —
-      // which is the whole reason one chapter is open at a time.
-      content: <DecidedDiff diff={diff} jobId={job.id} />,
-      openLabel:
-        produced === undefined
-          ? "Open the diff"
-          : `Open the diff — ${produced.files.length} files`,
-    },
-  ];
-}
-
-/** How many entries the log's collapsed preview shows. The drawing's own five. */
-const PREVIEWED = 5;
-
-/** What chapter one says before Armada has opened the step. */
-const NOT_OPENED_YET = "Armada has not opened this step yet.";
-
-/**
- * A reading that found nothing. **Ordinary, and never an error** — a Drone that
- * has just started has changed nothing yet.
- */
-const NOTHING_TOUCHED = "This drone has not changed anything yet.";
 
 /** The reads the panel's own chapters draw from. */
 export type FoldedReads = {

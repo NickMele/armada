@@ -1,15 +1,23 @@
 /* Sheet. The contract gives it one line: the same surface treatment as a
  * dialog, at --radius-lg. A floating layer, so a shadow is legal and no blur
- * is. Everything else here is inferred from Dialog and is reported.
+ * is. Everything else here is inferred from Dialog, from the component sheet,
+ * and from Journey 4's frames 4i-4m, which are the first thing to put a
+ * reading on this layer.
  *
  * MISSING TOKENS on the line below.
  * --armada-hairline: no border-width token exists in packages/tokens.
  * --armada-sheet-width: no panel-width token exists. The sidebar's own range
  *   tokens are the sidebar's and do not describe an overlay panel.
+ * --armada-sheet-wide / --armada-sheet-widest: the two trailing sheets are
+ *   measured as a fraction of the ground rather than as a width — 62% for the
+ *   log, 76% for the diff — because what has to fit is the reading. A fraction
+ *   is not a length and --w-sheet, at 480px, describes neither. Reported.
  */
 .armada-sheet {
   --armada-hairline: var(--border-width);
   --armada-sheet-width: var(--w-sheet);
+  --armada-sheet-wide: 62%;
+  --armada-sheet-widest: 76%;
 }
 
 .armada-sheet-scrim {
@@ -20,6 +28,13 @@
   background: var(--scrim);
 }
 
+/* A sheet belonging to the screen it was opened from rather than to the
+   window. The run tree behind it stays on screen and under the layer, which is
+   the reading frame 4i draws and annotates. */
+.armada-sheet-scrim[data-contained] {
+  position: absolute;
+}
+
 .armada-sheet {
   display: flex;
   flex-direction: column;
@@ -27,30 +42,60 @@
   max-width: var(--armada-sheet-width);
   background: var(--bg-overlay);
   box-shadow: var(--shadow-overlay);
+  min-width: 0;
+}
+
+.armada-sheet[data-size="wide"] {
+  max-width: var(--armada-sheet-wide);
+}
+
+.armada-sheet[data-size="widest"] {
+  max-width: var(--armada-sheet-widest);
 }
 
 /* Rounded on the inner edge only. A panel flush to the window edge that keeps
  * a radius there draws a sliver of canvas the window does not have. */
-.armada-sheet--right {
+.armada-sheet[data-side="right"] {
   margin-left: auto;
   border-left: var(--armada-hairline) solid var(--border-default);
   border-radius: var(--radius-lg) 0 0 var(--radius-lg);
 }
 
-.armada-sheet--left {
+.armada-sheet[data-side="left"] {
   margin-right: auto;
   border-right: var(--armada-hairline) solid var(--border-default);
   border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+}
+
+/* At --window-floor the sheet is flush to both edges and drops its radius.
+   62% of 768px is 476px and the 292px left over shows nothing usable. Still a
+   layer and not a route: nothing navigated, and Esc still closes it. */
+.armada-sheet[data-floor] {
+  max-width: none;
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0;
 }
 
 .armada-sheet__head {
   flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--pad-card);
-  border-bottom: var(--armada-hairline) solid var(--border-subtle);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: var(--armada-hairline) solid var(--border-default);
+}
+
+.armada-sheet[data-floor] .armada-sheet__head {
+  padding: var(--space-3) var(--space-4);
+}
+
+.armada-sheet__titles {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .armada-sheet__title {
@@ -58,6 +103,37 @@
   font-size: var(--text-lg);
   line-height: var(--leading-lg);
   font-weight: var(--weight-heading);
+}
+
+/* A title with a line under it is the name of a reading rather than the
+   heading of a panel, so it takes the drawn --text-base at medium and lets the
+   subtitle carry the facts. */
+.armada-sheet__title[data-titled] {
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
+  font-weight: var(--weight-medium);
+}
+
+.armada-sheet[data-floor] .armada-sheet__title[data-titled] {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.armada-sheet__subtitle {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  min-width: 0;
+}
+
+/* The titles take the slack, so the controls and the close sit at the trailing
+   edge without either needing a margin that the other has to cancel. */
+.armada-sheet__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  min-width: 0;
 }
 
 /* An icon-only ghost control, which is where Iconography permits a glyph. */
@@ -81,14 +157,32 @@
   color: var(--fg-default);
 }
 
+/* The bands between the header and the body — the held strip, the escalation
+   notice. They do not scroll: what they say is true of the whole reading. */
+.armada-sheet__bands {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .armada-sheet__body {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: auto;
   padding: var(--pad-card);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
   color: var(--fg-default);
+}
+
+/* A reading that runs edge to edge and pads itself — a log's rows, a patch
+   beside its file rail. */
+.armada-sheet__body[data-bleed] {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .armada-sheet__foot {

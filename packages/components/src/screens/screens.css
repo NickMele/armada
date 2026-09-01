@@ -255,6 +255,12 @@
   background: var(--bg-raised);
   border: var(--border-width) solid var(--border-default);
   min-width: 0;
+  /* The containing block for a trailing sheet. The layer belongs to the screen
+     it was opened from — flush to this edge, this height — so the run tree
+     behind it stays on screen and under it. `overflow: hidden` is what keeps
+     the sheet inside the screen's own radius at the corners. */
+  position: relative;
+  overflow: hidden;
 }
 
 /* The job detail header is `Job detail header actions` on all three states, so

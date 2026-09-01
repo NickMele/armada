@@ -16,6 +16,28 @@
   min-width: 0;
 }
 
+/* The header line: the header itself, and the control that opens what the
+   chapter holds. Two siblings rather than one nested pair, because the header
+   is a button and a button inside a button is one target with two meanings.
+   The surface and the rule belong to the line, so a chapter with an act still
+   reads as one lid. */
+.armada-chapter__line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-right: var(--armada-chapter-pad);
+  background: color-mix(in srgb, var(--bg-raised) 55%, var(--bg-sunken));
+  min-width: 0;
+}
+
+/* The act sits at the trailing edge of the line and never grows. */
+.armada-chapter__act {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 /* Between the well and the panel — the header is a lid on the chapter, not a
    surface of its own. */
 .armada-chapter__head {
@@ -23,11 +45,11 @@
   align-items: center;
   /* The drawn 10px: --space-2 plus a half --space-1. */
   gap: calc(var(--space-2) + var(--space-1) / 2);
-  width: 100%;
+  flex: 1;
   /* The drawn 9px: --space-2 plus a quarter --space-1. */
   padding: calc(var(--space-2) + var(--space-1) / 4) var(--armada-chapter-pad);
   border: 0;
-  background: color-mix(in srgb, var(--bg-raised) 55%, var(--bg-sunken));
+  background: transparent;
   text-align: left;
   font-family: var(--font-sans);
   min-width: 0;
@@ -36,7 +58,7 @@
 /* The rule under the header belongs to the open chapter. A collapsed chapter
    is one line, and a line with a rule at the bottom of it reads as a body that
    failed to render. */
-.armada-chapter[data-open] .armada-chapter__head {
+.armada-chapter[data-open] .armada-chapter__line {
   border-bottom: var(--border-width) solid var(--border-subtle);
 }
 
@@ -44,7 +66,7 @@ button.armada-chapter__head {
   cursor: pointer;
 }
 
-button.armada-chapter__head:hover {
+.armada-chapter__line:has(button.armada-chapter__head:hover) {
   background: var(--bg-raised);
 }
 

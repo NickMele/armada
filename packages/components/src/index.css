@@ -116,3 +116,9 @@
 @import "./compositions/RunTree/RunTree.css";
 @import "./compositions/StepStory/StepStory.css";
 @import "./compositions/ActivityLog/ActivityLog.css";
+
+/* The two trailing sheets — Journey 4's frames 4i-4m. Appended, per the rule
+   at the head of this file: a stylesheet the app does not import renders its
+   component as a vertical stack, which is exactly what a sheet must not be. */
+@import "./compositions/ActivityLogSheet/ActivityLogSheet.css";
+@import "./compositions/JobDiffSheet/JobDiffSheet.css";

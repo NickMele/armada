@@ -168,6 +168,21 @@ export type InsideAJobProps = {
   step?: StepPanel;
   /** Why no step is open, where none is. */
   stepAbsent?: string;
+  /**
+   * The trailing sheet, where one is open — the step's activity log, or the
+   * Job's patch.
+   *
+   * **It belongs to the screen and not to the window.** The layer is flush to
+   * the screen's trailing edge and full height, so the run tree and the panel
+   * stay on screen and under it: nothing navigated, and the chapter line a
+   * reader came back to is still where it was. A window-fixed layer would cover
+   * the shell's rail as well, which nothing asked it to.
+   *
+   * **The pulse goes with the reading.** With a sheet open the tree's current
+   * step is behind the layer, so `pulsing` is what the caller turns off and the
+   * sheet's own live mark takes it.
+   */
+  sheet?: ReactNode;
   onCopied?: (value: string) => void;
 };
 
@@ -191,6 +206,7 @@ export function InsideAJob({
   briefAbsent = "Nothing serves this Job's brief or its acceptance criteria.",
   step,
   stepAbsent = "No step is open. Select one in the run.",
+  sheet,
   onCopied,
 }: InsideAJobProps) {
   return (
@@ -333,6 +349,8 @@ export function InsideAJob({
           )}
         </div>
       </div>
+
+      {sheet}
     </div>
   );
 }

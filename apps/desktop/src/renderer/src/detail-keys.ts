@@ -62,8 +62,21 @@ import { LOG_REGION, rowOfPayload } from "./Log";
 /** Which chapter the diff is in. The id, so the story can be reordered. */
 export const DIFF_CHAPTER = "produced";
 
+/** Which chapter the activity log is in. */
+export const LOG_CHAPTER = "log";
+
 /** The attribute that names the step a label belongs to. Written by `namesStep`. */
 const STEP = "data-armada-step";
+
+/**
+ * The attribute that names the chapter a control belongs to. Written by
+ * `namesChapter`, read when a sheet closes and when `[` `]` land.
+ *
+ * **This app's own name, like `STEP` above.** The chapter's control is a
+ * `Button` in `packages/components`; reaching for the class it ships is what
+ * #271 took out of this file.
+ */
+const CHAPTER = "data-armada-chapter";
 
 /**
  * What the app writes on a step's name so the keyboard can find the control it
@@ -74,6 +87,19 @@ export function namesStep(stepId: string): Record<string, string> {
   return { [STEP]: stepId };
 }
 
+/**
+ * What the app writes on a chapter's own control so the keyboard can find it.
+ *
+ * **`[` `]` land focus on it and `Enter` presses it**, which is exactly the
+ * reading `actions.toml` gives `open_log`: *`Enter` already belongs to whatever
+ * holds focus, which here is the chapter `[` `]` landed on*. So the act has no
+ * key handler of its own — a second one would be two answers to one press, and
+ * `Enter` on every other focused control would have to be told apart from it.
+ */
+export function namesChapter(chapterId: string): Record<string, string> {
+  return { [CHAPTER]: chapterId };
+}
+
 /** What a press on job detail means. `null` is a key this surface does not carry. */
 export type DetailPress =
   /** `j` `k` `↓` `↑` — move the cursor within whichever list holds it. */
@@ -82,7 +108,7 @@ export type DetailPress =
   | { act: "disclose"; open: boolean }
   /** `[` `]` — move between the three chapters. */
   | { act: "chapter"; by: 1 | -1 }
-  /** `f` — open the Produced chapter to the diff. */
+  /** `f` — open the Job's patch, on the layer that can hold it. */
   | { act: "diff" }
   /** `g` — open a stage of the phase strip. */
   | { act: "stage" }
@@ -161,6 +187,17 @@ export type DetailShape = {
   /** The strip, in order, or nothing on a step that has none. */
   stages: readonly PhaseStage[] | undefined;
   /**
+   * Open the trailing sheet `f` names — the Job's patch.
+   *
+   * **The one act here that opens a layer rather than a chapter.** The patch
+   * stopped being something the panel draws, so the key that opened a chapter
+   * in place opens the sheet instead, and the screen passes in how rather than
+   * this file learning what a sheet is.
+   *
+   * Absent leaves the press unswallowed, as `onReport` does.
+   */
+  onOpenSheet?: () => void;
+  /**
    * Open the report dialog. **The one entry here that moves nothing on the
    * screen** — every other act opens something this file already holds, and
    * this one raises a dialog the screen owns, so the screen passes in what to
@@ -183,6 +220,12 @@ export type DetailKeys = {
   /** `PhaseStrip.pinnedStage` — the stage whose card is held open. */
   pinnedStage: string | null;
   onPinStage: (stageId: string | null) => void;
+  /**
+   * Put focus on a chapter's own control, by name. **What a closing sheet
+   * calls**: the chapter line is the way back, so `[` `]` carry on from the
+   * chapter the reader opened rather than from the top of the story.
+   */
+  onFocusChapter: (chapterId: string) => void;
   /**
    * What one log takes: its own name, the row of *its* rows that is open, and
    * how to say one was pressed. **Per log, not per story** — chapter one's
@@ -248,6 +291,13 @@ export function useDetailKeys(shape: DetailShape): DetailKeys {
     setOpenSteps((was) => withStep(was, stepId, open));
   }, []);
 
+  // The control is back in the document only after the panel re-renders, so the
+  // focus move waits a frame rather than running inside the press that closed
+  // the sheet — the same arrangement the Board's return-to-the-row uses.
+  const onFocusChapter = useCallback((chapterId: string) => {
+    requestAnimationFrame(() => chapterControl(chapterId)?.focus());
+  }, []);
+
   return {
     openSteps: openSteps ?? NONE,
     onOpenStep,
@@ -255,6 +305,7 @@ export function useDetailKeys(shape: DetailShape): DetailKeys {
     onOpenChapter: setOpenChapter,
     pinnedStage,
     onPinStage: setPinnedStage,
+    onFocusChapter,
     inLog: (region) => ({
       region,
       openId: openEntry?.region === region ? openEntry.row : null,
@@ -294,7 +345,7 @@ function act(press: DetailPress, shape: DetailShape, on: Moves): boolean {
     case "chapter":
       return chapter(press.by, shape, on);
     case "diff":
-      return diff(shape, on);
+      return diff(shape);
     case "stage":
       return stage(shape, on);
     case "report":
@@ -429,25 +480,48 @@ function chapter(by: 1 | -1, shape: DetailShape, on: Moves): boolean {
   on.chapter((was) => {
     const at = was === null ? -1 : opens.indexOf(was);
     const next = at < 0 ? 0 : Math.min(Math.max(at + by, 0), opens.length - 1);
-    return opens[next] ?? was;
+    const landed = opens[next] ?? was;
+    // Focus follows the landing, so `Enter` reaches the chapter's own act —
+    // which is the whole of `open_log`'s binding. A frame later, because the
+    // control the chapter draws may only exist once the story has re-rendered.
+    if (landed !== null) requestAnimationFrame(() => chapterControl(landed)?.focus());
+    return landed;
   });
   return true;
 }
 
 /**
- * Open the Produced chapter to the diff, by name. **Already open closes**,
- * which is what pressing the chapter's own control does and what a reader
- * pressing the same key twice expects.
+ * Open the Job's patch on the layer that can hold it.
+ *
+ * **It opens a sheet rather than a chapter**, because a patch in a 602px column
+ * is a decision taken on a line that wrapped. The screen holds which sheet is
+ * open and closing is `Esc`, so this is one direction only — pressing `f` twice
+ * does not toggle, where pressing it twice used to close the chapter.
  */
-function diff(shape: DetailShape, on: Moves): boolean {
-  if (!openable(shape.chapters()).includes(DIFF_CHAPTER)) return false;
-  on.chapter((was) => (was === DIFF_CHAPTER ? null : DIFF_CHAPTER));
+function diff(shape: DetailShape): boolean {
+  if (shape.onOpenSheet === undefined) return false;
+  shape.onOpenSheet();
   return true;
 }
 
-/** The chapters that have something behind them, in the story's own order. */
+/**
+ * The chapters `[` `]` can land on, in the story's own order.
+ *
+ * **A chapter with an act counts, and it has no body.** The log and the patch
+ * open as a layer, so neither carries `content` any more — reading only
+ * `content` would have left the brackets stopping at chapter one and nothing
+ * would have said so.
+ */
 function openable(chapters: readonly StepChapter[]): string[] {
-  return chapters.filter((held) => held.content !== undefined).map((held) => held.id);
+  return chapters
+    .filter((held) => held.content !== undefined || held.act !== undefined)
+    .map((held) => held.id);
+}
+
+/** A chapter's own control, by the name this app writes on it. */
+function chapterControl(chapterId: string): HTMLElement | null {
+  const marker = document.querySelector<HTMLElement>(`[${CHAPTER}="${CSS.escape(chapterId)}"]`);
+  return marker === null ? null : (marker.closest("button") ?? marker);
 }
 
 /**

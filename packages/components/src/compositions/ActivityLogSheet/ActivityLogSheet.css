@@ -1,0 +1,134 @@
+/* The activity log on a trailing sheet — Journey 4, frames 4i, 4l and 4m.
+   The layer, its header and its bands are `Sheet`; what lives here is the two
+   bands' own content and the line under the last entry.
+
+   MISSING TOKENS on the line below.
+   --armada-hairline: no border-width token exists in packages/tokens.
+   --armada-band-ground: a band on an overlay is one surface step under it, and
+     no token carries "sunken, against --bg-overlay" — the pair --bg-sunken and
+     --bg-overlay are both grounds, and this is the step between them. The same
+     mix the drawing makes. Reported. */
+.armada-log-sheet__strip,
+.armada-log-sheet__notice {
+  --armada-hairline: var(--border-width);
+  --armada-band-ground: color-mix(in srgb, var(--bg-sunken) 55%, var(--bg-overlay));
+}
+
+/* The held strip. It says the tail is not being followed, and offers the one
+   control that goes back to it. */
+.armada-log-sheet__strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-6);
+  background: var(--armada-band-ground);
+  border-bottom: var(--armada-hairline) solid var(--border-subtle);
+}
+
+.armada-sheet[data-floor] .armada-log-sheet__strip {
+  padding: var(--space-2) var(--space-4);
+}
+
+.armada-log-sheet__held {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  min-width: 0;
+}
+
+/* The count on the tail control. Mono, and quieter than the label: it is the
+   size of what you have not read, not the act. */
+.armada-log-sheet__count {
+  font-family: var(--font-mono);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.armada-log-sheet__mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The live mark, on the subtitle. The same dot the run tree's current step
+   takes, and the pulse moves here while the sheet is open: the step behind the
+   layer is not the thing being read. */
+.armada-log-sheet__live {
+  display: inline-block;
+  width: var(--dot);
+  height: var(--dot);
+  margin-right: var(--space-1);
+  border-radius: 50%;
+  background: var(--status-running);
+  vertical-align: middle;
+  animation: armada-log-sheet-pulse var(--duration-pulse) var(--ease) infinite;
+}
+
+@keyframes armada-log-sheet-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+}
+
+/* Nothing on a screen breathes once the Job is not running, and nothing
+   breathes for a reader who asked it not to. */
+@media (prefers-reduced-motion: reduce) {
+  .armada-log-sheet__live {
+    animation: none;
+  }
+}
+
+/* The escalation notice. It states the facts needed to decide and offers one
+   way out; it does not grow the act — Pilot keeps the accent in the Job
+   header, behind the layer. */
+.armada-log-sheet__notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--space-6);
+  background: var(--status-escalated-bg);
+  border-bottom: var(--armada-hairline) solid
+    color-mix(in srgb, var(--status-escalated) 40%, transparent);
+  color: var(--status-escalated);
+}
+
+.armada-log-sheet__said {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+.armada-log-sheet__said strong {
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+}
+
+.armada-log-sheet__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  min-width: 0;
+}
+
+/* The count of what arrived, repeated where the reader is. The strip is at the
+   top of the sheet and a reader who has been reading is at the bottom of it. */
+.armada-log-sheet__arrived {
+  margin: 0;
+  padding: var(--space-2);
+  border-top: var(--armada-hairline) solid var(--border-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}

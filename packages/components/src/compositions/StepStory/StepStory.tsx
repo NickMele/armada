@@ -64,6 +64,14 @@ export type StepChapter = {
    * control does not draw.
    */
   content?: ReactNode;
+  /**
+   * The control on the chapter's header line — `Open the log`, `Open the diff`.
+   *
+   * **A chapter whose content has no end opens as a trailing sheet instead**,
+   * because the panel cannot hold it and the chapter line is the way back. Such
+   * a chapter carries no `content`: it has a preview, and an act that leaves.
+   */
+  act?: ReactNode;
   /** The control that opens it — `Open the log — all 47 entries`. */
   openLabel?: ReactNode;
   /** The control that closes it. `Close` unless a chapter wants its own word. */
@@ -122,6 +130,7 @@ export function StepStory({ chapters, openId, openChapter, onOpen }: StepStoryPr
               tone={chapter.tone}
               open={!collapsed}
               onToggle={opens ? () => toggle(chapter.id) : undefined}
+              act={chapter.act}
               bodyId={`${bodies}-${chapter.id}`}
               moreLabel={
                 !opens ? undefined : shown ? (chapter.closeLabel ?? "Close") : (chapter.openLabel ?? "Open")
