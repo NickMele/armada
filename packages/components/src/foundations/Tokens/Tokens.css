@@ -1,0 +1,105 @@
+/* The token specimen. Nothing here declares a value — every rule reaches for
+   one, which is the whole point of the sheet it is documenting. */
+.armada-tokens {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-family: var(--font-sans);
+  color: var(--fg-default);
+}
+
+.armada-tokens__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.armada-tokens__label {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-heading);
+}
+
+.armada-tokens__note {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  max-width: 64ch;
+}
+
+.armada-tokens__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+}
+
+.armada-tokens__row {
+  display: grid;
+  grid-template-columns: minmax(0, 18rem) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-tokens__row:last-child {
+  border-bottom: none;
+}
+
+/* The name is machine-derived reference material, so it is mono and recedes. */
+.armada-tokens__name {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+.armada-tokens__value {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  min-width: 0;
+}
+
+/* A fill needs an edge, or a swatch the colour of the ground it sits on reads
+   as an empty box rather than as the ground. */
+.armada-tokens__chip {
+  flex: none;
+  width: var(--space-12);
+  height: var(--h-badge);
+  border-radius: var(--radius-sm);
+  border: var(--border-width) solid var(--border-default);
+}
+
+.armada-tokens__bar {
+  flex: none;
+  height: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+}
+
+.armada-tokens__mark {
+  flex: none;
+  width: var(--space-4);
+  height: var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  transition-property: transform;
+  transition-timing-function: var(--ease);
+}
+
+.armada-tokens__type {
+  color: var(--fg-default);
+  min-width: 0;
+}
+
+.armada-tokens__resolved {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
