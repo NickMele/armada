@@ -22,20 +22,22 @@
 // redispatch and approve stay in the Job header, which is also where Pilot
 // lands — `#250`, and nothing here has to change to take it.
 //
-// # What is served is drawn, and what is not is named
+// # The story is three chapters and none of them is behind a tab
 //
-// The run is built in `run.ts`, the strip in `phases.ts`, the log in `story.ts`,
-// and each of the three says at its own head what the wire does not carry. Two
-// are worth repeating here because they are visible on every Job: **a per-step
-// attempt count is not served**, so "an attempt is a row, not a counter" cannot
-// be drawn at all; and **the activity log carries the Drone's turns only**,
-// because Fleet's own events are not on the Observe socket.
+// Drone instructions, then Activity log, then Produced, in the order they
+// happened. The log streams while the Job runs and is on the page at every
+// state — it used to be one of four tabs inside a region called *What it left
+// behind*, which the drawing has none of, so the chapter that says what is
+// happening right now was the one thing a person had to go and find. That
+// region is gone: the turns are chapter two, the files are chapter three, and
+// the raw event table is not something this screen needs at all.
 
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
   ChangedFiles,
   DroneQuestion,
+  GamingFlags,
   InsideAJob,
   type JobDetailField,
   type JobDetailHeading,
@@ -47,26 +49,26 @@ import type {
   Diff,
   Evidence,
   Footprint,
-  History,
   Observed,
   Outcome,
+  Turn,
   Watched,
 } from "../../shared/bridge";
 import type { FileReport, JobDetail as JobWhole, JobSummary, StepDetail } from "../../shared/protocol";
 import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
 import { Acts, StepActs, type ConfirmableAct } from "./Acts";
 import { Decide, DecidedDiff } from "./Decide";
+import { act, pressOf } from "./detail-keys";
 import { span } from "./duration";
 import { factsOf, ordered } from "./facts";
 import { filesOf, footprintNote, readingFor, whyNoFootprint } from "./files";
+import { Log } from "./Log";
 import { phasesOf } from "./phases";
-import { Record } from "./Record";
 import { recourseOf } from "./recovery";
-import { RECORDS_ITS_OWN_TURNS, escalation, renderFor } from "./render";
+import { escalation, renderFor } from "./render";
 import { runOf } from "./run";
 import { readingOf } from "./reading";
-import { entriesOf, NOT_ONE_STREAM, NOTHING_YET_ON_THIS_STEP, NOT_WATCHING } from "./story";
-import { ActivityLog } from "@armada/components";
+import { entriesOf, NOTHING_YET_ON_THIS_STEP } from "./story";
 import { briefOf, whyNoWork, workOf } from "./work";
 import { stoppedAt } from "./stopped";
 
@@ -114,12 +116,14 @@ export type JobDetailProps = {
   onApproveReview: (jobId: string) => void;
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
-  /** What the second socket has said, where this Job's turns are being read. */
+  /**
+   * What the second socket has said. **Opened for every Job that is open**, not
+   * on a press: the activity log is a chapter of the step's story and a chapter
+   * that filled only after somebody asked is the tab this screen removed.
+   */
   observed: Observed;
-  /** The reads the record's sections and the running footprint draw from. */
+  /** The reads the panel's chapters draw from. */
   recorded: FoldedReads;
-  /** Open or close this Job's turns. Not an act on the Drone. */
-  onObserve: (on: boolean) => void;
   onCopied: (value: string) => void;
 };
 
@@ -145,7 +149,6 @@ export function JobDetail({
   onApproveReview,
   onRequestChanges,
   onReject,
-  onObserve,
   onCopied,
 }: JobDetailProps) {
   // Which step the panel is showing. **The whole of navigation inside a Job**:
@@ -155,6 +158,31 @@ export function JobDetail({
   // A selection belongs to the Job it was made in. Carried into the next Job it
   // would name a step that Job may not have.
   useEffect(() => setSelected(null), [job.id]);
+
+  // The diff, for every Job that is open rather than only for one at review.
+  // **A produced file opens to what it actually wrote**, and it did that on one
+  // status because the review block was the only thing asking for the read. It
+  // is still the expensive read and it is still made once, here, so the Produced
+  // chapter and the review decision draw from one answer.
+  useEffect(() => {
+    void window.armada.readDiff(job.id);
+    return () => {
+      void window.armada.readDiff(null);
+    };
+  }, [job.id]);
+
+  // The detail's contextual tier. Bound while a Job is open and not before, so
+  // nothing on the Board listens for a key that means nothing there — and the
+  // press is swallowed only where something answered it.
+  useEffect(() => {
+    function pressed(event: KeyboardEvent): void {
+      const press = pressOf(event);
+      if (press === null) return;
+      if (act(press)) event.preventDefault();
+    }
+    window.addEventListener("keydown", pressed);
+    return () => window.removeEventListener("keydown", pressed);
+  }, []);
 
   const reading = readingOf(job);
   const render = renderFor(job);
@@ -174,10 +202,13 @@ export function JobDetail({
   const heading: JobDetailHeading = {
     status: reading.status,
     statusIcon: reading.icon,
-    statusLabel: reading.verb,
+    // The registry's own verb, opening a line. `enum-verbs.toml` spells it
+    // lowercase because most of its readings are mid-sentence; here it is the
+    // first word in the badge, and the badge is the header.
+    statusLabel: leading(reading.verb),
     headline: job.title,
     jobId: job.id,
-    fields: factsOf(job, whole, workflow, manifest, now),
+    fields: factsOf(job, whole, workflow, now),
     // The acts that end or replace the Job. **Pilot's slot is this one**, left
     // of the kill group — #250, and it lands without this line changing.
     actions: (
@@ -192,7 +223,6 @@ export function JobDetail({
         onApprove={onApprove}
         onReport={onReport}
         onCopied={onCopied}
-        onObserve={RECORDS_ITS_OWN_TURNS.has(render) ? undefined : () => onObserve(true)}
       />
     ),
   };
@@ -209,7 +239,7 @@ export function JobDetail({
   return (
     <InsideAJob
       heading={heading}
-      run={whole === null ? [] : runOf(whole, now, selected ?? undefined)}
+      run={whole === null ? [] : runOf(whole, now, selected ?? undefined, watching?.rows ?? [])}
       runElapsed={span(job.created_at, now) ?? undefined}
       runAbsent={whyNoSteps(watched, job.id)}
       // One animated mark per screen, on the thing being read — and nothing
@@ -217,26 +247,11 @@ export function JobDetail({
       // is making.
       pulsing={render === "working"}
       onSelectStep={setSelected}
-      where={whole === null ? undefined : workOf(job, whole, manifest, render === "working")?.rows}
+      where={workOf(job, whole, manifest, workflow)}
       whereNote={NAMED_NOT_NEEDED}
       whereAbsent={whyNoWork(watched, job.id)}
       brief={whole === null ? undefined : briefOf(whole)}
       briefAbsent={whyNoBrief(watched, job.id)}
-      record={
-        <Record
-          job={job}
-          whole={whole}
-          observed={observed}
-          history={recorded.history}
-          evidence={recorded.evidence}
-          diff={recorded.diff}
-          // `get_diff` reads the declaration out of the slot this Job's own
-          // Drone holds, and a Job that is over has let go of it.
-          planReadable={render === "working" || render === "reviewing"}
-          onWatchTurns={onObserve}
-          onCopied={onCopied}
-        />
-      }
       step={
         open === undefined
           ? undefined
@@ -260,7 +275,7 @@ export function JobDetail({
               // A question outranks the render's own notice: nothing else on
               // this step is what a person is here for while one is open, and
               // the two would otherwise both claim the band.
-              notice: askingOf(whole) ?? noticeOf(job, whole, render),
+              notice: askingOf(whole) ?? noticeOf(job, whole, render, open),
               // **The question sits where the redirect box does** — between the
               // strip and the story, because it is the same kind of thing: a
               // box a person acts in about the step they are looking at.
@@ -274,6 +289,7 @@ export function JobDetail({
                 watching,
                 footprint: recorded.footprint,
                 diff: recorded.diff,
+                live: observed.state === "watching",
               }),
               // Review and reply are one loop: the decision is the block under
               // the story, one scroll from the diff it is made against, never a
@@ -299,6 +315,18 @@ export function JobDetail({
   );
 }
 
+/**
+ * A registry verb, opening a line.
+ *
+ * **The word is still the registry's.** `enum-verbs.toml` spells its verbs for
+ * the sentence they usually sit in the middle of; capitalising the first letter
+ * where one leads a label is presentation, not a second spelling — nothing here
+ * chooses, shortens or rewrites the word.
+ */
+function leading(verb: string): string {
+  return verb.charAt(0).toUpperCase() + verb.slice(1);
+}
+
 /** What the pointers under the run are for, said once. */
 const NAMED_NOT_NEEDED =
   "A path opens where it lives; an identifier copies. Nothing above needs these — they are here " +
@@ -308,10 +336,10 @@ const NAMED_NOT_NEEDED =
  * The step's own short facts. **Figures, never a chart** — a filled bar reads
  * as progress and a step has no percentage.
  *
- * **The attempt count is named as missing rather than left out.** The design
- * draws attempts as rows, and `StepDetail` carries nothing that counts them —
- * no `retry_count`, no attempt list — so the field says what is not served
- * rather than the panel quietly having one fewer fact than the drawing.
+ * **The attempt is which run this is**, from `attempts`, and it is absent on a
+ * step nothing has entered rather than drawn as a zero. A step run once still
+ * says `Attempt 1`, because the drawing does and because it is the fact a
+ * person checks before deciding a Drone is going in circles.
  */
 function fieldsOf(step: StepDetail, now: number): JobDetailField[] {
   const running = step.state === "running" || step.state === "retrying";
@@ -324,7 +352,9 @@ function fieldsOf(step: StepDetail, now: number): JobDetailField[] {
     ...(elapsed === undefined
       ? []
       : [{ label: running ? "Running for" : "Took", value: elapsed, mono: true }]),
-    { label: "Attempts", value: "not served" },
+    ...(step.attempts.length === 0
+      ? []
+      : [{ label: "Attempt", value: String(step.attempts.length), mono: true }]),
   ];
 }
 
@@ -396,7 +426,30 @@ function questionOf(
   );
 }
 
-function noticeOf(job: JobSummary, whole: JobWhole | null, render: string): StepNotice | undefined {
+/**
+ * The band above the story: what stopped this step, and what the machine that
+ * stopped it actually found.
+ *
+ * **`flagged` renders here, and it is the whole point of the band on a step
+ * where the evidence was disputed.** Everything mechanical can pass, every
+ * criterion can be met, and the step still stop — and a person reading
+ * `7 of 7 passed`, `2 of 2 met` and a stopped step, with nothing reconciling
+ * them, can only conclude the app is broken. The gaming check's finding is
+ * what reconciles them, and it was reachable only by pressing *Overrule the
+ * flag* and reading it in the dialog that confirms the act it exists to
+ * inform.
+ *
+ * **What each act does is not here.** That was ninety words describing four
+ * acts, in the imperative, detached from every control it named. Each sentence
+ * is on its act's tooltip now, with its binding, and the band says where the
+ * step stands.
+ */
+function noticeOf(
+  job: JobSummary,
+  whole: JobWhole | null,
+  render: string,
+  step: StepDetail,
+): StepNotice | undefined {
   if (render === "reviewing") {
     return {
       tone: "waiting",
@@ -413,14 +466,29 @@ function noticeOf(job: JobSummary, whole: JobWhole | null, render: string): Step
     at?.check,
     at?.outputPath,
   ].filter((part) => part != null);
+  const recourse = recourseOf(job, whole);
+  const flagged = step.flagged;
   return {
     // A Job that is over is red; one holding with a live Drone is not, because
     // a person deciding what happens next is not a failure.
     tone: job.status === "escalated" ? "stopped" : "failed",
     title: said.length === 0 ? "This Job stopped." : said.join(" · "),
-    children: recourseOf(job, whole).note,
+    children: (
+      <>
+        {flagged.length === 0 ? null : (
+          <GamingFlags flags={flagged} said={WHAT_THE_CHECK_FOUND} citation="whole" />
+        )}
+        <span>{recourse.stands}</span>
+        {recourse.withheld === undefined ? null : (
+          <span className="text-fg-subtle">{recourse.withheld}</span>
+        )}
+      </>
+    ),
   };
 }
+
+/** What the flag rows are, said once over them rather than once on each. */
+const WHAT_THE_CHECK_FOUND = "What the gaming check found, and where:";
 
 /**
  * The story: Drone instructions, then Activity log, then Produced. **The same
@@ -434,87 +502,86 @@ function chaptersOf({
   watching,
   footprint,
   diff,
+  live,
 }: {
   job: JobSummary;
   step: StepDetail;
   render: string;
-  watching: { rows: readonly import("../../shared/bridge").Turn[]; skipped: number } | null;
+  watching: { rows: readonly Turn[]; skipped: number } | null;
   footprint: Footprint;
   diff: Diff;
+  /** Whether the socket is still carrying rows, for the chapter's live mark. */
+  live: boolean;
 }): StepChapter[] {
-  const entries = watching === null ? [] : entriesOf(watching.rows, step.step_id);
+  const rows = watching === null ? [] : entriesOf(watching.rows, step.step_id);
+  const told = rows.filter((row) => row.actor === "armada");
+  const opened = told[0];
   const touched = readingFor(footprint, job.id);
   return [
     {
       id: "instructions",
       ordinal: 1,
       title: "Drone instructions",
-      // **Not served.** Nothing on `StepDetail` carries the brief Armada wrote
-      // for the step; the Job's own brief is above, and this is the turn the
-      // step opened with. Named where it would have gone.
-      summary: "not served",
+      // The turn the step opened with, in the words the Drone was given.
+      // Armada's own turns are on the transcript beside the Drone's, so this
+      // is the same stream chapter two draws, filtered to one voice.
+      summary: opened === undefined ? undefined : opened.at,
       preview:
-        "What Armada told the Drone at the top of this step is not on the wire. The Job's brief is " +
-        "above; this would be the injected turn that opened the step.",
+        opened === undefined ? (
+          <p className="text-2xs text-fg-muted">{NOT_OPENED_YET}</p>
+        ) : (
+          <p className="text-fg-muted">{opened.payload.map((line) => line.text).join("\n")}</p>
+        ),
+      ...(told.length <= 1
+        ? {}
+        : {
+            content: <Log rows={told} emptyNote={NOT_OPENED_YET} />,
+            openLabel: `Everything Armada told it — ${told.length} turns`,
+          }),
     },
     {
       id: "log",
       ordinal: 2,
       title: "Activity log",
-      summary:
-        watching === null
-          ? "not being read"
-          : `${entries.length} ${entries.length === 1 ? "entry" : "entries"} · every line opens`,
-      preview:
-        watching === null ? (
-          NOT_WATCHING
-        ) : (
-          <ActivityLog
-            entries={entries.slice(-PREVIEWED)}
-            emptyNote={NOTHING_YET_ON_THIS_STEP}
-            cut={NOT_ONE_STREAM}
-          />
-        ),
-      ...(watching === null || entries.length <= PREVIEWED
+      // The dot, not the word. `StepStory` composes `Chapter` now, so the
+      // running mark has its own channel and the summary carries only counts.
+      live,
+      summary: [
+        `${rows.length} ${rows.length === 1 ? "entry" : "entries"}`,
+        "every line opens",
+      ].join(" · "),
+      // Always drawn, and never behind a control. The log is what says what is
+      // happening right now, so it is on the page while the Job runs rather
+      // than a thing to go and open.
+      preview: <Log rows={rows.slice(-PREVIEWED)} emptyNote={NOTHING_YET_ON_THIS_STEP} />,
+      ...(rows.length <= PREVIEWED
         ? {}
         : {
-            content: (
-              <ActivityLog
-                entries={entries}
-                emptyNote={NOTHING_YET_ON_THIS_STEP}
-                cut={cutOf(watching.skipped)}
-              />
-            ),
-            openLabel: `Open the log — all ${entries.length} entries`,
+            content: <Log rows={rows} emptyNote={NOTHING_YET_ON_THIS_STEP} />,
+            openLabel: `Open the log — all ${rows.length} entries`,
           }),
     },
     {
       id: "produced",
       ordinal: 3,
       title: "Produced",
-      // **The Job's reading, not the step's.** `job.files_changed` and
-      // `JobDetail.footprint` are the whole Job's, so a per-step file list
-      // would be the same list under every step.
-      summary: touched === undefined ? "not read" : `${touched.files.length} files`,
+      summary: touched === undefined ? undefined : `${touched.files.length} files`,
       preview:
         touched === undefined ? (
-          whyNoFootprint(job.assigned_drone !== undefined)
+          <p className="text-2xs text-fg-muted">{whyNoFootprint(job.assigned_drone !== undefined)}</p>
         ) : (
           <ChangedFiles
             files={filesOf(touched)}
             emptyNote={NOTHING_TOUCHED}
-            note={footprintNote(touched, render === "working")}
+            note={footprintNote(touched)}
           />
         ),
-      // The diff is the expensive read and only the review gate asks for it
-      // here; everywhere else it is a section of the record, which is one place
-      // rather than two.
-      ...(render === "reviewing"
-        ? {
-            content: <DecidedDiff diff={diff} jobId={job.id} />,
-            openLabel: "Open the diff",
-          }
-        : {}),
+      // A produced file opens to what it actually wrote, at every state. The
+      // diff is the expensive read and opening the chapter is what spends it —
+      // which is the whole reason one chapter is open at a time.
+      content: <DecidedDiff diff={diff} jobId={job.id} />,
+      openLabel:
+        touched === undefined ? "Open the diff" : `Open the diff — ${touched.files.length} files`,
     },
   ];
 }
@@ -522,12 +589,8 @@ function chaptersOf({
 /** How many entries the log's collapsed preview shows. The drawing's own five. */
 const PREVIEWED = 5;
 
-/** What the stream left out, where the socket's backfill was bounded. */
-function cutOf(skipped: number): string {
-  return skipped === 0
-    ? NOT_ONE_STREAM
-    : `${NOT_ONE_STREAM} The backfill also left out ${skipped} older rows; the whole transcript is the file named under Where things are.`;
-}
+/** What chapter one says before Armada has opened the step. */
+const NOT_OPENED_YET = "Armada has not opened this step yet.";
 
 /**
  * A reading that found nothing. **Ordinary, and never an error** — a Drone that
@@ -535,10 +598,9 @@ function cutOf(skipped: number): string {
  */
 const NOTHING_TOUCHED = "This drone has not changed anything yet.";
 
-/** The two reads the record and the running footprint draw from. */
+/** The reads the panel's own chapters draw from. */
 export type FoldedReads = {
   footprint: Footprint;
-  history: History;
   evidence: Evidence;
   diff: Diff;
 };
@@ -556,12 +618,16 @@ function whyNoSteps(watched: Watched, jobId: string): string | undefined {
   return "Reading this Job.";
 }
 
-/** Why there is no brief, which is never the same sentence twice. */
+/**
+ * Why there is no brief. **Two sentences, and neither describes the wire** —
+ * one is a Job that has not arrived and one is a Job Fleet would not answer
+ * for, which are different things to do next.
+ */
 function whyNoBrief(watched: Watched, jobId: string): string {
   if (watched.state === "failed" && watched.jobId === jobId) {
-    return "Fleet did not answer for this job, so what done meant for it is unknown.";
+    return "Fleet did not answer for this job.";
   }
-  return "Reading this Job.";
+  return "Reading this job.";
 }
 
 /**

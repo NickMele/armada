@@ -37,6 +37,7 @@ use crate::briefing::Opening;
 use crate::crossing::Redirected;
 use crate::daemon::Fleet;
 use crate::drone::{self, environment, HostPaths};
+use crate::session::Occasion;
 use crate::transcript::{Spine, Taps};
 use crate::working::Working;
 
@@ -113,6 +114,11 @@ where
                 return Err(Adrift::NotConfigurable { job: job_id, cause });
             }
         };
+        // Kept before the brief is consumed. **The one turn of Armada's that
+        // was rendered and dropped**: `Prompt` goes into the process and the
+        // process ends, so what a step opened with survived nowhere at all
+        // until this row.
+        let opened_with = brief.as_str().to_string();
         let config = match self.spawn_config(job, step, &worktree, brief) {
             Ok(config) => config,
             Err(cause) => {
@@ -180,6 +186,12 @@ where
             recording,
             self.now(),
         ));
+        // The first row of this step's record, written by Armada, before the
+        // Drone has said anything. It is written after the slot exists rather
+        // than before because the sinks live on it.
+        if let Some(at_work) = working.as_ref() {
+            at_work.instructed(Occasion::Opening, &opened_with);
+        }
         // This step's baseline, read once the slot exists. A Job's first step
         // ordinarily starts on a worktree holding nothing, and reading it
         // rather than assuming so is what makes a redispatch onto a worktree

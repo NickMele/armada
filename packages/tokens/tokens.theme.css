@@ -118,6 +118,7 @@
   --spacing-min: var(--sidebar-min);
   --spacing-max: var(--sidebar-max);
   --spacing-rail: var(--sidebar-rail);
+  --spacing-run-column: var(--w-run-column);
   --spacing-width: var(--palette-width);
   --spacing-max-height: var(--palette-max-height);
   --spacing-dialog: var(--w-dialog);

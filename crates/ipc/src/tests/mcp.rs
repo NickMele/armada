@@ -104,6 +104,7 @@ fn a_transcript_row_reads_back_as_what_was_written() {
     let row = crate::TranscriptRow {
         ts: crate::Instant::carried("2026-08-26T09:00:00.000Z"),
         step: Some(crate::StepId::carried("implement")),
+        by: crate::Voice::Drone,
         saw: crate::Saw::Called {
             tool: "Bash".to_string(),
             call: "toolu_1".to_string(),
@@ -114,7 +115,7 @@ fn a_transcript_row_reads_back_as_what_was_written() {
     let json = crate::encode(&row).expect("a row encodes");
     assert_eq!(
         json,
-        r#"{"ts":"2026-08-26T09:00:00.000Z","step":"implement","event":"called","tool":"Bash","call":"toolu_1","detail":"cargo build --workspace","truncated":false}"#
+        r#"{"ts":"2026-08-26T09:00:00.000Z","step":"implement","by":"drone","event":"called","tool":"Bash","call":"toolu_1","detail":"cargo build --workspace","truncated":false}"#
     );
     let back: crate::TranscriptRow = crate::decode("row", json.as_bytes()).expect("a row decodes");
     assert_eq!(back, row);
@@ -129,9 +130,15 @@ fn a_row_from_before_the_step_was_recorded_still_decodes_and_says_it_does_not_kn
     let back: crate::TranscriptRow = crate::decode("row", old.as_bytes()).expect("a row decodes");
     assert_eq!(back.step, None);
     assert_eq!(
-        crate::encode(&back).expect("it re-encodes"),
-        old,
-        "an absent step is written back absent rather than as a null or a guess"
+        back.by,
+        crate::Voice::Drone,
+        "and a file written before the voice existed is a Drone's, which is what \
+         the default says rather than guesses"
+    );
+    let again = crate::encode(&back).expect("it re-encodes");
+    assert!(
+        !again.contains("step"),
+        "an absent step is written back absent rather than as a null or a guess: {again}"
     );
 }
 
@@ -142,6 +149,7 @@ fn a_withheld_row_has_no_constructor_and_no_decoder() {
     let quota = crate::TranscriptRow {
         ts: crate::Instant::carried("2026-08-26T09:00:00.000Z"),
         step: Some(crate::StepId::carried("implement")),
+        by: crate::Voice::Drone,
         saw: crate::Saw::QuotaMoved {
             window: "five_hour".to_string(),
             status: "warning".to_string(),
@@ -159,6 +167,7 @@ fn a_turn_message_carries_a_row_under_its_own_tag() {
     let shown = crate::Shown::of(crate::TranscriptRow {
         ts: crate::Instant::carried("2026-08-26T09:00:00.000Z"),
         step: Some(crate::StepId::carried("implement")),
+        by: crate::Voice::Drone,
         saw: crate::Saw::Said {
             text: "reading the file".to_string(),
         },

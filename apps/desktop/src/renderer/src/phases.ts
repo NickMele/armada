@@ -10,14 +10,21 @@
 
 import type { PhaseStage, PhaseStageRow, PhaseStripProps } from "@armada/components";
 
-import { ADVANCE_GATE, CHECK_ADVANCES, CHECK_OUTCOME } from "../../shared/generated/vocabulary";
-import type { CheckRun, Criterion, StepDetail } from "../../shared/protocol";
+import {
+  ADVANCE_GATE,
+  CHECK_ADVANCES,
+  CHECK_OUTCOME,
+  CRITERION_VERDICT_JUDGE,
+} from "../../shared/generated/vocabulary";
+import type { CheckRun, Criterion, Judged, StepDetail } from "../../shared/protocol";
 import { commandOf, nameOf } from "./declared";
 
 /** The gate value whose whole meaning is "the Checks are the whole gate". */
 const AUTO = "auto";
 /** The gate value that holds the Job for a person whatever the machines said. */
 const HUMAN = "human_always";
+/** The gate value where a model is the last thing to look, and no person is. */
+const JUDGE_ONLY = "auto_if_judge_passes";
 
 /**
  * The strip for one step.
@@ -61,10 +68,13 @@ export function phasesOf(step: StepDetail, criteria: Criterion[]): PhaseStripPro
   const judge = judgeStage(step, criteria);
   if (judge !== undefined) stages.push(judge);
 
-  const you = youStage(step);
-  if (you !== undefined) stages.push(you);
+  // **`You` closes the strip, always.** It is the last thing that can hold a
+  // step, and a strip that stopped at the Judge said a step could only ever be
+  // waiting on a machine. Where the workflow asks for no person it is still
+  // drawn, still ahead and never lit — an absent tier is not a failed tier.
+  stages.push(youStage(step));
 
-  return { stages, note: noteOf(step, checks !== undefined, judge !== undefined, you !== undefined) };
+  return { stages, note: noteOf(step, checks !== undefined, judge !== undefined) };
 }
 
 /** The step states that mean the Drone has handed the work over. */
@@ -137,8 +147,11 @@ function judgeStage(step: StepDetail, criteria: Criterion[]): PhaseStage | undef
       // an id that could not be joined is machine-derived, so it is.
       label: criterion?.text ?? judged.criterion_id,
       mono: criterion === undefined || undefined,
-      result: judged.verdict,
+      // The registry's verb: `no objection`, `refused`. `not_met` is the wire's
+      // key and reads as a field name rather than as a ruling.
+      result: CRITERION_VERDICT_JUDGE[judged.verdict]?.verb ?? judged.verdict,
       named: judged.verdict,
+      cited: citationOf(judged),
     };
   });
 
@@ -169,28 +182,54 @@ function judgeStage(step: StepDetail, criteria: Criterion[]): PhaseStage | undef
 }
 
 /**
- * The human tier, where the step declares one.
+ * What a refusal cites — what should be seen, what is seen instead, and what
+ * that difference does to whoever consumes it.
  *
- * **`auto` draws no stage**, because the Checks above are the whole gate and a
- * stage on every step of every workflow would bury the two values that matter.
- * A gate the registry does not spell draws as itself rather than being dropped:
- * a tier nobody can name is still a tier that will halt the Job.
+ * **The whole persuasive content of a refusal.** A criterion id and `not_met`
+ * tell a person nothing about their own Job; the override dialog has read these
+ * three in full since it was built, and the panel a person reaches that dialog
+ * from should not be weaker than the dialog. Absent on a criterion nothing was
+ * refused on: there is nothing to cite where nothing was disputed.
  */
-function youStage(step: StepDetail): PhaseStage | undefined {
+function citationOf(judged: Judged): string | undefined {
+  const said = [
+    judged.expected === undefined ? undefined : `Expected ${judged.expected}`,
+    judged.produced === undefined ? undefined : `Found ${judged.produced}`,
+    judged.consequence,
+  ].filter((part): part is string => part !== undefined);
+  return said.length === 0 ? undefined : said.join(" · ");
+}
+
+/**
+ * The human tier. **Always drawn, and lit only where the workflow asks for a
+ * person.**
+ *
+ * A step whose gate is `auto` will never stop for anybody, and the stage says
+ * so by sitting ahead and never lighting — which is a different statement from
+ * not being there, and the one a reader wanting to know whether this step can
+ * ever wait for them is asking. An absent tier is not a failed tier and a
+ * missing tier is not an absent one.
+ */
+function youStage(step: StepDetail): PhaseStage {
   const gate = step.advance_gate;
-  if (gate === undefined || gate === AUTO || gate === "auto_if_judge_passes") return undefined;
-  const waiting = step.state === "awaiting_human";
+  const asks = gate !== undefined && gate !== AUTO && gate !== JUDGE_ONLY;
+  const waiting = asks && step.state === "awaiting_human";
+  const named = gate === undefined || gate === HUMAN ? undefined : ADVANCE_GATE[gate]?.verb ?? gate;
   return {
     id: "you",
-    label: gate === HUMAN ? "You" : `You · ${ADVANCE_GATE[gate]?.verb ?? gate}`,
+    label: asks && named !== undefined ? `You · ${named}` : "You",
     kind: "human",
-    state: waiting ? "waiting" : step.state === "advanced" ? "cleared" : "ahead",
-    stands: waiting ? "waiting on you" : undefined,
+    state: waiting ? "waiting" : asks && step.state === "advanced" ? "cleared" : "ahead",
+    stands: waiting
+      ? "waiting on you"
+      : asks
+        ? "not reached"
+        : "this step advances without a person",
     // Where `advance_gate` is a manifest rule, the tier resolved at dispatch
     // from the Manifest's own policy — so two Jobs on one workflow can show
     // different gates. Naming the value is what says why.
     detail:
-      gate === HUMAN
+      !asks || gate === HUMAN
         ? undefined
         : `This step's gate is ${gate}, resolved when the Job was dispatched.`,
   };
@@ -201,8 +240,8 @@ function youStage(step: StepDetail): PhaseStage | undefined {
  * of an empty gate**, so it is not decoration — a greyed-out tier reads as a
  * gate that failed to render.
  */
-function noteOf(step: StepDetail, checks: boolean, judge: boolean, you: boolean): string {
-  if (!checks && !judge && !you) {
+function noteOf(step: StepDetail, checks: boolean, judge: boolean): string {
+  if (!checks && !judge) {
     return step.checks === undefined
       ? "Fleet cannot say what gates this step, because it does not hold the workflow this Job named."
       : "This step declares no Check and asks no Judge. Its evidence advances it, and nothing else.";

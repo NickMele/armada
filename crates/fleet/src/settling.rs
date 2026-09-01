@@ -194,6 +194,34 @@ where
         // never written down is a verdict with no trace.
         self.recorded_checks(&job_id, &step, attempt, &ruling)
             .await?;
+        // And into the step's own transcript, in Fleet's voice. **A Drone never
+        // runs a Check** — that is the point of them — so nothing mechanical
+        // appeared anywhere in the activity log, which is drawn from the same
+        // record. The reading of the worktree goes beside them: it is the only
+        // per-step one there is, and `JobFootprint` is the Job's whole work at
+        // the instant it stopped.
+        if let Some(at_work) = working.as_ref() {
+            for run in ruling.checks() {
+                at_work.told(
+                    ipc::Voice::Fleet,
+                    ipc::Saw::Checked {
+                        run: ipc::CheckRun::from(run),
+                    },
+                );
+            }
+            // One git read per ruling, which is once per submission rather than
+            // once per turn. A worktree that will not open writes no row: what
+            // the step produced is worth having and is not worth failing a
+            // ruling for, which is `watch_footprint`'s rule on the same read.
+            if let Ok(changed) = self.work().changed_files(&worktree) {
+                at_work.told(
+                    ipc::Voice::Fleet,
+                    ipc::Saw::Produced {
+                        files: crate::footprint::seen(&changed, declared.as_ref()),
+                    },
+                );
+            }
+        }
         self.recorded_judgments(&job_id, &step, &ruling).await?;
         self.recorded_evidence(&job_id, &step, &landed.submission, &ruling)
             .await?;

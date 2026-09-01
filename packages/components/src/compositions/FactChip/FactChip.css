@@ -1,0 +1,46 @@
+/* A fact chip. The drawing's `.chip`: mono on --bg-raised, a --radius-sm
+   corner, and padding that is deliberately tighter than any control's — a chip
+   is a value being read, not a target being pressed.
+
+   The drawn size is 12px, and the type scale's floor is --text-2xs at 13px.
+   The token wins: 12px is below the set's smallest declared size and adding a
+   ninth step to carry one chip is a second scale. Reported. */
+.armada-chip {
+  display: inline-block;
+  max-width: 100%;
+  /* The drawn 1px 6px. Vertical is the hairline, horizontal is one and a half
+     spacing steps — no token spells 6, and it is --space-1 plus a half. */
+  padding: var(--border-width) calc(var(--space-1) + var(--space-1) / 2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: baseline;
+}
+
+/* Verdict hue, per fact and never summed onto the step or the Job. The
+   surface stays --bg-raised in every case: the chip states which verdict it
+   is in one channel, and a tint behind it would state it twice and start
+   competing with the row surfaces that mean stopped and failed. */
+.armada-chip[data-named="passed"],
+.armada-chip[data-named="met"],
+.armada-chip[data-named="advanced"] {
+  color: var(--verdict-met);
+}
+
+.armada-chip[data-named="failed"],
+.armada-chip[data-named="not_met"],
+.armada-chip[data-named="refused"] {
+  color: var(--verdict-not-met);
+}
+
+/* Amber, never red. A step waiting on a person is the workflow working, and
+   the one shape that must not read as a failure. */
+.armada-chip[data-named="waiting"] {
+  color: var(--step-waiting);
+}

@@ -487,20 +487,28 @@
 
 /* The run on the left, the panel on the right, at every state.
 
-   Both tracks are proportional and neither is a fixed width. A fixed track
-   keeps demanding its width in a narrow window and the other one scrolls
-   sideways instead, which is the failure this app was built to escape. Two to
-   three is the drawing's own split at its 1180px width, and it holds down to
-   the window floor with no breakpoint — the tree gets narrower, the
-   directories recede, and the basenames the tree exists to keep never
-   truncate. A breakpoint was drawn first and removed: a media query cannot
-   read a custom property, so it could only be written as a literal, and the
-   proportional pair needs no query at all. `minmax(0, …)` on both is what
-   stops one long path from widening its own column past the pair. */
+   THE LEFT COLUMN NEVER CHANGES WIDTH. `--w-run-column` is the drawn 380px and
+   the panel takes every pixel of slack — that is the drawing's own rule and it
+   is what the tokens file argues for at length.
+
+   It was a 2fr/3fr pair here, defended in a comment that read well and was
+   wrong: a proportional rail widens with the window, so the tree of six short
+   names grew to half a maximised screen while the panel that has to hold a
+   diff grew by the same fraction rather than by the surplus. The old note
+   worried that a fixed track "keeps demanding its width in a narrow window".
+   380px against `--window-floor`'s 768 leaves 363 for the panel at the
+   narrowest window Bridge opens, which is tight and never sideways-scrolling —
+   and `minmax(0, 1fr)` on the panel is what keeps one long path from pushing
+   the pair wider than the window.
+
+   The middle track is the rule between them. Half a gap either side, so the
+   drawn 24px gutter still measures 24 with a hairline down the middle of it
+   rather than 24 plus a rule plus another 24. */
 .armada-inside {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-  gap: var(--space-4);
+  grid-template-columns: var(--w-run-column) minmax(0, 1fr);
+  column-gap: var(--space-6);
+  row-gap: var(--space-4);
   align-items: start;
   min-width: 0;
 }
@@ -513,8 +521,14 @@
   min-width: 0;
 }
 
+/* The panel is a card, which is what separates the two columns — the drawing
+   carries no rule between them, only this surface against the 24px gutter. */
 .armada-inside__panel {
   gap: var(--space-3);
+  padding: var(--pad-card);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
 }
 
 .armada-inside__region-head {
@@ -531,6 +545,47 @@
   line-height: var(--leading-2xs);
   color: var(--fg-muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* Where things are — the drawing's `.where`. A stack with a hairline gap, so
+   the rows read as one block and each still lights its own hover. The label
+   column, the value and the act are `WhereRow`'s; what lives here is only what
+   a single row cannot know about its neighbours. */
+.armada-inside__where {
+  display: flex;
+  flex-direction: column;
+  gap: var(--border-width);
+  min-width: 0;
+}
+
+/* A row that starts a second group. Inset to the rows' own padding, so it
+   separates the values rather than cutting the column. */
+.armada-inside__where-rule {
+  height: var(--border-width);
+  margin: var(--space-1) var(--space-2);
+  background: var(--border-subtle);
+}
+
+/* Why a path did not open, under the row it was pressed on. A failed open is
+   the one case in this region that has to speak: opening a file behind the
+   window looks exactly like nothing happening. */
+.armada-inside__where-unopened {
+  margin: 0;
+  padding: 0 var(--space-2);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--status-completed-failed);
+  text-wrap: pretty;
+}
+
+/* What the region is for, said once at the foot of it. */
+.armada-inside__where-note {
+  margin: var(--space-1) 0 0;
+  padding: 0 var(--space-2);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
 }
 
 .armada-inside__brief {

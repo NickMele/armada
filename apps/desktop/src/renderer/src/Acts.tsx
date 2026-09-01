@@ -10,12 +10,12 @@
 // hold one act and what it asks a person for before it sends. What stays here
 // is which of them a state offers. The words on every button are `copy.ts`'s.
 
-import { Button, SplitButton, type SplitButtonItem } from "@armada/components";
+import { Button, Tooltip } from "@armada/components";
 
 import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
 import type { Outcome } from "../../shared/bridge";
 import type { FileReport, JobDetail as JobWhole, JobSummary } from "../../shared/protocol";
-import { ACT_LABEL, MENU_LABEL } from "./copy";
+import { ACT_LABEL } from "./copy";
 import { OverruleControl } from "./Overrule";
 import { recourseOf } from "./recovery";
 import { RedirectControl } from "./Redirect";
@@ -92,11 +92,13 @@ export type ConfirmableAct = Exclude<
  * is not offered beside `approve`, and never styled like it: approving says the
  * work was right, and this says a machine was wrong.
  *
- * **The three that end something are one split button, not a row of red.** Two
- * outlined reds side by side read as one control with two labels, which is the
- * thing they are least like. What is on the face is the act that state calls
- * for; the rest sit in the menu and each one's label says what survives it, so
- * the caret never turns a terminal act into a variant of a milder one.
+ * **The three that end something are plain quiet buttons, not a red split.**
+ * The drawing gives a running Job one control, `Kill job`, in the same neutral
+ * treatment as every other button on the screen. A destructive red with a
+ * caret made the header's only control the loudest thing on it, and hid two
+ * acts behind a menu on a screen that is read rather than driven. Each is its
+ * own button now, in menu order — mildest first — and each still confirms,
+ * which is where what an act costs is stated.
  *
  * Redirect, restart, the override and the re-run sit outside that group: none
  * of them ends anything, so none belongs beside a control whose whole point is
@@ -117,7 +119,6 @@ export function Acts({
   stale,
   onAct,
   onApprove,
-  onObserve,
   onReport,
   onCopied,
 }: {
@@ -136,14 +137,8 @@ export function Acts({
   onAct: (act: ConfirmableAct, jobId: string) => void;
   onApprove: (jobId: string) => void;
   /**
-   * Open this Job's turns as a view of their own. **Omitted on the finished
-   * render**, where the turns are a section of the record on the page rather
-   * than a screen reached from the header — one route to a thing, not two.
-   */
-  onObserve?: () => void;
-  /**
    * Say this job failed in error. **Not one of the acts** — it moves nothing,
-   * which is why it is not in `JobAct` and does not reach the split button. It
+   * which is why it is not in `JobAct` and reaches no button here. It
    * answers with the outcome because the record that comes back is what the
    * dialog shows next.
    */
@@ -157,7 +152,8 @@ export function Acts({
   // only one that reads a classification: nothing else on this header is an act
   // on a Job that stopped.
   const recourse = render === "stopped" ? recourseOf(job, whole) : undefined;
-  // Menu order, mildest first — the split button puts destructive last.
+  // Mildest first, so the act that ends the Job is last and furthest from the
+  // reading a person arrived to do.
   const acts: ConfirmableAct[] = [
     // Fleet's answer and not the status: a replacement also needs the workflow
     // this Job named to be one Fleet still holds, which no row carries.
@@ -167,31 +163,9 @@ export function Acts({
     ...(job.assigned_drone === undefined ? [] : (["kill_drone"] as ConfirmableAct[])),
     ...(over ? [] : (["kill_job"] as ConfirmableAct[])),
   ];
-  // What the state calls for goes on the face: replacing a Job that stopped, and
-  // otherwise the kill that ends it. Never the milder kill — the act with the
-  // larger consequence does not hide behind a caret.
-  const face = FACE.find((act) => acts.includes(act)) ?? acts[0];
-  const menu: SplitButtonItem[] = acts
-    .filter((act) => act !== face)
-    .map((act) => ({
-      label: MENU_LABEL[act],
-      danger: act === "kill_job",
-      onSelect: () => onAct(act, job.id),
-    }));
-
   return (
     <>
-      {/* Ghost, and first: watching is not one of the acts. It ends nothing
-          and confirms nothing. It is offered wherever the turns are not already
-          on the page, because the transcript is the Job's history across every
-          Drone it has had — a Job that never had one says so in the pane rather
-          than by having no control. */}
-      {onObserve === undefined ? null : (
-        <Button variant="ghost" disabled={stale} onClick={onObserve}>
-          Watch the turns
-        </Button>
-      )}
-      {/* Ghost like watching, and beside it, because neither is an act on the
+      {/* Ghost, because it is not an act on the
           job: this records what a person concluded and leaves the job exactly
           where it was. Offered on every stopped job rather than only the ones
           something can still be done to — a job nothing can be done to is the
@@ -205,27 +179,20 @@ export function Acts({
           onCopied={onCopied}
         />
       ) : null}
-      {face === undefined ? null : menu.length === 0 ? (
-        // A split button with nothing in its menu is a button. Outlined, because
-        // a solid red control reads as an error state rather than as an act.
+      {/* One button per act, in menu order. Neutral, because the confirmation
+          is where a terminal act states what it costs — and a red control in a
+          header a person is reading rather than driving reads as the screen's
+          own alarm rather than as something they may press. */}
+      {acts.map((act) => (
         <Button
-          variant="destructive"
+          key={act}
+          variant="secondary"
           disabled={acting || stale}
-          onClick={() => onAct(face, job.id)}
+          onClick={() => onAct(act, job.id)}
         >
-          {ACT_LABEL[face]}
+          {ACT_LABEL[act]}
         </Button>
-      ) : (
-        <SplitButton
-          variant="destructive"
-          disabled={acting || stale}
-          menuLabel="What else ends this job"
-          items={menu}
-          onAction={() => onAct(face, job.id)}
-        >
-          {ACT_LABEL[face]}
-        </SplitButton>
-      )}
+      ))}
       {/* The one primary this header ever carries, and the only forward act in
           the set. Last, where the shell head puts its own primary — the accent
           fill and the distance are what keep it from reading as a peer of the
@@ -244,8 +211,6 @@ export function Acts({
   );
 }
 
-/** Which act takes the split button's face, in preference order. */
-const FACE: readonly ConfirmableAct[] = ["redispatch", "kill_job"];
 
 /**
  * The four acts that change a step rather than the Job, in the panel header
@@ -267,6 +232,13 @@ const FACE: readonly ConfirmableAct[] = ["redispatch", "kill_job"];
  * the side that can see the worktree, and a restart offered without that answer
  * was refused on the press every time the worktree had been reclaimed. Moving
  * the controls did not move that decision.
+ *
+ * **What each one does is on its own tooltip, with its binding.** The journey
+ * says it plainly — a step's help text is a tooltip carrying its binding, shown
+ * on hover and on focus — and the four sentences were being concatenated into
+ * one paragraph above the buttons, which described the menu rather than the
+ * step and put every sentence out of reach of the control it was about. What a
+ * destructive act costs is still stated again in its confirmation.
  */
 export function StepActs({
   job,
@@ -317,12 +289,17 @@ export function StepActs({
           primary: an override that looked like an approval would be claiming
           the work was right rather than that the Judge was wrong. */}
       {overrule === undefined ? null : (
-        <OverruleControl
-          jobId={job.id}
-          overrule={overrule}
-          disabled={acting || stale}
-          onOverrule={onOverrule}
-        />
+        // No binding on the tooltip: `actions.toml` registers none for the
+        // override, and a tooltip promising a key the map does not hold is
+        // worse than one with no key at all.
+        <Tooltip label={recourse?.says.override_verdict ?? ACT_LABEL.override_verdict}>
+          <OverruleControl
+            jobId={job.id}
+            overrule={overrule}
+            disabled={acting || stale}
+            onOverrule={onOverrule}
+          />
+        </Tooltip>
       )}
       {/* Where nothing ruled, in the place the override would be: the two are
           mutually exclusive, and both keep the step's work. **No dialog and no
@@ -330,25 +307,40 @@ export function StepActs({
           commits nothing, so stopping to ask would claim a cost Fleet does not
           charge. */}
       {reread === undefined ? null : (
-        <Button variant="secondary" disabled={acting || stale} onClick={() => onRerun(job.id)}>
-          {ACT_LABEL.rerun_gate}
-        </Button>
+        <Tooltip label={recourse?.says.rerun_gate ?? ACT_LABEL.rerun_gate}>
+          <Button variant="secondary" disabled={acting || stale} onClick={() => onRerun(job.id)}>
+            {ACT_LABEL.rerun_gate}
+          </Button>
+        </Tooltip>
       )}
       {/* Neither ends the Job, so neither is a plain-red act. The dialog a
           redirect opens is itself the confirmation — a person who cancels it
           has sent nothing. */}
       {canRedirect ? (
-        <RedirectControl jobId={job.id} disabled={acting || stale} onRedirect={onRedirect} />
+        <Tooltip label={recourse?.says.redirect ?? ACT_LABEL.redirect} shortcut={REDIRECT_KEY}>
+          <RedirectControl jobId={job.id} disabled={acting || stale} onRedirect={onRedirect} />
+        </Tooltip>
       ) : null}
       {canRestart ? (
-        <Button
-          variant="secondary"
-          disabled={acting || stale}
-          onClick={() => onAct("restart_step", job.id)}
-        >
-          {ACT_LABEL.restart_step}
-        </Button>
+        <Tooltip label={recourse?.says.restart_step ?? ACT_LABEL.restart_step} shortcut={RESTART_KEY}>
+          <Button
+            variant="secondary"
+            disabled={acting || stale}
+            onClick={() => onAct("restart_step", job.id)}
+          >
+            {ACT_LABEL.restart_step}
+          </Button>
+        </Tooltip>
       ) : null}
     </>
   );
 }
+
+/**
+ * The bindings the two step acts carry, from `actions.toml`'s contextual tier —
+ * `d` redirect, `s` restart step. Written beside the tooltip that displays
+ * them, because a tooltip promising a key the map does not hold is worse than
+ * one with no key at all.
+ */
+const REDIRECT_KEY = "d";
+const RESTART_KEY = "s";

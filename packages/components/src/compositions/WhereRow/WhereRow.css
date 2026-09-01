@@ -1,0 +1,100 @@
+/* One row of Where things are. The drawing's `.wrow`: a label column, the
+   value, and the row's one act as a 12px mark at the trailing edge.
+
+   Three columns and a baseline alignment, because the label is sans and the
+   value is mono and two type families on one line sit wrong on any other
+   alignment. */
+.armada-wrow {
+  display: grid;
+  /* The drawn 74px. --space-12 plus --space-6 plus a half --space-1: wide
+     enough for `Transcript` and `Worktree` unwrapped, which is what set it. */
+  grid-template-columns:
+    calc(var(--space-12) + var(--space-6) + var(--space-1) / 2)
+    minmax(0, 1fr)
+    var(--space-3);
+  gap: var(--space-2);
+  align-items: baseline;
+  width: 100%;
+  /* The drawn 5px 8px. Tighter than a step row, because these carry no glyph
+     in the leading column and no group opens beneath them. */
+  padding: calc(var(--space-1) + var(--space-1) / 4) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  text-align: left;
+  font-family: var(--font-sans);
+  min-width: 0;
+}
+
+button.armada-wrow {
+  cursor: pointer;
+}
+
+button.armada-wrow:hover {
+  background: color-mix(in srgb, var(--bg-raised) 55%, var(--bg-sunken));
+}
+
+button.armada-wrow:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.armada-wrow__k {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* Mono, and clipped from the right. This is the one region on job detail
+   where an ordinary clip is correct: a worktree path and a branch are both
+   read from their start, and it is the produced-file column that needs its
+   end kept. */
+.armada-wrow__v {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--space-2) - var(--space-1) / 4);
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What the value is, where the value does not say. Sans, so it reads as a note
+   about the value rather than as more of it. */
+.armada-wrow__note {
+  flex: none;
+  font-family: var(--font-sans);
+  color: var(--fg-subtle);
+}
+
+/* The act. Quiet at rest and brighter under the cursor, so the region reads as
+   a list of facts first and a list of controls second — which is the order a
+   person actually uses it in. */
+.armada-wrow__mark {
+  flex: none;
+  color: var(--border-strong);
+  transition: color var(--duration-fast) var(--ease);
+}
+
+button.armada-wrow:hover .armada-wrow__mark,
+button.armada-wrow:focus-visible .armada-wrow__mark {
+  color: var(--fg-muted);
+}
+
+/* What pressing the row does. The visible label is a path and the mark is
+   12px; neither is an accessible name. */
+.armada-wrow__sr {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  padding: 0;
+  margin: calc(var(--border-width) * -1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

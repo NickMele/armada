@@ -36,7 +36,7 @@ use crate::crossing::{Cleared, Crossed, Produced};
 use crate::daemon::Fleet;
 use crate::drone::{aftermath, Aftermath, Ending, Left};
 use crate::gate::{apply, Ruling};
-use crate::session::LiveSession;
+use crate::session::{LiveSession, Occasion};
 use crate::working::Working;
 
 impl<H, V, W> Fleet<H, V, W>
@@ -498,6 +498,10 @@ where
         let Some(at_work) = working.as_ref() else {
             return Ok(());
         };
+        // Written down before the send, not after: a turn the pipe would not
+        // take is still a turn Armada composed and a person still has to read
+        // it to know what the Drone was — or was not — told.
+        at_work.instructed(Occasion::Outcome, turn.text());
         at_work
             .session()
             .tell(turn, declaring)

@@ -112,7 +112,15 @@ export function StepActivityMark({ activity, label, ordinal, pulsing = false }: 
         <span className="armada-step-mark__ordinal" aria-hidden>
           {ordinal}
         </span>
-      ) : null}
+      ) : (
+        // A step that has not run, with no number to stand in for it: the
+        // Journey 4 drawing gives it a hollow ring, and the slot rendered
+        // nothing at all before. Not a glyph — the icon registry carries no
+        // bare circle and `packages/icons/` is not this component's to write
+        // — so it is a ring in the stylesheet, the same class of object as
+        // the running dot and the degraded dot already drawn there. Reported.
+        <span className="armada-step-mark__ring" aria-hidden />
+      )}
       <span className="armada-step-mark__name">{label}</span>
     </span>
   );

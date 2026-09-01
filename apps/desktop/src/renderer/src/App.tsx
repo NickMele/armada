@@ -60,10 +60,10 @@ export function App() {
   // not a router: which Job is open, or none. The row is the control that sets
   // it and Escape is what clears it.
   const [openJob, setOpenJob] = useState<string | null>(null);
-  // Whether the open Job's turns socket is held open. **Not navigation any
-  // more.** It was, while watching swapped the whole surface for a transcript;
-  // job detail holds the turns in its own record at every state now, so this
-  // says only that a tab is open and no screen turns on it.
+  // Whether the open Job's turns socket is held open. **Not navigation, and not
+  // a control either.** It was navigation while watching swapped the surface
+  // for a transcript, and then a tab; the turns are the open step's activity
+  // log now, so this tracks which Job is open and nothing presses it.
   const [observing, setObserving] = useState(false);
   // Whether the composer is open. It used to sit permanently above the list;
   // `New job` is what opens it now, so the surface is the list until somebody
@@ -112,11 +112,14 @@ export function App() {
   // Opening another Job drops the socket, and does it before the one below is
   // reopened — the rows in hand belong to the Job that was open, and carrying
   // them into a different one would be a transcript under the wrong title.
-  useEffect(() => setObserving(false), [openJob]);
+  //
+  // **A Job that is open is a Job being observed.** The turns are the step's
+  // activity log rather than a screen of their own, and a log that filled only
+  // after a press is the tab job detail removed. Closing the Job closes the
+  // socket, so nothing is held for a Job nobody is reading.
+  useEffect(() => setObserving(openJob !== null), [openJob]);
 
-  // Which Job's turns main should hold a socket open for. Closed the moment the
-  // tab is: the subscription exists only while somebody is reading it, and
-  // nothing about it is written onto the Job.
+  // Which Job's turns main should hold a socket open for.
   useEffect(() => {
     void window.armada.observeJob(observing ? openJob : null);
   }, [observing, openJob]);
@@ -446,7 +449,6 @@ export function App() {
                 observed={state.observed}
                 recorded={{
                   footprint: state.footprint,
-                  history: state.history,
                   evidence: state.evidence,
                   diff: state.diff,
                 }}
@@ -460,7 +462,6 @@ export function App() {
                 onApproveReview={(jobId) => void decide(jobId, "approve")}
                 onRequestChanges={(jobId, note) => void decide(jobId, "changes", note)}
                 onReject={(jobId) => void decide(jobId, "reject")}
-                onObserve={setObserving}
                 onCopied={setCopied}
               />
             </Boundary>

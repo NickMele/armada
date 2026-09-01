@@ -100,3 +100,26 @@ export * from "./compositions/StepStory/StepStory";
 // Inside a job — the one arrangement, at every state. The screen #186 built:
 // the run as a tree, the selected step in the panel, its story in order.
 export * from "./screens/InsideAJobOneArrangementAtEveryState/InsideAJobOneArrangementAtEveryState";
+
+// The two chips a step's facts are made of. A fact is a value; a path is the
+// one value that keeps its filename at every width.
+export * from "./compositions/FactChip/FactChip";
+export * from "./compositions/PathChip/PathChip";
+
+// One row of the run — the step, its mark, its elapsed figure, and the short
+// facts the chevron opens. The tree composes these; it does not draw a row.
+export * from "./compositions/StepRow/StepRow";
+
+// One row of Where things are. A path opens where it lives; an identifier
+// copies; and the label column says which is which before the value is read.
+export * from "./compositions/WhereRow/WhereRow";
+
+// The step's story. A chapter collapses to its header line and never to
+// nothing; a log entry opens in place to its payload, and every line opens.
+export * from "./compositions/Chapter/Chapter";
+export * from "./compositions/LogEntry/LogEntry";
+
+// What a stage of the phase strip opens to — what that tier is, what it is
+// waiting on and where it stands. The standing sentence for each tier lives
+// here, written once, because it is the same on every Job.
+export * from "./compositions/PhaseCard/PhaseCard";

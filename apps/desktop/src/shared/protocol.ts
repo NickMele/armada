@@ -17,6 +17,7 @@ import type {
   RedirectInFlight,
   RedirectWaiting,
 } from "./waiting";
+import type { StepAttempt } from "./attempt";
 import type { ProtocolVersion } from "./version";
 
 /** A Job, as a list row. `crates/ipc/src/job.rs`. */
@@ -471,6 +472,17 @@ export type StepDetail = {
    */
   flagged: Flagged[];
   /**
+   * Every run of this step, oldest first. **`Attempt 1 refused`, `Attempt 2
+   * advanced`** — the rows the run tree draws under a step that was worked
+   * more than once.
+   *
+   * It is the only place an earlier run's outcome survives: `state` and
+   * `last_verdict` are both the latest, so a step that passed on its third try
+   * and one that passed on its first were the same message. Empty on a step
+   * nothing has entered, which is every step a Job has not reached.
+   */
+  attempts: StepAttempt[];
+  /**
    * The Judge call out on this step **right now**, where one is.
    *
    * **Absent is the ordinary case, and it is the point of the field.** A step
@@ -836,6 +848,11 @@ export type JobForgotten = { job_id: string };
 // wire vocabulary. They live in `events.ts` because this file reached the 900
 // lines the gate refuses; the cut is the socket seam `crates/ipc/src/event.rs`
 // already draws.
+// Every run of one step. Its own file for the reason `crates/ipc/src/attempt.rs`
+// has one: it is folded out of the job's log rather than read off a row, and
+// this file was over the gate's ceiling.
+export type { StepAttempt } from "./attempt";
+
 export type {
   ChangedFile,
   Delivered,

@@ -68,6 +68,27 @@
   --sidebar-rail: 48px;   /* the rail never disappears */
   --window-floor: 768px;  /* hard floor */
   --layout-breakpoint: 1100px;
+  /* 380px: job detail's left column — the run tree and Where things are. THE
+     DRAWN WIDTH, lifted from the `jdRun` frame of the Monitor active work
+     journey, which sets `grid-template-columns: 380px minmax(0, 1fr)`. The
+     column never changes width and the panel takes every pixel of slack.
+
+     It was built as a 2fr/3fr ratio, which reads right at the drawn 1440px and
+     wrong everywhere else: the rail widens with the window, so a maximised
+     screen gives a tree of six short names half the width of the panel it is
+     meant to index. A fixed rail is not a fixed layout — the thing that has to
+     hold a diff is the track that grows.
+
+     380px is what fits the two values that set it: a step name beside its
+     elapsed without either truncating, and a `.wrow`'s 74px label column plus
+     a worktree path. It is off the 4px grid because it is a measure of content,
+     not a step of space — the same reason --w-dialog-wide is 640.
+
+     Named `--w-*` rather than joined to the layout block's own prefixes:
+     --sidebar-* is the shell's rail and this is a region inside one screen.
+     It sits here because it is layout, and the --w-* group above is floating
+     layers. Reported. */
+  --w-run-column: 380px;
   --palette-width: 560px;
   --palette-max-height: 400px;
 

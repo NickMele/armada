@@ -1,0 +1,231 @@
+/* A step row, and the facts under it. The drawing's `.srow` and `.facts`.
+
+   Two widths are named once here and used four times below, because the facts
+   region hangs off the chevron column: its left margin is that column plus the
+   row's gap, so the rule under the facts lands where the chevron's centre line
+   would be. Written as an expression rather than as 22px so that moving the
+   chevron moves the rule with it. */
+.armada-srow-group {
+  /* The drawn 14px. No token spells it; it is --space-3 plus a half --space-1. */
+  --armada-srow-chevron: calc(var(--space-3) + var(--space-1) / 2);
+  /* The drawn 6px, the row's vertical padding. --space-1 plus a half. */
+  --armada-srow-tight: calc(var(--space-1) + var(--space-1) / 2);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Four columns: chevron, mark, name, duration. The name is the only one that
+   flexes, so a long name clips and the duration column never moves — the
+   "columns flip-flopped between renders" line in the v1 failure log.
+
+   The left edge is --row-focus-bar with its colour dropped to transparent at
+   rest, so the edge adds no width and no row shifts when it appears. */
+.armada-srow {
+  display: grid;
+  grid-template-columns: var(--armada-srow-chevron) var(--space-4) minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--armada-srow-tight) var(--space-2);
+  border-radius: var(--radius-sm);
+  border-left: var(--row-focus-bar);
+  border-left-color: transparent;
+  min-width: 0;
+}
+
+/* Halfway between the well the tree sits in and the surface above it. Not
+   --bg-hover: that value is the selected row's, and a hover that reached it
+   would say "you are here" to a cursor passing through. */
+.armada-srow:hover,
+.armada-srow[data-hover] {
+  background: color-mix(in srgb, var(--bg-raised) 55%, var(--bg-sunken));
+}
+
+/* Background states what the row is; the accent left edge states which row you
+   are on. */
+.armada-srow[data-sel] {
+  background: var(--bg-hover);
+  border-left-color: var(--accent);
+}
+
+/* The two activity values that carry a row surface rather than a glyph hue
+   alone: a glyph only holds while its row is selected, and the row that ended
+   the run has to stay findable while its refusals are read beside it.
+
+   Waiting takes neither. Amber on the mark, no surface: everything mechanical
+   cleared, and a tint would make the workflow working look like the workflow
+   failing. That is the whole of "three kinds of stopped must never look
+   alike". */
+.armada-srow[data-activity="failed"],
+.armada-srow[data-activity="failed"][data-sel] {
+  background: var(--step-failed-bg);
+}
+
+.armada-srow[data-activity="stopped"],
+.armada-srow[data-activity="stopped"][data-sel] {
+  background: var(--step-stopped-bg);
+}
+
+/* --- the two controls on the row ----------------------------------------- */
+
+.armada-srow__chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--armada-srow-chevron);
+  height: var(--armada-srow-chevron);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-subtle);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast) var(--ease);
+}
+
+button.armada-srow__chevron:hover,
+.armada-srow[data-sel] button.armada-srow__chevron {
+  color: var(--fg-muted);
+}
+
+.armada-srow__chevron:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Step names are labels in sans on every surface. The name is the select
+   control, so it fills its column: a target the width of the word is a target
+   a person misses. */
+.armada-srow__name {
+  display: flex;
+  align-items: center;
+  gap: var(--armada-srow-tight);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.armada-srow__name {
+  cursor: pointer;
+}
+
+button.armada-srow__name:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+/* The selected row's name is the one thing on the tree at full weight. */
+.armada-srow[data-sel] .armada-srow__name {
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+}
+
+/* A step that has not been reached recedes further than one that has: the
+   tree's job is to say where the run is, and rows below that point are the
+   shape of the workflow rather than a record of anything. */
+.armada-srow[data-activity="not_started"] .armada-srow__name {
+  color: var(--fg-subtle);
+}
+
+/* A step named by its `step_id` because the workflow supplied no label. Mono,
+   because it is machinery — honest, and useless to scan. */
+.armada-srow__name[data-identifier] {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+.armada-srow__lock {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  color: var(--fg-subtle);
+}
+
+/* Elapsed is a figure, never a bar. A filled bar reads as progress and a step
+   has no percentage. */
+.armada-srow__dur {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+.armada-srow[data-sel] .armada-srow__dur {
+  color: var(--fg-default);
+}
+
+/* --- the facts the chevron opens ----------------------------------------- */
+
+/* A hairline down the left rather than an indent alone: the facts belong to
+   the row above them, and six steps' worth of facts in one column need a mark
+   saying where each group starts. The margin puts that rule under the chevron
+   column — see the expression at the top of the file. */
+.armada-srow__facts {
+  display: flex;
+  flex-direction: column;
+  /* The drawn 5px: --space-1 and a quarter. Tighter than the row gap, because
+     these lines are one group being read together. */
+  gap: calc(var(--space-1) + var(--space-1) / 4);
+  margin: calc(var(--space-1) / 2) 0 var(--armada-srow-tight)
+    calc(var(--armada-srow-chevron) + var(--space-2));
+  padding-left: var(--space-3);
+  border-left: var(--border-width) solid var(--border-subtle);
+  min-width: 0;
+}
+
+.armada-srow__facts[hidden] {
+  display: none;
+}
+
+.armada-srow__fact {
+  display: flex;
+  align-items: baseline;
+  /* The drawn 7px: --space-2 less a quarter --space-1. A name and its value
+     read as one pair, so this is tighter than the gap between pairs. */
+  gap: calc(var(--space-2) - var(--space-1) / 4);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* The name of the fact, in sans. Sans names work, mono names machinery — and
+   the value beside it is a chip, which is mono for exactly that reason. */
+.armada-srow__fact-label {
+  flex: none;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* A step that recorded nothing says so, in one line and in the app's own
+   empty-state voice. Not a paragraph about why nothing is there. */
+.armada-srow__absent {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+/* The lock's accessible name. */
+.armada-srow__sr {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  padding: 0;
+  margin: calc(var(--border-width) * -1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

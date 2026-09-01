@@ -65,7 +65,8 @@ const CHAPTERS: StepChapter[] = [
     id: "log",
     ordinal: 2,
     title: "Activity log",
-    summary: "live · 47 entries · every line opens",
+    live: true,
+    summary: "47 entries · every line opens",
     preview: <ActivityLog entries={PREVIEW} />,
     content: <ActivityLog entries={WHOLE} />,
     openLabel: "Open the log — all 47 entries",
@@ -121,7 +122,22 @@ export const WithADecision: Story = {
         title: "Your decision",
         summary: "nothing advances until you answer",
         preview: "Approve, send back with a note, or reject. Send back returns it to this step; reject ends the Job.",
+        tone: "waiting",
       },
     ],
   },
+};
+
+/**
+ * Held by the caller. `openChapter` is the whole of what is open and pressing a
+ * header only reports — **this story is deliberately inert**, because that is
+ * what a controlled component does when nobody holds the other end.
+ *
+ * It exists for a keyboard map that has to open chapter two by name. The
+ * alternative it replaces is a caller reaching into the DOM for
+ * `.armada-story__chapter` and clicking the first button it finds, which works
+ * until this component renames a class.
+ */
+export const HeldByTheCaller: Story = {
+  args: { chapters: CHAPTERS, openChapter: "log" },
 };

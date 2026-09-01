@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
-import { Button } from "../../primitives/Button/Button";
+import { useId, useState } from "react";
+import { Chapter, type ChapterTone } from "../Chapter/Chapter";
 
 /**
  * The step's story — Drone instructions, then Activity log, then Produced, in
@@ -22,6 +22,13 @@ import { Button } from "../../primitives/Button/Button";
  * preview — the first few log entries, the files with their counts — so the
  * story reads through without pressing anything. Opening is for the whole of a
  * thing, never for finding out that it exists.
+ *
+ * **A chapter is `Chapter`, and this holds the order and the one-open rule.**
+ * It drew its own header for a while, beside a `Chapter` component that was
+ * drawing the same header better — two answers to one question, and the visible
+ * cost was the activity log's live indicator: the word "live" in a summary
+ * string, where the drawing and `Chapter` both have the running dot. A claim
+ * that something is still arriving is not a word in a count.
  */
 export type StepChapter = {
   id: string;
@@ -32,11 +39,23 @@ export type StepChapter = {
   ordinal: number;
   title: ReactNode;
   /**
-   * The header line's trailing half — `live · 47 entries · every line opens`,
+   * The header line's trailing half — `47 entries · every line opens`,
    * `3 files · +94 −31`. What the chapter holds, so a collapsed one still
    * answers for itself.
    */
   summary?: ReactNode;
+  /**
+   * Whether the chapter is streaming. Draws the running dot before the summary,
+   * which is what says the activity log is live rather than a snapshot — the
+   * one claim a count cannot make, and the one a caller must not spell as the
+   * word `live` inside `summary`.
+   */
+  live?: boolean;
+  /**
+   * What the chapter is. `waiting` is the one that asks rather than reports —
+   * the decision chapter on a step stopped at a human gate.
+   */
+  tone?: ChapterTone;
   /** What it shows while nothing in the story is open. */
   preview?: ReactNode;
   /**
@@ -55,16 +74,32 @@ export type StepStoryProps = {
   chapters: StepChapter[];
   /** Which chapter is open on mount. After that the story holds its own. */
   openId?: string;
+  /**
+   * Which chapter is open, held by the caller. **Present makes the story
+   * controlled**: it draws what this says and changes nothing itself, and
+   * `onOpen` is the only way the value moves. `null` is a story with every
+   * chapter collapsed to its preview.
+   *
+   * This exists so a keyboard map can open a chapter by name instead of
+   * reaching into the DOM for the component's own class names. Absent leaves
+   * the story uncontrolled, which is what every caller that only clicks wants.
+   */
+  openChapter?: string | null;
   /** Told when a chapter is opened or closed, for a caller that records it. */
   onOpen?: (chapterId: string | null) => void;
 };
 
-export function StepStory({ chapters, openId, onOpen }: StepStoryProps) {
-  const [open, setOpen] = useState<string | null>(openId ?? null);
+export function StepStory({ chapters, openId, openChapter, onOpen }: StepStoryProps) {
+  const [held, setHeld] = useState<string | null>(openId ?? null);
+  const bodies = useId();
+  // Controlled by presence, not by a flag: a caller either holds the value or
+  // it does not, and a boolean beside it is a second answer that can disagree.
+  const controlled = openChapter !== undefined;
+  const open = controlled ? openChapter : held;
 
   function toggle(chapterId: string): void {
     const next = open === chapterId ? null : chapterId;
-    setOpen(next);
+    if (!controlled) setHeld(next);
     onOpen?.(next);
   }
 
@@ -79,31 +114,23 @@ export function StepStory({ chapters, openId, onOpen }: StepStoryProps) {
         const collapsed = open !== null && !shown;
         return (
           <li className="armada-story__chapter" key={chapter.id} data-open={shown || undefined}>
-            <div className="armada-story__head">
-              <span className="armada-story__ordinal" aria-hidden>
-                {chapter.ordinal}
-              </span>
-              <span className="armada-story__title">{chapter.title}</span>
-              {chapter.summary === undefined ? null : (
-                <span className="armada-story__summary">{chapter.summary}</span>
-              )}
-              {!opens ? null : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-expanded={shown}
-                  onClick={() => toggle(chapter.id)}
-                >
-                  {shown ? (chapter.closeLabel ?? "Close") : (chapter.openLabel ?? "Open")}
-                </Button>
-              )}
-            </div>
-
-            {collapsed ? null : (
-              <div className="armada-story__body">
-                {shown ? chapter.content : chapter.preview}
-              </div>
-            )}
+            <Chapter
+              ordinal={chapter.ordinal}
+              name={chapter.title}
+              meta={chapter.summary}
+              live={chapter.live}
+              tone={chapter.tone}
+              open={!collapsed}
+              onToggle={opens ? () => toggle(chapter.id) : undefined}
+              bodyId={`${bodies}-${chapter.id}`}
+              moreLabel={
+                !opens ? undefined : shown ? (chapter.closeLabel ?? "Close") : (chapter.openLabel ?? "Open")
+              }
+              onMore={opens ? () => toggle(chapter.id) : undefined}
+              moreCloses={shown}
+            >
+              {shown ? chapter.content : chapter.preview}
+            </Chapter>
           </li>
         );
       })}

@@ -34,7 +34,7 @@ use std::sync::Arc;
 
 use adapter_traits::DroneEvent;
 use core_model::{Component, DroneId, Envelope, FieldValue, JobId, Level, StepId, Timestamp, Ulid};
-use ipc::TranscriptRow;
+use ipc::{Saw, TranscriptRow, Voice};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -60,6 +60,16 @@ pub trait Tap: Send + Sync {
     /// Every event one line decoded to, in order, after the parser has already
     /// taken them.
     fn saw(&self, events: &[DroneEvent]);
+
+    /// A row Armada or Fleet authored, rather than one a Drone's line decoded
+    /// to.
+    ///
+    /// **The instant and the step are the tap's, exactly as they are on
+    /// [`saw`](Tap::saw).** A caller that stamped its own would be a second
+    /// clock beside the one every other row in the file is written by, and the
+    /// merge that a reader does — an instruction, then the turns it produced —
+    /// only works if one clock stamped both.
+    fn noted(&self, by: Voice, saw: Saw);
 }
 
 /// The ids every line written here carries.
@@ -219,6 +229,11 @@ impl Tap for Live {
             self.feed.offer(row::seen(&at, &step, event));
         }
     }
+
+    fn noted(&self, by: Voice, saw: Saw) {
+        self.feed
+            .offer(row::authored(&self.clock.now(), &self.step.now(), by, saw));
+    }
 }
 
 /// Everything one Drone's lines are fanned out to, put together once.
@@ -268,6 +283,16 @@ impl Tap for Recording {
             if self.rows.try_send(row).is_err() {
                 self.missed.fetch_add(1, Ordering::Relaxed);
             }
+        }
+    }
+
+    /// **Counted as missed on the same terms as a Drone's row.** What Fleet
+    /// said is no more durable than what the Drone said, and a queue that
+    /// refused one and made room for the other would be two records.
+    fn noted(&self, by: Voice, saw: Saw) {
+        let row = row::authored(&self.clock.now(), &self.step.now(), by, saw);
+        if self.rows.try_send(row).is_err() {
+            self.missed.fetch_add(1, Ordering::Relaxed);
         }
     }
 }

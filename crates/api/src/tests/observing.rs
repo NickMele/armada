@@ -61,6 +61,8 @@ fn said(what: &str) -> TranscriptRow {
         // Which step a row belongs to is Fleet's to say. This crate carries
         // rows and reads none of them, so there is nothing here to name one.
         step: None,
+        // Whose row it is is Fleet's to say too, for the same reason.
+        by: ipc::Voice::Drone,
         saw: Saw::Said {
             text: what.to_string(),
         },
@@ -144,6 +146,7 @@ async fn the_last_row_carries_what_the_run_cost_and_how_many_turns_it_took() {
     feed.offer(TranscriptRow {
         ts: Instant::carried("2026-08-27T14:11:00.000Z"),
         step: None,
+        by: ipc::Voice::Drone,
         saw: Saw::QuotaMoved {
             window: "five_hour".to_string(),
             status: "warning".to_string(),
@@ -152,6 +155,7 @@ async fn the_last_row_carries_what_the_run_cost_and_how_many_turns_it_took() {
     feed.offer(TranscriptRow {
         ts: Instant::carried("2026-08-27T14:12:00.000Z"),
         step: None,
+        by: ipc::Voice::Drone,
         saw: Saw::Ended {
             turns: 41,
             cost_micros: 1_530_000,

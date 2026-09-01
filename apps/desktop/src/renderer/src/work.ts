@@ -1,14 +1,14 @@
-// Where a Job's work is, what the Job was told, and what it has spent — the
-// region a person opens when a Job has gone wrong.
+// Where a Job's work is, and what the Job was told — the region a person opens
+// when they want a path rather than a reading.
 //
-// # Derived is not served, and the region says which
+// # Derived is not served
 //
-// `branch` is served. The worktree, the log and the transcript directory are
-// **derived**, from the Job's id and the repository its Manifest was read from
-// — see `shared/artifacts.ts`, which owns that arithmetic for both sides. The
-// architecture fixes the layout, says it is not configurable, and says any
-// path Fleet needs is derived rather than stored, so a path derived on this
-// side is the same path and not a guess.
+// `branch` is served. Where the work sits on disk is **derived**, from the
+// Job's id and the repository its Manifest was read from — see
+// `shared/artifacts.ts`, which owns that arithmetic for both sides. The
+// architecture fixes the layout, says it is not configurable, and says any path
+// Fleet needs is derived rather than stored, so a path derived on this side is
+// the same path and not a guess.
 //
 // # A row opens by naming itself, never by handing over its path
 //
@@ -17,42 +17,39 @@
 // `shell.openPath` would be an arbitrary-file capability wearing a row's
 // clothes. So this file draws the path and main opens it, from one derivation.
 //
-// # No count Bridge would have to invent
+// # Five rows, and three of them came down from the header
 //
-// The drawing shows "142 lines · 0 error". Nothing counts lines or errors, so a
-// path row names its path and stops. The `meta` on one of them says a file is
-// not written yet, which is read off `branch`: the worktree is created and the
-// branch stamped on the Job before the log is opened, so a Job with no branch
-// has nothing under any of these paths.
+// Where the work is, what branch it is on, and the three identifiers the header
+// used to stack into a second line: the Manifest, the workflow and the Drone.
+// The two `.jsonl` rows and the spend block are gone — spend is one of the
+// header's four facts, and a log path is not one of the things this region
+// names. **The drawing keeps a `Job log` and a `Transcript` row; the issue asks
+// for them dropped.** Reported.
 //
-// **What the Job has spent is the exception, and it is the rule's own reason
-// that admits it.** `JobDetail.spend` is served — Fleet is the only side that
-// can add it up, because a Job's Drones do not know about each other — so
-// drawing it here is reading a figure rather than inventing one. It is the
-// second group, under a rule, and `spending` below carries why both halves of
-// each pair are on the row.
+// # The brief is one line
+//
+// `Done means` and `What it was told` were two sub-headings inside a tall card
+// and neither is in the drawing. The brief is the sentence the Job was given,
+// on the panel's own surface, above the step. What the Job's criteria are is
+// what the Judge stage of the phase strip opens to, which is where a person
+// asks the question.
 
 import { File, Folder, GitBranch } from "lucide-react";
-import type { JobBriefProps, JobDetailLog, JobLogReferenceRow, NotOpened } from "@armada/components";
+import type { JobBriefProps, JobLogReferenceRow, NotOpened } from "@armada/components";
 
 import type { Watched } from "../../shared/bridge";
 import { artifactPath, repoOf } from "../../shared/artifacts";
 import type { Artifact, Opened } from "../../shared/artifacts";
-import type {
-  JobDetail as JobWhole,
-  JobSpend,
-  JobSummary,
-} from "../../shared/protocol";
-import { lasting } from "./duration";
-import type { ManifestSummary } from "../../shared/setup";
+import type { JobDetail as JobWhole, JobSummary } from "../../shared/protocol";
+import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
 
 export { repoOf };
 
 /**
- * What the Job was told, what done means for it, and what is still waiting to
- * be told to it. All three are served.
+ * What the Job was told, in the words it was told it — one line, on the panel's
+ * raised surface, above the step every step is read against.
  *
- * **The waiting note is passed through and never remembered.** Fleet clears it
+ * **The waiting note rides with it and is never remembered.** Fleet clears it
  * off the record the instant a drone's opening brief is built from it, so
  * `redirect_waiting` absent is both "nobody wrote one" and "the one somebody
  * wrote has gone in" — and neither of those is a thing to draw. The move that
@@ -62,20 +59,16 @@ export { repoOf };
  */
 export function briefOf(whole: JobWhole): JobBriefProps {
   return {
-    criteria: whole.acceptance_criteria.map((criterion) => ({
-      text: criterion.text,
-      // The wire spelling. No registry carries a verb for `criterion_source`,
-      // and one written here would be a second vocabulary.
-      source: criterion.source,
-    })),
-    criteriaAbsent:
-      "This job was proposed with no acceptance criteria, so nothing states what done " +
-      "means for it. Bridge's composer does not offer them yet.",
+    // Required by the shape and not drawn: `only` picks the half this region
+    // is. The criteria are what the Judge stage opens to, with each one's
+    // verdict beside it, which is one place rather than two.
+    criteria: [],
+    only: "facts",
+    // No label. The region is called Brief and the sentence follows it; a
+    // second heading over one line is the sub-heading this screen removed.
+    factsLabel: null,
     facts: whole.facts,
     factsAbsent: "This job was given no context beyond its title.",
-    // No `waitingAbsent` beside it. Absent here is the ordinary state of every
-    // job on the board, and a sentence saying so would be a permanent
-    // paragraph reporting that nothing has happened.
     waiting: whole.redirect_waiting?.note,
   };
 }
@@ -83,11 +76,9 @@ export function briefOf(whole: JobWhole): JobBriefProps {
 /**
  * Why an open did not happen, in the app's voice.
  *
- * **Four sentences, not one.** A reclaimed worktree, a Manifest Fleet no
- * longer holds and an OS with no handler for `.jsonl` need three different
- * next steps, and a shared sentence would send a person to look for the wrong
- * one. Beside the paths rather than in `copy.ts` because each names what these
- * rows are, the way `noteOf` below does.
+ * **Four sentences, not one.** A reclaimed directory, a Manifest Fleet no
+ * longer holds and an OS with no handler need three different next steps, and a
+ * shared sentence would send a person to look for the wrong one.
  */
 function whyNotOpened(opened: Opened, what: Artifact): string | null {
   if (opened.ok) return null;
@@ -101,7 +92,7 @@ function whyNotOpened(opened: Opened, what: Artifact): string | null {
       );
     case "not_there":
       return what === "worktree"
-        ? "Nothing is at that worktree. It was reclaimed, and the branch survives it."
+        ? "Nothing is there. It was reclaimed, and the branch survives it."
         : "That file has not been written, or it has been removed. The path is still where it goes.";
     case "refused":
       return `This machine did not open it: ${opened.detail}`;
@@ -120,39 +111,37 @@ function opener(jobId: string, what: Artifact, label: string) {
 }
 
 /**
- * The region: the brief, then the paths.
+ * The rows: where the work is, and the identifiers that name it.
  *
  * `undefined` while the Job has not been read whole — the caller says why,
  * because "still reading" and "Fleet did not answer" are different sentences.
- * `withBranch` is false on the finished render, where the handover above
- * already names the branch and drawing it twice is two places to keep in step.
  */
 export function workOf(
   job: JobSummary,
   whole: JobWhole | null,
   manifest: ManifestSummary | undefined,
-  withBranch: boolean,
-): JobDetailLog | undefined {
+  workflow: WorkflowSummary | undefined,
+): JobLogReferenceRow[] | undefined {
   if (whole === null) return undefined;
   const repo = repoOf(manifest);
   const dispatched = whole.branch !== undefined;
   const rows: JobLogReferenceRow[] = [];
 
   if (repo !== null) {
-    const worktree = artifactPath("worktree", repo, job.id, job.assigned_drone);
+    const where = artifactPath("worktree", repo, job.id, job.assigned_drone);
     rows.push({
-      // `folder` means "workspace" in the registry and a worktree is not one;
-      // there is no row for a worktree. Reported, and no glyph is invented.
+      // `folder` means "workspace" in the registry and this is not one; there
+      // is no row for it. Reported, and no glyph is invented.
       icon: Folder,
       iconLabel: "Worktree",
-      value: worktree,
-      copyValue: worktree,
+      value: where,
+      copyValue: where,
       open: opener(job.id, "worktree", "Open the worktree"),
       meta: dispatched ? undefined : NOT_WRITTEN,
     });
   }
 
-  if (withBranch && whole.branch !== undefined) {
+  if (whole.branch !== undefined) {
     // No `open`, and none is coming. A branch is served rather than derived,
     // it is not a path, and copying it is the whole of what it is for.
     rows.push({
@@ -163,143 +152,76 @@ export function workOf(
     });
   }
 
-  if (repo !== null) {
-    const log = artifactPath("log", repo, job.id, job.assigned_drone);
+  // The three the header used to carry. **Values you go and find, not values
+  // you read** — which is the whole distinction between this region and the
+  // four facts above the panel.
+  rows.push({
+    icon: File,
+    iconLabel: "Manifest",
+    value: manifest?.repository ?? job.owner_manifest_id,
+    copyValue: job.owner_manifest_id,
+    separated: true,
+  });
+  rows.push({
+    iconLabel: "Workflow",
+    value: workflow?.name ?? job.workflow_id,
+    copyValue: job.workflow_id,
+    meta: "as it was when the job was dispatched",
+  });
+  if (job.assigned_drone !== undefined) {
     rows.push({
-      icon: File,
-      iconLabel: "Log",
-      value: log,
-      copyValue: log,
-      open: opener(job.id, "log", "Open the log"),
-      meta: dispatched ? undefined : NOT_WRITTEN,
-      separated: true,
+      iconLabel: "Drone",
+      value: job.assigned_drone,
+      copyValue: job.assigned_drone,
     });
-    rows.push(transcript(repo, job));
   }
 
-  rows.push(...spending(whole.spend));
-
-  return { brief: briefOf(whole), rows, note: noteOf(repo, dispatched) };
+  rows.push(...overlapRows(whole));
+  return rows;
 }
 
 /**
- * What the job has spent, against what it is allowed to spend.
+ * Who else claims the paths this Job may write.
  *
- * **The one exception to this region's "no count, ever" rule, and it is the
- * rule's own reason that admits it.** That rule was written because nothing
- * counted: a file's lines and a log's errors are figures Bridge would have had
- * to invent, so a row named its path and stopped. These four are served —
- * `JobDetail.spend`, since protocol 5.5 — and Fleet is the only side that can
- * add them up, because a job's drones do not know about each other.
+ * **It names the workspace and the other Job, and stops.** It used to list
+ * every shared path, comma-joined with no ceiling — five paths at forty
+ * characters is eight hundred on one line, in mono, and it ran off the right
+ * edge of the window and took the header's height with it. The overlap is a
+ * fact a person acts on by deciding whether to wait, and that decision needs
+ * which Job and roughly where. Whoever wants the file list is one click from
+ * the other Job, and the whole list is still what copying the row writes.
  *
- * **Both halves on one row.** A figure with no ceiling says nothing about
- * whether the job is near one, and a ceiling with no figure says nothing about
- * this job. It is the pair that tells a person which of the two signals held
- * their job back, which is what the `over budget` badge on its own cannot.
- *
- * **The wall clock has no ceiling beside it** and says so, because there is
- * none to draw: it is bounded by a setting at a different scope that nothing
- * enforces yet, and a figure drawn as though it were capped would be the
- * unenforced-cap failure in another shape.
- *
- * Absent on a Fleet older than 5.5, which draws nothing rather than zeroes —
- * a job that cost nothing and a Fleet that does not count are different facts.
- * No glyph on either row: nothing in the icon registry depicts money or a turn,
- * and the values read as what they are.
+ * **A count for the rest, never the rest.** `+4` is the shape a Convoy's row
+ * already uses for its extra write targets.
  */
-function spending(spend: JobSpend | undefined): JobLogReferenceRow[] {
-  if (spend === undefined) return [];
-  return [
-    {
-      iconLabel: "Spent",
-      value: `${money(spend.cost_micros)} of ${money(spend.cost_cap_micros)}`,
-      meta: droneCount(spend.drones),
-      separated: true,
-    },
-    {
-      iconLabel: "Turns",
-      value: `${spend.turns} of ${spend.turn_cap} turns`,
-      meta: `${lasting(spend.ran_ms)} of drone time, uncapped`,
-    },
-  ];
+function overlapRows(whole: JobWhole): JobLogReferenceRow[] {
+  return (whole.write_scope_overlaps ?? []).map((other, at) => {
+    const paths = other.paths.map((shared) => shared.path);
+    const first = paths[0];
+    const rest = paths.length - 1;
+    const also = `${other.title} is writing into it too`;
+    return {
+      iconLabel: "Overlaps",
+      value: first === undefined ? other.job_id : workspaceOf(first),
+      copyValue: paths.join(" "),
+      meta: rest > 0 ? `${also} · +${rest}` : also,
+      separated: at === 0,
+    };
+  });
 }
 
 /**
- * A spend, from millionths of a dollar.
- *
- * **Hedged, and the same rendering `turns.ts` uses**, for the same two reasons.
- * The design contract spells an estimated value `~$2.40` and never `$2.40`; and
- * the figure is notional besides — it is what the run would have cost at list
- * price, which is not what a subscription account is billed.
- *
- * **Four places under a cent**, so a job that has cost a tenth of a penny does
- * not round to `~$0.00` and read as free.
+ * The workspace a shared path is in — its first two segments, or the path where
+ * it is shallower. **Not the path**: the Board's dispatch card names
+ * `crates/fleet` and leaves the file list on the other Job.
  */
-function money(micros: number): string {
-  const dollars = micros / 1_000_000;
-  return `~$${dollars.toFixed(dollars > 0 && dollars < CENT ? 4 : 2)}`;
-}
-
-/** A cent, in dollars. Below this two decimal places round to nothing. */
-const CENT = 0.01;
-
-/**
- * How many drones the figure is the sum of.
- *
- * **Zero is stated rather than left out**, because zero drones and a cost of
- * zero are different facts: one is a job nobody has run yet and the other is a
- * job that ran for free, and a row that said nothing would let a reader take
- * the first for the second.
- */
-function droneCount(drones: number): string {
-  if (drones === 0) return "no drone has run yet";
-  return drones === 1 ? "across 1 drone" : `across ${drones} drones`;
+function workspaceOf(path: string): string {
+  const parts = path.split("/");
+  return parts.length <= 2 ? path : `${parts[0]}/${parts[1]}`;
 }
 
 /** A file that will exist, named before it does. Never a count. */
 const NOT_WRITTEN = "not written yet";
-
-/**
- * The Drone's transcript.
- *
- * **The file is named by a drone id that is stored nowhere.** `assigned_drone`
- * has no event that sets it, so the only record the id existed is the line
- * Fleet writes into the Job log named above. The row names the directory and
- * says that, rather than printing a path with a hole in it — and opening it
- * lands in the directory, which is where a person would look anyway. No glyph:
- * nothing in the registry means a transcript, and `file` is reserved to the
- * log row.
- */
-function transcript(repo: string, job: JobSummary): JobLogReferenceRow {
-  const path = artifactPath("transcript", repo, job.id, job.assigned_drone);
-  const open = opener(job.id, "transcript", "Open the transcript");
-  if (job.assigned_drone === undefined) {
-    return {
-      iconLabel: "Transcript",
-      value: path,
-      copyValue: path,
-      open,
-      meta: "named by a drone id nothing serves — the job log above names it",
-    };
-  }
-  return { iconLabel: "Transcript", value: path, copyValue: path, open };
-}
-
-/** What the paths are, said once beneath them rather than on every row. */
-function noteOf(repo: string | null, dispatched: boolean): string {
-  if (repo === null) {
-    return (
-      "Fleet holds no manifest with this job's id, so Bridge cannot say which repository " +
-      "the work is in. The paths follow from the job id once it can."
-    );
-  }
-  const derived =
-    "The worktree, the log and the transcripts directory follow from this job's id and " +
-    "the repository its manifest was read from. The branch is served.";
-  return dispatched
-    ? `${derived} Armada leaves the worktree and the branch in place.`
-    : `${derived} Nothing has been dispatched, so nothing under these paths exists yet.`;
-}
 
 /** Why there is no region to draw, which is never the same sentence twice. */
 export function whyNoWork(watched: Watched, jobId: string): string {

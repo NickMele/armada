@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
+import { Fragment, useCallback, useState } from "react";
 import { JobBrief, type JobBriefProps } from "../../compositions/JobBrief/JobBrief";
 import { JobDetailHeaderActions } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
 import type { JobDetailField } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
-import { JobLogReference, type JobLogReferenceRow } from "../../compositions/JobLogReference/JobLogReference";
+import type { JobLogReferenceRow, NotOpened } from "../../compositions/JobLogReference/JobLogReference";
 import { PhaseStrip, type PhaseStripProps } from "../../compositions/PhaseStrip/PhaseStrip";
 import { RunTree, type RunTreeStep } from "../../compositions/RunTree/RunTree";
 import { StepStory, type StepChapter } from "../../compositions/StepStory/StepStory";
+import { WhereRow } from "../../compositions/WhereRow/WhereRow";
 import { Absent } from "../absent";
 import type { JobDetailHeading } from "../detail";
 
@@ -80,6 +82,14 @@ export type StepPanel = {
   /** Which chapter is open on mount. */
   openChapter?: string;
   /**
+   * Which chapter is open, held by the surface. Present makes the story
+   * controlled — see `StepStoryProps.openChapter`. It is here so a keyboard map
+   * can name a chapter rather than find one by the class the story ships.
+   */
+  openChapterId?: string | null;
+  /** Told when a chapter is opened or closed. */
+  onOpenChapter?: (chapterId: string | null) => void;
+  /**
    * After the story — the decision, on a step waiting for one. **At the end
    * rather than in the header**, because you make it after reading; the header
    * is for acts that change what a Drone is doing.
@@ -118,6 +128,15 @@ export type InsideAJobProps = {
    */
   pulsing?: boolean;
   onSelectStep?: (stepId: string) => void;
+  /**
+   * Which steps have their facts open, held by the surface. Present makes the
+   * tree controlled — see `RunTreeProps.openSteps`. It is here so a keyboard
+   * map can name a step rather than find its chevron by the class the tree
+   * ships.
+   */
+  openSteps?: readonly string[];
+  /** Told when a step's facts are opened or closed. */
+  onOpenStep?: (stepId: string, open: boolean) => void;
   /**
    * Where things are — the worktree, the branch, the Manifest, the workflow,
    * the log, the transcript, the Drone. **A path opens where it lives; an
@@ -160,6 +179,8 @@ export function InsideAJob({
   runAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
   pulsing = true,
   onSelectStep,
+  openSteps,
+  onOpenStep,
   where,
   whereLabel = "Where things are",
   whereNote,
@@ -194,6 +215,8 @@ export function InsideAJob({
               steps={run}
               pulsing={pulsing}
               onSelect={onSelectStep}
+              openSteps={openSteps}
+              onOpen={onOpenStep}
               onCopied={onCopied}
             />
           )}
@@ -206,9 +229,7 @@ export function InsideAJob({
               <Absent name="Where things are" note={whereAbsent} />
             </div>
           ) : (
-            <JobLogReference rows={where} onCopied={onCopied}>
-              {whereNote}
-            </JobLogReference>
+            <WhereRegion rows={where} note={whereNote} onCopied={onCopied} />
           )}
 
           {record === undefined ? null : (
@@ -220,6 +241,10 @@ export function InsideAJob({
             </>
           )}
         </div>
+
+        {/* The rule between the columns. Its own track, not a border on
+            either side, so it measures the full height of the taller column
+            whichever one that is. */}
 
         {/* The panel. Same regions in the same order at every state. */}
         <div className="armada-inside__panel">
@@ -294,7 +319,12 @@ export function InsideAJob({
                 <div className="armada-inside__before">{step.before}</div>
               )}
 
-              <StepStory chapters={step.chapters} openId={step.openChapter} />
+              <StepStory
+                chapters={step.chapters}
+                openId={step.openChapter}
+                openChapter={step.openChapterId}
+                onOpen={step.onOpenChapter}
+              />
 
               {step.after === undefined ? null : (
                 <div className="armada-inside__after">{step.after}</div>
@@ -303,6 +333,86 @@ export function InsideAJob({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Where things are — a label column, the machine value, and the row's one act.
+ *
+ * **The label column is the region.** It was drawn by `JobLogReference`, which
+ * has none: every row was a glyph and a path, and a reader had to work out from
+ * the shape of a string whether it was a worktree, a branch or a transcript.
+ * `WhereRow` was built for the drawn 74px column and nothing used it. This is
+ * that composition, and the rows arrive in the shape the surface already builds
+ * them in — the glyph each row carried is dropped, because the label it stood
+ * in for is now written out.
+ *
+ * **An open can fail, and the row is where it says so.** That is the one thing
+ * `WhereRow` cannot hold on its own: its act is synchronous, and whether a
+ * worktree still exists is not known until the OS has been asked. So the region
+ * holds the last refusal and draws it under the row it was pressed on — one at
+ * a time, and it is the last press, because two stale rows arguing on screen is
+ * worse than the one somebody just clicked.
+ */
+function WhereRegion({
+  rows,
+  note,
+  onCopied,
+}: {
+  rows: JobLogReferenceRow[];
+  note?: ReactNode;
+  onCopied?: (value: string) => void;
+}) {
+  const [unopened, setUnopened] = useState<{ row: number; because: string } | null>(null);
+  /** The row with an open in flight. A second press does not send a second. */
+  const [opening, setOpening] = useState<number | null>(null);
+
+  const open = useCallback((at: number, go: () => Promise<NotOpened>) => {
+    setOpening(at);
+    setUnopened(null);
+    void go()
+      .then((why) => {
+        // Nothing visible happens when a file opens behind the window, so the
+        // silent case is the one that worked. The failure is the one that has
+        // to speak, and it speaks on the row it was pressed on.
+        if (why !== null) setUnopened({ row: at, because: why.because });
+      })
+      .finally(() => setOpening(null));
+  }, []);
+
+  return (
+    <div className="armada-inside__where">
+      {rows.map((row, at) => {
+        const opens = row.open;
+        const failed = unopened !== null && unopened.row === at ? unopened.because : null;
+        return (
+          <Fragment key={at}>
+            {/* A row that starts a second group. The drawing runs its seven rows
+                flat; this keeps the grouping the surface asked for and spends a
+                hairline on it rather than a second heading. */}
+            {row.separated ? <span className="armada-inside__where-rule" aria-hidden /> : null}
+            <WhereRow
+              label={row.iconLabel}
+              value={row.value}
+              note={row.meta}
+              act={opens === undefined ? "copy" : "open"}
+              copyValue={row.copyValue}
+              onCopied={onCopied}
+              actLabel={opens?.label}
+              onAct={
+                opens === undefined || opening !== null ? undefined : () => open(at, opens.go)
+              }
+            />
+            {failed === null ? null : (
+              <p className="armada-inside__where-unopened" role="status">
+                {failed}
+              </p>
+            )}
+          </Fragment>
+        );
+      })}
+      {note === undefined ? null : <p className="armada-inside__where-note">{note}</p>}
     </div>
   );
 }

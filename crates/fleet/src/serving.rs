@@ -47,7 +47,9 @@ use crate::sub_dispatch::waiting_on_children;
 use crate::overruling::Overruling;
 use crate::reporting::Filed;
 use crate::resume::Redirection as Instruction;
-use crate::wire::{canonical, declared, recorded, reported, step_facts, submitted, told};
+use crate::wire::{
+    canonical, declared, recorded, reported, step_facts, step_moves, submitted, told,
+};
 
 impl<H, V, W> Daemon for Fleet<H, V, W>
 where
@@ -129,7 +131,7 @@ where
             .last_reason(job.id())
             .await
             .map_err(|why| self.refusal(why))?;
-        let (ran, judged, flagged) = {
+        let (ran, judged, flagged, moves) = {
             let store = self.store().lock().await;
             let ran = store
                 .step_checks(job.id())
@@ -140,7 +142,13 @@ where
             let flagged = store
                 .step_gaming_flags(job.id())
                 .map_err(|why| self.refusal(Adrift::Reading(why)))?;
-            (ran, judged, flagged)
+            // The rows `get_job_events` serves, narrowed to the step moves.
+            // **Read on every open, unlike the history**: one entry per run of
+            // a step rather than a row per move, so a rail can say `Attempt 1
+            // refused` without the unbounded read `history.rs` keeps off this.
+            let moves =
+                step_moves(&store, job.id()).map_err(|why| self.refusal(Adrift::Reading(why)))?;
+            (ran, judged, flagged, moves)
         };
         // The plans are read with the footprint and only with it: they are what
         // it is measured against, and a running Job has neither — its live
@@ -220,7 +228,7 @@ where
             reason.as_ref(),
             queued,
             self.resumption(&job),
-            &step_facts(self.aloft(), &job, ran, judged, flagged),
+            &step_facts(self.aloft(), &job, ran, judged, flagged, &moves),
             recorded
                 .as_ref()
                 .map(|(footprint, plans)| kept(footprint, plans)),

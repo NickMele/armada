@@ -31,6 +31,7 @@ pub(crate) fn seen(at: &Timestamp, step: &StepId, event: &DroneEvent) -> Transcr
     TranscriptRow {
         ts: Instant::carried(at.as_str()),
         step: Some(ipc::StepId::from(step)),
+        by: ipc::Voice::Drone,
         saw: match event {
             DroneEvent::Started {
                 session,
@@ -83,6 +84,22 @@ pub(crate) fn seen(at: &Timestamp, step: &StepId, event: &DroneEvent) -> Transcr
     }
 }
 
+/// One row Armada or Fleet authored. **Not a `DroneEvent` either.**
+///
+/// It takes the [`Saw`] already built rather than a value to map, which is the
+/// opposite of [`seen`] and right for the opposite reason: a Drone event is a
+/// vendor's vocabulary being narrowed to Armada's, and this is Armada's own
+/// vocabulary already — there is nothing to translate, and a `match` here would
+/// be a second place a variant had to be added.
+pub(crate) fn authored(at: &Timestamp, step: &StepId, by: ipc::Voice, saw: Saw) -> TranscriptRow {
+    TranscriptRow {
+        ts: Instant::carried(at.as_str()),
+        step: Some(ipc::StepId::from(step)),
+        by,
+        saw,
+    }
+}
+
 /// Rows the queue would not take. **Not a `DroneEvent`** — a sink saying what
 /// it lost is the one thing the vocabulary cannot say, and a gap left unsaid
 /// reads as a Drone that went quiet.
@@ -90,6 +107,9 @@ pub(crate) fn missed(at: &Timestamp, step: &StepId, rows: u64) -> TranscriptRow 
     TranscriptRow {
         ts: Instant::carried(at.as_str()),
         step: Some(ipc::StepId::from(step)),
+        // Fleet's, and it is withheld from a viewer either way: what a sink
+        // lost is the sink's to say and nobody else's.
+        by: ipc::Voice::Fleet,
         saw: Saw::Missed { rows },
     }
 }

@@ -1,0 +1,231 @@
+/* What a stage of the phase strip opens to. The drawing's `.card` flat on the
+   panel, and its `.pop` floating off the strip — one content, two grounds.
+
+   460px is the drawn ceiling and it is a reading measure, not a layout: the
+   standing sentence for the Judge runs to three lines at this width and five
+   at the panel's. --space-12 nine times, plus --space-6 and --space-1. */
+.armada-phase-card {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-2) + var(--space-1) / 2);
+  max-width: calc(var(--space-12) * 9 + var(--space-6) + var(--space-1));
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  min-width: 0;
+}
+
+/* The card as it opens off the strip. --bg-overlay and the strong edge,
+   because a floating layer has to separate from whatever it lands on, and the
+   one shadow the contract permits a floating layer. */
+.armada-phase-card[data-floating] {
+  /* Positioned for its own arrow only. Where the card sits is the strip's,
+     which puts an absolutely-positioned container around it. */
+  position: relative;
+  border-color: var(--border-strong);
+  background: var(--bg-overlay);
+  box-shadow: var(--shadow-overlay);
+}
+
+/* The arrow, pointing back at the stage that opened it. Anchored to the edge
+   the card is aligned to, so a stage in the trailing half of the strip opens a
+   card that stays inside the panel and still points at itself. */
+.armada-phase-card[data-floating]::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--space-1) / 2 * -1 - var(--border-width) * 2);
+  width: var(--space-2);
+  height: var(--space-2);
+  background: var(--bg-overlay);
+  border-left: var(--border-width) solid var(--border-strong);
+  border-top: var(--border-width) solid var(--border-strong);
+  transform: rotate(45deg);
+}
+
+.armada-phase-card[data-floating][data-align="start"]::before {
+  left: var(--space-4);
+}
+
+.armada-phase-card[data-floating][data-align="end"]::before {
+  right: var(--space-4);
+}
+
+.armada-phase-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The header mark takes the stage's hue. The family says what the tier is and
+   the member says where it stands; the colour is the third channel and it is
+   the same one the chip on the strip carries. */
+.armada-phase-card__mark {
+  flex: none;
+  color: var(--fg-subtle);
+}
+
+.armada-phase-card[data-state="cleared"] .armada-phase-card__mark {
+  color: var(--step-advanced);
+}
+
+.armada-phase-card[data-state="current"] .armada-phase-card__mark {
+  color: var(--step-running);
+}
+
+.armada-phase-card[data-state="waiting"] .armada-phase-card__mark {
+  color: var(--step-waiting);
+}
+
+.armada-phase-card[data-state="failed"] .armada-phase-card__mark {
+  color: var(--step-failed);
+}
+
+.armada-phase-card__name {
+  min-width: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+}
+
+/* Where it stands. Pushed to the trailing edge and quiet, because it is a
+   count and the sentence beneath it is the answer. */
+.armada-phase-card__stands {
+  margin-inline-start: auto;
+  flex: none;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+/* What the tier is. A sentence in sans, one step down from the body, because
+   it is read once and then skipped — the rows beneath it are what changes
+   between two Jobs. */
+.armada-phase-card__said {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* The rows sit in a well, so what happened is visibly a different thing from
+   what the tier is. */
+.armada-phase-card__rows {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) + var(--space-1) / 2);
+  margin: 0;
+  padding: calc(var(--space-2) + var(--space-1) / 2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  list-style: none;
+  min-width: 0;
+}
+
+.armada-phase-card__row {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+.armada-phase-card__row-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Nudged onto the text's baseline: a 12px mark beside an 18px line box sits a
+   fraction high on `align-items: baseline`. */
+.armada-phase-card__row-mark {
+  flex: none;
+  align-self: flex-start;
+  margin-block-start: calc(var(--space-1) / 2);
+  color: var(--fg-subtle);
+}
+
+.armada-phase-card__row-mark[data-state="cleared"] {
+  color: var(--verdict-met);
+}
+
+.armada-phase-card__row-mark[data-state="current"] {
+  color: var(--step-running);
+}
+
+.armada-phase-card__row-mark[data-state="waiting"] {
+  color: var(--step-waiting);
+}
+
+.armada-phase-card__row-mark[data-state="failed"] {
+  color: var(--verdict-not-met);
+}
+
+/* A criterion is a sentence somebody wrote, so it is sans and it wraps; a
+   Check is a command, so `data-mono` makes it mono and it clips. Sans names
+   work, mono names machinery. */
+.armada-phase-card__row-label {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+.armada-phase-card__row-label[data-mono="true"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An exit code is measured, so it speaks flatly. The mark beside the row
+   already carries which verdict it is. */
+.armada-phase-card__row-result {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+/* What the row cites. Indented under the criterion it belongs to, because a
+   citation is evidence for the line above it and not a second row. */
+.armada-phase-card__cited {
+  padding-inline-start: calc(var(--space-3) + var(--space-2));
+  font-size: var(--text-2xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+/* What the rows do not say, where there are no rows to say it — the human
+   tier's two acts. The same well, so the card has one shape whichever tier it
+   is drawing. */
+.armada-phase-card__note {
+  padding: calc(var(--space-2) + var(--space-1) / 2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+/* The closing line. The quietest thing on the card, because it is the standing
+   claim rather than anything about this run. */
+.armada-phase-card__detail {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}

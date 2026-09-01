@@ -254,9 +254,9 @@ function labelOf(stepId: string, whole: JobWhole | null): string {
  */
 export function whyNoDiff(diff: Diff, jobId: string): string {
   if (diff.state === "failed" && diff.jobId === jobId) {
-    return "Fleet did not answer for this job's diff, so what it changed is unknown.";
+    return "Fleet did not answer for this job's diff.";
   }
-  return "Reading this job's diff. It is the expensive read, and it is only made here.";
+  return "Reading this job's diff.";
 }
 
 /** What an empty reading says. **Ordinary, and never an error.** */

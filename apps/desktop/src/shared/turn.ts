@@ -7,13 +7,13 @@
 // Hand-written like `protocol.ts`, and a second statement of the Rust shapes
 // for the same reason: the codegen that would emit both does not exist yet.
 
-import type { Missed } from "./protocol";
+import type { ChangedFile, CheckRun, Missed } from "./protocol";
 import type { ProtocolVersion } from "./version";
 
 /** One message on a Job's Observe socket. `crates/ipc/src/turn.rs`. */
 export type TurnMessage =
   | ({ message: "opened" } & Opened)
-  | ({ message: "row"; ts: string; step?: string } & Saw)
+  | ({ message: "row"; ts: string; step?: string; by?: Voice } & Saw)
   | ({ message: "missed" } & Missed)
   | ({ message: "closed" } & Closed);
 
@@ -26,6 +26,20 @@ export type Opened = {
   /** Older rows the bounded backfill left out. Never a silent truncation. */
   skipped: number;
 };
+
+/**
+ * Who a row is. The three actors a step's story has.
+ *
+ * A step is a conversation: Armada opens it with an instruction, the Drone
+ * works, and Fleet runs the Checks and reads what came out. Only the middle one
+ * used to be written down, so the activity log could say what the Drone did and
+ * nothing about what it had been asked or what was made of it.
+ *
+ * **Absent is `drone`.** Every row written before Fleet stamped this field
+ * decoded from a Drone's own output, so an older row read back without it is
+ * read back correctly.
+ */
+export type Voice = "armada" | "drone" | "fleet";
 
 /** Nothing more is coming, and why. A socket that simply stops says nothing. */
 export type Closed = {
@@ -89,5 +103,26 @@ export type Saw =
    * is compared and accumulated as a float is a budget that drifts.
    */
   | { event: "ended"; turns: number; cost_micros: number; refusals: number }
+  /**
+   * A turn Armada put into the Drone's session, whole — chapter one of a
+   * step's story. `occasion` is spelled as the constructor that built it:
+   * `opening`, `outcome`, `redirect`, `answer`, `drift`, `report`, `poke`.
+   *
+   * The text is not bounded. It is Fleet's own rendering of a template it
+   * holds, so nothing here is a size a Drone chose.
+   */
+  | { event: "instructed"; occasion: string; text: string }
+  /**
+   * One declared Check, as Fleet ran it. **The Drone never runs these** — a
+   * Drone reporting its own tests is a claim rather than a result — so a Check
+   * appears nowhere in a Drone's own output.
+   */
+  | { event: "checked"; run: CheckRun }
+  /**
+   * What the step's work came to, read at the step boundary. The only per-step
+   * reading of what a Drone wrote there is: `job.files_changed` has no
+   * boundary attached and a footprint is the whole Job's.
+   */
+  | { event: "produced"; files: ChangedFile[] }
   | { event: "unrecognised"; kind: string }
   | { event: "unreadable"; line: string; why: string };

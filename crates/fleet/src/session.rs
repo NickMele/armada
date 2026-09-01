@@ -253,6 +253,47 @@ impl Turn {
     }
 }
 
+/// Which of Armada's turns a transcript row is.
+///
+/// **One variant per [`Turn`] constructor above, and it lives here for that
+/// reason** — the set is decided by what Fleet can say to a Drone, and this is
+/// the file that decides it. It crosses the wire as a string, for
+/// `ipc::JudgeInFlight::look`'s reason: no registry declares the set, so a
+/// closed set restated in `ipc` would be a second authority for a list that has
+/// exactly one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Occasion {
+    /// The brief a step opened with. **[`Turn::first`], and it is the one a
+    /// person most often wants** — what the Drone was asked to do.
+    Opening,
+    /// What the gate decided, injected into a session already running.
+    Outcome,
+    /// A person's own words, carried in verbatim.
+    Redirect,
+    /// A person's answer to a question the Drone asked.
+    Answer,
+    /// What the live scope check saw.
+    Drift,
+    /// Fleet's stop-and-report directive.
+    Report,
+    /// Fleet's liveness nudge, after a silence.
+    Poke,
+}
+
+impl Occasion {
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            Occasion::Opening => "opening",
+            Occasion::Outcome => "outcome",
+            Occasion::Redirect => "redirect",
+            Occasion::Answer => "answer",
+            Occasion::Drift => "drift",
+            Occasion::Report => "report",
+            Occasion::Poke => "poke",
+        }
+    }
+}
+
 /// A Drone that is running, held by the one component allowed to speak to it.
 ///
 /// **No spawn, no respawn, no restart.** The gate must not be able to produce a
