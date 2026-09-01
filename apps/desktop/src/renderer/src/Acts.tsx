@@ -10,12 +10,13 @@
 // hold one act and what it asks a person for before it sends. What stays here
 // is which of them a state offers. The words on every button are `copy.ts`'s.
 
-import { Button, Tooltip } from "@armada/components";
+import { Button, SplitButton, Tooltip } from "@armada/components";
+import type { SplitButtonItem } from "@armada/components";
 
 import { JOB_LIFECYCLE } from "../../shared/generated/vocabulary";
 import type { Outcome } from "../../shared/bridge";
 import type { FileReport, JobDetail as JobWhole, JobSummary } from "../../shared/protocol";
-import { ACT_LABEL } from "./copy";
+import { ACT_LABEL, MENU_LABEL, REPORT_LABEL } from "./copy";
 import { OverruleControl } from "./Overrule";
 import { recourseOf } from "./recovery";
 import { RedirectControl } from "./Redirect";
@@ -92,17 +93,48 @@ export type ConfirmableAct = Exclude<
  * is not offered beside `approve`, and never styled like it: approving says the
  * work was right, and this says a machine was wrong.
  *
- * **The three that end something are plain quiet buttons, not a red split.**
- * The drawing gives a running Job one control, `Kill job`, in the same neutral
- * treatment as every other button on the screen. A destructive red with a
- * caret made the header's only control the loudest thing on it, and hid two
- * acts behind a menu on a screen that is read rather than driven. Each is its
- * own button now, in menu order — mildest first — and each still confirms,
- * which is where what an act costs is stated.
+ * **On a Job that stopped, the header carries one split button.** Its lead is
+ * the act the state calls for, its divided segment is the caret and nothing
+ * else, and every other Job-level act sits behind it. Three controls in a row —
+ * `Report this job`, `Redispatch as a new job`, `Kill job` on a finished Job
+ * with disputed evidence — collapsed the title's column and wrapped a
+ * seven-word title to three lines, because the header's width was a function of
+ * how many acts the state offered. It is not a function of that any more.
+ * `docs/journeys/4-monitor-active-work.md`, Acts.
  *
- * Redirect, restart, the override and the re-run sit outside that group: none
- * of them ends anything, so none belongs beside a control whose whole point is
- * announcing what does.
+ * **This is not the red split the previous pass removed.** That one made the
+ * header's only control the loudest thing on a screen that is read rather than
+ * driven, and it led with an act that ends the Job. This one is never
+ * destructive on the face and never red: the fill is the state and the lead is
+ * the way forward.
+ *
+ * **The fill is the state, not the act.** Accent where the Job is waiting on a
+ * person, which the registry answers — `whoIsActing` is `Person` on `escalated`
+ * and `None` on every terminal status. Secondary where it is not. Same height
+ * in both cases: emphasis comes from fill, never from size, and nothing here
+ * types a list of statuses the registry already holds.
+ *
+ * **The lead is never destructive.** Both kills sit in the menu, because the
+ * lead segment is what a stray `Enter` hits. Each still confirms, which is
+ * where what an act costs is stated.
+ *
+ * **Two of the drawing's five leads are not here yet.** A running Job and a
+ * plain escalated one lead with `Pilot`, which `actions.toml` carries as
+ * `unbuilt = "#250"`; a Job awaiting review leads with `Review`, which on this
+ * screen is the decision block under the story rather than a header act. Until
+ * those land there is no non-destructive lead on those renders, and a split
+ * button with no legal lead is not a split button — so they keep the buttons
+ * they had. The drawing is ahead of the code here, and says which issue closes
+ * the gap rather than inventing a control to fill it.
+ *
+ * **`Copy debug info` and `Observe` are in the drawing's menu and not in
+ * this one.** Copy debug info is an error surface's act and composes no
+ * Job-level payload yet; observing is not a control at all — `App.tsx` opens
+ * the socket because a Job is open. Neither is invented here to match a
+ * picture.
+ *
+ * Redirect, restart, the override and the re-run sit outside all of this: none
+ * of them acts on the Job, so none reaches this header at all.
  *
  * **Which of the four is offered is `recourseOf`'s reading and not this
  * file's.** The stopped screen states in words what resumes this Job, and a
@@ -120,6 +152,8 @@ export function Acts({
   onAct,
   onApprove,
   onReport,
+  reporting,
+  onReporting,
   onCopied,
 }: {
   job: JobSummary;
@@ -143,6 +177,13 @@ export function Acts({
    * dialog shows next.
    */
   onReport: (jobId: string, filing: FileReport) => Promise<Outcome>;
+  /**
+   * Whether the report dialog is up. **Held by the screen and not here**,
+   * because `b` opens it and the keyboard is bound one level up — see
+   * `detail-keys.ts`.
+   */
+  reporting: boolean;
+  onReporting: (up: boolean) => void;
   onCopied: (value: string) => void;
 }) {
   const life = JOB_LIFECYCLE[job.status];
@@ -163,36 +204,95 @@ export function Acts({
     ...(job.assigned_drone === undefined ? [] : (["kill_drone"] as ConfirmableAct[])),
     ...(over ? [] : (["kill_job"] as ConfirmableAct[])),
   ];
+  // The lead, on the render that has one. Redispatch where Fleet offers it,
+  // and the report where it does not — the two are the only non-destructive
+  // acts this header holds until `Pilot` lands, and the lead is never
+  // destructive.
+  const lead: Lead | undefined =
+    render !== "stopped"
+      ? undefined
+      : acts.includes("redispatch")
+        ? { act: "redispatch", label: ACT_LABEL.redispatch }
+        : { act: "report", label: REPORT_LABEL };
+  const behind: SplitButtonItem[] =
+    lead === undefined
+      ? []
+      : [
+          // Never a repeat of the lead: a menu that offers the label again is
+          // one entry a person reads twice and can act on once.
+          ...(lead.act === "report"
+            ? []
+            : [{ label: REPORT_LABEL, shortcut: REPORT_KEY, onSelect: () => onReporting(true) }]),
+          ...acts
+            .filter((act) => act !== lead.act)
+            .map((act) => ({
+              label: MENU_LABEL[act],
+              // Both kills end something, and the menu draws that rather than
+              // the control announcing it in red on the face.
+              danger: true,
+              onSelect: () => onAct(act, job.id),
+            })),
+        ];
   return (
     <>
-      {/* Ghost, because it is not an act on the
-          job: this records what a person concluded and leaves the job exactly
-          where it was. Offered on every stopped job rather than only the ones
-          something can still be done to — a job nothing can be done to is the
-          one most likely to have failed wrongly and been left. */}
+      {/* The dialog with no button. Offered on every stopped job rather than
+          only the ones something can still be done to — a job nothing can be
+          done to is the one most likely to have failed wrongly and been left. */}
       {render === "stopped" ? (
         <ReportControl
           jobId={job.id}
           whole={whole}
-          disabled={stale}
+          open={reporting && !stale}
+          onClose={() => onReporting(false)}
           onReport={onReport}
           onCopied={onCopied}
         />
       ) : null}
-      {/* One button per act, in menu order. Neutral, because the confirmation
-          is where a terminal act states what it costs — and a red control in a
-          header a person is reading rather than driving reads as the screen's
-          own alarm rather than as something they may press. */}
-      {acts.map((act) => (
+      {/* One control, whatever the state offers. The accent says the Job is
+          waiting on a person and nothing else does — a terminal Job's control
+          is quiet, because there is nobody it is waiting for.
+
+          **A split button with nothing in its menu is a button**, which is the
+          primitive's own rule and not a shortcut taken here: a killed Job with
+          no Drone and no replacement offers the report and nothing else, and a
+          caret over an empty menu is a control that does not answer. */}
+      {lead === undefined ? null : behind.length === 0 ? (
         <Button
-          key={act}
-          variant="secondary"
+          variant={life?.whoIsActing === "Person" ? "primary" : "secondary"}
           disabled={acting || stale}
-          onClick={() => onAct(act, job.id)}
+          onClick={() => (lead.act === "report" ? onReporting(true) : onAct(lead.act, job.id))}
         >
-          {ACT_LABEL[act]}
+          {lead.label}
         </Button>
-      ))}
+      ) : (
+        <SplitButton
+          variant={life?.whoIsActing === "Person" ? "primary" : "secondary"}
+          items={behind}
+          disabled={acting || stale}
+          menuLabel="Everything else this job can do"
+          onAction={() => (lead.act === "report" ? onReporting(true) : onAct(lead.act, job.id))}
+        >
+          {lead.label}
+        </SplitButton>
+      )}
+      {/* The renders the split button has no legal lead on. Both of the
+          drawing's leads there are unbuilt — `Pilot` is #250, and `Review` is
+          the decision block under the story rather than a header act — and a
+          lead is never destructive, so until one lands each act keeps its own
+          quiet button. Neutral, because the confirmation is where a terminal
+          act states what it costs. */}
+      {lead !== undefined
+        ? null
+        : acts.map((act) => (
+            <Button
+              key={act}
+              variant="secondary"
+              disabled={acting || stale}
+              onClick={() => onAct(act, job.id)}
+            >
+              {ACT_LABEL[act]}
+            </Button>
+          ))}
       {/* The one primary this header ever carries, and the only forward act in
           the set. Last, where the shell head puts its own primary — the accent
           fill and the distance are what keep it from reading as a peer of the
@@ -344,3 +444,22 @@ export function StepActs({
  */
 const REDIRECT_KEY = "d";
 const RESTART_KEY = "s";
+
+/**
+ * The binding the report entry displays, from `actions.toml` — `report_job`,
+ * scope `detail`. **Shown because this surface answers it**: `detail-keys.ts`
+ * binds `b`, and a menu chip promising a key nothing answers is worse than a
+ * menu with no chips at all.
+ *
+ * **The kills carry none here for exactly that reason.** `x` is `kill` in the
+ * registry and it is bound on the Board, not on job detail — so the entries
+ * that end this Job state what they cost and no key beside it.
+ */
+const REPORT_KEY = "b";
+
+/**
+ * The act on the face of the split button. Two, and never a third: the lead is
+ * never destructive, and these are the only acts this header holds that are
+ * not.
+ */
+type Lead = { act: "redispatch"; label: string } | { act: "report"; label: string };

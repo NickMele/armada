@@ -99,7 +99,21 @@ Two tiers, and drawing them as one row of chips risks reading as one kind of thi
 
 **An act that changes a step sits in the panel header. An act that ends or replaces the Job sits in the Job header.** Redirect, restart step, override the verdict and re-run the gate act on a step; kill the Job, redispatch and approve act on the Job.
 
-**The step acts take the accent.** Why: the object of attention on this screen is the open step.
+**The Job header carries one split button.** Its lead is the act the state calls for, its divided segment is the caret and nothing else, and every other Job-level act sits behind it — so the control's width stops depending on how many acts the state offers, and the title keeps the row. Three side-by-side buttons collapsed the title's column and wrapped a seven-word title to three lines.
+
+**The fill is the state, not the act.** Accent where the Job is waiting on a person — escalated, awaiting review, evidence disputed. Secondary where it is not, which is a running Job and a finished one. Same height in both cases.
+
+**The lead is never destructive.** Kill sits in the menu on every state that offers it, because the lead segment is what a stray `Enter` hits. It keeps `x`.
+
+| State | Lead |
+| --- | --- |
+| Running | Pilot |
+| Escalated | Pilot, accent |
+| Awaiting review | Review, accent |
+| Evidence disputed | Redispatch as a new job, accent |
+| Killed, failed | Redispatch as a new job |
+
+**Within the panel header, the step acts take the accent.** Why: the object of attention on this screen is the open step. The Job header's fill is decided by state, above, and the two headers do not compete.
 
 **A step's help text is a tooltip carrying its binding**, shown on hover and on focus. What a destructive act costs is stated again in its confirmation.
 

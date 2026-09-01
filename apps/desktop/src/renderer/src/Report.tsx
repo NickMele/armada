@@ -1,10 +1,15 @@
 // Saying a job failed in error, and what comes back when you do.
 //
-// **The one control on this screen that changes nothing about the job.** The
-// acts beside it end a job, replace one, or move one past a verdict; this one
-// records what a person concluded and leaves the job exactly where it was. That
-// is why it is ghost rather than secondary, and why it is offered on every
-// stopped job rather than only on the ones something can still be done to.
+// **The one act on this screen that changes nothing about the job.** The acts
+// beside it end a job, replace one, or move one past a verdict; this one records
+// what a person concluded and leaves the job exactly where it was. That is why
+// it sits in the Job header's menu rather than on its face, and why it is
+// offered on every stopped job rather than only on the ones something can still
+// be done to — a job nothing can be done to is the one most likely to have
+// failed wrongly and been left.
+//
+// **The trigger is not here.** `Acts.tsx` renders the menu entry and holds
+// whether this dialog is up; `b` is the binding, from `actions.toml`.
 //
 // # The sentence is the point, and the bundle is not
 //
@@ -32,7 +37,7 @@
 // says what it did.
 
 import { useState } from "react";
-import { Button, Dialog, Radio, RadioGroup, Select, Textarea } from "@armada/components";
+import { Dialog, Radio, RadioGroup, Select, Textarea } from "@armada/components";
 
 import type { Outcome } from "../../shared/bridge";
 import type { FileReport, JobDetail as JobWhole, Report } from "../../shared/protocol";
@@ -144,7 +149,14 @@ export type ReportControlProps = {
   jobId: string;
   /** `GET /jobs/:job_id`, for the verdicts a criterion scope picks between. */
   whole: JobWhole | null;
-  disabled: boolean;
+  /**
+   * Whether the dialog is up. **Held by the caller**, because the control that
+   * opens it is the Job header's split-button menu and a menu item is not this
+   * file's to render — see `Acts.tsx`.
+   */
+  open: boolean;
+  /** Closed, however it closed: cancelled, filed and dismissed, or refused. */
+  onClose: () => void;
   /**
    * File it. **Answers with the outcome**, because the filed record is what the
    * dialog shows next — putting it in app state would leave a report on screen
@@ -156,22 +168,27 @@ export type ReportControlProps = {
 };
 
 /**
- * The button, the dialog it opens, and what the dialog becomes once a report is
- * filed.
+ * The dialog a report is filed in, and what it becomes once one is.
  *
  * **One dialog and not two.** Filing and reading back what was filed are one
  * continuous act for the person doing it: they press, and the thing they need
  * next is the record they are about to carry somewhere else. A second dialog
  * would put a modal in front of a modal to say what the first one produced.
+ *
+ * **It no longer carries its own button.** `Report this job` is a menu entry on
+ * the Job header's split button now, so the caller owns whether the dialog is
+ * up — and this file keeps everything the dialog asks for and everything it
+ * shows back. What a person filled in is still dropped on close, which is why
+ * every field is reset in `close` rather than remembered for the next press.
  */
 export function ReportControl({
   jobId,
   whole,
-  disabled,
+  open,
+  onClose,
   onReport,
   onCopied,
 }: ReportControlProps) {
-  const [open, setOpen] = useState(false);
   const [claim, setClaim] = useState(CLAIMS[0]!.value);
   const [verdict, setVerdict] = useState(WHOLE_JOB);
   const [said, setSaid] = useState("");
@@ -185,7 +202,7 @@ export function ReportControl({
   const scoped = disputesAVerdict(claim) && verdicts.length > 0;
 
   function close(): void {
-    setOpen(false);
+    onClose();
     setClaim(CLAIMS[0]!.value);
     setVerdict(WHOLE_JOB);
     setSaid("");
@@ -222,7 +239,7 @@ export function ReportControl({
         // report. The filing happened; saying otherwise sends somebody to do it
         // twice.
         setFiled(null);
-        setOpen(false);
+        close();
         return;
       }
       setRefused(
@@ -245,11 +262,6 @@ export function ReportControl({
 
   return (
     <>
-      {/* Ghost, beside "Watch the turns": neither is an act on the job. A
-          filled control here would read as a peer of the acts that end one. */}
-      <Button variant="ghost" disabled={disabled} onClick={() => setOpen(true)}>
-        Report this job
-      </Button>
       <Dialog
         open={open}
         tone="neutral"

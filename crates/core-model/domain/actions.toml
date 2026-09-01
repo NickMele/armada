@@ -243,6 +243,18 @@ destructive = false
 confirms = false
 notes = "The contract decides the blank: nothing in the error treatment carries a glyph, and `triangle-alert` and `octagon-alert` are both spoken for. `copy` was not taken either — it means copy an id or a path, and a debug payload is an artifact rather than a value. Widening it is a decision for the icon registry."
 
+[actions.report_job]
+kind = "Action"
+tier = "Contextual"
+verb = "Report this job"
+icon = ""
+icon_absent = "undecided"
+shortcut = "b"
+scope = "detail"
+destructive = false
+confirms = true
+notes = "`b` for bug, and never `r` or `t`, which review and attest hold. The act moves nothing — it records what a person concluded about a Job that already stopped, and leaves the Job exactly where it was — so it is not destructive; it confirms because `b` opens the filing dialog rather than filing anything. Bridge has had it since the reports surface landed, and it reached this registry late: `Report.tsx` renders it as a ghost control in the Job header on the stopped render, which is why the scope is detail and not the list. The glyph is undecided: `flag` reads as the stopped step's badge and `triangle-alert` and `octagon-alert` belong to the error treatment, so a silhouette for filing is a decision for packages/icons/icons.toml."
+
 [actions.kill]
 kind = "Action"
 tier = "Contextual"
@@ -253,6 +265,19 @@ scope = "list and detail"
 destructive = true
 confirms = true
 notes = "`x` and never `k`, because `k` sits against `j` and a mistyped navigation keystroke must not end a running job. The glyph is the registry's deliberate-stop mark, which is what kill is against unplug's connection lost."
+
+[actions.kill_and_redispatch]
+kind = "Action"
+tier = "Contextual"
+verb = "Kill & redispatch"
+icon = ""
+icon_absent = "undecided"
+shortcut = "X"
+scope = "detail"
+destructive = true
+confirms = true
+unbuilt = "#291"
+notes = "Shifted `x`, because kill is `x` and this is the same act carried further — a spare letter would be one chosen for convenience, which is what the destructive-key rule refuses. **It is not `kill` followed by `redispatch`**: one confirmation, one outcome, and the Drone's learnings are captured in between. The journey record names it — 3.5 retired `Rephrase and redispatch` in favour of it, and Helm carries it as rung 2 — and nothing answers it yet. The glyph is undecided because `power` is kill's and `rotate-cw` is redispatch's, and a compound is a decision for packages/icons/icons.toml."
 
 [actions.new_job]
 kind = "Action"
@@ -315,13 +340,13 @@ notes = "Hands a piloted job back to the machinery that checks it. `file-check` 
 [actions.redispatch]
 kind = "Action"
 tier = "Contextual"
-verb = "Redispatch"
+verb = "Redispatch as a new job"
 icon = "rotate-cw"
 shortcut = "e"
 scope = "list and detail"
 destructive = false
 confirms = false
-notes = "The glyph is the registry's own assignment for Redispatch — a single arrow, distinct from the two chasing arrows that mean churning."
+notes = "The glyph is the registry's own assignment for Redispatch — a single arrow, distinct from the two chasing arrows that mean churning. The long verb is deliberate: a redispatch makes a new Job with a new id, and the short form read as a retry of the Job in front of you. `Kill & Redispatch` is a different act and is not this row."
 
 [actions.disclose]
 kind = "Action"

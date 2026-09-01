@@ -165,6 +165,13 @@ export function JobDetail({
   // would name a step that Job may not have.
   useEffect(() => setSelected(null), [job.id]);
 
+  // Whether the report dialog is up. **Here rather than in `Acts`**, because
+  // two controls open it — the Job header's menu entry and `b` — and the
+  // keyboard is bound at this level. Dropped with the Job for the reason a
+  // selection is: a half-written report is about the Job it was written on.
+  const [reporting, setReporting] = useState(false);
+  useEffect(() => setReporting(false), [job.id]);
+
   // The diff, for every Job that is open rather than only for one at review.
   // **A produced file opens to what it actually wrote**, and it did that on one
   // status because the review block was the only thing asking for the read. It
@@ -207,7 +214,15 @@ export function JobDetail({
   // means nothing there — and the press is swallowed only where something
   // answered it. The story is read back through a function because it is built
   // from what this holds; see `DetailShape.chapters`.
-  const keys = useDetailKeys({ run, chapters: () => chapters, stages: phases?.stages });
+  const keys = useDetailKeys({
+    run,
+    chapters: () => chapters,
+    stages: phases?.stages,
+    // `b`, on the one render that offers the act. Elsewhere the shape carries
+    // nothing and the press is left alone rather than answered with a dialog
+    // the header is not offering.
+    ...(render === "stopped" && !stale ? { onReport: () => setReporting(true) } : {}),
+  });
 
   // The rest of any call argument the socket cut, for as long as this Job is
   // open. **Held for the Job rather than for a log**, because the story draws
@@ -260,6 +275,8 @@ export function JobDetail({
         onAct={onAct}
         onApprove={onApprove}
         onReport={onReport}
+        reporting={reporting}
+        onReporting={setReporting}
         onCopied={onCopied}
       />
     ),
