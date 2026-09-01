@@ -10,7 +10,8 @@
 //! **The mapping from `adapter_traits::DroneEvent` is not here.** `ipc` depends
 //! on `core-model` and nothing else by design, so the conversion stays in
 //! `fleet`, beside the loop that holds the event — which is also where a
-//! variant added to `DroneEvent` fails to compile.
+//! variant added to `DroneEvent` fails to compile. Three kinds map from none
+//! at all; [`Voice`] tells them apart.
 //!
 //! # A withheld row has no constructor
 //!
@@ -21,24 +22,7 @@
 //!
 //! A third was withheld until somebody checked the reason. [`Saw::Ended`]'s
 //! cost and turn count were held back because the Job's rail was said to state
-//! them, no rail ever did, and nothing else on the wire carries either — so
-//! what a Drone spent was reachable from nowhere.
-//!
-//! # Three voices, because the record was always three and carried one
-//!
-//! A step is a conversation: Armada opens it with an instruction, the Drone
-//! works, and Fleet runs the Checks and reads what came out. Only the middle
-//! one was written down, so a surface drawing the step's story could say what
-//! the Drone did and nothing about what it had been asked or what was made of
-//! it. [`Voice`] is which of the three a row is, and the rows Fleet authors
-//! itself are [`Saw::Instructed`], [`Saw::Checked`] and [`Saw::Produced`].
-//!
-//! **The transcript is where they go, and not a new channel.** It is already
-//! per-step and per-Drone, already durable, and already read back in order by
-//! the backfill — so an instruction and the turns it produced arrive
-//! interleaved, which is the whole of what a reader is trying to see. A second
-//! record would have to be merged against this one by instant, and two clocks
-//! is how the merge goes wrong.
+//! them; no rail ever did, so a Drone's spend was reachable from nowhere.
 
 use core::fmt;
 
@@ -83,12 +67,24 @@ pub struct TranscriptRow {
 
 /// Who a row is. The three actors a step's story has.
 ///
+/// A step is a conversation: Armada opens it with an instruction, the Drone
+/// works, and Fleet runs the Checks and reads what came out. **Only the middle
+/// one was written down**, so a surface drawing the story could say what the
+/// Drone did and nothing about what it had been asked or what was made of it.
+/// [`Saw::Instructed`], [`Saw::Checked`] and [`Saw::Produced`] are the rows
+/// Fleet authors, and this is what tells them from the Drone's.
+///
+/// **They go in the transcript rather than on a channel of their own.** It is
+/// already per-step, already durable, already read back in order — so an
+/// instruction and the turns it produced arrive interleaved, which is the whole
+/// of what a reader is looking for. A second record would have to be merged
+/// against this one by instant, and two clocks is how that goes wrong.
+///
 /// **Not [`Actor`](crate::Actor).** That one names who caused a *transition* —
-/// a person, Helm or Fleet — and is the answer to "who is accountable". This
-/// names who is speaking in a transcript, where the interesting distinction is
-/// between what Armada told the Drone and what Fleet did about the result. A
-/// registry declares neither set as this one, so it is a plain enum for
-/// [`Silence`]'s reason.
+/// a person, Helm or Fleet — and answers "who is accountable". This names who
+/// is speaking, where the distinction that matters is between what Armada told
+/// the Drone and what Fleet did about the result. No registry declares either
+/// set as this one, so it is a plain enum for [`Silence`]'s reason.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Voice {
