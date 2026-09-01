@@ -39,8 +39,15 @@ import type { Observed, Watched } from "../../shared/bridge";
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "../../shared/protocol";
 import { JobDetail } from "./JobDetail";
 
-/** One capture: the mark it pairs by, what to call it, and what to draw. */
-export type Screen = { mark: string; name: string; element: ReactElement };
+/**
+ * One capture: the mark it pairs by, what to call it, and what to draw.
+ *
+ * `width` is the window the screen is drawn in, defaulting to the 1280 Bridge
+ * opens at. **A layout is designed for resize rather than for the size it was
+ * built at**, which is a claim nothing checked until a screen could state a
+ * second width and be looked at in both.
+ */
+export type Screen = { mark: string; name: string; element: ReactElement; width?: number };
 
 /**
  * Fixed, because a shot has to be the same shot twice. Every elapsed on the
@@ -217,6 +224,15 @@ export const screens: Screen[] = [
     // Nothing Fleet will do, so the report is the only act left and a split
     // button with an empty menu is a button.
     element: screen(ended("completed_failed"), whole({ job: ended("completed_failed"), stuck: stuck([]) })),
+  },
+  {
+    mark: "inside-a-job-evidence-disputed-narrow",
+    name: "Evidence disputed, narrow",
+    // The same state at a width the window can actually be dragged to. Nothing
+    // about the arrangement is allowed to be a function of 1280, and this is
+    // the shot that says whether it is.
+    width: 900,
+    element: screen(JOB, whole({ stuck: stuck(["redispatch_job", "override_verdict"]) })),
   },
   {
     mark: "inside-a-job-running",

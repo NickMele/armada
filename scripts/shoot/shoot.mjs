@@ -83,7 +83,56 @@ const SIDES = {
   },
 };
 
-const AGAINST = { design: { left: "design", right: "app" } };
+/* Which two sides a sheet compares, keyed `<left>:<right>`.
+ *
+ * **Two sides, named, and never three.** A state both the gallery and Bridge
+ * render has three pictures, and a sheet that silently dropped one of them
+ * would rebuild the blind spot this side was added to end — the pair that
+ * agreed with itself and proved nothing. So the pair is chosen rather than
+ * inferred: a run says which two it is comparing, and the third picture is a
+ * second run away.
+ *
+ * **`app:bridge` needs no drawing.** It asks whether the gallery's arrangement
+ * of a screen and the app's assembly of it are the same screen — which is the
+ * question that had no asker when a story's fixture said `Needs you` and the
+ * pair beside it agreed, because both halves came from the gallery. */
+const AGAINST = {
+  "design:app": {
+    left: "design",
+    right: "app",
+    absent: {
+      design: "Not drawn. The build has a state the drawing does not.",
+      app: "Not built. The drawing has a state the build does not.",
+    },
+    only: { left: "drawn, not built", right: "built, not drawn" },
+    blocking: "Drawn and not built",
+  },
+  "design:bridge": {
+    left: "design",
+    right: "bridge",
+    absent: {
+      design: "Not drawn. Bridge assembles a state the drawing does not.",
+      bridge: "Not assembled. The drawing has a state Bridge does not.",
+    },
+    only: { left: "drawn, not assembled", right: "assembled, not drawn" },
+    blocking: "Drawn and not assembled",
+  },
+  "app:bridge": {
+    left: "app",
+    right: "bridge",
+    absent: {
+      app: "No story. Bridge assembles a screen the gallery does not arrange.",
+      bridge: "No screen. The gallery arranges one the app does not assemble here.",
+    },
+    only: { left: "in the gallery, not in the app", right: "in the app, not in the gallery" },
+    // Neither side of this pair is the authority, so nothing here blocks the
+    // way a drawing does. What it finds is drift, and drift is read rather
+    // than refused.
+    blocking: null,
+  },
+};
+
+const DEFAULT_PAIR = "design:app";
 
 const USAGE = `shoot — screenshot a screen and its drawing, and pair them
 
@@ -98,8 +147,10 @@ const USAGE = `shoot — screenshot a screen and its drawing, and pair them
   pnpm shoot --design <file> --suggest
                                     propose a mark for each unmarked frame
                                     instead of refusing
-  pnpm shoot --sheet                pair what has been captured into
-                                    .shots/sheet.html and .shots/pairs/
+  pnpm shoot --sheet [pair]         pair what has been captured into
+                                    .shots/sheet.html and .shots/pairs/.
+                                    pair is design:app (the default),
+                                    design:bridge or app:bridge
 
 Everything it writes is under .shots/, which is ignored.
 `;
@@ -419,12 +470,17 @@ function propose(unmarked, page) {
 
 // --------------------------------------------------------------------- the sheet
 
-async function sheet(against = "design") {
-  const { left, right } = AGAINST[against];
+async function sheet(against = DEFAULT_PAIR) {
+  const pair = AGAINST[against];
+  const { left, right } = pair;
   const sides = { [left]: sideShots(SIDES[left].dir), [right]: sideShots(SIDES[right].dir) };
 
   if (!Object.keys(sides[left]).length && !Object.keys(sides[right]).length)
-    die("Nothing has been captured. Run `pnpm shoot` and `pnpm shoot --design <file>` first.");
+    die(
+      `Neither side of ${against} has been captured.`,
+      "Capture them first: `pnpm shoot` for app, `pnpm shoot --bridge` for bridge, " +
+        "`pnpm shoot --design <file>` for design.",
+    );
 
   const states = [...new Set([...Object.keys(sides[left]), ...Object.keys(sides[right])])].sort();
   const rows = states.map((state) => {
@@ -444,9 +500,9 @@ async function sheet(against = "design") {
     };
   });
 
-  writeSheetHtml(rows, left, right);
+  writeSheetHtml(rows, left, right, pair.absent);
   const paired = rows.filter((r) => r.kind === "paired");
-  if (paired.length) await writePairs(paired);
+  if (paired.length) await writePairs(paired, left, right);
 
   const file = manifest(join(shots, "sheet.json"), {
     tool: "shoot",
@@ -474,7 +530,7 @@ async function sheet(against = "design") {
     })),
   });
 
-  report(rows, left, right, file);
+  report(rows, left, right, file, pair);
 }
 
 /* CSS pixels, matching what the side manifests record. A PNG header would
@@ -509,12 +565,12 @@ h1 { font-size: var(--text-xl); line-height: var(--leading-xl); font-weight: var
 .absent { border: var(--border-width) dashed var(--border-default); border-radius: var(--radius-md); padding: var(--space-6); color: var(--fg-muted); text-align: center; }
 `;
 
-function writeSheetHtml(rows, left, right) {
+function writeSheetHtml(rows, left, right, absent) {
   const cell = (side, shot) =>
     `<figure class="col"><figcaption>${esc(SIDES[side].label)}</figcaption>${
       shot
         ? `<img src="${esc(relative(shots, shot.file))}" alt="${esc(SIDES[side].label)}" width="${shot.width}" height="${shot.height}">`
-        : `<div class="absent">${esc(SIDES[side].absent)}</div>`
+        : `<div class="absent">${esc(absent[side])}</div>`
     }</figure>`;
 
   const body = rows
@@ -555,7 +611,7 @@ ${body}
  * halves in it, so the comparison can be held in a context window and
  * described. Composed by the same browser that took the shots — two <img> in a
  * grid, captured — rather than by an image library nothing else needs. */
-async function writePairs(paired) {
+async function writePairs(paired, left, right) {
   const into = join(shots, "pairs");
   rmSync(into, { recursive: true, force: true });
   mkdirSync(into, { recursive: true });
@@ -579,8 +635,8 @@ ${paired
     (r) => `<div class="sheet" data-shot="${esc(r.state)}">
   <div class="title">${esc(r.state)}</div>
   <div class="cols">
-    <figure><figcaption>Drawing</figcaption><img src="${esc(r.left.file)}"></figure>
-    <figure><figcaption>App</figcaption><img src="${esc(r.right.file)}"></figure>
+    <figure><figcaption>${esc(SIDES[left].label)}</figcaption><img src="${esc(r.left.file)}"></figure>
+    <figure><figcaption>${esc(SIDES[right].label)}</figcaption><img src="${esc(r.right.file)}"></figure>
   </div>
 </div>`,
   )
@@ -592,7 +648,7 @@ ${paired
   await browse({ page, capture: true, into, width: 1640, height: 1200 });
 }
 
-function report(rows, left, right, manifestFile) {
+function report(rows, left, right, manifestFile, pair) {
   console.log("\n.shots/sheet.html — one page, both halves, for a person");
   console.log(".shots/pairs/ — one PNG per paired state, for an agent");
   console.log(`${relative(root, manifestFile)} — the same comparison, for a caller\n`);
@@ -603,9 +659,9 @@ function report(rows, left, right, manifestFile) {
     const note = r.flagged
       ? `heights differ by ${Math.round(r.fraction * 100)}%`
       : r.kind === `${left}-only`
-        ? "drawn, not built"
+        ? pair.only.left
         : r.kind === `${right}-only`
-          ? "built, not drawn"
+          ? pair.only.right
           : "";
     console.log(
       `  ${r.kind === "paired" && !r.flagged ? " " : "!"} ${r.state.padEnd(pad)}  ` +
@@ -633,10 +689,13 @@ function report(rows, left, right, manifestFile) {
   }
   console.log(`\nAll of them at once   ${resolve(shots, "sheet.html")}`);
 
-  const blocking = rows.filter((r) => r.kind === `${left}-only`);
+  // Only a pair with an authority on the left has a blocking side. `app:bridge`
+  // has neither half in charge: what it finds is drift between two renderings
+  // of one screen, which is read rather than refused.
+  const blocking = pair.blocking === null ? [] : rows.filter((r) => r.kind === `${left}-only`);
   if (blocking.length)
     console.log(
-      `\nDrawn and not built:${blocking.map((r) => `\n  ${r.state}`).join("")}\n` +
+      `\n${pair.blocking}:${blocking.map((r) => `\n  ${r.state}`).join("")}\n` +
         "That is what this exists to find.",
     );
 }
@@ -656,7 +715,16 @@ if (designAt !== -1 && (!design || design.startsWith("--"))) die("--design needs
 mkdirSync(shots, { recursive: true });
 
 try {
-  if (argv.includes("--sheet")) await sheet();
+  if (argv.includes("--sheet")) {
+    const named = argv[argv.indexOf("--sheet") + 1];
+    const pair = named === undefined || named.startsWith("--") ? DEFAULT_PAIR : named;
+    if (AGAINST[pair] === undefined)
+      die(
+        `--sheet ${pair} is not a pair this tool holds.`,
+        `Pairs: ${Object.keys(AGAINST).join(", ")}.`,
+      );
+    await sheet(pair);
+  }
   else if (design) await shootDesign(design, { suggest: argv.includes("--suggest") });
   else if (argv.includes("--bridge")) await shootBridge();
   else await shootApp();
