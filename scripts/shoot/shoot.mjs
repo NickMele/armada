@@ -65,12 +65,12 @@ const SIDES = {
   design: {
     dir: join(shots, "design"),
     label: "Drawing",
-    absent: "Not drawn. The build has a state the drawing does not.",
+    absent: "Not drawn.",
   },
   app: {
     dir: join(shots, "app"),
     label: "App",
-    absent: "Not built. The drawing has a state the build does not.",
+    absent: "No story in the gallery.",
   },
   /* Bridge's own screens, assembled by `apps/desktop` rather than by a story
      that imitates it. A third side and not a replacement for `app`: the
@@ -79,60 +79,23 @@ const SIDES = {
   bridge: {
     dir: join(shots, "bridge"),
     label: "Bridge",
-    absent: "Not assembled. The drawing has a state Bridge does not.",
+    absent: "Not assembled by the app.",
   },
 };
 
-/* Which two sides a sheet compares, keyed `<left>:<right>`.
+/* The order the sides read in, and the whole of what a sheet is.
  *
- * **Two sides, named, and never three.** A state both the gallery and Bridge
- * render has three pictures, and a sheet that silently dropped one of them
- * would rebuild the blind spot this side was added to end — the pair that
- * agreed with itself and proved nothing. So the pair is chosen rather than
- * inferred: a run says which two it is comparing, and the third picture is a
- * second run away.
+ * **Every captured side, in one sheet, in one run.** It was two sides and a
+ * named pair, and that was wrong in a way the doc made obvious: verifying one
+ * screen took three runs and somebody remembering the third. A person runs
+ * `design:app`, sees green and stops — which is how a header shipped reading
+ * `Needs you` against a drawing that said `Escalated`, with a pair that agreed
+ * with itself because both halves came from the gallery.
  *
- * **`app:bridge` needs no drawing.** It asks whether the gallery's arrangement
- * of a screen and the app's assembly of it are the same screen — which is the
- * question that had no asker when a story's fixture said `Needs you` and the
- * pair beside it agreed, because both halves came from the gallery. */
-const AGAINST = {
-  "design:app": {
-    left: "design",
-    right: "app",
-    absent: {
-      design: "Not drawn. The build has a state the drawing does not.",
-      app: "Not built. The drawing has a state the build does not.",
-    },
-    only: { left: "drawn, not built", right: "built, not drawn" },
-    blocking: "Drawn and not built",
-  },
-  "design:bridge": {
-    left: "design",
-    right: "bridge",
-    absent: {
-      design: "Not drawn. Bridge assembles a state the drawing does not.",
-      bridge: "Not assembled. The drawing has a state Bridge does not.",
-    },
-    only: { left: "drawn, not assembled", right: "assembled, not drawn" },
-    blocking: "Drawn and not assembled",
-  },
-  "app:bridge": {
-    left: "app",
-    right: "bridge",
-    absent: {
-      app: "No story. Bridge assembles a screen the gallery does not arrange.",
-      bridge: "No screen. The gallery arranges one the app does not assemble here.",
-    },
-    only: { left: "in the gallery, not in the app", right: "in the app, not in the gallery" },
-    // Neither side of this pair is the authority, so nothing here blocks the
-    // way a drawing does. What it finds is drift, and drift is read rather
-    // than refused.
-    blocking: null,
-  },
-};
-
-const DEFAULT_PAIR = "design:app";
+ * Left to right is drawn, arranged, assembled: what the screen should be, how
+ * the component library puts it together, and what the app actually mounts. A
+ * disagreement between any two is a finding, and which two says whose it is. */
+const ORDER = ["design", "app", "bridge"];
 
 const USAGE = `shoot — screenshot a screen and its drawing, and pair them
 
@@ -147,10 +110,9 @@ const USAGE = `shoot — screenshot a screen and its drawing, and pair them
   pnpm shoot --design <file> --suggest
                                     propose a mark for each unmarked frame
                                     instead of refusing
-  pnpm shoot --sheet [pair]         pair what has been captured into
-                                    .shots/sheet.html and .shots/pairs/.
-                                    pair is design:app (the default),
-                                    design:bridge or app:bridge
+  pnpm shoot --sheet [sides]        compare every side that has been captured,
+                                    into .shots/sheet.html and .shots/rows/.
+                                    sides narrows it, as design:bridge
 
 Everything it writes is under .shots/, which is ignored.
 `;
@@ -470,67 +432,94 @@ function propose(unmarked, page) {
 
 // --------------------------------------------------------------------- the sheet
 
-async function sheet(against = DEFAULT_PAIR) {
-  const pair = AGAINST[against];
-  const { left, right } = pair;
-  const sides = { [left]: sideShots(SIDES[left].dir), [right]: sideShots(SIDES[right].dir) };
+/* Every side that was captured, beside every other, one state per row.
+ *
+ * **Nothing is inferred and nothing is dropped.** A state three sides render
+ * has three pictures on one row; a state one side renders has one picture and
+ * two sentences saying what is missing. `sides` narrows the columns when a
+ * question really is about two of them, and narrowing is the exception. */
+async function sheet(only = null) {
+  const asked = only === null ? ORDER : only.split(":");
+  for (const side of asked)
+    if (SIDES[side] === undefined) die(`\`${side}\` is not a side.`, `Sides: ${ORDER.join(", ")}.`);
 
-  if (!Object.keys(sides[left]).length && !Object.keys(sides[right]).length)
+  const held = Object.fromEntries(asked.map((side) => [side, sideShots(SIDES[side].dir)]));
+  /* A side with nothing captured is left out of the columns rather than drawn
+     as a column of absences. An empty column says "you did not run it", which
+     is not what this page is for. */
+  const sides = asked.filter((side) => Object.keys(held[side]).length > 0);
+
+  if (sides.length === 0)
     die(
-      `Neither side of ${against} has been captured.`,
-      "Capture them first: `pnpm shoot` for app, `pnpm shoot --bridge` for bridge, " +
-        "`pnpm shoot --design <file>` for design.",
+      "Nothing has been captured.",
+      "`pnpm shoot` for the gallery, `pnpm shoot --bridge` for the app, " +
+        "`pnpm shoot --design <file>` for a drawing.",
+    );
+  if (sides.length === 1)
+    console.log(
+      `Only ${SIDES[sides[0]].label.toLowerCase()} has been captured, so there is nothing to ` +
+        "compare it against. Capture another side and run this again.\n",
     );
 
-  const states = [...new Set([...Object.keys(sides[left]), ...Object.keys(sides[right])])].sort();
+  const states = [...new Set(sides.flatMap((side) => Object.keys(held[side])))].sort();
   const rows = states.map((state) => {
-    const at = (side) => sides[side][state] ?? null;
-    const l = at(left);
-    const r = at(right);
-    const taller = l && r ? Math.max(l.height, r.height) : 0;
-    const gap = l && r ? Math.abs(l.height - r.height) : 0;
-    return {
-      state,
-      left: l,
-      right: r,
-      kind: l && r ? "paired" : l ? `${left}-only` : `${right}-only`,
-      gap,
-      fraction: taller ? gap / taller : 0,
-      flagged: !!(l && r) && gap > HEIGHT_FLOOR && gap / taller > HEIGHT_TOLERANCE,
-    };
+    const shots = Object.fromEntries(sides.map((side) => [side, held[side][state] ?? null]));
+    const present = sides.filter((side) => shots[side]);
+    /* The widest disagreement on the row, and which two sides it is between.
+       A pair rather than a spread: "these two differ" is something to go and
+       look at, and "the spread is 25%" is not. */
+    let worst = null;
+    for (let i = 0; i < present.length; i += 1)
+      for (let j = i + 1; j < present.length; j += 1) {
+        const [x, y] = [shots[present[i]], shots[present[j]]];
+        const taller = Math.max(x.height, y.height);
+        const gap = Math.abs(x.height - y.height);
+        const fraction = taller ? gap / taller : 0;
+        const over = gap > HEIGHT_FLOOR && fraction > HEIGHT_TOLERANCE;
+        if (over && (worst === null || fraction > worst.fraction))
+          worst = { between: [present[i], present[j]], gap, fraction };
+      }
+    return { state, shots, present, missing: sides.filter((side) => !shots[side]), worst };
   });
 
-  writeSheetHtml(rows, left, right, pair.absent);
-  const paired = rows.filter((r) => r.kind === "paired");
-  if (paired.length) await writePairs(paired, left, right);
+  writeSheetHtml(rows, sides);
+  const comparable = rows.filter((r) => r.present.length > 1);
+  if (comparable.length) await writeRows(comparable, sides);
 
   const file = manifest(join(shots, "sheet.json"), {
     tool: "shoot",
-    against,
     compared_at: now(),
-    left: { side: left, label: SIDES[left].label },
-    right: { side: right, label: SIDES[right].label },
+    sides: sides.map((side) => ({ side, label: SIDES[side].label })),
     threshold: { height_fraction: HEIGHT_TOLERANCE, height_floor_css_px: HEIGHT_FLOOR },
     sheet: "sheet.html",
     summary: {
-      paired: paired.length,
-      [`${left}_only`]: rows.filter((r) => r.kind === `${left}-only`).length,
-      [`${right}_only`]: rows.filter((r) => r.kind === `${right}-only`).length,
-      flagged: rows.filter((r) => r.flagged).length,
+      states: rows.length,
+      on_every_side: rows.filter((r) => r.missing.length === 0).length,
+      flagged: rows.filter((r) => r.worst).length,
     },
     states: rows.map((r) => ({
       state: r.state,
-      kind: r.kind,
-      [left]: r.left && { file: relative(shots, r.left.file), size_css_px: sizeOf(r.left) },
-      [right]: r.right && { file: relative(shots, r.right.file), size_css_px: sizeOf(r.right) },
-      pair: r.kind === "paired" ? `pairs/${r.state}.png` : null,
-      height_gap_px: r.gap,
-      height_gap_fraction: Number(r.fraction.toFixed(3)),
-      flagged: r.flagged,
+      on: r.present,
+      missing: r.missing,
+      ...Object.fromEntries(
+        sides.map((side) => [
+          side,
+          r.shots[side] && {
+            file: relative(shots, r.shots[side].file),
+            size_css_px: sizeOf(r.shots[side]),
+          },
+        ]),
+      ),
+      row: r.present.length > 1 ? `rows/${r.state}.png` : null,
+      widest_height_gap: r.worst && {
+        between: r.worst.between,
+        px: r.worst.gap,
+        fraction: Number(r.worst.fraction.toFixed(3)),
+      },
     })),
   });
 
-  report(rows, left, right, file, pair);
+  report(rows, sides, file);
 }
 
 /* CSS pixels, matching what the side manifests record. A PNG header would
@@ -556,21 +545,22 @@ h1 { font-size: var(--text-xl); line-height: var(--leading-xl); font-weight: var
 .tag { font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: var(--tracking-caps); text-transform: uppercase; padding: 2px 6px; border-radius: var(--radius-sm); background: var(--bg-sunken); color: var(--fg-muted); }
 .tag[data-flag] { background: var(--status-failed); color: var(--bg-base); }
 .tag[data-only] { background: var(--status-waiting); color: var(--bg-base); }
-/* Equal width, always. A comparison where one side is wider than the other is
-   a comparison of two different things. */
-.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+/* Equal width, always. A comparison where one side is wider than another is a
+   comparison of two different things. The track count is set per section: it is
+   how many sides were captured, which this file cannot know. */
+.cols { display: grid; gap: var(--space-4); align-items: start; }
 .col { margin: 0; }
 .col > figcaption { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--fg-subtle); margin-bottom: var(--space-2); }
 .col img { width: 100%; height: auto; display: block; border: var(--border-width) solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-raised); }
 .absent { border: var(--border-width) dashed var(--border-default); border-radius: var(--radius-md); padding: var(--space-6); color: var(--fg-muted); text-align: center; }
 `;
 
-function writeSheetHtml(rows, left, right, absent) {
+function writeSheetHtml(rows, sides) {
   const cell = (side, shot) =>
     `<figure class="col"><figcaption>${esc(SIDES[side].label)}</figcaption>${
       shot
         ? `<img src="${esc(relative(shots, shot.file))}" alt="${esc(SIDES[side].label)}" width="${shot.width}" height="${shot.height}">`
-        : `<div class="absent">${esc(absent[side])}</div>`
+        : `<div class="absent">${esc(SIDES[side].absent)}</div>`
     }</figure>`;
 
   const body = rows
@@ -578,65 +568,80 @@ function writeSheetHtml(rows, left, right, absent) {
       (r) => `<section class="pair" id="${esc(r.state)}">
   <div class="head">
     <h2>${esc(r.state)}</h2>
-    ${r.kind === "paired" ? "" : `<span class="tag" data-only>${esc(r.kind)}</span>`}
-    ${r.flagged ? `<span class="tag" data-flag>heights differ by ${Math.round(r.fraction * 100)}%</span>` : ""}
-    <span class="tag">${r.left ? `${r.left.width}×${r.left.height}` : "—"} ${esc(left)}</span>
-    <span class="tag">${r.right ? `${r.right.width}×${r.right.height}` : "—"} ${esc(right)}</span>
+    ${r.missing.length ? `<span class="tag" data-only>only ${esc(r.present.join(" + "))}</span>` : ""}
+    ${r.worst ? `<span class="tag" data-flag>${esc(r.worst.between.join(" vs "))} differ in height by ${Math.round(r.worst.fraction * 100)}%</span>` : ""}
+    ${sides
+      .map(
+        (side) =>
+          `<span class="tag">${r.shots[side] ? `${r.shots[side].width}×${r.shots[side].height}` : "—"} ${esc(side)}</span>`,
+      )
+      .join("\n    ")}
   </div>
-  <div class="cols">
-    ${cell(left, r.left)}
-    ${cell(right, r.right)}
+  <div class="cols" style="grid-template-columns: repeat(${sides.length}, minmax(0, 1fr))">
+    ${sides.map((side) => cell(side, r.shots[side])).join("\n    ")}
   </div>
 </section>`,
     )
     .join("\n");
 
-  const counts = ["paired", `${left}-only`, `${right}-only`]
-    .map((k) => `${rows.filter((r) => r.kind === k).length} ${k}`)
-    .join(" · ");
+  const title = sides.map((side) => SIDES[side].label).join(" · ");
+  const whole = rows.filter((r) => r.missing.length === 0).length;
+  const flagged = rows.filter((r) => r.worst).length;
 
   writeFileSync(
     join(shots, "sheet.html"),
-    `<!doctype html><meta charset="utf-8"><title>${esc(SIDES[left].label)} beside ${esc(SIDES[right].label)}</title>
+    `<!doctype html><meta charset="utf-8"><title>${esc(title)}</title>
 <style>${tokens()}${SHEET_CSS}</style>
-<h1>${esc(SIDES[left].label)} beside ${esc(SIDES[right].label)}</h1>
-<p class="lede">Left is the ${esc(SIDES[left].label.toLowerCase())}, right is the ${esc(SIDES[right].label.toLowerCase())}, both at the same width. ${esc(counts)}. A state on one side only is the finding, not an omission from this page.</p>
+<h1>${esc(title)}</h1>
+<p class="lede">${esc(sides.map((side) => SIDES[side].label.toLowerCase()).join(", then "))} — every state on one row, all at the same width. ${rows.length} states, ${whole} on every side, ${flagged} flagged on height. A state missing from a side is the finding, not an omission from this page.</p>
 ${body}
 `,
     "utf8",
   );
 }
 
-/* The sheet is for a person. This is for an agent: one PNG per state with both
- * halves in it, so the comparison can be held in a context window and
- * described. Composed by the same browser that took the shots — two <img> in a
- * grid, captured — rather than by an image library nothing else needs. */
-async function writePairs(paired, left, right) {
-  const into = join(shots, "pairs");
+/* One image per state, every side in it, for an agent to hold in context and
+ * describe. The sheet is for a person with a scrollbar; this is the file that
+ * answers "is this state right" without opening a second one. */
+async function writeRows(comparable, sides) {
+  const into = join(shots, "rows");
   rmSync(into, { recursive: true, force: true });
   mkdirSync(into, { recursive: true });
 
-  const page = join(shots, ".run/pairs.html");
+  const page = join(shots, ".run/rows.html");
   mkdirSync(dirname(page), { recursive: true });
+  /* The page grows with the sides rather than the shots shrinking to fit a
+     fixed width — a third column in a fixed page is a third of the width, and
+     a screenshot of a screen at a third of its width reads as nothing. */
+  const width = 520 * sides.length + 80;
   writeFileSync(
     page,
     `<!doctype html><meta charset="utf-8">
 <style>${tokens()}
 body { margin: 0; background: var(--bg-base); font-family: var(--font-sans); }
-.sheet { width: 1600px; padding: var(--space-4); box-sizing: border-box; }
+.sheet { width: ${width}px; padding: var(--space-4); box-sizing: border-box; }
 .title { font-size: var(--text-sm); font-weight: var(--weight-heading); color: var(--fg-default); margin-bottom: var(--space-3); }
-.cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); align-items: start; }
+.cols { display: grid; grid-template-columns: repeat(${sides.length}, 1fr); gap: var(--space-4); align-items: start; }
 figure { margin: 0; }
 figcaption { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--fg-subtle); margin-bottom: var(--space-2); }
 img { width: 100%; height: auto; display: block; border: var(--border-width) solid var(--border-default); border-radius: var(--radius-sm); }
+.absent { border: var(--border-width) dashed var(--border-default); border-radius: var(--radius-sm); padding: var(--space-6); color: var(--fg-muted); text-align: center; font-size: var(--text-2xs); }
 </style>
-${paired
+${comparable
   .map(
     (r) => `<div class="sheet" data-shot="${esc(r.state)}">
   <div class="title">${esc(r.state)}</div>
   <div class="cols">
-    <figure><figcaption>${esc(SIDES[left].label)}</figcaption><img src="${esc(r.left.file)}"></figure>
-    <figure><figcaption>${esc(SIDES[right].label)}</figcaption><img src="${esc(r.right.file)}"></figure>
+${sides
+  .map(
+    (side) =>
+      `    <figure><figcaption>${esc(SIDES[side].label)}</figcaption>${
+        r.shots[side]
+          ? `<img src="${esc(r.shots[side].file)}">`
+          : `<div class="absent">${esc(SIDES[side].absent)}</div>`
+      }</figure>`,
+  )
+  .join("\n")}
   </div>
 </div>`,
   )
@@ -645,57 +650,59 @@ ${paired
     "utf8",
   );
 
-  await browse({ page, capture: true, into, width: 1640, height: 1200 });
+  await browse({ page, capture: true, into, width: width + 40, height: 1200 });
 }
 
-function report(rows, left, right, manifestFile, pair) {
-  console.log("\n.shots/sheet.html — one page, both halves, for a person");
-  console.log(".shots/pairs/ — one PNG per paired state, for an agent");
+function report(rows, sides, manifestFile) {
+  console.log("\n.shots/sheet.html — every side beside every other, for a person");
+  console.log(".shots/rows/ — one PNG per state, every side in it, for an agent");
   console.log(`${relative(root, manifestFile)} — the same comparison, for a caller\n`);
 
   const pad = Math.max(8, ...rows.map((r) => r.state.length));
   for (const r of rows) {
-    const size = (s) => (s ? `${s.width}×${s.height}` : "—");
-    const note = r.flagged
-      ? `heights differ by ${Math.round(r.fraction * 100)}%`
-      : r.kind === `${left}-only`
-        ? pair.only.left
-        : r.kind === `${right}-only`
-          ? pair.only.right
-          : "";
+    const size = (side) =>
+      (r.shots[side] ? `${r.shots[side].width}×${r.shots[side].height}` : "—").padStart(10);
+    const note = r.worst
+      ? `${r.worst.between.join(" vs ")} differ in height by ${Math.round(r.worst.fraction * 100)}%`
+      : r.missing.length
+        ? `missing from ${r.missing.join(", ")}`
+        : "";
     console.log(
-      `  ${r.kind === "paired" && !r.flagged ? " " : "!"} ${r.state.padEnd(pad)}  ` +
-        `${size(r.left).padStart(10)} ${left}   ${size(r.right).padStart(10)} ${right}   ${note}`,
+      `  ${r.missing.length === 0 && r.worst === null ? " " : "!"} ${r.state.padEnd(pad)}  ` +
+        `${sides.map((side) => `${size(side)} ${side}`).join("   ")}   ${note}`,
     );
   }
 
-  const count = (k) => rows.filter((r) => r.kind === k).length;
+  const whole = rows.filter((r) => r.missing.length === 0).length;
   console.log(
-    `\n${count("paired")} paired, ${count(`${left}-only`)} ${left}-only, ` +
-      `${count(`${right}-only`)} ${right}-only, ${rows.filter((r) => r.flagged).length} flagged on height`,
+    `\n${rows.length} states, ${whole} on every side, ` +
+      `${rows.filter((r) => r.worst).length} flagged on height`,
   );
   console.log(
     `A height gap is flagged over ${HEIGHT_TOLERANCE * 100}% of the taller shot, and never under ${HEIGHT_FLOOR}px. Sizes are CSS pixels.`,
   );
-  // The pairs are the point, so they are the last thing said and they are
-  // openable. One line each rather than a directory to go rummage in.
-  const paired = rows.filter((r) => r.kind === "paired");
-  if (paired.length > 0) {
-    console.log(`\n${plural(paired.length, "pair", "pairs")} to open:`);
-    const w = Math.max(8, ...paired.map((r) => r.state.length));
-    for (const r of paired) {
-      console.log(`  ${r.state.padEnd(w)}  ${resolve(shots, "pairs", `${r.state}.png`)}`);
+
+  const comparable = rows.filter((r) => r.present.length > 1);
+  if (comparable.length > 0) {
+    console.log(`\n${plural(comparable.length, "state", "states")} to open:`);
+    const w = Math.max(8, ...comparable.map((r) => r.state.length));
+    for (const r of comparable) {
+      console.log(`  ${r.state.padEnd(w)}  ${resolve(shots, "rows", `${r.state}.png`)}`);
     }
   }
   console.log(`\nAll of them at once   ${resolve(shots, "sheet.html")}`);
 
-  // Only a pair with an authority on the left has a blocking side. `app:bridge`
-  // has neither half in charge: what it finds is drift between two renderings
-  // of one screen, which is read rather than refused.
-  const blocking = pair.blocking === null ? [] : rows.filter((r) => r.kind === `${left}-only`);
+  /* Drawn, and built by nothing. The only finding here that is a refusal
+     rather than a difference — the others say two renderings of one screen
+     disagree, and this says a screen was drawn and nobody built it. Only when
+     the drawing is one of the sides: without it there is no authority for a
+     state to be missing from. */
+  if (!sides.includes("design")) return;
+  const built = sides.filter((side) => side !== "design");
+  const blocking = rows.filter((r) => r.shots.design && !built.some((side) => r.shots[side]));
   if (blocking.length)
     console.log(
-      `\n${pair.blocking}:${blocking.map((r) => `\n  ${r.state}`).join("")}\n` +
+      `\nDrawn and built by nothing:${blocking.map((r) => `\n  ${r.state}`).join("")}\n` +
         "That is what this exists to find.",
     );
 }
@@ -717,13 +724,7 @@ mkdirSync(shots, { recursive: true });
 try {
   if (argv.includes("--sheet")) {
     const named = argv[argv.indexOf("--sheet") + 1];
-    const pair = named === undefined || named.startsWith("--") ? DEFAULT_PAIR : named;
-    if (AGAINST[pair] === undefined)
-      die(
-        `--sheet ${pair} is not a pair this tool holds.`,
-        `Pairs: ${Object.keys(AGAINST).join(", ")}.`,
-      );
-    await sheet(pair);
+    await sheet(named === undefined || named.startsWith("--") ? null : named);
   }
   else if (design) await shootDesign(design, { suggest: argv.includes("--suggest") });
   else if (argv.includes("--bridge")) await shootBridge();
