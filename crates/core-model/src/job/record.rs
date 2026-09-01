@@ -1,36 +1,28 @@
 //! The `jobs` row, and the only thing that moves it.
-//!
-//! # No setter, and no `&mut self` at all
-//!
-//! Every field is private, nothing here takes `&mut self`, and the only method
-//! that produces a [`Job`] with a different status is
+//! **No setter, and no `&mut self` at all.** Every field is private, and the
+//! only method producing a [`Job`] with a different status is
 //! [`transition`](Job::transition). A caller holding a `Job` cannot write its
-//! status because there is nothing to call, which is the difference between a
-//! rule and a check.
+//! status because there is nothing to call — the difference between a rule and
+//! a check.
 //!
-//! # What is deliberately absent
+//! **Evidence is deliberately absent.** The registry gives it its own table,
+//! three open questions about how it serialises, and a rule that captured Check
+//! output goes to disk with a pointer in the row. It is loaded and appended by
+//! `store` rather than carried inline: a blob on the Job row would rewrite
+//! whole on every append.
 //!
-//! **Evidence.** The registry gives it its own table, three open questions
-//! about how it serialises, and a rule that captured Check output goes to disk
-//! with a pointer in the row. It is loaded and appended by `store`, not carried
-//! inline on the record — a blob on the Job row would rewrite whole on every
-//! append.
+//! **The inner machine's writer is the second mutator.**
+//! [`transition_step`](Job::transition_step) moves a step and the cursor under
+//! the same rule as [`transition`](Job::transition): `&self` in, a new [`Job`]
+//! out. What it may do is narrowed by [`StepTarget`], which names only states
+//! M1 reaches — so a step state M1 does not reach is not refused at runtime, it
+//! cannot be asked for.
 //!
-//! # The inner machine's writer is here now, and it is the second mutator
-//!
-//! [`transition_step`](Job::transition_step) moves a step and the cursor, and
-//! it obeys the same rule as [`transition`](Job::transition): `&self` in, a new
-//! [`Job`] out. What it may do is narrowed by [`StepTarget`], which names four
-//! moves across three of the six states — so the two M1 cannot reach are not
-//! refused at runtime, they cannot be asked for.
-//!
-//! # The other mutators, and what each may touch
-//!
-//! [`on_branch`](Job::on_branch), [`redirect_waits`](Job::redirect_waits) and
-//! [`redirect_delivered`](Job::redirect_delivered) write one field and mint
-//! nothing: no event carries a worktree or a person's note.
-//! [`drone_spawned`](Job::drone_spawned) and [`drone_exited`](Job::drone_exited)
-//! do mint one, because presence has to fold. **No `&mut self` anywhere.**
+//! **The other mutators write one field and mint nothing** —
+//! [`on_branch`](Job::on_branch), [`redirect_waits`](Job::redirect_waits),
+//! [`redirect_delivered`](Job::redirect_delivered) — because no event carries a
+//! worktree or a person's note. [`drone_spawned`](Job::drone_spawned) and
+//! [`drone_exited`](Job::drone_exited) do mint one: presence has to fold.
 
 use alloc::vec::Vec;
 

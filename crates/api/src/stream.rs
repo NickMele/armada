@@ -1,10 +1,8 @@
 //! The event stream: bounded, lossy, and honest about it.
-//!
-//! # It bounds the risk the architecture named as its largest
-//!
-//! axum's WebSocket sink is unbounded from the application side, so several
-//! Drones producing at Drone speed into a minimised Bridge grow Fleet's memory
-//! with nothing pushing back. Everything published here goes through a
+//! **It bounds the risk the architecture named as its largest.** axum's
+//! WebSocket sink is unbounded from the application side, so several Drones
+//! producing at Drone speed into a minimised Bridge grow Fleet's memory with
+//! nothing pushing back. Everything published here goes through a
 //! [`tokio::sync::broadcast`] of fixed capacity, which is bounded and
 //! **drop-oldest** by construction: a subscriber that falls behind loses the
 //! oldest events and is told how many, and the sink below it is fed one message
@@ -12,22 +10,19 @@
 //!
 //! Bounded-and-lossy is only safe if the client knows it happened, which is why
 //! a drop is a message and not a silence: **you missed N events, here is
-//! current state**. A reconnecting Bridge that believed its history was complete
+//! current state**. A reconnecting Bridge that believed its history complete
 //! would render a Board that is quietly wrong, and quietly wrong is worse than
 //! visibly stale — nothing on the screen tells the person to distrust it.
+//! Errors are not exempt from the bound: an error is an ordinary event and may
+//! be dropped like any other, and what a drop costs is the speed of noticing
+//! rather than the fact, because the durable record is written before anything
+//! is broadcast.
 //!
-//! Errors are not exempt from the bound. An error is an ordinary event and may
-//! be dropped like any other; what a drop costs is the speed of noticing, never
-//! the fact, because the durable record is written before anything is broadcast.
-//!
-//! # A resync may repeat, and never omits
-//!
-//! The subscription is opened *before* the snapshot is read, so no event can
-//! fall between the two. The cost is the other direction: a snapshot may
-//! already reflect an event that then arrives, and a client can see a
-//! transition it has already applied. That trade is deliberate — a duplicate
-//! `job.state_changed` is detectable from its `from` status, and a missing one
-//! is not detectable at all.
+//! **A resync may repeat, and never omits.** The subscription is opened
+//! *before* the snapshot is read, so no event can fall between the two. The
+//! cost runs the other way — a snapshot may already reflect an event that then
+//! arrives — and that trade is deliberate: a duplicate `job.state_changed` is
+//! detectable from its `from` status, and a missing one is not detectable.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;

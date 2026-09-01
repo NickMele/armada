@@ -325,34 +325,30 @@ pub trait Daemon: Send + Sync + 'static {
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `override_verdict` — the Judge refused, a person disagrees, and the step
-    /// advances anyway.
+    /// advances anyway. **The fifth act on an escalated Job, and the only one
+    /// that keeps the work.** [`Daemon::approve_review`] cannot be it: a Job a
+    /// gate refused is `escalated`, not `awaiting_review`.
+    /// [`Daemon::restart_step`] cannot either — it re-runs the step, discarding
+    /// work that was right and possibly drawing the same refusal. A verdict
+    /// with no appeal is worse than no verdict, because a verifier a person
+    /// cannot overrule is one they route around.
     ///
-    /// **The fifth act on an escalated Job, and the only one that keeps the
-    /// work.** [`Daemon::approve_review`] cannot be it: a Job a gate refused is
-    /// `escalated`, not `awaiting_review`. [`Daemon::restart_step`] cannot be
-    /// it either — it re-runs the step, which discards work that was right and
-    /// may draw the same refusal. A verdict with no appeal is worse than no
-    /// verdict, because a verifier a person cannot overrule is one they route
-    /// around.
+    /// **It is not an approve-anything.** Only `gate_failure` is liftable — the
+    /// Judge refusing a criterion, which is a matter of opinion. A step stopped
+    /// on `gate_undecided` was never weighed and one stopped on
+    /// `evidence_suspect` is a claim about the Drone's honesty; both are
+    /// [`Refusal::IllegalMove`]. A failed mechanical Check is out of reach
+    /// twice over: it ends the Job at `completed_failed`, which is terminal and
+    /// stops no step, and the recorded Check runs are read again before
+    /// anything moves.
     ///
-    /// # It is not an approve-anything
-    ///
-    /// Only `gate_failure` is liftable — the Judge refusing a criterion, which
-    /// is a matter of opinion. A step stopped on `gate_undecided` was never
-    /// weighed and one stopped on `evidence_suspect` is a claim about the
-    /// Drone's honesty; both are [`Refusal::IllegalMove`]. A failed mechanical
-    /// Check is out of reach twice over: it ends the Job at `completed_failed`,
-    /// which is terminal and stops no step, and the recorded Check runs are
-    /// read again before anything moves.
-    ///
-    /// # It is recorded as an override
-    ///
-    /// The step move is `stopped -> advanced` carrying the trigger it
-    /// overruled, so the row still says `failed` beside a state that says
-    /// `advanced`, and [`ipc::StepDetail::overridden`] is that pair read once
-    /// here rather than by every surface. A blank reason is
-    /// [`Refusal::Unacceptable`]: an override that says nothing is how this
-    /// becomes the way somebody quiets a gate.
+    /// **It is recorded as an override.** The step move is `stopped ->
+    /// advanced` carrying the trigger it overruled, so the row still says
+    /// `failed` beside a state that says `advanced`, and
+    /// [`ipc::StepDetail::overridden`] is that pair read once here rather than
+    /// by every surface. A blank reason is [`Refusal::Unacceptable`]: an
+    /// override that says nothing is how this becomes the way somebody quiets a
+    /// gate.
     fn override_verdict(
         &self,
         job_id: JobId,
@@ -516,28 +512,24 @@ pub trait Daemon: Send + Sync + 'static {
     /// rather than [`Refusal`]. [`Daemon::declare_scope`] and
     /// [`Daemon::run_checks`] are the other two.
     ///
-    /// # The submission is bound to a Job the caller never names
-    ///
-    /// There is no `job_id` parameter and no `step_id`, so there is nothing to
-    /// forge: the implementation attributes the submission to the Job whose
-    /// Drone holds the connection it arrived on, which it knows and the caller
-    /// cannot influence. A call that arrives while that Job is not working is
-    /// refused rather than queued.
-    ///
-    /// **[`Caller`] is the transport's word and never the body's.** It carries
-    /// the peer of the connection and nothing a caller wrote, so there is no
-    /// arrangement of a request that could put a Job id into it.
+    /// **The submission is bound to a Job the caller never names.** There is no
+    /// `job_id` parameter and no `step_id`, so there is nothing to forge: the
+    /// implementation attributes the submission to the Job whose Drone holds
+    /// the connection it arrived on, which it knows and the caller cannot
+    /// influence. A call arriving while that Job is not working is refused
+    /// rather than queued, and [`Caller`] is the transport's word and never the
+    /// body's — it carries the peer of the connection and nothing a caller
+    /// wrote, so no arrangement of a request puts a Job id into it.
     ///
     /// **That is binding by construction and not authentication.** Any process
     /// that can reach the listener can make this call; what it cannot do is
     /// choose which Job the evidence lands against, and a caller the
     /// implementation cannot place is refused rather than guessed at.
     ///
-    /// # It decides nothing
-    ///
-    /// The receipt says the submission was taken, not that it passed. A call
-    /// that blocked while a repository's Checks ran would time out, so the
-    /// gate runs afterwards and the outcome reaches the Drone as a later turn.
+    /// **It decides nothing.** The receipt says the submission was taken, not
+    /// that it passed: a call that blocked while a repository's Checks ran
+    /// would time out, so the gate runs afterwards and the outcome reaches the
+    /// Drone as a later turn.
     fn submit_evidence(
         &self,
         caller: Caller,

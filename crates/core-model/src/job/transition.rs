@@ -1,33 +1,28 @@
 //! Every legal edge of the Job status machine, what may accompany it, and the
 //! one error a move can produce.
-//!
-//! # The edges, from the registry
-//!
-//! [`EDGES`] is `domain/job-transitions.toml`, transcribed — one entry per
+//! **[`EDGES`] is `domain/job-transitions.toml`, transcribed** — one entry per
 //! `[[transitions]]` row, in that file's order. The registry's `on` prose is
 //! not carried: it says what fires an edge, which is Fleet's to know, and a
-//! second copy of it here could only drift from the file that owns it. What
-//! *is* carried is `escalation_trigger` and [`Guard`] — the latter from
-//! `domain/transition-guards.toml`, `#189` — because both constrain what a
-//! caller may pass, and a constraint the type system can hold is worth more
-//! than a sentence.
+//! second copy here could only drift from the file that owns it. What *is*
+//! carried is `escalation_trigger` and [`Guard`], the latter from
+//! `domain/transition-guards.toml` (`#189`), because both constrain what a
+//! caller may pass and a constraint the type system holds is worth more than a
+//! sentence.
 //!
-//! A transcription is a copy, and a copy drifts. The gate's `the transition
-//! registry and the edge table name the same edges` is what holds it: every row
-//! is an entry and every entry is a row, matched on `from` and `to` — which the
+//! A transcription is a copy, and a copy drifts. The gate rule *the transition
+//! registry and the edge table name the same edges* is what holds it: every row
+//! is an entry and every entry a row, matched on `from` and `to` — which the
 //! registry's own header calls the whole identity of an edge — with the trigger
-//! compared as a value inside a matched pair. No count is written here or
-//! asserted anywhere. A count is a second claim about the set that nothing
-//! keeps true, and the one that stood here agreed with the registry while an
-//! entry could have named the wrong status.
+//! compared inside a matched pair. **No count is written here or asserted
+//! anywhere**: a count is a second claim about the set that nothing keeps true,
+//! and the one that stood here agreed with the registry while an entry could
+//! have named the wrong status.
 //!
-//! # The destination and its reason are one value
-//!
-//! [`Target`] fuses them. Four statuses store a qualifying reason and eight do
-//! not, so a `(status, reason)` pair has twelve legal shapes out of a much
-//! larger product — and every illegal one would need a runtime check. Fused,
-//! `Escalated` cannot be entered without a trigger, `Killed` cannot be given
-//! one, and neither mistake reaches a check because neither compiles.
+//! **The destination and its reason are one value.** [`Target`] fuses them,
+//! because a `(status, reason)` pair has far more shapes than the machine has
+//! legal ones and every illegal one would need a runtime check. Fused,
+//! `Escalated` cannot be entered without a trigger and `Killed` cannot be given
+//! one — neither mistake reaches a check, because neither compiles.
 
 use alloc::vec::Vec;
 use core::fmt;

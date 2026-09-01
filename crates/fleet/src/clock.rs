@@ -1,26 +1,22 @@
 //! The one place in the workspace that reads a clock.
 //!
-//! # Every other crate takes its instant as an argument
+//! **Every other crate takes its instant as an argument.** `core-model` says
+//! it, `store` says it, `config` says it and the gate says it: a function that
+//! reads its own inputs from the process cannot be tested and cannot be
+//! replayed. That rule needs somewhere for the reading to actually happen, and
+//! this is it — one trait with one method, held by Fleet, passed down as a
+//! [`Timestamp`] to everything below. So [`Clock`] is not a convenience but the
+//! seam that makes the rule affordable: a test plants a clock answering a fixed
+//! string and the whole system below Fleet becomes deterministic, without a
+//! single call site growing a `#[cfg(test)]`.
 //!
-//! `core-model` says it, `store` says it, `config` says it and the gate says
-//! it: a function that reads its own inputs from the process cannot be tested
-//! and cannot be replayed. That rule needs somewhere for the reading to
-//! actually happen, and this is it — one trait with one method, held by Fleet,
-//! passed down as a [`Timestamp`] to everything below.
+//! **The format is `Timestamp`'s, and it is spelled once.** RFC3339, UTC,
+//! millisecond precision — `core_model::Timestamp`'s own contract. It is
+//! computed here rather than taken from a date library because the whole
+//! computation is the civil-date arithmetic below, and a dependency for it
+//! would be a dependency in the crate that spawns Drones.
 //!
-//! So [`Clock`] is not a convenience. It is the seam that makes the rule
-//! affordable: a test plants a clock that answers a fixed string and the whole
-//! system below Fleet becomes deterministic, without a single call site
-//! growing a `#[cfg(test)]`.
-//!
-//! # The format is `Timestamp`'s, and it is spelled once
-//!
-//! RFC3339, UTC, millisecond precision — `core_model::Timestamp`'s own
-//! contract. It is computed here rather than taken from a date library because
-//! the whole computation is the civil-date arithmetic below and a dependency
-//! for it would be a dependency in the crate that spawns Drones.
-//!
-//! There is no parsing counterpart and there will not be one here. A stored
+//! **There is no parsing counterpart and there will not be one here.** A stored
 //! instant is compared, ordered and displayed as text; the moment something
 //! wants arithmetic on one, the type that holds it needs to change rather than
 //! this module growing a reader.

@@ -1,30 +1,25 @@
 //! What a Job has produced, read out of its own worktree.
 //!
-//! # Against where the branch started, not against HEAD
+//! **Against where the branch started, not against HEAD.** A Drone commits
+//! inside its worktree, so a diff taken against that worktree's own HEAD is
+//! empty the moment the Drone commits — which would fail `diff_nonempty` for
+//! the best-behaved Drone in the fleet and pass it for one that left everything
+//! uncommitted. The base is therefore the **merge base** between the Job's
+//! branch and the repository's own HEAD: the commit the branch was cut from,
+//! found without storing it anywhere. Storing it was the alternative and it is
+//! the failure this project already knows by name — a field on a record that
+//! can disagree with the record holding it. Deriving it costs one revision
+//! walk.
 //!
-//! A Drone commits inside its worktree, so a diff taken against that worktree's
-//! own HEAD is empty the moment the Drone commits — which would fail
-//! `diff_nonempty` for the best-behaved Drone in the fleet and pass it for one
-//! that left everything uncommitted. The base is therefore the **merge base**
-//! between the Job's branch and the repository's own HEAD: the commit the
-//! branch was cut from, found without storing it anywhere.
+//! **Untracked files count.** A Drone that writes a new file and does not stage
+//! it has produced work, and a `diff_nonempty` check that ignored it would tell
+//! the Drone to do the thing it just did. Ignored files do not count: they are
+//! what `.gitignore` says are not part of the repository.
 //!
-//! Storing it was the alternative and it is the failure this project already
-//! knows by name — a field on a record that can disagree with the record
-//! holding it. Deriving it costs one revision walk.
-//!
-//! # Untracked files count
-//!
-//! A Drone that writes a new file and does not stage it has produced work, and
-//! a `diff_nonempty` check that ignored it would tell the Drone to do the thing
-//! it just did. Ignored files do not count: they are what `.gitignore` says are
-//! not part of the repository.
-//!
-//! # A reading that fails is never an empty answer
-//!
-//! Every path out of this file is either a list of files or an error. There is
-//! no branch that returns "nothing changed" because something could not be
-//! opened — that would turn a broken machine into a Drone that did no work.
+//! **A reading that fails is never an empty answer.** Every path out of this
+//! file is either a list of files or an error. No branch returns "nothing
+//! changed" because something could not be opened — that would turn a broken
+//! machine into a Drone that did no work.
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};

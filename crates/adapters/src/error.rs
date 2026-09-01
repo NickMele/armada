@@ -5,13 +5,12 @@
 //! and returned from [`Error::source`], never formatted into a message, so the
 //! chain stays traversable up to the one place it is flattened.
 //!
-//! # Why a Job needs to be failed with more than "the worktree failed"
-//!
+//! **Why a Job needs to be failed with more than "the worktree failed".**
 //! Creation happens at approval, before any Drone exists, and a failure there
-//! fails the Job. So the error is the *only* thing a person has: there is no
+//! fails the Job — so the error is the *only* thing a person has: no
 //! transcript, no log from a Drone, no partial work. Each variant below is a
 //! different thing to go and do, which is the test for whether it deserves to
-//! be its own variant:
+//! be one.
 //!
 //! | Variant | What the person does |
 //! | --- | --- |
@@ -23,9 +22,6 @@
 //! | [`CreateWorktreeError::ParentNotCreated`] | Fixes the disk or the permissions |
 //! | [`CreateWorktreeError::StaleRegistrationNotCleared`] | Reads the cause; git refused |
 //! | [`CreateWorktreeError::WorktreeNotCreated`] | Reads the cause, then deletes the branch |
-//!
-//! A collision and a disk error are two variants and two sentences, and neither
-//! is reachable from the other by reading prose.
 
 use std::error::Error;
 use std::fmt;

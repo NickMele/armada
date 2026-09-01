@@ -1,35 +1,27 @@
 //! Running one Check in one worktree, bounded.
+//! **There is no shell.** A Manifest's `run` is split into a program and its
+//! arguments and executed directly. Handing the string to `sh -c` would make
+//! the two failures this module exists to separate indistinguishable: a shell
+//! reports *command not found* as exit `127`, and `127` is also a code a real
+//! program returns. The Check would then fail — correctly, this time — for a
+//! reason nobody could read, and a step expecting `127` would pass on a command
+//! that was never installed. Spawning the program directly makes "not found" an
+//! operating system error before any code exists. The cost is that a `run`
+//! string cannot pipe, redirect or chain, which is consistent with what a Check
+//! is: a command and an exit code, with nothing reading its output. A
+//! repository that needs a pipeline writes a script and names the script.
 //!
-//! # There is no shell
+//! **A hanging Check is a failure, and its children go with it.** The child is
+//! put in a process group of its own and the whole group is ended when the
+//! budget expires. Killing only the process Fleet started leaves the test
+//! runner it spawned holding the worktree and the CPU, which is v1's shape of
+//! this failure: the Job ends, the machine does not notice, and the next Job is
+//! slower for reasons nobody connects.
 //!
-//! A Manifest's `run` is split into a program and its arguments and executed
-//! directly. Handing the string to `sh -c` would make the two failures this
-//! module exists to separate indistinguishable: a shell reports *command not
-//! found* as exit `127`, and `127` is also a code a real program returns. The
-//! Check would then fail — correctly, this time — for a reason nobody could
-//! read, and a step expecting `127` would pass on a command that was never
-//! installed. Spawning the program directly makes "not found" an operating
-//! system error before any code exists.
-//!
-//! The cost is that a `run` string cannot pipe, redirect or chain. That is
-//! consistent with what a Check is: a command and an exit code, with nothing
-//! reading its output. A repository that needs a pipeline writes a script and
-//! names the script.
-//!
-//! # A hanging Check is a failure, and its children go with it
-//!
-//! The child is put in a process group of its own and the whole group is ended
-//! when the budget expires. Killing only the process Fleet started leaves the
-//! test runner it spawned holding the worktree and the CPU, which is v1's
-//! shape of this failure: the Job ends, the machine does not notice, and the
-//! next Job is slower for reasons nobody connects.
-//!
-//! # Nothing here reads the output
-//!
-//! It is captured so a person can read it and returned to the caller. No branch
-//! in this file looks at a byte of it. Deciding which lines were the failure is
-//! a Judge's question answered by reading the diff, and a runner that grepped
-//! stdout would be answering it badly.
+//! **Nothing here reads the output.** It is captured so a person can read it
+//! and returned to the caller; no branch in this file looks at a byte of it.
+//! Deciding which lines were the failure is a Judge's question answered by
+//! reading the diff, and a runner that grepped stdout would answer it badly.
 
 use std::path::Path;
 use std::process::Stdio;

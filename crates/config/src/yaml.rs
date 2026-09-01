@@ -1,14 +1,13 @@
 //! Walking a YAML document by hand, collecting a refusal per key.
 //!
-//! # Why this is not `#[derive(Deserialize)]`
-//!
-//! `serde(deny_unknown_fields)` would give the unknown-key hard-fail for free,
+//! **Why this is not `#[derive(Deserialize)]`.**
+//! `serde(deny_unknown_fields)` would give the unknown-key hard-fail for free
 //! and nothing else this milestone step asks for. It stops at the first fault,
 //! so a file with three mistakes takes three edits to load; its message names
 //! the field and a line but not the file; and the faults that actually matter
 //! here are not field-shaped at all — a name in both `checks` and `commands`, a
 //! duplicate step id, a `verdict_routing` that contradicts `structure`. Those
-//! are cross-key comparisons that a derive cannot express and a
+//! are cross-key comparisons a derive cannot express, and a
 //! `#[serde(deserialize_with)]` hook can only express by taking the document
 //! apart again.
 //!
@@ -17,13 +16,12 @@
 //! [`None`] on a fault, and **records rather than raises** — which is what lets
 //! the walk continue and report the whole file.
 //!
-//! # `None` means recorded, never means fine
-//!
-//! Every function returning `Option` pushes a [`Refusal`] before returning
-//! [`None`]. A caller that sees `None` and carries on is not swallowing an
-//! error; the error is already in the sink, and the top-level parse refuses if
-//! the sink is non-empty. An optional key is read with [`Table::optional`],
-//! which returns `None` without recording anything.
+//! **`None` means recorded, never means fine.** Every function returning
+//! `Option` pushes a [`Refusal`] before returning [`None`], so a caller that
+//! sees `None` and carries on is not swallowing an error: it is already in the
+//! sink, and the top-level parse refuses if the sink is non-empty. An optional
+//! key is read with [`Table::optional`], which returns `None` recording
+//! nothing.
 
 use std::collections::BTreeSet;
 

@@ -1,36 +1,28 @@
-//! A step's evidence scope: the policy a definition carries, and what the
-//! Drone declares against it.
+//! A step's evidence scope: the policy a definition carries, and what the Drone
+//! declares against it.
 //!
-//! # The policy cannot carry the paths, and that is a missing field
-//!
+//! **The policy cannot carry the paths, and that is a missing field.**
 //! [`EvidenceScope`] has no `context_paths` field and no method returning one.
 //! At definition time nobody knows them — that is what `context_source:
 //! drone_declared` means — so a definition that tried to author them has no
-//! field to put them in, rather than a validator that rejects them afterwards.
-//! The paths arrive as [`DeclaredPaths`], from the Drone, and the two are
-//! joined by `verification`, which is the one place that compares them against
-//! what actually changed.
+//! field to put them in, rather than a validator rejecting them afterwards. The
+//! paths arrive as [`DeclaredPaths`], from the Drone, and the two are joined by
+//! `verification`, the one place that compares them against what changed.
 //!
-//! # `reference_docs` names evidence, never a path
+//! **`reference_docs` names evidence, never a path.** The yardstick a step is
+//! measured against is an earlier step's evidence, spelled the way
+//! `baseline_ref` is — `<step_id>.evidence`, through [`EvidenceRef`], which has
+//! no constructor taking a bare [`StepId`]. So the two cannot drift into two
+//! spellings of one thing, and a definition cannot point the Judge at a file on
+//! disk that nothing recorded. It is kept apart from `context_paths`
+//! deliberately: one is what changed and the other what it is measured against,
+//! so the Judge is never confused about which is target and which is standard.
 //!
-//! The yardstick a step is measured against is an earlier step's evidence, and
-//! it is spelled the way `baseline_ref` is — `<step_id>.evidence`, through
-//! [`EvidenceRef`], which has no constructor taking a bare [`StepId`]. So the
-//! two cannot drift into two spellings of one thing, and a definition cannot
-//! point the Judge at a file on disk that nothing recorded.
-//!
-//! **Kept separate from `context_paths` deliberately.** One is what changed and
-//! the other is what it is measured against, so the Judge is never confused
-//! about which is target and which is standard — `docs/concepts/judge.md`.
-//!
-//! # Why these are not `WriteTargets`
-//!
-//! `WriteTargets` is the **Job's** declared write scope and binds nothing —
-//! its own comment says so. This is one **step's**, and where
-//! `scope_diff_check` is on it binds that step's footprint. The step's is the
-//! Job's narrowed to one step, which is the granularity at which "did step two's
-//! work during step one" is even a question. Two newtypes so neither can be
-//! passed where the other is expected.
+//! **Not `WriteTargets`.** That is the **Job's** declared write scope and binds
+//! nothing, as its own comment says. This is one **step's**, and where
+//! `scope_diff_check` is on it, it binds that step's footprint — the Job's
+//! narrowed to the granularity at which "did step two's work during step one"
+//! is even a question. Two newtypes, so neither can be passed for the other.
 
 use alloc::vec::Vec;
 

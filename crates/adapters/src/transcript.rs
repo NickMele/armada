@@ -1,33 +1,28 @@
 //! One line of a Drone's output, read.
 //!
-//! # A deserialiser, not a parser
+//! **A deserialiser, not a parser.** Every fact Armada needs is a named key on
+//! a typed event — measured, spike 3 — so nothing here regexes prose, infers
+//! from ordering, or guesses. The shapes below are that stream's, which is why
+//! they are in this crate and nowhere else.
 //!
-//! Every fact Armada needs is a named key on a typed event — measured, spike 3
-//! — so nothing here regexes prose, infers from ordering, or guesses. The
-//! shapes below are that stream's, which is why they are in this crate and
-//! nowhere else.
-//!
-//! # Bytes enter the process here, and go through the one codec that reads them
-//!
-//! `ipc::decode` does the reading. Gate rule five scopes the untyped-JSON entry
+//! **Bytes enter the process here, through the one codec that reads them.**
+//! `ipc::decode` does the reading: gate rule five scopes the untyped-JSON entry
 //! points to the crates where bytes arrive, and calling through the codec is
 //! how this crate reads a stream without becoming a third of them — the same
-//! route `fleet` already takes for its runtime file, for the same reason.
+//! route `fleet` already takes for its runtime file.
 //!
-//! # Nothing is dropped, in either direction
+//! **Nothing is dropped, in either direction.** A line that does not decode is
+//! [`DroneEvent::Unreadable`] and one this vocabulary has no name for is
+//! [`DroneEvent::Unrecognised`]. A decoder answering "nothing happened" is the
+//! pre-filtered query in another shape, and the caller could not tell a quiet
+//! Drone from a stream it stopped reading. **It holds at the block too**: a
+//! turn is several lines, each answering for itself.
 //!
-//! A line that does not decode is [`DroneEvent::Unreadable`] and one this
-//! vocabulary has no name for is [`DroneEvent::Unrecognised`]; a decoder that
-//! answered "nothing happened" is the pre-filtered query in another shape, and
-//! the caller could not tell a quiet Drone from a stream it stopped reading.
-//! **It holds at the block too**: a turn is several, each answering for itself.
-//!
-//! # The fields that are deliberately not read
-//!
-//! `is_error`, `subtype`, `stop_reason` and `terminal_reason` on the
-//! terminating event. All four were present, agreeing and wrong on a run that
-//! did nothing — so there is no field on [`DroneEvent::Ended`] to put them in,
-//! and a gate cannot read one by mistake.
+//! **Four fields are deliberately not read**: `is_error`, `subtype`,
+//! `stop_reason` and `terminal_reason` on the terminating event. All four were
+//! present, agreeing and wrong on a run that did nothing — so there is no field
+//! on [`DroneEvent::Ended`] to put them in, and a gate cannot read one by
+//! mistake.
 
 use adapter_traits::{CallDetail, DroneEvent};
 use serde::Deserialize;

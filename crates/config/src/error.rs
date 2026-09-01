@@ -5,26 +5,22 @@
 //! the raise site. The `Display` impls exist so a refusal reads, and the fields
 //! exist so a caller can match on it without reading prose.
 //!
-//! # Every refusal names three things
+//! **Every refusal names three things**: the file, the key, and what was wrong.
+//! "Refuse loudly" is the requirement, and a message naming two of the three
+//! sends somebody back to the file to guess which line it meant. [`Refusal`]
+//! carries the key and the fault; [`LoadError::Refused`] carries the file and
+//! holds them.
 //!
-//! The file, the key and what was wrong. "Refuse loudly" is the requirement,
-//! and a message that names two of the three sends somebody back to the file to
-//! guess which line it meant. [`Refusal`] carries the key and the fault;
-//! [`LoadError::Refused`] carries the file and holds them.
+//! **A refusal set, not the first refusal.** Parsing collects every fault in
+//! the document and returns them together. A parser that stops at the first
+//! makes fixing an `armada.yml` a sequence of round trips, and — the reason
+//! that actually decides it — would hide the finding this milestone step exists
+//! to surface: four checked-in workflow samples declare `structure: "linear"`
+//! and carry `verdict_routing`, and every one of them also carries keys M1 does
+//! not read. Under a bail-on-first parser the contradiction is never reached.
 //!
-//! # A refusal set, not the first refusal
-//!
-//! Parsing collects every fault in the document and returns them together. A
-//! parser that stops at the first one makes fixing an `armada.yml` a sequence
-//! of round trips, and — the reason that actually decides it — it would hide
-//! the finding this milestone step exists to surface: four checked-in workflow
-//! samples declare `structure: "linear"` and carry `verdict_routing`, and every
-//! one of them also carries keys M1 does not read. Under a bail-on-first parser
-//! the contradiction is never reached.
-//!
-//! This is the same shape as `store`'s [`LoadAllError::SomeJobsUnreadable`],
-//! for the same reason: the caller decides what a partial answer is worth, and
-//! the function does not decide on its behalf.
+//! Same shape as `store`'s [`LoadAllError::SomeJobsUnreadable`], for the same
+//! reason: the caller decides what a partial answer is worth.
 //!
 //! [`LoadAllError::SomeJobsUnreadable`]: store::LoadAllError
 

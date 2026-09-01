@@ -1,33 +1,27 @@
 //! `evidence_scope` on a step: the policy, read off a file.
 //!
-//! # `context_paths` is refused by name, and that is the whole rule
+//! **`context_paths` is refused by name, and that is the whole rule.** At
+//! definition time nobody knows the paths — `context_source: drone_declared`
+//! says so — and the schema puts the field on the **resolved** object rather
+//! than on the definition. So a file carrying one gets a refusal naming which
+//! object it belongs to, rather than "unknown key", which would read as a field
+//! M1 has not reached.
 //!
-//! At definition time nobody knows the paths — `context_source:
-//! drone_declared` says so — and the schema puts the field on the **resolved**
-//! object rather than on the definition. So a file carrying one gets a refusal
-//! that says which object it belongs to, not "unknown key", which would read as
-//! a field M1 has not reached.
+//! **`reference_docs` is read, and names evidence rather than a file.** Each
+//! entry is `<step_id>.evidence`, parsed through `EvidenceRef` — the same type
+//! and spelling `baseline_ref` uses, so the yardstick and the gaming baseline
+//! cannot drift into two forms of one thing. Anything else is refused rather
+//! than resolved: a definition pointing the Judge at a path on disk would name
+//! something nothing recorded. **Which step it names is not checked here** —
+//! whether it is strictly earlier is a question about the Job's position in the
+//! workflow, and `fleet` answers it where the position is known.
 //!
-//! # `reference_docs` is read, and it names evidence rather than a file
-//!
-//! Each entry is `<step_id>.evidence`, parsed through `EvidenceRef` — the same
-//! type and the same spelling `baseline_ref` uses, so the yardstick and the
-//! gaming baseline cannot drift into two forms of one thing. Anything else is
-//! refused rather than resolved: a definition pointing the Judge at a path on
-//! disk would be naming something nothing recorded.
-//!
-//! **Which step it names is not checked here.** Whether it is strictly earlier
-//! is a question about the Job's position in the workflow, and `fleet` answers
-//! it where the position is known — the rule `crate::judge`'s `baseline_ref`
-//! already follows.
-//!
-//! # `max_context_size` is refused as deferred
-//!
-//! It is a legal schema key and it is not read. The number is undecided and its
-//! owner is verification rather than the Judge — `docs/concepts/judge.md` says
-//! the cap is deliberately ownerless because it bounds all of verification, not
-//! the Judge Check alone. A key nothing reads is a promise the file makes and
-//! the system does not keep — `crate::workflow`'s reason, applied here.
+//! **`max_context_size` is refused as deferred.** It is a legal schema key and
+//! it is not read: the number is undecided and its owner is verification rather
+//! than the Judge, because `docs/concepts/judge.md` makes the cap deliberately
+//! ownerless — it bounds all of verification, not the Judge Check alone. A key
+//! nothing reads is a promise the file makes and the system does not keep,
+//! which is `crate::workflow`'s reason applied here.
 
 use core_model::{ContextSource, DeclarePlanAt, EvidenceRef, EvidenceScope, RepoPath};
 use serde_yaml_ng::Value;

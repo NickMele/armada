@@ -1,29 +1,23 @@
 //! Forgetting a Job — whole, or not at all.
 //!
-//! # There is no method here that deletes a row
-//!
-//! [`Store::forget_job`] takes a [`JobId`] and removes the Job with every row
-//! beneath it. There is no `delete_event`, no `delete_step` and no predicate a
-//! caller supplies, because each of those is a way to leave a Job standing over
-//! a history that no longer explains it — and the fold would then read back a
-//! Job that never happened.
-//!
+//! **There is no method here that deletes a row.** [`Store::forget_job`] takes
+//! a [`JobId`] and removes the Job with every row beneath it. There is no
+//! `delete_event`, no `delete_step` and no predicate a caller supplies, because
+//! each of those is a way to leave a Job standing over a history that no longer
+//! explains it — and the fold would then read back a Job that never happened.
 //! The database holds the same rule from underneath: `job_events` refuses a
-//! delete while its Job row exists. See [`schema::MIGRATIONS`]'s fourth entry.
+//! delete while its Job row exists, per [`schema::MIGRATIONS`]'s fourth entry.
 //!
-//! # One transaction, and foreign keys deferred inside it
+//! **One transaction, with foreign keys deferred inside it.** The Job row goes
+//! first so the trigger lets the events go, which violates the foreign key for
+//! as long as the transaction is open; `defer_foreign_keys` moves that check to
+//! the commit, where both halves are gone. Nothing outside the transaction ever
+//! sees the half-forgotten shape.
 //!
-//! The Job row goes first so the trigger lets the events go, which is a state
-//! that violates the foreign key for as long as the transaction is open.
-//! `defer_foreign_keys` moves that check to the commit, where both halves are
-//! gone. Nothing outside the transaction ever sees the half-forgotten shape.
-//!
-//! # The tables are asked for, not listed
-//!
-//! "Every row beneath it" is read out of the file's own catalog by
-//! [`tables_pointing_at_a_job`] each time, because the three times this was a
-//! list in a loop it was a list three tables out of date. See that function for
-//! what it cost.
+//! **The tables are asked for, not listed.** "Every row beneath it" is read out
+//! of the file's own catalog by [`tables_pointing_at_a_job`] each time, because
+//! the three times this was a list in a loop it was a list three tables out of
+//! date. See that function for what it cost.
 //!
 //! [`schema::MIGRATIONS`]: crate::schema::MIGRATIONS
 
