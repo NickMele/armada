@@ -28,11 +28,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::attempt::StepAttempt;
 use crate::checks::{CheckRun, DeclaredCheck, DeclaredJudge};
-use crate::enums::{
-    AdvanceGate, CriterionSource, DependencyDirection, JudgeVerdict, Recourse, StepState,
-};
+use crate::enums::{AdvanceGate, CriterionSource, DependencyDirection, Recourse, StepState};
 use crate::ids::{CriterionId, Instant, JobId, StepId};
 use crate::job::{JobSummary, Subject};
+use crate::judged::{Flagged, Judged, KeptDeliverable};
 use crate::overlap::ScopeOverlap;
 use crate::waiting::{QuestionInFlight, RedirectInFlight, RedirectWaiting};
 use crate::work::JobFootprint;
@@ -76,6 +75,11 @@ pub struct StepFacts {
     /// What the gaming check flagged, in the order it answered. Empty on a step
     /// that declares none and on a step nothing was found on.
     pub flagged: Vec<Flagged>,
+    /// The copies of this step's deliverable that are on disk, oldest run
+    /// first. **The one fact here read off the filesystem** — Fleet rebuilds
+    /// each name from the step, the run and the target the frozen workflow
+    /// declares, and answers only the names that are there.
+    pub deliverables: Vec<KeptDeliverable>,
     /// Every run of this step, oldest first, folded from the Job's own log.
     ///
     /// **Not a row and not the workflow's** — the other facts here are one or
@@ -457,6 +461,21 @@ pub struct StepDetail {
     /// found and where — the same relation `judged` has to a `gate_failure`.
     /// Empty on every step nothing was flagged on, which is nearly all of them.
     pub flagged: Vec<Flagged>,
+    /// The copies of this step's deliverable Fleet kept, oldest run first.
+    ///
+    /// **The third of the three records a verdict is argued with**, beside
+    /// [`CheckRun::output_path`] and [`Judged::brief_path`]: what the Judge
+    /// read, what it printed, and what it was asked. One without the others
+    /// cannot separate a bad Judge from a bad brief, which is why all three
+    /// cross rather than the two that already did.
+    ///
+    /// **Empty is the ordinary case.** A step that declares no deliverable
+    /// keeps none, and so does one whose Judge was never asked — the bytes are
+    /// read where the Judge's call is built and nowhere else.
+    ///
+    /// [`CheckRun::output_path`]: crate::CheckRun::output_path
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub deliverables: Vec<KeptDeliverable>,
     /// Every run of this step, oldest first. **`Attempt 1 refused`, `Attempt 2
     /// advanced`** — the rows a rail draws under a step that was worked more
     /// than once.
@@ -598,135 +617,15 @@ impl StepDetail {
                 ),
             judged: facts.map(|facts| facts.judged.clone()).unwrap_or_default(),
             flagged: facts.map(|facts| facts.flagged.clone()).unwrap_or_default(),
+            deliverables: facts
+                .map(|facts| facts.deliverables.clone())
+                .unwrap_or_default(),
             attempts: facts
                 .map(|facts| facts.attempts.clone())
                 .unwrap_or_default(),
             judging: facts.and_then(|facts| facts.judging.clone()),
             entered_at: step.entered_at().into(),
             updated_at: step.updated_at().into(),
-        }
-    }
-}
-
-/// One criterion the Judge answered, as a person reads it.
-///
-/// **A refusal owes three lines and a no-objection owes none**, which is why
-/// the three below are optional rather than blank: there is nothing to cite
-/// where nothing was refused, and an empty string would read as a citation
-/// somebody lost.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Judged {
-    /// Which criterion was asked. What a citation points at, and what stays
-    /// meaningful at any panel size.
-    pub criterion_id: CriterionId,
-    pub verdict: JudgeVerdict,
-    /// What should be seen if the work were right.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expected: Option<String>,
-    /// What is seen instead.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub produced: Option<String>,
-    /// What that difference does to whoever consumes it. **The line a person
-    /// triages on.**
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub consequence: Option<String>,
-    /// Where the whole brief this verdict answers was written, relative to the
-    /// repository root.
-    ///
-    /// **A reference, never the question**, the way [`CheckRun::output_path`]
-    /// is one: a brief carries the request, the deliverable and the whole
-    /// branch diff, and Bridge does not read the filesystem. **Absent where the
-    /// brief was not kept**, which is a verdict nobody can re-read against its
-    /// input rather than one with an empty question.
-    ///
-    /// [`CheckRun::output_path`]: crate::CheckRun::output_path
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub brief_path: Option<String>,
-}
-
-impl From<&core_model::Judgment> for Judged {
-    fn from(judgment: &core_model::Judgment) -> Judged {
-        Judged {
-            criterion_id: (&judgment.criterion_id).into(),
-            verdict: judgment.verdict.into(),
-            expected: judgment.expected.clone(),
-            produced: judgment.produced.clone(),
-            consequence: judgment.consequence.clone(),
-            brief_path: judgment.brief_path.clone(),
-        }
-    }
-}
-
-/// One gaming pattern found, and what it was found in.
-///
-/// **Never a verdict**, the property `core_model::GamingFlag` has: a flag says
-/// the evidence is suspect and does not say the step failed.
-///
-/// `pattern` is a string rather than a mirrored enum, for the reason
-/// [`Verdict::trigger`] is one: no domain registry declares the set — it comes
-/// from what a workflow's `flag_if` names — so an enum here would be a second
-/// authority for a list that has none.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Flagged {
-    /// The pattern, spelled as `flag_if` spells it.
-    pub pattern: String,
-    /// The file, line or assertion the flag is about, as the check worded it.
-    /// **The whole value of the finding** — an uncited flag is unactionable,
-    /// exactly as an uncited refusal is.
-    pub cited: String,
-    /// Where [`cited`](Flagged::cited) is, where Fleet established that from
-    /// the patch. **Absent is a real answer**: see [`CitedAt`].
-    ///
-    /// Skipped rather than serialised as `null`, which is this crate's rule
-    /// wherever an `Option` crosses — `checks.rs` and `attempt.rs` both do it.
-    /// The TypeScript side spells the field `at?:`, and a `null` arriving
-    /// under a `?:` reads as present-and-empty to every guard written against
-    /// it. One did, and job detail stopped drawing.
-    #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub at: Option<CitedAt>,
-}
-
-/// Where in the change a flag points, for the flags that point anywhere.
-///
-/// **One optional object rather than two optional fields**, so that "there is
-/// nowhere to go" is one thing to read on a row rather than a pair a renderer
-/// has to combine — and so that a line with no file is not a shape the wire
-/// can hold.
-///
-/// **`None` on `Flagged.at` is not a gap Fleet will later fill.** Three
-/// answers cannot carry one and never will: a `no_findings_on_substantial_diff`
-/// flag is a finding about an absence, a citation the check wrote without
-/// quotation marks is about something the change does *not* do, and a flag
-/// stored before this field existed was never located. Drawing "no location"
-/// is right on all three; inventing one is worse than the uncited row it
-/// replaces.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CitedAt {
-    /// Repository-relative, as the patch's post-image side spells it.
-    pub file: String,
-    /// The line in that file **as this change leaves it**, where the flag is
-    /// about a line the change leaves behind. Absent where it is about a line
-    /// the change removed, or about the file as a whole — the file is still
-    /// somewhere to go, and a number pointing into the pre-image would send a
-    /// reader to whatever now sits at it.
-    pub line: Option<u32>,
-}
-
-impl From<&core_model::GamingFlag> for Flagged {
-    fn from(flag: &core_model::GamingFlag) -> Flagged {
-        Flagged {
-            pattern: flag.pattern.as_wire().to_string(),
-            cited: flag.cited.clone(),
-            at: flag.at.as_ref().map(CitedAt::from),
-        }
-    }
-}
-
-impl From<&core_model::CitedAt> for CitedAt {
-    fn from(at: &core_model::CitedAt) -> CitedAt {
-        CitedAt {
-            file: at.path().as_str().to_string(),
-            line: at.line(),
         }
     }
 }

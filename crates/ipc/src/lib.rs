@@ -39,6 +39,7 @@ mod event;
 mod history;
 mod ids;
 mod job;
+mod judged;
 /// The Evidence tool's transport. **A different seam** — Fleet to Drone, not
 /// Fleet to Bridge — so it is a module rather than a flat re-export and none of
 /// its types are in `operations.toml`.
@@ -66,8 +67,8 @@ pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use detail::{
-    CitedAt, Criterion, Dependency, Flagged, JobDelivery, JobDetail, JobSpend, JudgeInFlight,
-    Judged, StepDetail, StepFacts, Stuck, Verdict,
+    Criterion, Dependency, JobDelivery, JobDetail, JobSpend, JudgeInFlight, StepDetail, StepFacts,
+    Stuck, Verdict,
 };
 pub use enums::{
     Actor, AdvanceGate, CheckOutcome, CriterionSource, DependencyDirection, DronePresence,
@@ -86,6 +87,7 @@ pub use job::{
     AttachmentRef, DependencyEdge, JobForgotten, JobList, JobRequest, JobSummary, ProposeJob,
     ProposedCriterion, ProposedPlan, Redirection, Redispatched, Subject, UnreadableJob,
 };
+pub use judged::{CitedAt, Flagged, Judged, KeptDeliverable};
 pub use overlap::{ScopeOverlap, SharedPath};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};

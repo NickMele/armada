@@ -11,8 +11,8 @@
 use core_model::Job;
 use ipc::mcp::NotRecorded;
 use ipc::{
-    CheckRun, DeclaredCheck, DeclaredJudge, Flagged, Judged, StepFacts, StepId, Submitted,
-    WorkflowStep,
+    CheckRun, DeclaredCheck, DeclaredJudge, Flagged, Judged, KeptDeliverable, StepFacts, StepId,
+    Submitted, WorkflowStep,
 };
 use store::{LoadJobError, Moved, RecordedEvent, Store};
 
@@ -285,6 +285,7 @@ fn narrowed(events: &[RecordedEvent]) -> Vec<StepMove> {
 /// in this file. `serving.rs` is the trait impl; its helpers live here.
 pub(crate) fn step_facts(
     aloft: &Aloft,
+    repo_root: &str,
     job: &Job,
     ran: Vec<(core_model::StepId, Vec<core_model::StepCheck>)>,
     judged: Vec<(core_model::StepId, Vec<core_model::Judgment>)>,
@@ -293,35 +294,11 @@ pub(crate) fn step_facts(
 ) -> Vec<StepFacts> {
     job.steps()
         .iter()
-        .map(|step| StepFacts {
-            step_id: StepId::from(step.step_id()),
-            label: job
-                .workflow()
-                .step(step.step_id())
-                .map(|declared| declared.label().to_string()),
-            declares: job
-                .workflow()
-                .step(step.step_id())
-                .map(|declared| declared.checks().iter().map(declared_check).collect()),
-            ran: ran
-                .iter()
-                .find(|(at, _)| at == step.step_id())
-                .map(|(_, checks)| checks.iter().map(CheckRun::from).collect())
-                .unwrap_or_default(),
-            judged: judged
-                .iter()
-                .find(|(at, _)| at == step.step_id())
-                .map(|(_, answers)| answers.iter().map(Judged::from).collect())
-                .unwrap_or_default(),
-            flagged: flagged
-                .iter()
-                .find(|(at, _)| at == step.step_id())
-                .map(|(_, found)| found.iter().map(Flagged::from).collect())
-                .unwrap_or_default(),
+        .map(|step| {
             // The third source, beside the workflow and the per-step tables:
             // the log, which is where how many times a step ran has always
             // been and where `store::step_attempt` reads the same count from.
-            attempts: ipc::StepAttempt::over(
+            let attempts = ipc::StepAttempt::over(
                 moves
                     .iter()
                     .filter(|moved| &moved.step_id == step.step_id())
@@ -330,10 +307,81 @@ pub(crate) fn step_facts(
                         why: moved.why,
                         at: &moved.at,
                     }),
-            ),
-            // The one fact here that is not a row. Read from the live slot
-            // as the answer is assembled, because nothing writes it down.
-            judging: aloft.on(&ipc::JobId::from(job.id()), &StepId::from(step.step_id())),
+            );
+            StepFacts {
+                step_id: StepId::from(step.step_id()),
+                label: job
+                    .workflow()
+                    .step(step.step_id())
+                    .map(|declared| declared.label().to_string()),
+                declares: job
+                    .workflow()
+                    .step(step.step_id())
+                    .map(|declared| declared.checks().iter().map(declared_check).collect()),
+                ran: ran
+                    .iter()
+                    .find(|(at, _)| at == step.step_id())
+                    .map(|(_, checks)| checks.iter().map(CheckRun::from).collect())
+                    .unwrap_or_default(),
+                judged: judged
+                    .iter()
+                    .find(|(at, _)| at == step.step_id())
+                    .map(|(_, answers)| answers.iter().map(Judged::from).collect())
+                    .unwrap_or_default(),
+                flagged: flagged
+                    .iter()
+                    .find(|(at, _)| at == step.step_id())
+                    .map(|(_, found)| found.iter().map(Flagged::from).collect())
+                    .unwrap_or_default(),
+                // **The one fact here read off the filesystem, and a checked one.**
+                // Nothing writes the kept copy's path down: the name is a function
+                // of the step, the run and the target the frozen workflow declares,
+                // so `keeping` rebuilds it and answers only what is there. A column
+                // would be a second authority for a name that already has one, and
+                // a path served without the check is the dead path `#246` is
+                // about, one layer down.
+                deliverables: job
+                    .workflow()
+                    .step(step.step_id())
+                    .and_then(|declared| declared.deliverable())
+                    .map(|target| kept_for(repo_root, job, step.step_id(), &attempts, target))
+                    .unwrap_or_default(),
+                attempts,
+                // The one fact here that is not a row. Read from the live slot
+                // as the answer is assembled, because nothing writes it down.
+                judging: aloft.on(&ipc::JobId::from(job.id()), &StepId::from(step.step_id())),
+            }
+        })
+        .collect()
+}
+
+/// The kept copies of one step's deliverable, over every run the log holds.
+///
+/// **Per run, because a re-run is a different document.** A step worked three
+/// times was judged on three deliverables and the copies are keyed by run, so
+/// one path for the step would name whichever of them sorted first and call it
+/// what the Judge read.
+///
+/// A run that kept nothing contributes nothing — a Judge that was never asked,
+/// a document too big to put in a call, a disk that refused. `keeping` checks
+/// each name, so what comes back is what a person can open.
+fn kept_for(
+    repo_root: &str,
+    job: &Job,
+    step: &core_model::StepId,
+    attempts: &[ipc::StepAttempt],
+    target: &str,
+) -> Vec<KeptDeliverable> {
+    attempts
+        .iter()
+        .filter_map(|run| Some((run.attempt, core_model::Attempt::stored(run.attempt)?)))
+        .flat_map(|(number, attempt)| {
+            crate::keeping::kept_deliverables(repo_root, job.id(), step, attempt, target)
+                .into_iter()
+                .map(move |path| KeptDeliverable {
+                    attempt: number,
+                    path,
+                })
         })
         .collect()
 }
