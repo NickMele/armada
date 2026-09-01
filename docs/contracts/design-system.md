@@ -633,6 +633,9 @@ x              kill                (confirms)
 n              new job
 /              search the current list
 1–5            state filter        (Job Board only, in tab order)
+v              observe             (detail only)
+u              submit for verification  (piloted job only)
+e              redispatch
 ```
 
 **This is the map, not a pattern.** It was settled by drawing the Job
@@ -1520,6 +1523,13 @@ is verification source=Check with actor=Drone.
 
 ## Open questions
 
+- **[pilot-exit-bindings]** What are the keys for Close as superseded and
+  Override the verdict? Every action owes a verb, an icon and a shortcut, and
+  these two have no binding. Both end or overrule a Job's record, so neither
+  should take a spare letter by default — the destructive-key rule exists
+  because a binding chosen for convenience is one a person reaches by accident.
+  Three neighbouring acts took keys in the same pass: Observe `v`, Submit for
+  verification `u`, Redispatch `e`.
 
 - **[status-bar-loudness]** How loudly do the status bar's escalation and
   approval counts render, beyond taking their status token?
