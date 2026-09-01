@@ -11,6 +11,12 @@ dist/
 out/
 .vite/
 
+# The gallery's own intermediate bundle. `out/` above does not match a leading
+# dot, so this was tracked: a 400kB generated file re-committed by anyone who
+# touched a story, three times in the last week alone. It is rebuilt by
+# `packages/components/gallery/build.mjs` in seconds and read by nothing else.
+.out/
+
 # macOS
 .DS_Store
 

@@ -10,8 +10,14 @@ const stories = import.meta.glob<Record<string, any>>("../src/**/*.stories.tsx",
   eager: true,
 });
 
-type Rendered = { title: string; stories: { name: string; html: string }[] };
+type Story = { key: string; name: string; html: string };
+type Rendered = { title: string; stories: Story[] };
 
+/* The export name, kept beside the label. `shoot` derives a story's mark from
+   it — `WaitingOnYou` becomes `waiting-on-you` — and the label cannot serve:
+   it has already had its spaces put back, and two different keys can share
+   one. The key is what the story is called in the module, so it is what a
+   drawing's frame is paired against. */
 function label(key: string) {
   return key
     .replace(/([A-Z])/g, " $1")
@@ -25,7 +31,7 @@ export function collect(): Rendered[] {
     const meta = mod.default;
     if (!meta?.title) continue;
     const Component = meta.component;
-    const rendered: { name: string; html: string }[] = [];
+    const rendered: Story[] = [];
     for (const [key, story] of Object.entries(mod)) {
       if (key === "default" || !story || typeof story !== "object") continue;
       const s = story as { render?: (a: any) => ReactElement; args?: any };
@@ -35,9 +41,10 @@ export function collect(): Rendered[] {
           : Component
             ? createElement(Component, { ...meta.args, ...s.args })
             : null;
-        if (el) rendered.push({ name: label(key), html: renderToStaticMarkup(el) });
+        if (el) rendered.push({ key, name: label(key), html: renderToStaticMarkup(el) });
       } catch (e) {
         rendered.push({
+          key,
           name: label(key),
           html: `<p style="color:var(--status-failed)">did not render: ${String(e)}</p>`,
         });
