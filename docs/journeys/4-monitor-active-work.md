@@ -46,6 +46,22 @@ Open Bridge → Active Jobs → lightweight heartbeat per active Drone: status, 
 
 **The Job's brief sits above the step, on the panel's raised surface.** Why: every step is read against it.
 
+### Produced states line counts on a Job that has stopped, and not on one that is running
+
+A running Job's chapter reads `3 files · all inside the plan`. A finished one reads `3 files · +94 −31 · all inside the plan`. The difference is a measurement, not a field somebody left out.
+
+**The drawing shows a running Job carrying counts, and is wrong on that point.** Counting a file is the same xdiff that renders its patch, and every route to it costs the same — the call that skips the per-file work answers totals only. Measured against this repository, release build:
+
+| Footprint | The file list | The counts |
+|---|---|---|
+| 6 files, 105 lines | 0.08µs | 1.3ms |
+| 104 files, 7.7k lines | 0.25µs | 25ms |
+| 414 files, 59k lines | 1.0µs | 90ms |
+
+The live reading is taken every two seconds while somebody is watching, inside a Fleet turn of 250ms, so a large footprint would spend a third of that turn on a number nobody can read moving that fast. `crates/fleet/src/footprint.rs` takes it once instead, on the transition that ends the Job, and writes it down — which is also the only reading that survives `armada clean` giving the worktree back.
+
+**A file with no counts is one nothing could count**, not one that changed nothing. A binary file has no patch to count and a file moved without being edited is a real zero, so the pair is absent rather than zeroed and the chapter draws no churn where it is missing.
+
 ### The phase strip
 
 **A step's phases and its gate tiers are one progression** — instructed, working, submitted, then the step's Checks, its Judge, and you.
