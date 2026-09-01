@@ -1,16 +1,19 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ActivityLogSheet } from "../../compositions/ActivityLogSheet/ActivityLogSheet";
 import { ActivityLog, type ActivityEntry } from "../../compositions/ActivityLog/ActivityLog";
+import { JobDetailHeaderActions } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
 import { JobDiffSheet, type JobDiffFile } from "../../compositions/JobDiffSheet/JobDiffSheet";
 import { UnifiedDiff, type DiffFile } from "../../compositions/UnifiedDiff/UnifiedDiff";
 import type { RunTreeStep } from "../../compositions/RunTree/RunTree";
 import type { StepChapter } from "../../compositions/StepStory/StepStory";
 import { Button } from "../../primitives/Button/Button";
+import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { JobDetailWithASheet } from "./JobDetailTheLogAndTheDiffAsSheets";
 import {
   BRIEF,
   CHAPTERS,
   ESCALATED_HEADING,
+  escalatedHeading,
   HEADING,
   JOB,
   RUN_RUNNING,
@@ -311,6 +314,45 @@ export const JobDetailEscalatedLogOpen: Story = {
           >
             <ActivityLog entries={ESCALATED_ENTRIES} openId="e4" />
           </ActivityLogSheet>
+        }
+      />
+    </div>
+  ),
+};
+
+/** Every other Job-level act, behind the caret. Destructive last. */
+const BEHIND_THE_CARET = [
+  { label: "Report this job" },
+  { label: "Copy debug info", shortcut: "c" },
+  { label: "Observe", shortcut: "v" },
+  { label: "Kill job", shortcut: "x", danger: true },
+];
+
+/**
+ * **The header alone, at a second escalation reason.** The drawing frames this
+ * one as a header rather than a screen — it is where the split button's lead is
+ * decided — so this story frames it the same way.
+ *
+ * It is here for what it does not share with the story above. That one reads
+ * *Stopped at the gate* under `circle-x`; this reads *Evidence disputed* under
+ * `file-question-mark`. Both come from `ESCALATION_REASON`, neither string is
+ * written anywhere in this package, and a header back on one hard-coded label
+ * could not draw both. #294.
+ *
+ * **The menu is closed and the drawing draws it open.** Not a disagreement to
+ * fix here: `shoot` captures resting states, and the menu is a fixed layer
+ * anchored to its control, so an open one resolves against the window and lands
+ * outside the figure rather than under the button. What it holds is in `items`.
+ */
+export const JobDetailHeaderEvidenceDisputed: Story = {
+  render: () => (
+    <div className="armada-screen">
+      <JobDetailHeaderActions
+        {...escalatedHeading("evidence_suspect")}
+        actions={
+          <SplitButton variant="primary" menuLabel="What else this job offers" items={BEHIND_THE_CARET}>
+            Redispatch as a new job
+          </SplitButton>
         }
       />
     </div>
