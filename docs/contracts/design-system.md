@@ -647,6 +647,7 @@ x              kill                (confirms)
 n              new job
 /              search the current list
 1–5            state filter        (Job Board only, in tab order)
+a              approve             (dispatch card only)
 v              observe             (detail only)
 u              submit for verification  (piloted job only)
 e              redispatch

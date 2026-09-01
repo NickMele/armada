@@ -183,6 +183,18 @@ destructive = false
 confirms = false
 notes = "`d` rather than the initial, because `r` is spent on Review. The glyph is the registry's own assignment for Redirect."
 
+[actions.approve]
+kind = "Action"
+tier = "Contextual"
+verb = "Approve"
+icon = ""
+icon_absent = "undecided"
+shortcut = "a"
+scope = "dispatch card"
+destructive = false
+confirms = false
+notes = "The one act that approves, and the only place it happens. Nothing on a list approves — the Board's needs-approval row carries Review, and #217 records that the held-key rule moved here with the act: `a` acts once and needs releasing, because a queue approved by holding one key is what the one-job-one-decision rule exists to prevent. Scoped rather than global for that reason: a binding that approves must not be live on a surface showing fourteen approvable rows."
+
 [actions.restart_step]
 kind = "Action"
 tier = "Contextual"
