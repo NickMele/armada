@@ -58,6 +58,7 @@ import type { FileReport, JobDetail as JobWhole, JobSummary, StepDetail } from "
 import type { ManifestSummary, WorkflowSummary } from "../../shared/setup";
 import { Acts, StepActs, type ConfirmableAct } from "./Acts";
 import { Decide, DecidedDiff } from "./Decide";
+import { act, pressOf } from "./detail-keys";
 import { span } from "./duration";
 import { factsOf, ordered } from "./facts";
 import { filesOf, footprintNote, readingFor, whyNoFootprint } from "./files";
@@ -157,6 +158,19 @@ export function JobDetail({
   // A selection belongs to the Job it was made in. Carried into the next Job it
   // would name a step that Job may not have.
   useEffect(() => setSelected(null), [job.id]);
+
+  // The detail's contextual tier. Bound while a Job is open and not before, so
+  // nothing on the Board listens for a key that means nothing there — and the
+  // press is swallowed only where something answered it.
+  useEffect(() => {
+    function pressed(event: KeyboardEvent): void {
+      const press = pressOf(event);
+      if (press === null) return;
+      if (act(press)) event.preventDefault();
+    }
+    window.addEventListener("keydown", pressed);
+    return () => window.removeEventListener("keydown", pressed);
+  }, []);
 
   const reading = readingOf(job);
   const render = renderFor(job);
