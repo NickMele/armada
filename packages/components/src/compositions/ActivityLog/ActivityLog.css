@@ -56,15 +56,29 @@
   outline-offset: calc(var(--border-width) * -1);
 }
 
-/* The chevron keeps its column on every row, including the ones with nothing
-   behind them, so the timestamps line up down the stream. */
+/* The disclosure, on the trailing edge — the drawing puts it there on every
+   log row, and `LogEntry` already reserves the same 12px trailing column for
+   the same mark. It was a leading 16px slot held open on every row so the
+   timestamps would line up; trailing, there is nothing to the right of it to
+   line up with, so a row that does not open draws nothing and the leading
+   columns never move.
+
+   `margin-inline-start: auto` rather than a reserved track: the subject flexes
+   and absorbs the slack when there is one, and on a row that is only prose the
+   auto margin is what carries the chevron to the edge instead of leaving it
+   stranded against the end of the sentence. */
 .armada-activity__chevron {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   flex: none;
-  width: var(--space-4);
   align-self: center;
+  margin-inline-start: auto;
+  color: var(--border-strong);
+  transition: color var(--duration-fast) var(--ease);
+}
+
+/* Dim at rest and lit on approach, as `LogEntry` draws it and as the drawing
+   draws it: the marker says the line opens without competing with the line. */
+.armada-activity__row[data-opens]:hover .armada-activity__chevron,
+.armada-activity__row[data-open] .armada-activity__chevron {
   color: var(--fg-muted);
 }
 
@@ -141,14 +155,16 @@
 
 /* --- what an entry opens to ---------------------------------------------- */
 
-/* Indented to the timestamp's left edge: the chevron's slot and the two gaps,
-   measured from the row's own padding. */
+/* Flush with the timestamp, which is now the row's first column. The indent
+   was the leading chevron slot plus its two gaps; with the chevron on the
+   trailing edge there is nothing in front of the timestamp to clear, and
+   keeping the old inset would have hung the payload a slot to the right of
+   the line it belongs to. */
 .armada-activity__payload {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-2) var(--space-3)
-    calc(var(--space-4) + var(--space-2) * 2);
+  padding: var(--space-2) var(--space-2) var(--space-3);
   min-width: 0;
 }
 
