@@ -80,6 +80,44 @@ export const Checks: Story = { args: CHECKS };
 export const AChecksFailed: Story = { args: CHECKS_FAILED };
 
 /**
+ * **A Check the step's paths never reached**, and the row that overflowed the
+ * card.
+ *
+ * A skipped Check names the whole path set it covers, which is a value with no
+ * ceiling — this one is the real Manifest's, and there is no shorter true way
+ * to say it. The card is a reading measure and cannot widen, so the result
+ * wraps onto its own line under its command rather than painting across the
+ * card's right edge.
+ *
+ * **The long value is not the reported one.** A story that only proved the
+ * screenshot would pass again the next time a Manifest declared a longer set.
+ */
+export const AChecksSkipped: Story = {
+  args: {
+    kind: "checks",
+    name: "Checks",
+    state: "cleared",
+    stands: "1 of 2 passed",
+    rows: [
+      {
+        label: "cargo nextest run --workspace",
+        mono: true,
+        state: "cleared",
+        result: "exit 0 · 47s",
+      },
+      {
+        label: "pnpm -C packages/components build-storybook",
+        mono: true,
+        state: "ahead",
+        result:
+          "not run · no changed file is under packages/**, package.json, pnpm-lock.yaml, " +
+          "pnpm-workspace.yaml, apps/desktop/**, tsconfig.base.json",
+      },
+    ],
+  },
+};
+
+/**
  * **The Judge.** A model reading the work against this step's acceptance
  * criteria — and never the Drone's transcript, so it cannot be argued at by
  * the thing it is judging.
