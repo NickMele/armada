@@ -67,7 +67,20 @@
   --sidebar-max: 320px;
   --sidebar-rail: 48px;   /* the rail never disappears */
   --window-floor: 768px;  /* hard floor */
+  /* Two collapse points, no more. --layout-breakpoint is where a two-column
+     split stops fitting: the job detail spine beside its step pane, a two-up
+     card row, the Job row's six-track field run. --layout-breakpoint-narrow is
+     the last tier above the floor, where a three-up goes one-up and the Job row
+     stacks its badge, body and actions. Nothing is named below --window-floor,
+     because the window cannot get there — a media query under it is dead code.
+
+     A media query cannot read a custom property, so a drawing repeats the
+     literal and names the token beside it. In the app these are the Tailwind
+     breakpoint scale and resolve from here, which is why a component spells a
+     responsive variant rather than an @media of its own. A third collapse point
+     is a proposal against this file, never a local media query. */
   --layout-breakpoint: 1100px;
+  --layout-breakpoint-narrow: 880px;
   /* 380px: job detail's left column — the run tree and Where things are. THE
      DRAWN WIDTH, lifted from the `jdRun` frame of the Monitor active work
      journey, which sets `grid-template-columns: 380px minmax(0, 1fr)`. The
