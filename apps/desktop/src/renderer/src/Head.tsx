@@ -80,7 +80,7 @@ export function headOf({
   }
   if (reading) {
     return {
-      title: "Active jobs",
+      title: "Job Board",
       actions: (
         <>
           <Button variant="ghost" size="sm" onClick={onCloseJob}>
@@ -103,7 +103,7 @@ export function headOf({
     };
   }
   return {
-    title: "Active jobs",
+    title: "Job Board",
     actions: (
       <>
         {/* Re-reads over the connection Bridge already holds. It does not
