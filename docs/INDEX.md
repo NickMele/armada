@@ -30,6 +30,9 @@ Each ends with the questions it found and did not answer.
   security posture, and the v1 failure the desktop app exists to escape.
 - [`practices/protocol.md`](practices/protocol.md) — the one seam between Rust
   and TypeScript: version skew, DTOs, and what survives when the two disagree.
+- [`practices/comparing-to-the-drawing.md`](practices/comparing-to-the-drawing.md) —
+  `pnpm shoot`: how a built screen and its drawing become two images side by
+  side, and why an unmarked drawing is refused.
 - [`practices/half-built.md`](practices/half-built.md) — the defect this
   codebase produces most: a thing that exists and nothing reaches. Read before
   calling a change finished

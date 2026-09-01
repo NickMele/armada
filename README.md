@@ -216,6 +216,22 @@ that is already running it exits **0** and names the pid — the state you asked
 for already holds.
 
 
+### Seeing whether a screen matches its drawing
+
+```sh
+pnpm shoot                              # every screen the app builds, as a PNG
+pnpm shoot --design <file.dc.html>      # every marked frame of a drawing
+pnpm shoot --sheet                      # the two, paired, side by side
+```
+
+It needs nothing running and nothing built — the browser is Bridge's own
+Electron — and everything it writes goes to `.shots/`, which is ignored. A state
+captured on one side only is the finding: a screen drawn and never built, or one
+built with nothing to check it against. An unmarked drawing is refused by frame,
+and `--suggest` prints the attribute to paste onto each one.
+
+`docs/practices/comparing-to-the-drawing.md` is the whole of it.
+
 ### Running a Check or a Command by hand
 
 `armada.yml` declares both, and these run them exactly as a Job's gate would —
