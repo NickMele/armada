@@ -217,8 +217,7 @@ shortcut = "s"
 scope = "detail"
 destructive = false
 confirms = false
-unbuilt = "#233"
-notes = "`rotate-cw` is Redispatch and `refresh-cw` is reserved to churning, so the two rotation glyphs are both spoken for. Restarting one step is neither. Fleet has offered the act on an escalated step since #62; what is missing is the control on job detail, and #233 is where that gap is recorded — no other issue tracks it."
+notes = "`rotate-cw` is Redispatch and `refresh-cw` is reserved to churning, so the two rotation glyphs are both spoken for. Restarting one step is neither. Carries no `unbuilt`: Bridge has this act — `Acts.tsx` fires `restart_step` from the step panel and has since #62. What it has no keyboard path to is a different thing from what it cannot do, and #233 read the missing binding as a missing act."
 
 [actions.pilot]
 kind = "Action"

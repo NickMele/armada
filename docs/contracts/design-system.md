@@ -640,7 +640,7 @@ o              open. The same act, named so the palette can display it
 r              review
 t              attest
 d              redirect
-s              restart step        (detail only, not built)
+s              restart step        (detail only)
 p              pilot               (not built)
 c              copy debug info
 x              kill                (confirms)
