@@ -436,6 +436,15 @@ export const Convoy: Story = {
  * `Running` story above — a read-only row with no primary action would look
  * arbitrary; that is the whole reason this issue put origin on the row
  * rather than only on job detail.
+ *
+ * **The step field says the step, and does not repeat the reason.** It read
+ * "Held for CPU headroom", which is a value the real surface cannot emit twice
+ * over: no vocabulary in the repository contains those words, and the badge
+ * beside it already carries the reason — which is exactly the correction
+ * `Active jobs list` made to its own queued rows. The registry does have a word
+ * for a Job the machine is holding, `admission_hold.cpu`, and it reads "waiting
+ * on CPU"; it renders in the status bar, once for the whole fleet, because how
+ * full the machine is is not a fact about one row.
  */
 export const SubDispatchedWaitingOnResources: Story = {
   args: {
@@ -449,7 +458,7 @@ export const SubDispatchedWaitingOnResources: Story = {
     fields: [
       { label: "Workflow", value: "chore, 3 steps", quiet: true },
       { value: <StepBar total={3} current={1} label="Step 2 of 3, waiting" /> },
-      { value: "Held for CPU headroom", emphasis: true },
+      { value: "embed-batch", mono: true, emphasis: true },
       { value: "queued 09:41", quiet: true },
       { value: "Sub-dispatched by job_2d90bb" },
     ],
