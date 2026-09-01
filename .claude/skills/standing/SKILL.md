@@ -1,6 +1,6 @@
 ---
-name: recap
-description: One table of what is in flight, what each thing waits on, and who moves it next. Load when the owner asks where things stand, what is left, or what is blocked.
+name: standing
+description: One table of what is in flight, what each thing waits on, and who moves it next. Load when the owner asks where things stand, what is left, what is blocked, or what he should pick up.
 ---
 
 # Where things stand
