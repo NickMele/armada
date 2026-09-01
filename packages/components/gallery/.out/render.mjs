@@ -1653,19 +1653,49 @@ function emphasised(text, key) {
     return [/* @__PURE__ */ jsx(Fragment$1, { children: part }, `${key}-t${i}`)];
   });
 }
-function GamingFlags({ flags, said, citation = "clipped" }) {
+function GamingFlags({
+  flags,
+  said,
+  citation = "clipped",
+  onOpenAt
+}) {
   if (flags.length === 0) return null;
   return /* @__PURE__ */ jsxs("div", { className: "armada-gaming-flags", "data-citation": citation, children: [
     said === void 0 ? null : /* @__PURE__ */ jsx("span", { className: "armada-gaming-flags__said", children: said }),
     /* @__PURE__ */ jsx("ul", { className: "armada-gaming-flags__list", children: flags.map((flag, at) => /* @__PURE__ */ jsxs("li", { className: "armada-gaming-flags__flag", children: [
-      /* @__PURE__ */ jsx("span", { className: "armada-gaming-flags__pattern", children: flag.pattern }),
+      /* @__PURE__ */ jsx(
+        "span",
+        {
+          className: "armada-gaming-flags__pattern",
+          "data-verb": flag.verb === void 0 ? void 0 : "true",
+          children: flag.verb ?? flag.pattern
+        }
+      ),
       flag.cited === void 0 || flag.cited === "" ? null : citation === "whole" ? /* @__PURE__ */ jsx("div", { className: "armada-gaming-flags__cited", children: /* @__PURE__ */ jsx(Prose, { text: flag.cited }) }) : (
         // The whole citation stays in the title however narrow the row
         // gets, the way the Check's output path does.
         /* @__PURE__ */ jsx("span", { className: "armada-gaming-flags__cited", title: flag.cited, children: flag.cited })
-      )
+      ),
+      flag.at === void 0 ? null : /* @__PURE__ */ jsx(Where, { at: flag.at, onOpen: onOpenAt })
     ] }, `flag-${at}`)) })
   ] });
+}
+function Where({ at, onOpen }) {
+  const where = at.line === void 0 ? at.file : `${at.file}:${at.line}`;
+  if (onOpen === void 0) {
+    return /* @__PURE__ */ jsx("span", { className: "armada-gaming-flags__at", title: where, children: where });
+  }
+  return /* @__PURE__ */ jsx(
+    "button",
+    {
+      type: "button",
+      className: "armada-gaming-flags__at",
+      "data-opens": "true",
+      title: where,
+      onClick: () => onOpen(at),
+      children: where
+    }
+  );
 }
 const GLYPH$4 = {
   not_started: void 0,
@@ -3203,6 +3233,53 @@ const FlaggedAndNotCited = {
     flags: [{ pattern: "evidence_reused" }]
   }
 };
+const WhatItMeansAndWhereItIs = {
+  args: {
+    citation: "clipped",
+    said: "the gaming check flagged this evidence",
+    onOpenAt: () => {
+    },
+    flags: [
+      {
+        pattern: "assertion_weakened",
+        verb: "an assertion now asserts less",
+        cited: "served_every_operation counts the filtered set",
+        at: { file: "crates/api/src/tests/served.rs", line: 214 }
+      },
+      {
+        pattern: "test_deleted",
+        verb: "a test file was removed whole",
+        cited: "the whole of served_every_operation is gone",
+        at: { file: "crates/api/src/tests/served.rs" }
+      },
+      {
+        pattern: "no_findings_on_substantial_diff",
+        verb: "a review that found nothing in a substantial change",
+        cited: "1,204 lines across 18 files, and the review answered clean"
+      }
+    ]
+  }
+};
+const APatternWithNoVerb = {
+  args: {
+    citation: "clipped",
+    flags: [{ pattern: "evidence_reused", cited: "the same run is cited on two steps" }]
+  }
+};
+const WhereWithNowhereToGo = {
+  args: {
+    citation: "whole",
+    said: "What it flagged",
+    flags: [
+      {
+        pattern: "tautological_test",
+        verb: "a test that passes whatever the code does",
+        cited: "`crates/api/src/tests/served.rs:214` — the assertion compares a value against itself, so it holds for every possible implementation.",
+        at: { file: "crates/api/src/tests/served.rs", line: 214 }
+      }
+    ]
+  }
+};
 const OverrulingTwoFlags = {
   args: TwoFlagsReadInFull.args,
   render: (args) => /* @__PURE__ */ jsxs(
@@ -3225,10 +3302,13 @@ const OverrulingTwoFlags = {
 };
 const __vite_glob_0_13 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  APatternWithNoVerb,
   FlaggedAndNotCited,
   OnTheRail,
   OverrulingTwoFlags,
   TwoFlagsReadInFull,
+  WhatItMeansAndWhereItIs,
+  WhereWithNowhereToGo,
   default: meta$W
 }, Symbol.toStringTag, { value: "Module" }));
 function JobBrief({
