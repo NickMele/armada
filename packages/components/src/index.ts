@@ -89,3 +89,7 @@ export * from "./screens/TheShell/TheShell";
 export * from "./errors/ErrorCode/ErrorCode";
 export * from "./errors/ErrorNotice/ErrorNotice";
 export * from "./errors/FileAnIssue/FileAnIssue";
+
+// The run — the workflow as a tree on job detail. Not the rail: a rail drew
+// every step's gate rows inline, and a step's gates are the phase strip's now.
+export * from "./compositions/RunTree/RunTree";

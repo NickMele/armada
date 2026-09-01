@@ -76,3 +76,7 @@
 /* File an issue — the review between an error and a tracker. Appended, per the
    rule above: this list is append-only. */
 @import "./errors/FileAnIssue/FileAnIssue.css";
+
+/* The run — the workflow as a tree on job detail. Appended, per the rule
+   above: this list is append-only. */
+@import "./compositions/RunTree/RunTree.css";
