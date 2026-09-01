@@ -296,6 +296,55 @@ fn an_unknown_key_and_an_unknown_table_are_both_reported() {
     );
 }
 
+#[test]
+fn a_binding_with_no_act_passes_when_it_names_its_issue_and_is_counted() {
+    let found = run(
+        &with("review", &[("unbuilt", "#250")]),
+        &["r  review        (not built)"],
+    );
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(
+        found[0].contains("1 binding registered and not built: review (#250)"),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn an_unbuilt_column_that_is_not_an_issue_fails() {
+    let found = run(
+        &with("review", &[("unbuilt", "later")]),
+        &["r  review        (not built)"],
+    );
+    assert!(
+        found
+            .iter()
+            .any(|f| f.contains("is not an issue reference")),
+        "{found:?}"
+    );
+}
+
+/// Both directions, because either one alone is the drift the pair exists to
+/// catch: a map row a person presses for nothing, or a column left behind
+/// after the act landed.
+#[test]
+fn the_map_and_the_column_must_agree_about_not_built() {
+    let silent_map = run(&with("review", &[("unbuilt", "#250")]), &["r  review"]);
+    assert!(
+        silent_map
+            .iter()
+            .any(|f| f.contains("annotated `not built` in one of the two")),
+        "{silent_map:?}"
+    );
+
+    let silent_row = run(&row("review", WHOLE), &["r  review        (not built)"]);
+    assert!(
+        silent_row
+            .iter()
+            .any(|f| f.contains("annotated `not built` in one of the two")),
+        "{silent_row:?}"
+    );
+}
+
 /// The parser reads TOML's literal string, which is how `⌘\` is spelled
 /// without an escape reaching the comparison against the contract.
 #[test]

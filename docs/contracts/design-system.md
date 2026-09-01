@@ -640,8 +640,8 @@ o              open. The same act, named so the palette can display it
 r              review
 t              attest
 d              redirect
-s              restart step        (detail only)
-p              pilot
+s              restart step        (detail only, not built)
+p              pilot               (not built)
 c              copy debug info
 x              kill                (confirms)
 n              new job
@@ -664,6 +664,15 @@ and the authority. They stay here because this document is pasted whole
 into a design session, where a pointer resolves to nothing; the gate
 reads both and fails where they disagree, on the binding, the verb and
 the annotations in brackets.
+
+**`not built` means the binding is registered and nothing answers it.**
+The map was settled by drawing, so it holds acts nobody has written, and
+the palette displays a binding beside every entry — a row a person
+presses and gets nothing from is worse than one that is absent. The
+registry's `unbuilt` column names the issue that gives each of them an
+act, and the gate holds the annotation and the column to each other. So
+the palette can draw these rows disabled, or leave them out, on a fact
+rather than on a list of exceptions kept in the app.
 
 Three reversals against what stood before, each with a reason:
 

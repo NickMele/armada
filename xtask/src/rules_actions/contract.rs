@@ -109,6 +109,16 @@ pub fn against_the_contract(
                 line.line, line.keys
             ));
         }
+        // The map is what a design session pastes and the palette is drawn
+        // from, so a binding no act answers has to say so there too — a
+        // drawn palette row nobody can press is the defect #233 reported.
+        if rest.contains("not built") != entry.declares("unbuilt") {
+            report.fail(format!(
+                "{CONTRACT}:{} — `{}` is annotated `not built` in one of the two and not the \
+                 other. `{id}` is the row",
+                line.line, line.keys
+            ));
+        }
         for (annotation, scope) in [
             ("detail only", "detail"),
             ("piloted job only", "piloted job"),

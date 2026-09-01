@@ -12,6 +12,11 @@
 //! An `icon` is a key in `packages/icons/icons.toml`, which stays the authority
 //! on what a silhouette may mean.
 //!
+//! **A row Bridge cannot answer yet says which issue answers it.** The
+//! registry is ahead of the app on purpose — `p` and `s` were bound when the
+//! map was settled and neither act exists — and `unbuilt` is what stops that
+//! reading as the file claiming an act that is there. See [`unbuilt`].
+//!
 //! **No `toml` crate**, for the reason [`crate::rules_icons`] has none: the
 //! gate keeps no dependencies. This is a line parser for the one shape the
 //! registry has, and a line it cannot read is reported as one.
@@ -40,6 +45,7 @@ const KEYS: &[&str] = &[
     "scope",
     "destructive",
     "confirms",
+    "unbuilt",
     "notes",
 ];
 
@@ -71,6 +77,11 @@ impl Entry {
     }
     fn is(&self, key: &str) -> bool {
         self.get(key) == "true"
+    }
+    /// Whether the row carries the key at all, which `get` cannot say: an
+    /// absent column and one set to `""` read the same through it.
+    fn declares(&self, key: &str) -> bool {
+        self.fields.contains_key(key)
     }
 }
 
@@ -200,6 +211,7 @@ pub fn check(
     report: &mut Report,
 ) {
     let mut undecided: Vec<String> = Vec::new();
+    let mut registered: Vec<String> = Vec::new();
     let mut bindings: BTreeMap<(&str, &str), &str> = BTreeMap::new();
 
     for (id, entry) in entries {
@@ -208,6 +220,7 @@ pub fn check(
         one_of(&at, id, entry, "tier", TIERS, report);
         one_of(&at, id, entry, "scope", SCOPES, report);
         columns(&at, id, entry, glyphs, &mut undecided, report);
+        unbuilt(&at, id, entry, &mut registered, report);
 
         if entry.is("destructive") && !entry.is("confirms") {
             report.fail(format!(
@@ -240,6 +253,46 @@ pub fn check(
             undecided.join(", ")
         ));
     }
+
+    if !registered.is_empty() {
+        let count = registered.len();
+        let binds = if count == 1 { "binding" } else { "bindings" };
+        report.warn(format!(
+            "{REGISTRY} — {count} {binds} registered and not built: {}. The registry is ahead \
+             of Bridge deliberately; each names the issue that closes the gap",
+            registered.join(", ")
+        ));
+    }
+}
+
+/// A binding whose act Bridge does not have names the issue that builds it.
+///
+/// The palette draws a binding beside every entry, so a row nothing answers is
+/// a key a person will press. Without a column saying which rows those are,
+/// the alternative is a list of them living in `apps/`, which is the second
+/// registry this file exists to prevent — and the gate would keep reading as
+/// though the app were wrong rather than behind. `icon_absent` is the same
+/// idiom one column over: a field that exists only where something is missing
+/// and carries why.
+///
+/// The value is an issue reference and nothing else. A prose excuse here would
+/// be unfollowable, and the point of the column is that the gap is tracked.
+fn unbuilt(at: &str, id: &str, entry: &Entry, registered: &mut Vec<String>, report: &mut Report) {
+    if !entry.declares("unbuilt") {
+        return;
+    }
+    let issue = entry.get("unbuilt");
+    let numbered = issue
+        .strip_prefix('#')
+        .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
+    if !numbered {
+        report.fail(format!(
+            "{at} — `unbuilt = \"{issue}\"` on `{id}` is not an issue reference. \
+             A binding with no act names the issue that gives it one, as `#265`"
+        ));
+        return;
+    }
+    registered.push(format!("{id} ({issue})"));
 }
 
 /// The three columns, and what a blank one has to say for itself.

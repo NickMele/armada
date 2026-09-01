@@ -35,12 +35,24 @@
 #                 list and detail | detail | job board | piloted job
 #   destructive - whether it ends or overrules a Job's record
 #   confirms    - whether it takes a confirmation. Destructive implies it
+#   unbuilt     - the issue that builds the act, on a row Bridge cannot answer
+#                 yet. Absent means live. The gate refuses anything here that
+#                 is not an issue reference, and the contract's map annotates
+#                 the same rows `not built`
 #   notes       - the reasoning the row carries
 #
-# `icon_absent = "undecided"` is a gap, not a default. Eight rows carry one,
-# because no registered glyph means the act and inventing one is a decision
-# that belongs in the icon registry rather than here. They are countable and
-# the gate counts them; what a new action may not do is ship without either.
+# `icon_absent = "undecided"` is a gap, not a default: no registered glyph
+# means the act, and inventing one is a decision that belongs in the icon
+# registry rather than here. The gate counts the rows carrying it; what a new
+# action may not do is ship without either.
+#
+# **`unbuilt` is the other kind of blank, and it is not a gap.** This file was
+# transcribed from a map settled by drawing the Board and the palette together,
+# so it holds acts nobody has written — `p` and `s` when it landed, and job
+# detail's bindings since. The palette displays a binding beside every entry,
+# which makes a row nothing answers a key a person will press; the alternative
+# to a column is a list of them in `apps/`, which is the second registry this
+# file exists to prevent. A row loses the field in the change that builds it.
 
 # ------------------------------------------------------------------ global
 
@@ -205,7 +217,8 @@ shortcut = "s"
 scope = "detail"
 destructive = false
 confirms = false
-notes = "`rotate-cw` is Redispatch and `refresh-cw` is reserved to churning, so the two rotation glyphs are both spoken for. Restarting one step is neither."
+unbuilt = "#233"
+notes = "`rotate-cw` is Redispatch and `refresh-cw` is reserved to churning, so the two rotation glyphs are both spoken for. Restarting one step is neither. Fleet has offered the act on an escalated step since #62; what is missing is the control on job detail, and #233 is where that gap is recorded — no other issue tracks it."
 
 [actions.pilot]
 kind = "Action"
@@ -216,7 +229,8 @@ shortcut = "p"
 scope = "list and detail"
 destructive = false
 confirms = false
-notes = "The glyph is reserved to Pilot. Once the terminal has focus every keystroke belongs to it and this tier is suspended; only Esc Esc releases it."
+unbuilt = "#250"
+notes = "The glyph is reserved to Pilot. Once the terminal has focus every keystroke belongs to it and this tier is suspended; only Esc Esc releases it — a safety rule written against an act that does not exist yet, which is what #233 found. #250 is the control; the handover the exemption describes is #255's three exits."
 
 [actions.copy_debug_info]
 kind = "Action"
