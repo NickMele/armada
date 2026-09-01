@@ -79,3 +79,23 @@
 
 /* A drone asking a person a question. Appended, per the same rule. */
 @import "./compositions/DroneQuestion/DroneQuestion.css";
+
+/* Job detail's two chips — a fact and a path. Two files because they are two
+   components: the path's whole reason to exist is the half of it that refuses
+   to truncate, and folding it into the fact chip would lose that. */
+@import "./compositions/FactChip/FactChip.css";
+@import "./compositions/PathChip/PathChip.css";
+
+/* One row of the run, and the facts it opens. */
+@import "./compositions/StepRow/StepRow.css";
+
+/* One row of Where things are — a path that opens, an identifier that copies. */
+@import "./compositions/WhereRow/WhereRow.css";
+
+/* The step's story: one chapter, and one line of the activity log inside it. */
+@import "./compositions/Chapter/Chapter.css";
+@import "./compositions/LogEntry/LogEntry.css";
+
+/* What a stage of the phase strip opens to. Its own file because it is its own
+   component: the strip positions it, and it draws flat on a panel too. */
+@import "./compositions/PhaseCard/PhaseCard.css";

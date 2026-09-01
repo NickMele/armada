@@ -1,0 +1,70 @@
+/* A path chip. The drawing's `.path`: the fact chip's surface and geometry,
+   split into a directory that gives way and a basename that never does.
+
+   The same 12px-against---text-2xs note applies as on the fact chip; both take
+   the token, so the two stay the same object. */
+.armada-path {
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--border-width) calc(var(--space-1) + var(--space-1) / 2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  vertical-align: baseline;
+  text-align: left;
+}
+
+/* A chip that copies is a control. No copy glyph: a mono value that brightens
+   under the cursor is the convention this app already uses for a value that
+   goes to the clipboard, and a glyph on every produced path in a six-row
+   column is six glyphs saying one thing. */
+button.armada-path {
+  cursor: pointer;
+}
+
+button.armada-path:hover .armada-path__base,
+button.armada-path:focus-visible .armada-path__base {
+  color: var(--fg-default);
+}
+
+button.armada-path:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* The half that gives way. `direction: rtl` puts the overflow end at the
+   START of the run, so the ellipsis eats the repository root and leaves the
+   directory nearest the filename — `…/settings/src/` rather than
+   `packages/settin…`. `text-align: left` puts the kept text back against the
+   basename it belongs to. */
+.armada-path__dir {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+  color: var(--fg-subtle);
+}
+
+/* The half that never gives way. `flex: none` is the whole rule: the basename
+   is what the row is about, and a layout that lets it shrink is the one this
+   component exists to replace. */
+.armada-path__base {
+  flex: none;
+  color: var(--fg-muted);
+}
+
+/* What the path is, where the path does not say. Sans, so it reads as a note
+   about the value rather than as more of the value. */
+.armada-path__note {
+  flex: none;
+  margin-inline-start: calc(var(--space-1) + var(--space-1) / 2);
+  font-family: var(--font-sans);
+  color: var(--fg-subtle);
+}

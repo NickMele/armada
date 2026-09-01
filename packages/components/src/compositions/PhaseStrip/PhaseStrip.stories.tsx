@@ -1,66 +1,100 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { PhaseStrip } from "./PhaseStrip";
 
-/**
- * One story per gate shape the drawing names, plus the four states a step can
- * be standing in. Press a stage: what it is, what it is waiting on and where it
- * stands open beneath the strip.
- */
 const meta: Meta<typeof PhaseStrip> = {
   title: "Compositions/Phase strip",
   component: PhaseStrip,
+  decorators: [
+    // The panel the strip lives in. Every tint on it is picked against
+    // --bg-raised, and the card that opens off it lands on the same ground.
+    (Story) => (
+      <div
+        style={{
+          width: "calc(var(--space-12) * 16)",
+          padding: "var(--space-4) var(--space-6)",
+          borderRadius: "var(--radius-md)",
+          border: "var(--border-width) solid var(--border-default)",
+          background: "var(--bg-raised)",
+          // The card opens beneath the strip and has to be visible in the
+          // story, not clipped by the frame around it.
+          minHeight: "calc(var(--space-12) * 8)",
+        }}
+      >
+        <Story />
+      </div>
+    ),
+  ],
 };
 export default meta;
 
 type Story = StoryObj<typeof PhaseStrip>;
 
+const CHECKS = [
+  {
+    label: "cargo build --workspace --locked",
+    mono: true,
+    state: "cleared" as const,
+    result: "exit 0 · 47s",
+  },
+  {
+    label: "cargo nextest run --workspace",
+    mono: true,
+    state: "current" as const,
+    result: "running · 1m 04s",
+  },
+];
+
+const CRITERIA = [
+  { label: "Selectors import without the store", state: "cleared" as const },
+  { label: "No behaviour change in the reducer", state: "cleared" as const },
+];
+
 /**
- * `auto_if_judge_passes` — the commands decide, then a model reads it. The
- * Judge tier says how many criteria it is answering, because that is what it
- * will report against.
+ * A step the Drone is working. Instructed cleared, Working live, and
+ * everything past it ahead — no hue at all, because a stage still ahead is a
+ * position and not a state.
+ *
+ * The connectors are what make this an order rather than a set, and `You`
+ * closes it. The build stopped at the Judge, which said a step could only ever
+ * be waiting on a machine.
  */
-export const Working: Story = {
+export const AllFourStates: Story = {
   args: {
     note: "The Drone is working. Nothing has been submitted, so no gate has been asked anything yet.",
     stages: [
       { id: "instructed", label: "Instructed", state: "cleared" },
       { id: "working", label: "Working", state: "current" },
       { id: "submitted", label: "Submitted", state: "ahead" },
-      {
-        id: "checks",
-        label: "build, test",
-        kind: "checks",
-        state: "ahead",
-        stands: "not run",
-        rows: [
-          { label: "cargo build --workspace --locked", mono: true, result: "not run" },
-          { label: "cargo nextest run --workspace", mono: true, result: "not run" },
-        ],
-      },
+      { id: "checks", label: "build, test", kind: "checks", state: "ahead", rows: CHECKS },
       {
         id: "judge",
         label: "Judge · 2 criteria",
         kind: "judge",
         state: "ahead",
-        stands: "not reached",
-        rows: [
-          { label: "Selectors import without the store", result: "not reached" },
-          { label: "No behaviour change in the reducer", result: "not reached" },
-        ],
+        rows: CRITERIA,
       },
-      { id: "you", label: "You", kind: "human", state: "ahead" },
+      {
+        id: "you",
+        label: "You",
+        kind: "human",
+        state: "ahead",
+        cardNote: "Approve, or send it back with a reason. Both are recorded on the Job.",
+      },
     ],
   },
 };
 
 /**
- * A Check running. Open `build, test` and it says what a Check is — commands
- * the repository declares, which Fleet runs and the Drone never does.
+ * **`You` present and lit.** Everything mechanical cleared and the step is
+ * stopped anyway, because this workflow asks for a person whatever the gates
+ * came to.
+ *
+ * Amber, never red. A step sitting here is stopped with nothing wrong, which
+ * is the one shape that must not read as a failure.
  */
-export const AChecksRunning: Story = {
+export const WithYouPresent: Story = {
   args: {
-    openId: "checks",
-    note: "The suite is running. Nothing has been asked of the Judge yet.",
+    note: "Every Check passed and both criteria were met. This step is waiting on you.",
     stages: [
       { id: "instructed", label: "Instructed", state: "cleared" },
       { id: "working", label: "Working", state: "cleared" },
@@ -69,33 +103,57 @@ export const AChecksRunning: Story = {
         id: "checks",
         label: "build, test",
         kind: "checks",
-        state: "current",
-        stands: "1 of 2 · running",
+        state: "cleared",
+        stands: "2 of 2 passed",
         rows: [
-          { label: "cargo build --workspace --locked", mono: true, result: "exit 0 · 47s", named: "passed" },
-          { label: "cargo nextest run --workspace", mono: true, result: "running · 1m 04s" },
+          { label: "cargo build --workspace --locked", mono: true, state: "cleared", result: "exit 0 · 47s" },
+          { label: "cargo nextest run --workspace", mono: true, state: "cleared", result: "exit 0 · 1m 21s" },
         ],
       },
-      { id: "judge", label: "Judge · 2 criteria", kind: "judge", state: "ahead" },
-      { id: "you", label: "You", kind: "human", state: "ahead" },
+      {
+        id: "judge",
+        label: "Judge · 2 of 2 met",
+        kind: "judge",
+        state: "cleared",
+        stands: "2 of 2 met",
+        rows: CRITERIA,
+      },
+      {
+        id: "you",
+        label: "You",
+        kind: "human",
+        state: "waiting",
+        stands: "waiting 2m 04s",
+        cardNote: "Approve, or send it back with a reason. Both are recorded on the Job.",
+      },
     ],
   },
 };
 
 /**
- * **The escalation shape worth designing for**: green commands, a refused
- * criterion, and a tier behind it that was never reached. The Judge can only
- * refuse — it never turns a failed Check into a pass.
+ * **The exact escalation worth designing for**: green commands, a refused
+ * criterion, and a tier behind it that was never reached.
+ *
+ * The Judge stage is pinned, so the refusal and what it cites are on screen
+ * without anything being pressed — a criterion id and `not_met` tells a person
+ * nothing about their own Job.
  */
 export const AJudgeRefused: Story = {
   args: {
-    openId: "judge",
-    note: "The suite passed and the Judge refused one criterion. The human tier behind it was never reached.",
+    pinnedId: "judge",
+    note: "The commands were fine and one criterion was refused. Nothing past it ran.",
     stages: [
       { id: "instructed", label: "Instructed", state: "cleared" },
       { id: "working", label: "Working", state: "cleared" },
       { id: "submitted", label: "Submitted", state: "cleared" },
-      { id: "checks", label: "build, test", kind: "checks", state: "cleared", stands: "2 of 2 passed" },
+      {
+        id: "checks",
+        label: "build, test",
+        kind: "checks",
+        state: "cleared",
+        stands: "2 of 2 passed",
+        rows: CHECKS.map((row) => ({ ...row, state: "cleared" as const, result: "exit 0" })),
+      },
       {
         id: "judge",
         label: "Judge · 1 of 2 refused",
@@ -103,8 +161,15 @@ export const AJudgeRefused: Story = {
         state: "failed",
         stands: "1 of 2 refused",
         rows: [
-          { label: "Selectors import without the store", result: "met", named: "met" },
-          { label: "No behaviour change in the reducer", result: "not met", named: "not_met" },
+          { label: "Selectors import without the store", state: "cleared", result: "met" },
+          {
+            label: "No behaviour change in the reducer",
+            state: "failed",
+            result: "not met",
+            cited:
+              "packages/settings/src/reducer.ts:88 — the SETTINGS_RESET branch now clears " +
+              "manifests as well as columns, which it did not before this step.",
+          },
         ],
       },
       { id: "you", label: "You", kind: "human", state: "ahead" },
@@ -113,99 +178,64 @@ export const AJudgeRefused: Story = {
 };
 
 /**
- * `human_always` — and then you. **Amber, not red.** Everything mechanical has
- * cleared, so a step sitting here is stopped with nothing wrong, which is the
- * one shape that must not read as a failure.
- */
-export const WaitingOnYou: Story = {
-  args: {
-    openId: "you",
-    note: "The suite passed and the Judge met both criteria. Nothing is wrong; the workflow asks for a person here.",
-    stages: [
-      { id: "instructed", label: "Instructed", state: "cleared" },
-      { id: "working", label: "Working", state: "cleared" },
-      { id: "submitted", label: "Submitted", state: "cleared" },
-      { id: "checks", label: "3 Checks", kind: "checks", state: "cleared", stands: "3 of 3 passed" },
-      {
-        id: "judge",
-        label: "Judge · 2 of 2 met",
-        kind: "judge",
-        state: "cleared",
-        stands: "2 of 2 met",
-      },
-      { id: "you", label: "You", kind: "human", state: "waiting", stands: "waiting · 2m 04s" },
-    ],
-  },
-};
-
-/**
- * A Check failed and the work went back to the Drone. **The tiers behind it are
- * still ahead, not cancelled** — a failing test is work, and the Drone that
- * wrote the code is what should fix it.
+ * A Check that failed. The stage is red and everything behind it is ahead:
+ * nothing past a failed Check ran, and the strip shows that by leaving it
+ * unlit rather than by greying it out.
  */
 export const ACheckFailed: Story = {
   args: {
-    openId: "checks",
-    note: "The Check went back to the Drone with its output. The tiers behind it are still ahead, not cancelled.",
+    pinnedId: "checks",
+    note: "A command exited non-zero. The Drone is repairing it; no model has been asked anything.",
     stages: [
       { id: "instructed", label: "Instructed", state: "cleared" },
-      { id: "working", label: "Working", state: "current" },
+      { id: "working", label: "Working", state: "cleared" },
       { id: "submitted", label: "Submitted", state: "cleared" },
       {
         id: "checks",
         label: "test failed · fixing",
         kind: "checks",
         state: "failed",
-        stands: "exit 101 · attempt 2 of 3",
+        stands: "1 of 2 failed",
         rows: [
-          { label: "cargo build --workspace --locked", mono: true, result: "exit 0 · 47s", named: "passed" },
-          { label: "cargo nextest run --workspace", mono: true, result: "exit 101 · 3 failures", named: "failed" },
+          { label: "cargo build --workspace", mono: true, state: "cleared", result: "exit 0" },
+          { label: "cargo nextest run --workspace", mono: true, state: "failed", result: "exit 101" },
         ],
       },
-      { id: "judge", label: "Judge · 2 criteria", kind: "judge", state: "ahead" },
+      { id: "judge", label: "Judge · 2 criteria", kind: "judge", state: "ahead", rows: CRITERIA },
       { id: "you", label: "You", kind: "human", state: "ahead" },
     ],
   },
 };
 
 /**
- * **No gate at all — and an absent tier is not a failed tier.** A step
- * declaring no Check and no Judge draws what does advance it rather than an
- * empty gate greyed out, which reads as a gate that failed to render.
+ * A stage in the trailing half of the strip, pinned. The card hangs off the
+ * trailing edge instead of the leading one, so it stays inside the panel and
+ * still points at itself.
+ *
+ * Decided by position rather than by measurement — there is nothing to
+ * recompute when the window resizes, which is the failure this app exists to
+ * escape.
  */
-export const NoGateAtAll: Story = {
+export const OpenedNearTheTrailingEdge: Story = {
   args: {
-    note: "This step declares no Check and asks no Judge. Its evidence advances it, and nothing else.",
-    stages: [
-      { id: "instructed", label: "Instructed", state: "cleared" },
-      { id: "working", label: "Working", state: "current" },
-      { id: "submitted", label: "Submitted", state: "ahead" },
-    ],
+    ...WithYouPresent.args,
+    pinnedId: "you",
   },
 };
 
 /**
- * `manifest_rule: key` — the tier resolves at dispatch to a person or a machine
- * depending on the Manifest's policy. **It draws as whatever it resolved to,
- * and names the key that decided**, so two Jobs on the same workflow showing
- * different gates say why. Recorded as open in the journey; the row says which
- * key rather than leaving the difference unexplained.
+ * A step that declares no command and asks no model. **An absent tier is not a
+ * failed tier**, so the row says what does advance it rather than drawing an
+ * empty gate.
  */
-export const AManifestRuleGate: Story = {
+export const NoGateAtAll: Story = {
   args: {
-    note: "This step's gate resolved at dispatch from the Manifest's own policy.",
+    note: "This step declares no command and asks no model. Its evidence is what advances it.",
     stages: [
       { id: "instructed", label: "Instructed", state: "cleared" },
-      { id: "working", label: "Working", state: "cleared" },
-      { id: "submitted", label: "Submitted", state: "cleared" },
-      {
-        id: "you",
-        label: "You",
-        kind: "human",
-        state: "waiting",
-        stands: "waiting · 41s",
-        detail: "Resolved from review_policy on this Manifest when the Job was dispatched.",
-      },
+      { id: "working", label: "Working", state: "current" },
+      { id: "submitted", label: "Submitted", state: "ahead" },
+      { id: "you", label: "You", kind: "human", state: "ahead" },
     ],
   },
 };

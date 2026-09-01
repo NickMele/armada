@@ -1,18 +1,34 @@
-/* Failure notice. The escalated tone drawn flat — it is a standing condition
-   on a surface, not a floating layer, so no shadow. The tone is not a choice
-   per failure: one condition, one hue, and the sentence says which failure. */
+/* Failure notice — a fault, in the error treatment.
+
+   It was drawn in the escalation hue on a 12% tint inside a box, which is the
+   status treatment exactly: a 12% tint in a chip is what every Job status is,
+   and rendering a fault that way makes an error indistinguishable from the
+   thing it must never be mistaken for. #228.
+
+   So: one red, a LEADING EDGE and never a box, and no surface of its own. The
+   solid fill in this treatment is reserved to the code chip, which is the
+   channel that says error rather than status. A 3px red frame reads as a
+   filled alert and the edge points at what failed, which a frame does not.
+
+   Flat, because it is a standing condition on a surface rather than a floating
+   layer. No shadow. */
 .armada-failure {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--status-escalated-bg);
-  border: var(--border-width) solid var(--status-escalated);
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--error-edge) solid var(--error);
   color: var(--fg-default);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
+}
+
+/* The code, or the region standing in for one where a boundary fallback has
+   no wire code. Its own line under the copy, so the sentence is read first and
+   the value a person quotes is read next. */
+.armada-failure__code {
+  display: flex;
 }
 
 .armada-failure__copy {
@@ -23,7 +39,9 @@
   text-wrap: pretty;
 }
 
+/* An outcome states itself in both channels: the edge and the headline. */
 .armada-failure__headline {
+  color: var(--error);
   font-weight: var(--weight-medium);
 }
 

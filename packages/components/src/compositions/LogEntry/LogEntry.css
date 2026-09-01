@@ -1,0 +1,179 @@
+/* One line of the activity log. The drawing's `.entry`, `.payload` and `.pl`.
+
+   Four columns: the time, who, the line, and the mark that says it opens. Only
+   the message flexes, so the time column never moves — in a stream where a row
+   arrives every second, a column that shifted on a long message is the
+   "columns flip-flopped between renders" line in the v1 failure log. */
+.armada-entry-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.armada-entry {
+  display: grid;
+  /* The drawn 56px and 50px. --space-12 plus --space-2 for the timestamp,
+     which is exactly `14:29:40` in mono at --text-2xs; --space-12 plus a half
+     --space-1 for the actor, which is `Armada` in sans at the same size. Both
+     are the widest value the column can hold, so neither ever clips. */
+  grid-template-columns:
+    calc(var(--space-12) + var(--space-2))
+    calc(var(--space-12) + var(--space-1) / 2)
+    minmax(0, 1fr)
+    var(--space-3);
+  gap: var(--space-3);
+  align-items: baseline;
+  width: 100%;
+  /* The drawn 5px 8px. Tight, because this is a stream and the rows are read
+     as a column rather than one at a time. */
+  padding: calc(var(--space-1) + var(--space-1) / 4) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  text-align: left;
+  font-family: var(--font-sans);
+  min-width: 0;
+}
+
+button.armada-entry {
+  cursor: pointer;
+}
+
+button.armada-entry:hover,
+.armada-entry[data-open] {
+  background: color-mix(in srgb, var(--bg-raised) 55%, var(--bg-sunken));
+}
+
+button.armada-entry:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* The time. Mono and --fg-subtle: it orders the stream and is not read for
+   itself. --leading-xs rather than --leading-2xs, so a mono figure and a sans
+   sentence sit on the same baseline. */
+.armada-entry__t {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+/* Who. Sans, because Armada, Drone and Fleet are names rather than machinery,
+   and this column is the whole reason the stream is one stream. */
+.armada-entry__who {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.armada-entry[data-open] .armada-entry__who {
+  color: var(--fg-default);
+}
+
+/* The line. Sans for a message, mono for a tool call — sans names work, mono
+   names machinery, and the wire already knows which this is. */
+.armada-entry__msg {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-entry__msg[data-mono] {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+.armada-entry[data-open] .armada-entry__msg {
+  color: var(--fg-default);
+}
+
+/* Still producing this line. The running dot and nothing else — a spinner in a
+   stream where a row arrives every second is motion nobody can read. */
+.armada-entry__working {
+  flex: none;
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  background: var(--status-running);
+}
+
+.armada-entry__mark {
+  flex: none;
+  color: var(--border-strong);
+  transition: color var(--duration-fast) var(--ease);
+}
+
+button.armada-entry:hover .armada-entry__mark,
+.armada-entry[data-open] .armada-entry__mark {
+  color: var(--fg-muted);
+}
+
+/* --- what the line opens to ---------------------------------------------- */
+
+/* The payload sits on --bg-base, one step below the well the log is in: it is
+   output being quoted, not a surface of the app. Inset from the rows rather
+   than flush, so it reads as belonging to the line above it.
+
+   Padding is vertical only. The horizontal padding is on the lines inside,
+   because this box scrolls sideways and a right pad on a scroll container is
+   a pad that disappears at the end of the scroll. */
+.armada-entry__payload {
+  margin: calc(var(--space-1) / 2) var(--space-2) calc(var(--space-1) + var(--space-1) / 2);
+  padding: calc(var(--space-2) + var(--space-1) / 2) 0;
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  overflow-x: auto;
+  min-width: 0;
+}
+
+/* A build log reflowed is not a build log: `pre` keeps the newlines, and the
+   box above scrolls rather than wrapping. Wrapping a column of compiler output
+   turns one long line into three and loses which was which. */
+.armada-entry__pl {
+  display: block;
+  padding: 0 var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  white-space: pre;
+}
+
+/* The command being echoed back, and the trailer under the output. Both are
+   the payload talking about itself rather than being output. */
+.armada-entry__pl[data-named="echo"],
+.armada-entry__pl[data-named="meta"] {
+  color: var(--fg-subtle);
+}
+
+/* What the run came to. The diff hues rather than the status ones: this is a
+   line of terminal output and the two greens are the same value. */
+.armada-entry__pl[data-named="passed"] {
+  color: var(--diff-add-fg);
+}
+
+.armada-entry__pl[data-named="failed"] {
+  color: var(--diff-del-fg);
+}
+
+/* An open line that carried no payload. One sentence, in the app's empty-state
+   voice — not a paragraph reasoning about the wire. */
+.armada-entry__absent {
+  margin: 0;
+  padding: 0 var(--space-3);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
