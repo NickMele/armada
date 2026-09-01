@@ -105,3 +105,7 @@ export * from "./screens/InsideAJobOneArrangementAtEveryState/InsideAJobOneArran
 // one value that keeps its filename at every width.
 export * from "./compositions/FactChip/FactChip";
 export * from "./compositions/PathChip/PathChip";
+
+// One row of the run — the step, its mark, its elapsed figure, and the short
+// facts the chevron opens. The tree composes these; it does not draw a row.
+export * from "./compositions/StepRow/StepRow";
