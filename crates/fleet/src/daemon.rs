@@ -68,6 +68,7 @@ use tokio::sync::Mutex;
 
 use crate::admitting::Polled;
 use crate::adrift::Adrift;
+use crate::allowance::Allowance;
 use crate::asked::Asked;
 use crate::clock::Clock;
 use crate::converging::StepNorms;
@@ -167,6 +168,12 @@ pub struct Fittings<H, V, W> {
     /// `settings.fleet-health-check-resource-poll-interval` row** — see
     /// [`Polling`] for why it is a freshness bound rather than a second timer.
     pub polling: Polling,
+    /// What one Job may spend before Fleet stops starting Drones on it. **The
+    /// `settings.budget-cost-cap-per-job` and `settings.budget-turn-cap-per-job`
+    /// rows, enforced** — see [`Allowance`], which has no default for
+    /// [`Concurrency`]'s reason, and `crate::allowance` for what a cap can and
+    /// cannot do about a Drone already spending.
+    pub allowance: Allowance,
     pub budget: CheckBudget,
     /// What a step is expected to cost before the thrashing chain looks at it.
     /// See [`StepNorms`] for why it has no default.
@@ -267,6 +274,10 @@ pub struct Fleet<H, V, W> {
     machine: Arc<dyn Machine>,
     headroom: Headroom,
     polling: Polling,
+    /// What one Job may spend. **Held rather than read** — like every other
+    /// dial here, the composition root resolves it and nothing below Fleet
+    /// reads configuration.
+    allowance: Allowance,
     /// The last machine reading, and when it was taken. **Never written down**
     /// — headroom frees on its own, so a reading that outlived the process
     /// would be a reason that was already wrong when it was read back.
@@ -342,6 +353,7 @@ where
             machine: fittings.machine,
             headroom: fittings.headroom,
             polling: fittings.polling,
+            allowance: fittings.allowance,
             polled: Mutex::new(None),
             drones: std::sync::Mutex::new(Drones::default()),
             peers: fittings.peers,
@@ -680,6 +692,12 @@ where
     }
     pub(crate) fn budget(&self) -> CheckBudget {
         self.budget
+    }
+    /// What one Job may spend. **Not [`Fleet::budget`]**, which is how long one
+    /// Check may take — the two words collided before either shipped and the
+    /// names are kept apart on purpose.
+    pub(crate) fn allowance(&self) -> Allowance {
+        self.allowance
     }
     pub(crate) fn norms(&self) -> StepNorms {
         self.norms

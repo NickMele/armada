@@ -152,9 +152,14 @@ async fn a_drone_that_is_stood_down_is_gone_from_the_process_table() {
         "the child is running before the boundary, or the rest proves nothing"
     );
 
-    let stood_down = tokio::time::timeout(Duration::from_secs(5), working.stood_down())
-        .await
-        .expect("the ending signals the Drone rather than waiting it out");
+    let stood_down = tokio::time::timeout(
+        Duration::from_secs(5),
+        working.stood_down(&core_model::Timestamp::from_rfc3339(
+            "2026-08-31T10:00:00.000Z",
+        )),
+    )
+    .await
+    .expect("the ending signals the Drone rather than waiting it out");
 
     assert!(
         matches!(holder_of(pid), Ok(Holder::Vacant)),

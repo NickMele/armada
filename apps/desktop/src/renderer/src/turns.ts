@@ -19,9 +19,14 @@
 // stopped Job are drawn with that socket closed. A labelled blank there would
 // be worse than the absence it replaced.
 //
-// So the run says what it spent on its own last row. **What is still missing is
-// a figure a person can compare Jobs by without opening one**, and that needs a
-// served field on `JobSummary` or `JobDetail`; neither carries one. Reported.
+// So the run says what it spent on its own last row, and that is still the only
+// **per-run** figure there is.
+//
+// **The Job-level total is served now** — `JobDetail.spend`, since protocol
+// 5.5, which `work.ts` draws against the Job's cap. What that closes is a
+// person opening one Job and seeing what the whole of it has cost. What is
+// still open is comparing Jobs **without** opening one: `JobSummary` carries no
+// spend, so the board has no column and cannot have one until it does.
 
 import type { DroneTurn, TurnStep } from "@armada/components";
 

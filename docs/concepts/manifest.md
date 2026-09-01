@@ -289,25 +289,28 @@ Kit's global **Agent file** ("how I work" — personal, cross-project) has **no 
 
 ### What's frozen vs. live
 
-Skills/MCP/Agent-files/Commands are frozen into a Drone at spawn time, a process boot-time constraint. Allowlist, budget cap, and dispatch freeze are enforced live at every gated checkpoint.
+Skills/MCP/Agent-files/Commands are frozen into a Drone at spawn time, a process boot-time constraint. Allowlist and dispatch freeze are enforced live at every gated checkpoint. The budget cap is enforced live too, and it is [Machine](machine.md)'s rather than a Manifest's — see below.
 
 Checks split: a Check that existed at spawn is frozen for the life of the Job, while a Check added mid-Job gates immediately — additive-only, and for a different reason than the boot-time constraint above. Full detail on [Drone](drone.md) and [Fleet](fleet.md).
 
-## Budget
+## Budget — a Manifest has none
 
-A Manifest can set its own $ / quota limit. It **fully overrides** the [Machine](machine.md)-level cap — not additive, not a ceiling.
+**A budget cap is [Machine](machine.md)'s, and a Manifest has no say in it.**
+That is what the Kit/Machine split is for: how much this installation is willing
+to spend on a Job is a property of the installation, not of the repository the
+work is in. There is one cap, so there is no precedence rule and no override.
 
-**That override is not encoded anywhere, and precedence is open** (see [Machine](machine.md), Open questions). The two are independent single-layer rows in the Configuration Settings registry — one scoped Machine, one scoped Manifest-only, both carrying `n/a — single layer` as their merge strategy, so there is no two-tier merge between them to invoke.
+A Manifest-only budget row existed in the registry and is gone. It declared a
+full override of the Machine cap, and the reasoning around it had been arguing
+with itself for a while — two independent caps with no stated precedence, and
+budget named as the one place the Kit/Machine test gave an unclear answer. That
+a project-level version *parses* is not that it belongs.
 
-Budget is also the one place the Kit/Machine test gives an unclear answer: routing has no project-level version, but a Manifest cap demonstrably does.
-
-**A Job gated by several Manifests takes its owner's cap, not the lowest.** The two-tier rule above says nothing about several peers, and the obvious answer — the minimum — is wrong here.
-
-Why: a cap is a **resource** setting, not a safety one. Taking the minimum lets a small workspace's cap, sized for that workspace's own work, govern a [Convoy](convoy.md) several times larger and kill it for a reason unrelated to that workspace. Over-caution on a safety setting costs a manual step; over-caution here makes the work impossible.
-
-It is sidesteppable by choosing which workspace owns the Job.
-
-**Verification spend counts against the cap.** A Judge call bills against the same cap as the work it verifies — a cap that excluded it would understate what the Job cost. Whether verification carries a sub-limit of its own is [Judge](judge.md)'s to say.
+**Two things the deleted row was carrying that are still true**, and they are
+Machine's now: verification spend counts against the cap, because a cap that
+excluded the Judge would understate what the Job cost; and a cap is a resource
+setting rather than a safety one, so nothing anywhere takes the minimum across
+peers. Neither needed a Manifest tier to be true.
 
 ## Dispatch freeze
 

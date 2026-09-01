@@ -25,6 +25,7 @@ mod plan;
 mod reconstruct;
 mod report;
 mod roundtrip;
+mod spend;
 mod tmp;
 
 use core_model::{

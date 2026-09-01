@@ -102,6 +102,7 @@
 
 pub mod admitting;
 pub mod adrift;
+pub mod allowance;
 pub mod asked;
 pub mod at_step;
 mod boundary;
@@ -170,6 +171,7 @@ pub mod working;
 mod tests;
 
 pub use adrift::{Adrift, NotDeclared, NotSubmitted};
+pub use allowance::{Allowance, Micros, Overspent};
 pub use asked::Asked;
 pub use at_step::AtStep;
 pub use clock::{Clock, SystemClock};

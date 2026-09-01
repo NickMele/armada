@@ -78,8 +78,9 @@ use adapters::{GitVcs, HeadlessAgent};
 use config::Roster;
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
-    Bytes, CheckBudget, Concurrency, DryRuns, Fittings, Fleet, Headroom, Host, JudgeBudget,
-    Liveness, Mint, Polling, Spare, StepNorms, SystemClock, TheMachine, UlidMint,
+    Allowance, Bytes, CheckBudget, Concurrency, DryRuns, Fittings, Fleet, Headroom, Host,
+    JudgeBudget, Liveness, Micros, Mint, Polling, Spare, StepNorms, SystemClock, TheMachine,
+    UlidMint,
 };
 use ipc::PROTOCOL_VERSION;
 use store::Store;
@@ -268,6 +269,40 @@ const PROVISIONAL_HEADROOM: Headroom = Headroom::of(Spare::percent(15), Bytes::g
 /// twenty turns, and what the staleness can cost is one Job admitted against a
 /// machine that filled since: the bound is what stops that being unbounded.
 const PROVISIONAL_RESOURCE_POLL: Polling = Polling::every(Duration::from_secs(5));
+
+/// What one Job may spend before Fleet stops starting Drones on it.
+///
+/// **Two `settings.toml` rows in one value**: `budget-cost-cap-per-job` for the
+/// dollars and `budget-turn-cap-per-job` for the turns, resolved here like
+/// every other dial on this page. They are two rows because one number cannot
+/// carry both — see `fleet::allowance`, and spike 5, which is why there are two
+/// signals at all.
+///
+/// **Five dollars, and it is deliberately wide.** A small feature Job measured
+/// at a mean of $0.099 across three identical successful runs, whose prices
+/// spread 2.31x on cache warmth alone — $0.063, $0.087, $0.146 — with almost
+/// none of that attributable to the work. A cap set anywhere near the mean
+/// would refuse a healthy Job for having started cold. Five dollars is roughly
+/// fifty such Jobs, which is not a Job going slightly over: it is a Job that
+/// has stopped making progress and kept paying.
+///
+/// **Three hundred turns, and that one is the ceiling that actually catches
+/// something.** The same three runs turned 7, 7 and 4 times, so turns are the
+/// steady signal the price is not. A four-step Job at a generous thirty turns a
+/// step is 120; three hundred leaves room for a workflow twice that long and
+/// still stops a Drone that has been going in circles for hours.
+///
+/// **Neither figure stops a Drone that is spending**, and the settings rows say
+/// so where a person sets them. `cost_micros` arrives once, on the final result
+/// line of a session, so a cap can decline to start the next thing and cannot
+/// interrupt the current one.
+///
+/// **Notional dollars.** Spike 5 established that `total_cost_usd` is what a
+/// run would have cost at API list price, and this machine's account is not
+/// billed per token. The figure is arithmetically exact and denominated in a
+/// currency nothing here spends, which is what makes it a runaway detector
+/// rather than an invoice.
+const PROVISIONAL_ALLOWANCE: Allowance = Allowance::of(Micros::dollars(5), 300);
 
 /// How often Fleet is turned. **Provisional**, and nothing has measured it.
 ///
@@ -561,6 +596,7 @@ fn assemble(
         machine: Arc::new(TheMachine::watching(&repo_root)),
         headroom: PROVISIONAL_HEADROOM,
         polling: PROVISIONAL_RESOURCE_POLL,
+        allowance: PROVISIONAL_ALLOWANCE,
         budget: CheckBudget::of(PROVISIONAL_CHECK_BUDGET),
         norms: PROVISIONAL_STEP_NORMS,
         liveness: PROVISIONAL_LIVENESS,

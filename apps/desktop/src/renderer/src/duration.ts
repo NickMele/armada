@@ -38,7 +38,19 @@ export function span(from: string, to: string | number): string | null {
   const start = instant(from);
   const end = typeof to === "number" ? to : instant(to);
   if (start === null || end === null) return null;
-  const seconds = Math.max(0, Math.round((end - start) / 1000));
+  return lasting(end - start);
+}
+
+/**
+ * A duration in milliseconds, in the same words a span is written in.
+ *
+ * **Split out of [`span`] rather than written beside it.** Two formatters for
+ * one shape is how "4m 09s" and "4m 9s" come to sit on one screen, and what a
+ * caller has differs: a span is two instants and a drone's run is a number
+ * Fleet already subtracted.
+ */
+export function lasting(ms: number): string {
+  const seconds = Math.max(0, Math.round(ms / 1000));
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ${pad(seconds % 60)}s`;

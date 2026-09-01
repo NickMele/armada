@@ -130,6 +130,15 @@ export type JobDetail = {
    */
   delivery?: JobDelivery;
   /**
+   * What the job has spent, against what it is allowed to. Since protocol 5.5.
+   *
+   * **Present on every job, including one that has spent nothing.** That is
+   * what makes a job which cost nothing legible as such rather than as a job
+   * Fleet has not measured, and it is why `drones` is on the payload: a cost of
+   * zero across one drone and a cost of zero across none are different facts.
+   */
+  spend?: JobSpend;
+  /**
    * The redirect this job's drone has been sent and has not answered yet.
    * Since protocol 4.14.
    *
@@ -267,6 +276,39 @@ export type RedirectWaiting = {
  * and a row that treated them as one would say "unknown" about a branch that is
  * sitting on a remote right now.
  */
+/**
+ * What one job has spent and what it is allowed to spend.
+ *
+ * **Four numbers and no verdict**, deliberately. Whether the job is over is the
+ * pair being compared, and a boolean could not say by how much or which of the
+ * two ceilings it was — which is exactly what `queued_reason: "over_budget"`
+ * leaves out.
+ *
+ * `cost_micros` and `cost_cap_micros` are millionths of a dollar, and they are
+ * **notional**. The figure is what the run would have cost at list price, which
+ * is not what a subscription account is billed; a surface that presents it as
+ * money owed is presenting a currency nothing here spends. What it is for is
+ * telling a runaway from a job that started with a cold cache.
+ *
+ * `ran_ms` has no cap beside it on purpose. Wall clock is bounded by a
+ * different setting at a different scope, which nothing enforces yet, so the
+ * figure is here to be read and there is no ceiling to draw it against.
+ */
+export type JobSpend = {
+  /** What every drone of this job has cost, added up, in millionths of a dollar. */
+  cost_micros: number;
+  /** What it may cost before Fleet stops starting drones on it. */
+  cost_cap_micros: number;
+  /** How many turns every drone of this job has taken, added up. */
+  turns: number;
+  /** How many it may take before Fleet stops starting drones on it. */
+  turn_cap: number;
+  /** How long those drones ran, in milliseconds. No cap beside it — see above. */
+  ran_ms: number;
+  /** How many drones this is the sum of. Zero is a job nothing has run for. */
+  drones: number;
+};
+
 export type JobDelivery = {
   /** The commit Fleet wrote over the job's work, by its id. */
   commit?: string;
@@ -778,77 +820,12 @@ export type ProposedCriterion = { text: string; source: string };
  */
 export type AttachmentRef = { staged_path: string; filename: string; mime_type: string };
 
-/**
- * What a person sends to say a Job failed in error. `crates/ipc/src/report.rs`.
- *
- * **`said` is the whole reason this exists.** Everything Fleet attaches around
- * it is already served by three other routes; the sentence is the one thing
- * that does not exist anywhere until somebody types it, and Fleet answers 422
- * without it.
- *
- * `claim` is left as `string` like every other closed set here — but it is the
- * one Bridge *writes* rather than renders, so the three values it may hold are
- * named where the picker offers them, in `renderer/src/Report.tsx`.
- */
-export type FileReport = {
-  claim: string;
-  said: string;
-  /**
-   * The step the report is about. **Sendable without `criterion_id`**, which is
-   * what a report about a step the gate judged nothing on looks like — an
-   * undecided gate records no verdict, so there is none to name.
-   */
-  step_id?: string;
-  /** Sent with `step_id` and never without it: a criterion id is unique inside a step. */
-  criterion_id?: string;
-};
-
-/**
- * One filed report, as it reads afterwards. `crates/ipc/src/report.rs`.
- *
- * **`record` is the Job's own evidence rendered at filing time**, not a join to
- * rows that are still there: `armada clean` forgets a Job and takes every row
- * beneath it, and the report stays whole. `job_id` may therefore name a Job
- * that no longer exists, which is deliberate.
- */
-export type Report = {
-  id: string;
-  filed_at: string;
-  /** `human`. The column exists so the day Fleet files its own, it is a value. */
-  origin: string;
-  claim: string;
-  job_id: string;
-  job_title: string;
-  step_id?: string;
-  criterion_id?: string;
-  /** The person's own words. The finding. */
-  said: string;
-  /** The record, as the body of an issue. The evidence. */
-  record: string;
-};
-
-/** Every report filed, and the counts they are read beside. */
-export type ReportList = {
-  /** Newest first, bodies included. */
-  reports: Report[];
-  calibration: Calibration;
-};
-
-/**
- * What is known about whether the Judge has been right.
- *
- * **Four counts and not a rate.** A rate's denominator would count every Job
- * nobody read, and an unread Job is not a pass — so the gap between what the
- * Judge refused and what a person disputed is left visible rather than divided
- * away.
- */
-export type Calibration = {
-  refusals_recorded: number;
-  refusals_disputed: number;
-  /** Not the other half of the same number: a wrong pass is refused by nothing. */
-  passes_disputed: number;
-  reports_filed: number;
-};
+// Everything a filed report is made of, re-exported so `protocol.ts` stays the
+// one import for the wire vocabulary. They live in `report.ts` because this
+// file reached the 900 lines the gate refuses again; the cut is the seam
+// `crates/ipc/src/report.rs` already draws, and it is the same remedy the event
+// shapes took below.
+export type { Calibration, FileReport, Report, ReportList } from "./report";
 
 /**
  * What forgetting a Job leaves to say. `crates/ipc/src/job.rs`.

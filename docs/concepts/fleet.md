@@ -97,6 +97,16 @@ Sub-dispatches inside an already-approved Job need no separate approval — see 
 
 **That poll only covers Jobs that have not started.** A Job that exhausts CPU or memory while already running has nowhere to queue back to and escalates as `resource_exhausted`.
 
+### Budget gating (what the Job has spent)
+
+**Fleet reads what a Job's Drones have already cost before starting another one on it.** Over its cap, the Job stays `queued` and reads `over_budget`. It is the third reason a Job waits and it is asked through the same one-answer arrangement the other two are, so a Board cannot say a Job is over budget while Fleet is starting it.
+
+**It reads before "waiting on resources" when both hold.** Headroom frees on its own and a spent budget does not; a person told their Job is waiting for the machine would go and watch something that is already on its way, while the thing actually holding it needs them.
+
+**It refuses the next dispatch. It does not stop a Drone that is spending.** What a run cost arrives on the final line of a Drone's session and nowhere else, so there is no mid-session figure to interrupt on. What that catches is a runaway *sequence* of Jobs, which is the shape a runaway has.
+
+**The cap is per Job and the spend is per Drone.** A Drone belongs to a step, so a four-step Job is four Drones that never meet, and the sum lives in the record because nothing else outlives all of them. The dollars are notional — what the run would have cost at list price — and the turn count is the steadier signal beside them; [Machine](machine.md) carries both numbers and the measurement behind them.
+
 A **port span that cannot be re-claimed during a scope revision** is the case with a graceful path and does not escalate: the revision fails rather than the Job, which continues on its pre-revision claim and never leaves `running`.
 
 ### DAG scheduling
@@ -270,7 +280,7 @@ Each piece of Fleet's behavior lives where it is specified:
 - Evidence verification (Mechanical Check → Judge Check) — [Drone](drone.md), [Workflow](workflow.md)
 - DAG scheduling and cross-workspace work — [Job Board](job-board.md), [Manifest](manifest.md), Cross-Workspace Jobs, [Convoy](convoy.md)
 - Secrets brokering (Drone never holds secrets directly) — [Kit](kit.md), [Manifest](manifest.md), Secrets
-- Live re-evaluation of allowlist, budget caps and dispatch freeze at every gated checkpoint, versus Skills, MCP, Agent files and Commands, which are frozen into a Drone at spawn — [Drone](drone.md), What's Frozen at Spawn vs. Live
+- Live re-evaluation of the allowlist, the budget cap and dispatch freeze at every gated checkpoint, versus Skills, MCP, Agent files and Commands, which are frozen into a Drone at spawn — [Drone](drone.md), What's Frozen at Spawn vs. Live
 - Auto-merge enforcement, VCS push/PR/merge, the sole actor touching Git credentials — [Manifest](manifest.md), auto_merge and review_gate
 - Rebasing a Job's branch onto its base, and who reads a conflict — Catching a branch up, above
 - Schema migrations applied on startup — `../contracts/system-architecture.md` section 5, [Kit](kit.md), Upgrade

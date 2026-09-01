@@ -127,6 +127,7 @@ fn a_step_says_it_will_stop_for_a_person_before_it_stops() {
         None,
         None,
         None,
+        None,
     );
     let json = encode(&detail).expect("a detail is plain data");
 
@@ -165,6 +166,7 @@ fn a_declared_judge_check_crosses_as_counts_and_a_panel_only_above_one() {
         None,
         None,
         &[],
+        None,
         None,
         None,
         None,
@@ -228,6 +230,7 @@ fn a_step_the_workflow_does_not_declare_carries_neither_key() {
         None,
         None,
         None,
+        None,
     ))
     .expect("plain data");
     assert!(
@@ -235,7 +238,19 @@ fn a_step_the_workflow_does_not_declare_carries_neither_key() {
         "a declared step answers both: {declared}"
     );
 
-    let mut detail = JobDetail::of(&job, None, None, None, &[], None, None, None, None, None);
+    let mut detail = JobDetail::of(
+        &job,
+        None,
+        None,
+        None,
+        &[],
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
     detail.steps[0].judge_checks = None;
     detail.steps[0].advance_gate = None;
     let unanswerable = encode(&detail).expect("plain data");

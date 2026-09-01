@@ -138,6 +138,19 @@ pub struct JobDetail {
     /// before it was ever stored.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delivery: Option<JobDelivery>,
+    /// What the Job has spent, against what it is allowed to.
+    ///
+    /// **Both halves or neither**, because either alone is unreadable: a figure
+    /// with no ceiling says nothing about whether the Job is near one, and a
+    /// ceiling with no figure says nothing about this Job at all. It is the
+    /// pair that tells a person which of the two signals held their Job back,
+    /// which is why the pair is one field.
+    ///
+    /// Present on every Job, including one that has spent nothing — that is
+    /// what makes a Job which cost nothing legible as such rather than as a Job
+    /// Fleet has not measured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spend: Option<JobSpend>,
     /// The redirect this Job's Drone has been sent and has not answered yet.
     ///
     /// **Absent is the ordinary case**, and on this field absent is the whole
@@ -281,12 +294,14 @@ impl JobDetail {
         stuck: Option<&core_model::Stuck>,
         write_scope_overlaps: Option<Vec<ScopeOverlap>>,
         delivery: Option<JobDelivery>,
+        spend: Option<JobSpend>,
     ) -> JobDetail {
         JobDetail {
             job: JobSummary::of(job, reason, queued_reason, resumption),
             created_at: job.created_at().into(),
             branch: job.branch().map(|branch| branch.as_str().to_string()),
             delivery,
+            spend,
             steps: job
                 .steps()
                 .iter()
@@ -785,4 +800,42 @@ pub struct JobDelivery {
     /// The address a person clicks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pull_request: Option<String>,
+}
+
+/// What a Job has spent and what it is allowed to spend.
+///
+/// **Four numbers and no verdict.** Whether the Job is over is the pair being
+/// compared, and a client that was handed a boolean instead could not say by
+/// how much or which of the two signals it was — which is the whole of what
+/// `queued_reason = over_budget` does not carry.
+///
+/// `cost_micros` and `cost_cap_micros` are millionths of a dollar. They are
+/// integers because a cap compared as a float answers differently on two
+/// machines, and **notional**: `total_cost_usd` is what a run would have cost
+/// at list price, which is not what a subscription account is billed. It is a
+/// runaway detector denominated in dollars rather than an invoice, and a
+/// surface that presents it as money owed is presenting a currency nothing
+/// here spends.
+///
+/// `ran_ms` carries no cap beside it on purpose. Wall clock is bounded by
+/// `settings.drone-job-timeout`, which is a different row at a different scope
+/// and is not enforced yet — so the figure is here to be read and the ceiling
+/// is not here to be believed in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobSpend {
+    /// What every Drone of this Job has cost, added up.
+    pub cost_micros: u64,
+    /// What it may cost before Fleet stops starting Drones on it.
+    pub cost_cap_micros: u64,
+    /// How many turns every Drone of this Job has taken, added up.
+    pub turns: u64,
+    /// How many it may take before Fleet stops starting Drones on it.
+    pub turn_cap: u64,
+    /// How long those Drones ran, in milliseconds. **No cap beside it** — see
+    /// this type's note.
+    pub ran_ms: u64,
+    /// How many Drones this is the sum of. **Zero is not the same as a cost of
+    /// zero**: it is a Job nothing has run for yet, and a surface that folded
+    /// the two would say a Job was free when nobody had tried it.
+    pub drones: u64,
 }

@@ -350,6 +350,27 @@ do.**
 
 ## Open questions
 
+- **[filing-transport]** How does a filed issue actually reach a tracker, and
+  whose act is the send? Filing is specified above and built, and it ends at
+  the clipboard: Fleet holds no credential for an issue tracker and nothing on
+  the wire names the repository's remote, so the dialog says outright that
+  Armada opens nothing and the last step is the person's. Three things decide
+  it, and none has been argued. **Where a credential lives** — Armada brokers
+  credentials to Drones and `Secret<T>` is the type that carries one, but a
+  tracker credential is the app's rather than a Job's, and no config surface
+  claims it. **What names the remote** — a Manifest knows its repository and
+  the wire does not carry it, so either the operation grows a field or Bridge
+  reads it from somewhere that is not the wire. **Whether Armada sends at all**
+  — `crates/ipc/operations.toml` already records the strongest `No` in the file
+  against an agent filing on the owner's behalf, on the grounds that the record
+  is evidence and his reason is the finding; whether that reasoning extends to
+  the owner pressing Send himself is a different question and is not answered
+  there. Two built-and-refused things wait on this and are named above: the
+  **Reported** strip, and offering an already-filed issue to a second
+  occurrence. Both need an issue number, which only a real send produces —
+  which is also why `[error-occurrence-grouping]` below has nothing waiting on
+  it today.
+
 - **[error-occurrence-grouping]** Does Bridge count a repeat occurrence of an
   error on `code` alone, or on `code` plus `step_id`? Raised by the error-states
   drawing on 2026-08-31, which offers an already-filed issue to the second

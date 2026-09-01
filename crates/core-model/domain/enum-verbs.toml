@@ -152,6 +152,14 @@ status_token = "--status-not-started"
 vocabulary = "Queued reason"
 in_code = ""
 
+[verbs.queued_reason.over_budget]
+verb = "over budget"
+icon = ""
+status_token = "--status-not-started"
+vocabulary = "Queued reason"
+in_code = ""
+notes = "An approved Job whose Drones have already spent more than `settings.budget-cost-cap-per-job` or turned more than `settings.budget-turn-cap-per-job` allows. It reads before `waiting on resources` when both are true, because headroom frees on its own and a spent budget does not — a Job told it is waiting for the machine would be waiting for something that is not coming. Which of the two signals it was is the operator's distinction and not the Board's, the same way `fleet::headroom::Short` tells CPU from memory from disk beneath one label; the figures are on the Job's detail, where a person reads what was spent against what was allowed. No glyph: nothing in the registry depicts money, and it stays owed beside the escalation reasons that have none."
+
 [verbs.queued_reason.waiting_on_resources]
 verb = "waiting on resources"
 icon = "cpu"
