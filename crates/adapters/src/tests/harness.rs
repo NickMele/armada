@@ -13,7 +13,9 @@ use adapter_traits::{
     Worktree,
 };
 
-use crate::harness::{checks_tool, evidence_tool, scope_tool, HarnessRefused, HeadlessAgent};
+use crate::harness::{
+    ask_tool, checks_tool, dispatch_tool, evidence_tool, scope_tool, HarnessRefused, HeadlessAgent,
+};
 
 const SECRET_LOOKING_TASK: &str = "fix the parser, the token is hunter2";
 
@@ -99,10 +101,17 @@ fn armadas_own_tools_are_in_a_toolbelt_that_was_granted_nothing() {
     let allowed = value_after(&args, "--allowedTools").expect("an allowlist is rendered");
     assert_eq!(
         allowed,
-        format!("{},{},{}", evidence_tool(), scope_tool(), checks_tool()),
-        "a Drone granted nothing else still reports, still declares its scope \
-         and can still ask whether its work passes, because none of the three \
-         is one of the grants — and a Drone denied one is denied silently"
+        format!(
+            "{},{},{},{}",
+            evidence_tool(),
+            scope_tool(),
+            checks_tool(),
+            ask_tool()
+        ),
+        "a Drone granted nothing else still reports, still declares its scope, \
+         can still ask whether its work passes and can still ask a person, \
+         because none of the four is one of the grants — and a Drone denied one \
+         is denied silently"
     );
 }
 
@@ -120,9 +129,61 @@ fn a_grant_becomes_the_tools_it_needs_and_armadas_own_stay_first() {
     assert_eq!(entries.first(), Some(&evidence_tool()));
     assert_eq!(entries.get(1), Some(&scope_tool()));
     assert_eq!(entries.get(2), Some(&checks_tool()));
+    assert_eq!(entries.get(3), Some(&ask_tool()));
     assert!(entries.contains(&"Read"), "{allowed}");
     assert!(entries.contains(&"Edit"), "{allowed}");
     assert!(entries.contains(&"Bash(cargo test:*)"), "{allowed}");
+}
+
+/// **The asking tool is given, not granted**, and this is the case that says
+/// so — the mirror of the dispatch pair below.
+///
+/// Asking costs nothing and creates nothing, so there is no spend to gate it
+/// behind. And the denial is worse than the usual silence: a Drone that cannot
+/// ask does not go quiet, it **guesses**, and on a step whose output is other
+/// Jobs a guess is work nobody chose.
+#[test]
+fn every_toolbelt_carries_the_asking_tool_however_little_was_granted() {
+    for belt in [
+        Toolbelt::evidence_only(),
+        Toolbelt::evidence_only().and(Grant::ReadTheWorktree),
+        Toolbelt::evidence_only().and(Grant::DispatchAJob),
+    ] {
+        let args = rendered(belt);
+        let allowed = value_after(&args, "--allowedTools").expect("an allowlist is rendered");
+        assert!(
+            allowed.split(',').any(|entry| entry == ask_tool()),
+            "a Drone that cannot ask guesses: {allowed}"
+        );
+    }
+}
+
+/// **The dispatch tool is granted, not given.** A Drone that was not granted it
+/// has no entry for it at all, which is what makes creating Jobs a call that is
+/// not on its list rather than one somebody remembered to refuse.
+#[test]
+fn a_toolbelt_without_the_grant_carries_no_dispatch_tool() {
+    let args = rendered(
+        Toolbelt::evidence_only()
+            .and(Grant::ReadTheWorktree)
+            .and(Grant::ChangeTheWorktree),
+    );
+    let allowed = value_after(&args, "--allowedTools").expect("an allowlist is rendered");
+    assert!(
+        !allowed.contains(dispatch_tool()),
+        "a Drone on an ordinary step may not create Jobs: {allowed}"
+    );
+}
+
+#[test]
+fn the_grant_puts_the_dispatch_tool_on_the_list() {
+    let args = rendered(Toolbelt::evidence_only().and(Grant::DispatchAJob));
+    let allowed = value_after(&args, "--allowedTools").expect("an allowlist is rendered");
+    let entries: Vec<&str> = allowed.split(',').collect();
+    assert!(entries.contains(&dispatch_tool()), "{allowed}");
+    // Armada's own three still lead, which is the ordering the file states and
+    // the thing a reader checks an argument list by eye against.
+    assert_eq!(entries.first(), Some(&evidence_tool()));
 }
 
 #[test]

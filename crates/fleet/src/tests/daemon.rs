@@ -204,7 +204,7 @@ fn workflow_named_and(id: &str, gated: bool) -> config::ResolvedWorkflow {
         .unwrap_or_else(|refused| panic!("the fixture workflow did not resolve: {refused}"))
 }
 
-fn manifest() -> Manifest {
+pub fn manifest() -> Manifest {
     Manifest::parse(
         std::path::Path::new("armada.yml"),
         "version: 1\nid: 01FIXTUREMANIFEST\n",

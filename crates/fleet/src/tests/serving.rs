@@ -216,7 +216,7 @@ async fn a_move_the_machine_refuses_is_a_conflict() {
     assert_eq!(
         again,
         StatusCode::CONFLICT,
-        "`running -> queued` is not an edge, and 409 is what that is"
+        "the dispatch gate is `awaiting_approval` and a Job past it is a 409"
     );
 }
 

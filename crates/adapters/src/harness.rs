@@ -52,7 +52,7 @@ use crate::transcript;
 /// The tools the Evidence server exposes, as the harness names them: the
 /// server's registered name and each tool's own, joined the way MCP tools are.
 ///
-/// **All three in every toolbelt.** They are prepended here rather than being a
+/// **All four in every toolbelt.** They are prepended here rather than being a
 /// `Grant`, because a list is something a caller can build empty — and a Drone
 /// denied one of them is denied silently, which reads as a Drone that went
 /// quiet rather than as an argument-list fault.
@@ -69,6 +69,25 @@ use crate::transcript;
 const EVIDENCE_TOOL: &str = "mcp__armada__submit_evidence";
 const SCOPE_TOOL: &str = "mcp__armada__declare_scope";
 const CHECKS_TOOL: &str = "mcp__armada__run_checks";
+
+/// **In every toolbelt, and not a `Grant`.** Asking costs nothing and creates
+/// nothing — what it produces is a question on a Board — so there is no spend to
+/// gate it behind, which is the whole of what separates it from
+/// [`DISPATCH_TOOL`] below.
+///
+/// A Drone denied this one is denied in the way the comment above describes, and
+/// the shape it takes here is worse than usual: the alternative to asking is
+/// **guessing**, so a Drone whose `ask_question` is silently refused does not go
+/// quiet. It carries on and produces work nobody chose.
+const ASK_TOOL: &str = "mcp__armada__ask_question";
+
+/// **Not in the table above, because it is not in every toolbelt.** It is the
+/// one Armada tool that is granted rather than given: a Drone that may create
+/// Jobs is a Drone one approval bought several Drones' worth of spend from, so
+/// it is rendered only where [`Grant::DispatchAJob`] was granted. A Drone that
+/// calls it without the grant is denied by the CLI silently, which is why Fleet
+/// refuses the same call in words on its own side.
+const DISPATCH_TOOL: &str = "mcp__armada__dispatch_job";
 
 /// The program name `crates/config/settings.toml` gives as the default for the
 /// AgentHarness binary path: `claude (on PATH)`.
@@ -219,6 +238,7 @@ fn allowlist(config: &DroneSpawnConfig) -> Result<String, HarnessRefused> {
         String::from(EVIDENCE_TOOL),
         String::from(SCOPE_TOOL),
         String::from(CHECKS_TOOL),
+        String::from(ASK_TOOL),
     ];
     for grant in config.toolbelt().granted() {
         match grant {
@@ -235,6 +255,7 @@ fn allowlist(config: &DroneSpawnConfig) -> Result<String, HarnessRefused> {
                 allowed.push("Write".into());
             }
             Grant::RunADeclaredCommand(run) => allowed.push(command_rule(run)?),
+            Grant::DispatchAJob => allowed.push(DISPATCH_TOOL.into()),
         }
     }
     Ok(allowed.join(","))
@@ -344,7 +365,7 @@ pub fn evidence_tool() -> &'static str {
     EVIDENCE_TOOL
 }
 
-/// The scope tool's name, for the same callers. **All three are needed**: a
+/// The scope tool's name, for the same callers. **All four are needed**: a
 /// toolbelt missing any one of them denies the Drone silently, and a Job that
 /// goes quiet is an argument-list fault rather than a prompt one.
 pub fn scope_tool() -> &'static str {
@@ -358,7 +379,20 @@ pub fn checks_tool() -> &'static str {
     CHECKS_TOOL
 }
 
-/// The server both tools above are served from.
+/// The asking tool's name. In every toolbelt like the three above, and the one
+/// whose silent denial is not silence: a Drone that cannot ask guesses.
+pub fn ask_tool() -> &'static str {
+    ASK_TOOL
+}
+
+/// The dispatch tool's name, for a caller that needs to assert it is *absent*
+/// from a toolbelt. The four above are in every one; this is the only Armada
+/// tool a spawn can be built without.
+pub fn dispatch_tool() -> &'static str {
+    DISPATCH_TOOL
+}
+
+/// The server every tool above is served from.
 pub fn evidence_server() -> &'static str {
     EVIDENCE_SERVER
 }

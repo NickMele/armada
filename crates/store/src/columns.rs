@@ -299,6 +299,10 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
             // and a row that recorded the deferral as a decision would keep
             // answering with a model the workflow never asked for.
             "model": step.model().map(|model| model.as_str()),
+            // Written on every step, because a boolean has no absent value
+            // meaning anything other than `false`. A row frozen before the key
+            // existed carries none, which reads back as `false`.
+            "may_dispatch_jobs": step.may_dispatch_jobs(),
             "evidence_scope": step.evidence_scope().map(|scope| json!({
                 "context_source": scope.context_source().as_wire(),
                 "exclude_paths": scope.exclude_paths().iter()
@@ -384,7 +388,8 @@ fn read_step(entry: &Map<String, Value>) -> Result<ResolvedStep, Malformed> {
         read_evidence_scope(entry)?,
         read_retry_limit(entry)?,
         read_step_model(entry)?,
-    ))
+    )
+    .dispatching(read_may_dispatch_jobs(entry)?))
 }
 
 /// What the step asked to be run as. **Absent and null both read as none**,
@@ -401,6 +406,22 @@ fn read_step_model(entry: &Map<String, Value>) -> Result<Option<ModelName>, Malf
             ModelName::new(named).map_err(|blank| format!("`model` {blank}"))?,
         )),
         Some(other) => Err(format!("`model` is {}", kind(other))),
+    }
+}
+
+/// Whether a Drone on this step was given the tool that creates Jobs.
+/// **Absent and null both read as `false`**, which is the backfill every row
+/// frozen before the key existed needs and is also what a step that leaves the
+/// key out means.
+///
+/// A value that is there and is not a boolean is a refusal rather than a
+/// `false`: this key is what puts the dispatch tool in a Drone's hands, and a
+/// step that quietly lost it is a Job that runs and can do nothing.
+fn read_may_dispatch_jobs(entry: &Map<String, Value>) -> Result<bool, Malformed> {
+    match entry.get("may_dispatch_jobs") {
+        None | Some(Value::Null) => Ok(false),
+        Some(Value::Bool(found)) => Ok(*found),
+        Some(other) => Err(format!("`may_dispatch_jobs` is {}", kind(other))),
     }
 }
 

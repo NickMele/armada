@@ -168,4 +168,5 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
         step.retry_limit(),
         step.model().cloned(),
     )
+    .dispatching(step.may_dispatch_jobs())
 }

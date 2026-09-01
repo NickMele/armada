@@ -2,9 +2,10 @@
 //!
 //! Split from the transport beside it because they are two things: [`mod@super`]
 //! reads JSON-RPC and decides what is answered, and this decides what a tool
-//! takes. **A tool with nothing to share lives beside this file rather than in
-//! it** — [`ask`](mod@super::ask) is the first — so a fifth is a new file and
-//! about six lines here.
+//! takes. **A tool with nothing to share lives beside this file** —
+//! [`dispatch`](mod@super::dispatch) and [`ask`](mod@super::ask) both do — so
+//! what stays is [`closed`], [`text`] and [`list`], and a sixth tool is a new
+//! file plus about six lines here.
 //!
 //! # No tool takes a job id or a step id
 //!
@@ -13,20 +14,20 @@
 //! the call makes and the system does not keep.
 //!
 //! [`CHECKS_TOOL`] takes nothing at all, not even a Check name: the step's
-//! Checks were frozen at approval, so a name here could only agree or disagree,
-//! and disagreeing is a Drone choosing its own bar.
+//! Checks were frozen at approval, so a name here could only be a Drone
+//! choosing which bar it is measured against.
 //!
 //! # Why declaring is a different call from submitting
 //!
-//! A scope is declared **before** the work and evidence is submitted after it,
-//! so one call cannot carry both. Keeping them apart is also what leaves
-//! `submit_evidence` at the three prose fields the Agent Copy Contract names: a
-//! path list is a claim about where the work will be rather than prose about it,
-//! and Fleet checks it against the worktree rather than reading it.
+//! A scope is declared **before** the work and evidence after it, so one call
+//! cannot carry both. Keeping them apart is what leaves `submit_evidence` at the
+//! three prose fields the Agent Copy Contract names: a path list is a claim
+//! Fleet checks against the worktree rather than reading.
 
 use serde_json::{json, Map, Value};
 
-use super::ask;
+use super::ask::{ASK_FIELDS, ASK_TOOL, FEWEST_OPTIONS, MOST_OPTIONS};
+use super::dispatch::{DISPATCH_FIELDS, DISPATCH_TOOL};
 
 /// The Evidence tool's own name, bare. The client joins it to the server name
 /// to make the allowlist entry.
@@ -83,9 +84,26 @@ pub struct DeclareScope {
 /// **None of these is a gate failure.** Nothing was verified and the step has
 /// neither advanced nor failed; the call was malformed and what the Drone is
 /// told is to fix it and call again.
+///
+/// # One enum for every tool, and it is why this file is over 500 lines
+///
+/// A tool answers refusals through [`Incoming::NotASubmission`], which carries
+/// one type, so a tool with a rule no other tool has adds a variant here even
+/// when everything else about it lives next door. `ask_question` has four —
+/// a list that is not one, too few or too many answers, two answers a person
+/// could not tell apart, and a field that says nothing — because a question is
+/// the only call with a *shape* to get wrong rather than a field to omit.
+///
+/// **Splitting them would mean a second refusal type on the transport**, and
+/// then the arm that reads a tool call would have to decide which one it is
+/// holding before it could say anything at all. The file is long because the
+/// refusals are one closed set; that is the trade, and it is the same one
+/// `event.rs` makes about its kinds.
+///
+/// [`Incoming::NotASubmission`]: super::Incoming::NotASubmission
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NotAnArgument {
-    /// A tool that is none of the three.
+    /// A tool this server does not serve.
     NoSuchTool {
         named: String,
     },
@@ -100,7 +118,7 @@ pub enum NotAnArgument {
     NotText {
         field: &'static str,
     },
-    /// A field whose value should be a list of paths and is not.
+    /// A field whose value should be a list of strings and is not.
     NotAList {
         field: &'static str,
     },
@@ -110,19 +128,18 @@ pub enum NotAnArgument {
         tool: &'static str,
         takes: &'static [&'static str],
     },
-    /// A field whose value should be a list of objects and is not — or one of
-    /// whose entries is not.
+    /// A list of answer objects that is not one, or one entry that is not.
     NotOptions {
         field: &'static str,
     },
     /// Too few or too many answers offered. **Refused rather than trimmed**: a
-    /// question silently reduced to four options is a question a person answers
-    /// without knowing what was left out.
+    /// question quietly cut to four is one a person answers without knowing what
+    /// was left out.
     WrongCount {
         offered: usize,
     },
     /// Two answers a person could not tell apart. An answer names its label, so
-    /// two identical labels are an answer that means either.
+    /// two the same is an answer that means either.
     SameTwice {
         label: String,
     },
@@ -135,14 +152,12 @@ pub enum NotAnArgument {
 impl core::fmt::Display for NotAnArgument {
     fn fmt(&self, out: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            NotAnArgument::NoSuchTool { named } => {
-                let asking = ask::ASK_TOOL;
-                write!(
-                    out,
-                    "there is no tool called `{named}`. The tools are `{TOOL}`, \
-                     `{SCOPE_TOOL}`, `{CHECKS_TOOL}` and `{asking}`"
-                )
-            }
+            NotAnArgument::NoSuchTool { named } => write!(
+                out,
+                "there is no tool called `{named}`. The tools are `{TOOL}`, \
+                 `{SCOPE_TOOL}`, `{CHECKS_TOOL}`, `{DISPATCH_TOOL}` and \
+                 `{ASK_TOOL}`"
+            ),
             // The empty list is a real case now: `run_checks` takes nothing, so
             // a call of it with no arguments is a correct call and never
             // reaches here. A message reading "takes " with nothing after it
@@ -159,20 +174,23 @@ impl core::fmt::Display for NotAnArgument {
             ),
             NotAnArgument::Missing { field } => write!(
                 out,
-                "`{field}` is missing. It is required and may be empty only \
-                 where it is not_claimed — submit again with it"
+                "`{field}` is missing. Every field this tool takes is required, \
+                 and the ones that may be empty are empty rather than absent — \
+                 call again with it"
             ),
             NotAnArgument::NotText { field } => {
                 write!(out, "`{field}` is not text. Submit again with a string")
             }
             NotAnArgument::NotAList { field } => write!(
                 out,
-                "`{field}` is not a list of repository-relative paths. Call \
-                 again with one, using [] if this part changes nothing"
+                "`{field}` is not a list of strings. Call again with one, \
+                 using [] where the list is legitimately empty"
             ),
             // The two a Drone is likeliest to invent get the reason, because
             // "no such field" reads as an oversight it should work around.
-            NotAnArgument::NotAField { named, .. } if named == "job_id" || named == "step_id" => {
+            NotAnArgument::NotAField { named, .. }
+                if named == "job_id" || named == "step_id" || named == "parent_id" =>
+            {
                 write!(
                     out,
                     "`{named}` is not a field of this tool. Fleet knows which Job \
@@ -211,23 +229,23 @@ impl core::fmt::Display for NotAnArgument {
             NotAnArgument::NotOptions { field } => write!(
                 out,
                 "`{field}` is not a list of answers. Each entry is an object \
-                 with `label`, which is what the person picks, and \
-                 `consequence`, which is what you will do if they pick it"
+                 with `label`, what the person picks, and `consequence`, what \
+                 you will do if they pick it"
             ),
             NotAnArgument::WrongCount { offered } => {
-                let (fewest, most) = (ask::FEWEST_OPTIONS, ask::MOST_OPTIONS);
+                let (fewest, most) = (FEWEST_OPTIONS, MOST_OPTIONS);
                 write!(
                     out,
                     "you offered {offered} answers. Offer between {fewest} and \
-                     {most}: one answer is not a question, and a list longer \
-                     than {most} is one a person reads badly"
+                     {most}: one is not a question, and a longer list is one a \
+                     person reads badly"
                 )
             }
             NotAnArgument::SameTwice { label } => write!(
                 out,
                 "two answers are both labelled `{label}`. An answer names its \
-                 label, so two the same is an answer that means either — give \
-                 each one a label of its own and call again"
+                 label, so two the same means either — give each its own and \
+                 call again"
             ),
             NotAnArgument::Blank { field } => write!(
                 out,
@@ -276,24 +294,45 @@ pub(crate) fn nothing(arguments: &Map<String, Value>) -> Result<(), NotAnArgumen
 
 pub(crate) fn declaration(arguments: &Map<String, Value>) -> Result<DeclareScope, NotAnArgument> {
     closed(arguments, SCOPE_TOOL, SCOPE_FIELDS)?;
-    let field = "context_paths";
+    Ok(DeclareScope {
+        context_paths: list(arguments, "context_paths")?,
+    })
+}
+
+/// One field that is a list of strings, entry by entry.
+///
+/// **Legitimately empty and never absent.** A list nothing is in is an answer;
+/// a missing field is not, and the two are told apart here rather than by a
+/// caller reading a length.
+///
+/// `pub(super)` for [`closed`]'s reason — the dispatch tool takes two of these.
+pub(super) fn list(
+    arguments: &Map<String, Value>,
+    field: &'static str,
+) -> Result<Vec<String>, NotAnArgument> {
     let listed = arguments
         .get(field)
         .ok_or(NotAnArgument::Missing { field })?
         .as_array()
         .ok_or(NotAnArgument::NotAList { field })?;
-    let mut context_paths = Vec::with_capacity(listed.len());
-    for path in listed {
-        context_paths.push(
-            path.as_str()
+    let mut entries = Vec::with_capacity(listed.len());
+    for entry in listed {
+        entries.push(
+            entry
+                .as_str()
                 .ok_or(NotAnArgument::NotAList { field })?
                 .into(),
         );
     }
-    Ok(DeclareScope { context_paths })
+    Ok(entries)
 }
 
 /// Every argument is a field the tool takes.
+///
+/// `pub(super)` because [`dispatch`](mod@super::dispatch) and
+/// [`ask`](mod@super::ask) read their own tools' arguments and must refuse an
+/// unknown field identically. A second copy of this loop is a second place the
+/// rule could stop being true.
 pub(super) fn closed(
     arguments: &Map<String, Value>,
     tool: &'static str,
@@ -317,7 +356,8 @@ pub(crate) fn named(name: &str) -> Result<&'static str, NotAnArgument> {
         TOOL => Ok(TOOL),
         SCOPE_TOOL => Ok(SCOPE_TOOL),
         CHECKS_TOOL => Ok(CHECKS_TOOL),
-        ask::ASK_TOOL => Ok(ask::ASK_TOOL),
+        DISPATCH_TOOL => Ok(DISPATCH_TOOL),
+        ASK_TOOL => Ok(ASK_TOOL),
         other => Err(NotAnArgument::NoSuchTool {
             named: other.to_string(),
         }),
@@ -333,13 +373,17 @@ pub(crate) fn argumentless(tool: &'static str) -> NotAnArgument {
             tool: SCOPE_TOOL,
             takes: SCOPE_FIELDS,
         },
-        ask::ASK_TOOL => NotAnArgument::NoArguments {
-            tool: ask::ASK_TOOL,
-            takes: ask::ASK_FIELDS,
+        ASK_TOOL => NotAnArgument::NoArguments {
+            tool: ASK_TOOL,
+            takes: ASK_FIELDS,
         },
         CHECKS_TOOL => NotAnArgument::NoArguments {
             tool: CHECKS_TOOL,
             takes: CHECKS_FIELDS,
+        },
+        DISPATCH_TOOL => NotAnArgument::NoArguments {
+            tool: DISPATCH_TOOL,
+            takes: DISPATCH_FIELDS,
         },
         _ => NotAnArgument::NoArguments {
             tool: TOOL,
@@ -362,7 +406,11 @@ pub(super) fn filled(
     Ok(said)
 }
 
-fn text(arguments: &Map<String, Value>, field: &'static str) -> Result<String, NotAnArgument> {
+/// One text field. `pub(super)` for [`closed`]'s reason.
+pub(super) fn text(
+    arguments: &Map<String, Value>,
+    field: &'static str,
+) -> Result<String, NotAnArgument> {
     let value = arguments
         .get(field)
         .ok_or(NotAnArgument::Missing { field })?;
@@ -387,7 +435,8 @@ pub(crate) fn listed() -> Vec<Value> {
         evidence_tool(),
         scope_tool(),
         checks_tool(),
-        ask::ask_tool(),
+        super::dispatch::dispatch_tool(),
+        super::ask::ask_tool(),
     ]
 }
 

@@ -249,6 +249,13 @@ in_code = "Not yet"
 
 [[transitions]]
 from = "running"
+to = "queued"
+on = "The step just advanced is one that dispatched Jobs, and the next step waits for them"
+in_code = "Not yet"
+notes = "The reversal of `queued -> running`, and it exists for the working slot rather than for the work. A Job whose next step rolls up its children cannot hold a slot while it waits, because the children need the slot to finish at all — at a concurrency bound of two, a parent and one child fill it. So the parent's Drone stands down, the Job goes back in the queue, and admission holds it there until every child is terminal. `#215`. It is not an escalation: nothing is wrong and nobody is being asked for anything. It is not `awaiting_review` either, which would put the Job on a person's list for a wait that resolves on its own."
+
+[[transitions]]
+from = "running"
 to = "piloted"
 on = "escape_hatch, on a Job Fleet marked for the handoff"
 in_code = "Not yet"

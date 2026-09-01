@@ -213,6 +213,7 @@ mod settling;
 mod silence;
 mod starting;
 mod stuck;
+mod sub_dispatch;
 mod tmp;
 mod tools;
 mod transcript;

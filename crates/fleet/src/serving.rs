@@ -28,7 +28,7 @@ use api::{Daemon, Observed, Refusal};
 use core_model::{
     Job, JobId as CoreJobId, JobStatus as CoreJobStatus, QueuedReason as CoreQueuedReason,
 };
-use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
+use ipc::mcp::{CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
     ChangesRequested, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence, JobForgotten,
     JobHistory, JobId, JobList, JobSpend, JobSummary, ManifestId, ManifestSummary, ModelChoices,
@@ -40,6 +40,7 @@ use crate::admitting::clear_to_run;
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::footprint::kept;
+use crate::sub_dispatch::waiting_on_children;
 // The wire's `Redirection` is a struct with a public field; Fleet's is a
 // newtype that cannot hold an empty instruction. Both names are in scope here,
 // which is the one place they meet.
@@ -648,25 +649,10 @@ where
         })
     }
 
-    /// The Evidence tool. **The one method here whose caller is a Drone.**
-    ///
-    /// It converts and maps, and decides nothing: the binding — which Job, which
-    /// step, which evidence type — is `Fleet::record_evidence`'s, under the lock
-    /// that makes it a single decision.
-    ///
-    /// Every path answers 200 with `isError` rather than a status code, because
-    /// a Drone reads a tool error and can act on it, and a 4xx reaches the model
-    /// as a broken server — which is something it stops trying.
-    /// A person's answer to the question a waiting Drone asked.
-    ///
-    /// **Nothing moves.** The Job was `running` while it waited and is `running`
-    /// now; what changed is that the Drone has been handed a turn. The summary
-    /// comes back for the reason every other command's does — a caller folds
-    /// the row rather than re-reading the board — and not because anything
-    /// about it is different.
-    ///
-    /// The four refusals are `crate::questioning::NotAnswered`'s and it says each;
-    /// this only carries one out as the 409 it is.
+    /// A person's answer to the question a waiting Drone asked. **Nothing
+    /// moves** — the Job was `running` while it waited and is now, and the
+    /// summary comes back because a caller folds the row rather than re-reading
+    /// the board. The four refusals are `crate::questioning::NotAnswered`'s.
     async fn answer_question(
         &self,
         job_id: JobId,
@@ -681,16 +667,9 @@ where
     }
 
     /// The working Drone asking a person something it cannot answer from the
-    /// repository.
-    ///
-    /// The same shape as the three tool calls below and the same reason for it:
-    /// the binding — which Job, which step — is `Fleet::ask_question`'s, under
-    /// the slot lock, and every refusal answers 200 with `isError` so a Drone
-    /// can read it and call again.
-    ///
-    /// **The receipt says the question was taken and never that it was
-    /// answered.** What a person chose arrives in the Drone's own session as a
-    /// turn, however much later, which is why this call does not block. See
+    /// repository. Binding and refusals are `Fleet::ask_question`'s, under the
+    /// slot lock. **The receipt says taken, never answered**: what a person
+    /// chose arrives as a later turn, which is why this does not block — see
     /// `crate::questioning`.
     async fn ask_question(
         &self,
@@ -698,14 +677,21 @@ where
         asking: ipc::mcp::AskQuestion,
     ) -> Result<Receipt, NotRecorded> {
         let job = self.placed(&caller)?;
-        Fleet::ask_question(self, &job, asking)
-            .await
-            .map(|_| Receipt {
-                word: "asked".to_string(),
-            })
-            .map_err(NotRecorded::from)
+        Fleet::ask_question(self, &job, asking).await?;
+        Ok(Receipt {
+            word: "asked".to_string(),
+        })
     }
 
+    /// The Evidence tool. **The one method here whose caller is a Drone.**
+    ///
+    /// It converts and maps, and decides nothing: the binding — which Job, which
+    /// step, which evidence type — is `Fleet::record_evidence`'s, under the lock
+    /// that makes it a single decision.
+    ///
+    /// Every path answers 200 with `isError` rather than a status code, because
+    /// a Drone reads a tool error and can act on it, and a 4xx reaches the model
+    /// as a broken server — which is something it stops trying.
     async fn submit_evidence(
         &self,
         caller: api::Caller,
@@ -758,6 +744,36 @@ where
                 because: why.to_string(),
             })
     }
+
+    /// The Drone asking for one more Job to exist.
+    ///
+    /// The same shape as the three above: it places the caller, converts, and
+    /// decides nothing. **What is different is what a success is** — the other
+    /// three answer about the Job the call was made on, and this one answers
+    /// with the id of a record that did not exist a moment ago.
+    ///
+    /// `crate::sub_dispatch` holds whether the caller was allowed to ask, and
+    /// the refusal reaches the Drone as a tool error it can read rather than a
+    /// status code it can only retry.
+    async fn dispatch_job(
+        &self,
+        caller: api::Caller,
+        dispatch: DispatchJob,
+    ) -> Result<Receipt, NotRecorded> {
+        let job = self.placed(&caller)?;
+        match Fleet::sub_dispatch(self, &job, &dispatch).await {
+            // The minted id, and nothing else. A Drone needs it to name this
+            // Job in a later call's `after`, and it needs nothing else — the
+            // Job's state is not knowable yet and a receipt implying it were
+            // would be the verdict `Receipt` exists to have no room for.
+            Ok(minted) => Ok(Receipt {
+                word: minted.as_str().to_string(),
+            }),
+            Err(why) => Err(NotRecorded {
+                because: why.to_string(),
+            }),
+        }
+    }
 }
 
 // `canonical`, `declared_check`, `declared`, `recorded`, `submitted`,
@@ -788,12 +804,9 @@ where
     }
 
     /// A Job as a Board row, with the reason its last transition stored and
-    /// whether its Drone is waiting on somebody.
-    ///
-    /// **The slot read is free on every row but the working ones.**
-    /// `Fleet::question_awaited` answers `None` for a Job that holds no slot
-    /// without touching the store, which is every row on a Board but the handful
-    /// being worked.
+    /// whether its Drone is waiting on somebody. **The slot read is free on
+    /// every row but the working ones** — `question_awaited` answers `None`
+    /// without touching the store for a Job that holds no slot.
     async fn summarised(&self, job: &Job) -> Result<JobSummary, Refusal> {
         let reason = self
             .last_reason(job.id())
@@ -808,29 +821,6 @@ where
             asking,
             self.resumption(job),
         ))
-    }
-
-    /// Which act a person took to put this Job back in the queue, where one
-    /// did.
-    ///
-    /// **`readmitting::Fleet::owed` and nothing beside it.** That is the
-    /// function re-admission itself calls to decide which step a Drone goes
-    /// back on, so a row saying "restarted" and the Drone that arrives cannot
-    /// disagree — the same rule `queued_reason` follows against `admit_next`.
-    ///
-    /// **Nothing is read for a Job that is not `queued`**, and the record is
-    /// already in hand for one that is, so this costs no store call at all.
-    ///
-    /// **A refusal reads as "nobody put this Job back".** On a `queued` Job it
-    /// means the current step is `not_started` or missing, which is a Job that
-    /// arrived from `awaiting_approval` and has never run. The refusal that
-    /// matters is still re-admission's, made at the spawn: this renders nothing
-    /// where that would refuse, and never offers a word where it would not.
-    fn resumption(&self, job: &Job) -> Option<core_model::Resumption> {
-        if job.status() != CoreJobStatus::Queued {
-            return None;
-        }
-        self.owed(job).ok().map(|owed| owed.resumption())
     }
 
     /// Why an approved Job has not started, worked out from the board as it
@@ -863,6 +853,15 @@ where
             .map(|held| (held.id().clone(), held.status()))
             .collect();
         if !clear_to_run(job, &standing) {
+            return Ok(Some(CoreQueuedReason::BlockedByDependency));
+        }
+        // **The same label as the edge above, because it is the same fact from
+        // the Board's side.** The registry gives a `queued` Job no reason
+        // meaning "waiting on the Jobs it created"; a Job held for its children
+        // is held for work that has to finish first, which is what the
+        // dependency label says. The mechanism differs — provenance rather than
+        // an edge — and that difference is not a Board fact.
+        if waiting_on_children(job, &crate::sub_dispatch::children_standing(&loaded.jobs)) {
             return Ok(Some(CoreQueuedReason::BlockedByDependency));
         }
         // **Before the machine reading, and not only because admission asks it

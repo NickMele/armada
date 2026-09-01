@@ -71,13 +71,13 @@ The injected toolset:
 - The project's allowlist
 - The [Manifest Commands registry](manifest.md)
 - A brokered secrets scope
-- A dedicated **Armada MCP server**, carrying four tools: submit evidence, declare scope, run this step's Checks, and ask a person a question
+- A dedicated **Armada MCP server**. Four tools in every toolbelt — submit evidence, declare scope, run this step's Checks, ask a person a question — and a fifth, dispatch a Job, only where it was granted
 
 All of that assumes one owning Manifest. For a Drone working a [Convoy](convoy.md), see the resolution rule below.
 
 Discovery needs nothing from Armada for the MCP half: tools are self-describing, and what the prompt supplies is the obligation a schema cannot state.
 
-**Asking is the fourth, and it is the only one whose answer comes from a person.** A Drone that does not know had escalate — which stops the [Job](job.md) and holds its worktree until somebody moves it — and guess, which nothing prevents. Asking offers between two and four answers, a person picks one, and the answer arrives as a turn in the Drone's own session; the call returns a receipt rather than blocking, because a person's wait has no budget. **There is no free-text reply and no second question while one is outstanding**: a question is an event on a Job, asked once and answered once, and a Drone that could stack them would be holding a conversation. Where a person needs to say something the offered answers do not cover, Redirect is what carries their own words. A Drone waiting on an answer is *waiting* rather than silent, so neither the liveness vigil nor the thrashing chain measures it.
+**Asking is the only one whose answer comes from a person, and it is given rather than granted.** A Drone that does not know had escalate — which stops the [Job](job.md) and holds its worktree until somebody moves it — and guess, which nothing prevents. Asking offers between two and four answers, a person picks one, and the answer arrives as a turn in the Drone's own session; the call returns a receipt rather than blocking, because a person's wait has no budget. **There is no free-text reply and no second question while one is outstanding**: a question is an event on a Job, asked once and answered once, and a Drone that could stack them would be holding a conversation. Where a person needs to say something the offered answers do not cover, Redirect is what carries their own words. A Drone waiting on an answer is *waiting* rather than silent, so neither the liveness vigil nor the thrashing chain measures it. It is in every toolbelt because asking costs nothing and creates nothing, unlike dispatch — and because the alternative to a denied `ask_question` is not a Drone that goes quiet but one that guesses.
 
 **The brokered scope never includes a Git credential.** A Drone commits locally, inside its own worktree, and the Drone-facing `VCS` type has no push method at all. Push, pull request and merge are [Fleet](fleet.md)'s, using credentials Fleet holds directly.
 

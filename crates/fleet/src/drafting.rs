@@ -64,12 +64,18 @@ pub(crate) enum StatedBy {
     TheProposer(String),
     /// Somebody who filled the form in.
     APerson,
+    /// The Drone of the Job this one is a child of, on the step a person
+    /// cleared the plan of. **`Actor::Fleet`, like the proposer** — the
+    /// vocabulary has three values and none of them is "a Drone", and the act
+    /// that matters for evaluating the call afterwards is that this scope was
+    /// stated by the machine rather than typed.
+    TheSplit { parent: core_model::JobId },
 }
 
 impl StatedBy {
     fn actor(&self) -> Actor {
         match self {
-            StatedBy::TheProposer(_) => Actor::Fleet,
+            StatedBy::TheProposer(_) | StatedBy::TheSplit { .. } => Actor::Fleet,
             StatedBy::APerson => Actor::Human,
         }
     }
@@ -78,6 +84,10 @@ impl StatedBy {
         match self {
             StatedBy::TheProposer(said) => said.clone(),
             StatedBy::APerson => String::from("hand-entered at the dispatch form"),
+            StatedBy::TheSplit { parent } => format!(
+                "dispatched by {} as one piece of the split a person approved",
+                parent.as_str()
+            ),
         }
     }
 }

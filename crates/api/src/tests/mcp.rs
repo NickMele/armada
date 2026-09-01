@@ -4,6 +4,13 @@
 //! `docs/spikes/006-will-a-drone-use-the-evidence-tool.md`, and the bodies
 //! below are that log's shapes. What cannot be proved here is that a Drone
 //! calls it — that is the acceptance criterion and it needs a live Drone.
+//
+// **Over 500 lines, and left as one file.** Every case is one router serving one
+// JSON-RPC call, and what they prove together is the tool surface a Drone sees:
+// the list, and each tool's happy path beside the refusal it is most likely to
+// hit. A split by tool would put "the list carries five" in a different file
+// from four of the five it counts, and that assertion is the one that broke
+// silently when a fifth tool landed — which is the whole reason it is here.
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -114,25 +121,99 @@ async fn a_notification_is_acknowledged_and_not_answered() {
     assert!(answered.body.is_empty());
 }
 
-/// Four tools, named as the allowlist names them and as `adapters` joins them.
+/// Every tool, named as the allowlist names them and as `adapters` joins them.
 #[tokio::test]
-async fn the_tool_list_carries_four_tools_and_no_fifth() {
+async fn the_tool_list_carries_every_tool_and_only_one_that_reports() {
     let app = wired(FakeDaemon::new(Broadcaster::new()));
     let answered = call(&app, r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#).await;
     assert_eq!(answered.status, StatusCode::OK);
-    assert!(answered.body.contains("\"name\":\"submit_evidence\""));
-    assert!(answered.body.contains("\"name\":\"declare_scope\""));
-    assert!(answered.body.contains("\"name\":\"run_checks\""));
-    assert!(answered.body.contains("\"name\":\"ask_question\""));
-    // Four, and no fifth. **Only one of them reports** — the count matters
-    // because a Drone choosing between reporting-shaped tools is spike 6's one
-    // miss, and none of a declaration, a dry run or a question is a report.
+    for named in [
+        "submit_evidence",
+        "declare_scope",
+        "run_checks",
+        "dispatch_job",
+        "ask_question",
+    ] {
+        assert!(
+            answered.body.contains(&format!("\"name\":\"{named}\"")),
+            "the list is missing `{named}`",
+        );
+    }
+    // **Only one of them reports**, which is what the count is about — a Drone
+    // choosing between reporting-shaped tools is spike 6's one miss, and none
+    // of a declaration, a dry run, a dispatch and a question is a report.
     //
-    // `ask_question`'s own schema nests an object, so the count is of the
-    // top-level key: `inputSchema` appears once per tool and the option shape
-    // inside it is `items`.
-    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 4);
+    // The count is of the top-level key, one per tool. `ask_question`'s schema
+    // nests an object for its options and `dispatch_job`'s nests one for its
+    // edges; neither adds an `inputSchema`, because the nested shapes are
+    // `items` and `properties`.
+    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 5);
+    assert_eq!(
+        answered
+            .body
+            .matches("\"name\":\"submit_evidence\"")
+            .count(),
+        1
+    );
 }
+
+/// The list is the same for every Drone, and the grant is what differs.
+///
+/// **`tools/list` has no caller on it**, so a Drone on a step that may not
+/// dispatch is still shown the tool — what stops it is the allowlist rendered
+/// at its spawn and, if it calls anyway, `fleet::sub_dispatch` refusing in
+/// words. This asserts the first half of that arrangement so a change to it
+/// breaks here rather than in a Job that goes quiet.
+#[tokio::test]
+async fn the_dispatch_tool_is_listed_to_every_drone() {
+    let app = wired(FakeDaemon::new(Broadcaster::new()));
+    let answered = call(&app, r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#).await;
+    assert!(answered.body.contains("\"name\":\"dispatch_job\""));
+}
+
+/// A dispatch arrives with its five fields and answers with the minted id.
+#[tokio::test]
+async fn a_dispatch_is_taken_and_answers_with_the_minted_id() {
+    let daemon = FakeDaemon::new(Broadcaster::new());
+    running(&daemon, "01JOB0");
+    let app = wired(daemon);
+
+    let answered = call(&app, DISPATCH).await;
+    assert_eq!(answered.status, StatusCode::OK);
+    assert!(!answered.is_error());
+    assert_eq!(answered.text(), "01M0DISPATCHEDCHILD0000000");
+}
+
+/// A parent id is refused **by name**, which is the rule the other tools hold
+/// to and the one it costs most to break here.
+#[tokio::test]
+async fn a_dispatch_naming_a_parent_is_refused_by_name() {
+    let daemon = FakeDaemon::new(Broadcaster::new());
+    running(&daemon, "01JOB0");
+    let app = wired(daemon);
+
+    let answered = call(
+        &app,
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"dispatch_job",
+           "arguments":{"parent_id":"01JOB9","title":"t","workflow":"bug","brief":"b",
+           "acceptance_criteria":[],"after":[]}}}"#,
+    )
+    .await;
+    assert!(answered.is_error());
+    assert!(answered.text().contains("parent_id"));
+    assert!(answered.text().contains("Fleet knows which Job"));
+}
+
+/// One call of the dispatch tool, well formed.
+const DISPATCH: &str = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{
+    "name":"dispatch_job",
+    "arguments":{
+        "title":"Port the parser",
+        "workflow":"bug",
+        "brief":"The parser in crates/config refuses a key it should read.",
+        "acceptance_criteria":["the key is read","a malformed value is refused"],
+        "after":[]
+    }}}"#;
 
 /// A question is taken and answered with a receipt that is **not** the answer.
 ///
@@ -206,7 +287,7 @@ async fn two_answers_with_one_label_are_refused() {
     );
 }
 
-/// One well-formed question, reused by the tests above.
+/// One well-formed question, reused by the cases above.
 const QUESTION: &str = r#"{"jsonrpc":"2.0","id":8,"method":"tools/call",
     "params":{"name":"ask_question","arguments":{
         "question":"Should the store schema change be its own Job?",

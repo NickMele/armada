@@ -9,7 +9,9 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
-use ipc::mcp::{CheckRan, CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
+use ipc::mcp::{
+    CheckRan, CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, SubmitEvidence,
+};
 use ipc::{
     Actor, ChangesRequested, Event, EvidenceType, FleetCapacity, Instant, JobCreated, JobDetail,
     JobDiff, JobEvidence, JobForgotten, JobHistory, JobId, JobList, JobStateChanged, JobStatus,
@@ -80,6 +82,8 @@ pub struct FakeDaemon {
     pub declared: Mutex<Vec<DeclareScope>>,
     /// Every question taken, in arrival order.
     pub asked: Mutex<Vec<ipc::mcp::AskQuestion>>,
+    /// Every Job a Drone asked to have created, in arrival order.
+    pub dispatched: Mutex<Vec<DispatchJob>>,
     /// How many dry runs were asked for, so a test can assert that a refused
     /// call ran nothing.
     pub checked: AtomicU64,
@@ -104,6 +108,7 @@ impl FakeDaemon {
             submitted: Mutex::new(Vec::new()),
             declared: Mutex::new(Vec::new()),
             asked: Mutex::new(Vec::new()),
+            dispatched: Mutex::new(Vec::new()),
             checked: AtomicU64::new(0),
             reports: Mutex::new(Vec::new()),
             mute: Mutex::new(false),
@@ -950,6 +955,33 @@ impl Daemon for FakeDaemon {
                     log: Some(".armada/checks/a-job/implement.dry.1.log".to_string()),
                 },
             ],
+        })
+    }
+
+    /// One minted id, and the call recorded. **The fake decides nothing about
+    /// whether the caller was allowed to ask** — that is `fleet::sub_dispatch`,
+    /// and a router test's question is whether the arguments arrive and the id
+    /// comes back.
+    async fn dispatch_job(
+        &self,
+        _caller: crate::Caller,
+        dispatch: DispatchJob,
+    ) -> Result<Receipt, NotRecorded> {
+        let running = self
+            .jobs
+            .lock()
+            .expect("not poisoned")
+            .iter()
+            .any(|job| job.status.as_wire() == "running");
+        if !running {
+            return Err(NotRecorded {
+                because: "no Job is being worked, so there is no task these Jobs                           would belong to"
+                    .to_string(),
+            });
+        }
+        self.dispatched.lock().expect("not poisoned").push(dispatch);
+        Ok(Receipt {
+            word: "01M0DISPATCHEDCHILD0000000".to_string(),
         })
     }
 }

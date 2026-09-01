@@ -22,6 +22,7 @@
 //! which method a message is and what is answered; it never decides what a
 //! field means.
 mod ask;
+mod dispatch;
 mod report;
 mod tools;
 
@@ -31,6 +32,7 @@ use serde_json::{json, Value};
 use crate::codec::{encode, Unencodable};
 
 pub use ask::{AskQuestion, AskedOption, ASK_FIELDS, ASK_TOOL, FEWEST_OPTIONS, MOST_OPTIONS};
+pub use dispatch::{DispatchJob, DISPATCH_FIELDS, DISPATCH_TOOL};
 pub use report::{CheckRan, CheckReport};
 pub use tools::{
     DeclareScope, NotAnArgument, SubmitEvidence, CHECKS_FIELDS, CHECKS_TOOL, EVIDENCE_FIELDS,
@@ -108,6 +110,14 @@ pub enum Incoming {
     RunChecks {
         id: CallId,
     },
+    /// A call of the dispatch tool that read as one Job's worth of asking.
+    /// **Whether that Job may exist is the daemon's answer** — this module
+    /// reads five fields and knows nothing about who called or what they are
+    /// allowed to create.
+    Dispatch {
+        id: CallId,
+        dispatch: DispatchJob,
+    },
     /// A call of the asking tool that read as a question. Whether it *is* one
     /// Fleet may hold is the daemon's answer, not this module's.
     ///
@@ -138,7 +148,12 @@ pub enum Incoming {
 }
 
 /// The receipt, as the daemon answers it. **One word**, and the type carries
-/// no room for a verdict — the outcome is not known when either call returns.
+/// no room for a verdict — the outcome is not known when any of these calls
+/// returns.
+///
+/// The dispatch tool answers through it too, and the word is the id Fleet
+/// minted. That is the same shape and not a widening: an id is a fact about
+/// what was written down, in exactly the way `recorded` is.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Receipt {
     pub word: String,
@@ -294,6 +309,12 @@ fn called(id: CallId, params: Option<&Value>) -> Incoming {
     if tool == SCOPE_TOOL {
         return match tools::declaration(arguments) {
             Ok(declaration) => Incoming::Declare { id, declaration },
+            Err(why) => Incoming::NotASubmission { id, why },
+        };
+    }
+    if tool == DISPATCH_TOOL {
+        return match dispatch::dispatch(arguments) {
+            Ok(dispatch) => Incoming::Dispatch { id, dispatch },
             Err(why) => Incoming::NotASubmission { id, why },
         };
     }

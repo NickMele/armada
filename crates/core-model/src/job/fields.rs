@@ -277,12 +277,12 @@ impl AdmissionHold {
 /// |---|---|
 /// | `running` | the review was answered, either way |
 /// | `stopped` | the step was restarted |
-/// | `advanced` | the verdict was overruled |
+/// | `advanced` | the verdict was overruled, where a person is why |
 ///
-/// **Three and not four.** Approving and asking for changes share `running` and
-/// share this value: both are a person answering at the gate and the Job goes
-/// again either way. Which it was is carried by the note that waits on the
-/// record.
+/// **Three and not four, and every one of them is a person.** Approving and
+/// asking for changes share `running` and share this value; which it was is
+/// carried by the waiting note. A shape Fleet reaches on its own — a Job held
+/// for Jobs its own step created — answers absent rather than adding a word.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resumption {
     /// A person answered at a human advance gate. `approve_review`, or

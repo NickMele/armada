@@ -93,6 +93,7 @@ const STEP_KEYS: &[&str] = &[
     "declare_plan_at",
     "retry_limit",
     "model",
+    "may_dispatch_jobs",
 ];
 
 /// How the steps are wired. **One variant, of two.**
@@ -189,6 +190,7 @@ pub struct Step {
     evidence_scope: Option<EvidenceScope>,
     retry_limit: u32,
     model: Option<ModelName>,
+    may_dispatch_jobs: bool,
 }
 
 impl Step {
@@ -242,6 +244,13 @@ impl Step {
     /// record, at `Job::model_at`, and never re-derived here.
     pub fn model(&self) -> Option<&ModelName> {
         self.model.as_ref()
+    }
+
+    /// Whether a Drone on this step is given the tool that creates Jobs.
+    /// **False on every step that leaves the key out**, which is every step of
+    /// every workflow that creates none.
+    pub fn may_dispatch_jobs(&self) -> bool {
+        self.may_dispatch_jobs
     }
 }
 
@@ -492,6 +501,16 @@ fn step(
         .optional("model")
         .and_then(|value| yaml::text(&model_key, value, out))
         .and_then(|named| roster::offered(&model_key, named, roster, out));
+    // **Absent is false, and anything that is not a boolean is a refusal.**
+    // This key is what puts the dispatch tool in a Drone's hands, so a value
+    // read as absent would be a step written to create Jobs that silently
+    // cannot — and a Job that goes quiet is an argument-list fault, which is
+    // the hardest kind to see.
+    let grant_key = table.at("may_dispatch_jobs");
+    let may_dispatch_jobs = match table.optional("may_dispatch_jobs") {
+        None => Some(false),
+        Some(value) => yaml::flag(&grant_key, value, out),
+    };
     let gate_key = table.at("advance_gate");
     let advance_gate = table
         .required("advance_gate", out)
@@ -564,6 +583,7 @@ fn step(
         evidence_scope,
         retry_limit: retry_limit?,
         model,
+        may_dispatch_jobs: may_dispatch_jobs?,
     })
 }
 

@@ -17,6 +17,12 @@
 //! `config::ResolvedWorkflow` is still proof that happened. What that
 //! resolution produces is a field of the Job, so it is spelled here, where the
 //! record is — `config` re-exports it, and `store` reads one back off a row.
+//!
+//! # Over 500 lines, and left as one file
+//!
+//! Every field of a frozen step lives on [`ResolvedStep`]. Moving the newest
+//! one out to buy six lines costs a tenth positional argument on
+//! [`ResolvedStep::frozen`], at ten call sites in three crates — a worse shape.
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -237,6 +243,9 @@ pub struct ResolvedStep {
     /// workflow whose steps all restated the fallback would be a second place
     /// the fallback is written down.
     model: Option<ModelName>,
+    /// Whether a Drone on this step is given the tool that creates Jobs.
+    /// **False on every step that does not say otherwise.**
+    may_dispatch_jobs: bool,
 }
 
 impl ResolvedStep {
@@ -267,7 +276,17 @@ impl ResolvedStep {
             evidence_scope,
             retry_limit,
             model,
+            // Set by the builder below: a tenth parameter would make ten
+            // callers state a value that is false on all but one step.
+            may_dispatch_jobs: false,
         }
+    }
+
+    /// The dispatch grant, for the reason [`frozen`](Self::frozen) is not
+    /// given it.
+    pub fn dispatching(mut self, may: bool) -> ResolvedStep {
+        self.may_dispatch_jobs = may;
+        self
     }
 
     pub fn id(&self) -> &StepId {
@@ -369,6 +388,12 @@ impl ResolvedStep {
     /// fallback to the Job's is spelled.
     pub fn model(&self) -> Option<&ModelName> {
         self.model.as_ref()
+    }
+
+    /// **The one thing that grants the dispatch tool** — read where a
+    /// toolbelt is built, and again where a call of it arrives.
+    pub fn may_dispatch_jobs(&self) -> bool {
+        self.may_dispatch_jobs
     }
 
     /// How many model calls one pass over this step makes. Latency rather than

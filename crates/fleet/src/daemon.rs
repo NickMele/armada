@@ -61,7 +61,8 @@ use adapter_traits::{
 };
 use config::{Manifest, ResolvedWorkflow};
 use core_model::{
-    Actor, Job, JobId, JobStatus, StepId, Target, Timestamp, TransitionReason, Ulid, WorkflowId,
+    Actor, IllegalTransition, Job, JobId, JobStatus, StepId, Target, Timestamp, TransitionReason,
+    Ulid, WorkflowId,
 };
 use store::{LoadAllError, LoadJobError, Loaded, Moved, Store};
 use tokio::sync::Mutex;
@@ -468,6 +469,21 @@ where
     /// allowed to be recorded as the one that took it.
     pub async fn approve(&self, job_id: &JobId) -> Result<Job, Adrift> {
         let job = self.load(job_id).await?;
+        // **The gate is `awaiting_approval` and nothing else, said here rather
+        // than left to the machine.** Three other statuses have an edge to
+        // `queued` and none of them is an approval: `awaiting_review` and
+        // `escalated` are a person's act at the far end of a Job, and
+        // `running -> queued` is Fleet standing a dispatching Job's Drone down
+        // to wait for its children. Approving any of them would re-queue a Job
+        // that is already past the gate — and for the `running` one, strand a
+        // live Drone. The machine refused two of the four for as long as their
+        // edges did not exist, which is what this replaces.
+        if job.status() != JobStatus::AwaitingApproval {
+            return Err(Adrift::IllegalMove(IllegalTransition::NoSuchEdge {
+                from: job.status(),
+                to: JobStatus::Queued,
+            }));
+        }
         self.move_job(&job, Target::Queued, Actor::Human).await?;
         self.admit_next().await?;
         self.load(job_id).await

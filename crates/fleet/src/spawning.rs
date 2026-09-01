@@ -282,7 +282,7 @@ where
             Model::named(job.model_at(step).as_str())?,
             brief,
             McpConfig::only_these(&self.host().mcp_config)?,
-            self.toolbelt(),
+            self.toolbelt(job, step),
             environment(HostPaths {
                 path: &self.host().path,
                 home: &self.host().home,
@@ -291,14 +291,27 @@ where
         ))
     }
 
-    /// What the Drone may call: the Evidence tool, its own worktree, and each
-    /// **non-destructive** command the Manifest declares.
+    /// What the Drone may call: the Evidence tool, its own worktree, each
+    /// **non-destructive** command the Manifest declares, and — on one step of
+    /// one workflow — the dispatch tool.
     ///
     /// A destructive command is withheld, and that is a decision this file
     /// makes rather than one it inherits: `commands.<name>.destructive` is a
     /// key `config` reads at M1 and nothing consumed until now, and granting
     /// one to an unattended process is the opposite of what the flag is for.
-    fn toolbelt(&self) -> Toolbelt {
+    ///
+    /// # Why this takes the step, when it used to take nothing
+    ///
+    /// **The dispatch grant is per step and cannot be anything else.** The
+    /// capability it carries is *other Jobs existing*, and what authorises that
+    /// is a person having read the plan the step before it produced. A Job-wide
+    /// grant would put the tool in the hands of the Drone writing the plan,
+    /// which is the one Drone that must not have it.
+    ///
+    /// `Dispatching::at` is the same predicate the tool call itself is refused
+    /// by, so a Drone's allowlist and Fleet's answer cannot disagree — and both
+    /// read the frozen workflow, which is what a person approved.
+    fn toolbelt(&self, job: &Job, step: &StepId) -> Toolbelt {
         let mut belt = Toolbelt::evidence_only()
             .and(Grant::ReadTheWorktree)
             .and(Grant::ChangeTheWorktree);
@@ -310,6 +323,28 @@ where
                 _ => {}
             }
         }
+        // **Read off the step Fleet is about to put a Drone on, not off the
+        // Job's current step.** They are the same on every path that reaches
+        // here, and asking the one being spawned onto is what keeps that true
+        // if a path ever arrives where they are not.
+        if dispatches(job, step) {
+            belt = belt.and(Grant::DispatchAJob);
+        }
         belt
     }
+}
+
+/// Whether a Drone spawned on this step of this Job may create Jobs.
+///
+/// A free function so that the answer is one expression read in two places —
+/// here, where the allowlist is rendered, and `crate::sub_dispatch`, where a
+/// call of the tool is refused. It is the same shape `Dispatching::at` asks,
+/// minus the parent it borrows, because a toolbelt is built before there is a
+/// call to authorise.
+fn dispatches(job: &Job, step: &StepId) -> bool {
+    job.origin().top_level().is_some()
+        && job
+            .workflow()
+            .step(step)
+            .is_some_and(core_model::ResolvedStep::may_dispatch_jobs)
 }
