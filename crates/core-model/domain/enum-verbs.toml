@@ -31,6 +31,9 @@
 #   criterion_verdict_check    - one criterion, as a mechanical Check saw it
 #   criterion_verdict_judge    - one criterion, as the Judge saw it
 #   criterion_verdict_attested - one criterion, as a person attested it
+#   origin                     - where a Job came from. Keys match the `origin`
+#                                row of job-fields.toml, which has no registry
+#                                file of its own
 #
 # Fields:
 #   verb         - what a person reads. Never the enum name
@@ -56,6 +59,18 @@
 # its reason rather than its own name, and declaring that here keeps the
 # codegen rule exceptionless — an exception living inside the generator is
 # invisible to whoever adds the next variant.
+#
+# `origin` is the one vocabulary that renders as text rather than as a badge,
+# so its rows carry neither glyph nor token by decision and each says so. A
+# chip is a status, and where a Job came from is not one —
+# `docs/concepts/job-board.md` settled that, and it is also why those verbs are
+# capitalised where a badge word is not: the row draws the string as written.
+#
+# One verb carries a slot. `sub_dispatched` reads `Sub-dispatched by
+# job_2d90bb`, and the parent's id is part of what a person reads rather than a
+# decoration around a word — so the form lives here whole, spelled `{field}`
+# for the Job field it is filled from. `step_verdict.pass` carries a form of an
+# older shape and names no field.
 
 [verbs.job_status.awaiting_approval]
 verb = "needs approval"
@@ -488,3 +503,43 @@ status_token = "--status-not-started"
 vocabulary = "Check outcome"
 in_code = "In code"
 notes = "Its own glyph, and that is the whole point of the row. Reusing never_ran's shield-minus would draw a Check nobody asked to run identically to a Check whose command is missing, and one of those is a failure. The verb is \"not run\" rather than \"skipped\": skipped reads as something being got away with, and this is the gate declining to spend a Check on paths the step did not touch. The token is not-started for never_ran's reason — nothing measured, so neither green nor red is true."
+
+[verbs.origin.auto_detected]
+verb = "Found by Fleet"
+icon = ""
+status_token = ""
+vocabulary = "Origin"
+in_code = ""
+notes = "Says who acted. `Auto-detected` was settings vocabulary naming a mode the lexicon does not have, and this sentence replaced it on the drawing. Capitalised where a badge word is not, because the row draws the string as written — plain sans in `--fg-muted`, never a chip. No glyph and no token for that same reason, and `in_code` is empty because the row was authored here."
+
+[verbs.origin.manual]
+verb = "Dispatched by you"
+icon = ""
+status_token = ""
+vocabulary = "Origin"
+in_code = ""
+notes = "`Manual` named a mode. This names the person who acted, which is the whole of what a row has to say about a Job you dispatched yourself. Neither glyph nor token, for `auto_detected`'s reason."
+
+[verbs.origin.helm_drafted]
+verb = "Drafted in Helm"
+icon = ""
+status_token = ""
+vocabulary = "Origin"
+in_code = ""
+notes = "Drafted rather than dispatched, because a Job Helm proposed still takes your approval like any other. Neither glyph nor token, for `auto_detected`'s reason."
+
+[verbs.origin.workflow_triggered]
+verb = "Workflow-triggered"
+icon = ""
+status_token = ""
+vocabulary = "Origin"
+in_code = ""
+notes = "Unchanged when the other three were re-worded, because it already named an act. The Job that named it is over, so it is the one origin written from `subject` rather than from `dispatched_by`. Neither glyph nor token, for `auto_detected`'s reason."
+
+[verbs.origin.sub_dispatched]
+verb = "Sub-dispatched by {dispatched_by.job_id}"
+icon = ""
+status_token = ""
+vocabulary = "Origin"
+in_code = ""
+notes = "The registry carries the form rather than the word. The row reads `Sub-dispatched by job_2d90bb`, and the parent's id is the fact that says why that row is read-only — the approval already happened at its parent, so no control on it offers a decision. Composing the sentence in Bridge from a word plus the field would put `Sub-dispatched by` in a second place nothing checks, which is what this file exists to prevent. Neither glyph nor token, for `auto_detected`'s reason."
