@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { Sheet } from "../../primitives/Sheet/Sheet";
-import { UnifiedDiff, type DiffFile } from "../UnifiedDiff/UnifiedDiff";
 
 /**
  * The Job's patch, on the layer that can hold it — Journey 4, frame `4j`.
@@ -15,12 +14,25 @@ import { UnifiedDiff, type DiffFile } from "../UnifiedDiff/UnifiedDiff";
  * was the reading this replaced, and a diff read in a column that narrow is a
  * decision taken on a line that wrapped.
  */
-export type JobDiffFile = DiffFile & {
+/**
+ * One row of the rail. **Not a `DiffFile`** — the patch is drawn by the
+ * caller's own diff component, and what the rail needs is the reading's counts
+ * and the step that produced the file, which a patch does not carry.
+ */
+export type JobDiffFile = {
+  /** Repository-relative, exactly as git spells it. */
+  path: string;
   /** Lines added and removed, as the reading counted them. */
   added: number;
   removed: number;
-  /** The step that wrote it. The one step-scoped fact a Job's patch carries. */
-  step: ReactNode;
+  /**
+   * The step that wrote it. The one step-scoped fact a Job's patch carries —
+   * and **absent where nothing says which step that was**. Fleet's footprint
+   * carries `planned_by`, which is the step that *promised* a path, and that is
+   * a different claim: a file no step declared would then read as a file no
+   * step wrote. Absent draws the counts alone rather than a guess. Reported.
+   */
+  step?: ReactNode;
 };
 
 export type JobDiffSheetProps = {
@@ -32,16 +44,26 @@ export type JobDiffSheetProps = {
   /** Which file the rail has selected, by path. */
   selected?: string;
   onSelect?: (path: string) => void;
-  /** The step the diff was opened at, for the rail's heading. */
+  /**
+   * The step the diff was opened at, for the rail's heading. Absent where the
+   * reading is not scoped to one — which needs the attribution above.
+   */
   openedAt?: ReactNode;
-  /** What the region says with no patch. */
-  emptyNote: string;
-  /** What was left undrawn, where the patch was longer than the bound. */
-  cut?: ReactNode;
+  /**
+   * What the rail says about itself, under the files. The default is why every
+   * file in one sheet belongs to one patch; a caller whose reading cannot
+   * attribute a file to a step says that instead.
+   */
+  note?: ReactNode;
+  /**
+   * The patch. **A slot, so the sheet does not choose the diff component** —
+   * Bridge already draws one against its own read, and a sheet that imported
+   * `UnifiedDiff` would be drawing the patch twice from two answers.
+   */
+  children: ReactNode;
   /** The window is at `--window-floor`. */
   floor?: boolean;
   onClose?: () => void;
-  onCopied?: (value: string) => void;
 };
 
 /** Why every file in one sheet belongs to one patch, said once over the rail. */
@@ -56,11 +78,10 @@ export function JobDiffSheet({
   selected,
   onSelect,
   openedAt,
-  emptyNote,
-  cut,
+  note = ONE_PATCH,
+  children,
   floor = false,
   onClose,
-  onCopied,
 }: JobDiffSheetProps) {
   const added = files.reduce((sum, file) => sum + file.added, 0);
   const removed = files.reduce((sum, file) => sum + file.removed, 0);
@@ -116,16 +137,18 @@ export function JobDiffSheet({
                     <span className="armada-diff-sheet__removed">{`−${file.removed}`}</span>
                   </>
                 )}
-                {" · "}
-                {file.step}
+                {file.step === undefined ? null : (
+                  <>
+                    {" · "}
+                    {file.step}
+                  </>
+                )}
               </span>
             </button>
           ))}
-          <span className="armada-diff-sheet__rail-note">{ONE_PATCH}</span>
+          <span className="armada-diff-sheet__rail-note">{note}</span>
         </div>
-        <div className="armada-diff-sheet__patch">
-          <UnifiedDiff files={files} emptyNote={emptyNote} cut={cut} onCopied={onCopied} />
-        </div>
+        <div className="armada-diff-sheet__patch">{children}</div>
       </div>
     </Sheet>
   );

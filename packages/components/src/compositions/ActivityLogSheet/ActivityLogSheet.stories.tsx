@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ActivityLogSheet } from "./ActivityLogSheet";
-import type { ActivityEntry } from "../ActivityLog/ActivityLog";
+import { ActivityLog, type ActivityEntry } from "../ActivityLog/ActivityLog";
 
 /**
  * The activity log on a trailing sheet — Journey 4, frames `4i`, `4l` and `4m`.
@@ -62,12 +62,11 @@ export const Held: Story = {
     open: true,
     step: "Fix",
     jobId: "job_2d90bb",
-    entries: ENTRIES,
+    children: <ActivityLog entries={ENTRIES} openId="4" />,
     total: 1676,
     live: true,
     heldAt: "14:31:58",
     arrived: 31,
-    openId: "4",
   },
 };
 

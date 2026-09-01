@@ -655,7 +655,7 @@ u              submit for verification  (piloted job only)
 e              redispatch as a new job
 h / l / ← / →  expand and collapse  (detail only)
 [ ]            move between chapters  (detail only)
-Enter          open the log         (detail only, not built)
+Enter          open the log         (detail only)
 f              open the diff        (detail only)
 g              open the stage       (detail only)
 ```

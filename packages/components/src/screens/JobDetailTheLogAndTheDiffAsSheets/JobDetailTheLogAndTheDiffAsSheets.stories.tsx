@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ActivityLogSheet } from "../../compositions/ActivityLogSheet/ActivityLogSheet";
-import type { ActivityEntry } from "../../compositions/ActivityLog/ActivityLog";
+import { ActivityLog, type ActivityEntry } from "../../compositions/ActivityLog/ActivityLog";
 import { JobDiffSheet, type JobDiffFile } from "../../compositions/JobDiffSheet/JobDiffSheet";
+import { UnifiedDiff, type DiffFile } from "../../compositions/UnifiedDiff/UnifiedDiff";
 import type { RunTreeStep } from "../../compositions/RunTree/RunTree";
 import type { StepChapter } from "../../compositions/StepStory/StepStory";
 import { Button } from "../../primitives/Button/Button";
@@ -45,12 +46,9 @@ function opened(chapters: StepChapter[], id: string, meta: string): StepChapter[
   );
 }
 
-const DIFF_FILES: JobDiffFile[] = [
+const PATCH: DiffFile[] = [
   {
     path: "packages/settings/src/selectors.ts",
-    added: 61,
-    removed: 4,
-    step: "Fix",
     lines: [
       { kind: "hunk", text: "@@ -14,6 +14,9 @@ import { createSelector } from 'reselect'" },
       { kind: "context", text: " import type { SettingsState } from './types'" },
@@ -81,17 +79,23 @@ const DIFF_FILES: JobDiffFile[] = [
   },
   {
     path: "packages/settings/src/reducer.ts",
-    added: 12,
-    removed: 27,
-    step: "Fix",
     lines: [{ kind: "hunk", text: "@@ -30,12 +30,9 @@ export function settings(state, action) {" }],
   },
+  {
+    path: "packages/settings/test/useColumnSelectors.test.ts",
+    lines: [{ kind: "hunk", text: "@@ -0,0 +1,21 @@" }],
+  },
+];
+
+/** The rail's own reading: the counts, and the step that wrote each file. */
+const RAIL: JobDiffFile[] = [
+  { path: "packages/settings/src/selectors.ts", added: 61, removed: 4, step: "Fix" },
+  { path: "packages/settings/src/reducer.ts", added: 12, removed: 27, step: "Fix" },
   {
     path: "packages/settings/test/useColumnSelectors.test.ts",
     added: 21,
     removed: 0,
     step: "Reproduction",
-    lines: [{ kind: "hunk", text: "@@ -0,0 +1,21 @@" }],
   },
 ];
 
@@ -120,13 +124,13 @@ export const JobDetailLogOpen: Story = {
             open
             step="Fix"
             jobId={JOB}
-            entries={WHOLE}
             total={1676}
             live
             heldAt="14:31:58"
             arrived={31}
-            openId="3"
-          />
+          >
+            <ActivityLog entries={WHOLE} openId="3" />
+          </ActivityLogSheet>
         }
       />
     </div>
@@ -156,11 +160,12 @@ export const JobDetailDiffOpen: Story = {
           <JobDiffSheet
             open
             branch="fix/settings-split-selectors"
-            files={DIFF_FILES}
-            selected={DIFF_FILES[0]!.path}
+            files={RAIL}
+            selected={RAIL[0]!.path}
             openedAt="Fix"
-            emptyNote="This drone has not changed anything yet."
-          />
+          >
+            <UnifiedDiff files={PATCH} emptyNote="This drone has not changed anything yet." />
+          </JobDiffSheet>
         }
       />
     </div>
@@ -193,13 +198,13 @@ export const JobDetailLogOpenAtFloor: Story = {
             open
             floor
             step="Fix"
-            entries={WHOLE}
             total={1676}
             live
             heldAt="14:31:58"
             arrived={31}
-            openId="3"
-          />
+          >
+            <ActivityLog entries={WHOLE} openId="3" />
+          </ActivityLogSheet>
         }
       />
     </div>
@@ -295,9 +300,7 @@ export const JobDetailEscalatedLogOpen: Story = {
             open
             step="Fix"
             jobId={JOB}
-            entries={ESCALATED_ENTRIES}
             total={1676}
-            openId="e4"
             endedAt="14:47:11"
             escalation={{
               at: "14:47:11",
@@ -305,7 +308,9 @@ export const JobDetailEscalatedLogOpen: Story = {
                 "The suite passed and the Judge refused: the diff widens the catch block rather " +
                 "than addressing the cause named in root_cause.md. Three attempts spent.",
             }}
-          />
+          >
+            <ActivityLog entries={ESCALATED_ENTRIES} openId="e4" />
+          </ActivityLogSheet>
         }
       />
     </div>

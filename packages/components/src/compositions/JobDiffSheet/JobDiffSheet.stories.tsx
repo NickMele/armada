@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { JobDiffSheet, type JobDiffFile } from "./JobDiffSheet";
+import { UnifiedDiff, type DiffFile } from "../UnifiedDiff/UnifiedDiff";
 
 /**
  * The Job's patch on a trailing sheet — Journey 4, frame `4j`.
@@ -28,12 +29,9 @@ export default meta;
 
 type Story = StoryObj<typeof JobDiffSheet>;
 
-const FILES: JobDiffFile[] = [
+const PATCH: DiffFile[] = [
   {
     path: "packages/settings/src/selectors.ts",
-    added: 61,
-    removed: 4,
-    step: "Fix",
     lines: [
       { kind: "hunk", text: "@@ -14,6 +14,9 @@ import { createSelector } from 'reselect'" },
       { kind: "context", text: " import type { SettingsState } from './types'" },
@@ -51,9 +49,6 @@ const FILES: JobDiffFile[] = [
   },
   {
     path: "packages/settings/src/reducer.ts",
-    added: 12,
-    removed: 27,
-    step: "Fix",
     lines: [
       { kind: "hunk", text: "@@ -48,7 +51,7 @@ export const selectDensity = …" },
       { kind: "removed", text: "-  return state.settings.density ?? 'comfortable'" },
@@ -62,13 +57,22 @@ const FILES: JobDiffFile[] = [
   },
   {
     path: "packages/settings/test/useColumnSelectors.test.ts",
-    added: 21,
-    removed: 0,
-    step: "Reproduction",
     lines: [
       { kind: "hunk", text: "@@ -0,0 +1,21 @@" },
       { kind: "added", text: "+import { selectVisibleColumns } from '../src/selectors'" },
     ],
+  },
+];
+
+/** The rail's own reading: the counts, and the step that wrote each file. */
+const RAIL: JobDiffFile[] = [
+  { path: "packages/settings/src/selectors.ts", added: 61, removed: 4, step: "Fix" },
+  { path: "packages/settings/src/reducer.ts", added: 12, removed: 27, step: "Fix" },
+  {
+    path: "packages/settings/test/useColumnSelectors.test.ts",
+    added: 21,
+    removed: 0,
+    step: "Reproduction",
   },
 ];
 
@@ -77,10 +81,12 @@ export const OpenedAtAStep: Story = {
   args: {
     open: true,
     branch: "fix/settings-split-selectors",
-    files: FILES,
-    selected: FILES[0]!.path,
+    files: RAIL,
+    selected: PATCH[0]!.path,
     openedAt: "Fix",
-    emptyNote: "This drone has not changed anything yet.",
+    children: (
+      <UnifiedDiff files={PATCH} emptyNote="This drone has not changed anything yet." />
+    ),
   },
 };
 

@@ -3,7 +3,6 @@ import { Button } from "../../primitives/Button/Button";
 import { Kbd } from "../../primitives/Kbd/Kbd";
 import { Sheet } from "../../primitives/Sheet/Sheet";
 import { Tabs } from "../../primitives/Tabs/Tabs";
-import { ActivityLog, type ActivityEntry } from "../ActivityLog/ActivityLog";
 
 /**
  * A step's activity log, on the layer that can hold it — Journey 4, frames
@@ -21,6 +20,13 @@ import { ActivityLog, type ActivityEntry } from "../ActivityLog/ActivityLog";
  * the strip says so, and *Jump to now* carries the count of what arrived while
  * you were reading. The same count is repeated under the last entry, because
  * the strip is at the top and the reader is at the bottom.
+ *
+ * **The stream itself is a slot.** Two log renderings exist in this package —
+ * `ActivityLog` and `LogEntry` — and Bridge draws the second. A sheet that
+ * imported one of them would be the sheet for one of the two surfaces, so it
+ * takes the rows as children and the caller brings whichever log it already
+ * draws in the panel. Which one a step's story should use is a question for
+ * those two components, not for this layer. Reported.
  *
  * **The notice carries no glyph.** The drawing draws `triangle-alert` on it and
  * the icon registry reserves that glyph to Doctor — the reservation was
@@ -65,8 +71,8 @@ export type ActivityLogSheetProps = {
   step: ReactNode;
   /** The Job, in mono. Absent at the floor, where the width is not there. */
   jobId?: ReactNode;
-  /** Every entry the stream has carried, already filtered. */
-  entries: ActivityEntry[];
+  /** The stream, drawn by whichever log the caller's surface already uses. */
+  children: ReactNode;
   /** How many the stream holds, which is not how many are drawn. */
   total: number;
   /** Whether rows are still arriving. The live mark, and the pulse with it. */
@@ -85,8 +91,6 @@ export type ActivityLogSheetProps = {
   onJumpToNow?: () => void;
   /** What the Job did while the sheet was open, where it did something. */
   escalation?: ActivityEscalation;
-  /** Which entry is open, for a caller that holds it. */
-  openId?: string;
   /** The window is at `--window-floor`. */
   floor?: boolean;
   onClose?: () => void;
@@ -96,7 +100,7 @@ export function ActivityLogSheet({
   open,
   step,
   jobId,
-  entries,
+  children,
   total,
   live = false,
   endedAt,
@@ -106,7 +110,6 @@ export function ActivityLogSheet({
   arrived = 0,
   onJumpToNow,
   escalation,
-  openId,
   floor = false,
   onClose,
 }: ActivityLogSheetProps) {
@@ -205,7 +208,7 @@ export function ActivityLogSheet({
       onClose={onClose}
     >
       <div className="armada-log-sheet__body">
-        <ActivityLog entries={entries} openId={openId} />
+        {children}
         {arrived === 0 ? null : (
           <p className="armada-log-sheet__arrived" role="status">
             {`${arrived} ${arrived === 1 ? "entry" : "entries"} arrived while you were reading`}
