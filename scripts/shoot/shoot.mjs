@@ -19,6 +19,7 @@
  * caller to scrape this terminal:
  *
  *   .shots/app/shots.json      what was captured from the build, and where
+ *   .shots/design/shots.json   the same for a drawing, plus what was cached
  * A manifest per side, because a side is captured on its own and is worth
  * reading on its own.
  *
@@ -26,8 +27,17 @@
  *
  * Documented in `docs/practices/comparing-to-the-drawing.md`. */
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { browse } from "./browser.mjs";
 
@@ -46,6 +56,11 @@ const HEIGHT_FLOOR = 16;
 /* A side is a directory of PNGs named by state, and where the sheet will look
  * for them. Nothing that captures one knows about the other. */
 const SIDES = {
+  design: {
+    dir: join(shots, "design"),
+    label: "Drawing",
+    absent: "Not drawn. The build has a state the drawing does not.",
+  },
   app: {
     dir: join(shots, "app"),
     label: "App",
@@ -57,6 +72,12 @@ const USAGE = `shoot — screenshot a screen and its drawing, and pair them
 
   pnpm shoot                        the app: build the gallery, capture every
                                     marked screen story to .shots/app/
+  pnpm shoot --design <file.dc.html>
+                                    a drawing: capture every [data-shot] frame
+                                    to .shots/design/, and cache the source
+  pnpm shoot --design <file> --suggest
+                                    propose a mark for each unmarked frame
+                                    instead of refusing
 Everything it writes is under .shots/, which is ignored.
 `;
 
@@ -150,6 +171,149 @@ async function shootApp() {
   console.log("\n.shots/app/shots.json — what was captured, for a caller");
 }
 
+// ------------------------------------------------------------------ the drawing
+
+/** Every relative asset a file reaches for, followed into CSS. */
+function assetsOf(file) {
+  const text = readFileSync(file, "utf8");
+  const specs = new Set();
+  const local = (s) => s && !/^[a-z]+:/i.test(s) && !s.startsWith("/") && !s.startsWith("#");
+  for (const m of text.matchAll(/(?:href|src)\s*=\s*["']([^"']+)["']/g))
+    if (local(m[1])) specs.add(m[1]);
+  for (const m of text.matchAll(/@import\s+["']([^"']+)["']/g)) if (local(m[1])) specs.add(m[1]);
+  for (const m of text.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/g))
+    if (local(m[1])) specs.add(m[1]);
+  return [...specs];
+}
+
+/* A drawing is compared against a build that will have moved on by the time
+ * anybody reads the comparison, so the drawing is copied in beside the shots.
+ * It is copied with what it reaches for: a `.dc.html` file carries no values of
+ * its own, it links the design workspace's token sheet, and one cached without
+ * that sheet renders as unstyled text and screenshots as garbage. */
+function cacheSource(file) {
+  const cache = join(SIDES.design.dir, "_source");
+  rmSync(cache, { recursive: true, force: true });
+  mkdirSync(cache, { recursive: true });
+
+  const from = dirname(file);
+  const missing = [];
+  const copied = [];
+  const copy = (spec) => {
+    const src = join(from, spec);
+    const dst = join(cache, spec);
+    if (!existsSync(src) || !statSync(src).isFile()) return missing.push(spec);
+    mkdirSync(dirname(dst), { recursive: true });
+    copyFileSync(src, dst);
+    copied.push(spec);
+    if (/\.css$/i.test(src)) for (const nested of assetsOf(src)) copy(join(dirname(spec), nested));
+  };
+
+  copyFileSync(file, join(cache, basename(file)));
+  for (const spec of assetsOf(file)) copy(spec);
+
+  return { page: join(cache, basename(file)), cache, copied, missing };
+}
+
+const unmarkedLines = (frames) =>
+  frames.map((f) => `  #${f.id}${f.heading ? `  ${f.heading}` : ""}`);
+
+async function shootDesign(file, { suggest }) {
+  if (!existsSync(file)) die(`No such drawing: ${file}`);
+
+  const cached = cacheSource(resolve(file));
+  console.log(`Cached ${basename(file)} to ${relative(root, cached.cache)}/`);
+  if (cached.missing.length) {
+    console.log(
+      `\nIt links ${plural(cached.missing.length, "file that is", "files that are")} not beside it:`,
+    );
+    for (const m of cached.missing) console.log(`  ${m}`);
+    console.log("Without its token sheet a drawing renders as unstyled text.");
+  }
+
+  const page = cached.page;
+  const read = await browse({ page, capture: false, width: 1440, height: 1200 });
+  const unmarked = read.frames.filter((f) => !f.marked);
+
+  if (suggest) return propose(unmarked, resolve(file));
+
+  /* Refusing is the enforcement. There is nothing on the design side that can
+     be made to require a mark, and a drawing that cannot be paired blocks the
+     implementation it was drawn for — so a partly-marked drawing is refused on
+     the same terms as an unmarked one. Capturing what it can would report the
+     unmarked frames as built-and-not-drawn, which is a different defect and a
+     false one. */
+  if (unmarked.length)
+    die(
+      read.marks.length
+        ? `${basename(file)} is partly marked, and a partly marked drawing pairs partly.`
+        : `${basename(file)} carries no data-shot, so nothing in it can be paired.`,
+      "",
+      `${plural(unmarked.length, "frame has", "frames have")} no mark:`,
+      ...unmarkedLines(unmarked),
+      "",
+      "Run again with --suggest for a line to paste onto each one.",
+    );
+
+  const into = SIDES.design.dir;
+  for (const png of Object.values(pngsIn(into))) rmSync(png, { force: true });
+  const captured = await browse({ page, capture: true, into, width: 1440, height: 1200 });
+
+  const rows = shotRows(captured);
+  printShots(rows, ".shots/design/");
+
+  manifest(join(into, "shots.json"), {
+    tool: "shoot",
+    side: "design",
+    captured_at: now(),
+    source: {
+      kind: "drawing",
+      name: basename(file),
+      cached: relative(shots, cached.page),
+      assets_cached: cached.copied,
+      assets_missing: cached.missing,
+    },
+    shots: rows,
+    page_errors: captured.failures,
+  });
+  console.log("\n.shots/design/shots.json — what was captured, for a caller");
+}
+
+const kebab = (s) =>
+  s
+    .split(/\s+—\s+/)[0]
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+/** Print an attribute to paste, per unmarked frame. Marking is then typing. */
+function propose(unmarked, page) {
+  if (!unmarked.length) return console.log("\nEvery frame is marked. Nothing to suggest.");
+
+  console.log(
+    `\n${plural(unmarked.length, "frame has", "frames have")} no mark. Paste each attribute onto the element shown:\n`,
+  );
+  for (const f of unmarked) {
+    const mark = kebab(f.heading || f.id);
+    console.log(`  #${f.id}${f.heading ? `  ${f.heading}` : ""}`);
+    if (!f.candidate) {
+      console.log("      nothing inside it to mark — the frame is empty\n");
+      continue;
+    }
+    const opening = f.candidate.opening;
+    console.log(`      data-shot="${mark}"`);
+    console.log(`      on  ${opening.slice(0, 96)}${opening.length > 96 ? "…" : ""}`);
+    console.log(
+      f.candidate.guessed
+        ? "      guessed — no div in this frame paints var(--bg-base), so this is its biggest child\n"
+        : "      the div that paints var(--bg-base), so it is the screen\n",
+    );
+  }
+  console.log(`The drawing is ${page}`);
+  console.log("Mark it, then run shoot --design again without --suggest.");
+}
+
 // ---------------------------------------------------------------------- the door
 
 const argv = process.argv.slice(2);
@@ -158,10 +322,15 @@ if (argv.includes("--help") || argv.includes("-h")) {
   process.exit(0);
 }
 
+const designAt = argv.indexOf("--design");
+const design = designAt === -1 ? null : argv[designAt + 1];
+if (designAt !== -1 && (!design || design.startsWith("--"))) die("--design needs a file.", "", USAGE);
+
 mkdirSync(shots, { recursive: true });
 
 try {
-  await shootApp();
+  if (design) await shootDesign(design, { suggest: argv.includes("--suggest") });
+  else await shootApp();
 } finally {
   rmSync(join(shots, ".run"), { recursive: true, force: true });
 }
