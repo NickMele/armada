@@ -95,3 +95,7 @@
 /* The step's story: one chapter, and one line of the activity log inside it. */
 @import "./compositions/Chapter/Chapter.css";
 @import "./compositions/LogEntry/LogEntry.css";
+
+/* What a stage of the phase strip opens to. Its own file because it is its own
+   component: the strip positions it, and it draws flat on a panel too. */
+@import "./compositions/PhaseCard/PhaseCard.css";

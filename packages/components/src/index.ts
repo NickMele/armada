@@ -118,3 +118,8 @@ export * from "./compositions/WhereRow/WhereRow";
 // nothing; a log entry opens in place to its payload, and every line opens.
 export * from "./compositions/Chapter/Chapter";
 export * from "./compositions/LogEntry/LogEntry";
+
+// What a stage of the phase strip opens to — what that tier is, what it is
+// waiting on and where it stands. The standing sentence for each tier lives
+// here, written once, because it is the same on every Job.
+export * from "./compositions/PhaseCard/PhaseCard";

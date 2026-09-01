@@ -1,66 +1,47 @@
 import type { ReactNode } from "react";
-import { useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
+
+import { PhaseCard, phaseGlyph } from "../PhaseCard/PhaseCard";
+import type { PhaseCardRow, PhaseStageKind, PhaseStageState } from "../PhaseCard/PhaseCard";
 
 /**
  * Where this step is — a step's phases and its gate tiers, drawn as one
  * progression: Instructed, Working, Submitted, then its Checks, its Judge, and
  * you.
  *
- * **They are one strip because they are one progression.** A step that has been
- * submitted and is waiting on a Check is not in two places; drawing the phases
- * as a position marker and the gates as a separate row of chips made a reader
- * hold two readings of the same fact.
+ * **They are one strip because they are one progression.** A step that has
+ * been submitted and is waiting on a Check is not in two places; drawing the
+ * phases as a position marker and the gates as a separate row of chips made a
+ * reader hold two readings of the same fact.
  *
- * **Every stage is a control.** Opening one states what that stage is, what it
- * is waiting on and where it stands — so the explanation lives where the
- * question is asked, instead of in a page somebody has to remember.
+ * **`You` closes the strip, always.** It is the last thing that can hold a
+ * step, and a strip that stopped at the Judge said a step could only ever be
+ * waiting on a machine. Where the workflow asks for no person the stage is
+ * still drawn, still ahead and never lit — an absent tier is not a failed
+ * tier.
  *
- * **An absent tier is not a failed tier.** A step that declares no Check and no
- * Judge passes neither stage, and `note` is where it says what does advance it.
- * An empty gate drawn greyed out says the gate failed to render.
+ * **The connectors are not decoration.** Six chips in a row with a gap between
+ * them is a set; six chips joined by a line is an order, and the order is the
+ * whole claim the strip makes.
  *
- * **Checks and the Judge are different in kind, and this is where that shows.**
- * A Check is a command the repository declares and Fleet runs, judged by an
- * exit code, and it may pass or fail. The Judge is a model reading the work
- * against the step's acceptance criteria, and it may only refuse. Drawing them
- * as one row of chips risks reading as one kind of thing, so the standing
- * sentence for each is `SAID` below — written once, here, rather than retyped
- * on every screen that draws a strip.
+ * **Every stage is a control, and it opens on hover and pins on click.** The
+ * drawing specifies click and hovering is what was asked for; a card that does
+ * both satisfies each without inventing a third behaviour. Hovering away
+ * closes an unpinned card and leaves a pinned one, `Escape` unpins, and
+ * keyboard focus opens the same card a cursor does.
+ *
+ * **An absent tier is not a failed tier.** A step that declares no Check and
+ * no Judge passes neither stage, and `note` is where it says what does advance
+ * it. An empty gate drawn greyed out says the gate failed to render.
  */
+export type { PhaseCardRow, PhaseStageKind, PhaseStageState };
 
 /**
- * What a stage is. The three phases share one kind because nothing standing is
- * true of one that is not true of the others; the three tiers each have their
- * own, because what each tier is is exactly what a reader opens it to learn.
+ * A row inside an opened stage. The card's row, under the strip's name for it
+ * — a caller building a strip reaches for this and never has to know the card
+ * exists, which is the whole point of the strip owning the composition.
  */
-export type PhaseStageKind = "phase" | "checks" | "judge" | "human";
-
-/**
- * Where a stage stands. **Not a step activity and not a Job status** — those
- * are the tree's and the badge's. Hue comes from the below-Job-level tokens
- * `tokens/status.css` declares and nothing else: cleared is `--step-advanced`,
- * current is `--step-running`, waiting is `--step-waiting`, failed is
- * `--step-failed`, and a stage still ahead takes no hue at all.
- */
-export type PhaseStageState = "cleared" | "current" | "waiting" | "failed" | "ahead";
-
-/**
- * One row inside an opened stage: a Check and its exit code, a criterion and
- * its verdict.
- */
-export type PhaseStageRow = {
-  /** The command or the criterion. */
-  label: ReactNode;
-  /** What it came to — `exit 0 · 47s`, `met`, `running · 1m 04s`. */
-  result?: ReactNode;
-  /** Which of `passed`, `failed` or `met`/`not_met` it is, for the hue. */
-  named?: string;
-  /**
-   * Whether `label` is machine-derived. A Check is a command, so it is mono; a
-   * criterion is a sentence somebody wrote, so it is not.
-   */
-  mono?: boolean;
-};
+export type PhaseStageRow = PhaseCardRow;
 
 export type PhaseStage = {
   id: string;
@@ -75,139 +56,169 @@ export type PhaseStage = {
   state: PhaseStageState;
   /**
    * Where it stands, in the caller's words — what it is waiting on, or what it
-   * came to. Drawn above the rows, beneath the standing sentence for its kind.
+   * came to. Drawn in the card's header.
    */
   stands?: ReactNode;
   /** The Checks and their exit codes, or the criteria and their verdicts. */
-  rows?: PhaseStageRow[];
-  /** Anything the standing sentence and the rows cannot say. */
-  detail?: ReactNode;
+  rows?: PhaseCardRow[];
+  /** What the tier is. Defaults to the standing sentence for its kind. */
+  said?: ReactNode | null;
+  /** What the rows do not say, on the card's own well. */
+  cardNote?: ReactNode;
+  /** The card's closing line. Defaults to the standing one for its kind. */
+  detail?: ReactNode | null;
+  /**
+   * Whether the stage opens a card at all. A phase with nothing to say — most
+   * of `Instructed`, `Working`, `Submitted` — draws as a marker rather than as
+   * a control that opens an empty box.
+   */
+  opens?: boolean;
 };
 
 export type PhaseStripProps = {
   stages: PhaseStage[];
-  /** The label over the strip. */
+  /**
+   * The label over the strip. **Sentence case, plain text** — the build drew it
+   * as an uppercase caption, and a caption announces a region where this
+   * introduces a line.
+   */
   label?: ReactNode;
   /**
-   * The sentence beneath — where the step stands overall, and what advances it
-   * where no tier does. **This is what an ungated step says instead of an empty
-   * gate**, so it is not decoration.
+   * The sentence beneath — where the step stands, in the panel's own voice.
+   * *The Drone is working. Nothing has been submitted, so no gate has been
+   * asked anything yet.*
+   *
+   * **One sentence describing the state, not a paragraph describing the
+   * menu.** What each act does belongs on that act's tooltip with its binding,
+   * and this is also where an ungated step says what advances it instead of
+   * drawing an empty gate.
    */
   note?: ReactNode;
-  /** Which stage is open on mount. After that the strip holds its own. */
-  openId?: string;
-  /** Told when a stage is opened, for a caller that wants to record it. */
-  onOpen?: (stageId: string | null) => void;
+  /** Which stage is pinned on mount. After that the strip holds its own. */
+  pinnedId?: string;
+  /** Told when a stage is pinned or unpinned, for a caller that records it. */
+  onPin?: (stageId: string | null) => void;
 };
 
-/**
- * What each tier *is*, in one sentence, written once.
- *
- * These are standing copy rather than values: they are true of every Job on
- * every workflow, and a screen that retyped them would be the second place the
- * difference between a Check and a Judge is stated. The difference is the whole
- * reason the two tiers are not one row of chips.
- */
-const SAID: Record<PhaseStageKind, string | undefined> = {
-  phase: undefined,
-  checks:
-    "Commands this repository declares in its own Manifest. Fleet runs them and the Drone never " +
-    "does — a Drone reporting its own tests is a claim, not a result. A command and an exit code: " +
-    "nothing to interpret, and the same answer every time it runs.",
-  judge:
-    "A model reading the work against this step's acceptance criteria, the ones written when the " +
-    "Job was dispatched. It answers per criterion, and it never sees the Drone's transcript, so it " +
-    "cannot be argued at by the thing it is judging. It can only refuse — a Judge never turns a " +
-    "failed Check into a pass.",
-  human:
-    "The human gate, where the workflow asks for one. Everything mechanical has already cleared by " +
-    "the time this tier is lit, so a step sitting here is stopped with nothing wrong. Approve, or " +
-    "send it back with a reason. Both are recorded on the Job.",
-};
+/** Strip glyphs are 12px at strokeWidth 2, as every mark on this screen is. */
+const GLYPH = 12;
+const STROKE = 2;
 
 export function PhaseStrip({
   stages,
   label = "Where this step is",
   note,
-  openId,
-  onOpen,
+  pinnedId,
+  onPin,
 }: PhaseStripProps) {
-  const [open, setOpen] = useState<string | null>(openId ?? null);
+  const [pinned, setPinned] = useState<string | null>(pinnedId ?? null);
+  const [hovered, setHovered] = useState<string | null>(null);
   // Two strips on one page is the gallery, every day. A fixed id would point
-  // every stage on the second strip at the first strip's panel.
+  // every stage on the second strip at the first strip's card.
   const panelId = useId();
+
+  const open = pinned ?? hovered;
   const shown = stages.find((stage) => stage.id === open) ?? null;
 
-  function toggle(stageId: string): void {
-    const next = open === stageId ? null : stageId;
-    setOpen(next);
-    onOpen?.(next);
-  }
+  const pin = useCallback(
+    (stageId: string) => {
+      setPinned((was) => {
+        const next = was === stageId ? null : stageId;
+        onPin?.(next);
+        return next;
+      });
+    },
+    [onPin],
+  );
+
+  // Escape unpins. A card held open over the strip is covering the thing it
+  // explains, and the way out of it should not be finding the same chip again.
+  useEffect(() => {
+    if (pinned === null) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setPinned(null);
+      onPin?.(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pinned, onPin]);
 
   return (
     <section className="armada-phases">
       {label === undefined ? null : <span className="armada-phases__label">{label}</span>}
 
       <ol className="armada-phases__strip">
-        {stages.map((stage) => (
-          <li className="armada-phases__stage" key={stage.id}>
-            <button
-              type="button"
-              className="armada-phases__control"
-              data-state={stage.state}
-              data-open={open === stage.id || undefined}
-              aria-expanded={open === stage.id}
-              aria-controls={panelId}
-              onClick={() => toggle(stage.id)}
-            >
-              {stage.label}
-            </button>
-          </li>
-        ))}
-      </ol>
+        {stages.map((stage, at) => {
+          const kind = stage.kind ?? "phase";
+          const Mark = phaseGlyph(kind, stage.state);
+          const opens = stage.opens ?? kind !== "phase";
+          const isOpen = open === stage.id;
+          // Which edge the card hangs off. Decided by position rather than by
+          // measurement: a stage past the halfway point opens leftward, so the
+          // card stays inside the panel without anything having to be measured
+          // on a resize.
+          const align = at * 2 >= stages.length ? "end" : "start";
 
-      {/* One open at a time, and it opens in place beneath the strip rather
-          than as a popover: what a tier is is read alongside where the step is,
-          and a layer over the strip would cover the thing being explained. */}
-      <div className="armada-phases__open" id={panelId} hidden={shown === null}>
-        {shown === null ? null : (
-          <>
-            <div className="armada-phases__open-head">
-              <span className="armada-phases__open-name">{shown.label}</span>
-              {shown.stands === undefined ? null : (
-                <span className="armada-phases__open-stands" data-state={shown.state}>
-                  {shown.stands}
+          const chip = (
+            <>
+              {Mark === undefined ? null : (
+                <Mark size={GLYPH} strokeWidth={STROKE} aria-hidden />
+              )}
+              {stage.label}
+            </>
+          );
+
+          return (
+            <li className="armada-phases__stage" key={stage.id}>
+              {/* A connector before every stage but the first. Six chips with a
+                  gap between them is a set; six joined by a line is an order. */}
+              {at === 0 ? null : <span className="armada-phases__conn" aria-hidden />}
+
+              {opens ? (
+                <button
+                  type="button"
+                  className="armada-phases__control"
+                  data-state={stage.state}
+                  data-kind={kind}
+                  data-open={isOpen || undefined}
+                  data-pinned={pinned === stage.id || undefined}
+                  aria-expanded={isOpen}
+                  aria-controls={panelId}
+                  onMouseEnter={() => setHovered(stage.id)}
+                  onMouseLeave={() => setHovered((was) => (was === stage.id ? null : was))}
+                  onFocus={() => setHovered(stage.id)}
+                  onBlur={() => setHovered((was) => (was === stage.id ? null : was))}
+                  onClick={() => pin(stage.id)}
+                >
+                  {chip}
+                </button>
+              ) : (
+                <span className="armada-phases__control" data-state={stage.state} data-kind={kind}>
+                  {chip}
                 </span>
               )}
-            </div>
 
-            {SAID[shown.kind ?? "phase"] === undefined ? null : (
-              <p className="armada-phases__said">{SAID[shown.kind ?? "phase"]}</p>
-            )}
-
-            {shown.rows === undefined || shown.rows.length === 0 ? null : (
-              <ul className="armada-phases__rows">
-                {shown.rows.map((row, r) => (
-                  <li className="armada-phases__row" key={r}>
-                    <span className="armada-phases__row-label" data-mono={row.mono || undefined}>
-                      {row.label}
-                    </span>
-                    {row.result === undefined ? null : (
-                      <span className="armada-phases__row-result" data-named={row.named}>
-                        {row.result}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {shown.detail === undefined ? null : (
-              <div className="armada-phases__detail">{shown.detail}</div>
-            )}
-          </>
-        )}
-      </div>
+              {isOpen && shown !== null ? (
+                <div className="armada-phases__pop" data-align={align} id={panelId} role="dialog">
+                  <PhaseCard
+                    floating
+                    align={align}
+                    kind={kind}
+                    name={shown.label}
+                    state={shown.state}
+                    stands={shown.stands}
+                    said={shown.said}
+                    rows={shown.rows}
+                    note={shown.cardNote}
+                    detail={shown.detail}
+                  />
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
 
       {note === undefined ? null : <p className="armada-phases__note">{note}</p>}
     </section>
