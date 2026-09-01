@@ -20,7 +20,7 @@ beside the drawing.
 | `pnpm shoot --bridge` | Builds Bridge's own screens from `apps/desktop`, captures them to `.shots/bridge/` |
 | `pnpm shoot --design <file.dc.html>` | Captures every marked frame of a drawing to `.shots/design/`, caching the drawing beside them |
 | `pnpm shoot --design <file> --suggest` | Proposes a mark for each unmarked frame instead of refusing |
-| `pnpm shoot --sheet` | Pairs what has been captured into `.shots/sheet.html` and `.shots/pairs/` |
+| `pnpm shoot --sheet [pair]` | Pairs two captured sides into `.shots/sheet.html` and `.shots/pairs/`. `design:app` by default, or `design:bridge`, or `app:bridge` |
 
 **It needs nothing but an installed workspace.** No network, no running Fleet,
 no built app. The browser is Bridge's own Electron.
@@ -45,18 +45,66 @@ app's own code from one fixture, the way it is derived from one wire read at
 runtime. A shot of a control in isolation proves the control and says nothing
 about the screen, which is the question this side exists to answer.
 
-**The stage is Bridge's own window, 1280×800, and it clips.** A right edge cut
-off is a finding rather than an artifact: it is a screen whose content will not
-shrink to the window it ships in. The screens are declared in
-`*.screens.tsx` beside the code they draw: a file exports a `title` and a
-`screens` array, and each entry states its own `data-shot` mark, the name to
-print, and one element. Fixtures are written in the file — enough of the wire's
-shape for the composition to decide what it draws, and nothing else. Nothing
-runs; a screen that needed a Fleet is a screen nobody captures.
+**The stage is Bridge's own window, 1280×800, and a screen may name a second
+width.** `width` on a screen entry draws the same composition at another size,
+which is how "designed for resize rather than for the size it was built at"
+stops being a claim nobody checks.
 
-**A mark is written by hand here rather than derived.** There is no story export
-name to derive one from, and a mark that a drawing has to match is not something
-to leave to a transform. Two screens claiming one mark is refused at build.
+**The page loads the stylesheet Bridge ships, read out of its own build.** Not a
+list assembled by the tool: the renderer imports Tailwind between the tokens and
+the components, so a page that followed only the component stylesheets had no
+`box-sizing: border-box` and every screen overflowed by its own padding. That
+looked exactly like a layout defect in the app and was reported as one. **Check
+the page loads what the app loads before believing what it shows.**
+
+### Adding or changing a Bridge screen
+
+A screen lives in a `*.screens.tsx` beside the code it draws. The file exports
+`title` and `screens`; each entry is a mark, a name, the render it is one of,
+and one element. Nothing runs — a screen that needed a Fleet is a screen nobody
+captures — so a fixture is the values the wire would carry, written down.
+
+```tsx
+export const title = "Inside a job";
+
+export const screens: Screen[] = [
+  {
+    mark: "inside-a-job-killed",   // what it pairs by. Chosen, not derived
+    name: "Killed",                // what the page prints above it
+    render: "stopped",             // which of renderFor's arrangements
+    width: 900,                    // optional. 1280, Bridge's own, otherwise
+    element: <JobDetail job={...} watched={...} {...INERT} />,
+  },
+];
+```
+
+Then:
+
+```sh
+pnpm shoot --bridge            # capture, and rewrite the snapshots
+```
+
+**Look at the PNGs it names.** That is the step; everything else exists to make
+it cheap. The snapshots are a diff, not a substitute — markup says what is
+there, and only the image says whether it is drawn right.
+
+**A mark is written by hand rather than derived.** There is no story export name
+to derive one from, and a mark that a drawing has to match is not something to
+leave to a transform. Two screens claiming one mark is refused at build.
+
+### What keeps it current
+
+**`.shots/` is ignored, so the images are not a baseline.** Two things stand in
+for one:
+
+| | Catches | Where it runs |
+|---|---|---|
+| `apps/desktop/screens/snapshots/` | A screen that changed. The markup is checked in, so a rebuilt header is a changed file on the pull request whether or not anybody ran the tool | `pnpm shoot --bridge` writes them; `--check` fails on drift without writing |
+| The gate rule | A screen that does not exist. Every variant of `Render` has a screen, every screen has a snapshot, and neither list is one somebody maintains — `Render` is the app's own union | `cargo xtask verify-foundations` |
+
+**Neither of them looks at anything.** They make an unlooked-at change visible;
+a person or an agent still has to open the image. Two of the five renders had no
+screen at all when the rule was written, and nobody had noticed.
 
 **Everything it writes is under `.shots/`, which is ignored.** Regenerating both
 sides takes about a minute.
@@ -118,9 +166,17 @@ person's job or an agent's.
 A split button is captured closed, so what its menu holds is not on the shot —
 read that in the markup or in the code.
 
-**`--bridge` captures and does not pair.** `--sheet` pairs the drawing against
-`app`. Pairing a drawing against `bridge` needs the drawing's frames to carry
-the same marks, and no drawing does yet.
+**A sheet is two sides, named, and never three.** A state the gallery and Bridge
+both render has three pictures, and a sheet that silently dropped one would
+rebuild the blind spot this exists to end. So the pair is chosen: the third
+picture is a second run away.
+
+**`app:bridge` needs no drawing at all.** It asks whether the gallery's
+arrangement of a screen and the app's assembly of it are the same screen —
+which is the question nobody could ask when a story's fixture said `Needs you`
+and the pair beside it agreed, because both halves came from the gallery.
+Neither side of that pair is the authority, so it reports drift rather than
+refusing anything.
 
 **It pairs one drawing at a time.** `--design` replaces `.shots/design/`.
 

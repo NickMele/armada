@@ -10,6 +10,8 @@ their work before advancing them. Rust daemon, Electron app, one repo.
 - **v1 is deleted.** A bare file path in a doc means `git show v1-final:<path>`.
 - **Never write an address into this repository.** It is public and the design
   workspace is not. Name what a thing is, not where it is.
+- **Cite an issue to a person as its full link**, so it opens from the terminal.
+  A bare `#123` stays bare *inside* the repo — docs autolink and gates parse it.
 
 | Looking for | Go to |
 |---|---|
