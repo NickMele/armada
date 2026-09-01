@@ -543,11 +543,10 @@ function chaptersOf({
       id: "log",
       ordinal: 2,
       title: "Activity log",
-      // `live` is a word here rather than the running dot the drawing puts
-      // before it: `Chapter` draws that mark and `StepStory` does not compose
-      // `Chapter`, so the claim is made in the only channel this header has.
+      // The dot, not the word. `StepStory` composes `Chapter` now, so the
+      // running mark has its own channel and the summary carries only counts.
+      live,
       summary: [
-        ...(live ? ["live"] : []),
         `${rows.length} ${rows.length === 1 ? "entry" : "entries"}`,
         "every line opens",
       ].join(" · "),
