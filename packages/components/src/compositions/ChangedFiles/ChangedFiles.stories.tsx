@@ -18,6 +18,28 @@ type Story = StoryObj<typeof ChangedFiles>;
 
 const NOTHING_YET = "This drone has not changed anything yet.";
 
+/**
+ * The drawing's own three files and their counts — `3 files · +94 −31`.
+ *
+ * Declared above the stories that use it, not below. A story's `args` are read
+ * when the module loads, so a `const` under them is in its temporal dead zone
+ * and the gallery dies on it — which Storybook's own build does not catch,
+ * because it evaluates a story only when something renders it.
+ */
+const COUNTED: ChangedFile[] = [
+  { path: "packages/settings/src/selectors.ts", change: "modified", added: 61, deleted: 4 },
+  { path: "packages/settings/src/reducer.ts", change: "modified", added: 12, deleted: 27 },
+  // No deletion beside it, as the drawing has it. `−0` measures nothing.
+  { path: "packages/settings/src/index.ts", change: "added", added: 21 },
+];
+
+/** The same reading with two paths outside the plan, and one file only deleted. */
+const DRIFTED: ChangedFile[] = [
+  ...COUNTED,
+  { path: "packages/tokens/src/status.css", change: "modified", added: 3, deleted: 3, outsidePlan: true },
+  { path: "scripts/legacy-dev", change: "deleted", deleted: 40, outsidePlan: true },
+];
+
 /** A drone part way through a step, on a step that declared no plan. */
 export const WhatADroneHasTouched: Story = {
   args: {
@@ -141,18 +163,3 @@ export const TheSummaryOverTheList: Story = {
     </div>
   ),
 };
-
-/** The drawing's own three files and their counts — `3 files · +94 −31`. */
-const COUNTED: ChangedFile[] = [
-  { path: "packages/settings/src/selectors.ts", change: "modified", added: 61, deleted: 4 },
-  { path: "packages/settings/src/reducer.ts", change: "modified", added: 12, deleted: 27 },
-  // No deletion beside it, as the drawing has it. `−0` measures nothing.
-  { path: "packages/settings/src/index.ts", change: "added", added: 21 },
-];
-
-/** The same reading with two paths outside the plan, and one file only deleted. */
-const DRIFTED: ChangedFile[] = [
-  ...COUNTED,
-  { path: "packages/tokens/src/status.css", change: "modified", added: 3, deleted: 3, outsidePlan: true },
-  { path: "scripts/dev-old", change: "deleted", deleted: 40, outsidePlan: true },
-];

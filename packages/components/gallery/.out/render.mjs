@@ -1125,6 +1125,31 @@ const __vite_glob_0_3 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.def
   default: meta$14
 }, Symbol.toStringTag, { value: "Module" }));
 const OUTSIDE_PLAN$1 = "outside plan";
+function changedFilesSummary(files, planDeclared) {
+  const parts = [`${files.length} ${files.length === 1 ? "file" : "files"}`];
+  const churn = countsOf({
+    added: sum(files, (file) => file.added),
+    deleted: sum(files, (file) => file.deleted)
+  });
+  if (churn !== void 0) {
+    parts.push([churn.added, churn.deleted].filter((n) => n !== void 0).join(" "));
+  }
+  if (planDeclared === true) {
+    const outside = files.filter((file) => file.outsidePlan === true).length;
+    parts.push(outside === 0 ? "all inside the plan" : `${outside} outside the plan`);
+  }
+  return parts.join(" · ");
+}
+function sum(files, of) {
+  const counted2 = files.map(of).filter((n) => n !== void 0);
+  return counted2.length === 0 ? void 0 : counted2.reduce((a, b) => a + b, 0);
+}
+function countsOf({ added, deleted }) {
+  const plus = added === void 0 || added === 0 ? void 0 : `+${added}`;
+  const minus = deleted === void 0 || deleted === 0 ? void 0 : `−${deleted}`;
+  if (plus === void 0 && minus === void 0) return void 0;
+  return { added: plus, deleted: minus };
+}
 function ChangedFiles({ files, emptyNote, note, onCopied }) {
   const copy = useCallback(
     (event, value) => {
@@ -1136,8 +1161,9 @@ function ChangedFiles({ files, emptyNote, note, onCopied }) {
   if (files.length === 0) {
     return /* @__PURE__ */ jsx("p", { className: "armada-files__empty", role: "note", children: emptyNote });
   }
+  const counted2 = files.some((file) => countsOf(file) !== void 0);
   return /* @__PURE__ */ jsxs("div", { className: "armada-files", children: [
-    /* @__PURE__ */ jsx("ol", { className: "armada-files__list", children: files.map((file) => /* @__PURE__ */ jsxs(
+    /* @__PURE__ */ jsx("ol", { className: "armada-files__list", "data-counts": counted2 || void 0, children: files.map((file) => /* @__PURE__ */ jsxs(
       "li",
       {
         className: "armada-files__file",
@@ -1153,6 +1179,7 @@ function ChangedFiles({ files, emptyNote, note, onCopied }) {
               children: file.path
             }
           ),
+          counted2 ? /* @__PURE__ */ jsx(Counts, { file }) : null,
           /* @__PURE__ */ jsx("span", { className: "armada-files__mark", children: file.outsidePlan === true ? OUTSIDE_PLAN$1 : null })
         ]
       },
@@ -1161,11 +1188,30 @@ function ChangedFiles({ files, emptyNote, note, onCopied }) {
     note === void 0 ? null : /* @__PURE__ */ jsx("p", { className: "armada-files__note", children: note })
   ] });
 }
+function Counts({ file }) {
+  const counts = countsOf(file);
+  if (counts === void 0) return /* @__PURE__ */ jsx("span", { className: "armada-files__counts" });
+  return /* @__PURE__ */ jsxs("span", { className: "armada-files__counts", children: [
+    counts.added === void 0 ? null : /* @__PURE__ */ jsx("span", { className: "armada-files__added", children: counts.added }),
+    counts.deleted === void 0 ? null : /* @__PURE__ */ jsx("span", { className: "armada-files__deleted", children: counts.deleted })
+  ] });
+}
 const meta$13 = {
   title: "Compositions/Changed files",
   component: ChangedFiles
 };
 const NOTHING_YET$2 = "This drone has not changed anything yet.";
+const COUNTED = [
+  { path: "packages/settings/src/selectors.ts", change: "modified", added: 61, deleted: 4 },
+  { path: "packages/settings/src/reducer.ts", change: "modified", added: 12, deleted: 27 },
+  // No deletion beside it, as the drawing has it. `−0` measures nothing.
+  { path: "packages/settings/src/index.ts", change: "added", added: 21 }
+];
+const DRIFTED = [
+  ...COUNTED,
+  { path: "packages/tokens/src/status.css", change: "modified", added: 3, deleted: 3, outsidePlan: true },
+  { path: "scripts/legacy-dev", change: "deleted", deleted: 40, outsidePlan: true }
+];
 const WhatADroneHasTouched = {
   args: {
     emptyNote: NOTHING_YET$2,
@@ -1216,13 +1262,28 @@ const TheKindsThatAreNotAnEdit = {
 const NothingChangedYet = {
   args: { files: [], emptyNote: NOTHING_YET$2 }
 };
+const WithLineCounts = {
+  args: { emptyNote: NOTHING_YET$2, files: COUNTED }
+};
+const TheSummaryOverTheList = {
+  render: () => /* @__PURE__ */ jsx("div", { style: { display: "flex", flexDirection: "column", gap: "var(--space-4)" }, children: [
+    [COUNTED, true],
+    [DRIFTED, true],
+    [DRIFTED, void 0]
+  ].map(([files, planDeclared], at) => /* @__PURE__ */ jsxs("div", { style: { display: "flex", flexDirection: "column", gap: "var(--space-2)" }, children: [
+    /* @__PURE__ */ jsx("span", { className: "armada-chapter__meta", children: changedFilesSummary(files, planDeclared) }),
+    /* @__PURE__ */ jsx(ChangedFiles, { files, emptyNote: NOTHING_YET$2 })
+  ] }, at)) })
+};
 const __vite_glob_0_4 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   NoPlanIsRecordedAgainstIt,
   NothingChangedYet,
   TheKindsThatAreNotAnEdit,
+  TheSummaryOverTheList,
   TwoPathsOutsideThePlan,
   WhatADroneHasTouched,
+  WithLineCounts,
   default: meta$13
 }, Symbol.toStringTag, { value: "Module" }));
 const GLYPH$5 = 12;
@@ -3183,11 +3244,11 @@ function JobBrief({
 }) {
   return /* @__PURE__ */ jsxs("div", { className: "armada-job-brief", children: [
     waiting === void 0 ? null : /* @__PURE__ */ jsxs("div", { className: "armada-job-brief__block", "data-waiting": true, children: [
-      /* @__PURE__ */ jsx("span", { className: "armada-job-brief__label", children: waitingLabel }),
+      /* @__PURE__ */ jsx(Label, { children: waitingLabel }),
       /* @__PURE__ */ jsx("p", { className: "armada-job-brief__facts", children: waiting })
     ] }),
     only === "facts" ? null : /* @__PURE__ */ jsxs("div", { className: "armada-job-brief__block", children: [
-      /* @__PURE__ */ jsx("span", { className: "armada-job-brief__label", children: criteriaLabel }),
+      /* @__PURE__ */ jsx(Label, { children: criteriaLabel }),
       criteria2.length === 0 ? /* @__PURE__ */ jsx("p", { className: "armada-job-brief__note", children: criteriaAbsent }) : /* @__PURE__ */ jsx("ol", { className: "armada-job-brief__criteria", children: criteria2.map((criterion, i) => /* @__PURE__ */ jsxs("li", { className: "armada-job-brief__criterion", children: [
         /* @__PURE__ */ jsx("span", { className: "armada-job-brief__ordinal", children: i + 1 }),
         /* @__PURE__ */ jsx("span", { className: "armada-job-brief__text", children: criterion.text }),
@@ -3195,10 +3256,14 @@ function JobBrief({
       ] }, i)) })
     ] }),
     only === "criteria" ? null : /* @__PURE__ */ jsxs("div", { className: "armada-job-brief__block", children: [
-      /* @__PURE__ */ jsx("span", { className: "armada-job-brief__label", children: factsLabel }),
+      /* @__PURE__ */ jsx(Label, { children: factsLabel }),
       facts2 === void 0 ? /* @__PURE__ */ jsx("p", { className: "armada-job-brief__note", children: factsAbsent }) : /* @__PURE__ */ jsx("p", { className: "armada-job-brief__facts", children: facts2 })
     ] })
   ] });
+}
+function Label({ children }) {
+  if (children === null) return null;
+  return /* @__PURE__ */ jsx("span", { className: "armada-job-brief__label", children });
 }
 const meta$V = {
   title: "Compositions/Job brief",
@@ -3232,8 +3297,12 @@ const CriteriaOnly = {
 const FactsOnly = {
   args: { criteria: [], facts, only: "facts" }
 };
+const AsALine = {
+  args: { criteria: [], facts, only: "facts", factsLabel: null }
+};
 const __vite_glob_0_14 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  AsALine,
   Brief,
   CriteriaOnly,
   FactsOnly,
@@ -4748,6 +4817,28 @@ const YOU = {
 };
 const Checks = { args: CHECKS$1 };
 const AChecksFailed = { args: CHECKS_FAILED };
+const AChecksSkipped = {
+  args: {
+    kind: "checks",
+    name: "Checks",
+    state: "cleared",
+    stands: "1 of 2 passed",
+    rows: [
+      {
+        label: "cargo nextest run --workspace",
+        mono: true,
+        state: "cleared",
+        result: "exit 0 · 47s"
+      },
+      {
+        label: "pnpm -C packages/components build-storybook",
+        mono: true,
+        state: "ahead",
+        result: "not run · no changed file is under packages/**, package.json, pnpm-lock.yaml, pnpm-workspace.yaml, apps/desktop/**, tsconfig.base.json"
+      }
+    ]
+  }
+};
 const Judge = { args: JUDGE };
 const JudgeRefusedAndWhy = {
   args: {
@@ -4794,6 +4885,7 @@ const TheThree = {
 const __vite_glob_0_23 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   AChecksFailed,
+  AChecksSkipped,
   Checks,
   FloatingOffTheStrip,
   Judge,
@@ -4809,33 +4901,34 @@ function PhaseStrip({
   label: label2 = "Where this step is",
   note,
   pinnedId,
+  pinnedStage,
   onPin
 }) {
-  const [pinned, setPinned] = useState(pinnedId ?? null);
+  const [held, setHeld] = useState(pinnedId ?? null);
   const [hovered, setHovered] = useState(null);
+  const controlled = pinnedStage !== void 0;
+  const pinned = controlled ? pinnedStage : held;
   const panelId = useId();
   const open2 = pinned ?? hovered;
   const shown = stages.find((stage) => stage.id === open2) ?? null;
   const pin = useCallback(
     (stageId) => {
-      setPinned((was) => {
-        const next = was === stageId ? null : stageId;
-        onPin?.(next);
-        return next;
-      });
+      const next = pinned === stageId ? null : stageId;
+      if (!controlled) setHeld(next);
+      onPin?.(next);
     },
-    [onPin]
+    [controlled, onPin, pinned]
   );
   useEffect(() => {
     if (pinned === null) return;
     function onKey(event) {
       if (event.key !== "Escape") return;
-      setPinned(null);
+      if (!controlled) setHeld(null);
       onPin?.(null);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pinned, onPin]);
+  }, [controlled, pinned, onPin]);
   return /* @__PURE__ */ jsxs("section", { className: "armada-phases", children: [
     label2 === void 0 ? null : /* @__PURE__ */ jsx("span", { className: "armada-phases__label", children: label2 }),
     /* @__PURE__ */ jsx("ol", { className: "armada-phases__strip", children: stages.map((stage, at) => {
@@ -5070,11 +5163,18 @@ const NoGateAtAll = {
     ]
   }
 };
+const HeldByTheCaller$2 = {
+  args: {
+    ...WithYouPresent.args,
+    pinnedStage: "judge"
+  }
+};
 const __vite_glob_0_24 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   ACheckFailed: ACheckFailed$1,
   AJudgeRefused,
   AllFourStates,
+  HeldByTheCaller: HeldByTheCaller$2,
   NoGateAtAll,
   OpenedNearTheTrailingEdge,
   WithYouPresent,
@@ -5276,21 +5376,36 @@ function StepRowLock({ says }) {
     /* @__PURE__ */ jsx("span", { className: "armada-srow__sr", children: says })
   ] });
 }
-function RunTree({ steps, pulsing = false, onSelect, onOpen, onCopied }) {
-  const [open2, setOpen] = useState(
+function RunTree({
+  steps,
+  pulsing = false,
+  onSelect,
+  openSteps,
+  onOpen,
+  onCopied
+}) {
+  const [held, setHeld] = useState(
     () => new Set(steps.filter((step) => step.factsOpen).map((step) => step.id))
+  );
+  const controlled = openSteps !== void 0;
+  const open2 = useMemo(
+    () => openSteps === void 0 ? held : new Set(openSteps),
+    [openSteps, held]
   );
   const toggle = useCallback(
     (stepId) => {
-      setOpen((held) => {
-        const next = new Set(held);
-        if (next.has(stepId)) next.delete(stepId);
-        else next.add(stepId);
-        onOpen?.(stepId, next.has(stepId));
-        return next;
-      });
+      const next = !open2.has(stepId);
+      if (!controlled) {
+        setHeld((was) => {
+          const now = new Set(was);
+          if (next) now.add(stepId);
+          else now.delete(stepId);
+          return now;
+        });
+      }
+      onOpen?.(stepId, next);
     },
-    [onOpen]
+    [controlled, onOpen, open2]
   );
   return /* @__PURE__ */ jsx("ol", { className: "armada-run", children: steps.map((step) => /* @__PURE__ */ jsx("li", { className: "armada-run__step", children: /* @__PURE__ */ jsx(
     StepRow,
@@ -5518,11 +5633,16 @@ const NoHumanName = {
 const ReadOnly$1 = {
   args: { steps: BUG }
 };
+const HeldByTheCaller$1 = {
+  args: { steps: BUG, onSelect: () => {
+  }, openSteps: ["root_cause", "fix"] }
+};
 const __vite_glob_0_26 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   EverythingClosed,
   Failed: Failed$6,
   HardPrerequisite: HardPrerequisite$1,
+  HeldByTheCaller: HeldByTheCaller$1,
   NoHumanName,
   ReadOnly: ReadOnly$1,
   Running: Running$7,
@@ -6090,35 +6210,37 @@ const __vite_glob_0_31 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.de
   WaitingOnYou: WaitingOnYou$1,
   default: meta$E
 }, Symbol.toStringTag, { value: "Module" }));
-function StepStory({ chapters, openId, onOpen }) {
-  const [open2, setOpen] = useState(openId ?? null);
+function StepStory({ chapters, openId, openChapter, onOpen }) {
+  const [held, setHeld] = useState(openId ?? null);
+  const bodies = useId();
+  const controlled = openChapter !== void 0;
+  const open2 = controlled ? openChapter : held;
   function toggle(chapterId) {
     const next = open2 === chapterId ? null : chapterId;
-    setOpen(next);
+    if (!controlled) setHeld(next);
     onOpen?.(next);
   }
   return /* @__PURE__ */ jsx("ol", { className: "armada-story", children: chapters.map((chapter) => {
     const opens = chapter.content !== void 0;
     const shown = open2 === chapter.id;
     const collapsed = open2 !== null && !shown;
-    return /* @__PURE__ */ jsxs("li", { className: "armada-story__chapter", "data-open": shown || void 0, children: [
-      /* @__PURE__ */ jsxs("div", { className: "armada-story__head", children: [
-        /* @__PURE__ */ jsx("span", { className: "armada-story__ordinal", "aria-hidden": true, children: chapter.ordinal }),
-        /* @__PURE__ */ jsx("span", { className: "armada-story__title", children: chapter.title }),
-        chapter.summary === void 0 ? null : /* @__PURE__ */ jsx("span", { className: "armada-story__summary", children: chapter.summary }),
-        !opens ? null : /* @__PURE__ */ jsx(
-          Button,
-          {
-            variant: "ghost",
-            size: "sm",
-            "aria-expanded": shown,
-            onClick: () => toggle(chapter.id),
-            children: shown ? chapter.closeLabel ?? "Close" : chapter.openLabel ?? "Open"
-          }
-        )
-      ] }),
-      collapsed ? null : /* @__PURE__ */ jsx("div", { className: "armada-story__body", children: shown ? chapter.content : chapter.preview })
-    ] }, chapter.id);
+    return /* @__PURE__ */ jsx("li", { className: "armada-story__chapter", "data-open": shown || void 0, children: /* @__PURE__ */ jsx(
+      Chapter,
+      {
+        ordinal: chapter.ordinal,
+        name: chapter.title,
+        meta: chapter.summary,
+        live: chapter.live,
+        tone: chapter.tone,
+        open: !collapsed,
+        onToggle: opens ? () => toggle(chapter.id) : void 0,
+        bodyId: `${bodies}-${chapter.id}`,
+        moreLabel: !opens ? void 0 : shown ? chapter.closeLabel ?? "Close" : chapter.openLabel ?? "Open",
+        onMore: opens ? () => toggle(chapter.id) : void 0,
+        moreCloses: shown,
+        children: shown ? chapter.content : chapter.preview
+      }
+    ) }, chapter.id);
   }) });
 }
 const meta$D = {
@@ -6169,7 +6291,8 @@ const CHAPTERS$1 = [
     id: "log",
     ordinal: 2,
     title: "Activity log",
-    summary: "live · 47 entries · every line opens",
+    live: true,
+    summary: "47 entries · every line opens",
     preview: /* @__PURE__ */ jsx(ActivityLog, { entries: PREVIEW$1 }),
     content: /* @__PURE__ */ jsx(ActivityLog, { entries: WHOLE$1 }),
     openLabel: "Open the log — all 47 entries"
@@ -6202,13 +6325,18 @@ const WithADecision = {
         ordinal: 4,
         title: "Your decision",
         summary: "nothing advances until you answer",
-        preview: "Approve, send back with a note, or reject. Send back returns it to this step; reject ends the Job."
+        preview: "Approve, send back with a note, or reject. Send back returns it to this step; reject ends the Job.",
+        tone: "waiting"
       }
     ]
   }
 };
+const HeldByTheCaller = {
+  args: { chapters: CHAPTERS$1, openChapter: "log" }
+};
 const __vite_glob_0_32 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  HeldByTheCaller,
   TheDiffOpen,
   TheLogOpen,
   TheStory,
@@ -9863,6 +9991,8 @@ function InsideAJob({
   runAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
   pulsing = true,
   onSelectStep,
+  openSteps,
+  onOpenStep,
   where,
   whereLabel = "Where things are",
   whereNote,
@@ -9889,11 +10019,13 @@ function InsideAJob({
             steps: run,
             pulsing,
             onSelect: onSelectStep,
+            openSteps,
+            onOpen: onOpenStep,
             onCopied
           }
         ),
         /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", "data-spaced": true, children: whereLabel }),
-        where === void 0 || where.length === 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Where things are", note: whereAbsent }) }) : /* @__PURE__ */ jsx(JobLogReference, { rows: where, onCopied, children: whereNote }),
+        where === void 0 || where.length === 0 ? /* @__PURE__ */ jsx("div", { className: "armada-screen__slot", children: /* @__PURE__ */ jsx(Absent, { name: "Where things are", note: whereAbsent }) }) : /* @__PURE__ */ jsx(WhereRegion, { rows: where, note: whereNote, onCopied }),
         record === void 0 ? null : /* @__PURE__ */ jsxs(Fragment, { children: [
           /* @__PURE__ */ jsx("span", { className: "armada-screen__eyebrow", "data-spaced": true, children: recordLabel }),
           record
@@ -9935,26 +10067,78 @@ function InsideAJob({
           ] }),
           step.phases === void 0 ? /* @__PURE__ */ jsx("p", { className: "armada-inside__absent", role: "note", children: step.phasesAbsent ?? "Nothing serves this step's gates, so where it stands is unknown." }) : /* @__PURE__ */ jsx(PhaseStrip, { ...step.phases }),
           step.before === void 0 ? null : /* @__PURE__ */ jsx("div", { className: "armada-inside__before", children: step.before }),
-          /* @__PURE__ */ jsx(StepStory, { chapters: step.chapters, openId: step.openChapter }),
+          /* @__PURE__ */ jsx(
+            StepStory,
+            {
+              chapters: step.chapters,
+              openId: step.openChapter,
+              openChapter: step.openChapterId,
+              onOpen: step.onOpenChapter
+            }
+          ),
           step.after === void 0 ? null : /* @__PURE__ */ jsx("div", { className: "armada-inside__after", children: step.after })
         ] })
       ] })
     ] })
   ] });
 }
+function WhereRegion({
+  rows,
+  note,
+  onCopied
+}) {
+  const [unopened, setUnopened] = useState(null);
+  const [opening, setOpening] = useState(null);
+  const open2 = useCallback((at, go) => {
+    setOpening(at);
+    setUnopened(null);
+    void go().then((why) => {
+      if (why !== null) setUnopened({ row: at, because: why.because });
+    }).finally(() => setOpening(null));
+  }, []);
+  return /* @__PURE__ */ jsxs("div", { className: "armada-inside__where", children: [
+    rows.map((row, at) => {
+      const opens = row.open;
+      const failed2 = unopened !== null && unopened.row === at ? unopened.because : null;
+      return /* @__PURE__ */ jsxs(Fragment$1, { children: [
+        row.separated ? /* @__PURE__ */ jsx("span", { className: "armada-inside__where-rule", "aria-hidden": true }) : null,
+        /* @__PURE__ */ jsx(
+          WhereRow,
+          {
+            label: row.iconLabel,
+            value: row.value,
+            note: row.meta,
+            act: opens === void 0 ? "copy" : "open",
+            copyValue: row.copyValue,
+            onCopied,
+            actLabel: opens?.label,
+            onAct: opens === void 0 || opening !== null ? void 0 : () => open2(at, opens.go)
+          }
+        ),
+        failed2 === null ? null : /* @__PURE__ */ jsx("p", { className: "armada-inside__where-unopened", role: "status", children: failed2 })
+      ] }, at);
+    }),
+    note === void 0 ? null : /* @__PURE__ */ jsx("p", { className: "armada-inside__where-note", children: note })
+  ] });
+}
 const JOB = "job_2d90bb";
 const WORKTREE = `.armada/worktrees/${JOB}`;
+const DRONE = "01M10B1V2A0011VRS6RA2SKPQ7";
 const WHERE = [
-  { icon: Folder, iconLabel: "Worktree", value: WORKTREE, copyValue: WORKTREE },
+  { iconLabel: "Worktree", value: WORKTREE, copyValue: WORKTREE },
   {
-    icon: GitBranch,
     iconLabel: "Branch",
     value: "fix/settings-split-selectors",
     copyValue: "fix/settings-split-selectors"
   },
-  { icon: File, iconLabel: "Manifest", value: "armada.yml", copyValue: "armada.yml" },
+  { iconLabel: "Manifest", value: "armada.yml", copyValue: "armada.yml" },
   {
-    icon: File,
+    iconLabel: "Workflow",
+    value: "bug",
+    copyValue: "bug",
+    meta: "as it was at 14:20"
+  },
+  {
     iconLabel: "Job log",
     value: `.armada/logs/${JOB}.jsonl`,
     copyValue: `.armada/logs/${JOB}.jsonl`,
@@ -9964,14 +10148,14 @@ const WHERE = [
     iconLabel: "Transcript",
     value: ".armada/transcripts/01M10B1V2A.jsonl",
     copyValue: ".armada/transcripts/01M10B1V2A.jsonl"
-  }
+  },
+  { iconLabel: "Drone", value: DRONE, copyValue: DRONE }
 ];
 const BRIEF = {
   facts: "The selectors cannot be tested without constructing the whole store, which makes every settings test an integration test.",
-  criteria: [
-    { text: "Selectors import without the store.", source: "judge" },
-    { text: "No behaviour change in the reducer.", source: "judge" }
-  ]
+  criteria: [],
+  only: "facts",
+  factsLabel: null
 };
 const HEADING = {
   status: "running",
@@ -10195,17 +10379,12 @@ const WHOLE = [
   { id: "1c", at: "14:23:11", actor: "drone", summary: "Read", subject: "packages/settings/src/reducer.ts" },
   ...PREVIEW.slice(1)
 ];
-const PRODUCED = /* @__PURE__ */ jsx(
-  ChangedFiles,
-  {
-    emptyNote: "This drone has not changed anything yet.",
-    files: [
-      { path: "packages/settings/src/selectors.ts", change: "modified" },
-      { path: "packages/settings/src/reducer.ts", change: "modified" },
-      { path: "packages/settings/src/index.ts", change: "added" }
-    ]
-  }
-);
+const PRODUCED_FILES = [
+  { path: "packages/settings/src/selectors.ts", change: "modified", added: 61, deleted: 4 },
+  { path: "packages/settings/src/reducer.ts", change: "modified", added: 12, deleted: 27 },
+  { path: "packages/settings/src/index.ts", change: "added", added: 21 }
+];
+const PRODUCED = /* @__PURE__ */ jsx(ChangedFiles, { emptyNote: "This drone has not changed anything yet.", files: PRODUCED_FILES });
 const CHAPTERS = [
   {
     id: "instructions",
@@ -10218,7 +10397,10 @@ const CHAPTERS = [
     id: "log",
     ordinal: 2,
     title: "Activity log",
-    summary: "live · 47 entries · every line opens",
+    // `live` is the running dot, not the word. A count says how many entries
+    // there are and only the dot says they are still arriving.
+    live: true,
+    summary: "47 entries · every line opens",
     preview: /* @__PURE__ */ jsx(ActivityLog, { entries: PREVIEW }),
     content: /* @__PURE__ */ jsx(ActivityLog, { entries: WHOLE }),
     openLabel: "Open the log — all 47 entries"
@@ -10227,7 +10409,9 @@ const CHAPTERS = [
     id: "produced",
     ordinal: 3,
     title: "Produced",
-    summary: "3 files · +94 −31 · all inside the plan",
+    // Built from the list rather than typed beside it, so the header and the
+    // rows cannot disagree about what the reading found.
+    summary: changedFilesSummary(PRODUCED_FILES, true),
     preview: PRODUCED,
     content: PRODUCED,
     openLabel: "Open the diff — 3 files"
