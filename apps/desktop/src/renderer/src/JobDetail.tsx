@@ -66,7 +66,7 @@ import { readingOf } from "./reading";
 import { entriesOf, NOT_ONE_STREAM, NOTHING_YET_ON_THIS_STEP, NOT_WATCHING } from "./story";
 import { ActivityLog } from "@armada/components";
 import { briefOf, whyNoWork, workOf } from "./work";
-import { stoppedAt } from "./rail";
+import { stoppedAt } from "./stopped";
 
 export type { ConfirmableAct, JobAct } from "./Acts";
 export { renderFor } from "./render";
