@@ -8,6 +8,14 @@ import { Radio, RadioGroup } from "../../primitives/Radio/Radio";
  * A drone has asked a question and is waiting. The question, the answers it
  * offered, and the one control that sends one.
  *
+ * **The band above it says why you are here; this is what you do about it.**
+ * `InsideAJob` draws a `waiting` notice and then this, in the slot the redirect
+ * draft uses — between the phase strip and the step's story — because a question
+ * is the same kind of thing: a box a person acts in about the step they have
+ * open. So this carries no frame and no fill of its own, only the waiting rule
+ * on its left; two framed regions for one condition would read as two things
+ * wrong.
+ *
  * **The whole surface is a closed set.** There is no text field here and no
  * prop that could add one: the drone offers between two and four answers, a
  * person picks one, and nothing is typed. That is the difference between this
@@ -33,15 +41,11 @@ import { Radio, RadioGroup } from "../../primitives/Radio/Radio";
  * in the registry means it. So this draws none, per `armada-components`: a state
  * with no glyph gets the story and the report, never an invented mark.
  *
- * # It takes the waiting hue, and the job is `running`
+ * # The job stays `running`, and its badge is right to say so
  *
- * `--status-awaiting-review` is the "needs you, not urgent" token, which is the
- * condition on this surface exactly: nothing is wrong, and nothing moves until a
- * person acts. **The job's own badge is unaffected** — it says `running`, which
- * is true, because a question rides beside the state rather than being one.
- * Drawing this in the escalated hue would say something had gone wrong, and
- * drawing it in no hue at all would leave the one region on a running job's
- * screen that is waiting on a person looking like the three that are not.
+ * A question rides beside the state rather than being one, so nothing about the
+ * header changes while this is open. `--step-waiting` is the tone, which is what
+ * the screen's own `waiting` notice takes and means "needs you, not urgent".
  */
 export type DroneQuestionProps = {
   /** What was asked, in the drone's own words. */

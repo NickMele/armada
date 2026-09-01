@@ -64,6 +64,8 @@ const OUT_VERSION = join(here, "..", "src", "shared", "generated", "protocol-ver
 const WANTED = [
   "job_status",
   "queued_reason",
+  "admission_hold",
+  "resumption",
   "escalation_reason",
   "check_outcome",
   "criterion_verdict_check",
@@ -71,6 +73,25 @@ const WANTED = [
   "step_state",
   "advance_gate",
 ];
+
+// `admission_hold` is here because the status bar says which of the four things
+// is holding the next drone back, and every one of them folds to
+// `queued_reason.waiting_on_resources` on a Board row. Its four rows carry a
+// verb and a token and no glyph, so all four land in `GAPS` as missing one —
+// which is accurate: the status bar carries no icons, and `cpu` is reserved to
+// `queued_reason` in `packages/icons/icons.toml`. Nothing renders a glyph for
+// these today and nothing should invent one.
+//
+// **It is the one vocabulary Fleet may widen without a protocol bump.** The map
+// below is keyed by the wire value with an `undefined` answer for a key this
+// build has never heard of, which is exactly what makes that safe — see
+// `crates/ipc/src/capacity.rs`.
+
+// `resumption` is here because a queued row says which act a person took to put
+// it back, and that word is the registry's. Its three rows carry a verb and a
+// token and no glyph, which is accurate rather than a gap left open: the verb
+// renders as a suffix on the row's headline — where a recurrence count already
+// goes, per `Job row (stacked)`'s own story — and a headline carries no glyphs.
 
 // A glyph the registry names and this lucide-react version does not export.
 // Carried as data rather than fixed by a rename, because the rename is the

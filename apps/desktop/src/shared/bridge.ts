@@ -7,6 +7,7 @@
 
 import type {
   FileReport,
+  FleetCapacity,
   JobDetail,
   JobFilesChanged,
   JobSummary,
@@ -169,6 +170,16 @@ export type BridgeState = {
   jobs: JobSummary[];
   /** Rows the store refused. Shown, never merged into `jobs` as a placeholder. */
   unreadable: UnreadableJob[];
+  /**
+   * How full the fleet is, and what holds the next Drone back.
+   *
+   * **`null` until Fleet has answered once**, which is a Bridge that has not
+   * asked rather than a Fleet with room — the two are drawn differently and a
+   * zeroed placeholder would make them one. Re-read whenever a Job moves,
+   * because a Job moving is the only thing that changes the occupancy, and the
+   * machine reading rides along on the same call.
+   */
+  capacity: FleetCapacity | null;
   /** Events Fleet dropped before Bridge saw them, since the window opened. */
   missed: number;
   /** When the Jobs above were last current, in epoch milliseconds. */
@@ -666,6 +677,7 @@ export const NOTHING_YET: BridgeState = {
   bridge: { auditPath: null, fleetProtocol: null },
   jobs: [],
   unreadable: [],
+  capacity: null,
   missed: 0,
   readAt: null,
   approving: [],

@@ -11,9 +11,9 @@ use std::sync::Mutex;
 
 use ipc::mcp::{CheckRan, CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    Actor, ChangesRequested, Event, EvidenceType, Instant, JobCreated, JobDetail, JobDiff,
-    JobEvidence, JobForgotten, JobHistory, JobId, JobList, JobStateChanged, JobStatus, JobSummary,
-    ManifestId, ManifestSummary, ModelChoices, Movement, Origin, ProposeJob, Recorded,
+    Actor, ChangesRequested, Event, EvidenceType, FleetCapacity, Instant, JobCreated, JobDetail,
+    JobDiff, JobEvidence, JobForgotten, JobHistory, JobId, JobList, JobStateChanged, JobStatus,
+    JobSummary, ManifestId, ManifestSummary, ModelChoices, Movement, Origin, ProposeJob, Recorded,
     Redispatched, RunId, StatusMoved, StepId, Submitted, UnreadableJob, Urgency, Work, WorkflowId,
     WorkflowSummary,
 };
@@ -181,6 +181,24 @@ impl Daemon for FakeDaemon {
         Ok(JobList {
             jobs: self.jobs.lock().expect("not poisoned").clone(),
             unreadable: self.unreadable.lock().expect("not poisoned").clone(),
+        })
+    }
+
+    /// A fleet of two, one place taken, and the disk short.
+    ///
+    /// **Fixed, and built through `ipc::AdmissionHold::from_wire`** — which is
+    /// this file's whole claim one type further on: a spelling a client can
+    /// check against the registry is a spelling a Bridge can check. The value
+    /// exercises the shape a caller has to handle, which is all three fields
+    /// present at once.
+    async fn get_capacity(&self) -> Result<FleetCapacity, Refusal> {
+        if *self.mute.lock().expect("not poisoned") {
+            return Err(self.fault("the fake was told not to answer"));
+        }
+        Ok(FleetCapacity {
+            bound: 2,
+            occupied: 1,
+            held_by: ipc::AdmissionHold::from_wire("disk"),
         })
     }
 
@@ -431,6 +449,7 @@ impl Daemon for FakeDaemon {
             branch: None,
             reason: None,
             queued_reason: None,
+            resumption: None,
             workflow_id: proposal.workflow_id,
             owner_manifest_id: proposal.owner_manifest_id,
             origin: Origin::from_wire(proposal.origin.as_wire()).expect("a top-level origin"),
@@ -760,6 +779,7 @@ impl Daemon for FakeDaemon {
             branch: None,
             reason: None,
             queued_reason: None,
+            resumption: None,
             redispatched_from: Some(failed.id.clone()),
             ..failed.clone()
         };
@@ -950,6 +970,7 @@ pub fn at(daemon: &FakeDaemon, id: &str, spelling: &str) {
         branch: Some(format!("armada/{id}")),
         reason: None,
         queued_reason: None,
+        resumption: None,
         workflow_id: WorkflowId::carried("01WF"),
         owner_manifest_id: ManifestId::carried("01MF"),
         origin: Origin::from_wire("manual").expect("an origin"),

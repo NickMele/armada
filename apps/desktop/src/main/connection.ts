@@ -12,6 +12,16 @@
 // `command.ts` acts on a Job, `reader.ts` holds one Job's read and the rule
 // that drops a stale one, `review.ts` reads the work, `observe.ts` holds the
 // second socket.
+//
+// # Over 500 lines, and left whole
+//
+// Six files have already been taken out of it, and what is left is one thing:
+// a state machine, plus the arrival handler that folds each message into it.
+// Every remaining split runs along a message kind rather than a subject — the
+// resync here, the state changes there — and each half would still have to
+// reach `this.current` and `this.publish`. That is a state machine with its
+// transitions in two files, which is worse than a long one. The next real seam
+// is the socket lifecycle itself, and it is not one this change opened.
 
 import WebSocket from "ws";
 
@@ -25,7 +35,7 @@ import { JobCommands } from "./command";
 import { ObserveSocket } from "./observe";
 import { JobReader } from "./reader";
 import { ReportsReader } from "./reports";
-import { ask, holdingsOf } from "./request";
+import { ask, capacityOf, holdingsOf } from "./request";
 import { ReviewMaterial } from "./review";
 import { HOST, machinePath, read, startingIdentity } from "./runtime-file";
 
@@ -277,6 +287,9 @@ export class FleetConnection {
       // What a proposal may name: read once per connection, because it changes
       // when Fleet restarts rather than when a Job moves.
       void this.readHoldings(fleet.port);
+      // And how full the fleet is, which changes when a Job moves and is
+      // therefore read again below on every status move.
+      void this.readCapacity(fleet.port);
       // A resync says nothing about the open Job's steps, so it is re-read.
       void this.watched.again(fleet.port);
       // A pane left open across a Fleet restart reopens its own socket. Only
@@ -372,6 +385,12 @@ export class FleetConnection {
       readAt: this.wiring.now(),
     });
     this.refresh(fleet.port, moved.id);
+    // **A status move is the only thing that changes the occupancy**, so this
+    // is where the reading is taken rather than on a timer. The machine half
+    // rides along on the same call, which means a disk that fills while nothing
+    // moves is not noticed until something does — and something moving is the
+    // moment it starts mattering, because that is when admission next asks.
+    void this.readCapacity(fleet.port);
   }
 
   private async reread(port: number): Promise<void> {
@@ -388,6 +407,15 @@ export class FleetConnection {
   /** What a proposal may name. The reads are `request.ts`'s; the state is here. */
   private async readHoldings(port: number): Promise<void> {
     this.publish({ holds: await holdingsOf(port, this.current.holds) });
+  }
+
+  /**
+   * How full the fleet is. **A failed read publishes `null`**, which draws as
+   * nothing rather than as the last count — the bar must not keep saying
+   * "2 of 2" off an answer it could not get.
+   */
+  private async readCapacity(port: number): Promise<void> {
+    this.publish({ capacity: await capacityOf(port) });
   }
 
   // -------------------------------------------- one Job, whole and recounted

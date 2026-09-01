@@ -30,9 +30,9 @@ use core_model::{
 };
 use ipc::mcp::{CheckReport, DeclareScope, NotRecorded, Receipt, SubmitEvidence};
 use ipc::{
-    ChangesRequested, JobDelivery, JobDetail, JobDiff, JobEvidence, JobForgotten, JobHistory,
-    JobId, JobList, JobSpend, JobSummary, ManifestId, ManifestSummary, ModelChoices, Overruled,
-    ProposeJob, Redirection, Redispatched, Work, WorkflowId, WorkflowSummary,
+    ChangesRequested, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence, JobForgotten,
+    JobHistory, JobId, JobList, JobSpend, JobSummary, ManifestId, ManifestSummary, ModelChoices,
+    Overruled, ProposeJob, Redirection, Redispatched, Work, WorkflowId, WorkflowSummary,
 };
 use store::LoadJobError;
 
@@ -79,6 +79,30 @@ where
                 })
                 .collect(),
         })
+    }
+
+    /// How full the fleet is, and the one thing holding the next Drone back.
+    ///
+    /// **The same predicate again, unreduced.** `admit_next` opens with
+    /// `room_for_another` and `queued_reason` folds it to one label; this is
+    /// the third reader of that one answer and it takes it whole. Nothing here
+    /// computes a second opinion about why a Job is waiting — `Room::hold` is a
+    /// `match` over the value admission itself returned.
+    ///
+    /// **`occupied` is `Slots::count`.** The roster is what the bound is
+    /// measured against, and a count taken from Job statuses would disagree
+    /// with it: an escalated Job keeps its Drone alive and idle so a redirect
+    /// costs no respawn, and it keeps its place. `count` sweeps the slots whose
+    /// `Working` has gone, so what it answers is what admission will act on.
+    ///
+    /// The roster lock is taken once and both facts are read under it, so the
+    /// bound, the count and the reason cannot be three readings of three
+    /// different instants. It is admission's own lock order — roster first,
+    /// then the poll lock inside `room_for_another` — so this adds no cycle.
+    async fn get_capacity(&self) -> Result<FleetCapacity, Refusal> {
+        let mut slots = self.slots().lock().await;
+        let room = self.room_for_another(&mut slots).await;
+        Ok(FleetCapacity::of(slots.cap(), slots.count(), room.hold()))
     }
 
     /// One Job in full, folded from its log like every other read.
@@ -194,6 +218,7 @@ where
             &job,
             reason.as_ref(),
             queued,
+            self.resumption(&job),
             &step_facts(self.aloft(), &job, ran, judged, flagged),
             recorded
                 .as_ref()
@@ -776,7 +801,36 @@ where
             .map_err(|why| self.refusal(why))?;
         let queued = self.queued_reason(job).await?;
         let asking = self.question_awaited(job.id()).await.is_some();
-        Ok(JobSummary::of(job, reason.as_ref(), queued, asking))
+        Ok(JobSummary::of(
+            job,
+            reason.as_ref(),
+            queued,
+            asking,
+            self.resumption(job),
+        ))
+    }
+
+    /// Which act a person took to put this Job back in the queue, where one
+    /// did.
+    ///
+    /// **`readmitting::Fleet::owed` and nothing beside it.** That is the
+    /// function re-admission itself calls to decide which step a Drone goes
+    /// back on, so a row saying "restarted" and the Drone that arrives cannot
+    /// disagree — the same rule `queued_reason` follows against `admit_next`.
+    ///
+    /// **Nothing is read for a Job that is not `queued`**, and the record is
+    /// already in hand for one that is, so this costs no store call at all.
+    ///
+    /// **A refusal reads as "nobody put this Job back".** On a `queued` Job it
+    /// means the current step is `not_started` or missing, which is a Job that
+    /// arrived from `awaiting_approval` and has never run. The refusal that
+    /// matters is still re-admission's, made at the spawn: this renders nothing
+    /// where that would refuse, and never offers a word where it would not.
+    fn resumption(&self, job: &Job) -> Option<core_model::Resumption> {
+        if job.status() != CoreJobStatus::Queued {
+            return None;
+        }
+        self.owed(job).ok().map(|owed| owed.resumption())
     }
 
     /// Why an approved Job has not started, worked out from the board as it

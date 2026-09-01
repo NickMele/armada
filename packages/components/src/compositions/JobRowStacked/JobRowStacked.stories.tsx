@@ -121,6 +121,45 @@ export const Queued: Story = {
 };
 
 /**
+ * **A queued Job a person put back, which the row above cannot be told from.**
+ * Press restart while every place is taken and the Job lands here: `queued`,
+ * `waiting_on_resources`, and — until the headline said so — identical to a Job
+ * approved an hour ago and never started. The press moved nothing on screen,
+ * which is the worst reading of a correct system.
+ *
+ * It is new. A restart and an override spawned a drone on the spot until
+ * re-admission put them behind the concurrency cap.
+ *
+ * **The word is a suffix on the title, not a sixth field**, which is where the
+ * `Escalated, second time` story already puts a qualifier — the field run's
+ * tracks are shared down the list and a conditional sixth would land in the
+ * track reserved for spend. It comes from `resumption` in `enum-verbs.toml` and
+ * carries no glyph, because a headline carries none.
+ *
+ * **The badge is unchanged and says what the Job is waiting for.** Two facts,
+ * two channels: the badge answers "why has nothing started" and the headline
+ * answers "did my press land". Folding either into the other loses one of them.
+ */
+export const QueuedAfterARestart: Story = {
+  args: {
+    status: "not-started",
+    statusIcon: Cpu,
+    statusLabel: "Waiting on resources",
+    headline: "Retire the legacy poke path, restarted",
+    jobId: "job_8b42",
+    tracks: GATE_TRACKS,
+    fields: [
+      { label: "Workflow", value: "bug, 4 steps", quiet: true },
+      { value: <StepBar total={4} current={2} label="Step 2 of 4" /> },
+      { value: "Run tests", mono: true, emphasis: true },
+      { value: "queued 09:41", quiet: true },
+      { value: "Dispatched by you" },
+    ],
+    action: open,
+  },
+};
+
+/**
  * The running row standing alone, outside any list: the badge pulses and the
  * step bar beside it stays still.
  *
@@ -397,6 +436,15 @@ export const Convoy: Story = {
  * `Running` story above — a read-only row with no primary action would look
  * arbitrary; that is the whole reason this issue put origin on the row
  * rather than only on job detail.
+ *
+ * **The step field says the step, and does not repeat the reason.** It read
+ * "Held for CPU headroom", which is a value the real surface cannot emit twice
+ * over: no vocabulary in the repository contains those words, and the badge
+ * beside it already carries the reason — which is exactly the correction
+ * `Active jobs list` made to its own queued rows. The registry does have a word
+ * for a Job the machine is holding, `admission_hold.cpu`, and it reads "waiting
+ * on CPU"; it renders in the status bar, once for the whole fleet, because how
+ * full the machine is is not a fact about one row.
  */
 export const SubDispatchedWaitingOnResources: Story = {
   args: {
@@ -410,7 +458,7 @@ export const SubDispatchedWaitingOnResources: Story = {
     fields: [
       { label: "Workflow", value: "chore, 3 steps", quiet: true },
       { value: <StepBar total={3} current={1} label="Step 2 of 3, waiting" /> },
-      { value: "Held for CPU headroom", emphasis: true },
+      { value: "embed-batch", mono: true, emphasis: true },
       { value: "queued 09:41", quiet: true },
       { value: "Sub-dispatched by job_2d90bb" },
     ],

@@ -132,9 +132,9 @@ impl Urgency {
 /// Why an approved Job has not started. **Derived, never stored.**
 ///
 /// `job-statuses.toml` applies the recomputed-label rule literally on `queued`:
-/// a held port span never self-clears, so a stored value would go stale the
-/// moment headroom frees. It is computed from `dependencies` and live headroom
-/// at read time.
+/// CPU, memory and disk all free without anything moving the Job, so a stored
+/// value would be wrong from the moment it was written. It is computed from
+/// `dependencies` and live headroom at read time.
 ///
 /// **Three variants and not four.** The registry's vocabulary reads
 /// `blocked_by_dependency / over_budget / waiting_on_resources / none`, and
@@ -184,6 +184,137 @@ impl QueuedReason {
             .iter()
             .copied()
             .find(|reason| reason.as_wire() == value)
+    }
+}
+
+/// Which one thing is holding the next Drone back, where one is.
+///
+/// **The finer half of [`QueuedReason::WaitingOnResources`], and not a
+/// replacement for it.** `job-statuses.toml` gives a `queued` Job exactly three
+/// labels and every variant here folds into the second of them, so a Board row
+/// is unchanged by this existing. What it adds is the fleet-wide answer to "why
+/// is nothing starting", which no surface could reach: the bound, CPU, memory
+/// and disk were one word.
+///
+/// # One value, because admission asks one question at a time
+///
+/// `fleet::admitting::Room` asks the bound before it reads the machine, so a
+/// Fleet already at its cap never pays for a reading it would not have acted
+/// on. That ordering makes [`AdmissionHold::ConcurrencyBound`] and the three
+/// machine variants **exclusive**: "the cap is spent *and* the disk is full" is
+/// not a state this can carry. It reports what is stopping admission now, and
+/// says the next thing once that clears.
+///
+/// # The set grows and the wire does not
+///
+/// A fifth reason is a variant here, a row in `enum-verbs.toml`, and nothing
+/// else. `ipc::FleetCapacity` carries the spelling rather than a closed set for
+/// exactly that reason — see its own doc, which argues why this one enum is
+/// read as opaque where `JobStatus` is not.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AdmissionHold {
+    /// Every place the bound allows is taken. `settings.concurrency-cap`.
+    ///
+    /// **A place is taken for as long as a Job holds a Drone**, which is not
+    /// the same as the Job running: a Job that escalated on a refusal keeps its
+    /// Drone alive and idle so a redirect costs no respawn, and it keeps its
+    /// place. A count taken from Job statuses would disagree with admission
+    /// exactly when somebody is asking why nothing started.
+    ConcurrencyBound,
+    /// Too little of the machine's cores is spare.
+    Cpu,
+    /// Too little of the machine's memory is spare.
+    Memory,
+    /// Too few bytes are free on the volume the worktrees are cut under. **The
+    /// one of the three that has actually run out**, and the one whose
+    /// exhaustion destroys work rather than slowing it.
+    Disk,
+}
+
+impl AdmissionHold {
+    /// Every variant, bound first and then the order `Headroom::short_of` names
+    /// them in — which is the order they are reported in, not a ranking.
+    pub const ALL: &'static [AdmissionHold] = &[
+        AdmissionHold::ConcurrencyBound,
+        AdmissionHold::Disk,
+        AdmissionHold::Cpu,
+        AdmissionHold::Memory,
+    ];
+
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            AdmissionHold::ConcurrencyBound => "concurrency_bound",
+            AdmissionHold::Cpu => "cpu",
+            AdmissionHold::Memory => "memory",
+            AdmissionHold::Disk => "disk",
+        }
+    }
+
+    pub fn from_wire(value: &str) -> Option<AdmissionHold> {
+        AdmissionHold::ALL
+            .iter()
+            .copied()
+            .find(|hold| hold.as_wire() == value)
+    }
+}
+
+/// Which act a person took to put a `queued` Job back in the queue.
+///
+/// **A second axis over `queued`, exactly as [`QueuedReason`] is.** That one
+/// says what the Job is waiting for; this says who put it there. Both are
+/// absent on a Job approved and never run: a Job *arrives* at `queued` from
+/// `awaiting_approval` and *returns* to it from `awaiting_review` and
+/// `escalated`, and only a return has somebody waiting on it.
+///
+/// # Derived, never stored, and from the inner machine
+///
+/// `fleet::readmitting::Owed` is the partition, read off the current step's
+/// state rather than off a column remembering which button was pressed, and
+/// this is that value with the step ids taken out. Fleet answers by calling the
+/// function re-admission calls, not by reading the same record twice.
+///
+/// | The current step reads | The act was |
+/// |---|---|
+/// | `running` | the review was answered, either way |
+/// | `stopped` | the step was restarted |
+/// | `advanced` | the verdict was overruled |
+///
+/// **Three and not four.** Approving and asking for changes share `running` and
+/// share this value: both are a person answering at the gate and the Job goes
+/// again either way. Which it was is carried by the note that waits on the
+/// record.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Resumption {
+    /// A person answered at a human advance gate. `approve_review`, or
+    /// `request_changes`.
+    Reviewed,
+    /// A person restarted a step that stopped. `restart_step`.
+    Restarted,
+    /// A person overruled the verdict that stopped a step. `override_verdict`.
+    Overruled,
+}
+
+impl Resumption {
+    /// All three, in the order the step states are reached in.
+    pub const ALL: &'static [Resumption] = &[
+        Resumption::Reviewed,
+        Resumption::Restarted,
+        Resumption::Overruled,
+    ];
+
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            Resumption::Reviewed => "reviewed",
+            Resumption::Restarted => "restarted",
+            Resumption::Overruled => "overruled",
+        }
+    }
+
+    pub fn from_wire(value: &str) -> Option<Resumption> {
+        Resumption::ALL
+            .iter()
+            .copied()
+            .find(|act| act.as_wire() == value)
     }
 }
 

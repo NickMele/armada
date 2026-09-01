@@ -1,0 +1,205 @@
+/* The activity log — one stream, three voices, every entry opening to its
+   payload. A well: it is a record being read. */
+.armada-activity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-activity__entries {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.armada-activity__entry {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* One entry, one line. The whole row is the control, because a target the width
+   of a chevron is a target a person misses — and every entry opens, so there is
+   nothing else the row could be for. */
+.armada-activity__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  width: 100%;
+  padding: calc(var(--space-1) / 2) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  text-align: left;
+  cursor: default;
+  min-width: 0;
+}
+
+.armada-activity__row[data-opens] {
+  cursor: pointer;
+}
+
+.armada-activity__row[data-opens]:hover {
+  background: var(--bg-hover);
+}
+
+.armada-activity__row[data-open] {
+  background: var(--bg-hover);
+}
+
+.armada-activity__row:focus-visible {
+  outline: var(--border-width) solid var(--border-strong);
+  outline-offset: calc(var(--border-width) * -1);
+}
+
+/* The chevron keeps its column on every row, including the ones with nothing
+   behind them, so the timestamps line up down the stream. */
+.armada-activity__chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--space-4);
+  align-self: center;
+  color: var(--fg-muted);
+}
+
+/* Machine-written, so mono, and tabular so the column does not shimmer as the
+   seconds change. */
+.armada-activity__at {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Who. A fixed track, so the column reads down rather than ragged, and sans
+   because it is a name — three voices told apart by weight and position, not by
+   three hues. Hue below Job level exists only where the token file declares it,
+   and no token declares an actor. */
+.armada-activity__who {
+  flex: none;
+  width: calc(var(--space-12) + var(--space-2));
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+}
+
+/* Fleet's own events are the ones a reader is scanning for in a stream of the
+   Drone's, so Fleet takes the brighter of the two neutrals. Armada's injected
+   turns are instructions and read as the Drone's do. */
+.armada-activity__who[data-actor="fleet"] {
+  color: var(--fg-default);
+}
+
+.armada-activity__summary {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The tool, the Check id, the command. Machine-derived, so mono. */
+.armada-activity__subject {
+  flex: none;
+  max-width: 40%;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-activity__subject[data-named="failed"],
+.armada-activity__subject[data-named="refused"] {
+  color: var(--step-failed);
+}
+
+.armada-activity__subject[data-named="passed"] {
+  color: var(--step-advanced);
+}
+
+/* --- what an entry opens to ---------------------------------------------- */
+
+/* Indented to the timestamp's left edge: the chevron's slot and the two gaps,
+   measured from the row's own padding. */
+.armada-activity__payload {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-3)
+    calc(var(--space-4) + var(--space-2) * 2);
+  min-width: 0;
+}
+
+/* The command and its output. Mono throughout, because every line of it is
+   machine output, and it scrolls sideways rather than wrapping — a wrapped
+   stack trace is a stack trace nobody can read. */
+.armada-activity__output {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  border: var(--border-width) solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* What the run came to. Read after the output, so it sits under it. */
+.armada-activity__ran {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* A cut says so and names where the rest is — the diff's rule, so the diff's
+   treatment, token for token. Not a claim that the Job failed: it is the same
+   reuse the contract grants Doctor, where a health claim borrows the Job
+   palette rather than inventing a third set, and text a reader cannot finish
+   reading is the loudest health claim a record can make. Spelling it a second
+   way here would say the two cuts are different kinds of thing. */
+.armada-activity__cut {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--status-completed-failed);
+  background: var(--status-completed-failed-bg);
+  color: var(--fg-default);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  text-wrap: pretty;
+}
+
+.armada-activity__extra {
+  min-width: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+.armada-activity__empty {
+  margin: 0;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}

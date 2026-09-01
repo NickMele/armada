@@ -42,7 +42,8 @@ use crate::event::Reason;
 use crate::ids::{DroneId, Instant, JobId, ManifestId, StepId, WorkflowId};
 
 use crate::enums::{
-    CriterionSource, DependencyDirection, JobStatus, Origin, QueuedReason, TopLevelOrigin, Urgency,
+    CriterionSource, DependencyDirection, JobStatus, Origin, QueuedReason, Resumption,
+    TopLevelOrigin, Urgency,
 };
 
 /// One Job, as a Board row.
@@ -96,6 +97,20 @@ pub struct JobSummary {
     /// absence of a value rather than as a variant nothing renders.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub queued_reason: Option<QueuedReason>,
+    /// Which act a person took to put this Job back in the queue.
+    ///
+    /// **The other axis over `queued`, and the one that says somebody is
+    /// waiting.** `queued_reason` says what the Job is waiting for; this says
+    /// it is here because a person pressed something. Absent on a Job approved
+    /// and never run — which is how a Job arrives at `queued` rather than
+    /// returns to it — and absent on every other status.
+    ///
+    /// Without it, pressing restart while the bound is spent moves nothing on
+    /// screen. That reading was correct and looked like a dropped press, and it
+    /// is new: those acts started a Drone on the spot until re-admission put
+    /// them behind the bound.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resumption: Option<Resumption>,
     pub workflow_id: WorkflowId,
     pub owner_manifest_id: ManifestId,
     pub origin: Origin,
@@ -163,6 +178,7 @@ impl JobSummary {
         reason: Option<&core_model::TransitionReason>,
         queued_reason: Option<core_model::QueuedReason>,
         asking: bool,
+        resumption: Option<core_model::Resumption>,
     ) -> JobSummary {
         JobSummary {
             id: job.id().into(),
@@ -172,6 +188,7 @@ impl JobSummary {
             branch: job.branch().map(|branch| branch.as_str().to_string()),
             reason: reason.and_then(Reason::of),
             queued_reason: queued_reason.map(QueuedReason::from),
+            resumption: resumption.map(Resumption::from),
             workflow_id: job.workflow_id().into(),
             owner_manifest_id: job.owner_manifest_id().into(),
             origin: job.origin().into(),
@@ -234,11 +251,11 @@ pub struct Redirection {
 
 /// The redaction, at the Fleet boundary, with no reason to hand.
 ///
-/// **No queued reason either**, and that is not a gap: this conversion is what
-/// an event publish uses, and nothing publishes a summary of a `queued` Job —
-/// creation, a step advancing and a Drone arriving or leaving all carry a Job
-/// in some other status. A publish that did would need the board, which is
-/// exactly what this conversion does not have.
+/// **No queued reason and no resumption either**, and that is not a gap: this
+/// conversion is what an event publish uses, and nothing publishes a summary of
+/// a `queued` Job — creation, a step advancing and a Drone arriving or leaving
+/// all carry a Job in some other status. A publish that did would need the
+/// board, which is exactly what this conversion does not have.
 impl From<&core_model::Job> for JobSummary {
     fn from(job: &core_model::Job) -> JobSummary {
         // **`asking` is `false` here and that is the answer, not a default.**
@@ -246,7 +263,7 @@ impl From<&core_model::Job> for JobSummary {
         // creation, a step advancing and a Drone arriving or leaving are none of
         // them a Job that has just asked something. The message that says a
         // question exists is `job.asking`, which carries the question itself.
-        JobSummary::of(job, None, None, false)
+        JobSummary::of(job, None, None, false, None)
     }
 }
 

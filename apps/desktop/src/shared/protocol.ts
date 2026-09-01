@@ -33,6 +33,19 @@ export type JobSummary = {
    * a queued Job that nothing is holding.
    */
   queued_reason?: string;
+  /**
+   * Which act a person took to put this Job back in the queue — a key into
+   * `RESUMPTION` in the generated vocabulary.
+   *
+   * **The other axis over `queued`, and the one that says somebody is
+   * waiting.** `queued_reason` says what the Job is waiting for. Absent on a
+   * Job approved and never run, which is how a Job *arrives* at `queued`
+   * rather than *returns* to it, and absent on every other status.
+   *
+   * Without it, pressing restart while the bound is spent moves nothing on
+   * screen and a correct system reads as a dropped press.
+   */
+  resumption?: string;
   workflow_id: string;
   owner_manifest_id: string;
   origin: string;
@@ -704,6 +717,37 @@ export type JobList = {
   unreadable?: UnreadableJob[];
 };
 
+/**
+ * How full the fleet is, and the one thing holding the next Drone back.
+ * `crates/ipc/src/capacity.rs`.
+ *
+ * **Fleet-wide, and the answer no per-Job field could give.** A `queued` row's
+ * `queued_reason` folds the concurrency bound, CPU, memory and disk into
+ * `waiting_on_resources`, because that is the only label the registry grants
+ * it. This says which of them it was.
+ */
+export type FleetCapacity = {
+  /** How many Jobs Fleet may work at once. */
+  bound: number;
+  /**
+   * How many it is working, from the roster admission counts against — never a
+   * count of `running` rows. An escalated Job keeps its Drone alive and idle so
+   * a redirect costs no respawn, and it keeps its place while it does.
+   */
+  occupied: number;
+  /**
+   * A key into `ADMISSION_HOLD` in the generated vocabulary. **Absent means
+   * nothing is holding it** — not unknown, and not that Fleet failed to look,
+   * because an unreadable machine admits rather than refuses.
+   *
+   * `string` and not a union, for the reason at the top of this file and one
+   * more: this is the one set on the seam a newer Fleet may widen without a
+   * protocol bump, so a union here would be a build that refuses a message it
+   * is meant to survive.
+   */
+  held_by?: string;
+};
+
 /** A Job drafted onto the approval gate. The request half of `propose_job`. */
 export type ProposeJob = {
   /** Required. A proposal without one does not decode on the Rust side. */
@@ -771,77 +815,12 @@ export type ProposedCriterion = { text: string; source: string };
  */
 export type AttachmentRef = { staged_path: string; filename: string; mime_type: string };
 
-/**
- * What a person sends to say a Job failed in error. `crates/ipc/src/report.rs`.
- *
- * **`said` is the whole reason this exists.** Everything Fleet attaches around
- * it is already served by three other routes; the sentence is the one thing
- * that does not exist anywhere until somebody types it, and Fleet answers 422
- * without it.
- *
- * `claim` is left as `string` like every other closed set here — but it is the
- * one Bridge *writes* rather than renders, so the three values it may hold are
- * named where the picker offers them, in `renderer/src/Report.tsx`.
- */
-export type FileReport = {
-  claim: string;
-  said: string;
-  /**
-   * The step the report is about. **Sendable without `criterion_id`**, which is
-   * what a report about a step the gate judged nothing on looks like — an
-   * undecided gate records no verdict, so there is none to name.
-   */
-  step_id?: string;
-  /** Sent with `step_id` and never without it: a criterion id is unique inside a step. */
-  criterion_id?: string;
-};
-
-/**
- * One filed report, as it reads afterwards. `crates/ipc/src/report.rs`.
- *
- * **`record` is the Job's own evidence rendered at filing time**, not a join to
- * rows that are still there: `armada clean` forgets a Job and takes every row
- * beneath it, and the report stays whole. `job_id` may therefore name a Job
- * that no longer exists, which is deliberate.
- */
-export type Report = {
-  id: string;
-  filed_at: string;
-  /** `human`. The column exists so the day Fleet files its own, it is a value. */
-  origin: string;
-  claim: string;
-  job_id: string;
-  job_title: string;
-  step_id?: string;
-  criterion_id?: string;
-  /** The person's own words. The finding. */
-  said: string;
-  /** The record, as the body of an issue. The evidence. */
-  record: string;
-};
-
-/** Every report filed, and the counts they are read beside. */
-export type ReportList = {
-  /** Newest first, bodies included. */
-  reports: Report[];
-  calibration: Calibration;
-};
-
-/**
- * What is known about whether the Judge has been right.
- *
- * **Four counts and not a rate.** A rate's denominator would count every Job
- * nobody read, and an unread Job is not a pass — so the gap between what the
- * Judge refused and what a person disputed is left visible rather than divided
- * away.
- */
-export type Calibration = {
-  refusals_recorded: number;
-  refusals_disputed: number;
-  /** Not the other half of the same number: a wrong pass is refused by nothing. */
-  passes_disputed: number;
-  reports_filed: number;
-};
+// Everything a filed report is made of, re-exported so `protocol.ts` stays the
+// one import for the wire vocabulary. They live in `report.ts` because this
+// file reached the 900 lines the gate refuses again; the cut is the seam
+// `crates/ipc/src/report.rs` already draws, and it is the same remedy the event
+// shapes took below.
+export type { Calibration, FileReport, Report, ReportList } from "./report";
 
 /**
  * What forgetting a Job leaves to say. `crates/ipc/src/job.rs`.

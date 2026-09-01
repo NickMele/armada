@@ -7,10 +7,7 @@
 // what the socket believes.
 
 import type { Holdings, Outcome } from "../shared/bridge";
-import type {
-  JobSummary,
-  WireError,
-} from "../shared/protocol";
+import type { FleetCapacity, JobSummary, WireError } from "../shared/protocol";
 import type { ManifestSummary, ModelChoices, WorkflowSummary } from "../shared/setup";
 import { HOST } from "./runtime-file";
 
@@ -102,4 +99,16 @@ export async function holdingsOf(port: number, held: Holdings): Promise<Holdings
     manifests: manifests.ok === true ? (manifests.body as ManifestSummary[]) : held.manifests,
     models: models.ok === true ? (models.body as ModelChoices) : held.models,
   };
+}
+
+/**
+ * How full the fleet is. **`null` where Fleet did not answer**, rather than the
+ * last reading kept — unlike `holdingsOf` above, and for the opposite reason:
+ * a workflow roster is stable and a stale one is nearly right, and this is a
+ * live count that is wrong the moment a Job moves. A bar that keeps drawing
+ * "2 of 2" off an answer it could not get is saying something it does not know.
+ */
+export async function capacityOf(port: number): Promise<FleetCapacity | null> {
+  const answer = await ask(port, "GET", "/capacity");
+  return answer.ok === true ? (answer.body as FleetCapacity) : null;
 }

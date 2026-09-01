@@ -21,7 +21,7 @@
 // |---|---|
 // | Finished | `terminal` |
 // | Running | `mode` is `Working` — `running` and `piloted`, because a job somebody has taken over is still moving |
-// | Needs you | `who_is_acting` is `Person` — `awaiting_approval`, `awaiting_attestation`, `awaiting_review`, `escalated` — **or the row says `asking`** |
+// | Needs you | `who_is_acting` is `Person`, **or the row says `asking`** |
 // | Queued | `who_is_acting` is `Drone` — `queued` |
 //
 // **Every tab is a positive rule and none is a leftover.** `Needs you` was
@@ -31,13 +31,11 @@
 // it silently. The registry has said `who_is_acting = "Person"` on exactly those
 // four all along; the codegen just was not carrying it.
 //
-// **`asking` is the one rule that is not a lifecycle row, and it is still a
-// positive one.** A drone waiting on a person's answer is on a `running` job —
-// nothing about the status moves while it waits, which is deliberate and is why
-// there is no seventh step state — so the registry has nothing to say about it
-// and cannot. The row carries the fact instead. Without it a question would sit
-// under Running and be invisible until somebody happened to open that job, which
-// is the whole failure `Needs you` exists to prevent.
+// **`asking` is the one rule that is not a lifecycle row, and still a positive
+// one.** A drone waiting on an answer is on a `running` job and its status does
+// not move while it waits, so the registry cannot say this. Without the row's
+// own fact a question would sit under Running, invisible until somebody opened
+// that job — the failure `Needs you` exists to prevent.
 //
 // **The order of the two mode-and-actor tests is the one thing to read
 // carefully.** `piloted` is `Working` and its actor is a `Person`, so `Working`

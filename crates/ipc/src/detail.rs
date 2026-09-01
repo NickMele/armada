@@ -301,6 +301,7 @@ impl JobDetail {
         job: &core_model::Job,
         reason: Option<&core_model::TransitionReason>,
         queued_reason: Option<core_model::QueuedReason>,
+        resumption: Option<core_model::Resumption>,
         steps: &[StepFacts],
         footprint: Option<JobFootprint>,
         redirecting: Option<RedirectInFlight>,
@@ -311,11 +312,11 @@ impl JobDetail {
         spend: Option<JobSpend>,
     ) -> JobDetail {
         JobDetail {
-            // **From the question this call was already handed**, never a
-            // second argument: one fact, one source, and a detail whose row
-            // said `false` while its own `asking` held a question would be
+            // **`asking` from the question this call was already handed**,
+            // never a second argument: one fact, one source, and a detail whose
+            // row said `false` while its own `asking` held a question would be
             // two answers to one question in one message.
-            job: JobSummary::of(job, reason, queued_reason, asking.is_some()),
+            job: JobSummary::of(job, reason, queued_reason, asking.is_some(), resumption),
             created_at: job.created_at().into(),
             branch: job.branch().map(|branch| branch.as_str().to_string()),
             delivery,

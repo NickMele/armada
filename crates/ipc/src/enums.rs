@@ -132,6 +132,20 @@ wire_enum! {
     QueuedReason, core_model::QueuedReason, "a queued reason"
 }
 wire_enum! {
+    /// Which act a person took to put a `queued` Job back in the queue.
+    ///
+    /// **The other axis over `queued`**, beside [`QueuedReason`]: that one says
+    /// what the Job is waiting for and this says who put it there. Absent on a
+    /// Job approved and never run, which is the ordinary way in.
+    ///
+    /// **Closed, unlike [`AdmissionHold`](crate::AdmissionHold).** That one is
+    /// open because its set grows with every resource signal Fleet learns to
+    /// read; this one is the shape of the inner step machine, and a fourth
+    /// value would mean that machine grew a state. `docs/practices/protocol.md`
+    /// carries the distinction.
+    Resumption, core_model::Resumption, "a resumption"
+}
+wire_enum! {
     /// What kind of work product a step's evidence is. Six, from the
     /// WorkflowDef schema, and **the workflow's word rather than the Drone's**:
     /// the Evidence tool has no parameter for it, so a submission is recorded

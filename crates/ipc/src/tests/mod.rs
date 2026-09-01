@@ -92,7 +92,7 @@ fn job() -> Job {
 /// about is the Job and its steps, and this says so.
 pub(super) fn detail_of(job: &core_model::Job, steps: &[StepFacts]) -> JobDetail {
     JobDetail::of(
-        job, None, None, steps, None, None, None, None, None, None, None,
+        job, None, None, None, steps, None, None, None, None, None, None, None,
     )
 }
 

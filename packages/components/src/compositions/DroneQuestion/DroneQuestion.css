@@ -1,19 +1,20 @@
-/* Drone question — the waiting hue, drawn flat.
+/* Drone question — the box a person answers in, under the band that says why
+   they are here.
  *
- * `--status-awaiting-review` is "needs you, not urgent", which is this
- * condition exactly: nothing is wrong and nothing moves until a person acts.
- * Not the escalated hue, which would say the job had stopped, and not no hue at
- * all, which would leave the one region on a running job's screen that is
- * waiting on somebody looking like the three that are not. The job's own badge
- * still says running, and it is right to. */
+ * **No border and no fill.** The band above it already carries the waiting tone
+ * — `--step-waiting`, amber and never red, because everything mechanical has
+ * cleared — and a second framed region under it would draw one condition twice
+ * and make the pair read as two things wrong. This is the box, and `notice` is
+ * the sentence; the screen puts them in that order for the redirect draft too.
+ *
+ * The one thing it does take from the waiting family is the rule on the left,
+ * which ties the box to the band without repeating its fill. */
 .armada-question {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: var(--status-awaiting-review-bg);
-  border: var(--border-width) solid var(--status-awaiting-review);
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--border-width) solid var(--step-waiting);
   color: var(--fg-default);
   font-family: var(--font-sans);
   font-size: var(--text-sm);

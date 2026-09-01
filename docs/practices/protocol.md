@@ -180,6 +180,30 @@ adding/loosening X" — that sentence is the tell. Stop and check whether the
 other side's code has an exhaustive match, a presence assumption, or a name
 lookup anywhere near the thing you're touching.
 
+**The caveat row has exactly one instance, and it is deliberate.**
+`FleetCapacity.held_by` — which one of the concurrency bound, CPU, memory or
+disk is stopping the next Drone — is a `String` on the wire rather than a
+`wire_enum!`, and `crates/ipc/src/capacity.rs` is where that is argued. Fleet is
+the only writer, Bridge looks the value up in the generated vocabulary rather
+than matching on it, and that map already answers `undefined` for a key it does
+not hold. So a fifth reason is a `core-model` variant, a row in
+`enum-verbs.toml` and a codegen run, and it moves neither number here.
+
+**The condition is what makes it minor, not the type.** The moment something on
+either side branches on this value rather than rendering it, the row above it
+applies instead and widening the set is a major bump. Every other closed set on
+this seam is the strict kind and refuses a spelling the registry does not have,
+which is right for `JobStatus` — Bridge picks a screen from it.
+
+**And the test is where the set's growth comes from, not how it is read.**
+`JobSummary.resumption` — which act a person took to put a `queued` Job back —
+is rendered exactly as opaquely as `held_by` and is still a strict
+`wire_enum!`, because its three values are the shapes the inner step machine
+can be in. A fourth would mean that machine grew a state, which is a change
+every reader has to be told about. `held_by`'s set grows every time Fleet
+learns to read another resource, which is a change no reader needs to be told
+about at all. Ask which of those two a new set is before making it open.
+
 ## What Bridge does with the version it reads
 
 Bridge is the side that decides. It reads Fleet's version out of the runtime

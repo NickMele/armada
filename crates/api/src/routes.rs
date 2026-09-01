@@ -68,6 +68,14 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/jobs/:job_id",
     },
+    // Fleet's own capacity, not a Job's. It is `/capacity` and not
+    // `/jobs/capacity` because nothing about it is scoped to a Job — the whole
+    // point is the answer no per-Job field could give.
+    Route {
+        operation: "get_capacity",
+        method: "GET",
+        path: "/capacity",
+    },
     // The path taken, under the Job that took it. `get_job_events` drops
     // `get_` and `job_` for the reason `redispatch` drops `_job`: the segment
     // before it already names the Job. It is not `/events`, which is the
@@ -199,9 +207,9 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/restart_step",
     },
-    // Its own route rather than a shape `redirect` also takes: that one carries
-    // a person's own words and this carries one of a closed set the Drone
-    // offered, and one route taking either would make the closed set optional.
+    // Its own route and not a shape `redirect` also takes: one carries a
+    // person's words and this a label the Drone offered, and one route taking
+    // either would make the closed set optional.
     Route {
         operation: "answer_question",
         method: "POST",
@@ -339,6 +347,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/workflows", get(list_workflows::<D>))
         .route("/manifests", get(list_manifests::<D>))
         .route("/models", get(list_models::<D>))
+        .route("/capacity", get(get_capacity::<D>))
         .route("/jobs/:job_id", get(get_job::<D>))
         .route("/jobs/:job_id/events", get(get_job_events::<D>))
         .route("/jobs/:job_id/evidence", get(get_evidence::<D>))
@@ -378,6 +387,18 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
 async fn list_jobs<D: Daemon>(State(served): State<Served<D>>) -> Response {
     match served.daemon.list_jobs().await {
         Ok(jobs) => answer(StatusCode::OK, &jobs, &served.run_id),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// The bound, what is occupying it, and what holds the next Drone back.
+///
+/// **Its own route rather than a field on `/jobs`.** That read is a list of
+/// Jobs and is made on every Board refresh; this is three values about Fleet,
+/// asked for by the surface that draws Fleet's state.
+async fn get_capacity<D: Daemon>(State(served): State<Served<D>>) -> Response {
+    match served.daemon.get_capacity().await {
+        Ok(capacity) => answer(StatusCode::OK, &capacity, &served.run_id),
         Err(refusal) => refused(refusal),
     }
 }
@@ -682,10 +703,9 @@ async fn redirect_drone<D: Daemon>(
     }
 }
 
-/// Answer the question a Drone asked. **The Job comes back unchanged** — it was
-/// `running` while it waited and is `running` now; what moved is the Drone,
-/// handed the answer as a turn. 409 where nothing is waiting, where the id
-/// names a question already answered, and where the label was not offered.
+/// Answer the question a Drone asked. **The Job comes back unchanged**: what
+/// moved is the Drone, handed the answer as a turn. 409 where nothing waits,
+/// where the id names an answered question, or where the label was not offered.
 async fn answer_question<D: Daemon>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
@@ -695,21 +715,16 @@ async fn answer_question<D: Daemon>(
         Ok(chosen) => chosen,
         Err(why) => return undecodable(&why.to_string(), &served.run_id),
     };
-    match served
-        .daemon
-        .answer_question(JobId::carried(job_id), chosen)
-        .await
-    {
+    let job_id = JobId::carried(job_id);
+    match served.daemon.answer_question(job_id, chosen).await {
         Ok(job) => answer(StatusCode::OK, &job, &served.run_id),
         Err(refusal) => refused(refusal),
     }
 }
 
-/// A body that would not parse, as the 400 it is.
-///
-/// **Written once.** This arm was spelled out at every command that takes a
-/// body, seven times, each one four lines of `WireError` construction that has
-/// to agree with the other six. Adding the eighth is what made it a function.
+/// A body that would not parse, as the 400 it is. **Written once**: this arm
+/// was spelled out at seven commands, each four lines of `WireError` that had to
+/// agree with the other six, and the eighth is what made it a function.
 fn undecodable(why: &str, run_id: &RunId) -> Response {
     problem(
         StatusCode::BAD_REQUEST,

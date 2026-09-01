@@ -372,7 +372,7 @@ export function Jobs({
           query,
         })}
         selectable
-        label="Active jobs"
+        label="Job Board"
         controls={
           <BoardControls
             query={query}

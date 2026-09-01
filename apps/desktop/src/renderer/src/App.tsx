@@ -22,8 +22,8 @@ import { useEffect, useState } from "react";
 import { Alert, Button, Dialog } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
-import type { BridgeState, Draft, Outcome, Watched } from "../../shared/bridge";
-import type { FileReport, JobDetail as JobWhole } from "../../shared/protocol";
+import type { BridgeState, Draft, Outcome } from "../../shared/bridge";
+import type { FileReport } from "../../shared/protocol";
 import { Boundary } from "./Boundary";
 import { CopiedToast, useCopied } from "./CopiedToast";
 import { FailureBlock } from "./FailureSurface";
@@ -33,10 +33,8 @@ import { statementOf } from "./fleet";
 import { Composer } from "./Composer";
 import { Reports } from "./Reports";
 import { JobDetail, type ConfirmableAct } from "./JobDetail";
-import { RECORDS_ITS_OWN_TURNS, renderFor } from "./render";
 import { ACT_LABEL, CONFIRM, said } from "./copy";
 import { Jobs } from "./Jobs";
-import { Observe } from "./Observe";
 import { Shell } from "./Shell";
 import { watchUncaught } from "./uncaught";
 import type { Uncaught } from "./uncaught";
@@ -62,12 +60,10 @@ export function App() {
   // not a router: which Job is open, or none. The row is the control that sets
   // it and Escape is what clears it.
   const [openJob, setOpenJob] = useState<string | null>(null);
-  // Whether the open Job's turns are being watched. **A second piece of
-  // navigation, because watching is a second act** — it is opened on one Job
-  // deliberately and closed, and it changes nothing about the Job either way.
-  // It says the socket is open, not which surface is up: a finished Job and a
-  // stopped one both hold the turns in their own record, so there the flag is
-  // set by a tab and swaps no screen. `watching` is the one that does.
+  // Whether the open Job's turns socket is held open. **Not navigation any
+  // more.** It was, while watching swapped the whole surface for a transcript;
+  // job detail holds the turns in its own record at every state now, so this
+  // says only that a tab is open and no screen turns on it.
   const [observing, setObserving] = useState(false);
   // Whether the composer is open. It used to sit permanently above the list;
   // `New job` is what opens it now, so the surface is the list until somebody
@@ -101,14 +97,6 @@ export function App() {
   // leaves the list — superseded, or gone from a resync — closes its own detail
   // rather than leaving a row on screen that Fleet no longer has.
   const reading = openJob === null ? null : (state.jobs.find((job) => job.id === openJob) ?? null);
-  // Whether the turns have a screen of their own up. The finished and stopped
-  // renders hold them in their own record instead, so the socket being open
-  // there must not replace the page a person is reading — and must not take the
-  // Escape that closes it. Which renders those are is `render.ts`'s answer, so
-  // the header's control and this cannot disagree about it.
-  const watching =
-    reading !== null && observing && !RECORDS_ITS_OWN_TURNS.has(renderFor(reading));
-
   useEffect(() => {
     void window.armada.state().then(setState);
     return window.armada.subscribe(setState);
@@ -121,14 +109,13 @@ export function App() {
     void window.armada.watchJob(openJob);
   }, [openJob]);
 
-  // Opening another Job closes the pane, and does it before the socket is
-  // reopened below — the rows on screen belong to the Job that was open, and
-  // carrying them into a different one would be a transcript under the wrong
-  // title.
+  // Opening another Job drops the socket, and does it before the one below is
+  // reopened — the rows in hand belong to the Job that was open, and carrying
+  // them into a different one would be a transcript under the wrong title.
   useEffect(() => setObserving(false), [openJob]);
 
   // Which Job's turns main should hold a socket open for. Closed the moment the
-  // pane is: the subscription exists only while somebody is watching, and
+  // tab is: the subscription exists only while somebody is reading it, and
   // nothing about it is written onto the Job.
   useEffect(() => {
     void window.armada.observeJob(observing ? openJob : null);
@@ -154,15 +141,14 @@ export function App() {
   useEffect(() => {
     if (openJob === null) return;
     const pressed = (event: KeyboardEvent): void => {
-      // The pane first: Escape leaves the innermost view, which is what a
-      // reader who opened two things in order expects to get back.
+      // One view to leave, since the turns stopped being a screen of their own:
+      // Escape returns to the list from anywhere inside a Job.
       if (event.key !== "Escape") return;
-      if (watching) setObserving(false);
-      else close();
+      close();
     };
     window.addEventListener("keydown", pressed);
     return () => window.removeEventListener("keydown", pressed);
-  }, [openJob, watching]);
+  }, [openJob]);
 
   // The row is back in the document only after the list re-renders, so the
   // focus move is an effect rather than part of the click that closed it.
@@ -352,13 +338,11 @@ export function App() {
 
   const scoped = state.holds.manifests.find((held) => held.id === scope);
   const head = headOf({
-    watching,
     reading: reading !== null,
     composing,
     auditing,
     live,
     refreshing,
-    onCloseTurns: () => setObserving(false),
     onCloseJob: close,
     onCloseComposer: () => setComposing(false),
     onCompose: () => setComposing(true),
@@ -376,6 +360,7 @@ export function App() {
         scope={scope}
         onScope={setScope}
         jobs={state.jobs}
+        capacity={state.capacity}
         title={head.title}
         summary={head.summary}
         actions={head.actions}
@@ -446,23 +431,7 @@ export function App() {
           {/* One Job, read whole, in place of the board. Reviewing and deciding
               is one loop, so the detail is not a panel beside the list — and the
               list is what Escape and the control in the head both return to. */}
-          {watching && reading !== null ? (
-            /* One Job's turns, read while they are still being written. It
-               replaces the detail rather than sitting beside it: watching is
-               opened on one Job deliberately and closed, and Bridge stays a
-               scanning surface everywhere else. Nothing in it can reach the
-               Drone. */
-            <Boundary region="this job's turns" {...guarded}>
-              <Observe
-                job={reading}
-                whole={wholeOf(state.watched, reading.id)}
-                observed={state.observed}
-                workflows={state.holds.workflows}
-                manifests={state.holds.manifests}
-                now={now}
-              />
-            </Boundary>
-          ) : reading !== null ? (
+          {reading !== null ? (
             <Boundary region="the job detail" {...guarded}>
               <JobDetail
                 job={reading}
@@ -578,16 +547,4 @@ export function App() {
       <CopiedToast copied={copied} />
     </>
   );
-}
-
-/**
- * The open Job read whole, or `null` where the read has not landed.
- *
- * Checked against the id it was asked for: `watched` lags the selection by a
- * round trip, so the detail on hand can still be the Job that was open a moment
- * ago — and a transcript labelled from another Job's workflow would name steps
- * that never ran.
- */
-function wholeOf(watched: Watched, jobId: string): JobWhole | null {
-  return watched.state === "read" && watched.jobId === jobId ? watched.detail : null;
 }

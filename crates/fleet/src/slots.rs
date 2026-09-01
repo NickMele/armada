@@ -102,6 +102,15 @@ impl Slots {
         self.held.len()
     }
 
+    /// How many Jobs may be worked at once. `settings.concurrency-cap`.
+    ///
+    /// **Read beside [`Slots::count`] and never on its own.** "2 of 2" is one
+    /// fact and a bound with no occupancy beside it says nothing about whether
+    /// anything can start.
+    pub(crate) fn cap(&self) -> usize {
+        self.cap.jobs()
+    }
+
     /// Whether another Job may be admitted. **The predicate `admit_next` opens
     /// with, and the one `queued_reason` answers `waiting_on_resources` from.**
     /// One answer, not two — a Board saying a Job is blocked while Fleet is
