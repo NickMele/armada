@@ -1,5 +1,7 @@
 import { CircleDot, Eye, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { Button } from "../../primitives/Button/Button";
+import { Kbd } from "../../primitives/Kbd/Kbd";
 import { ActivityLog, type ActivityEntry } from "../../compositions/ActivityLog/ActivityLog";
 import {
   ChangedFiles,
@@ -317,7 +319,8 @@ const PREVIEW: ActivityEntry[] = [
   { id: "5", at: "14:31:58", actor: "drone", summary: "thinking" },
 ];
 
-const WHOLE: ActivityEntry[] = [
+/** Every entry the step carried, which is what the log sheet draws. */
+export const WHOLE: ActivityEntry[] = [
   PREVIEW[0]!,
   {
     id: "1b",
@@ -339,7 +342,7 @@ const WHOLE: ActivityEntry[] = [
  * drawing draws it; the surface cannot reach it yet, and that is reported
  * rather than papered over with a shorter fixture.
  */
-const PRODUCED_FILES: ChangedFile[] = [
+export const PRODUCED_FILES: ChangedFile[] = [
   { path: "packages/settings/src/selectors.ts", change: "modified", added: 61, deleted: 4 },
   { path: "packages/settings/src/reducer.ts", change: "modified", added: 12, deleted: 27 },
   { path: "packages/settings/src/index.ts", change: "added", added: 21 },
@@ -353,6 +356,25 @@ const PRODUCED = (
  * The story, in the order it happened. **Same three chapters at every state** —
  * what changes is which one is the reason you are here.
  */
+/**
+ * The affordance on a chapter whose content has no end.
+ *
+ * **It names its own destination and it is on the header line.** The log and
+ * the diff open as a trailing sheet rather than in place — 1676 entries and a
+ * whole patch are not longer versions of a preview — so there is no body for
+ * the control to sit under, and the word is never *more*. Its binding is drawn
+ * inline, which is Journey 4's stated departure from the contract: a missing
+ * one is then visible, which is how the `open_log` gap was found.
+ */
+export function chapterAct(label: string, binding: string) {
+  return (
+    <Button variant="ghost" size="sm">
+      {label}
+      <Kbd>{binding}</Kbd>
+    </Button>
+  );
+}
+
 export const CHAPTERS: StepChapter[] = [
   {
     id: "instructions",
@@ -372,8 +394,7 @@ export const CHAPTERS: StepChapter[] = [
     live: true,
     summary: "47 entries · every line opens",
     preview: <ActivityLog entries={PREVIEW} />,
-    content: <ActivityLog entries={WHOLE} />,
-    openLabel: "Open the log — all 47 entries",
+    act: chapterAct("Open the log", "Enter"),
   },
   {
     id: "produced",
@@ -383,8 +404,7 @@ export const CHAPTERS: StepChapter[] = [
     // rows cannot disagree about what the reading found.
     summary: changedFilesSummary(PRODUCED_FILES, true),
     preview: PRODUCED,
-    content: PRODUCED,
-    openLabel: "Open the diff — 3 files",
+    act: chapterAct("Open the diff", "f"),
   },
 ];
 
@@ -402,7 +422,7 @@ export const REPAIR_CHAPTERS: StepChapter[] = [
     ordinal: 2,
     title: "Activity log",
     summary: "88 entries · ended 14:47:11",
-    openLabel: "Open the log — all 88 entries",
+    act: chapterAct("Open the log", "Enter"),
     preview: (
       <ActivityLog
         entries={[
@@ -431,7 +451,6 @@ export const REPAIR_CHAPTERS: StepChapter[] = [
         openId="r2"
       />
     ),
-    content: <ActivityLog entries={WHOLE} />,
   },
   {
     id: "produced",
@@ -441,7 +460,6 @@ export const REPAIR_CHAPTERS: StepChapter[] = [
     preview:
       "The work is on fix/settings-split-selectors and the Drone is editing it now. Nothing was " +
       "thrown away and nothing was rolled back.",
-    content: PRODUCED,
-    openLabel: "Open the diff — 4 files",
+    act: chapterAct("Open the diff", "f"),
   },
 ];

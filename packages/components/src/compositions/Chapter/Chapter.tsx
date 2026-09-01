@@ -63,6 +63,17 @@ export type ChapterProps = {
   open?: boolean;
   /** Open or close. Absent draws the header as a label, not a control. */
   onToggle?: () => void;
+  /**
+   * The control on the header line — `Open the log`, `Open the diff`.
+   *
+   * **The affordance is on the header rather than at the foot of the body**,
+   * because what these two chapters open is a trailing sheet and not a body: a
+   * chapter whose content has no end leaves the panel, so there is no body for
+   * the control to sit under. It is a sibling of the header rather than inside
+   * it — a control nested in a control is one target a pointer cannot tell
+   * apart, and invalid besides.
+   */
+  act?: ReactNode;
   /** The chapter's contents. */
   children?: ReactNode;
   /**
@@ -98,6 +109,7 @@ export function Chapter({
   tone = "neutral",
   open = true,
   onToggle,
+  act,
   children,
   moreLabel,
   onMore,
@@ -121,19 +133,22 @@ export function Chapter({
 
   return (
     <section className="armada-chapter" data-tone={tone} data-open={open || undefined}>
-      {onToggle === undefined ? (
-        <div className="armada-chapter__head">{head}</div>
-      ) : (
-        <button
-          type="button"
-          className="armada-chapter__head"
-          aria-expanded={open}
-          aria-controls={bodyId}
-          onClick={onToggle}
-        >
-          {head}
-        </button>
-      )}
+      <div className="armada-chapter__line">
+        {onToggle === undefined ? (
+          <div className="armada-chapter__head">{head}</div>
+        ) : (
+          <button
+            type="button"
+            className="armada-chapter__head"
+            aria-expanded={open}
+            aria-controls={bodyId}
+            onClick={onToggle}
+          >
+            {head}
+          </button>
+        )}
+        {act === undefined ? null : <div className="armada-chapter__act">{act}</div>}
+      </div>
 
       {/* Kept in the document while collapsed so the header's `aria-controls`
           names something. Hidden, not unmounted — and the activity log is

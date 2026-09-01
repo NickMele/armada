@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 
 /**
  * The four button variants of the design system contract.
@@ -15,6 +15,13 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "destructive";
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  /**
+   * The element, for a caller that has to move focus to it — a sheet lands
+   * focus on its close. React 19 passes `ref` to a function component as an
+   * ordinary prop, so it reaches the element through the spread below and only
+   * the type needed widening.
+   */
+  ref?: Ref<HTMLButtonElement>;
   variant?: ButtonVariant;
   /** `sm` inside table rows. Every button in one group takes the same size. */
   size?: "default" | "sm";

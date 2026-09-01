@@ -99,9 +99,16 @@
   color: var(--fg-default);
 }
 
+/* The summary and the subject read as one sentence — `Read` then the path,
+   `Bash` then the command — so the summary is only as wide as its words and the
+   subject takes the slack. It was the other way round, which read fine in a
+   602px panel and wrong the moment the log moved onto a sheet: the verb sat at
+   one edge and its object at the other, with a hand of empty column between
+   them. Journey 4 draws them adjacent in every frame that has a log. */
 .armada-activity__summary {
-  flex: 1;
+  flex: none;
   min-width: 0;
+  max-width: 100%;
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-default);
@@ -112,8 +119,8 @@
 
 /* The tool, the Check id, the command. Machine-derived, so mono. */
 .armada-activity__subject {
-  flex: none;
-  max-width: 40%;
+  flex: 1;
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);

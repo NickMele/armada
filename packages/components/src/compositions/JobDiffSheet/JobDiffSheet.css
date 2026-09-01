@@ -1,0 +1,144 @@
+/* The Job's patch on a trailing sheet — Journey 4, frame 4j. The layer and its
+   header are `Sheet` and the patch itself is `UnifiedDiff`; what lives here is
+   the file rail, which is the one step-scoped fact a Job-wide patch carries.
+
+   MISSING TOKENS on the line below.
+   --armada-hairline: no border-width token exists in packages/tokens.
+   --armada-rail-width: the file rail. The drawing measures it 210px, and 150px
+     at the floor; both are off the 4px grid, so each is composed from the
+     spacing scale at the nearest step — 208 and 152. No width token describes a
+     rail inside an overlay: the --sidebar-* range is the shell's rail, which is
+     a different thing. Reported, with the drawn values.
+   --armada-band-ground: a rail on an overlay is one surface step under it, and
+     no token carries "sunken, against --bg-overlay". The same mix the drawing
+     makes. Reported.
+   --armada-rail-edge: the selected file's leading edge. --row-focus-bar means
+     focus; a rail's selection is not focus, so it cannot borrow it. */
+.armada-diff-sheet {
+  --armada-hairline: var(--border-width);
+  /* 208px, drawn 210 */
+  --armada-rail-width: calc(var(--space-12) * 4 + var(--space-4));
+  /* 152px, drawn 150 */
+  --armada-rail-width-floor: calc(var(--space-12) * 3 + var(--space-2));
+  --armada-band-ground: color-mix(in srgb, var(--bg-sunken) 55%, var(--bg-overlay));
+  --armada-rail-edge: var(--edge-active);
+}
+
+.armada-diff-sheet {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.armada-diff-sheet__rail {
+  flex: none;
+  width: var(--armada-rail-width);
+  display: flex;
+  flex-direction: column;
+  gap: var(--border-width);
+  padding: var(--space-3);
+  overflow: auto;
+  background: var(--armada-band-ground);
+  border-right: var(--armada-hairline) solid var(--border-default);
+}
+
+.armada-sheet[data-floor] .armada-diff-sheet__rail {
+  width: var(--armada-rail-width-floor);
+}
+
+.armada-diff-sheet__rail-head {
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* One file. The whole row is the control, as every row in this app is. */
+.armada-diff-sheet__file {
+  display: flex;
+  flex-direction: column;
+  gap: var(--border-width);
+  padding: var(--space-2);
+  border: 0;
+  border-left: var(--armada-rail-edge) solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.armada-diff-sheet__file:hover {
+  background: var(--bg-hover);
+}
+
+.armada-diff-sheet__file[data-on] {
+  background: var(--bg-hover);
+  border-left-color: var(--accent);
+}
+
+/* Truncated from the front. The end of a path names the file and the front of
+   it names the tree, so an ellipsis belongs at the start — `direction: rtl` on
+   the box with the text itself in a `bdi`, which keeps the characters in their
+   own order while the overflow moves to the other end. */
+.armada-diff-sheet__path {
+  direction: rtl;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.armada-diff-sheet__file[data-on] .armada-diff-sheet__path {
+  color: var(--fg-default);
+}
+
+.armada-diff-sheet__counts {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.armada-diff-sheet__rail-note {
+  margin-top: var(--space-1);
+  padding: var(--space-2);
+  border-top: var(--armada-hairline) solid var(--border-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-wrap: pretty;
+}
+
+/* The patch. It takes every pixel of slack and scrolls in both directions —
+   a machine-written line is not re-wrapped to fit a column. */
+.armada-diff-sheet__patch {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: var(--space-3) 0;
+  background: var(--bg-sunken);
+}
+
+.armada-diff-sheet__mono {
+  font-family: var(--font-mono);
+}
+
+.armada-diff-sheet__added {
+  font-family: var(--font-mono);
+  color: var(--diff-add-fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.armada-diff-sheet__removed {
+  font-family: var(--font-mono);
+  color: var(--diff-del-fg);
+  font-variant-numeric: tabular-nums;
+}
