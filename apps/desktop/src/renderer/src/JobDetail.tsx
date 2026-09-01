@@ -32,6 +32,7 @@
 // region is gone: the turns are chapter two, the files are chapter three, and
 // the raw event table is not something this screen needs at all.
 
+import { GAMING_PATTERN } from "../../shared/generated/vocabulary";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -44,6 +45,7 @@ import {
   type RunTreeStep,
   type StepChapter,
   type StepNotice,
+  changedFilesSummary,
 } from "@armada/components";
 
 import type {
@@ -530,7 +532,17 @@ function noticeOf(
     children: (
       <>
         {flagged.length === 0 ? null : (
-          <GamingFlags flags={flagged} said={WHAT_THE_CHECK_FOUND} citation="whole" />
+          <GamingFlags
+            flags={flagged.map((flag) => ({
+              ...flag,
+              // The registry carries a verb per pattern since #279; the wire
+              // spelling is the key, never the copy. A pattern with no row
+              // falls back to it rather than rendering nothing.
+              verb: GAMING_PATTERN[flag.pattern]?.verb ?? undefined,
+            }))}
+            said={WHAT_THE_CHECK_FOUND}
+            citation="whole"
+          />
         )}
         <span>{recourse.stands}</span>
         {recourse.withheld === undefined ? null : (
@@ -652,7 +664,11 @@ function chaptersOf({
       id: DIFF_CHAPTER,
       ordinal: 3,
       title: "Produced",
-      summary: touched === undefined ? undefined : `${touched.files.length} files`,
+      // The header carries the summary, so a collapsed chapter still says what
+      // the step produced. `changedFilesSummary` is the one reading of it —
+      // the body draws the same files from the same answer.
+      summary:
+        touched === undefined ? undefined : changedFilesSummary(filesOf(touched), touched.plan_declared),
       preview:
         touched === undefined ? (
           <p className="text-2xs text-fg-muted">{whyNoFootprint(job.assigned_drone !== undefined)}</p>
