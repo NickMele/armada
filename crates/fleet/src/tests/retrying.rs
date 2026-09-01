@@ -15,6 +15,7 @@
 //! makes a spent budget testable at all. A test that calls `turn` once and
 //! asserts a failure would pass against a system with no retries in it.
 
+use api::Daemon;
 use core_model::{EscalationTrigger, JobStatus, StepId, StepState, StepVerdict};
 use testkit::{FakeWorkProduct, Gate, Sketch};
 
@@ -418,6 +419,62 @@ async fn both_runs_of_a_retried_step_are_on_the_record() {
         every[0].record[0].output_path, every[1].record[0].output_path,
         "and each run's output is its own file, so the first run's row does not \
          point at the second run's log"
+    );
+}
+
+/// **The rows a run tree draws.** `state` and `last_verdict` are both the
+/// latest, so before this a step that passed on its second try and one that
+/// passed on its first were the same message — and which attempt a person was
+/// looking at was reachable from no field on `get_job`.
+#[tokio::test]
+async fn get_job_says_how_many_times_a_step_ran_and_what_each_run_came_to() {
+    let home = TempDir::new();
+    let fleet = a_fleet_holding(
+        &home,
+        FakeWorkProduct::changed(&["src/routes.rs"]),
+        gated_on(UNHAPPY, 1),
+        1,
+    );
+
+    let job = fleet
+        .propose(a_proposal("register the route"))
+        .await
+        .unwrap();
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
+    fleet.turn().await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
+    fleet.turn().await.unwrap();
+
+    let detail = fleet.get_job(ipc::JobId::from(job.id())).await.unwrap();
+    let implement = detail
+        .steps
+        .iter()
+        .find(|step| step.step_id.as_str() == "implement")
+        .expect("the one step");
+    assert_eq!(
+        implement.attempts.len(),
+        2,
+        "one entry per run, oldest first: {:?}",
+        implement.attempts
+    );
+    assert_eq!(implement.attempts[0].attempt, 1);
+    assert_eq!(
+        implement.attempts[0].outcome.as_wire(),
+        "retrying",
+        "the first run was handed back"
+    );
+    assert!(
+        implement.attempts[0].why.is_some(),
+        "and it says which trigger handed it back: {:?}",
+        implement.attempts[0]
+    );
+    assert_eq!(implement.attempts[1].attempt, 2);
+    assert!(
+        implement.attempts[1].ended_at.is_some(),
+        "the second run is over too: {:?}",
+        implement.attempts[1]
     );
 }
 

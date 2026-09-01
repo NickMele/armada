@@ -26,6 +26,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::attempt::StepAttempt;
 use crate::checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 use crate::enums::{
     AdvanceGate, CriterionSource, DependencyDirection, JudgeVerdict, Recourse, StepState,
@@ -75,6 +76,13 @@ pub struct StepFacts {
     /// What the gaming check flagged, in the order it answered. Empty on a step
     /// that declares none and on a step nothing was found on.
     pub flagged: Vec<Flagged>,
+    /// Every run of this step, oldest first, folded from the Job's own log.
+    ///
+    /// **Not a row and not the workflow's** — the other facts here are one or
+    /// the other, and this is the third source Fleet holds: `job_events`, which
+    /// is what `store::step_attempt` already counts to key the per-attempt
+    /// tables. Empty on a step nothing has entered.
+    pub attempts: Vec<StepAttempt>,
     /// The Judge call out on this step **right now**. `None` on every step but
     /// the one Fleet is asking about, and on that one too between calls.
     ///
@@ -449,6 +457,21 @@ pub struct StepDetail {
     /// found and where — the same relation `judged` has to a `gate_failure`.
     /// Empty on every step nothing was flagged on, which is nearly all of them.
     pub flagged: Vec<Flagged>,
+    /// Every run of this step, oldest first. **`Attempt 1 refused`, `Attempt 2
+    /// advanced`** — the rows a rail draws under a step that was worked more
+    /// than once.
+    ///
+    /// It is the only place an earlier run's outcome survives:
+    /// [`last_verdict`](StepDetail::last_verdict) and [`state`](StepDetail::state)
+    /// are both the latest, so a step that passed on its third try and one that
+    /// passed on its first were the same message. Empty on a step nothing has
+    /// entered, which is every step of a Job that has not reached it.
+    ///
+    /// **A count is not carried beside it.** The list's length is the count,
+    /// and the pair could disagree — the same argument
+    /// [`JobDetail::steps`] makes about its own.
+    #[serde(default)]
+    pub attempts: Vec<StepAttempt>,
     /// The Judge call out on this step **right now**, where one is.
     ///
     /// **Absent is the ordinary case and it is not a gap.** A step nothing is
@@ -575,6 +598,9 @@ impl StepDetail {
                 ),
             judged: facts.map(|facts| facts.judged.clone()).unwrap_or_default(),
             flagged: facts.map(|facts| facts.flagged.clone()).unwrap_or_default(),
+            attempts: facts
+                .map(|facts| facts.attempts.clone())
+                .unwrap_or_default(),
             judging: facts.and_then(|facts| facts.judging.clone()),
             entered_at: step.entered_at().into(),
             updated_at: step.updated_at().into(),
