@@ -117,7 +117,7 @@ pub use evidence::{
 pub use gate::{apply, rule_on, CheckBudget, CheckOutput, Ruling};
 pub use headroom::{Bytes, Headroom, InUse, Machine, Polling, Reading, Short, Spare, TheMachine};
 pub use judging::{Aloft, CallFailed, JudgeBudget, Judging, Look, Marking};
-pub use keeping::{deliverables_dir, Keeping};
+pub use keeping::{deliverables_dir, kept_deliverables, Keeping};
 pub use mint::{Mint, UlidMint};
 pub use overruling::Overruling;
 pub use peer::{NotACaller, PeerOf};
