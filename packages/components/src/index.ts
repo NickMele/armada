@@ -113,3 +113,8 @@ export * from "./compositions/StepRow/StepRow";
 // One row of Where things are. A path opens where it lives; an identifier
 // copies; and the label column says which is which before the value is read.
 export * from "./compositions/WhereRow/WhereRow";
+
+// The step's story. A chapter collapses to its header line and never to
+// nothing; a log entry opens in place to its payload, and every line opens.
+export * from "./compositions/Chapter/Chapter";
+export * from "./compositions/LogEntry/LogEntry";

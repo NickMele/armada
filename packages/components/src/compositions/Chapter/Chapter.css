@@ -1,0 +1,153 @@
+/* One chapter of a step's story. The drawing's `.chapter`, `.chead`, `.cbody`
+   and `.more`.
+
+   A well inside the panel: the panel is --bg-raised and this sits one step
+   down at --bg-sunken, so the story reads as a record inside the surface
+   rather than as three more cards on it. `overflow: hidden` is what lets the
+   header carry the top corners. */
+.armada-chapter {
+  /* The drawn 14px, the body's padding and the header's inline padding. No
+     token spells it: --space-3 plus a half --space-1. */
+  --armada-chapter-pad: calc(var(--space-3) + var(--space-1) / 2);
+  background: var(--bg-sunken);
+  border: var(--border-width) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* Between the well and the panel — the header is a lid on the chapter, not a
+   surface of its own. */
+.armada-chapter__head {
+  display: flex;
+  align-items: center;
+  /* The drawn 10px: --space-2 plus a half --space-1. */
+  gap: calc(var(--space-2) + var(--space-1) / 2);
+  width: 100%;
+  /* The drawn 9px: --space-2 plus a quarter --space-1. */
+  padding: calc(var(--space-2) + var(--space-1) / 4) var(--armada-chapter-pad);
+  border: 0;
+  background: color-mix(in srgb, var(--bg-raised) 55%, var(--bg-sunken));
+  text-align: left;
+  font-family: var(--font-sans);
+  min-width: 0;
+}
+
+/* The rule under the header belongs to the open chapter. A collapsed chapter
+   is one line, and a line with a rule at the bottom of it reads as a body that
+   failed to render. */
+.armada-chapter[data-open] .armada-chapter__head {
+  border-bottom: var(--border-width) solid var(--border-subtle);
+}
+
+button.armada-chapter__head {
+  cursor: pointer;
+}
+
+button.armada-chapter__head:hover {
+  background: var(--bg-raised);
+}
+
+button.armada-chapter__head:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--focus-ring-offset) * -1);
+}
+
+/* The number. Mono and --border-strong: it orders the chapters and is not
+   read for itself, so it is the quietest thing on the line. */
+.armada-chapter__n {
+  flex: none;
+  width: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--border-strong);
+}
+
+.armada-chapter__name {
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The fact that makes a collapsed chapter worth leaving collapsed. Pushed to
+   the trailing edge, so three chapters' meta line up down one column. */
+.armada-chapter__meta {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space-2) - var(--space-1) / 4);
+  margin-inline-start: auto;
+  flex: none;
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* Streaming. The running dot, at the size the error treatment's dot already
+   uses — a count says how many there are and only this says they are still
+   arriving. It does not pulse: the pulse is one per screen and it belongs on
+   the step the Drone is working. */
+.armada-chapter__live {
+  flex: none;
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  background: var(--status-running);
+}
+
+/* The chapter that asks rather than reports. Amber on the header alone, and a
+   stronger edge on the chapter: what is inside it is not a warning, and a
+   tinted body would render a step stopped with nothing wrong as a failure. */
+.armada-chapter[data-tone="waiting"] {
+  border-color: var(--border-strong);
+}
+
+.armada-chapter[data-tone="waiting"] .armada-chapter__head {
+  background: var(--status-awaiting-review-bg);
+}
+
+.armada-chapter__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--armada-chapter-pad);
+  min-width: 0;
+}
+
+.armada-chapter__body[hidden] {
+  display: none;
+}
+
+/* The one thing in a chapter that leads somewhere. The accent, at the start of
+   its line rather than filling it — a full-width control at the foot of every
+   chapter would read as three buttons stacked. */
+.armada-chapter__more {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--space-1) + var(--space-1) / 4);
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--accent);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-chapter__more:hover {
+  color: var(--accent-hover);
+}
+
+.armada-chapter__more:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}

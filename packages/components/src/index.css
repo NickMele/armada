@@ -91,3 +91,7 @@
 
 /* One row of Where things are — a path that opens, an identifier that copies. */
 @import "./compositions/WhereRow/WhereRow.css";
+
+/* The step's story: one chapter, and one line of the activity log inside it. */
+@import "./compositions/Chapter/Chapter.css";
+@import "./compositions/LogEntry/LogEntry.css";
