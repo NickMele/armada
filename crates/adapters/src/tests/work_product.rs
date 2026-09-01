@@ -6,7 +6,7 @@
 //! each of those, and the guess about untracked directories has already been
 //! wrong once (see [`repo::TempRepo::status_via_the_library`]).
 
-use adapter_traits::{Change, Vcs, WorkProduct, WorktreeSpec};
+use adapter_traits::{Change, LineCount, Vcs, WorkProduct, WorktreeSpec};
 
 use crate::tests::repo::TempRepo;
 use crate::worktree::GitVcs;
@@ -101,6 +101,81 @@ fn each_file_carries_what_happened_to_it() {
             ("written.txt", Change::Added),
         ]
     );
+}
+
+/// **What the counted reading buys over the file list.** The same three files,
+/// each with what it gained and lost — the numbers a finished Job's footprint
+/// carries, and the ones the live seam deliberately does not.
+///
+/// A file written and never staged counts every line as added, for the reason
+/// the module gives: an unstaged new file is work.
+#[test]
+fn each_counted_file_carries_the_lines_it_gained_and_lost() {
+    let repo = TempRepo::with_a_commit();
+    repo.write("doomed.txt", "one\ntwo\n");
+    repo.write("edited.txt", "one\ntwo\nthree\n");
+    repo.commit_everything("two files to work on");
+    let worktree = worktree_for(&repo);
+    std::fs::remove_file(format!("{}/doomed.txt", worktree.path())).expect("the removal");
+    std::fs::write(
+        format!("{}/edited.txt", worktree.path()),
+        "one\nTWO\nthree\n",
+    )
+    .expect("the edit");
+    std::fs::write(format!("{}/written.txt", worktree.path()), "new\nfile\n")
+        .expect("the new file");
+
+    let counted = GitVcs::new().counted_files(&worktree).expect("a reading");
+    let mut seen: Vec<(&str, Change, Option<(u32, u32)>)> = counted
+        .files()
+        .iter()
+        .map(|file| {
+            (
+                file.path(),
+                file.change(),
+                file.lines().map(|at| (at.added(), at.deleted())),
+            )
+        })
+        .collect();
+    seen.sort_by_key(|(path, _, _)| *path);
+    assert_eq!(
+        seen,
+        vec![
+            ("doomed.txt", Change::Deleted, Some((0, 2))),
+            ("edited.txt", Change::Modified, Some((1, 1))),
+            ("written.txt", Change::Added, Some((2, 0))),
+        ]
+    );
+}
+
+/// **Zero is a measurement and absent is not.** A file with nothing in it was
+/// counted and the answer is `0` and `0`; a file nothing could count carries no
+/// numbers at all. A reader that took one for the other would call an empty
+/// file and a binary one the same thing.
+#[test]
+fn a_file_with_no_lines_in_it_counts_zero_rather_than_nothing() {
+    let repo = TempRepo::with_a_commit();
+    let worktree = worktree_for(&repo);
+    std::fs::write(format!("{}/empty.txt", worktree.path()), "").expect("an empty new file");
+
+    let counted = GitVcs::new().counted_files(&worktree).expect("a reading");
+    let empty = counted
+        .files()
+        .iter()
+        .find(|file| file.path() == "empty.txt")
+        .expect("the empty file is in the reading");
+    assert_eq!(empty.lines(), Some(LineCount::of(0, 0)));
+}
+
+/// A count is a reading like any other: it fails rather than answering an
+/// empty list, for the reason [`changed_files`] does.
+///
+/// [`changed_files`]: adapter_traits::WorkProduct::changed_files
+#[test]
+fn a_worktree_that_is_not_there_cannot_be_counted_either() {
+    let missing = adapter_traits::Worktree::at("/armada-no-such-worktree", "armada/nope");
+    let read = GitVcs::new().counted_files(&missing);
+    assert!(read.is_err(), "an unreadable worktree answered a count");
 }
 
 /// The main line moving on must not make a Job look busier than it is. The base

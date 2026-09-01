@@ -15,15 +15,19 @@
 //! fake with one fixed answer cannot tell a Drone that is writing from one that
 //! has stopped.
 //!
-//! Two ledgers: [`asked`](FakeWorkProduct::asked) is every reading of any kind,
-//! and [`listed`](FakeWorkProduct::listed) is the file-list ones alone. See
-//! `listed` for why the live view needs its own.
+//! Three ledgers: [`asked`](FakeWorkProduct::asked) is every reading of any
+//! kind, [`listed`](FakeWorkProduct::listed) is the file-list ones alone, and
+//! [`counted`](FakeWorkProduct::counted) is the ones that asked for line
+//! counts. See each for why one total could not answer for the others.
 
 use std::error::Error;
 use std::fmt;
 use std::sync::{Arc, Mutex};
 
-use adapter_traits::{Change, Changed, ChangedFile, Footprint, Patch, WorkProduct, Worktree};
+use adapter_traits::{
+    Change, Changed, ChangedFile, Counted, CountedFile, Footprint, LineCount, Patch, WorkProduct,
+    Worktree,
+};
 
 /// Why the fake would not read the worktree.
 ///
@@ -53,7 +57,15 @@ struct Wrote {
     path: String,
     change: Change,
     revision: usize,
+    /// What the file gained and lost, where the test said. `None` is a file
+    /// nothing could count, which is the default because a path and a kind are
+    /// what a test usually means by a change.
+    lines: Option<LineCount>,
 }
+
+/// One file a test writes into the fake worktree: the path, what happened to
+/// it, and what it gained and lost where that is part of the case.
+pub type Written<'a> = (&'a str, Change, Option<(u32, u32)>);
 
 /// What the fake worktree holds, as a handle rather than a value.
 ///
@@ -69,8 +81,19 @@ impl Holding {
     /// Put bytes at these paths. A path named here holds something it did not
     /// hold before, whether or not it was already in the worktree.
     pub fn wrote(&self, files: &[(&str, Change)]) {
+        self.wrote_counting(
+            &files
+                .iter()
+                .map(|(path, change)| (*path, *change, None))
+                .collect::<Vec<Written<'_>>>(),
+        );
+    }
+
+    /// The same, with what each file gained and lost. `None` stands in for a
+    /// file the counter could not read, which is absent and never zero.
+    pub fn wrote_counting(&self, files: &[Written<'_>]) {
         let mut held = self.0.lock().expect("not poisoned");
-        for (path, change) in files {
+        for (path, change, lines) in files {
             let revision = held
                 .iter()
                 .find(|was| was.path == *path)
@@ -81,6 +104,7 @@ impl Holding {
                 path: path.to_string(),
                 change: *change,
                 revision,
+                lines: lines.map(|(added, deleted)| LineCount::of(added, deleted)),
             });
         }
     }
@@ -101,6 +125,7 @@ pub struct FakeWorkProduct {
     refuse: Mutex<Option<&'static str>>,
     asked: Mutex<Vec<String>>,
     listed: Mutex<Vec<String>>,
+    counted: Mutex<Vec<String>>,
     /// Whether the work moves between one footprint and the next.
     ///
     /// A footprint is read at a step's start and again at its gate, and what
@@ -146,6 +171,24 @@ impl FakeWorkProduct {
             ..FakeWorkProduct::default()
         };
         fake.wrote(files);
+        fake
+    }
+
+    /// A worktree in which these files changed, each with the lines it gained
+    /// and lost. The constructor for a test whose subject is the count — and
+    /// `None` for a file is the reading the record has to keep apart from zero.
+    pub fn counting(files: &[Written<'static>]) -> FakeWorkProduct {
+        let fake = FakeWorkProduct {
+            patch: Mutex::new(
+                files
+                    .iter()
+                    .map(|(path, _, _)| format!("--- a/{path}\n+++ b/{path}\n"))
+                    .collect(),
+            ),
+            moving: true,
+            ..FakeWorkProduct::default()
+        };
+        fake.changed.wrote_counting(files);
         fake
     }
 
@@ -227,6 +270,16 @@ impl FakeWorkProduct {
         self.asked.lock().expect("not poisoned").clone()
     }
 
+    /// Every worktree path this fake was asked to **count**, in order.
+    ///
+    /// Its own ledger for [`listed`](FakeWorkProduct::listed)'s reason turned
+    /// the other way: counting is the reading a live view may never take, so a
+    /// test proving it happens once per Job must not be reading a total a
+    /// watcher also moves.
+    pub fn counted(&self) -> Vec<String> {
+        self.counted.lock().expect("not poisoned").clone()
+    }
+
     /// Every worktree path this fake was asked for a **file list**, in order —
     /// the live view a Bridge watches, and the scope check. The step's
     /// footprint readings are not in it: see this module.
@@ -262,6 +315,19 @@ impl WorkProduct for FakeWorkProduct {
             self.read(worktree)?
                 .into_iter()
                 .map(|was| ChangedFile::new(was.path, was.change))
+                .collect(),
+        ))
+    }
+
+    fn counted_files(&self, worktree: &Worktree) -> Result<Counted, Self::Error> {
+        self.counted
+            .lock()
+            .expect("not poisoned")
+            .push(worktree.path().to_string());
+        Ok(Counted::of(
+            self.read(worktree)?
+                .into_iter()
+                .map(|was| CountedFile::new(ChangedFile::new(was.path, was.change), was.lines))
                 .collect(),
         ))
     }

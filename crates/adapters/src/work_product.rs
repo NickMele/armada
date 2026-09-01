@@ -25,7 +25,10 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-use adapter_traits::{Change, Changed, ChangedFile, Footprint, Patch, WorkProduct, Worktree};
+use adapter_traits::{
+    Change, Changed, ChangedFile, Counted, CountedFile, Footprint, LineCount, Patch, WorkProduct,
+    Worktree,
+};
 use git2::{Delta, Diff, DiffOptions, Oid, Repository};
 
 use crate::error::ReadWorkProductError;
@@ -38,6 +41,12 @@ impl WorkProduct for GitVcs {
         let (repo, base) = opened(worktree)?;
         let diff = diff_of(&repo, base, worktree)?;
         Ok(Changed::of(files(&diff)))
+    }
+
+    fn counted_files(&self, worktree: &Worktree) -> Result<Counted, Self::Error> {
+        let (repo, base) = opened(worktree)?;
+        let diff = diff_of(&repo, base, worktree)?;
+        Ok(Counted::of(counted(&diff)))
     }
 
     fn footprint(&self, worktree: &Worktree) -> Result<Footprint, Self::Error> {
@@ -240,6 +249,37 @@ fn files(diff: &Diff<'_>) -> Vec<ChangedFile> {
                 })
         })
         .collect()
+}
+
+/// The same paths, each with the lines it gained and lost.
+///
+/// **One patch per delta, which is the whole cost of the reading.** libgit2
+/// counts by running the same xdiff that renders the text, so this is the
+/// expensive call the trait's comment measures — and there is no cheaper door:
+/// `git_diff_get_stats` walks the same patches and answers only totals.
+///
+/// **A file this cannot count keeps its row and loses its numbers.** A binary
+/// file has no patch to build and libgit2 says so by answering nothing; a patch
+/// that errors is the same absence for a reader. Dropping the file instead, or
+/// failing the whole reading over one of them, would spend the record — which
+/// is the path list — to protect the annotation on it.
+fn counted(diff: &Diff<'_>) -> Vec<CountedFile> {
+    let mut counted = Vec::with_capacity(diff.deltas().len());
+    for (index, delta) in diff.deltas().enumerate() {
+        let Some(path) = delta.new_file().path().or_else(|| delta.old_file().path()) else {
+            continue;
+        };
+        let file = ChangedFile::new(path.to_string_lossy().into_owned(), change(delta.status()));
+        counted.push(CountedFile::new(file, lines(diff, index)));
+    }
+    counted
+}
+
+/// What one delta added and removed, or nothing where libgit2 will not say.
+fn lines(diff: &Diff<'_>, index: usize) -> Option<LineCount> {
+    let patch = git2::Patch::from_diff(diff, index).ok()??;
+    let (_context, added, deleted) = patch.line_stats().ok()?;
+    Some(LineCount::of(added as u32, deleted as u32))
 }
 
 /// git's word for what happened, in the vocabulary the wire carries.
