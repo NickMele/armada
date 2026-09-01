@@ -72,14 +72,26 @@ const SIDES = {
     label: "App",
     absent: "Not built. The drawing has a state the build does not.",
   },
+  /* Bridge's own screens, assembled by `apps/desktop` rather than by a story
+     that imitates it. A third side and not a replacement for `app`: the
+     gallery answers whether a component is drawn right, and this answers
+     whether the screen the app assembles out of them is. */
+  bridge: {
+    dir: join(shots, "bridge"),
+    label: "Bridge",
+    absent: "Not assembled. The drawing has a state Bridge does not.",
+  },
 };
 
 const AGAINST = { design: { left: "design", right: "app" } };
 
 const USAGE = `shoot — screenshot a screen and its drawing, and pair them
 
-  pnpm shoot                        the app: build the gallery, capture every
-                                    marked screen story to .shots/app/
+  pnpm shoot                        the components: build the gallery, capture
+                                    every marked screen story to .shots/app/
+  pnpm shoot --bridge               the app: build Bridge's own screens from
+                                    apps/desktop and capture them to
+                                    .shots/bridge/
   pnpm shoot --design <file.dc.html>
                                     a drawing: capture every [data-shot] frame
                                     to .shots/design/, and cache the source
@@ -212,6 +224,54 @@ async function shootApp() {
     page_errors: read.failures,
   });
   console.log("\n.shots/app/shots.json — what was captured, for a caller");
+}
+
+// ------------------------------------------------------------------- bridge
+
+/* The app's own screens, and the reason this side exists.
+ *
+ * The gallery's `Screens/Inside a job` hand-builds its header out of four
+ * buttons. It is a drawing of the screen written in React, so a change to
+ * `Acts.tsx` cannot move it — the header could ship rebuilt and this tool would
+ * report the old one, green. Every figure on this side imports the component it
+ * is a shot of. */
+async function shootBridge() {
+  console.log("Building Bridge's screens");
+  const built = await new Promise((done) =>
+    spawn(process.execPath, [join(root, "apps/desktop/screens/build.mjs")], {
+      stdio: "inherit",
+    }).on("exit", done),
+  );
+  if (built !== 0) die("The screens did not build, so there is nothing to capture.");
+
+  const into = SIDES.bridge.dir;
+  rmSync(into, { recursive: true, force: true });
+
+  const page = join(root, "apps/desktop/screens/dist/screens.html");
+  const read = await browse({ page, capture: true, into, width: 1440, height: 1200 });
+
+  if (!read.written.length)
+    die(
+      "No screen is marked, so there is nothing to capture.",
+      "A `*.screens.tsx` exports `title` and `screens`, and each screen states its own mark.",
+    );
+
+  const rows = shotRows(read);
+  printShots(rows, ".shots/bridge/");
+  if (read.failures.length) {
+    console.log("\nThe page reported:");
+    for (const f of read.failures) console.log(`  ${f}`);
+  }
+
+  manifest(join(into, "shots.json"), {
+    tool: "shoot",
+    side: "bridge",
+    captured_at: now(),
+    source: { kind: "screens", page: relative(root, page) },
+    shots: rows,
+    page_errors: read.failures,
+  });
+  console.log("\n.shots/bridge/shots.json — what was captured, for a caller");
 }
 
 // ------------------------------------------------------------------ the drawing
@@ -598,6 +658,7 @@ mkdirSync(shots, { recursive: true });
 try {
   if (argv.includes("--sheet")) await sheet();
   else if (design) await shootDesign(design, { suggest: argv.includes("--suggest") });
+  else if (argv.includes("--bridge")) await shootBridge();
   else await shootApp();
 } finally {
   rmSync(join(shots, ".run"), { recursive: true, force: true });
