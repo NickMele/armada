@@ -51,7 +51,7 @@ export type ChangedFile = {
    * and reads as a value that failed to arrive. A file with neither is a row
    * with an empty count cell, which is every row today.
    *
-   * **Nothing serves these.** `ChangedFile` on the wire is a path, a change
+   * **`TouchedFile.lines` serves these.** `ChangedFile` on the wire is a path, a change
    * kind and a drift mark — "the names, never the bytes" is that seam's own
    * stated rule, and it holds for `Saw::Produced`, `job.files_changed` and the
    * finished job's `TouchedFile` alike. The only route carrying line counts at

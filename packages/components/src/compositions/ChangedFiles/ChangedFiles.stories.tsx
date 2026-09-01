@@ -118,7 +118,7 @@ export const NothingChangedYet: Story = {
 /**
  * The files the drawing lists, each with its own `+61 −4`.
  *
- * **Nothing on the wire fills this.** `ChangedFile` is a path, a change kind
+ * **`TouchedFile.lines` fills this on a finished Job.** `ChangedFile` is a path, a change kind
  * and a drift mark — "the names, never the bytes" is that seam's own rule, and
  * it holds for the live reading, the step's `Saw::Produced` and the finished
  * job's record alike. The only route carrying counts is `get_diff`, which
