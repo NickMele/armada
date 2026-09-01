@@ -1,52 +1,27 @@
 //! One hermetic run of a Bug Job, and the invariants that make it mean
-//! something.
+//! something. **It proves** that a Job reaches `completed_success` **only** by
+//! transitioning — a human approval, a Fleet dispatch, one submission per step,
+//! a gate that ran every check the step declared. That evidence and passing
+//! checks are both required and neither is sufficient. That a Drone's word
+//! reaches no type in the system, so a Drone that says it is done and leaves
+//! escalates rather than completes. That the acceptance criteria and step list
+//! survive every move made on the Job, and that a Job's branch is derived from
+//! its id by the one derivation that ships.
 //!
-//! # What this proves
+//! **Nothing here starts a process, opens a repository or reaches a network**,
+//! so what that leaves out is named rather than implied.
 //!
-//! That a Job reaches `completed_success` **only** by transitioning: through a
-//! human approval, a Fleet dispatch, one submission per step, and a gate that
-//! ran every check the step declared. That evidence and passing checks are both
-//! required and neither is sufficient. That a Drone's word reaches no type in
-//! the system, so a Drone that says it is done and leaves escalates rather than
-//! completes. That the acceptance criteria and the step list a Job was created
-//! with survive every move made on it. And that the branch a Job writes is
-//! derived from its id by the one derivation that ships.
-//!
-//! # What this does not prove
-//!
-//! **Not the merge, which is the milestone's other half.** Nothing here starts
-//! a process, opens a repository or reaches a network, so nothing here observes
-//! an agent doing work, a commit, a push or a pull request. The milestone's
-//! claim is "Armada does a small real task in the Armada repo, and I merge the
-//! branch it wrote"; this file proves the machinery that would carry such a
-//! task, and the run itself is a person's to perform once. What a finished Job
-//! does with its branch — the base it merges into, the rebase, the push, the
-//! pull request — is asserted in `fleet` against a scripted seam and in
-//! `adapters` against a real repository, for the same reason.
-//!
-//! Three more gaps, named rather than implied:
-//!
-//! - **The loop is not driven here.** `Fleet::approve` starts a detached child
-//!   before it can gate anything, and there is no seam that lets it not. The
-//!   loop's own end-to-end test spawns `/bin/cat` for exactly that reason.
-//!   What this file drives is the machine and the gate the loop calls.
-//! - **The workflow's checks are not frozen onto the Job.** `Job` freezes each
-//!   step's id and ordinal at creation; the checks are read from Fleet's
-//!   current `ResolvedWorkflow` when the gate runs. So an `armada.yml` edited
-//!   while a Job waits at the approval gate changes the bar that Job faces,
-//!   which is what `fleet::drafting` says freezing prevents. Asserted below as
-//!   far as it holds, and no further.
-//! - **A retry and a human advance gate are not built**, so nothing here
-//!   asserts about them. A Judge now is: the case below shows the semantic
-//!   tier stopping a step the mechanical tier had cleared. What it does not
-//!   show is a live model — the call is made through Fleet's own runner
-//!   against a scripted verdict, because a suite that reached a model would
-//!   cost money and need a network.
+//! | Not proved here | Where it is, or why not |
+//! |---|---|
+//! | The merge, the milestone's other half | The claim is "Armada does a small real task in the Armada repo, and I merge the branch it wrote". This proves the machinery that would carry such a task and the run itself is a person's to perform once; the base, the rebase, the push and the pull request are asserted in `fleet` against a scripted seam and in `adapters` against a real repository |
+//! | The loop | `Fleet::approve` starts a detached child before it can gate anything and there is no seam that lets it not, so the loop's own end-to-end test spawns `/bin/cat`. What this file drives is the machine and the gate the loop calls |
+//! | The workflow's checks frozen onto the Job | `Job` freezes each step's id and ordinal at creation; the checks are read from Fleet's current `ResolvedWorkflow` when the gate runs, so an `armada.yml` edited while a Job waits at the approval gate changes the bar that Job faces — which is what `fleet::drafting` says freezing prevents. Asserted below as far as it holds, and no further |
+//! | A live model | The Judge call goes through Fleet's own runner against a scripted verdict, because a suite that reached a model would cost money and need a network |
 //!
 //! Everything below is an assertion. The apparatus — the planted clock and
 //! mint, the workflow fixture, and the Job that can only be moved by
-//! transitioning — is in [`bench`], so that what the milestone claims and what
-//! it is claimed against read as two different things.
+//! transitioning — is [`bench`], kept apart so that the claim and what it is
+//! claimed against read as two different things.
 
 // The bench is shared with the other milestone's test and neither uses all of
 // it. Every item in it is reached from one of the two.

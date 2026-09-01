@@ -1,55 +1,28 @@
 //! One hermetic run of a two-step Job across a step boundary, and what has to
-//! be true on both sides of it.
+//! be true on both sides of it. **It proves that a Drone belongs to a workflow
+//! step**: it is put on one, the record says which, it is gone before the next
+//! step's Drone arrives, and that one starts on the same worktree knowing what
+//! the step before it produced. That the bar it is measured against is the one
+//! the Job was created with, not the one the Manifest holds when the boundary
+//! is crossed. And that a redirect arriving where there is no Drone waits,
+//! opens the next Drone's brief, and outlives no further boundary — `#136`.
 //!
-//! # What this claims
-//!
-//! That a Drone belongs to a workflow step. It is put on one step, the record
-//! says which, it is gone before the next step's Drone arrives, and the next
-//! one starts on the same worktree knowing what the step before it produced.
-//! And that the bar it is measured against is the one the Job was created with,
-//! not the one the Manifest holds when the boundary is crossed.
-//!
-//! Written before the code, in the order a Job meets each assertion. Why it
-//! compiles rather than naming APIs that do not exist is
-//! `docs/practices/acceptance-tests.md`.
-//!
-//! And that a redirect arriving where there is no Drone waits, opens the next
-//! Drone's brief, and outlives no further boundary — `#136`'s second rule.
-//!
-//! **All five steps have landed and every assertion below holds**, and the file
-//! was green before the milestone was, because nothing here observes a process.
 //! **The pointer is presence and the log is durable**: a step's
 //! `assigned_drone` is null once its Drone has gone, so which Drone worked
 //! which step is the `step_id` on each drone row. **The brief is assembled here
-//! rather than read off a spawn**: what a real boundary hands to
-//! `fleet::spawning` is the `Crossed` built below, by `fleet::boundary` — and
-//! for the waiting redirect, by `fleet::spawning` itself, which reads it off
-//! the record on every spawn so that no act reaching one can forget it.
+//! rather than read off a spawn** — what a real boundary hands to
+//! `fleet::spawning` is the `Crossed` built below, and for a waiting redirect
+//! it is `fleet::spawning` reading it off the record on every spawn, so that no
+//! act reaching one can forget it.
 //!
-//! # What this does not prove
+//! | Not proved here | Why not |
+//! |---|---|
+//! | A `setsid` child outliving the slot that held it | Nothing here spawns, opens a repository or reaches a network, so this would pass over a Drone still running — the assertion `#140` said would pass while being wrong. `crates/fleet/src/tests/boundary.rs` starts a real child and asks `ps`; the boundary here is driven the way `bug_job.rs` drives a gate, by calling what `fleet::dispatch` calls in the order it calls it |
+//! | The toolbelt half of the snapshot rule | It covers Commands as well as Checks, and `crates/fleet/src/spawning.rs` resolves the toolbelt from a Fleet-lifetime `Manifest` — the rule holds by where the value lives rather than by anything asserting it, and reaching it needs a `Fleet` |
+//! | A retry, which keeps its Drone | A Drone belongs to a step and not to an attempt, and `Ruling::HandedBack` says the process holding the context is the economy of the thing |
 //!
-//! **Not the loop, and not a process.** Nothing here spawns, opens a repository
-//! or reaches a network, so nothing here observes a `setsid`-detached child
-//! outliving the slot that held it — the assertion #140 said would pass while
-//! being wrong, and it would still pass here over a Drone that is still
-//! running. The boundary is driven the way `bug_job.rs` drives a gate: by
-//! calling what `fleet::dispatch` calls, in the order it calls it.
-//!
-//! **It is asserted, and not here.** `crates/fleet/src/tests/boundary.rs`
-//! starts a real detached child and asks `ps`, with the control beside it. It
-//! stayed out of this file because a hermetic run of a workflow is what this
-//! file is for.
-//!
-//! **Not the toolbelt half of the snapshot rule**, which covers Commands as
-//! well as Checks. `crates/fleet/src/spawning.rs` resolves the toolbelt from a
-//! Fleet-lifetime `Manifest` — the rule holds by where the value lives rather
-//! than by anything asserting it, and reaching it needs a `Fleet`.
-//!
-//! **Not a retry**, which keeps its Drone: `Ruling::HandedBack` says the
-//! process holding the context is the economy of the thing. A Drone belongs to
-//! a step and not to an attempt, and nothing below asserts the difference.
-//!
-//! The apparatus is [`bench`] and [`bench::focus`].
+//! Why this compiles rather than naming APIs that do not exist is
+//! `docs/practices/acceptance-tests.md`; the apparatus is [`bench::focus`].
 
 // The bench is shared with the other milestone's test and neither uses all of
 // it. Every item in it is reached from one of the two.

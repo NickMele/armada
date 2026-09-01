@@ -1,40 +1,28 @@
 //! The log, and the Job it folds to.
 //!
-//! # This is the half of the step that is easy to skip
+//! **The half of the step that is easy to skip.** An events table written and
+//! never read is wrong by the time something needs it and nothing says so in
+//! the meantime, so the read path is here and it is the only way [`Job`]s come
+//! out of this crate.
 //!
-//! An events table that is written and never read is wrong by the time
-//! something needs it, and nothing says so in the meantime — every write looks
-//! fine. So the read path is here now, it is the only way [`Job`]s come out of
-//! this crate, and a test writes a whole history, drops every in-memory copy,
-//! reopens the file and rebuilds the same `Job` from the log.
+//! **The fold replays the machine; it does not assign the answer.** Each event
+//! could set `status` to its own `status_to` in one line. Instead each is turned
+//! back into a [`Target`] and put through [`Job::transition`], the same function
+//! that produced it — so **a history the machine would not admit fails to
+//! fold**, rather than reproducing a Job no legal sequence could have reached.
 //!
-//! # The fold replays the machine, it does not assign the answer
+//! **Both machines, one order.** A step move is a row in the same log and goes
+//! back through [`Job::transition_step`] the same way, rebuilding
+//! `current_step_id` and every `job_steps` row. It is why the log is one table:
+//! the inner machine advances beneath two of the twelve statuses only, so a
+//! step move replays only once the fold has replayed the Job up to it, and its
+//! `status_from` is checked against the fold rather than believed — which a
+//! separately keyed second log could not have offered.
 //!
-//! Each event could set `status` to its own `status_to` in one line. Instead
-//! each one is turned back into a [`Target`] and put through
-//! [`Job::transition`] — the same function that produced it. **A history the
-//! machine would not admit therefore fails to fold**, rather than reproducing a
-//! Job that no sequence of legal moves could have reached. That is the
-//! difference between reading the log and trusting it.
-//!
-//! # Both machines, one order
-//!
-//! A step move is a row in the same log, and it goes back through
-//! [`Job::transition_step`] the same way. That is what rebuilds
-//! `current_step_id` and every `job_steps` row, and it is why the log is one
-//! table: the inner machine only advances beneath two of the twelve statuses,
-//! so a step move is replayable only if the fold has already replayed the Job
-//! up to the point it happened. A step row's `status_from` states which status
-//! that was, and it is checked against the fold like any other row rather than
-//! believed — which a separately keyed second log could not have offered.
-//!
-//! # Where the fold starts
-//!
-//! At the `jobs` row, not at the log. Creation is not a transition — it has no
-//! `from` — so no event describes it, and the entry status follows from
-//! `origin`: `sub_dispatched` enters at `queued` and the other four enter at
-//! `awaiting_approval`. That is not this file's rule; it is which constructor
-//! `core-model` offers, and the rebuild calls the same one.
+//! **It starts at the `jobs` row, not the log.** Creation has no `from`, so no
+//! event describes it and the entry status follows from `origin`:
+//! `sub_dispatched` enters at `queued`, the other four at `awaiting_approval`.
+//! That is which constructor `core-model` offers, and the rebuild calls it.
 
 use core_model::{
     Actor, CriteriaOwed, DroneId, DronePresence, EscalationTrigger, Job, JobId, JobStatus,

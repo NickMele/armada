@@ -1,57 +1,27 @@
-//! The daemon core: what Fleet is made of, the one slot it works in, and the
-//! things it can be asked.
+//! The daemon core: what Fleet is made of, the slots it works in, and the
+//! things it can be asked. [`working`](mod@crate::working) is a slot's
+//! contents, an invariant kept away from the logic that moves it, and
+//! [`dispatch`](mod@crate::dispatch) is what happens to a Job while it is in one.
 //!
-//! Two neighbours carry what this file deliberately does not.
-//! [`working`](mod@crate::working) is the slot's contents — a type with an
-//! invariant of its own, kept away from the logic that moves it, which is the
-//! split the 500-line rule exists to prompt. [`dispatch`](mod@crate::dispatch)
-//! is what happens to a Job while it is in that slot.
+//! **The queue is not a list.** [`Fleet`] holds a [`Slots`] roster, one
+//! [`Working`] slot per Job being worked and bounded by [`Concurrency`], and a
+//! Job approved while the bound is spent stays at `queued` — a status the
+//! registry already has and the store already persists. So there is no queue
+//! object here, and no ordering in memory a restart could lose or could
+//! disagree with the log — what `#50` added was the second slot rather than a
+//! scheduler over it. **The bound is on Drones, never on approvals.**
 //!
-//! # N Jobs at a time, and the queue is still not a list
+//! **A refused transition is not survivable.** Every move goes through
+//! `Job::transition` or `Job::transition_step`, every refusal comes back as
+//! `Adrift::IllegalMove` or `Adrift::IllegalStepMove`, and no arm here logs one
+//! and continues: a refusal means Fleet asked for something the edge table says
+//! cannot happen, which is a bug in Fleet.
 //!
-//! [`Fleet`] holds a [`Slots`] roster: one [`Working`] slot per Job being
-//! worked, bounded by [`Concurrency`]. A Job approved while the bound is spent
-//! stays at `queued`, which is a status the registry already has and the store
-//! already persists — **so there is no queue object here**, and no ordering
-//! held in memory that a restart could lose or that could disagree with the
-//! log. `queued` is the queue, and what `#50` added was the second slot rather
-//! than a scheduler over the structure the first one already built.
-//!
-//! **The bound is on Drones and never on approvals.** Every Job-level dispatch
-//! is still approved explicitly and one by one; this decides how many *approved*
-//! Jobs run at once.
-//!
-//! # A refused transition is not survivable
-//!
-//! Every move goes through `Job::transition` or `Job::transition_step`, and
-//! every refusal comes straight back out as `Adrift::IllegalMove` or
-//! `Adrift::IllegalStepMove`. There is no arm anywhere in this crate that logs
-//! one and continues. A refusal means Fleet asked the machine for something the
-//! edge table says cannot happen, which is a bug in Fleet and has to read like
-//! one.
-//!
-//! # Nothing here reads a clock or invents an id
-//!
-//! [`Clock`] and [`Mint`] are injected. That is what lets an end-to-end test
-//! assert on the exact instant and the exact id of every row it produced, and
-//! it is the same rule `core-model`, `store` and `config` each state about
-//! themselves — the rule needs somewhere for the reading to happen, and this is
-//! the composition root's business to hand in.
-//!
-//! # Locking, and the one order it is taken in
-//!
-//! Three locks: the roster, one Job's slot, and the store. **They are taken in
-//! that order and in no other**, and no path takes a slot and then reaches for
-//! the roster. [`crate::slots`] holds the argument.
-//!
-//! The gate still holds a slot across a Check. What changed is whose: it is the
-//! slot of the Job being checked, so a `cargo nextest` that runs for a quarter
-//! of an hour holds up that Job's own Drone and nothing else's.
-//!
-//! A fourth lock is not in the order because nothing else takes it while
-//! holding one of the three except in the one direction: [`Fleet::merge_end`]
-//! serialises the rebase-and-push tail, so exactly one Job at a time touches
-//! the repository every worktree is cut from. See [`crate::delivery`].
+//! **Three locks — the roster, one Job's slot, the store — taken in that order
+//! and in no other**, with [`crate::slots`] holding the argument. The gate holds
+//! a slot across a Check, but the checked Job's own, so a quarter-hour run holds
+//! up that Job's Drone alone. [`Fleet::merge_end`] is a fourth and sits outside
+//! the order, for the reason its field gives.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

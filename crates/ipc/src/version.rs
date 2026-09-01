@@ -68,6 +68,10 @@ impl fmt::Display for ProtocolVersion {
 /// recognise. Reversed, it is not: a newer Bridge may require a field an older
 /// Fleet was built before sending, and additive-only promises nothing about
 /// what a *newer reader* needs.
+///
+/// **The `/v0` lifeboat is the Ship milestone's** and is deliberately absent
+/// rather than stubbed: a lifeboat sharing a type with the protocol it is the
+/// lifeboat for is not one. This enum is what decides when Bridge needs it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Skew {
     /// Both sides speak the same protocol. Connect, and say nothing.

@@ -1,54 +1,28 @@
 //! The wire vocabulary, as DTOs rather than domain types.
-//!
 //! `From<core_model::Job> for ipc::JobSummary` at the Fleet boundary is where
-//! redaction becomes an explicit, visible step. **A domain type on the wire is a
-//! redaction decision nobody made.**
+//! redaction becomes an explicit, visible step. **A domain type on the wire is
+//! a redaction decision nobody made.**
 //!
-//! `PROTOCOL_VERSION` is emitted by `build.rs` from `protocol-version.toml` at
-//! the repo root, and a codegen step emits matching TypeScript from this crate's
-//! types. Both generated outputs are checked in, so a cross-language breaking
-//! change is a build failure rather than a runtime surprise.
+//! `PROTOCOL_VERSION` is emitted by `build.rs` from `protocol-version.toml`, and
+//! codegen emits matching TypeScript from these types. Both outputs are checked
+//! in, so a cross-language breaking change is a build failure rather than a
+//! runtime surprise. This is one of two crates permitted to deserialize.
 //!
-//! One of two crates permitted to deserialize, because this is where bytes
-//! arrive from outside.
-//!
-//! # Where the conversion lives, and why it is here rather than in Fleet
-//!
-//! `docs/practices/protocol.md` sketches the redaction as Fleet's — and the
-//! *decision* is, since Fleet is the only caller. The `impl` cannot be: neither
+//! **The conversion lives here rather than in Fleet.** The *decision* is
+//! Fleet's, since Fleet is the only caller, but the `impl` cannot be: neither
 //! `core_model::Job` nor `ipc::JobSummary` belongs to `fleet`, so the orphan
-//! rule puts every `From` at this boundary in this crate. What Fleet keeps is
-//! the choice of which conversion to call and what to pass it.
+//! rule puts every `From` at this boundary here. What Fleet keeps is which
+//! conversion to call and what to pass it.
 //!
-//! # Nothing here restates a spelling
+//! **Nothing here restates a spelling.** `core-model` carries an
+//! `as_wire`/`from_wire` pair beside every enum and the wire value **is** the
+//! registry key, so every closed set below spells the domain value through it.
+//! There is no variant-to-string `match` here — the defect just removed from
+//! `store`, and the one a second vocabulary always becomes.
 //!
-//! `core-model` carries an `as_wire`/`from_wire` pair beside every enum and the
-//! wire value **is** the registry key. Every closed set below holds the domain
-//! value and spells it through that pair. There is no variant-to-string `match`
-//! in this crate, which is the defect just removed from `store` and the one a
-//! second vocabulary always becomes.
-//!
-//! # What this crate is not
-//!
-//! Not the full protocol surface. `operations.toml` inventories every
-//! operation; the types here serve the ones M1 needs — `list_jobs`,
-//! `get_job`, `get_job_events`, `propose_job`, `propose_from_request`,
-//! `approve_dispatch`, `kill_drone`, `kill_job`, `redispatch_job`, the three
-//! acts a person takes on finished work — `approve_review`, `request_changes`,
-//! `reject_job` — with `get_evidence` and `get_diff`, which are the material
-//! those acts are taken on, and `override_verdict`, which is the act on work a
-//! gate refused rather than work a gate held, `forget_job`, which is a real
-//! deletion rather than a further status, and the event
-//! stream. Neither
-//! kill adds a type: both name a Job and answer with one. `redispatch_job`
-//! adds [`Redispatched`] because it is the one command that leaves two Jobs
-//! behind, `propose_from_request` adds [`JobRequest`] because it is the one
-//! that carries no Job at all, and `forget_job` adds [`JobForgotten`] because
-//! it is the one command that leaves no Job at all to answer with — the same
-//! type doubles as `job.forgotten`'s payload. The `/v0` lifeboat is
-//! the Ship milestone's and is deliberately absent rather than stubbed: a
-//! lifeboat that shares a type with the protocol it is the lifeboat for is not
-//! one. [`Skew`] decides when Bridge needs it.
+//! **Not the full protocol surface.** `crates/ipc/operations.toml` inventories
+//! every operation; the types here serve what M1 needs, and a command adds a
+//! type only where a Job is not what it answers with.
 
 /// How many Drones Fleet may run, how many it is running, and what holds the
 /// next one back. **Fleet-wide, and not a Job's field.**

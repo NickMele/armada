@@ -1,56 +1,28 @@
 //! SQLite in WAL mode, migrations, retention — and **the only crate that
-//! deserializes**.
+//! deserializes**. A Cargo-graph fact rather than a review item: the SQLite
+//! dependency is scoped here alone, so nothing else *can* read a row. `ipc` is
+//! the other place bytes enter the process, from the wire.
 //!
-//! That is a Cargo-graph fact rather than a review item: the SQLite dependency
-//! is scoped to this crate alone, so nothing else *can* read a row. `ipc` is the
-//! other place bytes enter the process, from the wire.
+//! **`job_events` is authoritative** for `status`, `current_step_id` and every
+//! `job_steps` row; the `jobs` row is for everything else, so nothing here
+//! returns a Job by reading its status column — [`fold`](mod@fold) is the
+//! replay. The cost is a field with no event being authoritative only on the
+//! row, checked rather than assumed: [`RowError::ColumnNotReconstructable`].
 //!
-//! # What is authoritative
+//! **Query functions never return pre-filtered results**, but the parse
+//! failures alongside them. v1 wrote `.filter_map(Result::ok)` after a store
+//! call and dropped twenty-one real Jobs with no error anywhere — the bug was
+//! at the call site, and a signature handing back a bare `Vec` invites it.
+//! [`LoadAllError::SomeJobsUnreadable`] carries both sets.
 //!
-//! **`job_events` is, for `status`, for `current_step_id` and for every
-//! `job_steps` row. The `jobs` row is, for everything else.**
+//! **A corrupt store is refused and an empty one created**, on six checks in
+//! `open.rs` that are each fatal: silently starting empty over a database that
+//! exists means somebody loses work and is shown a clean Board.
 //!
-//! `job-fields.toml` calls the status column "a cache of the fold over
-//! `job_events`", and this crate follows that literally: nothing here returns a
-//! Job by reading its status column. [`Store::load_job`] and
-//! [`Store::load_all_jobs`] rebuild the Job at its creation state and replay
-//! every event through `Job::transition` — the same function that produced
-//! them. A history the machine would not admit fails to load instead of
-//! producing a Job no legal sequence of moves could reach.
-//!
-//! The log carries what a machine moved, and a status transition, a step move
-//! and a Drone arriving on a step are all rows in it, in one order. A step move that
-//! could not be ordered against the status transitions around it could not be
-//! replayed at all, because the inner machine only advances beneath two of the
-//! twelve statuses.
-//!
-//! What that costs: a field with no event can only be authoritative on the row,
-//! and it is checked rather than assumed — see
-//! [`RowError::ColumnNotReconstructable`]. `branch` is the one left.
-//!
-//! # The rule that cost v1 twenty-one Jobs
-//!
-//! **Query functions never return pre-filtered results.** They return the parse
-//! failures with them, in a shape the caller cannot silently ignore. v1 wrote
-//! `.filter_map(Result::ok)` after a store call and dropped twenty-one real
-//! Jobs without an error anywhere — the bug was not in the store, it was at the
-//! call site, and a signature that hands back a bare `Vec` invites it. There is
-//! no such signature here: [`LoadAllError::SomeJobsUnreadable`] carries the
-//! Jobs that loaded *and* the ones that did not.
-//!
-//! # A corrupt store is refused, an empty one is created
-//!
-//! Six checks decide which is which, and every one of them is fatal — see
-//! `open.rs`. Silently starting empty over a database that exists means somebody
-//! loses work and is shown a clean Board.
-//!
-//! # Time is injected
-//!
-//! Nothing in this crate reads a clock. A transition's instant arrives on the
-//! event; creation's arrives as an argument to [`Store::insert_job`].
-//!
-//! Schema versioning is a migration list plus a version row, applied on open.
-//! `job_events` is append-only in the database itself, by trigger.
+//! **Nothing here reads a clock**: a transition's instant is on the event and
+//! creation's is an argument to [`Store::insert_job`]. Schema versioning is a
+//! migration list and a version row, applied on open, and `job_events` is
+//! append-only in the database itself, by trigger.
 
 mod attempt;
 mod columns;

@@ -3,39 +3,13 @@
 //! # There is no registry edge table, and this does not invent one
 //!
 //! `domain/step-states.toml` declares six states and says nothing about which
-//! moves are legal. Built here are the edges M1 walks: `not_started -> running`,
-//! `running -> advanced`, `running -> stopped`, which is the one a refusal
-//! needs — `job-statuses.toml` gives `escalated` the step state `stopped`, and
-//! without the edge a refused step stayed `running` with no writer for
-//! `last_verdict` at all — and `stopped -> running`, which is how a person
-//! resumes it.
+//! moves are legal. [`STEP_EDGES`] is the set M1 walks, and says why each of
+//! them is there.
 //!
 //! **`stopped -> running` is one edge for two acts**, and which of them a Job
 //! admits is decided by whether it holds a Drone — `fleet::resume`'s to ask,
 //! not this file's. **`stopped -> advanced` is one edge for one**, and the only
 //! edge two targets could reach: [`StepTarget::Overridden`] alone may walk it.
-//!
-//! # `retrying` is a pair of edges and not a resting place
-//!
-//! `running -> retrying -> running` is one hand-back. The step passes through
-//! `retrying` rather than sitting in it, and that is forced by two things
-//! already decided elsewhere.
-//!
-//! `store::attempt` counts a step's runs as the entries into `running` in its
-//! own log, and every per-run record — checks, judgments, evidence, gaming
-//! flags — is filed under that count. A reattempt that stayed at `retrying`
-//! would never increment it, so the second run's verdicts would overwrite the
-//! first's and the record would read as one run. `docs/concepts/workflow.md`
-//! wants the opposite: *"keeping all the verdicts is what shows the same note
-//! went unaddressed three times."*
-//!
-//! And there is no self-edge in this table, by design — so a third failure
-//! could not be recorded at all from a step that was already `retrying`.
-//!
-//! What passing through leaves behind is a log that says which entries into
-//! `running` were the machine handing work back, and which were a person
-//! restarting a stopped step. Those are different acts and `stopped -> running`
-//! already spells the second.
 //!
 //! `awaiting_human` has its human advance gate now and is **still
 //! unreachable**: a step at that gate stays `running`, since `approve_review`
@@ -43,15 +17,11 @@
 //! [`StepState`], because a stored row may render any of the six, and it has no
 //! [`StepTarget`].
 //!
-//! # The outer machine gates the inner one
-//!
-//! `job-fields.toml`'s `workflow_status` row: a step "advances only while the
-//! Job is `running` or `awaiting_review`; frozen otherwise, never cleared,
-//! still rendered." [`ADVANCING_STATUSES`] is that sentence — which is why a
-//! step stops *before* the Job escalates, and why a step move and a status move
-//! belong in one log in one order. It has one exception, and
-//! [`overruled_while_frozen`] is it — a predicate rather than a third entry in
-//! the list, for the reason given there.
+//! **The outer machine gates the inner one**, and [`ADVANCING_STATUSES`] is
+//! that rule — which is why a step stops *before* the Job escalates, and why a
+//! step move and a status move belong in one log in one order. It has one
+//! exception, [`overruled_while_frozen`], which is a predicate rather than a
+//! third entry in the list, for the reason given there.
 
 use core::fmt;
 
@@ -72,6 +42,27 @@ pub struct StepEdge {
 
 /// The edges M1 walks. Nothing else in this crate decides what is legal for a
 /// step.
+///
+/// `running -> stopped` is the one a refusal needs: `job-statuses.toml` gives
+/// `escalated` the step state `stopped`, and without the edge a refused step
+/// stayed `running` with no writer for `last_verdict` at all.
+///
+/// **`retrying` is a pair of edges and not a resting place.**
+/// `running -> retrying -> running` is one hand-back, and two decisions made
+/// elsewhere force the step to pass through rather than sit there.
+/// `store::attempt` counts a step's runs as the entries into `running` in its
+/// own log, and every per-run record — checks, judgments, evidence, gaming
+/// flags — is filed under that count, so a reattempt that stayed at `retrying`
+/// would never increment it and the second run's verdicts would overwrite the
+/// first's. `docs/concepts/workflow.md` wants the opposite: *"keeping all the
+/// verdicts is what shows the same note went unaddressed three times."* And
+/// there is no self-edge here, so a third failure could not be recorded at all
+/// from a step that was already `retrying`.
+///
+/// What passing through leaves behind is a log saying which entries into
+/// `running` were the machine handing work back and which were a person
+/// restarting a stopped step. Those are different acts, and `stopped ->
+/// running` already spells the second.
 pub static STEP_EDGES: &[StepEdge] = &[
     step_edge(StepState::NotStarted, StepState::Running),
     step_edge(StepState::Running, StepState::Advanced),

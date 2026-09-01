@@ -1,55 +1,28 @@
 //! The Evidence tool, as Fleet answers it.
 //!
-//! # The call returns `recorded` and nothing else
+//! **The call returns `recorded` and nothing else.** [`Recorded`] carries one
+//! word, has no other method, is not a verdict and has no variant for a
+//! failure — because the outcome is not known yet when this returns. **A tool
+//! call that blocked on `cargo test` would time out**, so the Checks run after
+//! the call has returned and the outcome reaches the Drone later, as an
+//! injected turn.
 //!
-//! [`Recorded`] carries one word and has no other method. It is not a verdict,
-//! it cannot become one, and the type has no variant for a failure — because
-//! the outcome is not known yet when this returns. **A tool call that blocked
-//! on `cargo test` would time out**, so the checks run after the call has
-//! returned and the outcome reaches the Drone later, as an injected turn.
-//!
-//! # The tool is bound to a Job, and the Drone is not asked which
-//!
-//! [`EvidenceTool`] takes the [`JobId`] at construction, because Fleet builds
-//! one per Drone and knows what it built it for. So [`Call`] carries no job id
-//! and no step id: Fleet knows the current step, and a Drone naming one could
-//! only agree or disagree, and the disagreeing case would need a rule.
-//!
-//! **The tool a Drone reaches carries neither either**, and refuses a call that
-//! invents one rather than dropping it — see `ipc::mcp`. Which Job the call is
-//! bound to is `crate::peer`'s answer: the process on the other end of the
-//! connection, matched against the Drones Fleet spawned. **That is an
-//! attribution and still not an authentication** — what a caller cannot do is
+//! **The tool is bound to a Job, and the Drone is not asked which.**
+//! [`EvidenceTool`] takes the [`JobId`] at construction because Fleet builds one
+//! per Drone and knows what it built it for, so [`Call`] carries no job id and
+//! no step id: Fleet knows the current step, and a Drone naming one could only
+//! agree or disagree. The tool a Drone reaches carries neither and refuses a
+//! call that invents one rather than dropping it — see `ipc::mcp`. Which Job a
+//! call is bound to is `crate::peer`'s answer, the process on the other end of
+//! the connection matched against the Drones Fleet spawned. **That is an
+//! attribution and still not an authentication**: what a caller cannot do is
 //! choose a Job, and what nothing stops is a caller that is not a Drone
-//! reaching the endpoint. A caller Fleet cannot place is refused rather than
-//! guessed at.
+//! reaching the endpoint. One Fleet cannot place is refused, not guessed at.
 //!
-//! # The fields are the ones the Drone prompt already names
-//!
-//! `claimed`, `shown_by` and `not_claimed` — the Agent Copy Contract's Work
-//! submission fields, spelled here exactly as the Drone is asked for them. A
-//! tool taking a different vocabulary would instruct a Drone in one language
-//! and hand it a form in another.
-//!
-//! [`Call`]'s fields are public and it has no `Default`, so every construction
-//! writes all of them out and adding one is a compile error at every call site.
-//! There is no `source`, and its absence is the guarantee that a Drone cannot
-//! mark its own evidence human-attested — see `verification`'s `Submission`,
-//! which this is the wire-facing half of.
-//!
-//! The field types come from `verification` rather than being `&str` here.
-//! Three adjacent strings are three the compiler cannot tell apart, and the
-//! contract's first rule about this record is that `claimed` and `shown_by`
-//! are not the same kind of thing.
-//!
-//! # What is not built here
-//!
-//! **The MCP server itself.** Turning a JSON-RPC tool call into a [`Call`]
-//! means deserializing untyped bytes, and gate rule five scopes that to `store`
-//! and `ipc`. So the transport is `ipc::mcp`, which reads the bytes, and
-//! `api`'s Evidence endpoint, which routes them. What is here is everything
-//! from the typed call inward, on both sides of the inbox: the tool, the queue,
-//! and Fleet's own answering half.
+//! **What is not built here is the MCP server.** Turning a JSON-RPC tool call
+//! into a [`Call`] means deserializing untyped bytes, which gate rule five
+//! scopes to `store` and `ipc`. Everything from the typed call inward is here,
+//! on both sides of the inbox: the tool, the queue, and Fleet's answering half.
 
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Mutex;
@@ -82,6 +55,17 @@ impl Recorded {
 ///
 /// Public fields and no `Default`: a caller writes each one out, and another
 /// would fail to compile at every call site rather than default to something.
+///
+/// **The names are the Drone prompt's.** `claimed`, `shown_by` and
+/// `not_claimed` are the Agent Copy Contract's Work submission fields, spelled
+/// here exactly as a Drone is asked for them — a tool taking a different
+/// vocabulary would instruct a Drone in one language and hand it a form in
+/// another. Their types come from `verification` rather than being `&str`,
+/// because three adjacent strings are three the compiler cannot tell apart.
+///
+/// **There is no `source`**, and its absence is the guarantee that a Drone
+/// cannot mark its own evidence human-attested. This is the wire-facing half of
+/// `verification`'s `Submission`, which holds the rest of that argument.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Call<'a> {
     pub evidence_type: EvidenceType,
