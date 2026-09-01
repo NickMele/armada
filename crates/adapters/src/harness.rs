@@ -1,43 +1,25 @@
-//! The headless agent CLI: what a Drone is started as.
+//! The headless agent CLI: what a Drone is started as. **This is the only file
+//! in the workspace that knows how that CLI spells anything** — a capability
+//! arrives as a `Grant` and leaves as a string in argv, a guarantee arrives as a
+//! type with one inhabitant and leaves as a flag, and nothing above this crate
+//! learns either spelling.
 //!
-//! **This is the only file in the workspace that knows how that CLI spells
-//! anything.** A capability arrives here as a `Grant` and leaves as a string in
-//! an argument list; a guarantee arrives as a type with one inhabitant and
-//! leaves as a flag. Nothing above this crate learns either spelling.
-//!
-//! # The argument list is the permission model
-//!
-//! Not a metaphor. What a Drone may run unattended, whether it is asked before
-//! it is refused, and whether the operator's own servers come along are all
-//! granted and withheld here, in argv, at spawn. Three of the flags below are
-//! doing work that has no runtime check behind it anywhere:
+//! **The argument list is the permission model**, and not as a metaphor. What a
+//! Drone may run unattended, whether it is asked before it is refused, and
+//! whether the operator's servers come along are all granted and withheld here,
+//! at spawn. Three flags do work no runtime check is behind:
 //!
 //! | Flag | What its absence does |
 //! | --- | --- |
 //! | `--strict-mcp-config` | The session comes up holding every MCP server the operator has connected. Measured: seven servers, ninety-five tools, personal accounts. **This is the v1 defect this step exists for** |
-//! | `--permission-mode` | The mode falls back to the operator's own configured default, which was measured as `auto` — a Drone that approves itself |
-//! | `--allowedTools` | Every built-in tool is callable. It is a permission allowlist and **not** a toolset: it removed none of the thirty built-ins in any of the three spike runs |
+//! | `--permission-mode` | The mode falls back to the operator's own configured default, which was measured as `auto` — a Drone that approves itself. **A denial is silent to the Drone and loud here**: `dontAsk` refuses without prompting, which it must, because a detached Drone has no terminal and a prompt would hang the Job until its timeout. The Drone is told so in the baseline prompt, and every refusal is a `DroneEvent::Refused` in the transcript, so a Job that goes quiet is diagnosable as an argv problem rather than a prompt one |
+//! | `--allowedTools` | Every built-in tool is callable. It is a permission allowlist and **not** a toolset: it removed none of the thirty built-ins in any of the three spike runs. That is why confinement here is a floor rather than a fence, and it is written down as an open question on Drone rather than papered over — the built-in tools are bounded by what the Drone can reach, a worktree and an empty environment, not by this list |
 //!
-//! The last row is why confinement here is a floor rather than a fence, and it
-//! is written down as an open question on Drone rather than papered over: the
-//! built-in tools are bounded by what the Drone can reach — a worktree, an
-//! empty environment — not by this list.
-//!
-//! # Nothing readable goes in argv
-//!
-//! No prompt text, no task, nothing brokered. `ps` prints a same-uid child's
-//! argument list on darwin 27 and does **not** print its environment, measured
-//! for this step, so argv is the one channel that is public by construction.
-//! The prompt goes in on stdin as the session's first turn, which is also the
-//! channel a later turn is injected through — one path, not two.
-//!
-//! # A denial is silent to the Drone and loud here
-//!
-//! `--permission-mode dontAsk` refuses without prompting, which it must: a
-//! detached Drone has no terminal, so a prompt would hang the Job until its
-//! timeout. The Drone is told about that in the baseline prompt, and every
-//! refusal is a `DroneEvent::Refused` in the transcript, so a Job that goes
-//! quiet is diagnosable as an argument-list problem rather than a prompt one.
+//! **Nothing readable goes in argv**: no prompt text, no task, nothing brokered.
+//! `ps` prints a same-uid child's argument list on darwin 27 and does **not**
+//! print its environment, measured for this step, so argv is the one channel
+//! public by construction. The prompt goes in on stdin as the session's first
+//! turn, the same channel a later turn is injected through.
 
 use std::error::Error;
 use std::fmt;

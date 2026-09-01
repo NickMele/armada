@@ -1,47 +1,28 @@
 //! `armada.yml`, in the slice M1 reads.
 //!
-//! # Seven keys, and nothing else
-//!
-//! `version`, `id`, `base`, `checks.<name>.run`, `checks.<name>.when`,
-//! `commands.<name>.run`, `commands.<name>.destructive` and `setup.requires`.
-//! Every other section the Manifest concept page describes — permissions,
-//! secrets, ports, skills, budget, dispatch freeze, auto-merge policy — is a
-//! key this parser refuses, on purpose.
+//! **Seven keys, and nothing else.** `version`, `id`, `base`,
+//! `checks.<name>.run`, `checks.<name>.when`, `commands.<name>.run`,
+//! `commands.<name>.destructive` and `setup.requires`. Every other section the
+//! Manifest concept page describes — permissions, secrets, ports, skills,
+//! budget, dispatch freeze, auto-merge — is a key this parser refuses.
 //!
 //! **A key nothing reads is worse than a key that is not there.** A file
 //! carrying `budget: 40` that no code consumes reads to its author as a budget
 //! that is set. Refusing it means the section arrives with the code that
-//! honours it, and every deferred section stays additive rather than becoming
-//! a migration.
+//! honours it, and every deferred section stays additive rather than a
+//! migration. [`Manifest::version`] refuses no number for the same reason.
 //!
-//! `checks.<name>.when` is a list of path patterns, in
-//! `core_model::PathPattern`'s dialect, checked at load. A pattern this parser
-//! cannot read is a refusal beside every other refusal in the file rather than
-//! a Check that quietly stops running. **Absent means always.**
+//! `checks.<name>.when` is a list of path patterns in
+//! `core_model::PathPattern`'s dialect, checked at load, so a pattern this
+//! parser cannot read is a refusal beside every other refusal in the file
+//! rather than a Check that quietly stops running. **Absent means always.**
 //!
 //! `setup.requires` names Commands the same file declares, each resolved to its
-//! `run` string **at load** — so a name nothing declares is a refusal here
-//! rather than a worktree nothing prepares and a Check that fails for a reason
-//! nobody can connect to it.
-//!
-//! **Its code word is *preparation*.** `armada::setup` runs nothing and means
-//! something else, and one word over two meanings is the second vocabulary this
-//! workspace refuses elsewhere.
-//!
-//! # Two registries, sharing no names
-//!
-//! Checks gate advancement and Commands do not; a Check may name a Command as
-//! a prerequisite, which is the reason they are separate registries rather than
-//! one list with a flag. A name in both is refused at load, because a reference
-//! to that name resolves to two different things with two different meanings
-//! and nothing in the file says which was meant.
-//!
-//! # What is deliberately not enforced here
-//!
-//! `version` is required and must be a positive whole number, and no particular
-//! value is demanded. Refusing anything but `1` would be a compatibility policy
-//! this milestone step does not state, and one written into a parser is one
-//! nobody can find later.
+//! `run` string **at load** — a name nothing declares is a refusal here rather
+//! than a worktree nothing prepares and a Check that fails for a reason nobody
+//! can connect to it. **Its code word is *preparation***, because
+//! `armada::setup` runs nothing and means something else — one word over two
+//! meanings is the second vocabulary this workspace refuses elsewhere.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -147,6 +128,12 @@ impl Preparation {
 /// Carries the path it was read from, so a refusal downstream — a workflow step
 /// naming a Check that is not here — can name the file that was missing it
 /// without the caller having to thread a path alongside.
+///
+/// **Two registries, sharing no names.** Checks gate advancement and Commands
+/// do not, and a Check may name a Command as a prerequisite, which is why they
+/// are separate registries rather than one list with a flag. A name in both is
+/// refused at load, because a reference to it resolves to two different things
+/// with two different meanings and nothing in the file says which was meant.
 #[derive(Debug, Clone)]
 pub struct Manifest {
     path: PathBuf,
@@ -200,6 +187,9 @@ impl Manifest {
         &self.id
     }
 
+    /// **Required, and a positive whole number, and nothing more.** Refusing
+    /// anything but `1` would be a compatibility policy this milestone step
+    /// does not state, and one written into a parser is one nobody can find.
     pub fn version(&self) -> u32 {
         self.version
     }

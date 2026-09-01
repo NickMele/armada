@@ -1,7 +1,6 @@
 //! A repository's own setup, found from its root.
 //!
-//! # A repository carries its setup, and Fleet is pointed at the repository
-//!
+//! **A repository carries its setup, and Fleet is pointed at the repository.**
 //! `armada.yml` at the root, workflow definitions in `.armada/workflows/`
 //! beside it. There is no `--manifest` flag and no `--workflow` flag, and that
 //! is the decision this module exists to hold: a pair of paths on a command
@@ -14,28 +13,12 @@
 //! per Manifest — which makes that list a Reach-milestone question rather than
 //! a shortcut available here.
 //!
-//! # Holding one of these is proof the files agree
-//!
-//! [`Setup`] has no constructor but [`Setup::at`], and its fields are private.
-//! Every [`ResolvedWorkflow`] inside it can only have been built against the
-//! [`Manifest`] beside it, so every Check any workflow's steps name was
-//! declared by that Manifest at the moment the daemon started — checked once,
-//! before a worktree exists and before a Drone is spawned.
-//!
-//! # Every file in `.armada/workflows/`, keyed by its own id
-//!
-//! A repository may declare more than one workflow — Bug and Feature are not
-//! the same shape of work — so [`Setup::workflows`] is a map rather than a
-//! single value, keyed by the `workflow_id` each definition carries. Two files
-//! naming the same id is refused at start: a Fleet that picked one silently
-//! would be choosing on behalf of whoever wrote the second file.
-//!
-//! # Every fault, and never the first one
-//!
-//! `config` collects each refusal in a document rather than stopping, and
-//! [`SetupRefused`] carries the whole set through to the terminal. The person
-//! reading the output is the person who wrote the file, and a parser that
-//! reported one fault per run would turn one edit into three.
+//! **Holding one of these is proof the files agree.** [`Setup`] has no
+//! constructor but [`Setup::at`] and its fields are private, so every
+//! [`ResolvedWorkflow`] inside it can only have been built against the
+//! [`Manifest`] beside it. Every Check any workflow's steps name was declared
+//! by that Manifest at the moment the daemon started — checked once, before a
+//! worktree exists and before a Drone is spawned.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -131,6 +114,11 @@ impl Setup {
     }
 
     /// Every workflow this repository declares, keyed by its `workflow_id`.
+    ///
+    /// A map rather than a single value, because a repository may declare more
+    /// than one — Bug and Feature are not the same shape of work. Two files
+    /// naming the same id is refused at start: a Fleet that picked one silently
+    /// would be choosing on behalf of whoever wrote the second file.
     pub fn workflows(&self) -> &BTreeMap<core_model::WorkflowId, ResolvedWorkflow> {
         &self.workflows
     }
@@ -183,6 +171,11 @@ fn definitions(root: &Path) -> Result<Vec<PathBuf>, SetupRefused> {
 }
 
 /// Why a repository's setup could not be read.
+///
+/// **Every fault, and never the first one.** `config` collects each refusal in
+/// a document rather than stopping, and this carries the whole set through to
+/// the terminal: the person reading the output is the person who wrote the
+/// file, and a parser reporting one fault per run turns one edit into three.
 ///
 /// Eight variants because a person has eight different things to do about them,
 /// and each names the file it is about. `source` is deliberately absent: every

@@ -5,38 +5,14 @@
 //! is the vocabulary the rest of Armada reads, which is why it names
 //! capabilities and conditions rather than a vendor's keys.
 //!
-//! # There is no variant that says the run succeeded
-//!
-//! Measured, spike 3: a run denied every tool it needed terminated with exit
-//! code 0, `is_error` false, a success subtype and a polite final message,
-//! having accomplished nothing. Four signals, all present, all agreeing, all
-//! wrong. So [`Ended`](DroneEvent::Ended) carries the turn count, the cost and
-//! how many calls were refused, and **there is no field on it that a gate could
-//! read as a verdict**. Evidence submitted through the tool is the only proof,
-//! and nothing cheap goes beside it.
-//!
-//! # `Ended` is a turn boundary, not a lifetime
-//!
-//! Also measured, spike 4: one process emitted `result`, accepted an injected
-//! turn, emitted a second `init`, did more work and emitted a second `result` —
-//! one session id throughout. A reader that treats the first `Ended` as "the
-//! Drone has exited" reaps a live session. Whether the Drone is gone is a
-//! question about the process, answered by `fleet::holder_of`, and never by
-//! this stream.
-//!
-//! # A call carries what it did, bounded
-//!
-//! `Bash · toolu_01Haa…` twenty-two times cannot tell `ls` from `rm -rf`, so
-//! [`Called`](DroneEvent::Called) carries a [`CallDetail`]. The bound is the
-//! type's rather than a caller's, because a `Write` argument is a whole file.
-//!
-//! # A line that does not decode is an event
-//!
-//! [`Unreadable`](DroneEvent::Unreadable) exists so that no decoder anywhere
-//! can answer "nothing happened" for output it did not understand. It is the
-//! same rule as a query function that never returns pre-filtered results: the
-//! caller sees what failed rather than being told, silently, that there was
-//! less of it.
+//! **There is no variant that says the run succeeded.** Measured, spike 3: a
+//! run denied every tool it needed terminated with exit code 0, `is_error`
+//! false, a success subtype and a polite final message, having accomplished
+//! nothing. Four signals, all present, all agreeing, all wrong. So
+//! [`Ended`](DroneEvent::Ended) carries the turn count, the cost and how many
+//! calls were refused, and **there is no field on it a gate could read as a
+//! verdict**. Evidence submitted through the tool is the only proof, and
+//! nothing cheap goes beside it.
 
 use alloc::string::String;
 
@@ -129,6 +105,11 @@ pub enum DroneEvent {
         mcp_servers: usize,
     },
     /// The Drone reached for a tool, and what it reached for it with.
+    ///
+    /// **A call carries what it did, bounded.** `Bash · toolu_01Haa…`
+    /// twenty-two times cannot tell `ls` from `rm -rf`, so this carries a
+    /// [`CallDetail`]. The bound is the type's rather than a caller's, because
+    /// a `Write` argument is a whole file.
     Called {
         tool: String,
         call: String,
@@ -149,7 +130,16 @@ pub enum DroneEvent {
     },
     /// The quota window moved. Read for dispatch gating, not for this Job.
     QuotaMoved { window: String, status: String },
-    /// A turn finished. **Not a verdict and not an exit** — see this module.
+    /// A turn finished. **Not a verdict and not an exit** — see this module for
+    /// the first, and this variant for the second.
+    ///
+    /// **It is a turn boundary, not a lifetime.** Measured, spike 4: one
+    /// process emitted `result`, accepted an injected turn, emitted a second
+    /// `init`, did more work and emitted a second `result` — one session id
+    /// throughout. A reader treating the first of these as "the Drone has
+    /// exited" reaps a live session. Whether the Drone is gone is a question
+    /// about the process, answered by `fleet::holder_of` and never by this
+    /// stream.
     Ended {
         turns: u32,
         /// What the turn cost, in millionths of a dollar.
@@ -169,6 +159,11 @@ pub enum DroneEvent {
     /// a gap.
     Unrecognised { kind: String },
     /// A line that did not decode. **Never dropped.**
+    ///
+    /// It exists so that no decoder anywhere can answer "nothing happened" for
+    /// output it did not understand. Same rule as a query function that never
+    /// returns pre-filtered results: the caller sees what failed rather than
+    /// being told, silently, that there was less of it.
     Unreadable {
         /// What could not be read, as the decoder saw it. Truncated by the
         /// decoder, because a runaway line is still a line.

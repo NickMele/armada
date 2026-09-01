@@ -1,24 +1,12 @@
 //! Speaking to a Drone that is already running, and ending one.
 //!
-//! # The mechanism, and where it came from
-//!
-//! Spike 4 established that Fleet can inject a turn into a live session — the
-//! harness reads one JSON object per line on stdin with the stream held open,
-//! and re-emits each message when it is consumed, which is what made the
-//! latency measurable rather than inferred. Three runs, delivered in 1.59s
-//! mid-task and 2.85s idle.
-//!
-//! [`DroneSession`] is that, and the first turn a Drone is ever given goes down
-//! the same pipe — see `crate::drone`, which is the only thing that opens one.
-//!
-//! # Every write is checked, and a truncated one is a failure
-//!
-//! `write_all` either writes the whole turn or fails; nothing here reports how
-//! much of a turn went. v1's equivalent read a short payload as an empty grant,
-//! so a partial write became a silent absence of authority and the run failed
-//! naming a secret rather than the pipe. A half-delivered instruction is an
-//! error, never a Drone that was told part of something.
-//! # What the spike also established, and what it costs this trait
+//! **The mechanism is spike 4's.** Fleet can inject a turn into a live session:
+//! the harness reads one JSON object per line on stdin with the stream held
+//! open, and re-emits each message when it is consumed, which is what made the
+//! latency measurable rather than inferred — three runs, delivered in 1.59s
+//! mid-task and 2.85s idle. [`DroneSession`] is that, and the first turn a
+//! Drone is ever given goes down the same pipe; `crate::drone` is the only
+//! thing that opens one.
 //!
 //! **Delivery waits for the current turn to end.** A message injected while the
 //! Drone is inside a tool call is consumed when that call returns — measured at
@@ -26,22 +14,12 @@
 //! that cost is zero: a Drone that has just submitted evidence is between turns
 //! by definition, which is exactly the moment the gate speaks.
 //!
-//! # Seven methods, and none of them can start anything
-//!
-//! [`tell`](LiveSession::tell), [`notice`](LiveSession::notice),
-//! [`redirect`](LiveSession::redirect), [`interrupt`](LiveSession::interrupt),
-//! [`answer`](LiveSession::answer), [`poke`](LiveSession::poke),
-//! [`terminate`](LiveSession::terminate). There
-//! is no spawn, no respawn and no restart, because the gate must not be able to
-//! produce a Drone — and no way to remove a worktree, because nothing in this
-//! workspace can. A restart is `crate::resume`'s, and it reaches a spawn rather
-//! than this trait.
-//!
-//! Each carries a different authorship, which is why one method taking text
-//! would be wrong: a verdict Fleet reached, something Fleet observed while the
-//! step ran, a person's own words, Fleet's directive at the third stage of the
-//! thrashing chain, the answer a person picked from a set the Drone offered, and
-//! Fleet asking a quiet Drone whether it is still there.
+//! **Every write is checked, and a truncated one is a failure.** `write_all`
+//! either writes the whole turn or fails, and nothing here reports how much of
+//! one went. v1's equivalent read a short payload as an empty grant, so a
+//! partial write became a silent absence of authority and the run failed naming
+//! a secret rather than the pipe. A half-delivered instruction is an error,
+//! never a Drone that was told part of something.
 
 use std::future::Future;
 use std::io;
@@ -59,6 +37,18 @@ use crate::resume::Redirection;
 use crate::silence::Poke;
 
 /// A Drone's live session, from the gate's side.
+///
+/// **Seven methods, and none of them can start anything.** There is no spawn,
+/// no respawn and no restart, because the gate must not be able to produce a
+/// Drone — and no way to remove a worktree, because nothing in this workspace
+/// can. A restart is `crate::resume`'s and it reaches a spawn rather than this
+/// trait.
+///
+/// Each method carries a different authorship, which is why one method taking
+/// text would be wrong: a verdict Fleet reached, something Fleet observed while
+/// the step ran, a person's own words, Fleet's directive at the third stage of
+/// the thrashing chain, the answer a person picked from a set the Drone
+/// offered, and Fleet asking a quiet Drone whether it is still there.
 pub trait LiveSession {
     /// Errors this implementation can raise. Named by the implementation, so a
     /// caller can tell a session that has already ended from one that would not

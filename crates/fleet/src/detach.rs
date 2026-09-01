@@ -1,41 +1,28 @@
 //! Spawning a child that outlives this process, and no other kind of spawn.
 //!
-//! # Why this is a type and not a helper function
+//! **A type rather than a helper function.** Every Drone is spawned into its
+//! own session, because a supervisor signals a job's whole process tree and a
+//! Drone spawned as a plain child dies at every Fleet restart — silently,
+//! mid-Job, burning tokens against a real repository. That is the opposite of
+//! the killing Fleet does do, which is deliberate, at a cap, on a Drone burning
+//! without converging. A helper a caller remembers to use is the convention
+//! failure this codebase exists to remove, so there is no `Command` in this
+//! crate's public surface at all: [`Detached`] is the only way to start a
+//! process from Fleet and applies the call in its constructor. A caller cannot
+//! spawn an attached child because the call does not exist.
 //!
-//! Every Drone is spawned into its own session. A supervisor signals a job's
-//! whole process tree, so a Drone spawned as a plain child dies at every Fleet
-//! restart — silently, mid-Job, burning tokens against a real repository. A
-//! Drone killed by a restart it had nothing to do with is the opposite of the
-//! one killing Fleet does do, which is deliberate, at a cap, on a Drone that is
-//! burning without converging. A helper that a caller
-//! remembers to use is exactly the convention failure this codebase is built to
-//! remove, so there is no `Command` in this crate's public surface at all:
-//! [`Detached`] is the only way to start a process from Fleet, and it applies
-//! the call in its constructor. A caller cannot spawn an attached child because
-//! the call does not exist, not because a review catches it.
+//! **No `process_group` on this type**, and no way to reach the underlying
+//! `Command` and set one. Not tidiness: setting a process group and creating a
+//! session are mutually exclusive, and a spawn asking for both fails at
+//! `pre_exec` with `Operation not permitted` — the caller having become a
+//! process-group leader is precisely why the session call then refuses. v1
+//! measured that. One flag, and it is not optional, so the pair cannot be asked
+//! for.
 //!
-//! There is deliberately **no `process_group`** on this type, and no way to
-//! reach the underlying `Command` and set one. That is not tidiness: setting a
-//! process group and creating a session are mutually exclusive, and a spawn
-//! that asks for both fails at `pre_exec` with `Operation not permitted` — the
-//! caller having become a process-group leader is precisely why the session
-//! call then refuses. v1 measured that. One flag, and it is not optional, so
-//! the pair cannot be requested.
-//!
-//! # Why `libc` and not a shell
-//!
-//! macOS ships no `/usr/bin/setsid`, so this is a library call between fork and
-//! exec rather than a wrapper program.
-//!
-//! # The one place `unsafe` is spoken in this workspace
-//!
-//! `pre_exec` is unsafe because the closure runs in the forked child, between
-//! fork and exec, where only async-signal-safe calls are legal. The closure
-//! below makes exactly one, and touches nothing else. `crates/fleet/Cargo.toml`
-//! therefore sets `unsafe_code = "deny"` instead of inheriting the workspace's
-//! `forbid`, so that this single site can carry an `allow` and every other site
-//! in the crate still fails to compile. The deviation is one attribute wide and
-//! is greppable.
+//! **`libc` and not a shell**, because macOS ships no `/usr/bin/setsid`: a
+//! library call between fork and exec rather than a wrapper program. That makes
+//! `detach` the one place `unsafe` is spoken in this workspace, and it says why
+//! there.
 
 use std::ffi::OsStr;
 use std::io;
@@ -155,6 +142,14 @@ impl Detached {
 /// forked child never is. The error is returned rather than ignored: a child
 /// that silently stayed attached is the failure mode this whole module exists
 /// to remove, so it must not be able to look like a successful spawn.
+///
+/// **The one place `unsafe` is spoken in this workspace.** `pre_exec` is unsafe
+/// because its closure runs in the forked child, between fork and exec, where
+/// only async-signal-safe calls are legal — and the closure below makes exactly
+/// one and touches nothing else. `crates/fleet/Cargo.toml` therefore sets
+/// `unsafe_code = "deny"` instead of inheriting the workspace's `forbid`, so
+/// this single site can carry an `allow` while every other site in the crate
+/// still fails to compile. The deviation is one attribute wide and greppable.
 #[allow(unsafe_code)]
 fn detach(command: &mut Command) {
     // SAFETY: the closure runs in the forked child before exec, where only

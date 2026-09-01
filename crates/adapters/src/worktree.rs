@@ -1,12 +1,9 @@
 //! One worktree per Job, on its own new branch, created before a Drone exists.
 //!
-//! # The order the checks run in, and why it is the order
-//!
-//! Every refusal happens **before** anything is written. v1's bug was that the
+//! **Every refusal happens before anything is written.** v1's bug was that the
 //! branch collision was discovered by `git worktree add` failing halfway, which
 //! reported git's own sentence — the operation, not the reason — and left the
-//! caller to guess. So the branch is probed first, and the two ways a path can
-//! already be taken are probed next, and only then does anything land on disk.
+//! caller to guess. So the order below is the specification.
 //!
 //! 1. Open the repository.
 //! 2. Refuse if the branch is already there. **Refused, never reused**: adding
@@ -17,31 +14,14 @@
 //! 4. Refuse if the path holds something git did not put there.
 //! 5. Create `.armada/worktrees`, the branch, and the worktree.
 //!
-//! # The stale registration, which is the case a person will actually hit
+//! Step three is the one a person will actually hit, and
+//! [`clear_a_stale_registration`] holds why and how narrowly it is done.
 //!
-//! git files an administrative record under `.git/worktrees/<name>` and that
-//! record **outlives the directory**. M1 has no cleanup on purpose — worktrees
-//! accumulate and a person removes them by hand — and `rm -rf` on the checkout
-//! leaves the record behind, because nothing about a directory tells git it is
-//! gone. The next worktree at that path is then refused by git with *"is a
-//! missing but already registered working tree"*.
-//!
-//! So the record is pruned here, and the pruning is narrow in two ways that
-//! matter:
-//!
-//! - **Only this Job's name.** Walking every registration and pruning what
-//!   looks dead is a sweeper, and a sweeper is the thing M1 must not have.
-//! - **Never the working tree.** [`git2::WorktreePruneOptions`] defaults leave
-//!   the `working_tree` flag off, and the default options are passed as `None`
-//!   rather than built — so there is no field in this file that could be
-//!   flipped to make a prune delete somebody's files.
-//!
-//! # What is not here
-//!
-//! No removal, no sweep, no retention. [`Vcs`] has no method for it, so this
-//! file could not offer one anyway — a worktree survives every terminal state
-//! because nothing Fleet hands a Drone can delete one. Removal is a person's
-//! act, at `armada clean`, through [`reclaim`](crate::reclaim()).
+//! **What is not here: no removal, no sweep, no retention.** [`Vcs`] has no
+//! method for it, so this file could not offer one anyway — a worktree survives
+//! every terminal state because nothing Fleet hands a Drone can delete one.
+//! Removal is a person's act, at `armada clean`, through
+//! [`reclaim`](crate::reclaim()).
 
 use std::fs;
 use std::path::Path;
@@ -134,6 +114,20 @@ fn refuse_an_existing_branch(
 /// Prunable, in libgit2's default sense, means exactly: not locked, not still
 /// checked out, and no longer valid — the directory it points at is not there.
 /// A live worktree is therefore never pruned; it is refused.
+///
+/// **The record outlives the directory.** git files one under
+/// `.git/worktrees/<name>`, M1 has no cleanup on purpose, and `rm -rf` on a
+/// checkout leaves the record behind because nothing about a directory tells
+/// git it is gone. The next worktree at that path is then refused with *"is a
+/// missing but already registered working tree"*.
+///
+/// The pruning is narrow in two ways that matter. **Only this Job's name** —
+/// walking every registration and pruning what looks dead is a sweeper, and a
+/// sweeper is the thing M1 must not have. **Never the working tree** —
+/// [`git2::WorktreePruneOptions`] defaults leave the `working_tree` flag off,
+/// and the defaults are passed as `None` rather than built, so there is no
+/// field in this file that could be flipped to make a prune delete somebody's
+/// files.
 fn clear_a_stale_registration(
     repo: &Repository,
     spec: &WorktreeSpec,

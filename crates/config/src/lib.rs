@@ -1,44 +1,28 @@
 //! Kit and Manifest resolution, and the merge strategies between them.
 //!
 //! Owns scan, propose, select and verify — the part of v1 that ported most
-//! cleanly — plus Check and Command definitions, and the Kit and Manifest health
-//! probes, which read and validate their own files.
+//! cleanly — plus Check and Command definitions, and the Kit and Manifest
+//! health probes, which read and validate their own files. A Manifest is an
+//! `armada.yml` at a workspace root, version-controlled with the project it
+//! configures, and path ownership is nearest-ancestor: the nearest `armada.yml`
+//! up the tree owns a path, and the root owns whatever no Workspace claims.
 //!
-//! A Manifest is an `armada.yml` at a workspace root, version-controlled with
-//! the project it configures. Path ownership is nearest-ancestor: the nearest
-//! `armada.yml` up the tree owns a path, and the root owns whatever no Workspace
-//! claims.
+//! **Everything either schema holds and this crate does not read is an unknown
+//! key, and hard-fails.** [`manifest`](mod@manifest) and
+//! [`workflow`](mod@workflow) each name the keys they take. That looks like an
+//! unfinished parser and is not: a key nothing reads is a promise the file
+//! makes and the system does not keep, so refusing it means each deferred
+//! section lands with the code that honours it, and stays additive rather than
+//! becoming a migration of every file already written.
 //!
-//! # What is built, and what is refused
+//! **Bytes enter here, and JSON does not.** Gate rule five scopes untyped JSON
+//! reading to `store` and `ipc`; `armada.yml` and a WorkflowDef are YAML, walked
+//! as an untyped value rather than deserialized into a struct —
+//! [`yaml`](mod@yaml) holds why a derive could not carry the refusals.
 //!
-//! M1 reads **seven keys** from an `armada.yml` — `version`, `id`,
-//! `checks.<name>.run`, `checks.<name>.when`, `commands.<name>.run`,
-//! `commands.<name>.destructive`, `setup.requires` —
-//! and **five fields** of a WorkflowDef. Everything else in either schema is an
-//! unknown key and hard-fails.
-//!
-//! That is the decision worth restating, because it looks like the parser is
-//! unfinished and it is not. A key nothing reads is a promise the file makes
-//! and the system does not keep: an `armada.yml` carrying a `budget:` section
-//! that no code consumes reads to its author as a budget that is set. Refusing
-//! it means each deferred section lands with the code that honours it, and
-//! stays additive rather than becoming a migration of every file already
-//! written.
-//!
-//! # Bytes enter here, and JSON does not
-//!
-//! Gate rule five scopes untyped JSON reading to `store` and `ipc`. Nothing
-//! here parses JSON: `armada.yml` and a WorkflowDef are YAML, and the document
-//! is walked as an untyped value rather than deserialized into a struct. See
-//! [`yaml`](mod@yaml)'s own comment for why a derive could not carry the
-//! refusals this crate has to produce.
-//!
-//! # Nothing here reads a clock
-//!
-//! Parsing and validation are pure. There is no mtime check, no staleness
-//! window and no cache expiry — a Manifest is as fresh as the last time
-//! somebody read it, and who decides to read it again is not this crate's
-//! question.
+//! **Nothing here reads a clock.** Parsing and validation are pure: no mtime
+//! check, no staleness window, no cache expiry. A Manifest is as fresh as the
+//! last time somebody read it, and who reads it again is not asked here.
 
 mod error;
 mod judge;

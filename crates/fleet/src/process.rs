@@ -1,42 +1,23 @@
 //! Whether a pid is held, and whether it is held by the *same* process.
 //!
-//! # The question v1 never had to answer
+//! **The question v1 never had to answer.** v1's `group_alive` proved a pid was
+//! held, which was enough because the only reader of v1's pidfile was the
+//! daemon reading its own — one process, one file, one boot. Bridge is a
+//! second, independent reader asking a stronger question: **is the process at
+//! this pid the Fleet that wrote this file.** A live pid does not answer it,
+//! because pids are recycled and a recycled pid says "yes, something is here"
+//! to every check that only asks for liveness. So [`holder_of`] returns *who*
+//! holds a pid, expressed as the one fact about a process that is fixed for its
+//! whole life and is not reused when its pid is: **when it started.** Comparing
+//! that against what was recorded is the identity check.
 //!
-//! v1's `group_alive` proved a pid was held. That was enough, because the only
-//! reader of v1's pidfile was the daemon reading its own — one process, one
-//! file, one boot. Bridge is a second, independent reader asking a stronger
-//! question: **is the process at this pid the Fleet that wrote this file**. A
-//! live pid does not answer it. Pids are recycled, and a recycled pid answers
-//! "yes, something is here" to every check that only asks for liveness.
-//!
-//! So liveness is not the primitive here. [`holder_of`] returns *who* holds a
-//! pid — expressed as the one fact about a process that is fixed for its whole
-//! life and is not reused when its pid is: **when it started.** Comparing that
-//! against what was recorded is the identity check.
-//!
-//! # Why an absolute start time, and no boot id
-//!
-//! The harvest names v1's shape for the same problem on a Drone: boot id plus
-//! process start time. The boot id is there because v1 read a start time that
-//! is *relative* — jiffies since boot, out of `/proc/<pid>/stat` — and two
-//! boots both have a jiffy 4,096. An absolute wall-clock start time needs no
-//! such disambiguation: a process that starts after a reboot cannot carry a
-//! start time from before it, so the boot id is a field that would only ever
-//! restate what the start time already says.
-//!
-//! # Why it asks `ps`
-//!
-//! The two obvious alternatives read a kernel structure directly, and they do
-//! it differently on each platform: `/proc/<pid>/stat` on Linux, `kinfo_proc`
-//! through `sysctl` on macOS. Both need `unsafe` or a platform crate, and both
-//! put a platform fork in a crate that has no other reason to have one.
-//! `ps -o lstart= -p <pid>` is one spelling on both, and — the deciding
-//! argument — it is a spelling **Bridge can run too**. The runtime file is a
-//! contract between a Rust process and a Node one, so an identity check only
-//! Rust can perform is an identity check the reader that needs it cannot make.
-//!
-//! Second resolution is the cost, and it is stated where it bites:
-//! [`Holder::Held`].
+//! **An absolute start time, and no boot id.** The harvest names v1's shape for
+//! the same problem on a Drone — boot id plus process start time — and the boot
+//! id is there because v1 read a *relative* start time, jiffies since boot out
+//! of `/proc/<pid>/stat`, and two boots both have a jiffy 4,096. An absolute
+//! wall-clock start time needs no such disambiguation: a process starting after
+//! a reboot cannot carry a start time from before it, so a boot id would only
+//! ever restate what the start time already says.
 
 use std::error::Error;
 use std::fmt;
@@ -96,6 +77,16 @@ const PID_CEILING: u32 = i32::MAX as u32;
 /// **Pid zero is never held.** It names the caller's own process group to
 /// `kill(2)` and nothing at all here, and v1 carried a test by that name for
 /// the same reason: a zero-valued pid is what a half-written file reads as.
+///
+/// **It asks `ps`.** The two obvious alternatives read a kernel structure
+/// directly and do it differently on each platform — `/proc/<pid>/stat` on
+/// Linux, `kinfo_proc` through `sysctl` on macOS — needing `unsafe` or a
+/// platform crate, and putting a platform fork in a crate with no other reason
+/// for one. `ps -o lstart= -p <pid>` is one spelling on both, and the deciding
+/// argument is that it is a spelling **Bridge can run too**: the runtime file
+/// is a contract between a Rust process and a Node one, so an identity check
+/// only Rust can perform is one the reader that needs it cannot make. Second
+/// resolution is the cost, stated where it bites at [`Holder::Held`].
 pub fn holder_of(pid: u32) -> Result<Holder, ProbeFailed> {
     if pid == 0 || pid > PID_CEILING {
         return Ok(Holder::Vacant);

@@ -1,46 +1,28 @@
 //! A proposal, turned into everything creation decides — and nothing it does
-//! not.
+//! not. **The one place a wire type becomes a Job**: `serving` converts the
+//! other way, which is where redaction happens. This is the inbound half, kept
+//! from the loop for the same reason — turning a `ProposeJob` into a `NewJob`
+//! is a creation decision, and every field below is about what a Job *is*.
 //!
-//! # The one place a wire type becomes a Job
+//! **Three fields are decided here and not by the proposer.** The **id**,
+//! because Fleet is the sole authority for the ids that name records and an id
+//! invented by a peer joins to nothing. The **steps**, because they are the
+//! frozen workflow's, written at creation so that what was approved is what
+//! runs even if the workflow file is edited while the Job waits days at the
+//! gate. And **each criterion's id**, because a Judge citation references one by
+//! its frozen position. There is no `status` field below — `NewJob`'s doing: a
+//! Job cannot be created into a state, so no proposal asks for one.
 //!
-//! `serving` converts the other way, `Job` to `JobSummary`, which is where
-//! redaction happens. This is the inbound half, and it is separate from the
-//! loop for the same reason: turning a `ProposeJob` into a `NewJob` is a
-//! creation decision, not a dispatch one, and every field below is a choice
-//! about what a Job *is* rather than about what happens to it next.
-//!
-//! # Three of the fields are decided here and not by the proposer
-//!
-//! **The id**, because Fleet is the sole authority for the ids that name
-//! records and an id invented by a peer joins to nothing. **The steps**,
-//! because they are the frozen workflow's — written at creation so that what
-//! was approved is what runs, even if the workflow file is edited while the Job
-//! waits at the gate for days. And **each criterion's id**, because a Judge
-//! citation references a criterion by its frozen position.
-//!
-//! There is no `status` field anywhere below, and that is `NewJob`'s doing
-//! rather than this file's: a Job cannot be created into a state, so a proposal
-//! cannot ask for one.
-//!
-//! # Five refusals, and every one of them used to be a Job on the board
-//!
-//! **This is where a value that cannot produce a Drone is refused**, and until
-//! it was, three of the four were accepted here and failed layers further in —
-//! or never failed at all, which is worse.
+//! **A value that cannot produce a Drone is refused here**, and every row below
+//! used to be a Job on the board.
 //!
 //! | The proposal said | What used to happen |
 //! |---|---|
-//! | `title: ""` | Refused here already. The pattern the other three follow |
-//! | `model: ""` | Stored, drawn on the board, refused at spawn as "no model was named" |
+//! | `title: ""` | Refused here already. The pattern the other four follow |
+//! | `model: ""` | Stored, drawn on the board, refused at spawn as "no model was named". Naming none is the ordinary case — `list_models` says what the configured default is and Fleet fills it in — so the refusal is for a proposal that names none *and* configuration that supplies none, which is a machine that is not set up rather than a request that is wrong |
 //! | a workflow id nothing holds | Written onto the record unverified; the Job claimed a workflow Fleet had never heard of |
 //! | a Manifest id nothing holds | The same, for the other id |
-//! | an attachment's `staged_path` does not exist or cannot be read | Nothing checked this until now — a screenshot a person believed they attached would silently not exist on the Job, which is worse than the Job never being proposed |
-//!
-//! The model is the one of the four original refusals that a proposal may
-//! leave out. Naming none is the ordinary case — `list_models` says what the
-//! configured default is and Fleet fills it in — and the refusal is for the
-//! case where the proposal names none *and* configuration supplies none,
-//! which is a machine that is not set up rather than a request that is wrong.
+//! | an attachment's `staged_path` is missing or unreadable | Nothing checked this until now — a screenshot a person believed they attached would silently not exist on the Job, which is worse than the Job never being proposed |
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
