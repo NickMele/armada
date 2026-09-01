@@ -2,9 +2,9 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import "./styles/index.css";
-import type { BridgeIdentity } from "../../shared/bridge";
+import type { BridgeIdentity } from "@armada/protocol";
 import { App, WAITING } from "./App";
-import { Boundary } from "./Boundary";
+import { Boundary } from "@armada/shell";
 
 // Bridge's renderer entry point. No Node, no `require`, no socket — everything
 // it draws arrives through the preload from the one connection in the main

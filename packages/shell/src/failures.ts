@@ -13,7 +13,7 @@
 import { File } from "lucide-react";
 import type { DebugField, DebugPayload, FailureDetail, FailureMachineValue } from "@armada/components";
 
-import type { BridgeIdentity } from "../../shared/bridge";
+import type { BridgeIdentity } from "@armada/protocol";
 import type { Connection } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 import type { UnreadableJob, WireError } from "@armada/protocol";

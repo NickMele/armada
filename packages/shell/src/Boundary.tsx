@@ -15,7 +15,7 @@
 import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
 
-import type { BridgeIdentity } from "../../shared/bridge";
+import type { BridgeIdentity } from "@armada/protocol";
 import type { Caught } from "./failures";
 import { FailureSurface } from "./FailureSurface";
 

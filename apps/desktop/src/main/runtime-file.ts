@@ -16,7 +16,7 @@ import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
-import type { BridgeIdentity } from "../shared/bridge";
+import type { BridgeIdentity } from "@armada/protocol";
 import type { Absence, FleetIdentity, RuntimeFault } from "@armada/protocol";
 import { versionOf } from "@armada/protocol";
 

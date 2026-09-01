@@ -89,3 +89,45 @@ export function connectedTo(fleet: FleetIdentity, cursor: number): Connection {
   const reading = skew({ fleet: fleet.protocolVersion, bridge: PROTOCOL_VERSION });
   return { state: "connected", fleet, cursor, skew: connects(reading) ? reading : "same" };
 }
+
+/* What the side holding the connection knows about its own session, which the
+ * side rendering a failure cannot derive.
+ *
+ * **Here rather than with the app that fills it.** Both a host process and the
+ * surface that draws its failures need this type, and they sit at opposite ends
+ * of the layering — the only place both can reach is the bottom. It is the
+ * loosest thing in this package: an audit path is a local file, not something
+ * Fleet ever sends. It travels because a shared vocabulary is what this package
+ * is for, not because a socket carries it. */
+/**
+ * What every Bridge failure carries that is not about the failure — where the
+ * machine log is, and which Fleet is on the other end of the one connection.
+ *
+ * **No `run_id`, and none is minted.** The envelope makes `run_id` the one id an
+ * emitter mints for itself, but nothing in Bridge writes a log line yet, so an
+ * id minted here would join to nothing and would read on screen as though it
+ * identified the failure. The only real one is the one a `WireError` carries,
+ * and that names Fleet's run rather than any single failure.
+ *
+ * Both fields are facts main holds and the renderer cannot derive — a home
+ * directory it cannot resolve, and a connection it does not own — so both are
+ * published rather than guessed at.
+ */
+export type BridgeIdentity = {
+  /** The machine log. `null` where HOME is not set and no path resolves. */
+  auditPath: string | null;
+  /**
+   * The protocol Fleet speaks, written `5.2`, as the runtime file said it.
+   *
+   * **Here rather than at each failure, because four of the five failures are
+   * handed no connection.** A refusal is the case that made it worth fixing:
+   * Fleet answered it, so Fleet's version is the first thing a reader of the
+   * payload wants, and it was the one payload guaranteed to omit it. Derived
+   * where the connection is published, so nothing re-derives it per failure.
+   *
+   * `null` before a runtime file has been read and believed, and again the
+   * moment the connection is one of the states that never got a version —
+   * which is a fact rather than a gap, and the tail omits the row.
+   */
+  fleetProtocol: string | null;
+};
