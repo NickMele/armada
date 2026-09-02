@@ -8,6 +8,26 @@ refuse.
 
 ---
 
+## Node and pnpm
+
+**`.nvmrc` names the Node version, and `engines.node` is the floor.**
+`engineStrict: true` in `pnpm-workspace.yaml` makes a mismatch refuse the
+install rather than warn and carry on.
+
+| Where | Says |
+|---|---|
+| `.nvmrc` | The exact version — `nvm use` reads it |
+| `engines.node` in `package.json` | The floor a wrong Node is measured against |
+| `pnpm-workspace.yaml` | That the floor is enforced, not advisory |
+| `packageManager` in `package.json` | The pnpm version corepack fetches |
+
+**pnpm comes from corepack, which is bundled with Node.** A Node old enough
+carries a corepack whose npm signing keys have expired, and every `pnpm` call
+then dies in `verifySignature` with `Cannot find matching keyid` — which reads
+as a registry outage and is a stale Node. The version in `.nvmrc` ships a
+corepack with current keys; on an older Node, `npm i -g corepack@latest` fixes
+it in place.
+
 ## The two halves
 
 **Fleet is started first, always.** Fleet binds a loopback port and publishes a
