@@ -150,3 +150,49 @@ export const MidStepWithNoFootprint: Story = {
     await expect(sheet).toHaveTextContent("Nothing served says which step wrote each file.");
   },
 };
+
+/**
+ * Nothing was read — the third header state, and the reason it exists.
+ *
+ * **A count of nothing is a claim, and here it would be a false one.** A Job
+ * with no worktree, a read Fleet did not answer and a read still in flight all
+ * arrive as no reading, and `0 files · +0 −0` over any of them says the drone
+ * changed nothing. That is #310 one state along, so the header says it has no
+ * reading and leaves the explanation to the body.
+ *
+ * `files: []` is a different story and not this one: a worktree that opened and
+ * holds no change genuinely is `0 files`, and it says so.
+ */
+export const NoReading: Story = {
+  args: {
+    open: true,
+    branch: "fix/settings-split-selectors",
+    files: null,
+    children: (
+      <UnifiedDiff
+        files={[]}
+        emptyNote={
+          "This job has no worktree, so there is nothing to read. Absent is not empty — a " +
+          "drone that changed nothing is a different answer, and this is not it."
+        }
+      />
+    ),
+  },
+  play: async ({ canvas }) => {
+    const sheet = canvas.getByRole("dialog", { name: "Job diff" });
+
+    // The header states the absence. It never asserts a count, and it drops the
+    // clause that says where a patch came from, because there is no patch.
+    await expect(sheet).toHaveTextContent("no reading");
+    await expect(sheet).not.toHaveTextContent("0 files");
+    await expect(sheet).not.toHaveTextContent("+0");
+    await expect(sheet).not.toHaveTextContent("uncommitted, in the worktree");
+
+    // Which silence it is comes from the body, not the header.
+    await expect(sheet).toHaveTextContent("This job has no worktree");
+
+    // No rail rows to select, and the note is still under them.
+    await expect(canvas.queryAllByRole("button", { name: /packages\// })).toHaveLength(0);
+    await expect(sheet).toHaveTextContent("Fleet commits once at the end");
+  },
+};

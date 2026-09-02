@@ -75,8 +75,18 @@ export type JobDiffSheetProps = {
   open: boolean;
   /** The branch the work is on. Mono: git spelled it. */
   branch: ReactNode;
-  /** Every file in the patch, in the order the reading found them. */
-  files: JobDiffFile[];
+  /**
+   * Every file in the patch, in the order the reading found them — or `null`
+   * where there is no reading at all.
+   *
+   * **Absent is not empty, and the header says which.** `[]` is a worktree that
+   * opened and holds no change, which is a real answer and reads `0 files · +0
+   * −0`. `null` is a Job with no worktree, a read that failed or one still in
+   * flight, and there the header says it has no reading rather than summing an
+   * empty list — a count of nothing asserted where nothing was read is #310 one
+   * state over. Which silence it is belongs to `children` and to `note`.
+   */
+  files: JobDiffFile[] | null;
   /** Which file the rail has selected, by path. */
   selected?: string;
   onSelect?: (path: string) => void;
@@ -107,6 +117,41 @@ const ONE_PATCH =
   "Fleet commits once at the end, so the patch is the Job's. Each file names the step that " +
   "wrote it.";
 
+/**
+ * What the header says where there is no reading behind it.
+ *
+ * **It states the absence and stops.** It does not say *why* — a Job with no
+ * worktree, a read that failed and a read still in flight are three different
+ * facts, and the sentence for each belongs to the caller, in the body. A header
+ * that guessed between them would be inventing the one thing it does not know.
+ *
+ * Nor does it carry the *uncommitted, in the worktree* clause the counted
+ * header ends on: that clause says where the patch came from, and there is no
+ * patch.
+ */
+const NO_READING = "no reading";
+
+/**
+ * The counted half of the header: how many files, and what they gained and
+ * lost.
+ *
+ * Its own component so the sum lives with the branch that draws it. Summing
+ * before knowing whether there is a reading is what produced `+0 −0` under a
+ * `null`.
+ */
+function Counted({ files }: { files: JobDiffFile[] }) {
+  const added = files.reduce((sum, file) => sum + file.added, 0);
+  const removed = files.reduce((sum, file) => sum + file.removed, 0);
+  return (
+    <>
+      {` · ${files.length} ${files.length === 1 ? "file" : "files"} · `}
+      <span className="armada-diff-sheet__added">{`+${added}`}</span>{" "}
+      <span className="armada-diff-sheet__removed">{`−${removed}`}</span>
+      {" · uncommitted, in the worktree"}
+    </>
+  );
+}
+
 export function JobDiffSheet({
   open,
   branch,
@@ -119,9 +164,6 @@ export function JobDiffSheet({
   floor = false,
   onClose,
 }: JobDiffSheetProps) {
-  const added = files.reduce((sum, file) => sum + file.added, 0);
-  const removed = files.reduce((sum, file) => sum + file.removed, 0);
-
   return (
     <Sheet
       open={open}
@@ -132,10 +174,7 @@ export function JobDiffSheet({
       subtitle={
         <>
           <span className="armada-diff-sheet__mono">{branch}</span>
-          {` · ${files.length} ${files.length === 1 ? "file" : "files"} · `}
-          <span className="armada-diff-sheet__added">{`+${added}`}</span>{" "}
-          <span className="armada-diff-sheet__removed">{`−${removed}`}</span>
-          {" · uncommitted, in the worktree"}
+          {files === null ? ` · ${NO_READING}` : <Counted files={files} />}
         </>
       }
       closeLabel="Close"
@@ -152,7 +191,7 @@ export function JobDiffSheet({
               {"'s files"}
             </span>
           )}
-          {files.map((file) => (
+          {(files ?? []).map((file) => (
             <button
               key={file.path}
               type="button"

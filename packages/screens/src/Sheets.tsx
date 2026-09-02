@@ -171,17 +171,24 @@ export function holdOf(now: number, rows: number): HeldAt {
  * so the rail names exactly the files beside it in the order the patch wrote
  * them. It is a second call of one pure function rather than a second answer.
  *
+ * **`null` is no reading and `[]` is a reading of nothing**, and the split
+ * falls on the line the wire already draws. `work` absent is a Job with no
+ * worktree; `work` present with no patch is a drone that changed nothing, which
+ * is a real answer and truthfully reads `0 files · +0 −0`. Returning `[]` for
+ * both would put a count of nothing over a Job nothing was read from, which is
+ * this issue one state over.
+ *
  * **No step against a file.** The drawing names the step that wrote each one
  * and nothing served says which step that was: the footprint carries
  * `planned_by`, which is the step that *promised* a path, and a file no step
  * declared would then read as a file no step wrote. The rail draws the counts
  * alone and says why underneath rather than guessing. Reported.
  */
-function railOf(diff: Diff, jobId: string): JobDiffFile[] {
-  // A reading of some other Job is not this Job's rail, and `whyNoDiff` is what
-  // the body says for every other state — an empty rail is the honest rail
-  // there, because there is no patch on screen for it to be a count of.
-  if (diff.state !== "read" || diff.jobId !== jobId || diff.work === undefined) return [];
+function railOf(diff: Diff, jobId: string): JobDiffFile[] | null {
+  // A reading of some other Job is not this Job's reading. `whyNoDiff` is the
+  // sentence the body carries for each of these, and the header says only that
+  // it has none.
+  if (diff.state !== "read" || diff.jobId !== jobId || diff.work === undefined) return null;
   return railOfPatch(drawn(diff.work).files);
 }
 
