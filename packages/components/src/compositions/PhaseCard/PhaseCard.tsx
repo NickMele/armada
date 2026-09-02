@@ -173,27 +173,61 @@ const CLOSES_WITH: Record<PhaseStageKind, string | undefined> = {
 /**
  * Where the state changes what the tier *is*, and not only where it stands.
  *
- * **The human tier's closing line is a claim about the chip in front of you.**
- * *Amber, not red — it is waiting on you, not broken* is true of a tier holding
- * a step and false of every un-lit one, and the two un-lit states are false for
- * different reasons.
+ * **The human tier's closing line is a claim about the chip in front of you**,
+ * not a description of the tier in general. *Amber, not red — it is waiting on
+ * you, not broken* is true of a tier holding a step and false of every other
+ * state, each for its own reason.
  *
- * **`never` is a tier that will not light.** A step whose `advance_gate` never
- * asks for a person will never sit here, so the chip will never be amber and
- * nobody is ever waited on — and *waiting on you* is the exact claim #308 was
- * filed to stop.
+ * # The human tier's four states, and which one takes the standing line
+ *
+ * | State | The chip | What the closer has to say |
+ * |---|---|---|
+ * | `waiting` | amber, holding the step | **the standing line, and only here** |
+ * | `cleared` | a person answered | the gate does not ask twice |
+ * | `ahead` | un-lit, will light | not amber yet, and why |
+ * | `never` | un-lit, will not light | nobody is ever asked |
+ *
+ * **Three of the four carried a false claim, and #320 named one of them.**
+ * That is the defect behind all three rather than three defects: the lookup was
+ * keyed by kind, so every state a caller did not think about inherited a
+ * sentence written for one of them. The table is here so the set is readable at
+ * a glance — **a fifth state added to this tier inherits the default silently**,
+ * and reading it off a map with one entry is how that goes unnoticed.
+ *
+ * `current` and `failed` are typeable on this tier and no caller produces
+ * either. A caller that starts to is the fifth state.
+ *
+ * # Why each of the three differs
+ *
+ * **`cleared` is a tier a person has already answered.** *It is waiting on you*
+ * is not merely the wrong tense there — it asks again for something already
+ * given. It is also the state every approved step lands in, which makes it the
+ * most-seen of the three wrong ones rather than the most obscure.
  *
  * **`ahead` is a tier that has not been reached.** It will light, and it has
  * not, so the card is not amber and nothing is on the person yet. **The state
- * that has not been reached is not the state that is waiting.** Copy that
- * described what the card will become was the alternative and it is refused: a
- * card describing what it will become is a card that is wrong now.
+ * that has not been reached is not the state that is waiting.**
  *
- * **Sparse on purpose, and not a severity ordering.** A state that does not
- * change what the tier is takes the kind's own sentence, which is the property
- * worth keeping — the common tier says the standing line without any caller
- * retyping it. `never` and `ahead` differ because the facts differ, not because
- * one is worse.
+ * **`never` is a tier that will not light.** A step whose `advance_gate` never
+ * asks for a person will never sit here, so the chip will never be amber and
+ * nobody is ever waited on — *waiting on you* is the exact claim #308 was filed
+ * to stop.
+ *
+ * # Two rules the copy follows
+ *
+ * **None of the three says *waiting*, and that is deliberate rather than
+ * incidental.** Each could have hedged the word and stayed true; avoiding it
+ * outright is what lets all three stories assert one absent word, so a
+ * rewording that put the claim back fails on every un-waiting state at once.
+ *
+ * **Copy that describes what the card will become is refused.** It was the
+ * alternative for `ahead`: a card describing what it will become is a card that
+ * is wrong now.
+ *
+ * **Sparse, and not a severity ordering.** A state that does not change what
+ * the tier is takes the kind's own sentence, which is the property worth
+ * keeping — the common tier says the standing line without any caller retyping
+ * it. These differ because the facts differ, not because one is worse.
  */
 const WHEN: Record<"said" | "closesWith", Partial<Record<PhaseStageKind, Partial<Record<PhaseStageState, string>>>>> = {
   said: {
@@ -203,6 +237,7 @@ const WHEN: Record<"said" | "closesWith", Partial<Record<PhaseStageKind, Partial
     human: {
       never: "Nothing at this step waits for a person. Its advance gate never asks for one.",
       ahead: "Not amber yet. This step's gate will ask for a person, and it has not got that far.",
+      cleared: "Answered. A person approved this step, and the gate does not ask twice.",
     },
   },
 };

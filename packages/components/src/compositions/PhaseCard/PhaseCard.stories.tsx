@@ -222,10 +222,39 @@ export const TheHumanTierNotReachedYet: Story = {
   },
   play: async ({ canvas }) => {
     // The same assertion as the never tier, on the same word, for the same
-    // reason. The pair is why the copy avoids *waiting* rather than hedging
-    // it: one word, refused on every un-lit human tier.
+    // reason. The set is why the copy avoids *waiting* rather than hedging
+    // it: one word, refused on every human tier that is not waiting.
     expect(canvas.queryByText(/waiting/i)).toBeNull();
     await expect(canvas.getByText(/Not amber yet/)).toBeVisible();
+  },
+};
+
+/**
+ * **A human tier a person has already answered**, given nothing but its kind
+ * and its state. The third of the three states that carried the standing line
+ * wrongly, and **the most-seen of them** — every approved step lands here.
+ *
+ * *It is waiting on you* was not merely the wrong tense on this card. It asks
+ * again for something already given, on the one state a person reaches by
+ * having acted.
+ *
+ * **`stands` is omitted rather than written.** `phases.tsx` passes `not
+ * reached` for this state, which is wrong in its own right and is a caller's
+ * bug rather than this component's, so a story asserting the closing line
+ * should not draw it. Reported, not fixed here.
+ */
+export const TheHumanTierAlreadyAnswered: Story = {
+  args: {
+    kind: "human",
+    name: "You",
+    state: "cleared",
+  },
+  play: async ({ canvas }) => {
+    // Three states, one absent word. A rewording of the standing closer that
+    // put the claim back fails on all three at once, which is the property the
+    // copy was written for.
+    expect(canvas.queryByText(/waiting/i)).toBeNull();
+    await expect(canvas.getByText(/does not ask twice/)).toBeVisible();
   },
 };
 
