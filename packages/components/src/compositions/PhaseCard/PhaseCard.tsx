@@ -28,8 +28,10 @@ import type { ReactNode } from "react";
  * exit code, and it may pass or fail. The Judge is a model reading the work
  * against the step's acceptance criteria, and it may only refuse. Drawing them
  * as one row of chips risks reading as one kind of thing, so each carries a
- * standing sentence written once, here — `SAID` below — rather than retyped on
- * every screen that draws a strip.
+ * standing sentence written once, here — `phaseSaid` below — rather than
+ * retyped on every screen that draws a strip. **Keyed by state as well as
+ * kind**, because a tier that can never hold a step cannot say what a tier
+ * holding one says.
  *
  * **The standing sentence does not replace this step's facts.** It says what
  * the tier is; the rows say what happened. A card that showed only the
@@ -145,7 +147,7 @@ export function phaseGlyph(kind: PhaseStageKind, state: PhaseStageState): Lucide
  * Check and a Judge is stated. That difference is the whole reason the two
  * tiers are not one row of chips.
  */
-export const SAID: Record<PhaseStageKind, string | undefined> = {
+const SAID: Record<PhaseStageKind, string | undefined> = {
   phase: undefined,
   checks:
     "Commands this repository declares in its own Manifest. Fleet runs them and the Drone never " +
@@ -160,13 +162,58 @@ export const SAID: Record<PhaseStageKind, string | undefined> = {
 };
 
 /** What each tier is worth knowing after the rows. Standing copy, same rule. */
-export const CLOSES_WITH: Record<PhaseStageKind, string | undefined> = {
+const CLOSES_WITH: Record<PhaseStageKind, string | undefined> = {
   phase: undefined,
   checks:
     "A command and an exit code. Nothing to interpret, and the same answer every time it is run.",
   judge: "It can only refuse. A Judge never turns a failed Check into a pass.",
   human: "Amber, not red. It is waiting on you, not broken.",
 };
+
+/**
+ * Where the state changes what the tier *is*, and not only where it stands.
+ *
+ * **`never` is the case the two maps above cannot hold.** Both of the human
+ * tier's sentences describe a tier that can stop a step: one says a step
+ * sitting here is stopped with nothing wrong, the other says the chip is amber
+ * rather than red. A step whose `advance_gate` never asks for a person will
+ * never sit there and the chip will never be amber, so both are false — and
+ * *waiting on you* is the exact claim #308 was filed to stop.
+ *
+ * **Sparse on purpose.** A state that does not change what the tier is takes
+ * the kind's own sentence, which is the property worth keeping: the common tier
+ * says the standing line without any caller retyping it. This is not a severity
+ * ordering either — `ahead` and `never` are both un-lit, and only one of them
+ * makes the kind's sentence untrue.
+ */
+const WHEN: Record<"said" | "closesWith", Partial<Record<PhaseStageKind, Partial<Record<PhaseStageState, string>>>>> = {
+  said: {
+    human: { never: "The human gate, which this step's workflow does not use." },
+  },
+  closesWith: {
+    human: {
+      never: "Nothing at this step waits for a person. Its advance gate never asks for one.",
+    },
+  },
+};
+
+/**
+ * What the tier is, keyed by kind and state.
+ *
+ * **Exported, and the kind-only maps are not.** A lookup that took the kind
+ * alone is how a caller reached the waiting sentence for a tier that can never
+ * wait — the guard has to be here rather than in each caller's discipline,
+ * because the next caller is the one who forgets. #320, and `phaseGlyph` above
+ * is the same argument for the same reason.
+ */
+export function phaseSaid(kind: PhaseStageKind, state: PhaseStageState): string | undefined {
+  return WHEN.said[kind]?.[state] ?? SAID[kind];
+}
+
+/** What the tier is worth knowing after the rows, keyed by kind and state. */
+export function phaseClosesWith(kind: PhaseStageKind, state: PhaseStageState): string | undefined {
+  return WHEN.closesWith[kind]?.[state] ?? CLOSES_WITH[kind];
+}
 
 /**
  * A wire verdict, as the state a row stands in. `undefined` where the verdict
@@ -272,8 +319,8 @@ export function PhaseCard({
   align = "start",
 }: PhaseCardProps) {
   const Head = phaseGlyph(kind, state);
-  const says = said === undefined ? SAID[kind] : said;
-  const closes = detail === undefined ? CLOSES_WITH[kind] : detail;
+  const says = said === undefined ? phaseSaid(kind, state) : said;
+  const closes = detail === undefined ? phaseClosesWith(kind, state) : detail;
 
   return (
     <div

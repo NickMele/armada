@@ -419,13 +419,12 @@ function youStage(step: StepDetail): PhaseStage {
       kind: "human",
       state: "never",
       stands: "this step advances without a person",
-      // **Both lines are said here rather than left to the card's standing
-      // ones, because both of those are about a tier that can hold a step.**
-      // The standing sentence says a step sitting here is stopped with nothing
-      // wrong, and the standing closer says *amber, not red — it is waiting on
-      // you*. Neither is true of a gate that cannot ask.
-      said: "The human gate, which this step's workflow does not use.",
-      detail: "Nothing at this step waits for a person. Its advance gate never asks for one.",
+      // No `said` and no `detail`. Both lines used to be written here, and
+      // that was the defect: the card keyed its standing copy by kind alone,
+      // so a caller who omitted them got *amber, not red — it is waiting on
+      // you* on a tier that can never wait. `phaseSaid` and `phaseClosesWith`
+      // now key by state, and the discipline is the component's rather than
+      // every caller's. #320.
     };
   }
 

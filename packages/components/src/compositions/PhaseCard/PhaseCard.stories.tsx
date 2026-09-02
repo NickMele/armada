@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 import { PhaseCard, type PhaseCardProps } from "./PhaseCard";
 
 const meta: Meta<typeof PhaseCard> = {
@@ -165,6 +166,37 @@ export const JudgeRefusedAndWhy: Story = {
  * not read as a failure. Amber, not red.
  */
 export const You: Story = { args: YOU };
+
+/**
+ * **A human tier that can never ask, given nothing but its kind and its
+ * state.** No `said`, no `detail`, no `note` — every sentence on this card is
+ * the component's own, which is the whole point of the story.
+ *
+ * A step whose `advance_gate` is `auto` or `auto_if_judge_passes` will never
+ * stop for a person. Both of the human tier's standing sentences describe a
+ * tier that *can* stop one, so on this card both were false, and the closing
+ * one said *waiting on you* — the exact claim #308 was filed to stop. It never
+ * reached a screen only because `phases.tsx` overrode both lines at every site,
+ * which is a guard that lasts until somebody adds a caller.
+ *
+ * Beside `You` above, the pair is the argument: same kind, same component, and
+ * neither sentence retyped by a caller.
+ */
+export const TheHumanTierThatCanNeverAsk: Story = {
+  args: {
+    kind: "human",
+    name: "No one",
+    state: "never",
+    stands: "this step advances without a person",
+  },
+  play: async ({ canvas }) => {
+    // The refusal first, because it is what the story is for. A word rather
+    // than a sentence: any rewording of the standing closer that put *waiting*
+    // back on a tier that can never wait still fails here.
+    expect(canvas.queryByText(/waiting/i)).toBeNull();
+    await expect(canvas.getByText(/never asks for one/)).toBeVisible();
+  },
+};
 
 /**
  * The card as it opens off the strip — `--bg-overlay`, the strong edge, and
