@@ -19,6 +19,7 @@ no second drawing of it to reconcile against.
 | The tokens | `packages/tokens/src/*.css`. Read the comments; several carry the argument for a value |
 | The glyphs | `packages/icons/icons.toml` |
 | The states a status can hold | `crates/core-model/domain/enum-verbs.toml` |
+| What a `play` asserts | `docs/practices/react.md`, under `Stories are the tests` |
 
 **Where the contract and a built component disagree, the contract wins** — and
 the disagreement is a finding worth reporting, not a coin toss. Four were found
@@ -68,10 +69,26 @@ the accessible name, the text a person reads. A test that names markup fails on
 every refactor and proves nothing about what was drawn; one that reads roles
 lets the markup be rebuilt underneath it.
 
+**Where no accessible property carries the fact, add the one that should** —
+rather than reading a `data-` attribute, and rather than asserting nothing.
+`JobDiffSheet`'s rail took `aria-current` for this: which file the patch was
+showing lived in `data-on` and the stylesheet, so nobody who was not looking at
+it was ever told.
+
 **Arithmetic is not tested here.** A pure function belongs in its own package's
 unit tests, where a hundred cases cost what one costs — `packages/screens` is
 the worked example. A `play` that computes rather than reads is a unit test
 paying a browser's price.
+
+**What earns a `play` is behaviour a rendering cannot show.** A keyboard
+contract written by hand, a rule about what does *not* happen, controlled state
+that must stay inert, a callback falling through to another, unmounted versus
+hidden. A variant, a measurement or a colour earns none.
+
+**Run a new `play` once against a deliberately broken component.** One that
+passes either way asserts nothing and reads exactly like one that works.
+Wrapping `ActiveJobsList`'s clamp and mounting `JobRecord`'s closed sections
+behind `hidden` are the two breaks the plays there were checked against.
 
 ## The hard rules, and what enforces them
 
@@ -112,6 +129,8 @@ From `packages/components`:
   headless browser, so a story that throws is a failing test, and a story with a
   `play` function has its assertions run against what it drew. Needs Playwright's
   Chromium shell — `armada run browsers` from the root, once per machine.
+- **A `play` you added is run once against the component broken on purpose.**
+  Revert the break before committing; the point is the failure, not the fix.
 - `pnpm exec vitest` watches instead, which is the loop to work in.
 - `pnpm build-storybook` must succeed.
 - `pnpm exec storybook dev -p 6006 --no-open --ci` to look at it. **Pass `--ci`**

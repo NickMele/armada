@@ -103,6 +103,63 @@ saying what it could not read.
 Never a blank cell, never an invented word — the registry carries variants with
 neither, and a blank hides that.
 
+## Stories are the tests
+
+**Every story is a test the moment it exists.** `@storybook/addon-vitest`
+mounts each one in headless Chromium, so a story that throws fails without
+anyone writing an assertion.
+
+**A `play` function is where a story asserts what a person should see.** A
+handful per surface, on the behaviour that surface exists to express — never
+one per story.
+
+### What earns a play
+
+| Earns one | Where |
+|---|---|
+| A keyboard contract written by hand | `Dialog`'s Enter, `Tabs`'s arrows |
+| A rule about what does not happen | `Sheet`'s scrim takes no press |
+| Controlled state that must stay inert | `PhaseStrip`'s `pinnedStage` |
+| A callback falling through to another | `ActivityLogSheet`'s `Show me` |
+| Unmounted versus hidden | `JobRecord`'s closed sections |
+| A roving cursor, and its clamp | `ActiveJobsList` |
+
+**A variant, a measurement, a colour or a sum earns none.** A `play` that reads
+what the args already say is ceremony, and one that computes is a unit test
+paying a browser's price.
+
+### Assert on roles, names and text
+
+**Never a class name and never a `data-` attribute.** A test naming a
+stylesheet's hook fails on every refactor and says nothing about what a person
+saw or heard.
+
+**Where no accessible property carries the fact, add the one that should.**
+`JobDiffSheet`'s rail took `aria-current` for this reason: which file is open
+was in `data-on` alone, so a screen reader was never told.
+
+**A prop callback is asserted with `fn()` from `storybook/test`.** Prefer a
+rendered outcome wherever one exists — a spy proves the component reported, not
+that anybody could see it.
+
+### Two traps
+
+**Move the pointer off a control before asserting the layer closed.** Hover and
+a pin are two reasons one card is open, and a press leaves the cursor on what
+it pressed.
+
+**Locate an element with no role through the structure, not its class.** A
+scrim is the panel's `parentElement`; dispatch with `fireEvent` where there is
+nothing to hit-test.
+
+### Verify a play by breaking what it guards
+
+**A new `play` is run once against a deliberately broken component.** One that
+passes either way asserts nothing, and reads exactly like one that works.
+
+**Arithmetic is not tested here.** A pure function belongs in `packages/screens`,
+where a hundred cases cost what one costs.
+
 ## TypeScript
 
 **Props are a named type, exported beside the component.** A component whose
