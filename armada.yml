@@ -90,13 +90,21 @@ checks:
     # what it claims. A component could be wrong in every way that is not a type
     # error and nothing here would say so.
     #
-    # **Two runners under one name, and neither subsumes the other.**
+    # **Three runners under one name, and none subsumes another.** The split is
+    # by what is being checked, not by package.
+    #
     # `packages/screens` runs its pure modules in node — which tab a Job is in,
-    # which render it takes — where a hundred cases cost what one costs.
+    # which render it takes — where a hundred cases cost what one costs. It also
+    # runs its screens in a browser, in a second project, because a screen
+    # cannot be storied: `xtask/src/rules_layers.rs` puts `@armada/components`
+    # below `@armada/screens` and refuses the import the other way, so no story
+    # can mount `OverruleControl`. What a screen wires is checked where the
+    # screen is.
+    #
     # `packages/components` runs every story in a real browser through
     # `@storybook/addon-vitest`: rendering at all is the smoke test, and a story
-    # with a `play` function has its assertions run. So the drawing and the
-    # arithmetic are each checked by the thing that can check them.
+    # with a `play` function has its assertions run. So the drawing, the wiring
+    # and the arithmetic are each checked by the thing that can check them.
     #
     # **The chain is in a `package.json` script, for the reason `typecheck`
     # above gives at length: a `run` gets no shell.** Screens first, because it
@@ -136,6 +144,11 @@ commands:
   #
   # `--only-shell`: the headless shell is what a headless run launches, and it
   # is a third of the full browser download.
+  #
+  # One install for two packages. `packages/screens` pins the same Playwright as
+  # `packages/components` and the shell is cached per machine, so this covers
+  # both — a second line here would download nothing and would go stale the
+  # first time the pins differed.
   browsers:
     run: pnpm -C packages/components exec playwright install chromium --only-shell
 
