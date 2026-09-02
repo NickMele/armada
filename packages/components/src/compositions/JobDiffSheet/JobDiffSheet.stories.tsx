@@ -106,16 +106,20 @@ export const OpenedAtAStep: Story = {
    * order the reading found them, and be wrong the first time a reading came
    * back sorted.
    *
-   * Two things are deliberately not asserted. The subtitle's totals are a sum,
-   * and a browser is the most expensive place to check arithmetic. And that
-   * the selection has not moved cannot be read at all: which file the rail has
-   * is carried by `data-on` and CSS, with no `aria-current` or `aria-pressed`
-   * on the row — so a screen reader is never told which file is open, and
-   * there is nothing here to assert that is not the stylesheet. Reported.
+   * The subtitle's totals are deliberately not asserted: they are a sum, and a
+   * browser is the most expensive place to check arithmetic.
    */
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole("button", { name: /reducer\.ts/ }));
     await expect(args.onSelect).toHaveBeenCalledWith("packages/settings/src/reducer.ts");
+
+    // Held by the caller, so the rail's selection has not moved — and it is
+    // `aria-current` that makes that a thing a play can read rather than a
+    // colour on a row.
+    await expect(canvas.getByRole("button", { name: /selectors\.ts/ })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
   },
 };
 
