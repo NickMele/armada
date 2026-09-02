@@ -144,3 +144,8 @@ export * from "./lexicon";
 
 // The token specimens: what a value looks like, read off the running sheet.
 export * from "./foundations/Tokens/Tokens";
+
+// What Armada told the Drone, in the blocks Fleet wrote it in. The chapter
+// preview drew it as one paragraph and every newline collapsed to a space —
+// #306.
+export * from "./compositions/DroneBrief/DroneBrief";
