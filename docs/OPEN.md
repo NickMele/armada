@@ -148,7 +148,7 @@ on purpose and makes the gate name what was waiting.
 
 ## docs/journeys/change-a-jobs-scope.md
 
-- **[drone-cannot-request-a-widening]** How does a Drone that needs a path outside the Job's scope ask for one? The `running → awaiting_approval` edge exists and nothing in the Drone's toolset can take it. The answer has to settle four things: whether the Drone ends on the call, whether it may ask twice for the same path, whether the reason is its own words or a structured field, and whether it may ask to narrow.
+- **[drone-cannot-request-a-widening]** How does a Drone that needs a path outside the Job's scope ask for one? Filed as #299. The `running → awaiting_approval` edge exists and nothing in the Drone's toolset can take it. The answer has to settle four things: whether the Drone ends on the call, whether it may ask twice for the same path, whether the reason is its own words or a structured field, and whether it may ask to narrow.
 - **[declined-widening-has-no-edge]** Where does a Job go when a person declines a widening? `awaiting_approval` leaves only to `queued`, `rejected` or `killed`, so declining ends a Job that has passed two steps — while the record states that its entries include revisions that did not take. A candidate is `awaiting_approval → queued`, the revision recorded as not taken and the Job resuming at the scope it already had; it re-queues rather than resumes because the gate ended the Drone.
 - **[widening-and-the-judge-context]** Should the gate warn that a wider diff may exceed the Judge's context? A Convoy is where `max_context_size` bites first.
 - **[scope-revision-on-a-stopped-job]** Is a scope revision legal on an escalated or piloted Job? No edge exists, so it is not offered, and whether that is deliberate is unknown.
