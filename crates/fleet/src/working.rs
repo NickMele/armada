@@ -485,14 +485,38 @@ impl Working {
     }
 
     /// The Drone has been told to report, from this instant.
+    ///
+    /// `in_plan` is the declared plan as the look that produced `why` found it.
     pub(crate) fn reporting(
         &mut self,
         asked_at: Timestamp,
         rested_before: usize,
         why: NotConverging,
+        in_plan: Vec<RepoPath>,
     ) {
         self.rested_before = rested_before;
-        self.chain = Chain::Reporting { asked_at, why };
+        self.chain = Chain::Reporting {
+            asked_at,
+            why,
+            in_plan,
+        };
+    }
+
+    /// The grace is spent and the Drone is still writing inside its plan, so it
+    /// is given another one from this instant, measured against this reading.
+    ///
+    /// **It keeps the finding and the rest baseline.** Nothing about the look
+    /// has changed — what changed is that the citation is being answered — and
+    /// re-reading `rested_before` here would count the Drone as never having
+    /// been asked.
+    pub(crate) fn still_reporting(&mut self, asked_at: Timestamp, in_plan: Vec<RepoPath>) {
+        if let Chain::Reporting { why, .. } = &self.chain {
+            self.chain = Chain::Reporting {
+                asked_at,
+                why: why.clone(),
+                in_plan,
+            };
+        }
     }
 
     /// The step stopped and the Job escalated.

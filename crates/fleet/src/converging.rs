@@ -15,6 +15,9 @@
 //! `thrashing` mean "took a while"; at stage two it would spend a call and
 //! ignore what it said.
 //!
+//! **Stage four asks about silence, not about the finding** — [`NoReport`] is
+//! the reason, and a Drone still writing inside its plan re-arms the grace.
+//!
 //! [`Chain`] holds where a step stands and is cleared when the step changes, so
 //! a tripwire that stays tripped — drift does — buys no second call.
 //! **Nothing here kills a Drone.** `docs/concepts/helm.md` holds a thrashing
@@ -24,8 +27,8 @@ use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
-    Actor, Component, Envelope, EscalationTrigger, FieldValue, JobId, JobStatus, Level, RepoPath,
-    StepId, StepLevelTrigger, StepTarget, Target, Timestamp,
+    Actor, CheckOutcome, Component, Envelope, EscalationTrigger, FieldValue, JobId, JobStatus,
+    Level, RepoPath, StepCheck, StepId, StepLevelTrigger, StepTarget, Target, Timestamp,
 };
 use verification::{Convergence, NotConverging};
 
@@ -131,13 +134,22 @@ pub enum Stage {
     /// The look found thrashing and the Drone has been told to stop and report.
     /// **Nothing has escalated** — this is the chance the trigger's own wording
     /// requires it to be given.
+    ///
+    /// `asked_at` is the instant the look was taken, which is the stamp
+    /// everything downstream quotes the finding with.
     AskedToReport {
         tripped: Tripwire,
         why: NotConverging,
+        asked_at: Timestamp,
     },
-    /// The report did not arrive inside the grace. The step is stopped and the
-    /// Job is escalated as `thrashing`.
-    Escalated { why: NotConverging },
+    /// The grace is spent, the report has not come, and the declared plan has
+    /// gained work since the look. **Nothing is stopped and nothing is
+    /// recorded**: the deadline re-arms from here, so a Drone that then goes
+    /// still is cut on the next window.
+    StillWriting { since: Vec<RepoPath> },
+    /// The report did not arrive inside the grace and nothing moved. The step
+    /// is stopped and the Job is escalated as `thrashing`.
+    Escalated { quiet: NoReport },
     /// The look could not be made. **Nothing escalates**: a machine that cannot
     /// answer must not produce a verdict, in either direction.
     CouldNotLook {
@@ -187,6 +199,59 @@ impl ReportNow {
     }
 }
 
+/// What the step that stopped is written down as.
+///
+/// Not a Manifest Check and not a `mechanical_checks` entry, for the reason
+/// [`verification::EVIDENCE_SCOPE`] is neither: it is named by the thing that
+/// asked for it.
+pub const FORCED_REPORT: &str = "forced_report";
+
+/// Why the step stopped, as the row a person reads.
+///
+/// **The proximate cause, which reached no record the Job carried.** It was in
+/// one line of Fleet's log — *the forced report did not arrive* — while the
+/// step's only row was the mid-step finding under its own name, outcome
+/// `failed`. So the record said the work was going nowhere, dated nothing, and
+/// a person had to reconstruct the actual sentence from a log file.
+///
+/// The finding is still shown, because "what was it doing" is the next question
+/// after "why did it stop" — quoted, and stamped by
+/// [`NotConverging::as_of`] with the instant the look ran.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NoReport {
+    grace: Duration,
+    quoted: String,
+}
+
+impl NoReport {
+    /// **There is no constructor that omits the finding or the instant**, so a
+    /// row under this name cannot be written without saying what the look found
+    /// and when it looked.
+    fn after(grace: Duration, asked_at: &Timestamp, why: &NotConverging) -> NoReport {
+        NoReport {
+            grace,
+            quoted: why.as_of(asked_at),
+        }
+    }
+
+    pub fn recorded(&self) -> StepCheck {
+        StepCheck {
+            name: FORCED_REPORT.to_string(),
+            outcome: CheckOutcome::Failed,
+            expected: Some(format!(
+                "a report from the Drone within {}s of being told to stop and report",
+                self.grace.as_secs()
+            )),
+            produced: Some(format!(
+                "no report arrived and nothing was submitted, so the step was \
+                 stopped for the silence. Before it, {}",
+                self.quoted
+            )),
+            output_path: None,
+        }
+    }
+}
+
 impl<H, V, W> Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
@@ -215,9 +280,13 @@ where
             // step whose look was spent does not get a second one — that is
             // what keeps the tier cold when a tripwire stays tripped.
             Chain::Stopped | Chain::Looked => Ok(None),
-            Chain::Reporting { asked_at, why } => {
-                let (asked_at, why) = (asked_at.clone(), why.clone());
-                self.after_the_directive(working, &job, &step, &asked_at, why)
+            Chain::Reporting {
+                asked_at,
+                why,
+                in_plan,
+            } => {
+                let (asked_at, why, in_plan) = (asked_at.clone(), why.clone(), in_plan.clone());
+                self.after_the_directive(working, &job, &step, &asked_at, why, &in_plan)
                     .await
             }
             Chain::Working => self.first_look(working, &job, &step).await,
@@ -257,6 +326,11 @@ where
         let Ok(patch) = self.work().patch(&worktree) else {
             return Ok(None);
         };
+        // The declared plan as the finding is about to be made against it. A
+        // file inside the plan that is not in this reading appeared *after* the
+        // look, which is what makes the citation stale rather than merely old.
+        // One reading, on the one turn of a step that reaches this far.
+        let in_plan = self.in_plan(at_work);
         let judging = self.judging(job).map_err(|cause| Adrift::NotConfigurable {
             job: job.clone(),
             cause,
@@ -278,19 +352,25 @@ where
             Err(cause) => Stage::CouldNotLook { tripped, cause },
             Ok(Convergence::Thrashing(why)) => {
                 self.told_to_report(working, job, &why).await?;
-                Stage::AskedToReport { tripped, why }
+                Stage::AskedToReport {
+                    tripped,
+                    why,
+                    asked_at: self.now(),
+                }
             }
             Ok(found) => Stage::StillConverging { tripped, found },
         };
         // The look is spent whatever came back, including a call that failed:
         // asking again every tick against a Judge that is down would be the
         // schedule this tier does not have.
-        let asked_at = matches!(stage, Stage::AskedToReport { .. }).then(|| self.now());
         if let Some(at_work) = working.as_mut() {
-            match (&stage, asked_at) {
-                (Stage::AskedToReport { why, .. }, Some(asked_at)) => {
-                    at_work.reporting(asked_at, rested_before, why.clone())
-                }
+            match &stage {
+                Stage::AskedToReport { why, asked_at, .. } => at_work.reporting(
+                    asked_at.clone(),
+                    rested_before,
+                    why.clone(),
+                    in_plan.clone(),
+                ),
                 _ => at_work.looked(),
             }
         }
@@ -302,7 +382,7 @@ where
         }))
     }
 
-    /// Stage four's question: did the report arrive, and is the grace spent.
+    /// Stage four's question: has the Drone gone quiet, and is the grace spent.
     async fn after_the_directive(
         &self,
         working: &mut Option<Working>,
@@ -310,6 +390,7 @@ where
         step: &StepId,
         asked_at: &Timestamp,
         why: NotConverging,
+        in_plan: &[RepoPath],
     ) -> Result<Option<Wandering>, Adrift> {
         let at_work = working.as_ref().expect("the slot was read as full");
         // **The whole distinction the trigger turns on.** A Drone that came to
@@ -331,16 +412,39 @@ where
             }
             return Ok(None);
         }
+        // **The citation, re-read for nothing.** The finding named an observable
+        // that had not moved; a declared path holding work that was not there
+        // when the look ran is that observable moving, and a Drone answering it
+        // two minutes late is not a Drone that has gone quiet. Paths and not
+        // content, because a file saved twice is what thrashing looks like and a
+        // file that did not exist at the look is not.
+        //
+        // Not a second Judge call: this asks whether the reason still holds, not
+        // whether the step is converging now, and `git diff --name-only` answers
+        // it. The deadline re-arms from here, so going still is still cut.
+        if let Some((since, held)) = self.grown_in_plan(working, in_plan) {
+            if let Some(at_work) = working.as_mut() {
+                at_work.still_reporting(self.now(), held);
+            }
+            let stage = Stage::StillWriting { since };
+            self.noted(job, step, &stage);
+            return Ok(Some(Wandering {
+                job: job.clone(),
+                step: step.clone(),
+                stage,
+            }));
+        }
         // Before the Job moves, and it cannot be after: the inner machine is
         // frozen beneath every status but `running`, so a step stopped after
         // the escalation would be refused and `last_verdict` would stay unwritten.
         let Some(stops) = stops_the_step() else {
             return Ok(None);
         };
+        let quiet = NoReport::after(self.norms().report_grace(), asked_at, &why);
         self.store()
             .lock()
             .await
-            .record_step_checks(job, step, &[why.recorded()], &self.now())
+            .record_step_checks(job, step, &[quiet.recorded()], &self.now())
             .map_err(Adrift::Writing)?;
         let record = self
             .move_step(&record, step, StepTarget::Stopped(stops))
@@ -370,7 +474,7 @@ where
         if let Some(at_work) = working.as_mut() {
             at_work.stopped();
         }
-        let stage = Stage::Escalated { why };
+        let stage = Stage::Escalated { quiet };
         self.noted(job, step, &stage);
         Ok(Some(Wandering {
             job: job.clone(),
@@ -394,6 +498,48 @@ where
         (!off_plan.is_empty()).then(|| Tripwire::OffPlan {
             paths: off_plan.to_vec(),
         })
+    }
+
+    /// Which of the declared plan's paths the worktree is holding work at.
+    ///
+    /// Empty where nothing was declared — there is no plan for work to be
+    /// inside — and empty where the worktree would not read. A reading nobody
+    /// could take spares a Drone once rather than cutting one over it, which is
+    /// the direction an unknown answer has to fail in here.
+    fn in_plan(&self, at_work: &Working) -> Vec<RepoPath> {
+        let Some(declared) = at_work.declared() else {
+            return Vec::new();
+        };
+        let (_, _, worktree) = at_work.standing();
+        let Ok(changed) = self.work().changed_files(&worktree) else {
+            return Vec::new();
+        };
+        changed
+            .paths()
+            .into_iter()
+            .filter(|path| declared.covers(path))
+            .map(RepoPath::new)
+            .collect()
+    }
+
+    /// What the declared plan has gained since the look, and the whole reading
+    /// it was found in. `None` where it has gained nothing.
+    ///
+    /// The reading comes back with the answer so that the re-armed deadline is
+    /// measured from what is there now: growth has to be fresh growth each
+    /// window, or one new file would buy the rest of the step.
+    fn grown_in_plan(
+        &self,
+        working: &Option<Working>,
+        was: &[RepoPath],
+    ) -> Option<(Vec<RepoPath>, Vec<RepoPath>)> {
+        let held = self.in_plan(working.as_ref()?);
+        let since: Vec<RepoPath> = held
+            .iter()
+            .filter(|path| !was.contains(path))
+            .cloned()
+            .collect();
+        (!since.is_empty()).then_some((since, held))
     }
 
     /// Say it, into the session the slot is holding.
@@ -435,8 +581,16 @@ where
                 "the step is not converging and the Drone was told to report",
                 "thrashing",
             ),
+            Stage::StillWriting { .. } => (
+                Level::Info,
+                "the forced report has not arrived and the declared plan is still growing",
+                "still_writing",
+            ),
+            // **`no_report` and not `thrashing`.** The finding was made two
+            // minutes earlier and nothing re-checked it; what this line saw is
+            // silence, and the log said the word the record says instead.
             Stage::Escalated { .. } => {
-                (Level::Warn, "the forced report did not arrive", "thrashing")
+                (Level::Warn, "the forced report did not arrive", "no_report")
             }
             Stage::CouldNotLook { .. } => (
                 Level::Warn,
@@ -469,7 +623,7 @@ fn tripwire_of(stage: &Stage) -> Option<&Tripwire> {
         Stage::StillConverging { tripped, .. }
         | Stage::AskedToReport { tripped, .. }
         | Stage::CouldNotLook { tripped, .. } => Some(tripped),
-        Stage::Escalated { .. } => None,
+        Stage::StillWriting { .. } | Stage::Escalated { .. } => None,
     }
 }
 
@@ -493,9 +647,14 @@ pub(crate) enum Chain {
     /// The one look this step gets has been spent.
     Looked,
     /// The Drone was told to stop and report, and has not yet.
+    ///
+    /// `in_plan` is the declared plan as the look found it. What stage four asks
+    /// is whether it has grown since — see
+    /// [`Fleet::grown_in_plan`](crate::daemon::Fleet).
     Reporting {
         asked_at: Timestamp,
         why: NotConverging,
+        in_plan: Vec<RepoPath>,
     },
     /// The step stopped and the Job escalated.
     Stopped,

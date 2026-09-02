@@ -43,7 +43,7 @@ mod submission;
 mod tests;
 
 pub use answered::{Answered, Printed};
-pub use converging::{Convergence, ConvergenceBrief, NotConverging, MID_STEP_CONVERGENCE};
+pub use converging::{Convergence, ConvergenceBrief, NotConverging};
 pub use drift::{drift_criterion, DECLARED_PLAN_DRIFT};
 pub use gaming::{in_the_diff, judged_patterns, Baseline, Flagged, GamingBrief};
 pub use gate::{decide, Accepted, NotWhatTheStepAsked, Verdict};

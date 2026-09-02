@@ -102,7 +102,7 @@ pub use allowance::{Allowance, Micros, Overspent};
 pub use asked::Asked;
 pub use at_step::AtStep;
 pub use clock::{Clock, SystemClock};
-pub use converging::{ReportNow, Stage, StepNorms, Tripwire, Wandering};
+pub use converging::{NoReport, ReportNow, Stage, StepNorms, Tripwire, Wandering, FORCED_REPORT};
 pub use crossing::{Cleared, Crossed, Dispatched, Produced, Reconciling, Redirected};
 pub use daemon::{Fittings, Fleet, Host, Reconciled};
 pub use delivery::Delivered;

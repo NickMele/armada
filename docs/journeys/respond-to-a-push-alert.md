@@ -107,7 +107,7 @@ Renamed from "Escalating Response Tiers" Aug 2026. The old name read as severity
 
 ## Escalation Resource State
 
-Paused, unless a cap was hit. Worktree and state held as-is either way. Killing is a human action — rung 2, or directly from Alerts — and always prompts a cleanup step rather than happening silently; the exception is a Drone confirmed to be thrashing, which Fleet stops itself, because a Drone that was told to report and did not is spending money rather than waiting for you.
+Paused, unless a cap was hit. Worktree and state held as-is either way. Killing is a human action — rung 2, or directly from Alerts — and always prompts a cleanup step rather than happening silently; the exception is a Drone that was told to report and then went quiet, which Fleet stops itself, because it is spending money rather than waiting for you. A Drone still writing inside its declared plan is not that one, and Fleet leaves it working.
 
 **Pause is therefore not a rung on an escalated Job.** There it is the condition you are responding *from*, not a response — anything escalated is already paused by the time you see it.
 

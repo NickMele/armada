@@ -18,13 +18,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use adapter_traits::{CallDetail, DroneEvent};
+use adapter_traits::{CallDetail, Change, DroneEvent};
 use config::ResolvedWorkflow;
-use core_model::{EscalationTrigger, JobStatus, StepState, StepVerdict, TransitionReason};
+use core_model::{
+    EscalationTrigger, JobStatus, StepCheck, StepState, StepVerdict, TransitionReason,
+};
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Scoped, Sketch};
-use verification::{Convergence, NotConverging, MID_STEP_CONVERGENCE};
+use verification::{Convergence, NotConverging};
 
-use crate::converging::{stops_the_step, ReportNow, Stage, StepNorms, Tripwire, Wandering};
+use crate::converging::{
+    stops_the_step, ReportNow, Stage, StepNorms, Tripwire, Wandering, FORCED_REPORT,
+};
 use crate::daemon::Fleet;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
@@ -152,6 +156,37 @@ fn a_chain_that_will_reach_the_trigger(home: &TempDir, harness: FakeHarness) -> 
         StepNorms::of(5, Duration::from_secs(86_400), Duration::from_secs(2)),
         one_step(None),
     )
+}
+
+/// The same chain, on a step that declares where its work will be — which is
+/// what makes "inside the plan" a question with an answer.
+fn a_declaring_chain(home: &TempDir) -> Fixture {
+    a_watched_fleet(
+        home,
+        a_drone_that_will_not_answer(90),
+        Arc::new(FakeJudge::saying(THRASHING)),
+        StepNorms::of(5, Duration::from_secs(86_400), Duration::from_secs(2)),
+        one_step(Some(Scoped {
+            diff_check: true,
+            at_step_start: true,
+            exclude: &[],
+            references: &[],
+        })),
+    )
+}
+
+/// The Drone in the one slot, so a kill can be measured against a process that
+/// was demonstrably alive rather than assumed to be.
+async fn the_pid(fleet: &Fixture) -> u32 {
+    fleet
+        .the_only_slot()
+        .await
+        .lock()
+        .await
+        .as_ref()
+        .expect("a Drone is working")
+        .session()
+        .pid()
 }
 
 /// Approve the Job and hand back its id, with a worktree on disk.
@@ -494,14 +529,21 @@ async fn the_escalation_holds_the_drone_rather_than_ending_it() {
     assert!(turns(&fleet, 10).await.is_empty());
 }
 
-/// The finding is on the record. Without it the escalation says `thrashing`
-/// and not what about it — the same defect an uncited refusal would be.
+/// **The row is the reason, and the reason is the silence.** It used to be the
+/// finding alone, under the look's own name and outcome `failed` — so a step
+/// stopped because a report never came read back as a two-minute-old snapshot
+/// of the diff, and the thing that actually stopped it was in Fleet's log and
+/// nowhere on the Job.
 #[tokio::test]
-async fn the_escalation_records_the_observable_that_did_not_move() {
+async fn the_step_that_stopped_says_the_report_never_arrived() {
     let home = TempDir::new();
     let fleet = a_chain_that_will_reach_the_trigger(&home, a_drone_that_will_not_answer(90));
     let job_id = started(&fleet, &home).await;
-    next_stage(&fleet, "told the Drone to report").await;
+    let asked = next_stage(&fleet, "told the Drone to report").await;
+    let Stage::AskedToReport { asked_at, .. } = &asked.stage else {
+        panic!("the Drone was told to report: {:?}", asked.stage);
+    };
+    let looked_at = asked_at.as_str().to_string();
     next_stage(&fleet, "escalated").await;
 
     let recorded = fleet
@@ -510,17 +552,102 @@ async fn the_escalation_records_the_observable_that_did_not_move() {
         .await
         .step_checks(&job_id)
         .expect("the step's rows read back");
-    let checks: Vec<(String, Option<String>)> = recorded
+    let rows: Vec<StepCheck> = recorded
         .iter()
-        .flat_map(|(_, rows)| rows.iter())
-        .map(|check| (check.name.clone(), check.produced.clone()))
+        .flat_map(|(_, held)| held.iter())
+        .cloned()
         .collect();
+    let [row] = rows.as_slice() else {
+        panic!("one row, naming the cause: {rows:?}");
+    };
+    assert_eq!(row.name, FORCED_REPORT);
+    let produced = row.produced.clone().unwrap_or_default();
+    assert!(produced.contains("no report arrived"), "{produced}");
+    // The finding is quoted rather than ruled, and it says when it was taken —
+    // which is the whole of what made the old row unreadable.
+    assert!(produced.contains(&looked_at), "{produced}");
+    assert!(
+        produced.contains("the same panic on the same input"),
+        "{produced}"
+    );
+}
+
+/// **A Drone that ignored the directive and kept working inside the plan it
+/// declared is not cut for the report.** The look's citation named an
+/// observable that had not moved; files landing inside the declaration are that
+/// citation being answered, and killing over it is killing a Drone for the two
+/// minutes it took to answer.
+#[tokio::test]
+async fn a_drone_still_writing_inside_its_plan_is_not_stopped_for_the_report() {
+    let home = TempDir::new();
+    let fleet = a_declaring_chain(&home);
+    let job_id = started(&fleet, &home).await;
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
+            context_paths: vec!["src".to_string()],
+        },
+    )
+    .await
+    .expect("the step declares a scope");
+    let asked = next_stage(&fleet, "told the Drone to report").await;
+    assert!(matches!(asked.stage, Stage::AskedToReport { .. }));
+    let pid = the_pid(&fleet).await;
+    // The work the finding said was not there, arriving after the look.
+    fleet.work().wrote(&[("src/token.rs", Change::Modified)]);
+
+    let still = next_stage(&fleet, "saw the plan grow").await;
+    assert!(
+        matches!(still.stage, Stage::StillWriting { .. }),
+        "{:?}",
+        still.stage
+    );
+    let job = fleet.load(&job_id).await.unwrap();
+    assert_eq!(job.status(), JobStatus::Running);
+    assert!(job
+        .steps()
+        .iter()
+        .all(|step| step.state() != StepState::Stopped));
+    assert!(
+        fleet
+            .store()
+            .lock()
+            .await
+            .step_checks(&job_id)
+            .expect("the step's rows read back")
+            .is_empty(),
+        "nothing stopped, so nothing is recorded as having stopped it"
+    );
+    assert!(alive(pid), "the Drone is still working and still alive");
+}
+
+/// The other half of the pair: the same fixture, the same declaration, and a
+/// worktree that does not move. **Going quiet is what the trigger is for**, and
+/// narrowing it to that must not empty it.
+#[tokio::test]
+async fn a_drone_that_writes_nothing_more_is_still_stopped() {
+    let home = TempDir::new();
+    let fleet = a_declaring_chain(&home);
+    let job_id = started(&fleet, &home).await;
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
+            context_paths: vec!["src".to_string()],
+        },
+    )
+    .await
+    .expect("the step declares a scope");
+    next_stage(&fleet, "told the Drone to report").await;
+
+    let escalated = next_stage(&fleet, "escalated").await;
+    assert!(
+        matches!(escalated.stage, Stage::Escalated { .. }),
+        "{:?}",
+        escalated.stage
+    );
     assert_eq!(
-        checks,
-        vec![(
-            MID_STEP_CONVERGENCE.to_string(),
-            Some("the same panic on the same input".to_string())
-        )]
+        fleet.load(&job_id).await.unwrap().status(),
+        JobStatus::Escalated
     );
 }
 

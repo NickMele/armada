@@ -159,7 +159,7 @@ An off-plan edit alone doesn't auto-fail; it tags the step for a mandatory Judge
 
 **The mid-step Judge runs only when a mechanical trigger fires** — plan drift flagged, or turn count/wall-clock exceeds norm — not on a fixed schedule regardless of activity. **It does not read the Drone's turns.** It judges the *work product so far* against the declared scope and the step's intent: "is what has been produced converging on the task, is it justified drift, or is it thrashing?"
 
-If thrashing, force-interrupt with a "stop, report current state now" directive. If that also fails, escalate as `thrashing`.
+If thrashing, force-interrupt with a "stop, report current state now" directive. A Drone that then goes quiet has its step stopped on a `forced_report` row naming the report that never came. A Drone still writing inside its declared plan is not stopped for it.
 
 **Reading the Drone's last N turns would be the stronger detector and is ruled out by the veto-only input contract.** The detector is weaker for it: it can no longer separate justified drift from thrashing by reading the Drone's stated intent, and must infer it from what was actually produced.
 
