@@ -12,6 +12,6 @@
     "dev": "scripts/dev",
     "gate": "cargo xtask verify-foundations",
     "typecheck": "pnpm -C packages/protocol typecheck && pnpm -C packages/components typecheck && pnpm -C packages/shell typecheck && pnpm -C packages/screens typecheck && pnpm -C apps/desktop typecheck",
-    "bridge-test": "pnpm -C packages/screens test && pnpm -C apps/desktop test && pnpm -C packages/components test"
+    "bridge-test": "pnpm -C apps/desktop test && pnpm -C packages/screens test && pnpm -C packages/components test"
   }
 }

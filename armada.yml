@@ -115,8 +115,11 @@ checks:
     # them.
     #
     # **The chain is in a `package.json` script, for the reason `typecheck`
-    # above gives at length: a `run` gets no shell.** Screens first, because it
-    # is the half that answers in under a second; the browser last.
+    # above gives at length: a `run` gets no shell.** `apps/desktop` first,
+    # because it is now the only one that starts no browser: screens answered in
+    # under a second until it gained a browser project of its own, and the
+    # sentence that used to be here said so. The order is the order they answer
+    # in — 6s, 40s, then the stories — so a failure surfaces as early as it can.
     run: pnpm bridge-test
     when:
       - "apps/**"
