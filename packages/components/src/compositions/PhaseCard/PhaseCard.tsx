@@ -56,8 +56,16 @@ export type PhaseStageKind = "phase" | "checks" | "judge" | "human";
  * `packages/tokens/src/status.css` declares and nowhere else: cleared is
  * `--step-advanced`, current is `--step-running`, waiting is `--step-waiting`,
  * failed is `--step-failed`, and a stage still ahead takes no hue at all.
+ *
+ * **`never` is a tier this step can never reach, and it is not `ahead`.** A
+ * step whose `advance_gate` is `auto` will never stop for a person, and drawing
+ * that as `ahead` made it identical to the tier of a step that *will* stop and
+ * has not got there yet — two different facts, one chip. It takes no hue
+ * either, because hue below Job level exists only where `tokens/status.css`
+ * declares it and amber is already spent on waiting on you; the pair is told
+ * apart by label and glyph, the way every same-hue state here is.
  */
-export type PhaseStageState = "cleared" | "current" | "waiting" | "failed" | "ahead";
+export type PhaseStageState = "cleared" | "current" | "waiting" | "failed" | "ahead" | "never";
 
 /**
  * The glyph a stage carries, keyed by what it is and where it stands.
@@ -75,10 +83,20 @@ export type PhaseStageState = "cleared" | "current" | "waiting" | "failed" | "ah
  *
  * A phase still ahead carries no glyph. It is a position, not a state, and
  * there is nothing to depict.
+ *
+ * **A `never` tier carries none either, and for the human tier that is the
+ * registry's rule rather than a choice.** `user-check` is reserved to *human
+ * required, or actor=human*, and a step whose gate never asks for a person
+ * requires none — so the one human silhouette in the set may not be drawn
+ * there. Its absence beside the changed label is what tells the never-asks
+ * tier from a tier not yet reached. Only the human tier can hold `never`; the
+ * other three declare it because the record is total, and draw nothing rather
+ * than borrow a mark that means something else.
  */
 const GLYPHS: Record<PhaseStageKind, Record<PhaseStageState, LucideIcon | undefined>> = {
   phase: {
     ahead: undefined,
+    never: undefined,
     current: CircleDot,
     cleared: Check,
     waiting: Eye,
@@ -86,6 +104,7 @@ const GLYPHS: Record<PhaseStageKind, Record<PhaseStageState, LucideIcon | undefi
   },
   checks: {
     ahead: ShieldMinus,
+    never: undefined,
     current: ShieldMinus,
     cleared: ShieldCheck,
     waiting: ShieldMinus,
@@ -93,6 +112,7 @@ const GLYPHS: Record<PhaseStageKind, Record<PhaseStageState, LucideIcon | undefi
   },
   judge: {
     ahead: CircleMinus,
+    never: undefined,
     current: CircleMinus,
     cleared: CircleCheck,
     waiting: CircleMinus,
@@ -100,6 +120,7 @@ const GLYPHS: Record<PhaseStageKind, Record<PhaseStageState, LucideIcon | undefi
   },
   human: {
     ahead: UserCheck,
+    never: undefined,
     current: UserCheck,
     cleared: UserCheck,
     waiting: UserCheck,

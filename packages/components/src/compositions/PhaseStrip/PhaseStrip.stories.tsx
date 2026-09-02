@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 import { PhaseStrip } from "./PhaseStrip";
 
 const meta: Meta<typeof PhaseStrip> = {
@@ -256,5 +257,103 @@ export const HeldByTheCaller: Story = {
   args: {
     ...WithYouPresent.args,
     pinnedStage: "judge",
+  },
+};
+
+/**
+ * **The two tiers that used to be one chip.** Both steps are
+ * `.armada/workflows/bug.json`'s: `Plan the change` declares
+ * `advance_gate: auto_if_judge_passes` and can never stop for a person, and
+ * `Summarise` declares `advance_gate: human_always` and has not been reached.
+ * Two different facts — *this can never wait for you* and *this has not got to
+ * you yet* — and they drew as one chip, `You` sitting `ahead`, with the
+ * difference only in the card a hover opens. Nobody hovers a step that passed.
+ *
+ * **Told apart by label and glyph, never by hue.** Amber is spent on waiting on
+ * you and hue below Job level exists only where `tokens/status.css` declares
+ * it, so the never-asks tier reads `No one` and carries no `user-check` — the
+ * one human silhouette in the set is reserved to *human required*, and this is
+ * a step that requires none. Both keep the same neutral ground, because neither
+ * is a state a reader should be pulled towards.
+ *
+ * The `play` function is the claim: one `getByRole` per name. Before the fix
+ * both chips were named `You`, and an ambiguous match is what fails.
+ */
+export const TheHumanTierThatCanNeverAsk: Story = {
+  render: () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-6)" }}>
+      <PhaseStrip
+        label="Plan the change · advance_gate auto_if_judge_passes · advanced"
+        stages={[
+          { id: "instructed", label: "Instructed", state: "cleared" },
+          { id: "working", label: "Working", state: "cleared" },
+          { id: "submitted", label: "Submitted", state: "cleared" },
+          {
+            id: "checks",
+            label: "artifact_exists",
+            kind: "checks",
+            state: "cleared",
+            stands: "1 of 1 passed",
+            rows: [
+              {
+                label: "artifact_exists · .armada/artifacts/plan.md",
+                mono: true,
+                state: "cleared",
+                result: "exit 0",
+              },
+            ],
+          },
+          {
+            id: "judge",
+            label: "Judge · 2 of 2 met",
+            kind: "judge",
+            state: "cleared",
+            stands: "2 of 2 met",
+            rows: [
+              {
+                label: "Does this plan address the problem that was reported?",
+                state: "cleared",
+                result: "no objection",
+              },
+              {
+                label: "Does this plan name a specific root cause?",
+                state: "cleared",
+                result: "no objection",
+              },
+            ],
+          },
+          {
+            id: "you",
+            label: "No one",
+            kind: "human",
+            state: "never",
+            stands: "this step advances without a person",
+            said: "The human gate, which this step's workflow does not use.",
+            detail: "Nothing at this step waits for a person. Its advance gate never asks for one.",
+          },
+        ]}
+      />
+
+      <PhaseStrip
+        label="Summarise · advance_gate human_always · not started"
+        note="Nothing has reached this step yet."
+        stages={[
+          { id: "instructed", label: "Instructed", state: "ahead", stands: "not reached" },
+          { id: "working", label: "Working", state: "ahead" },
+          { id: "submitted", label: "Submitted", state: "ahead", stands: "nothing submitted" },
+          { id: "you", label: "You", kind: "human", state: "ahead", stands: "not reached" },
+        ]}
+      />
+    </div>
+  ),
+  play: async ({ canvas }) => {
+    // Two names, two queries. `getByRole` refuses an ambiguous match, so this
+    // pair failing is the regression: before the fix both chips read `You`.
+    const never = canvas.getByRole("button", { name: "No one" });
+    const notReached = canvas.getByRole("button", { name: "You" });
+
+    // Said outright rather than left implied by the queries above, because
+    // "these two do not render identically" is what the story is for.
+    await expect(never.textContent).not.toEqual(notReached.textContent);
   },
 };
