@@ -33,7 +33,7 @@
 // carries no size the row says nothing about size at all — an old transcript
 // cannot recover one, and a number nobody measured is worse than no number.
 
-import type { Turn } from "@armada/protocol";
+import type { Observed, Turn } from "@armada/protocol";
 import type { ChangedFile, CheckRun } from "@armada/protocol";
 import { CHECK_ADVANCES, CHECK_OUTCOME } from "@armada/components";
 import { clock } from "./duration";
@@ -99,6 +99,57 @@ export type CutCall = {
 /** What a step with no rows says. Ordinary, and never an error. */
 export const NOTHING_YET_ON_THIS_STEP =
   "Nothing has happened on this step yet.";
+
+/**
+ * What the socket says about its own reading, or nothing while it is reading.
+ *
+ * **The third answer, beside "no rows yet" and "rows".** Four of the five
+ * states carry no live rows and none of them was drawn, so `Fleet is not
+ * connected.` and `the connection closed` both rendered as
+ * [`NOTHING_YET_ON_THIS_STEP`] — the sentence that means the step has not
+ * started. A step that genuinely has not started must still read as one, which
+ * is why this answers `undefined` rather than a sentence of its own while the
+ * socket is carrying rows. #324.
+ *
+ * `whyNoFootprint` in `files.ts` is the precedent: a surface that cannot read
+ * something says which reading failed.
+ */
+export function whyNotWatching(observed: Observed): string | undefined {
+  switch (observed.state) {
+    case "watching":
+      return undefined;
+    case "opening":
+      return "Armada is opening this job's transcript.";
+    case "none":
+      return "Armada is not reading this job's transcript.";
+    case "failed":
+      // The detail is main's own sentence — which port, which peer, which
+      // frame — and it is the half a reader can act on.
+      return `The transcript could not be read. ${observed.detail}`;
+    case "ended":
+      return whyItEnded(observed.because);
+  }
+}
+
+/**
+ * Why the socket closed, in a sentence.
+ *
+ * **The two `Silence` variants are told apart**, because they are different
+ * facts: one is a Drone that finished and one is a Job nothing was writing when
+ * the socket opened. Anything else is a transport close, and it carries main's
+ * own words rather than a word invented here — the reading `story.ts` gives an
+ * unrecognised row.
+ */
+function whyItEnded(because: string): string {
+  switch (because) {
+    case "drone_ended":
+      return "The drone that was writing this transcript has finished.";
+    case "nothing_writing":
+      return "No drone is writing this job's transcript.";
+    default:
+      return `The transcript stopped: ${because}.`;
+  }
+}
 
 /**
  * The rows for one step.

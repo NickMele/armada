@@ -1,20 +1,32 @@
-// What a turn's payload lines say about themselves.
+// What `story.ts` answers: why a log has no rows, and what a turn's payload
+// lines say about themselves.
 //
-// **The block heading is the whole subject.** Everything else `story.ts` names
-// on a line — the echoed command, what a Check's run came to, the trailer —
-// comes off a `CheckRun`'s own fields and is read where those are. A heading
-// comes off a list of line numbers Fleet wrote down as it wrote the blocks, and
-// the defect it closes is that the list did not exist: the renderer's only
-// options were to guess or to draw every line the same.
+// **Three answers where there were two, and that is the first subject.** Four
+// of the five `Observed` states carry no live rows and `story.ts` had one
+// sentence for all of them, so a socket that had failed, one that had closed
+// and a Bridge that was not connected all read as a step that had not started.
+// Each case below is written against that sentence: it survives for the step
+// nothing has happened on, and nothing else is given it. #324.
 //
-// So each case here is written against a guess. A short line, a shouted line
-// and a line at the top of a block are all body unless the wire named them.
+// **The block heading is the second.** Everything else `story.ts` names on a
+// line — the echoed command, what a Check's run came to, the trailer — comes
+// off a `CheckRun`'s own fields and is read where those are. A heading comes
+// off a list of line numbers Fleet wrote down as it wrote the blocks, and the
+// defect it closes is that the list did not exist: the renderer's only options
+// were to guess or to draw every line the same. So each of those cases is
+// written against a guess. A short line, a shouted line and a line at the top
+// of a block are all body unless the wire named them.
 
 import { describe, expect, it } from "vitest";
 
-import type { Turn } from "@armada/protocol";
+import type { Observed, Turn, Turns } from "@armada/protocol";
 
-import { entriesOf } from "./story";
+import { entriesOf, NOTHING_YET_ON_THIS_STEP, whyNotWatching } from "./story";
+
+const A_JOB = "01M1HQZAKN001AJ5MT3PT09KKY";
+
+/** One connection that has said something and lost nothing. */
+const CARRIED: Turns = { live: true, skipped: 0, missed: 0, rows: [] };
 
 /** One `instructed` row, with whatever the wire said about its lines. */
 function instructed(text: string, headings?: number[]): Turn {
@@ -35,6 +47,53 @@ function payload(row: Turn) {
 }
 
 const BRIEF = ["JOB BRIEF", "", "Yes.", "", "STOP.", "", "WHERE YOU ARE"].join("\n");
+
+describe("why the log is not being read", () => {
+  it("says nothing at all while it is being read", () => {
+    const watching: Observed = { state: "watching", jobId: A_JOB, turns: CARRIED };
+    // Nothing, so the sentence about a step that has not started is what a step
+    // that has not started gets — and only that step.
+    expect(whyNotWatching(watching)).toBeUndefined();
+  });
+
+  it("says which reading failed, in the detail main gave it", () => {
+    const failed: Observed = {
+      state: "failed",
+      jobId: A_JOB,
+      turns: CARRIED,
+      detail: "Fleet is not connected.",
+    };
+    const said = whyNotWatching(failed);
+    expect(said).toContain("Fleet is not connected.");
+    expect(said).not.toBe(NOTHING_YET_ON_THIS_STEP);
+  });
+
+  it("tells a drone that has finished from a job nothing is writing", () => {
+    const drone: Observed = {
+      state: "ended",
+      jobId: A_JOB,
+      turns: CARRIED,
+      because: "drone_ended",
+    };
+    const nothing: Observed = { ...drone, because: "nothing_writing" };
+    expect(whyNotWatching(drone)).not.toBe(whyNotWatching(nothing));
+  });
+
+  it("renders a reason of its own, so a transport close is not a wire word", () => {
+    const closed: Observed = {
+      state: "ended",
+      jobId: A_JOB,
+      turns: CARRIED,
+      because: "the connection closed",
+    };
+    expect(whyNotWatching(closed)).toContain("the connection closed");
+  });
+
+  it("says the transcript is being opened rather than that nothing happened", () => {
+    expect(whyNotWatching({ state: "opening", jobId: A_JOB })).toBeDefined();
+    expect(whyNotWatching({ state: "none" })).toBeDefined();
+  });
+});
 
 describe("a block heading in a turn's payload", () => {
   it("names the lines the wire named and no others", () => {

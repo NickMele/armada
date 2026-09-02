@@ -90,7 +90,7 @@ checks:
     # what it claims. A component could be wrong in every way that is not a type
     # error and nothing here would say so.
     #
-    # **Three runners under one name, and none subsumes another.** The split is
+    # **Four runners under one name, and none subsumes another.** The split is
     # by what is being checked, not by package.
     #
     # `packages/screens` runs its pure modules in node — which tab a Job is in,
@@ -101,18 +101,28 @@ checks:
     # can mount `OverruleControl`. What a screen wires is checked where the
     # screen is.
     #
+    # `apps/desktop` runs main's own state machines in node, against a `ws`
+    # server on a loopback port. Everything main holds is a socket's messages
+    # folded into state, and no Check here could reach any of it: `typecheck`
+    # compiles main without running it and `bridge_build` bundles it, so a
+    # `failed` that dropped the rows it had already received was invisible until
+    # #324.
+    #
     # `packages/components` runs every story in a real browser through
     # `@storybook/addon-vitest`: rendering at all is the smoke test, and a story
-    # with a `play` function has its assertions run. So the drawing, the wiring
-    # and the arithmetic are each checked by the thing that can check them.
+    # with a `play` function has its assertions run. So the drawing, the wiring,
+    # the arithmetic and the wire are each checked by the thing that can check
+    # them.
     #
     # **The chain is in a `package.json` script, for the reason `typecheck`
-    # above gives at length: a `run` gets no shell.** Screens first, because it
-    # is the half that answers in under a second.
+    # above gives at length: a `run` gets no shell.** `apps/desktop` first,
+    # because it is now the only one that starts no browser: screens answered in
+    # under a second until it gained a browser project of its own, and the
+    # sentence that used to be here said so. The order is the order they answer
+    # in — 6s, 40s, then the stories — so a failure surfaces as early as it can.
     run: pnpm bridge-test
-    # No `apps/**`: `apps/desktop` carries no tests, and a change confined to it
-    # cannot fail this. `bridge_build` is the Check that reads it.
     when:
+      - "apps/**"
       - "packages/**"
       - "crates/core-model/domain/**"
       - "protocol-version.toml"

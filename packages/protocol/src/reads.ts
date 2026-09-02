@@ -106,7 +106,13 @@ export type Observed =
   | { state: "watching"; jobId: string; turns: Turns }
   /** The socket ended. The rows are kept — a closed transcript is still a record. */
   | { state: "ended"; jobId: string; turns: Turns; because: string }
-  | { state: "failed"; jobId: string; detail: string };
+  /**
+   * The socket could not be read. **The rows are kept for `ended`'s reason**:
+   * a failure is a fact about the connection and not about the turns already
+   * in hand, and one transient error used to empty a log that was full a
+   * moment before.
+   */
+  | { state: "failed"; jobId: string; turns: Turns; detail: string };
 
 /** What one Observe connection has said so far. */
 export type Turns = {

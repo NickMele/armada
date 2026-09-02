@@ -439,6 +439,15 @@ export class FleetConnection {
 
   /** Re-read the open Job, where the event was about it. */
   private refresh(port: number, jobId: string): void {
+    // **A step advancing is a new Drone, and Fleet's socket ended with the last
+    // one.** So the event that says this Job moved is what reopens the
+    // transcript — there is no timer here on purpose: reopening resets the rows
+    // and republishes `opening`, so a loop would blank the log on every tick.
+    // Only where the socket is down; reopening a working one restarts the
+    // transcript from the top. #324.
+    if (this.observing === jobId && !this.turns.attached()) {
+      this.turns.open(port, jobId);
+    }
     // A history that is unfolded grows as the Job moves, so the move that was
     // just delivered is read back rather than left off the end of the list.
     if (this.history.jobId === jobId) void this.history.again(port);

@@ -49,7 +49,7 @@ export class ObserveSocket {
       return;
     }
     if (port === null) {
-      this.publish({ state: "failed", jobId, detail: "Fleet is not connected." });
+      this.publish({ state: "failed", jobId, turns: this.turns, detail: "Fleet is not connected." });
       return;
     }
     this.publish({ state: "opening", jobId });
@@ -140,11 +140,19 @@ export class ObserveSocket {
     this.publish({ state: "ended", jobId, turns: this.turns, because });
   }
 
+  /**
+   * The socket could not be read, and what it had read stays read.
+   *
+   * **The rows travel with the failure.** They used to be dropped, so one
+   * unreadable frame emptied a step's whole log and the panel went back to
+   * reading as a step nothing had happened on — #324.
+   */
   private broke(detail: string): void {
     const jobId = this.jobId;
     if (jobId === null) return;
     this.socket?.removeAllListeners();
     this.socket = null;
-    this.publish({ state: "failed", jobId, detail });
+    this.turns = { ...this.turns, live: false };
+    this.publish({ state: "failed", jobId, turns: this.turns, detail });
   }
 }

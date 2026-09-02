@@ -79,7 +79,7 @@ import { Opening, phasesOf, type Opens } from "./phases";
 import { recourseOf } from "./recovery";
 import { escalation, renderFor } from "./render";
 import { runOf } from "./run";
-import { entriesOf } from "./story";
+import { entriesOf, whyNotWatching } from "./story";
 import { readingOf } from "./reading";
 import { briefOf, whyNoWork, workOf } from "./work";
 import { stoppedAt } from "./stopped";
@@ -253,6 +253,11 @@ export function JobDetail({
   // Job's turns under this Job's step would be a transcript under the wrong
   // title.
   const watching = "turns" in observed && observed.jobId === job.id ? observed.turns : null;
+  // And what the socket says about itself, where it is not reading. **A third
+  // answer the story needs**: four of the five states carry no rows, and a
+  // chapter drawn from the rows alone reads every one of them as a step that
+  // has not started. `story.ts` holds the sentences. #324.
+  const transcript = whyNotWatching(observed);
 
   // What the keyboard can name, built before it is drawn. **The three regions
   // the contextual tier reaches are values here rather than queries later** —
@@ -334,6 +339,7 @@ export function JobDetail({
           kept: whole?.footprint,
           diff: recorded.diff,
           live: observed.state === "watching",
+          transcript,
           log: keys.inLog,
           calls,
           sheet,

@@ -111,7 +111,7 @@ const OPENS: Opens = {
 };
 
 /** The chapters, with everything the panel owns stubbed to a no-op. */
-function chapters(over: { rows?: Turn[]; step?: StepDetail } = {}) {
+function chapters(over: { rows?: Turn[]; step?: StepDetail; transcript?: string } = {}) {
   return chaptersOf({
     job: job(),
     step: over.step ?? step(),
@@ -121,6 +121,7 @@ function chapters(over: { rows?: Turn[]; step?: StepDetail } = {}) {
     kept: { files: [], recorded_at: "2026-09-02T13:18:00Z", plans: [] },
     diff: { state: "none" } as Diff,
     live: false,
+    transcript: over.transcript,
     log: (region) => ({ region, openId: null, onOpen: () => {} }),
     calls: { of: () => undefined, fetch: () => {} },
     sheet: null,
@@ -363,5 +364,40 @@ describe("a step retried twice, on both surfaces", () => {
       ".armada/deliverables/plan.2.plan.md · attempt 2",
       ".armada/deliverables/plan.1.plan.md · attempt 1",
     ]);
+  });
+});
+
+/**
+ * **The defect this file's third answer exists for.** A socket that had failed
+ * or closed drew as a step that had not started — the same two sentences a step
+ * nobody has opened yet gets, which is how nine minutes of an escalated
+ * implement step read as `Nothing has happened on this step yet.` #324.
+ */
+describe("a step whose transcript is not being read", () => {
+  const NOT_READ = "The transcript could not be read. Fleet is not connected.";
+
+  it("says which reading failed instead of that nothing has happened", () => {
+    const markup = renderToStaticMarkup(chapters({ transcript: NOT_READ })[1]!.preview);
+    expect(markup).toContain("The transcript could not be read.");
+    expect(markup).not.toContain("Nothing has happened on this step yet.");
+  });
+
+  it("says it in chapter one too, where the instruction would be", () => {
+    const markup = renderToStaticMarkup(chapters({ transcript: NOT_READ })[0]!.preview);
+    expect(paragraphs(markup)).toContain(NOT_READ);
+    expect(markup).not.toContain("Armada has not opened this step yet.");
+  });
+
+  it("keeps saying it with rows in hand, because the rows do not answer for the socket", () => {
+    const markup = renderToStaticMarkup(
+      chapters({ rows: [instructed("go")], transcript: NOT_READ })[1]!.preview,
+    );
+    expect(markup).toContain("The transcript could not be read.");
+    expect(markup).toContain("Armada opened the step.");
+  });
+
+  it("leaves the ordinary sentence alone while the socket is reading", () => {
+    const markup = renderToStaticMarkup(chapters()[1]!.preview);
+    expect(markup).toContain("Nothing has happened on this step yet.");
   });
 });
