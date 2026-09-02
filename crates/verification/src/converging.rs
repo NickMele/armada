@@ -5,8 +5,9 @@
 //! [`Convergence`] shares no type with [`Verdict`](crate::Verdict) or
 //! [`Refusals`](crate::Refusals), and there is no function here taking one and
 //! answering either. A finding cannot advance a step, cannot fail one, and
-//! cannot be folded into a ruling — the only thing downstream of it is a
-//! directive injected into the Drone.
+//! cannot be folded into a ruling — the two things downstream of it are a
+//! directive injected into the Drone and a quotation stamped with when the look
+//! was taken.
 //!
 //! # What the call is told, and what it is denied
 //!
@@ -19,17 +20,9 @@
 
 use adapter_traits::Patch;
 use config::ResolvedStep;
-use core_model::{CheckOutcome, DeclaredPaths, RepoPath, StepCheck};
+use core_model::{DeclaredPaths, RepoPath, Timestamp};
 
 use crate::judge::{field, Unreadable};
-
-/// What the mid-step look is written down as, where it stopped a step.
-///
-/// Not a Manifest Check and not a `mechanical_checks` entry, for the reason
-/// [`EVIDENCE_SCOPE`](crate::EVIDENCE_SCOPE) is neither: it is named by the
-/// thing that asked for it. Without a row the escalation says `thrashing` and
-/// not what about it, which is the defect an uncited refusal would be.
-pub const MID_STEP_CONVERGENCE: &str = "mid_step_convergence";
 
 /// The three words the look may answer with, and the citation the last owes.
 const ANSWER_FORMAT: &str = "\
@@ -109,15 +102,28 @@ impl NotConverging {
         &self.consequence
     }
 
-    /// The row a person reads on the step that stopped.
-    pub fn recorded(&self) -> StepCheck {
-        StepCheck {
-            name: MID_STEP_CONVERGENCE.to_string(),
-            outcome: CheckOutcome::Failed,
-            expected: Some(self.expected.clone()),
-            produced: Some(self.produced.clone()),
-            output_path: None,
-        }
+    /// The finding as it is quoted beside something else, stamped with the
+    /// instant the look was taken.
+    ///
+    /// **A sentence and not a `StepCheck`, which is the whole of the change.**
+    /// This was `recorded`, and it answered with a row named for this look
+    /// carrying `CheckOutcome::Failed`. A step stopped because a forced report
+    /// never arrived wrote that row and nothing else, so the record's stated
+    /// reason was a snapshot taken two minutes earlier — one whose `produced`
+    /// had already been falsified by the time it was written. That is the fold
+    /// this module refuses, reached from the other side: a finding did fail a
+    /// step, by being the only thing on it.
+    ///
+    /// A quotation cannot be mistaken for a ruling, and the stamp is what stops
+    /// it being read in the present tense. `expected` and `produced` and not
+    /// `consequence`, which is the selection the row carried.
+    pub fn as_of(&self, taken_at: &Timestamp) -> String {
+        format!(
+            "the mid-step look at {} expected {} and found {}",
+            taken_at.as_str(),
+            self.expected,
+            self.produced
+        )
     }
 }
 

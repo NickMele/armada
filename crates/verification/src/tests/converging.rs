@@ -6,10 +6,10 @@
 
 use adapter_traits::Patch;
 use config::ResolvedWorkflow;
-use core_model::{CheckOutcome, DeclaredPaths, RepoPath};
+use core_model::{DeclaredPaths, RepoPath, Timestamp};
 use testkit::{Gate, Sketch};
 
-use crate::{Convergence, ConvergenceBrief, NotConverging, Unreadable, MID_STEP_CONVERGENCE};
+use crate::{Convergence, ConvergenceBrief, NotConverging, Unreadable};
 
 fn workflow() -> ResolvedWorkflow {
     testkit::resolved(&[Sketch {
@@ -82,10 +82,12 @@ fn a_finding_that_cites_nothing_is_unreadable_rather_than_thrashing() {
     );
 }
 
-/// The row a person reads on the step that stopped, so the escalation says what
-/// about the step rather than only that it stopped.
+/// **A finding outlives the instant it was taken, so anything quoting it says
+/// when.** A step stopped for a missing report read an undated snapshot back as
+/// its cause — the look had run two minutes earlier and the observable it named
+/// as unmoved had moved nineteen seconds before that.
 #[test]
-fn a_finding_is_written_down_under_its_own_name() {
+fn a_finding_is_quoted_with_the_instant_the_look_was_taken() {
     let Ok(Convergence::Thrashing(why)) = brief(&[]).read(
         "state: thrashing\nexpected: the counter reaches zero\n\
          produced: the counter is still four\nconsequence: the loop never ends",
@@ -100,8 +102,11 @@ fn a_finding_is_written_down_under_its_own_name() {
             "the loop never ends"
         )
     );
-    let row = why.recorded();
-    assert_eq!(row.name, MID_STEP_CONVERGENCE);
-    assert_eq!(row.outcome, CheckOutcome::Failed);
-    assert_eq!(row.produced.as_deref(), Some("the counter is still four"));
+    let quoted = why.as_of(&Timestamp::from_rfc3339("2026-09-02T19:17:22.658Z"));
+    assert!(quoted.contains("2026-09-02T19:17:22.658Z"), "{quoted}");
+    assert!(quoted.contains("the counter reaches zero"), "{quoted}");
+    assert!(quoted.contains("the counter is still four"), "{quoted}");
+    // The two fields the row it replaces carried. This change is about the
+    // stamp and not about what is disclosed, so the selection stays as it was.
+    assert!(!quoted.contains("the loop never ends"), "{quoted}");
 }
