@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 import { PhaseCard, type PhaseCardProps } from "./PhaseCard";
 
 const meta: Meta<typeof PhaseCard> = {
@@ -165,6 +166,97 @@ export const JudgeRefusedAndWhy: Story = {
  * not read as a failure. Amber, not red.
  */
 export const You: Story = { args: YOU };
+
+/**
+ * **A human tier that can never ask, given nothing but its kind and its
+ * state.** No `said`, no `detail`, no `note` — every sentence on this card is
+ * the component's own, which is the whole point of the story.
+ *
+ * A step whose `advance_gate` is `auto` or `auto_if_judge_passes` will never
+ * stop for a person. Both of the human tier's standing sentences describe a
+ * tier that *can* stop one, so on this card both were false, and the closing
+ * one said *waiting on you* — the exact claim #308 was filed to stop. It never
+ * reached a screen only because `phases.tsx` overrode both lines at every site,
+ * which is a guard that lasts until somebody adds a caller.
+ *
+ * Beside `You` above, the pair is the argument: same kind, same component, and
+ * neither sentence retyped by a caller.
+ */
+export const TheHumanTierThatCanNeverAsk: Story = {
+  args: {
+    kind: "human",
+    name: "No one",
+    state: "never",
+    stands: "this step advances without a person",
+  },
+  play: async ({ canvas }) => {
+    // The refusal first, because it is what the story is for. A word rather
+    // than a sentence: any rewording of the standing closer that put *waiting*
+    // back on a tier that can never wait still fails here.
+    expect(canvas.queryByText(/waiting/i)).toBeNull();
+    await expect(canvas.getByText(/never asks for one/)).toBeVisible();
+  },
+};
+
+/**
+ * **A human tier that will ask and has not been reached**, given nothing but
+ * its kind and its state. The sibling of the card above, and the same defect
+ * one state over.
+ *
+ * `ahead` is un-lit, so the chip is not amber and nothing is on you — and the
+ * standing closer said *Amber, not red. It is waiting on you, not broken*,
+ * which describes a state this card is not in. **The state that has not been
+ * reached is not the state that is waiting.** Copy that described what the
+ * card will become was the alternative and it is refused: a card describing
+ * what it will become is a card that is wrong now.
+ *
+ * The line it carries instead says why it is un-lit, which is the fact that
+ * separates it from `No one` above: this gate will ask.
+ */
+export const TheHumanTierNotReachedYet: Story = {
+  args: {
+    kind: "human",
+    name: "You",
+    state: "ahead",
+    stands: "not reached",
+  },
+  play: async ({ canvas }) => {
+    // The same assertion as the never tier, on the same word, for the same
+    // reason. The set is why the copy avoids *waiting* rather than hedging
+    // it: one word, refused on every human tier that is not waiting.
+    expect(canvas.queryByText(/waiting/i)).toBeNull();
+    await expect(canvas.getByText(/Not amber yet/)).toBeVisible();
+  },
+};
+
+/**
+ * **A human tier a person has already answered**, given nothing but its kind
+ * and its state. The third of the three states that carried the standing line
+ * wrongly, and **the most-seen of them** — every approved step lands here.
+ *
+ * *It is waiting on you* was not merely the wrong tense on this card. It asks
+ * again for something already given, on the one state a person reaches by
+ * having acted.
+ *
+ * **`stands` is omitted rather than written.** `phases.tsx` passes `not
+ * reached` for this state, which is wrong in its own right and is a caller's
+ * bug rather than this component's, so a story asserting the closing line
+ * should not draw it. Reported, not fixed here.
+ */
+export const TheHumanTierAlreadyAnswered: Story = {
+  args: {
+    kind: "human",
+    name: "You",
+    state: "cleared",
+  },
+  play: async ({ canvas }) => {
+    // Three states, one absent word. A rewording of the standing closer that
+    // put the claim back fails on all three at once, which is the property the
+    // copy was written for.
+    expect(canvas.queryByText(/waiting/i)).toBeNull();
+    await expect(canvas.getByText(/does not ask twice/)).toBeVisible();
+  },
+};
 
 /**
  * The card as it opens off the strip — `--bg-overlay`, the strong edge, and

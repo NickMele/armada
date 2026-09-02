@@ -28,8 +28,10 @@ import type { ReactNode } from "react";
  * exit code, and it may pass or fail. The Judge is a model reading the work
  * against the step's acceptance criteria, and it may only refuse. Drawing them
  * as one row of chips risks reading as one kind of thing, so each carries a
- * standing sentence written once, here — `SAID` below — rather than retyped on
- * every screen that draws a strip.
+ * standing sentence written once, here — `phaseSaid` below — rather than
+ * retyped on every screen that draws a strip. **Keyed by state as well as
+ * kind**, because a tier that can never hold a step cannot say what a tier
+ * holding one says.
  *
  * **The standing sentence does not replace this step's facts.** It says what
  * the tier is; the rows say what happened. A card that showed only the
@@ -145,7 +147,7 @@ export function phaseGlyph(kind: PhaseStageKind, state: PhaseStageState): Lucide
  * Check and a Judge is stated. That difference is the whole reason the two
  * tiers are not one row of chips.
  */
-export const SAID: Record<PhaseStageKind, string | undefined> = {
+const SAID: Record<PhaseStageKind, string | undefined> = {
   phase: undefined,
   checks:
     "Commands this repository declares in its own Manifest. Fleet runs them and the Drone never " +
@@ -160,13 +162,103 @@ export const SAID: Record<PhaseStageKind, string | undefined> = {
 };
 
 /** What each tier is worth knowing after the rows. Standing copy, same rule. */
-export const CLOSES_WITH: Record<PhaseStageKind, string | undefined> = {
+const CLOSES_WITH: Record<PhaseStageKind, string | undefined> = {
   phase: undefined,
   checks:
     "A command and an exit code. Nothing to interpret, and the same answer every time it is run.",
   judge: "It can only refuse. A Judge never turns a failed Check into a pass.",
   human: "Amber, not red. It is waiting on you, not broken.",
 };
+
+/**
+ * Where the state changes what the tier *is*, and not only where it stands.
+ *
+ * **The human tier's closing line is a claim about the chip in front of you**,
+ * not a description of the tier in general. *Amber, not red — it is waiting on
+ * you, not broken* is true of a tier holding a step and false of every other
+ * state, each for its own reason.
+ *
+ * # The human tier's four states, and which one takes the standing line
+ *
+ * | State | The chip | What the closer has to say |
+ * |---|---|---|
+ * | `waiting` | amber, holding the step | **the standing line, and only here** |
+ * | `cleared` | a person answered | the gate does not ask twice |
+ * | `ahead` | un-lit, will light | not amber yet, and why |
+ * | `never` | un-lit, will not light | nobody is ever asked |
+ *
+ * **Three of the four carried a false claim, and #320 named one of them.**
+ * That is the defect behind all three rather than three defects: the lookup was
+ * keyed by kind, so every state a caller did not think about inherited a
+ * sentence written for one of them. The table is here so the set is readable at
+ * a glance — **a fifth state added to this tier inherits the default silently**,
+ * and reading it off a map with one entry is how that goes unnoticed.
+ *
+ * `current` and `failed` are typeable on this tier and no caller produces
+ * either. A caller that starts to is the fifth state.
+ *
+ * # Why each of the three differs
+ *
+ * **`cleared` is a tier a person has already answered.** *It is waiting on you*
+ * is not merely the wrong tense there — it asks again for something already
+ * given. It is also the state every approved step lands in, which makes it the
+ * most-seen of the three wrong ones rather than the most obscure.
+ *
+ * **`ahead` is a tier that has not been reached.** It will light, and it has
+ * not, so the card is not amber and nothing is on the person yet. **The state
+ * that has not been reached is not the state that is waiting.**
+ *
+ * **`never` is a tier that will not light.** A step whose `advance_gate` never
+ * asks for a person will never sit here, so the chip will never be amber and
+ * nobody is ever waited on — *waiting on you* is the exact claim #308 was filed
+ * to stop.
+ *
+ * # Two rules the copy follows
+ *
+ * **None of the three says *waiting*, and that is deliberate rather than
+ * incidental.** Each could have hedged the word and stayed true; avoiding it
+ * outright is what lets all three stories assert one absent word, so a
+ * rewording that put the claim back fails on every un-waiting state at once.
+ *
+ * **Copy that describes what the card will become is refused.** It was the
+ * alternative for `ahead`: a card describing what it will become is a card that
+ * is wrong now.
+ *
+ * **Sparse, and not a severity ordering.** A state that does not change what
+ * the tier is takes the kind's own sentence, which is the property worth
+ * keeping — the common tier says the standing line without any caller retyping
+ * it. These differ because the facts differ, not because one is worse.
+ */
+const WHEN: Record<"said" | "closesWith", Partial<Record<PhaseStageKind, Partial<Record<PhaseStageState, string>>>>> = {
+  said: {
+    human: { never: "The human gate, which this step's workflow does not use." },
+  },
+  closesWith: {
+    human: {
+      never: "Nothing at this step waits for a person. Its advance gate never asks for one.",
+      ahead: "Not amber yet. This step's gate will ask for a person, and it has not got that far.",
+      cleared: "Answered. A person approved this step, and the gate does not ask twice.",
+    },
+  },
+};
+
+/**
+ * What the tier is, keyed by kind and state.
+ *
+ * **Exported, and the kind-only maps are not.** A lookup that took the kind
+ * alone is how a caller reached the waiting sentence for a tier that can never
+ * wait — the guard has to be here rather than in each caller's discipline,
+ * because the next caller is the one who forgets. #320, and `phaseGlyph` above
+ * is the same argument for the same reason.
+ */
+export function phaseSaid(kind: PhaseStageKind, state: PhaseStageState): string | undefined {
+  return WHEN.said[kind]?.[state] ?? SAID[kind];
+}
+
+/** What the tier is worth knowing after the rows, keyed by kind and state. */
+export function phaseClosesWith(kind: PhaseStageKind, state: PhaseStageState): string | undefined {
+  return WHEN.closesWith[kind]?.[state] ?? CLOSES_WITH[kind];
+}
 
 /**
  * A wire verdict, as the state a row stands in. `undefined` where the verdict
@@ -272,8 +364,8 @@ export function PhaseCard({
   align = "start",
 }: PhaseCardProps) {
   const Head = phaseGlyph(kind, state);
-  const says = said === undefined ? SAID[kind] : said;
-  const closes = detail === undefined ? CLOSES_WITH[kind] : detail;
+  const says = said === undefined ? phaseSaid(kind, state) : said;
+  const closes = detail === undefined ? phaseClosesWith(kind, state) : detail;
 
   return (
     <div

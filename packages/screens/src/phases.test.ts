@@ -8,6 +8,11 @@
 // `Compositions/Phase strip`'s `TheHumanTierThatCanNeverAsk` pins the same two
 // values as a rendering. A change to either has to move both.
 //
+// **What the tier *says* is no longer here.** `PhaseCard` keys its standing
+// copy by state as well as kind, so the sentences are the component's and
+// `Compositions/Phase card`'s `TheHumanTierThatCanNeverAsk` reads them off a
+// rendering. What this file is checked for is that it writes none of them.
+//
 // The rest of `phasesOf` is drawn rather than computed and belongs to the
 // stories; what is tested here is the branch, which the type does not show.
 
@@ -72,14 +77,21 @@ describe("the human tier", () => {
     expect(never?.label).not.toBe(notReached?.label);
   });
 
-  it("says the amber sentence only where the tier can hold the step", () => {
-    // `undefined` takes the card's standing line for a human tier, which is
-    // *amber, not red — it is waiting on you*. A tier that can never ask is
-    // neither, so it carries its own.
+  // This screen used to write both of the never tier's sentences itself, so
+  // that the card's standing amber closer could not reach a tier that can
+  // never be amber. `PhaseCard` keys that copy by state now, so an override
+  // here would be a second place the sentence is written — and worse, it would
+  // put the guard back on the caller. What is left to check is that this file
+  // hands over no copy at all: the state and the label are the whole of what
+  // it says, and `Compositions/Phase card`'s `TheHumanTierThatCanNeverAsk` is
+  // where the sentence itself is read off a rendering. #320.
+  it("hands the never tier's copy to the card rather than writing it", () => {
+    const never = you({ advance_gate: "auto" });
+    expect(never?.state).toBe("never");
+    expect(never?.said).toBeUndefined();
+    expect(never?.detail).toBeUndefined();
+    // The gate that will ask says nothing either, and takes the standing line.
     expect(you({ advance_gate: "human_always" })?.detail).toBeUndefined();
-    expect(you({ advance_gate: "auto" })?.detail).toBe(
-      "Nothing at this step waits for a person. Its advance gate never asks for one.",
-    );
   });
 
   it("lights amber only where a person is being waited on", () => {
