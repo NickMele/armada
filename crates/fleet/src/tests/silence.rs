@@ -45,6 +45,16 @@ type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 /// what the tests exercise is the number that ships.
 const QUIET_AFTER: Duration = Duration::from_secs(120);
 
+/// How long a case waits for a real child to speak before it calls itself
+/// broken.
+///
+/// **Generous on purpose, and it costs nothing.** Every wait below polls and
+/// breaks the moment the pipe moves, so this is only ever spent on a run that
+/// is actually wrong. It replaced a 40ms sleep and a one-second poll, which is
+/// how a machine already running the rest of the workspace turned a child that
+/// had not been scheduled yet into a Drone that had stopped talking — #327.
+const A_CHILD_HAS_LONG_ENOUGH: Duration = Duration::from_secs(30);
+
 /// A clock that ticks a second per reading, and jumps when a test says so.
 struct Held {
     ticks: AtomicU64,
@@ -191,9 +201,18 @@ async fn a_drone_that_keeps_talking_is_never_poked() {
 
     let mut said = Vec::new();
     for _ in 0..20 {
+        // **The Drone has to have spoken since the last turn, or the case never
+        // ran.** This claims a *talking* Drone is left alone, and a child that
+        // has not been scheduled is not talking — so the precondition is waited
+        // for rather than slept through. Slept through, a loaded machine failed
+        // here saying a talking Drone was poked, about a Drone that was silent.
+        let before = heard(&fleet).await;
+        assert!(
+            spoke_again(&fleet, before).await,
+            "the Drone stopped talking, so this case never ran"
+        );
         // Half the threshold per turn, so twenty turns run the step ten times
         // past a wall clock that would have fired on the honest case.
-        tokio::time::sleep(Duration::from_millis(40)).await;
         clock.on(QUIET_AFTER.as_secs() / 2);
         let turned = fleet.turn().await.expect("a turn");
         if let Some(quiet) = turned.each.into_iter().find_map(|worked| worked.quiet) {
@@ -321,21 +340,23 @@ async fn a_drone_that_answers_the_poke_is_heard_and_not_escalated() {
     // **The poke reached the Drone and something came back**, which is what
     // restarts the clock. Read as a count of events and never as their content,
     // for [`Working::came_to_rest`]'s reason.
-    let mut answered = false;
-    for _ in 0..200 {
-        // Inside the threshold on purpose: what is under test is the answer
-        // arriving, and a second silence would be a second episode.
-        clock.on(QUIET_AFTER.as_secs() / 8);
-        let turned = fleet.turn().await.expect("a turn");
-        let quiet = turned.quiet();
-        assert!(quiet.is_none(), "the vigil spoke again: {quiet:?}");
-        if heard(&fleet).await > before {
-            answered = true;
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
-    assert!(answered, "the poke was sent and nothing came back");
+    //
+    // Waited for on the pipe and not counted in turns. This was a loop that
+    // pushed the clock every iteration, so the budget for the answer and the
+    // budget before a second episode were the same number: two hundred
+    // iterations already push 3000s past a 120s threshold, and raising it to
+    // give a loaded child longer would have poked the Drone again instead.
+    assert!(
+        spoke_again(&fleet, before).await,
+        "the poke was sent and nothing came back"
+    );
+
+    // Inside the threshold on purpose: what is under test is the answer
+    // arriving, and a second silence would be a second episode.
+    clock.on(QUIET_AFTER.as_secs() / 8);
+    let turned = fleet.turn().await.expect("a turn");
+    let quiet = turned.quiet();
+    assert!(quiet.is_none(), "the vigil spoke again: {quiet:?}");
     assert_eq!(
         fleet.load(&job).await.unwrap().status(),
         JobStatus::Running,
@@ -355,6 +376,26 @@ async fn heard(fleet: &Fixture) -> usize {
         .as_ref()
         .map(|at_work| at_work.heard().len())
         .unwrap_or_default()
+}
+
+/// Wait until the Drone in the slot has said more than `since`, and say whether
+/// it did.
+///
+/// **A poll on the pipe, not a sleep beside it.** [`Watching`] drains the
+/// transcript on its own task, so what a Drone has said grows whether or not
+/// Fleet turns — which means the precondition these cases need can be waited
+/// for directly instead of assumed to have happened inside a fixed window.
+///
+/// [`Watching`]: crate::watch::Watching
+async fn spoke_again(fleet: &Fixture, since: usize) -> bool {
+    let deadline = tokio::time::Instant::now() + A_CHILD_HAS_LONG_ENOUGH;
+    while tokio::time::Instant::now() < deadline {
+        if heard(fleet).await > since {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    false
 }
 
 /// The prompt contract is explicit that this turn names elapsed time and never
