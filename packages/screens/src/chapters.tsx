@@ -30,14 +30,14 @@ import {
 } from "@armada/components";
 
 import type { Diff, Footprint, Turn } from "@armada/protocol";
-import type { JobSummary, KeptDeliverable, StepDetail } from "@armada/protocol";
+import type { JobSummary, StepDetail } from "@armada/protocol";
 import type { JobFootprint } from "@armada/protocol";
 import type { Calls } from "./calls";
 import { DecidedDiff } from "./Decide";
 import { DIFF_CHAPTER, LOG_CHAPTER, namesChapter, type DetailKeys } from "./detail-keys";
 import { readingFor, whyNoFootprint } from "./files";
 import { Log } from "./Log";
-import { Opening, type Opens } from "./phases";
+import { keptOf, type KeptRead, type Opens } from "./phases";
 import { producedIn } from "./produced";
 import { entriesOf, NOTHING_YET_ON_THIS_STEP } from "./story";
 
@@ -106,7 +106,10 @@ export function chaptersOf({
   const told = rows.filter((row) => row.actor === "armada");
   const opened = told[0];
   const produced = producedIn(kept, readingFor(footprint, job.id));
-  const documents = step.deliverables ?? [];
+  // Read once, here, and drawn twice: the same call builds the Submitted
+  // tier's rows on the phase strip. Two readings is how the two surfaces
+  // came to state one ordering separately. #321.
+  const documents = keptOf(step, opens);
   return [
     {
       id: "instructions",
@@ -200,7 +203,7 @@ export function chaptersOf({
               note={produced.note}
             />
           )}
-          {documents.length === 0 ? null : <Documents kept={documents} opens={opens} />}
+          {documents.length === 0 ? null : <Documents kept={documents} />}
         </>
       ),
       // The patch opens on the layer that can hold it. It is the Job's whole
@@ -235,18 +238,18 @@ export function chaptersOf({
  * step that passed sent nobody there, so a 7,605-byte plan was unreachable from
  * the chapter that exists to say what the step produced.
  *
- * **Newest run first**, for the reason the strip's rows are: a step worked
- * three times kept three documents, and the run being read about is the last
- * one.
+ * **The ordering is not decided here.** `keptOf` decides it once for both
+ * surfaces and carries the argument for it; a second reversal in this file
+ * would be a second answer to one question, which is what #321 found.
  */
-function Documents({ kept, opens }: { kept: readonly KeptDeliverable[]; opens: Opens }) {
+function Documents({ kept }: { kept: readonly KeptRead[] }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <span className="text-2xs text-fg-muted">{DOCUMENTS}</span>
-      {[...kept].reverse().map((one) => (
+      {kept.map((one) => (
         <span key={one.path} className="flex items-center gap-2">
-          <Opening path={one.path} what="deliverable" opens={opens} />
-          <span className="text-2xs text-fg-subtle">attempt {one.attempt}</span>
+          {one.opening}
+          <span className="text-2xs text-fg-subtle">{one.attempt}</span>
         </span>
       ))}
       <p className="text-2xs text-fg-subtle">{DOCUMENTS_NOTE}</p>

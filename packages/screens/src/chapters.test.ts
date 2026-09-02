@@ -23,6 +23,9 @@ import type { Diff, Footprint, JobSummary, StepDetail, Turn } from "@armada/prot
 import { briefBlocks, widenIndent } from "@armada/components";
 
 import { chaptersOf } from "./chapters";
+// The phase strip, because the last describe in this file is the two surfaces
+// against each other and there is no third place both are reachable from.
+import { phasesOf, type Opens } from "./phases";
 
 /** The brief as `crates/fleet/src/briefing.rs` writes it, three blocks of it. */
 const BRIEF = [
@@ -91,6 +94,13 @@ function instructed(text: string): Turn {
   };
 }
 
+/** How a document is opened, stubbed. Shared, because both surfaces take it. */
+const OPENS: Opens = {
+  jobId: "01M130Y1380016YK5S0JXBXDQ5",
+  open: async () => ({ ok: true }),
+  onSaid: () => {},
+};
+
 /** The chapters, with everything the panel owns stubbed to a no-op. */
 function chapters(over: { rows?: Turn[]; step?: StepDetail } = {}) {
   return chaptersOf({
@@ -105,7 +115,7 @@ function chapters(over: { rows?: Turn[]; step?: StepDetail } = {}) {
     log: (region) => ({ region, openId: null, onOpen: () => {} }),
     calls: { of: () => undefined, fetch: () => {} },
     sheet: null,
-    opens: { jobId: job().id, open: async () => ({ ok: true }), onSaid: () => {} },
+    opens: OPENS,
     onOpenSheet: () => {},
   });
 }
@@ -230,5 +240,57 @@ describe("produced, on a step whose product is a document", () => {
     const markup = renderToStaticMarkup(chapters({ step: three })[2]!.preview);
     expect(markup.indexOf("plan.2.plan.md")).toBeLessThan(markup.indexOf("plan.1.plan.md"));
     expect(chapters({ step: three })[2]!.summary).toBe("0 files · 2 documents");
+  });
+});
+
+/**
+ * The two surfaces that draw one step's documents, read against each other.
+ *
+ * **The defect was two readings, not one wrong one.** `keptRows` reversed and
+ * argued for it; this chapter reversed and said so separately. Both were right
+ * and nothing held them together, so the next edit to either was free to move
+ * one. What this pins is the agreement — a step retried twice listing the same
+ * documents in the same sequence on both. #321.
+ */
+describe("a step retried twice, on both surfaces", () => {
+  const twice = step({
+    deliverables: [
+      { attempt: 1, path: ".armada/deliverables/plan.1.plan.md" },
+      { attempt: 2, path: ".armada/deliverables/plan.2.plan.md" },
+    ],
+  });
+
+  /** Each document a surface drew, with its attempt, in the order it drew it. */
+  function documentsIn(markup: string): string[] {
+    return [
+      ...markup.matchAll(/title="(\.armada\/deliverables\/[^"]+)"[\s\S]*?(attempt \d+)/g),
+    ].map((found) => `${found[1]} · ${found[2]}`);
+  }
+
+  /** What the Produced chapter lists. */
+  function inProduced(one: StepDetail): string[] {
+    return documentsIn(renderToStaticMarkup(chapters({ step: one })[2]!.preview));
+  }
+
+  /** What the strip's Submitted tier lists. The result is beside the label. */
+  function onTheStrip(one: StepDetail): string[] {
+    const stage = phasesOf(one, [], OPENS).stages.find((held) => held.id === "submitted");
+    return (stage?.rows ?? []).flatMap((row) =>
+      documentsIn(renderToStaticMarkup(row.label) + renderToStaticMarkup(row.result)),
+    );
+  }
+
+  it("lists the same documents in the same order on both", () => {
+    expect(onTheStrip(twice)).toEqual(inProduced(twice));
+  });
+
+  // Named rather than only compared, so a change that reversed *both* surfaces
+  // still fails here. Two surfaces agreeing on the wrong order is the reading
+  // the test above cannot tell from the right one.
+  it("puts the last run at the top of both", () => {
+    expect(inProduced(twice)).toEqual([
+      ".armada/deliverables/plan.2.plan.md · attempt 2",
+      ".armada/deliverables/plan.1.plan.md · attempt 1",
+    ]);
   });
 });

@@ -120,7 +120,7 @@ export function phasesOf(
 ): PhaseStripProps {
   const submitted = HAS_SUBMITTED.has(step.state);
   const working = step.state === "running" || step.state === "retrying";
-  const kept = keptRows(step, opens);
+  const kept = keptRows(keptOf(step, opens));
   const stages: PhaseStage[] = [
     {
       id: "instructed",
@@ -337,7 +337,24 @@ function citedOf(judged: Judged, opens: Opens): ReactNode {
 }
 
 /**
- * The documents this step was judged on, one row per run.
+ * One kept document, read once for both surfaces that draw it.
+ *
+ * **The markup is not shared and should not be.** The strip wants a
+ * `PhaseStageRow` with a mark and a hue; the Produced chapter wants two
+ * elements in a flex row. What drifts is the reading — the ordering, the
+ * `what`, and the *attempt N* label — so that is what this carries.
+ */
+export type KeptRead = {
+  /** The path, which is also the row key: one document per attempt. */
+  path: string;
+  /** The control that opens it, in the words a person was hunting for. */
+  opening: ReactNode;
+  /** Which run wrote it — `attempt 3`. */
+  attempt: string;
+};
+
+/**
+ * The documents this step kept, one per run, newest run first.
  *
  * **Per run, because a re-run is a different document.** A step worked three
  * times was judged on three, and a single row would make *the one the Judge
@@ -345,19 +362,29 @@ function citedOf(judged: Judged, opens: Opens): ReactNode {
  * a step that declares no deliverable, and on one whose Judge was never asked —
  * the bytes are copied where the call is built and nowhere else.
  *
- * **Newest run first.** The wire orders them oldest first, which is what a
- * history wants; this is a person looking at why the last run went the way it
- * did, and the run they are reading about is the one at the top.
+ * **Newest run first, on both surfaces.** The wire orders them oldest first,
+ * which is what a history wants; this is a person looking at why the last run
+ * went the way it did, and the run they are reading about is the one at the
+ * top. The Produced chapter reversed for the same reason and said so
+ * separately, and two statements of one ordering is how a step retried twice
+ * ends up listing its documents two ways. #321.
  */
-function keptRows(step: StepDetail, opens: Opens): PhaseStageRow[] {
-  return [...(step.deliverables ?? [])]
-    .reverse()
-    .map((kept) => ({
-      label: <Opening path={kept.path} what="deliverable" opens={opens} />,
-      mono: true,
-      result: `attempt ${kept.attempt}`,
-      state: "cleared" as const,
-    }));
+export function keptOf(step: StepDetail, opens: Opens): KeptRead[] {
+  return [...(step.deliverables ?? [])].reverse().map((kept) => ({
+    path: kept.path,
+    opening: <Opening path={kept.path} what="deliverable" opens={opens} />,
+    attempt: `attempt ${kept.attempt}`,
+  }));
+}
+
+/** The kept documents as rows on the Submitted tier. A path is machine-derived. */
+function keptRows(kept: KeptRead[]): PhaseStageRow[] {
+  return kept.map((one) => ({
+    label: one.opening,
+    mono: true,
+    result: one.attempt,
+    state: "cleared" as const,
+  }));
 }
 
 /**
