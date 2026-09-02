@@ -28,6 +28,7 @@ mod rules_docs;
 mod rules_enums;
 mod rules_icons;
 mod rules_layers;
+mod rules_node;
 mod rules_privacy;
 mod rules_protocol;
 mod rules_stories;
@@ -122,6 +123,7 @@ fn verify_foundations() -> ExitCode {
         rules_stories::every_story_names_its_own_path(&root),
         rules_layers::every_package_imports_downward(&root),
         rules_bundled::no_workspace_package_is_left_for_node(&root),
+        rules_node::the_pinned_node_satisfies_the_declared_floor(&root),
         rules_stylesheets::every_stylesheet_reaches_the_sheet_the_app_loads(&root),
         rules_protocol::the_router_serves_what_the_inventory_names(&root),
         rules_protocol::version::the_version_and_its_generated_constant_agree(&root),
