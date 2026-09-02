@@ -98,8 +98,8 @@ crate graph, and the rules that hold everywhere, with diagrams.
 
 ## Building it
 
-**Requirements:** macOS, Rust 1.90 or later, Node 22 or later, and
-[pnpm](https://pnpm.io).
+**Requirements:** macOS, Rust 1.90 or later, and Node 24 — the version in
+`.nvmrc`, which `pnpm` refuses to run without.
 
 ```sh
 git clone https://github.com/NickMele/armada.git

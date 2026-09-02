@@ -6,7 +6,7 @@
   "description": "Dispatch coding agents against git repositories.",
   "packageManager": "pnpm@11.6.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "scripts": {
     "dev": "scripts/dev",
