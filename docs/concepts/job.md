@@ -138,7 +138,7 @@ different name.** They are ordered here by how much they take away.
 | **Override the verdict** | Anywhere | Everything, including the refused step's own work | `queued`, then the **next** step when there is room. On the workflow's last step, `completed_success` |
 | **Redirect** | Mid-step, or at a boundary | The worktree and every step so far. Mid-step the session too; at a boundary there is none, and the words go into the next Drone's opening brief | `running` the same step where a step stopped; where none did, the Job stays `escalated` until the work turns |
 | **Restart a step** | A step stopped, and is to be worked again | The worktree and the branch; earlier steps' work | `queued`, then the same step with a new Drone when there is room |
-| **Redispatch** | Anywhere | Nothing. A new Job carries a reference back | A replacement at the approval gate |
+| **Redispatch** | Anywhere | No work. A new Job carries a reference back, and its brief names the failed attempt's branch | A replacement at the approval gate, starting at the first step |
 | **Pilot** | Anywhere | The worktree, handed to a person | `piloted` |
 
 **The first one takes nothing away, and that is what it is for.** A Judge that

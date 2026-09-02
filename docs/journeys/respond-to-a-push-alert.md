@@ -100,7 +100,7 @@ Renamed from "Escalating Response Tiers" Aug 2026. The old name read as severity
 | Rung | Action | Where | Evidence trail |
 | --- | --- | --- | --- |
 | 1 | Redirect — structured instruction sent to the Drone | In-place on Debug | Normal Job event |
-| 2 | Kill & Redispatch — kill Drone, capture learnings, dispatch a fresh one with new context | In-place on Debug | New Job dispatch, old learnings become reference context |
+| 2 | Kill & Redispatch — kill Drone, capture learnings, dispatch a fresh one with new context | In-place on Debug | New Job at the first step, old learnings become reference context |
 | 3 | Break-glass Pilot — raw terminal takeover, you finish the work | Deliberate mode switch, entered rarely | Explicit manual-override event, never mixed into Drone evidence |
 
 **Helm's authority maps onto this ladder**, not onto the alert levels. Rung 1 it may take directly; rung 2 always routes through your approval; rung 3 is a human at a keyboard by definition and no agent can take it.
@@ -113,13 +113,24 @@ Paused, unless a cap was hit. Worktree and state held as-is either way. Killing 
 
 **On a healthy Drone it is an action.** The ladder is reachable on a healthy, non-escalated Drone, decided Aug 21 2026: all three of Redirect, Kill and Pause are available there. Kill was never in doubt — killing a healthy Drone is unambiguous and already safe. Pause only ever means something on a healthy Drone, since anything escalated is already paused, so Helm's ability to pause a healthy running Job rides on the same answer. Redirect carried the real risk — injecting context mid-step produces evidence the step did not plan for, which the Judge might then flag for a reason that is the engineer's fault rather than the Drone's — but two things decided the same day weakened that concern: Pilot became available on any Job, running or escalated, so gating the lightest intervention while leaving the heaviest one ungated inverts the ladder; and the Judge already handles unplanned drift, since `scope_diff_check` tags a step for a mandatory Judge look rather than auto-failing, precisely because legitimate investigation moves the work. The one constraint kept: a redirect on a healthy Drone is mid-step context injection and must not silently become a step restart. The Drone continues with more information, and the record says a human intervened.
 
+## Where a redispatched Drone starts
+
+**The first step.** A redispatch mints a new Job, and a new Job cannot resume — which is forced twice over rather than chosen.
+
+**It has no worktree to resume onto.** The failed Job's branch is its record, and `create_worktree` refuses an existing branch, so the replacement takes a fresh one under its own id. Every step that passed did its work on a branch the replacement does not have.
+
+**"The failed step" may not exist.** The replacement freezes the workflow as it stands now rather than copying the failed Job's frozen definition, deliberately, so that an edit made in response to the failure reaches the retry. A step index into a definition that may have changed shape is not a resume point.
+
+**So what carries forward is context, never work.** The brief, the title and the workflow, plus what the dead Drone learned — and the failed attempt's branch, named as what it is: the previous attempt, in whatever state it was left. Whether that work is any good is the new Drone's reading to make, and the brief says it is unverified rather than pretending otherwise. **A named branch is a kept branch**, and ordinary cleanup keeps an unmerged one — #301 is when a failed attempt stops being worth holding.
+
+**The cost is the whole Job, not the failed step, and the dialog says so.** That is what makes this rung 2. Rung 1 keeps the session; this spends every step that had already passed.
+
+**Restart Step is the act that resumes**, and it is a different one: same Job, same worktree, same branch, a fresh Drone at the step that stopped. Reach for that where the diagnosis holds and only the execution went wrong.
+
 ## Open questions
 
 - **[status-updates-os-notification-surface]** Do written status updates surface in-app only, or as OS notifications too?
   Voice governs how written status updates read. Where they surface is unspecified: in-app only, or OS notifications as well. Not cosmetic — the away-from-desk pre-authorized batch flow assumes a person is not looking at Bridge, and an alert that only exists inside a closed window is not an alert. The escalations-interrupt / approvals-queue rule would also need an OS-level expression if notifications leave the app.
-
-- **[redispatch-resume-point]** Where does a Kill & Redispatch drone start — the failed step, or the first step?
-  Recorded above under "Open after design." Drawn as resuming at the failed step, inferred from the worktree being kept, but the rung's own definition does not state it. Restart Step, Pilot's separate outcome, explicitly starts a new Drone at the step that failed; whether rung 2 follows the same rule or restarts from the first step is not written down anywhere that governs it.
 
 - **[interrupted-job-alert-level]** Does a Job `interrupted` after a Fleet crash stay at Blocked once crash recovery is designed?
   Recorded inline in the Alert Levels table above, against the `interrupted` row: "Revisit once crash recovery is designed — if resuming is one click this may belong at Waiting." The cause of the interruption is already dead by the time a person sees it; whether resumption is cheap enough to demote it off the interrupt-worthy tier depends on a milestone (Recovery) that has not yet designed that path.
