@@ -55,6 +55,7 @@ export function chaptersOf({
   kept,
   diff,
   live,
+  transcript,
   log,
   calls,
   sheet,
@@ -75,6 +76,17 @@ export function chaptersOf({
   diff: Diff;
   /** Whether the socket is still carrying rows, for the chapter's live mark. */
   live: boolean;
+  /**
+   * What the socket says about its own reading, from `whyNotWatching`, or
+   * `undefined` while it is reading.
+   *
+   * **The third answer, and it replaces the other two where it is present.** A
+   * chapter with no rows says either that nothing has happened on the step or
+   * that Armada has not opened it — both of which are true only of a step that
+   * has not started. A socket that failed or closed says so instead, and a
+   * chapter that already has rows says it above them. #324.
+   */
+  transcript: string | undefined;
   /**
    * What one log takes, by name. Held by `detail-keys` for the reason the
    * chapters and the strip are: `h`/`l` open a row, and a keyboard and a
@@ -121,7 +133,7 @@ export function chaptersOf({
       summary: opened === undefined ? undefined : opened.at,
       preview:
         opened === undefined ? (
-          <p className="text-2xs text-fg-muted">{NOT_OPENED_YET}</p>
+          <p className="text-2xs text-fg-muted">{transcript ?? NOT_OPENED_YET}</p>
         ) : (
           // **The payload and not its text.** Each line carries what it is,
           // and the block headings are on the wire as line numbers Fleet wrote
@@ -172,13 +184,23 @@ export function chaptersOf({
       // Always drawn, and never behind a control. The log is what says what is
       // happening right now, so it is on the page while the Job runs rather
       // than a thing to go and open.
+      //
+      // The note sits above the rows rather than replacing them: a socket that
+      // stopped is a fact about the reading, and the rows already in hand are
+      // still the step's record. With no rows the same sentence is the empty
+      // note, so it is said once either way.
       preview: (
-        <Log
-          rows={rows.slice(-PREVIEWED)}
-          emptyNote={NOTHING_YET_ON_THIS_STEP}
-          calls={calls}
-          {...log("log")}
-        />
+        <>
+          {transcript === undefined || rows.length === 0 ? null : (
+            <p className="text-2xs text-fg-muted">{transcript}</p>
+          )}
+          <Log
+            rows={rows.slice(-PREVIEWED)}
+            emptyNote={transcript ?? NOTHING_YET_ON_THIS_STEP}
+            calls={calls}
+            {...log("log")}
+          />
+        </>
       ),
     },
     {

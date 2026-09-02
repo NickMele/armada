@@ -26,7 +26,7 @@ import { clock } from "./duration";
 import { Log } from "./Log";
 import { recourseOf } from "./recovery";
 import { drawn } from "./review";
-import { NOTHING_YET_ON_THIS_STEP, type LogRow } from "./story";
+import { NOTHING_YET_ON_THIS_STEP, whyNotWatching, type LogRow } from "./story";
 
 /** Which sheet is open, or none. Two cannot be. */
 export type OpenSheet = "log" | "diff" | null;
@@ -98,7 +98,15 @@ export function DetailSheet({
         escalation={escalationOf(job, whole, step, onClose)}
         onClose={onClose}
       >
-        <Log rows={rows} emptyNote={NOTHING_YET_ON_THIS_STEP} calls={calls} {...log} />
+        {/* The sheet is the whole log, so a socket that stopped says so here
+            for the reason the chapter's preview does: an empty sheet reading as
+            a step that has not started is the panel's defect one layer out. */}
+        <Log
+          rows={rows}
+          emptyNote={whyNotWatching(observed) ?? NOTHING_YET_ON_THIS_STEP}
+          calls={calls}
+          {...log}
+        />
       </ActivityLogSheet>
     );
   }
