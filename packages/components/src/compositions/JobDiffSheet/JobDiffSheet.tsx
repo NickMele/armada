@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Sheet } from "../../primitives/Sheet/Sheet";
+import type { DiffFile } from "../UnifiedDiff/UnifiedDiff";
 
 /**
  * The Job's patch, on the layer that can hold it — Journey 4, frame `4j`.
@@ -16,13 +17,19 @@ import { Sheet } from "../../primitives/Sheet/Sheet";
  */
 /**
  * One row of the rail. **Not a `DiffFile`** — the patch is drawn by the
- * caller's own diff component, and what the rail needs is the reading's counts
- * and the step that produced the file, which a patch does not carry.
+ * caller's own diff component, and the rail needs one number per file where the
+ * patch holds one row per line.
+ *
+ * **It is derivable from the patch, and `railOfPatch` is how.** The counts were
+ * once described here as the *reading's*, which sent callers to a footprint for
+ * them; a footprint is written when a step submits, so mid-step there is none
+ * and the rail came back empty beside a fully drawn patch — #310. The one thing
+ * a patch genuinely does not carry is `step`.
  */
 export type JobDiffFile = {
   /** Repository-relative, exactly as git spells it. */
   path: string;
-  /** Lines added and removed, as the reading counted them. */
+  /** Lines added and removed, as the patch spells them. */
   added: number;
   removed: number;
   /**
@@ -34,6 +41,35 @@ export type JobDiffFile = {
    */
   step?: ReactNode;
 };
+
+/**
+ * The rail for a patch, counted off the same files the patch is drawn from.
+ *
+ * **One answer feeds the rail, the header and the body.** Hand this the array
+ * you hand `UnifiedDiff` and the header cannot contradict what is beside it —
+ * which is what #310 was: a rail and a count taken from a footprint while the
+ * body was taken from the worktree, so a Job mid-step read `0 files · +0 −0`
+ * above its own patch.
+ *
+ * **A cut patch counts what was drawn**, because that is what the reader is
+ * looking at. `UnifiedDiff`'s `cut` is what says the rest exists; a header
+ * counting lines nobody can see would be the second source again, one field
+ * along.
+ *
+ * No `step`: a patch does not say which step wrote a file, and nothing is
+ * guessed here. See `JobDiffFile.step`.
+ */
+export function railOfPatch(files: DiffFile[]): JobDiffFile[] {
+  return files.map((file) => {
+    let added = 0;
+    let removed = 0;
+    for (const line of file.lines) {
+      if (line.kind === "added") added += 1;
+      else if (line.kind === "removed") removed += 1;
+    }
+    return { path: file.path, added, removed };
+  });
+}
 
 export type JobDiffSheetProps = {
   open: boolean;
