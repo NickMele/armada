@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { ReactElement } from "react";
 import { cloneElement } from "react";
 import { Check, CircleDot, Cpu, GitBranch, Power, UserCheck, X } from "lucide-react";
+import { expect } from "storybook/test";
 import { Button } from "../../primitives/Button/Button";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { JobRowStacked, type JobRowStackedProps } from "../JobRowStacked/JobRowStacked";
@@ -242,6 +243,44 @@ export const Selectable: Story = {
       cloneElement(row, { onOpen: () => {}, selected: i === 2 }),
     ),
   },
+  /**
+   * **The paragraph above says to read this with the keyboard rather than the
+   * eye, so this is that reading.** Every claim it makes is invisible in a
+   * drawing: a list of six tab stops and a list with one cursor render
+   * identically, and the difference is the whole reason the role was changed.
+   *
+   * `tabindex` is read directly because it *is* the claim. It is not styling —
+   * it is which of six rows Tab will find, and there is no rendered mark for
+   * it.
+   */
+  play: async ({ canvas, userEvent }) => {
+    const rows = canvas.getAllByRole("option");
+    await expect(rows).toHaveLength(6);
+
+    // One tab stop for the list, on the first row — where a list nobody has
+    // touched should put it.
+    await expect(rows.filter((row) => row.getAttribute("tabindex") === "0")).toEqual([rows[0]]);
+
+    rows[0].focus();
+    await userEvent.keyboard("{ArrowDown}{ArrowDown}");
+    await expect(rows[2]).toHaveFocus();
+
+    // And the row the cursor left gave up its tab stop, which is the half a
+    // roving implementation forgets: two rows at `tabindex=0` is a list that
+    // Tab enters twice.
+    await expect(rows[0]).toHaveAttribute("tabindex", "-1");
+
+    await userEvent.keyboard("{End}");
+    await expect(rows[5]).toHaveFocus();
+
+    // Clamped, not wrapped. A Board is scanned, and a list that jumps back to
+    // the top loses the reader's place.
+    await userEvent.keyboard("{ArrowDown}");
+    await expect(rows[5]).toHaveFocus();
+
+    await userEvent.keyboard("{Home}");
+    await expect(rows[0]).toHaveFocus();
+  },
 };
 
 /**
@@ -345,5 +384,21 @@ export const OneOption: Story = {
         onOpen: () => {},
       }),
     ],
+  },
+  /**
+   * The state the prose above calls the one a clamp gets wrong most easily —
+   * and the one where getting it wrong is silent, because a cursor wrapping
+   * onto the only row it could be on looks exactly like a cursor staying put.
+   *
+   * All four keys, because a clamp is four expressions and each can be wrong
+   * on its own.
+   */
+  play: async ({ canvas, userEvent }) => {
+    const row = canvas.getByRole("option");
+    row.focus();
+
+    await userEvent.keyboard("{ArrowDown}{ArrowUp}{Home}{End}");
+    await expect(row).toHaveFocus();
+    await expect(row).toHaveAttribute("tabindex", "0");
   },
 };

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
 import { ActivityLog } from "../ActivityLog/ActivityLog";
 import { ChangedFiles } from "../ChangedFiles/ChangedFiles";
 import { StepStory, type StepChapter } from "./StepStory";
@@ -85,6 +86,36 @@ const CHAPTERS: StepChapter[] = [
 /** The story at rest: three chapters, each showing what it holds. */
 export const TheStory: Story = {
   args: { chapters: CHAPTERS },
+  /**
+   * **Opening one chapter closes the other.** That is the answer to the height
+   * problem, and it is the constraint that makes this a story rather than a
+   * stack of accordions — two long chapters open at once is the state an
+   * accordion reaches on its second press and this must never reach at all.
+   *
+   * The last two lines are the other half of the rule: collapsed is hidden,
+   * not unmounted. The log is still streaming into a chapter that is shut, and
+   * the header's `aria-controls` still has to name something.
+   */
+  play: async ({ canvas, userEvent }) => {
+    const log = canvas.getByRole("button", { name: /Activity log/ });
+    const produced = canvas.getByRole("button", { name: /Produced/ });
+
+    // Nothing open, so every chapter is showing what it holds.
+    await expect(log).toHaveAttribute("aria-expanded", "true");
+    await expect(produced).toHaveAttribute("aria-expanded", "true");
+
+    await userEvent.click(log);
+    await expect(log).toHaveAttribute("aria-expanded", "true");
+    await expect(produced).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(produced);
+    await expect(produced).toHaveAttribute("aria-expanded", "true");
+    await expect(log).toHaveAttribute("aria-expanded", "false");
+
+    const body = document.getElementById(log.getAttribute("aria-controls") ?? "");
+    await expect(body).not.toBeNull();
+    await expect(body).not.toBeVisible();
+  },
 };
 
 /**
@@ -139,5 +170,19 @@ export const WithADecision: Story = {
  * until this component renames a class.
  */
 export const HeldByTheCaller: Story = {
-  args: { chapters: CHAPTERS, openChapter: "log" },
+  args: { chapters: CHAPTERS, openChapter: "log", onOpen: fn() },
+  /**
+   * The inertness the prose above calls deliberate, asserted — because inert
+   * and broken are the same drawing. A component that kept its own copy of the
+   * open chapter beside the caller's would look right in every story where the
+   * caller writes back, and disagree with it silently everywhere else.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    const produced = canvas.getByRole("button", { name: /Produced/ });
+    await expect(produced).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(produced);
+    await expect(args.onOpen).toHaveBeenCalledWith("produced");
+    await expect(produced).toHaveAttribute("aria-expanded", "false");
+  },
 };

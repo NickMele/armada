@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
 
 import { DroneQuestion } from "./DroneQuestion";
 
@@ -50,7 +51,26 @@ export const TwoAnswers: Story = {
       },
     ],
     waiting: "12m",
-    onAnswer: () => {},
+    onAnswer: fn(),
+  },
+  /**
+   * **Off until something is picked.** Fleet would refuse an empty answer, and
+   * a round trip to learn nothing was chosen is a refusal that reads as a
+   * failure — so the control never offers the press in the first place.
+   *
+   * The answer sent is the label, which is what the drone asked with. A
+   * regression to an index would look right here and be wrong the moment Fleet
+   * reordered the options.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    const send = canvas.getByRole("button", { name: "Send this answer" });
+    await expect(send).toBeDisabled();
+
+    await userEvent.click(canvas.getByRole("radio", { name: "Its own job" }));
+    await expect(send).toBeEnabled();
+
+    await userEvent.click(send);
+    await expect(args.onAnswer).toHaveBeenCalledWith("Its own job");
   },
 };
 
