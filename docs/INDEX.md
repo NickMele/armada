@@ -39,6 +39,9 @@ Each ends with the questions it found and did not answer.
 - [`practices/acceptance-tests.md`](practices/acceptance-tests.md) — the one
   test per milestone that stands for its claim: why it is written first, what
   reconciling one costs, and what M1's proves.
+- [`practices/running-locally.md`](practices/running-locally.md) — starting,
+  checking and stopping a local Fleet: what it prints, what it refuses before it
+  binds a port, and what `armada clean` will not delete
 
 ## Contracts
 
