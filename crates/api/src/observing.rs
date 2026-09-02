@@ -18,14 +18,9 @@
 //! [`Feed::offer`] is a broadcast send: synchronous, non-blocking, drop-oldest.
 //! A slow viewer loses the oldest rows and is told how many.
 //!
-//! # A step ending is not the Job ending
-//!
-//! One channel belongs to one Drone, and a Job that advances exits one Drone
-//! and spawns the next milliseconds later. A viewer dropped at the exit watches
-//! the whole of the next step behind a panel that reads as a step which has not
-//! started, which is what #324 recorded. So a [`Watch`] outlives the Drone it
-//! opened on: it waits [`HANDOVER`] for the Job's next Drone and picks it up.
-//! Only a Job where none arrives is [`Silence::DroneEnded`].
+//! **A step ending is not the Job ending.** A [`Watch`] outlives the Drone it
+//! opened on, because a Job that advances spawns its next milliseconds later:
+//! [`HANDOVER`] is the rule, and #324 is what dropping the viewer there cost.
 //!
 //! `docs/concepts/observe.md` is the design.
 
