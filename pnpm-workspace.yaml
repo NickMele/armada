@@ -13,3 +13,9 @@ packages:
 allowBuilds:
   electron: true
   esbuild: true
+
+# Refuse to install on a Node the repo does not support, rather than warn and
+# carry on. `engines.node` in package.json is the floor; `.nvmrc` names the
+# exact version. Without this the mismatch is a WARN line nobody reads, and the
+# failure lands later as a stack trace from whichever tool broke first.
+engineStrict: true
