@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { useState } from "react";
 import { expect, fn } from "storybook/test";
 import { Textarea } from "../Textarea/Textarea";
 import { Dialog } from "./Dialog";
@@ -203,5 +204,105 @@ export const MoreThanFitsWithAFieldToReach: Story = {
         </p>
       </>
     ),
+  },
+};
+
+/**
+ * **Waiting on the field, and refusing twice.** `confirmDisabled` turns the
+ * confirm control off without hiding it, because a control that vanished would
+ * leave a person looking for the act rather than for the reason it is off.
+ *
+ * Three screens set this — `Overrule`, `Redirect` and `Report` in
+ * `packages/screens` — all on `trim() === ""`, and all three are acts that go
+ * on a record nothing takes back.
+ */
+export const WaitingOnAField: Story = {
+  args: {
+    open: true,
+    tone: "neutral",
+    width: "wide",
+    title: "Overrule the gaming flag on this step?",
+    confirmLabel: "Overrule the flag",
+    confirmDisabled: true,
+    field: <Textarea label="Why the flag is wrong" rows={3} />,
+    children:
+      "Overruling says a person has read the evidence and takes responsibility for it. Your reason " +
+      "is written to this job's log and stays there — the log is append-only, and nothing takes an " +
+      "override back.",
+    onConfirm: fn(),
+    onCancel: fn(),
+  },
+  /**
+   * **Two refusals, and only one of them can be seen.** The button carries
+   * `disabled`; the `Enter` handler bound on `window` has its own
+   * `if (!confirmDisabled)`. They are independent, so a regression in the
+   * second leaves a dialog whose confirm reads as refused and confirms anyway
+   * from the keyboard — on the one surface where the act is a person putting
+   * their name to something.
+   *
+   * `Esc` is asserted beside them because a dialog that refused every key
+   * would pass the line above and be worse than the bug: the way out has to
+   * work while the way through does not.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByRole("button", { name: "Overrule the flag" })).toBeDisabled();
+
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onConfirm).not.toHaveBeenCalled();
+
+    await userEvent.keyboard("{Escape}");
+    await expect(args.onCancel).toHaveBeenCalled();
+  },
+};
+
+/**
+ * The same dialog with the field wired, which is the only way the transition
+ * can be read: `Waiting on a field` above holds `confirmDisabled` as a literal,
+ * so nothing there can be satisfied.
+ *
+ * The state is the caller's in the app too — `Overrule.tsx` holds the reason
+ * and hands this component the answer to *is it blank*. This wrapper is that
+ * caller, reduced to the one rule.
+ */
+export const TheReasonSatisfiesIt: Story = {
+  render: () => {
+    const [reason, setReason] = useState("");
+    return (
+      <Dialog
+        open
+        tone="neutral"
+        width="wide"
+        title="Overrule the gaming flag on this step?"
+        confirmLabel="Overrule the flag"
+        confirmDisabled={reason.trim() === ""}
+        field={
+          <Textarea
+            label="Why the flag is wrong"
+            rows={3}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+        }
+      >
+        Overruling says a person has read the evidence and takes responsibility for it.
+      </Dialog>
+    );
+  },
+  /**
+   * Blank, then whitespace, then a reason. **The whitespace step is the one
+   * worth the line**: `trim()` is what every caller of this prop uses, and a
+   * check that had lost it would enable the confirm on a field holding spaces —
+   * which reads as filled and records nothing.
+   */
+  play: async ({ canvas, userEvent }) => {
+    const confirm = canvas.getByRole("button", { name: "Overrule the flag" });
+    const field = canvas.getByRole("textbox", { name: "Why the flag is wrong" });
+    await expect(confirm).toBeDisabled();
+
+    await userEvent.type(field, "   ");
+    await expect(confirm).toBeDisabled();
+
+    await userEvent.type(field, "it read the wrong diff");
+    await expect(confirm).toBeEnabled();
   },
 };
