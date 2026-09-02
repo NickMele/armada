@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
 import { Textarea } from "../Textarea/Textarea";
 import { Dialog } from "./Dialog";
 
@@ -25,6 +26,30 @@ export const Confirmation: Story = {
     cancelLabel: "Cancel",
     children:
       "Step 3 of 5, 18 minutes in. The worktree is left in place and evidence carries forward if you redispatch.",
+    onConfirm: fn(),
+    onCancel: fn(),
+  },
+  /**
+   * **The keyboard contract, run rather than described** — and the reason the
+   * two sentences in `Dialog.tsx` can disagree and both still hold. Cancel
+   * holds initial focus so a destructive act is never one keystroke from a
+   * focused row, and `Enter` confirms anyway: the window handler takes the
+   * press first, and its `preventDefault` is what stops the focused button
+   * being activated as well.
+   *
+   * Both halves have to be asserted together, because the regression is quiet.
+   * Drop the `preventDefault` and `Enter` cancels — nothing errors, the dialog
+   * closes, and the act the person pressed for never happened.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByRole("button", { name: "Cancel" })).toHaveFocus();
+
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onConfirm).toHaveBeenCalled();
+    await expect(args.onCancel).not.toHaveBeenCalled();
+
+    await userEvent.keyboard("{Escape}");
+    await expect(args.onCancel).toHaveBeenCalled();
   },
 };
 
