@@ -15,19 +15,17 @@
 // **Two exits and no third.** The labelled control and `Esc`. A click on the
 // ground behind does not close a sheet.
 
-import { ActivityLogSheet, JobDiffSheet, type JobDiffFile } from "@armada/components";
-import type { ReactNode } from "react";
+import { ActivityLogSheet, JobDiffSheet, railOfPatch, type JobDiffFile } from "@armada/components";
+import { useMemo, type ReactNode } from "react";
 
 import type { Diff, Footprint, Observed } from "@armada/protocol";
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
-import type { JobFootprint } from "@armada/protocol";
 import type { Calls } from "./calls";
 import { DecidedDiff } from "./Decide";
 import { clock } from "./duration";
-import { readingFor } from "./files";
 import { Log } from "./Log";
-import { producedIn } from "./produced";
 import { recourseOf } from "./recovery";
+import { drawn } from "./review";
 import { NOTHING_YET_ON_THIS_STEP, type LogRow } from "./story";
 
 /** Which sheet is open, or none. Two cannot be. */
@@ -52,6 +50,13 @@ export type DetailSheetProps = {
   /** The step's rows, in the order they arrived. */
   rows: LogRow[];
   observed: Observed;
+  /**
+   * The live `job.files_changed` reading. **Nothing here draws it.** The diff
+   * sheet used to take its rail from a footprint and its patch from the
+   * worktree; it takes both from the worktree now — #310 — and the footprint's
+   * own surface is the `Files changed` chapter behind the layer. Kept on the
+   * shape because dropping it is a change to `JobDetail`'s call. Reported.
+   */
   footprint: Footprint;
   diff: Diff;
   calls: Calls;
@@ -73,7 +78,6 @@ export function DetailSheet({
   step,
   rows,
   observed,
-  footprint,
   diff,
   calls,
   log,
@@ -107,20 +111,44 @@ export function DetailSheet({
     );
   }
   if (which === "diff") {
-    return (
-      <JobDiffSheet
-        open
-        floor={floor}
-        branch={job.branch ?? job.id}
-        files={railOf(footprint, whole?.footprint, job.id)}
-        note={WHICH_STEP_WROTE_IT}
-        onClose={onClose}
-      >
-        <DecidedDiff diff={diff} jobId={job.id} />
-      </JobDiffSheet>
-    );
+    return <DiffSheet job={job} diff={diff} floor={floor} onClose={onClose} />;
   }
   return null;
+}
+
+/**
+ * The patch, the rail beside it and the count over both, from one reading.
+ *
+ * **Its own component so the split is not paid for by the log.** The parse is
+ * held across renders, and the panel above ticks `now` every second: a
+ * 2,000-line patch re-split on every tick is the freeze the v1 failure log
+ * recorded nine times. A hook in `DetailSheet` would have to run before its
+ * early return and would run on every log render too.
+ */
+function DiffSheet({
+  job,
+  diff,
+  floor,
+  onClose,
+}: {
+  job: JobSummary;
+  diff: Diff;
+  floor: boolean;
+  onClose: () => void;
+}) {
+  const files = useMemo(() => railOf(diff, job.id), [diff, job.id]);
+  return (
+    <JobDiffSheet
+      open
+      floor={floor}
+      branch={job.branch ?? job.id}
+      files={files}
+      note={WHICH_STEP_WROTE_IT}
+      onClose={onClose}
+    >
+      <DecidedDiff diff={diff} jobId={job.id} />
+    </JobDiffSheet>
+  );
 }
 
 /** The reading, held where it is now. One spelling, used opening and jumping. */
@@ -131,20 +159,37 @@ export function holdOf(now: number, rows: number): HeldAt {
 /**
  * The file rail beside the patch — the paths, and what each gained and lost.
  *
+ * **From the patch, which is the answer the body is drawn from.** It used to
+ * come from the footprint, and a footprint is a step's read-back written when
+ * the step submits: mid-step nothing has submitted, so the rail was empty and
+ * the header read `0 files · +0 −0` above a fully rendered patch. That is
+ * #310, and it was two sources on one line rather than a hole to plug — filling
+ * the rail from the patch and leaving the counts on the footprint would have
+ * kept the contradiction one field along.
+ *
+ * `drawn` is the same split `DecidedDiff` renders, called on the same reading,
+ * so the rail names exactly the files beside it in the order the patch wrote
+ * them. It is a second call of one pure function rather than a second answer.
+ *
+ * **`null` is no reading and `[]` is a reading of nothing**, and the split
+ * falls on the line the wire already draws. `work` absent is a Job with no
+ * worktree; `work` present with no patch is a drone that changed nothing, which
+ * is a real answer and truthfully reads `0 files · +0 −0`. Returning `[]` for
+ * both would put a count of nothing over a Job nothing was read from, which is
+ * this issue one state over.
+ *
  * **No step against a file.** The drawing names the step that wrote each one
  * and nothing served says which step that was: the footprint carries
  * `planned_by`, which is the step that *promised* a path, and a file no step
  * declared would then read as a file no step wrote. The rail draws the counts
  * alone and says why underneath rather than guessing. Reported.
  */
-function railOf(footprint: Footprint, kept: JobFootprint | undefined, jobId: string): JobDiffFile[] {
-  const produced = producedIn(kept, readingFor(footprint, jobId));
-  if (produced === undefined) return [];
-  return produced.files.map((file) => ({
-    path: file.path,
-    added: file.added ?? 0,
-    removed: file.deleted ?? 0,
-  }));
+function railOf(diff: Diff, jobId: string): JobDiffFile[] | null {
+  // A reading of some other Job is not this Job's reading. `whyNoDiff` is the
+  // sentence the body carries for each of these, and the header says only that
+  // it has none.
+  if (diff.state !== "read" || diff.jobId !== jobId || diff.work === undefined) return null;
+  return railOfPatch(drawn(diff.work).files);
 }
 
 /** What the rail says instead of naming a step, because nothing serves one. */
