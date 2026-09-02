@@ -60,6 +60,11 @@ the same reason: a release build is a minute every time and the same program.
 **Ctrl-C stops both, which the script does and Armada does not.** Closing
 Bridge in earnest leaves Fleet running.
 
+**Arguments to `pnpm dev` reach `cargo install` and nothing else.** `--force` is
+the one worth knowing: `cargo install` refuses a binary name another package
+owns, which is what an install left behind by a renamed or deleted crate looks
+like.
+
 **`scripts/dev` is not an agent's to run.** It kills the Fleet in use and
 reinstalls the binary. An agent starts Bridge alone against a Fleet already up,
 and works from `target/debug/armada` rather than an installed copy.
