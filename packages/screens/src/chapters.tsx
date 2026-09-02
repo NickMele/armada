@@ -11,24 +11,33 @@
 // chapters two and three carry an act on their header line rather than a body,
 // and what the act opens is a trailing sheet — #286, and `Sheets.tsx`.
 //
+// **A deliverable sits beside the diff and never inside it.** The Produced
+// chapter counts files in the patch, and `.armada/` is ignored by this
+// repository's own deliberate choice, so a step whose whole product is a
+// document under it reads back zero files. Counting the document there would
+// make `3 files · +94 −31` a number that means two things; drawn beside it, the
+// chapter can say a document was written without lying about the patch. #307.
+//
 // Split out of `JobDetail.tsx` at the 900-line line.
 
 import {
   Button,
   ChangedFiles,
+  DroneBrief,
   Kbd,
   changedFilesSummary,
   type StepChapter,
 } from "@armada/components";
 
 import type { Diff, Footprint, Turn } from "@armada/protocol";
-import type { JobSummary, StepDetail } from "@armada/protocol";
+import type { JobSummary, KeptDeliverable, StepDetail } from "@armada/protocol";
 import type { JobFootprint } from "@armada/protocol";
 import type { Calls } from "./calls";
 import { DecidedDiff } from "./Decide";
 import { DIFF_CHAPTER, LOG_CHAPTER, namesChapter, type DetailKeys } from "./detail-keys";
 import { readingFor, whyNoFootprint } from "./files";
 import { Log } from "./Log";
+import { Opening, type Opens } from "./phases";
 import { producedIn } from "./produced";
 import { entriesOf, NOTHING_YET_ON_THIS_STEP } from "./story";
 
@@ -49,6 +58,7 @@ export function chaptersOf({
   log,
   calls,
   sheet,
+  opens,
   onOpenSheet,
 }: {
   job: JobSummary;
@@ -82,12 +92,21 @@ export function chaptersOf({
   calls: Calls;
   /** Which sheet is open, so the chapter behind it says so and stops offering. */
   sheet: "log" | "diff" | null;
+  /**
+   * How the step's deliverable is opened, and where a refusal is said.
+   *
+   * **The same handler the phase strip takes, and required for the same
+   * reason.** A path on screen that opens nothing is the defect `phases.ts`
+   * names, and an optional handler is how a surface goes quietly back to it.
+   */
+  opens: Opens;
   onOpenSheet: (which: "log" | "diff") => void;
 }): StepChapter[] {
   const rows = watching === null ? [] : entriesOf(watching.rows, step.step_id);
   const told = rows.filter((row) => row.actor === "armada");
   const opened = told[0];
   const produced = producedIn(kept, readingFor(footprint, job.id));
+  const documents = step.deliverables ?? [];
   return [
     {
       id: "instructions",
@@ -101,7 +120,7 @@ export function chaptersOf({
         opened === undefined ? (
           <p className="text-2xs text-fg-muted">{NOT_OPENED_YET}</p>
         ) : (
-          <p className="text-fg-muted">{opened.payload.map((line) => line.text).join("\n")}</p>
+          <DroneBrief lines={opened.payload.map((line) => line.text)} />
         ),
       ...(told.length <= 1
         ? {}
@@ -161,20 +180,29 @@ export function chaptersOf({
       // the body draws the same files from the same answer. On a finished Job
       // that summary carries `+94 −31`, because the record it draws from is the
       // one reading anybody counted.
-      summary:
-        produced === undefined
-          ? sheet === "diff"
-            ? "open"
-            : undefined
-          : [changedFilesSummary(produced.files, produced.planDeclared)]
-              .concat(sheet === "diff" ? ["open"] : [])
-              .join(" · "),
-      preview:
-        produced === undefined ? (
-          <p className="text-2xs text-fg-muted">{whyNoFootprint(job.assigned_drone !== undefined)}</p>
-        ) : (
-          <ChangedFiles files={produced.files} emptyNote={NOTHING_TOUCHED} note={produced.note} />
-        ),
+      //
+      // **The documents are their own segment.** Folding them into the file
+      // count would put a path that is deliberately outside the patch inside
+      // the number that measures the patch; a segment of its own is what lets a
+      // step read `0 files · 1 document` rather than as a step that produced
+      // nothing. #307.
+      summary: summaryOf(produced, documents.length, sheet === "diff"),
+      preview: (
+        <>
+          {produced === undefined ? (
+            <p className="text-2xs text-fg-muted">
+              {whyNoFootprint(job.assigned_drone !== undefined)}
+            </p>
+          ) : (
+            <ChangedFiles
+              files={produced.files}
+              emptyNote={nothingTouched(documents.length)}
+              note={produced.note}
+            />
+          )}
+          {documents.length === 0 ? null : <Documents kept={documents} opens={opens} />}
+        </>
+      ),
       // The patch opens on the layer that can hold it. It is the Job's whole
       // patch and the expensive read, and a 602px column was never going to
       // hold either — #286, frame 4j.
@@ -197,15 +225,83 @@ export function chaptersOf({
   ];
 }
 
+/**
+ * The documents this step wrote, each one a control that opens it.
+ *
+ * **Reachable from the chapter a person came to, which is the whole of #307.**
+ * The copy under `.armada/deliverables/` was already on the wire and already
+ * drawn — on the Submitted tier of the phase strip, an affordance `opening.ts`
+ * scopes to the records a person reads because a verdict went against them. A
+ * step that passed sent nobody there, so a 7,605-byte plan was unreachable from
+ * the chapter that exists to say what the step produced.
+ *
+ * **Newest run first**, for the reason the strip's rows are: a step worked
+ * three times kept three documents, and the run being read about is the last
+ * one.
+ */
+function Documents({ kept, opens }: { kept: readonly KeptDeliverable[]; opens: Opens }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="text-2xs text-fg-muted">{DOCUMENTS}</span>
+      {[...kept].reverse().map((one) => (
+        <span key={one.path} className="flex items-center gap-2">
+          <Opening path={one.path} what="deliverable" opens={opens} />
+          <span className="text-2xs text-fg-subtle">attempt {one.attempt}</span>
+        </span>
+      ))}
+      <p className="text-2xs text-fg-subtle">{DOCUMENTS_NOTE}</p>
+    </div>
+  );
+}
+
+/**
+ * The Produced header's trailing half — `3 files · +94 −31 · 1 document`.
+ *
+ * `undefined` where there is nothing to count and no sheet open, which is what
+ * leaves the header line carrying only its name.
+ */
+function summaryOf(
+  produced: ReturnType<typeof producedIn>,
+  documents: number,
+  open: boolean,
+): string | undefined {
+  const said = [
+    ...(produced === undefined ? [] : [changedFilesSummary(produced.files, produced.planDeclared)]),
+    ...(documents === 0 ? [] : [documents === 1 ? "1 document" : `${documents} documents`]),
+    ...(open ? ["open"] : []),
+  ];
+  return said.length === 0 ? undefined : said.join(" · ");
+}
+
 /** How many entries the log's collapsed preview shows. The drawing's own five. */
 const PREVIEWED = 5;
 
 /** What chapter one says before Armada has opened the step. */
 const NOT_OPENED_YET = "Armada has not opened this step yet.";
 
-/**
- * A reading that found nothing. **Ordinary, and never an error** — a Drone that
- * has just started has changed nothing yet.
- */
-const NOTHING_TOUCHED = "This drone has not changed anything yet.";
+/** The sub-label over the documents, so the block says what it holds. */
+const DOCUMENTS = "Documents this step wrote";
 
+/**
+ * Why the documents are not in the count above them. **The disagreement is the
+ * whole reason this line exists** — a reader who has just read `0 files` and is
+ * looking at a document needs the two facts reconciled where they sit.
+ */
+const DOCUMENTS_NOTE =
+  "Kept outside the diff, so the count above does not include them. One per attempt.";
+
+/**
+ * A reading that found nothing in the patch.
+ *
+ * **Ordinary, and never an error** — a Drone that has just started has changed
+ * nothing yet. It no longer says the drone changed nothing: on a step whose
+ * whole product is a document under `.armada/`, that sentence was false while a
+ * 7,605-byte plan sat on disk, and the subject of the sentence is the
+ * repository rather than the drone besides. #307.
+ */
+function nothingTouched(documents: number): string {
+  if (documents === 0) return "Nothing in the repository has changed yet.";
+  return documents === 1
+    ? "Nothing in the repository changed. This step's product is the document below."
+    : "Nothing in the repository changed. This step's product is the documents below.";
+}

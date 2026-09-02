@@ -1,0 +1,42 @@
+/* Drone brief — the turn Armada opened a step with, in its own blocks.
+
+   NOTHING HERE DECLARES A FONT SIZE, for the reason Prose.css states at
+   length: the type scale belongs to docs/contracts/design-system.md, and this
+   draws inside a chapter body at --text-xs. What it declares is the block
+   boundary and the whitespace treatment, which is the whole of the component. */
+.armada-brief {
+  display: flex;
+  flex-direction: column;
+  /* The blank line Fleet wrote between blocks, as space rather than as an
+     empty line box. An empty element would be a gap a reader cannot tell from
+     a block that failed to render.
+
+     --space-3 rather than --space-2, because this gap is the only channel
+     marking a block boundary: a heading carries no weight and no colour of its
+     own, and marking one properly needs LogLine.named set on the wire. A sole
+     signal takes the larger step, at --text-xs in a 602px panel. */
+  gap: var(--space-3);
+  min-width: 0;
+  color: var(--fg-muted);
+}
+
+/* `pre-wrap`, and it is the half of #306 that a stylesheet lost. The newlines
+   inside a block are the author's and they carry the meaning: the parts rail
+   is one part per line, indented, with STOP under the part the Drone is on. At
+   `white-space: normal` every one of them collapsed to a space, so the parts
+   list, the delivery path and the stop boundary read as prose.
+
+   `pre` was the alternative and is wrong here. It is right for the activity
+   log's payload — a build log reflowed is not a build log — but a brief is
+   sentences written for a person, and a horizontal scrollbar on prose inside a
+   602px panel hides text behind a gesture.
+
+   `overflow-wrap: anywhere` is what stops `pre-wrap` handing the line length
+   to whatever briefing.rs wrote. A path breaking mid-token beats one that runs
+   off the edge, and it only breaks where the whole run does not fit — the same
+   trade Prose.css takes for a fenced block. */
+.armada-brief__block {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

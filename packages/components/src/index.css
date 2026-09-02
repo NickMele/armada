@@ -125,3 +125,7 @@
 
 /* The token specimens. They read the sheet above rather than restating it. */
 @import "./foundations/Tokens/Tokens.css";
+
+/* What Armada told the Drone, in the blocks Fleet wrote it in. Appended, per
+   the rule at the head of this file. */
+@import "./compositions/DroneBrief/DroneBrief.css";

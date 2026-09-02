@@ -337,6 +337,10 @@ export function JobDetail({
           log: keys.inLog,
           calls,
           sheet,
+          // The Produced chapter opens the step's deliverable, which the phase
+          // strip's Submitted tier was the only route to. Same handler, because
+          // two would be two vocabularies for one failed open — #307.
+          opens: opensRecords,
           onOpenSheet: openSheet,
         });
 
