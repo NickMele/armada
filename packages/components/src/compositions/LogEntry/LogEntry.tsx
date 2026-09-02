@@ -156,8 +156,14 @@ export function LogEntry({
  * `passed` and `failed` are what the run came to, and `meta` is the trailer
  * saying where and how long. A payload with a red line in the middle of its
  * output would be a component deciding what a compiler meant.
+ *
+ * **`heading` is the one value that says structure rather than outcome.** It is
+ * a block heading inside a turn Armada wrote, named by the wire on
+ * `Saw.instructed.headings` — so an opened brief in this log reads in its
+ * blocks the way `DroneBrief` draws it, rather than as one flat column with the
+ * headings lost in it.
  */
-export type PayloadLineNamed = "echo" | "passed" | "failed" | "meta";
+export type PayloadLineNamed = "echo" | "passed" | "failed" | "meta" | "heading";
 
 export type PayloadLineProps = {
   children: ReactNode;

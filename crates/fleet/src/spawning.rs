@@ -37,7 +37,6 @@ use crate::briefing::Opening;
 use crate::crossing::Redirected;
 use crate::daemon::Fleet;
 use crate::drone::{self, environment, HostPaths};
-use crate::session::Occasion;
 use crate::transcript::{Spine, Taps};
 use crate::working::Working;
 
@@ -119,7 +118,10 @@ where
         // process ends, so what a step opened with survived nowhere at all
         // until this row.
         let opened_with = brief.as_str().to_string();
-        let config = match self.spawn_config(job, step, &worktree, brief) {
+        // Kept beside the text for the same reason, and it is the half no
+        // reader can recover from the text: which lines are block headings.
+        let headings = brief.headings().to_vec();
+        let config = match self.spawn_config(job, step, &worktree, brief.prompt()) {
             Ok(config) => config,
             Err(cause) => {
                 // A model name no roster row carries is the case this is
@@ -190,7 +192,7 @@ where
         // Drone has said anything. It is written after the slot exists rather
         // than before because the sinks live on it.
         if let Some(at_work) = working.as_ref() {
-            at_work.instructed(Occasion::Opening, &opened_with);
+            at_work.briefed(&opened_with, headings);
         }
         // This step's baseline, read once the slot exists. A Job's first step
         // ordinarily starts on a worktree holding nothing, and reading it

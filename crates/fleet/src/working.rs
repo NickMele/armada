@@ -739,6 +739,28 @@ impl Working {
             ipc::Saw::Instructed {
                 occasion: occasion.as_wire().to_string(),
                 text: text.to_string(),
+                // One block of prose, so there is no heading to name. Every
+                // occasion but the opening brief is one of these.
+                headings: Vec::new(),
+            },
+        );
+    }
+
+    /// Write down the brief a step opened with, and which of its lines
+    /// `crate::briefing` wrote as block headings.
+    ///
+    /// **A sibling of [`Working::instructed`] rather than an argument on it.**
+    /// The opening brief is the one turn assembled out of headed blocks, so a
+    /// `headings` argument on the common path would be six call sites saying
+    /// they have none. What the field is for is
+    /// `ipc::Saw::Instructed::headings`.
+    pub(crate) fn briefed(&self, text: &str, headings: Vec<usize>) {
+        self.told(
+            ipc::Voice::Armada,
+            ipc::Saw::Instructed {
+                occasion: Occasion::Opening.as_wire().to_string(),
+                text: text.to_string(),
+                headings,
             },
         );
     }

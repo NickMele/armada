@@ -2,6 +2,23 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 import { DroneBrief } from "./DroneBrief";
 
+import type { BriefLine } from "./DroneBrief";
+
+/**
+ * A brief's lines as the payload carries them, with the lines Fleet named as
+ * block headings marked.
+ *
+ * **The indices are the wire's, and a fixture that computed them would be the
+ * defect.** `Saw.instructed.headings` is a list of line numbers `briefing.rs`
+ * wrote down as it wrote the blocks; a helper here that looked for capitals, or
+ * took the first line of each block, would prove this component against the
+ * guess rather than against the wire.
+ */
+function marked(text: string, headings: readonly number[]): BriefLine[] {
+  const named = new Set(headings);
+  return text.split("\n").map((line, at) => (named.has(at) ? { text: line, named: "heading" } : { text: line }));
+}
+
 /**
  * The brief off a real `plan` step, block for block as
  * `crates/fleet/src/briefing.rs` composes it.
@@ -117,16 +134,26 @@ type Story = StoryObj<typeof DroneBrief>;
  * says so where it happens.
  */
 export const TheBriefAsFleetWroteIt: Story = {
-  args: { lines: BRIEF.split("\n") },
+  args: { lines: marked(BRIEF, [0, 11, 24]) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // Each heading is the whole of its own element, which is what "on its own
-    // line" is when a test has to read it. Drawn as one paragraph no element
-    // has this text and every one of these throws.
-    const brief = canvas.getByText("JOB BRIEF");
-    const where = canvas.getByText("WHERE YOU ARE");
-    const step = canvas.getByText("STEP: Plan the change");
+    // Each heading is a heading, read as a role rather than as a class: the
+    // three lines the wire named, and nothing else on the brief.
+    const brief = canvas.getByRole("heading", { name: "JOB BRIEF" });
+    const where = canvas.getByRole("heading", { name: "WHERE YOU ARE" });
+    const step = canvas.getByRole("heading", { name: "STEP: Plan the change" });
+    await expect(canvas.getAllByRole("heading")).toHaveLength(3);
+
+    // And they are marked without the space above them. `--fg-default` against
+    // the brief's `--fg-muted`, at a weight above its 400 — the two channels
+    // #318 was about, read off what the browser computed.
+    const drawn = getComputedStyle(brief);
+    const body = getComputedStyle(canvas.getByText(/^This is done when:/));
+    await expect(drawn.color).not.toBe(body.color);
+    await expect(parseInt(drawn.fontWeight, 10)).toBeGreaterThan(
+      parseInt(body.fontWeight, 10),
+    );
 
     // And they are three lines rather than three readings of one, taken off
     // what the browser drew rather than off the markup.
@@ -167,9 +194,10 @@ export const TheBriefAsFleetWroteIt: Story = {
  * redirect carried in — and those are one block of prose with no boundary in
  * them.
  *
- * There is no heading here and none is invented. A component that drew the
- * first line of every payload as a heading would draw this sentence's first
- * clause as one.
+ * There is no heading here and none is invented. **It is also the bare-string
+ * form of the prop**, which is a payload nothing was said about: a turn with no
+ * headed blocks and a turn from a Fleet built before the marker existed reach
+ * this component as the same thing, and draw as the same thing.
  */
 export const OneBlockAndNoBoundary: Story = {
   args: {
@@ -191,16 +219,65 @@ export const OneBlockAndNoBoundary: Story = {
  * nobody can read.
  */
 export const ADeliveryPathLongerThanThePanel: Story = {
-  args: { lines: DELIVERS.split("\n") },
+  args: { lines: marked(DELIVERS, [0]) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const blocks = [
-      ...(canvas.getByText("WHAT THIS PART DELIVERS").parentElement?.children ?? []),
+      ...(canvas.getByRole("heading", { name: "WHAT THIS PART DELIVERS" }).parentElement
+        ?.children ?? []),
     ] as HTMLElement[];
     const path = blocks.find((block) => block.textContent?.includes(".armada/artifacts/"));
     if (path === undefined) throw new Error("the delivery path is not a block of its own");
     // Nothing is behind the edge. `scrollWidth` past `clientWidth` is content
     // the panel is holding and not drawing, which is the failure mode.
     await expect(path.scrollWidth).toBeLessThanOrEqual(path.clientWidth + 1);
+  },
+};
+
+/**
+ * A body line short enough to look like a heading, drawn as body.
+ *
+ * **The state this component would fail on if it sniffed**, and the reason the
+ * marker had to go on the wire rather than into a rule here. Every line below
+ * is a candidate for one of the two cheap rules: `Yes.` is short, `STOP.` is
+ * short and shouted, and the title opens a block of its own. Only `JOB BRIEF`
+ * is named, so only `JOB BRIEF` is a heading — where a rule reading capitals or
+ * position would mark two or three of them.
+ *
+ * The lines are Fleet's rather than invented for the story: `STOP.` is the
+ * parts rail's boundary, and a one-word line is what a person's redirect
+ * carried in can be.
+ */
+export const ABodyLineThatLooksLikeAHeading: Story = {
+  args: {
+    lines: marked(
+      [
+        "JOB BRIEF",
+        "",
+        "Coalesce concurrent token refreshes",
+        "",
+        "Yes.",
+        "",
+        "STOP.",
+        "",
+        "Two requests arrive inside the refresh window and each starts its own.",
+      ].join("\n"),
+      [0],
+    ),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // The one line the wire named, and the only heading on the brief.
+    canvas.getByRole("heading", { name: "JOB BRIEF" });
+    await expect(canvas.getAllByRole("heading")).toHaveLength(1);
+
+    // Each line a guess would have caught is body. `queryByRole` rather than
+    // `getByRole`, because the answer being null is the assertion.
+    for (const looks of ["Yes.", "STOP.", "Coalesce concurrent token refreshes"]) {
+      await expect(canvas.queryByRole("heading", { name: looks })).toBeNull();
+      // Drawn all the same: a line that is not a heading is still on the brief.
+      canvas.getByText(looks);
+    }
   },
 };

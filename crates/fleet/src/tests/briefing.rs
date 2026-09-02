@@ -76,7 +76,7 @@ pub(super) fn a_job() -> Job {
     )
 }
 
-fn a_workflow() -> core_model::FrozenWorkflow {
+pub(super) fn a_workflow() -> core_model::FrozenWorkflow {
     testkit::frozen(&[
         Sketch {
             id: "implement",

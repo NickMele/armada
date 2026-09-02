@@ -167,6 +167,14 @@ button.armada-entry:hover .armada-entry__mark,
   color: var(--diff-del-fg);
 }
 
+/* A block heading inside a turn Armada wrote. **Colour and nothing else**,
+   because that is the whole vocabulary of this stylesheet: every value above is
+   a hue on the same mono line, and a weight step here would be the one line in
+   a column of output drawn in a different face. */
+.armada-entry__pl[data-named="heading"] {
+  color: var(--fg-default);
+}
+
 /* An open line that carried no payload. One sentence, in the app's empty-state
    voice — not a paragraph reasoning about the wire. */
 .armada-entry__absent {

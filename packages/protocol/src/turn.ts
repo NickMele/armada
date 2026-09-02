@@ -138,8 +138,21 @@ export type Saw =
    *
    * The text is not bounded. It is Fleet's own rendering of a template it
    * holds, so nothing here is a size a Drone chose.
+   *
+   * `headings` names which lines of `text` its writer wrote as block headings,
+   * zero-based into `text.split("\n")`. **It is the one fact about the turn's
+   * shape a reader cannot recover**: `fleet::briefing` writes every block as a
+   * heading, a blank line, then the body, and a surface handed the text alone
+   * can only guess — the first line of a block, or a line in capitals. Both
+   * guesses are wrong on briefs Fleet already writes, so a short body line
+   * would draw as a heading and nothing would catch it.
+   *
+   * **Absent is a turn with no headed blocks, and also a row written before
+   * Fleet stamped this field** — deliberately the same to a reader, because
+   * what an older row draws as is what an unheaded turn draws as. Every turn
+   * but the opening brief is one block of prose.
    */
-  | { event: "instructed"; occasion: string; text: string }
+  | { event: "instructed"; occasion: string; text: string; headings?: number[] }
   /**
    * One declared Check, as Fleet ran it. **The Drone never runs these** — a
    * Drone reporting its own tests is a claim rather than a result — so a Check

@@ -44,8 +44,22 @@ export type LogActor = "armada" | "drone" | "fleet";
 /**
  * One line of a payload. `named` is what the line *is* rather than how bad it
  * is — the echoed command, the result, the trailer saying where and how long.
+ *
+ * **`heading` says structure and the rest say outcome, and it is still one
+ * field.** `echo`, `passed`, `failed` and `meta` are what a Check's run came
+ * to; `heading` is a block heading in a turn Armada wrote. A renderer that
+ * coloured by this field alone would paint `JOB BRIEF` as though something had
+ * happened, so each surface reads the values it draws and leaves the rest as
+ * body — the log does not hue a heading, and the brief does not hue a result.
+ *
+ * **It is the wire's word and never this file's.** `Saw.instructed` carries
+ * `headings`, because only the code that wrote the block knows which line was
+ * the heading; nothing here looks at a line's length or its capitals.
  */
-export type LogLine = { text: string; named?: "echo" | "passed" | "failed" | "meta" };
+export type LogLine = {
+  text: string;
+  named?: "echo" | "passed" | "failed" | "meta" | "heading";
+};
 
 /** One row of the activity log, ready for `LogEntry`. */
 export type LogRow = {
@@ -116,7 +130,7 @@ function rowOf(row: Turn): LogRow {
         at,
         actor,
         message: opening(saw.occasion),
-        payload: lines(saw.text),
+        payload: lines(saw.text, saw.headings),
       };
     case "checked":
       return {
@@ -274,9 +288,20 @@ function produced(files: ChangedFile[]): string {
     : `The step's work read back — ${counted}, ${outside} outside the plan`;
 }
 
-/** A block of text as payload lines. The newlines are the author's. */
-function lines(text: string): LogLine[] {
-  return text.split("\n").map((line) => ({ text: line }));
+/**
+ * A block of text as payload lines. The newlines are the author's.
+ *
+ * **`headed` is the wire's own list of line numbers and nothing here adds to
+ * it.** A line is a heading because the code that wrote the block said so, so a
+ * body line that happens to be short, or shouted, is body. An index the text is
+ * too short for marks nothing, which is what an older row and a mismatched
+ * pair both look like.
+ */
+function lines(text: string, headed: readonly number[] = []): LogLine[] {
+  const headings = new Set(headed);
+  return text
+    .split("\n")
+    .map((line, at) => (headings.has(at) ? { text: line, named: "heading" as const } : { text: line }));
 }
 
 /**

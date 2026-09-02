@@ -43,6 +43,7 @@ mod forget;
 mod frozen;
 mod gaming;
 mod gate;
+mod headings;
 mod headroom;
 mod history;
 mod host;

@@ -123,7 +123,14 @@ export function chaptersOf({
         opened === undefined ? (
           <p className="text-2xs text-fg-muted">{NOT_OPENED_YET}</p>
         ) : (
-          <DroneBrief lines={opened.payload.map((line) => line.text)} />
+          // **The payload and not its text.** Each line carries what it is,
+          // and the block headings are on the wire as line numbers Fleet wrote
+          // down as it wrote the blocks. Mapped to `line.text` the marking is
+          // dropped here and the brief draws with the gap above a heading as
+          // the only thing marking it, which is #318 — nothing downstream can
+          // recover it, because deciding by position or by capitals is the
+          // guess the marker exists to replace.
+          <DroneBrief lines={opened.payload} />
         ),
       ...(told.length <= 1
         ? {}
