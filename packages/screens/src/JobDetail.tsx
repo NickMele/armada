@@ -471,7 +471,6 @@ export function JobDetail({
             step={open}
             rows={rows}
             observed={observed}
-            footprint={recorded.footprint}
             diff={recorded.diff}
             calls={calls}
             // Its own name, so a row opened in the sheet is not a row opened in

@@ -18,7 +18,7 @@
 import { ActivityLogSheet, JobDiffSheet, railOfPatch, type JobDiffFile } from "@armada/components";
 import { useMemo, type ReactNode } from "react";
 
-import type { Diff, Footprint, Observed } from "@armada/protocol";
+import type { Diff, Observed } from "@armada/protocol";
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import type { Calls } from "./calls";
 import { DecidedDiff } from "./Decide";
@@ -50,14 +50,6 @@ export type DetailSheetProps = {
   /** The step's rows, in the order they arrived. */
   rows: LogRow[];
   observed: Observed;
-  /**
-   * The live `job.files_changed` reading. **Nothing here draws it.** The diff
-   * sheet used to take its rail from a footprint and its patch from the
-   * worktree; it takes both from the worktree now — #310 — and the footprint's
-   * own surface is the `Files changed` chapter behind the layer. Kept on the
-   * shape because dropping it is a change to `JobDetail`'s call. Reported.
-   */
-  footprint: Footprint;
   diff: Diff;
   calls: Calls;
   /** What one log takes, by name, so the sheet's rows are not the preview's. */
