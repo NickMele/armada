@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { File } from "lucide-react";
+import { expect } from "storybook/test";
 
 import { Button } from "../../primitives/Button/Button";
 import { FailureNotice } from "./FailureNotice";
@@ -200,6 +201,26 @@ export const TheRendererThrew: Story = {
     ],
     note: "The rest of the window is still usable. Only this region stopped drawing. This never reached Fleet, so there is no run id: the component and the log identify it.",
     actions: <Acts />,
+  },
+  /**
+   * **Folded, not dropped — which is the whole treatment.** A stack on screen
+   * is the generic error page this component exists instead of; a stack that is
+   * not in the document at all is a failure nobody can report. The assertions
+   * are on the alert's own text and on what a person can see, so the fold can
+   * be rebuilt out of anything that keeps that true.
+   */
+  play: async ({ canvas, userEvent }) => {
+    const notice = canvas.getByRole("alert");
+    await expect(notice).toHaveTextContent("Bridge could not draw the job list");
+    await expect(notice).toHaveTextContent("Reload Bridge.");
+
+    // In the document, and not on screen, until it is asked for.
+    await expect(canvas.getByText("JobRowStacked")).not.toBeVisible();
+    await userEvent.click(canvas.getByText("What threw"));
+    await expect(canvas.getByText("JobRowStacked")).toBeVisible();
+
+    // The one thing a person can do about it is a control, in both states.
+    await expect(canvas.getByRole("button", { name: "Reload Bridge" })).toBeVisible();
   },
 };
 

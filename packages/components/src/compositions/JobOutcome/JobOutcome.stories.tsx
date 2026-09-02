@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { GitBranch, GitCommitHorizontal, GitPullRequest, FileCheck } from "lucide-react";
+import { expect } from "storybook/test";
 import { JobOutcome } from "./JobOutcome";
 
 /**
@@ -58,6 +59,25 @@ export const WhatIsServedToday: Story = {
         absent: "No operation serves a work submission, so there is nothing to draw.",
       },
     ],
+  },
+  /**
+   * **The claim is the count.** Four of the five parts are unserved, and the
+   * defect this story exists to prevent is a region that quietly closes up
+   * around the one value it has — drawing a finished outcome that is a fifth of
+   * one. So the first assertion is that five rows are on screen, and the second
+   * is that the unserved row names the operation that would fill it rather than
+   * rendering blank.
+   *
+   * Read by position, because the order is the contract: parts are drawn in the
+   * order a reader asks for them.
+   */
+  play: async ({ canvas }) => {
+    const parts = canvas.getAllByRole("listitem");
+    await expect(parts).toHaveLength(5);
+    await expect(parts[0]).toHaveTextContent("armada/01M130Y1380016YK5S0JXBXDQ5");
+    await expect(parts[3]).toHaveTextContent("Files changed");
+    await expect(parts[3]).toHaveTextContent("Nothing serves a finished job's footprint.");
+    await expect(canvas.getByText(/Armada does not merge/)).toBeVisible();
   },
 };
 

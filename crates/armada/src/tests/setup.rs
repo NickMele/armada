@@ -72,19 +72,23 @@ fn this_repositorys_own_setup_loads_and_resolves() {
         setup.manifest().check_names(),
         vec![
             "bridge_build".to_string(),
+            "bridge_test".to_string(),
             "build".to_string(),
             "format".to_string(),
             "storybook".to_string(),
             "test".to_string(),
             "typecheck".to_string(),
         ],
-        "the six Checks this workspace is built and tested with — two for the \
-         Rust half and three for the Bridge, which is #200: every Check used to \
+        "the seven Checks this workspace is built and tested with — two for the \
+         Rust half and four for the Bridge, which is #200: every Check used to \
          compile Rust, so a Job that changed only `apps/` was verified entirely \
-         on the code it had not touched. `format` is the sixth and is the same \
+         on the code it had not touched. `format` is the seventh and is the same \
          defect one lint over: PR #199 also merged nine unformatted files, \
-         because `cargo fmt --check` was not a Check. There is no `clippy` — \
-         `[clippy-as-a-check]` in `docs/OPEN.md` says why"
+         because `cargo fmt --check` was not a Check. `bridge_test` is the \
+         newest and closes the other half of #200's gap: the three Bridge \
+         Checks before it were all compilers, so nothing ran a line of \
+         TypeScript. There is no `clippy` — `[clippy-as-a-check]` in \
+         `docs/OPEN.md` says why"
     );
     assert_eq!(bug(&setup).name(), "bug");
     let steps: Vec<&str> = bug(&setup)
@@ -136,6 +140,10 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             ("typecheck", "pnpm typecheck"),
             ("bridge_build", "pnpm -C apps/desktop build"),
             ("storybook", "pnpm -C packages/components build-storybook"),
+            // The one Check that runs TypeScript rather than compiling it. A
+            // script again, and for the same reason: it chains two runners —
+            // the screens' pure modules in node, then every story in a browser.
+            ("bridge_test", "pnpm bridge-test"),
         ]
     );
 }

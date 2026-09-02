@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
+import { expect } from "storybook/test";
 import { BoardControls, type BoardControlsProps } from "./BoardControls";
 
 /**
@@ -109,6 +110,28 @@ export const Searching: Story = {
       ]}
     />
   ),
+  /**
+   * **The two rules the prose above argues for, run rather than described.**
+   * Both are things a person loses if they regress and neither is visible from
+   * the props: the selection surviving a search, and a suspended tab still
+   * being the way out of the search.
+   */
+  play: async ({ canvas, userEvent }) => {
+    const search = canvas.getByRole("searchbox", { name: "Search every job" });
+    await expect(search).toHaveValue("poke");
+
+    // Suspended, not reset: `Running` is still the tab this person chose, and
+    // it still says so. Resetting to `All` would spend that choice to make the
+    // sentence "search reads every job" true, and have nothing to give back.
+    await expect(canvas.getByRole("tab", { selected: true })).toHaveAccessibleName(/^Running/);
+
+    // And pressing a suspended tab is the way out. A control that did nothing
+    // while the field held text would be dead in the one state a person
+    // presses it to leave.
+    await userEvent.click(canvas.getByRole("tab", { name: "Queued" }));
+    await expect(search).toHaveValue("");
+    await expect(canvas.getByRole("tab", { selected: true })).toHaveAccessibleName(/^Queued/);
+  },
 };
 
 /**

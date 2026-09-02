@@ -32,11 +32,13 @@
 # and the designed `review`'s summary check declares `gates_advancement:
 # false`, which M1's parser does not read -- see `feature.json`.
 #
-# **`typecheck`, `bridge_build` and `storybook` are on `revert`.** See
-# `bug.json` for the defect they were added for. Undoing a commit that touched
-# both halves is the case: a revert that restores the Rust and leaves the
-# Bridge calling what it removed passes `build` and `test` and does not
-# compile.
+# **`typecheck`, `bridge_build`, `storybook` and `bridge_test` are on
+# `revert`.** See `bug.json` for the defect they were added for. Undoing a
+# commit that touched both halves is the case: a revert that restores the Rust
+# and leaves the Bridge calling what it removed passes `build` and `test` and
+# does not compile. `bridge_test` is the half that catches the other shape of
+# it -- a revert that compiles and puts a component back to a state its own
+# stories no longer describe.
 #
 # **`model: haiku` on `handoff`, and nowhere else.** `bug.json` carries the
 # reasoning and the cache cost. `revert` produces a diff and is judged on
@@ -83,6 +85,11 @@
         {
           "type": "manifest_check",
           "check": "storybook",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "bridge_test",
           "expect_exit_code": 0
         },
         {

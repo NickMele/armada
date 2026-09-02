@@ -62,10 +62,13 @@
 # brief as the whole Job's bar and no criterion can name one of them --
 # `config/src/judge.rs` refuses `source_ref` for that reason.
 #
-# **`typecheck`, `bridge_build` and `storybook` are on `implement`.** See
-# `bug.json` for the defect they were added for. Refactor is where a rename
-# that compiles in Rust and breaks an import in TypeScript is the likeliest
-# single failure, and `implement`'s `test` said nothing about it.#
+# **`typecheck`, `bridge_build`, `storybook` and `bridge_test` are on
+# `implement`.** See `bug.json` for the defect they were added for. Refactor is
+# where a rename that compiles in Rust and breaks an import in TypeScript is
+# the likeliest single failure, and `implement`'s `test` said nothing about it.
+# `bridge_test` is what makes a Bridge refactor safe to take at all: the
+# rendered assertions read roles and text rather than internals, so moving a
+# component's markup around is proved rather than eyeballed.#
 # **A step whose product a later step reads writes a file.** `artifact_exists`
 # is carried now, and `bug.json` carries the reasoning: a written step used to
 # hand the next one three prose strings, two of which `verification::submission`
@@ -147,6 +150,11 @@
         {
           "type": "manifest_check",
           "check": "storybook",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "bridge_test",
           "expect_exit_code": 0
         },
         {

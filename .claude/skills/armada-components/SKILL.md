@@ -54,6 +54,25 @@ you invented.
 fail visibly.** A missing thing that renders as an error is a finding; a missing
 thing that is silently absent is a gap nobody sees.
 
+## Stories are the tests, and a `play` is the assertion
+
+**Every story is already a test.** `pnpm test` mounts each one in a browser, so
+a story that throws fails without anyone writing anything.
+
+**A `play` function is where a story states what a person should see.** A
+handful per surface, on the states the surface exists to express — not one per
+story.
+
+**Assert on roles and text, never on class names or internals.** `getByRole`,
+the accessible name, the text a person reads. A test that names markup fails on
+every refactor and proves nothing about what was drawn; one that reads roles
+lets the markup be rebuilt underneath it.
+
+**Arithmetic is not tested here.** A pure function belongs in its own package's
+unit tests, where a hundred cases cost what one costs — `packages/screens` is
+the worked example. A `play` that computes rather than reads is a unit test
+paying a browser's price.
+
 ## The hard rules, and what enforces them
 
 - **No arbitrary values.** No raw hex, no off-scale px, no Tailwind `-[…]`.
@@ -89,6 +108,11 @@ drifted three times before it was deleted.
 
 From `packages/components`:
 
+- `pnpm test` must pass. **It runs the stories.** Every one is mounted in a real
+  headless browser, so a story that throws is a failing test, and a story with a
+  `play` function has its assertions run against what it drew. Needs Playwright's
+  Chromium shell — `armada run browsers` from the root, once per machine.
+- `pnpm exec vitest` watches instead, which is the loop to work in.
 - `pnpm build-storybook` must succeed.
 - `pnpm exec storybook dev -p 6006 --no-open --ci` to look at it. **Pass `--ci`**
   — without it a port conflict opens an interactive prompt and the command hangs.

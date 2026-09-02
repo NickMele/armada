@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 import { TabsWithCounts } from "./TabsWithCounts";
 
 const meta: Meta<typeof TabsWithCounts> = {
@@ -39,6 +40,15 @@ export const Zero: Story = {
       { id: "activity", label: "Activity" },
     ],
   },
+  /**
+   * Read off the accessible name, which is the whole tab a screen reader hears
+   * and the whole tab an eye reads: `Alerts` and not `Alerts 0`, beside a
+   * `Reviews 3` that proves a count still draws when there is one.
+   */
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("tab", { name: "Alerts" })).toBeVisible();
+    await expect(canvas.queryByRole("tab", { name: "Alerts 0" })).toBeNull();
+    await expect(canvas.getByRole("tab", { name: "Reviews 3" })).toBeVisible();  },
 };
 
 /**

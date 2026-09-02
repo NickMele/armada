@@ -62,13 +62,14 @@
 # `retry_limit` and `advance_gate`. Everything else in the schema is refused by
 # name.
 #
-# **Six mechanical Checks on `implement` now, three Bridge and one formatting.**
+# **Seven mechanical Checks on `implement` now, four Bridge and one
+# formatting.**
 # `format` is `cargo fmt --all --check`, and it is here for the same reason the
 # three below it are one lint over: PR #199 also merged nine unformatted files,
 # because `cargo fmt --check` was not a Check either. `armada.yml`'s entry for
 # it says why there is no `clippy` beside it.
 #
-# **The three Bridge Checks.**
+# **The four Bridge Checks.**
 # `typecheck`, `bridge_build` and `storybook` arrive with #200, and the defect
 # they exist for is worth stating where an author reading this step will see
 # it: PR #199 merged a branch whose renderer did not compile. It passed
@@ -77,7 +78,15 @@
 # TypeScript, so a Job that changed `apps/` was verified entirely on the half
 # it had not touched.
 #
-# The same three, and `format` with them, are named on every other step that
+# **`bridge_test` is the fourth, and it closes the gap the other three leave
+# open**: all three are compilers. A component could be wrong in every way that
+# is not a type error -- a tab that stops clearing the search, a region that
+# quietly drops the rows nothing serves -- and the branch would pass every
+# Check this repository had. It runs the stories as tests in a real browser and
+# the screens' pure modules in node; `armada.yml`'s entry says why those are
+# two runners and one Check.
+#
+# The same four, and `format` with them, are named on every other step that
 # produces a diff and gates on anything -- `feature`'s `implement` and `tests`,
 # `refactor`'s `implement`, `revert`'s `revert`. They are **not** on `plan` or
 # `handoff`, which produce a `facts_note` and could not fail a compile or a test
@@ -322,6 +331,11 @@
         {
           "type": "manifest_check",
           "check": "storybook",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "bridge_test",
           "expect_exit_code": 0
         },
         {
