@@ -10,7 +10,7 @@ workspace = true
 
 [dependencies]
 adapter-traits = { path = "../adapter-traits" }
-git2 = "0.19"
+git2 = { version = "0.19", default-features = false }
 # Not the wire, the codec. A Drone's stdout is a third place bytes enter the
 # process, and `ipc::decode`/`ipc::encode` is the one route that reads and
 # writes them — which is how this crate stays off gate rule five's list.

@@ -47,8 +47,12 @@ if [[ -f "$runtime" ]]; then
 fi
 
 # 2. Rebuild and reinstall, so `armada` on the PATH is this working tree.
+#
+# Arguments to this script reach `cargo install` and nothing else. `--force` is
+# the one worth knowing: `cargo install` refuses a binary name another package
+# owns, which is what a leftover install from a renamed crate looks like.
 say "Installing armada from $root"
-cargo install --path crates/armada --debug --locked --quiet
+cargo install --path crates/armada --debug --locked --quiet "$@"
 
 # 3. Start Fleet, and wait for it to publish before starting anything that
 #    reads what it publishes. Bridge started first has nothing to read.
