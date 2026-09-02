@@ -169,7 +169,8 @@ export function phasesOf(
   // **`You` closes the strip, always.** It is the last thing that can hold a
   // step, and a strip that stopped at the Judge said a step could only ever be
   // waiting on a machine. Where the workflow asks for no person it is still
-  // drawn, still ahead and never lit — an absent tier is not a failed tier.
+  // drawn and still last, under its own label — an absent tier is not a failed
+  // tier, and a tier that can never ask is not one that has not asked yet.
   stages.push(youStage(step));
 
   return { stages, note: noteOf(step, checks !== undefined, judge !== undefined) };
@@ -360,35 +361,73 @@ function keptRows(step: StepDetail, opens: Opens): PhaseStageRow[] {
 }
 
 /**
- * The human tier. **Always drawn, and lit only where the workflow asks for a
- * person.**
+ * The human tier. **Always drawn, and named for whether it can ever ask.**
  *
- * A step whose gate is `auto` will never stop for anybody, and the stage says
- * so by sitting ahead and never lighting — which is a different statement from
- * not being there, and the one a reader wanting to know whether this step can
- * ever wait for them is asking. An absent tier is not a failed tier and a
- * missing tier is not an absent one.
+ * A step whose gate is `auto` will never stop for anybody. **That is not the
+ * same fact as a tier not yet reached, and it used to draw as one** — both sat
+ * `ahead` under the label `You`, so the one question a reader opens this tier
+ * with, *can this step ever wait for me*, was answered only on a hover nobody
+ * performs on a step that already passed. The distinction was in the data and
+ * absent from the chip.
+ *
+ * **So the never-asks case is its own state and its own label.** `never` says
+ * the tier is out of this step's progression rather than ahead of it, and `No
+ * one` says who it is waiting for. Neither takes hue: amber is spent on
+ * waiting on you, and the pair is told apart by label and glyph the way every
+ * same-hue state is. An absent tier is not a failed tier and a missing tier is
+ * not an absent one — this tier is still drawn, still last, and still counted.
+ *
+ * **Three cases, because an absent `advance_gate` is a fourth thing again.**
+ * The key is missing where the Job named a workflow this Fleet does not hold,
+ * so nothing here knows whether a person is asked, and answering `No one`
+ * would be this file deciding a question the wire declined. It stays `You` and
+ * unlit, and `noteOf` is what names the missing workflow on screen.
  */
 function youStage(step: StepDetail): PhaseStage {
   const gate = step.advance_gate;
-  const asks = gate !== undefined && gate !== AUTO && gate !== JUDGE_ONLY;
-  const waiting = asks && step.state === "awaiting_human";
-  const named = gate === undefined || gate === HUMAN ? undefined : ADVANCE_GATE[gate]?.verb ?? gate;
+  if (gate === AUTO || gate === JUDGE_ONLY) {
+    return {
+      id: "you",
+      label: "No one",
+      kind: "human",
+      state: "never",
+      stands: "this step advances without a person",
+      // **Both lines are said here rather than left to the card's standing
+      // ones, because both of those are about a tier that can hold a step.**
+      // The standing sentence says a step sitting here is stopped with nothing
+      // wrong, and the standing closer says *amber, not red — it is waiting on
+      // you*. Neither is true of a gate that cannot ask.
+      said: "The human gate, which this step's workflow does not use.",
+      detail: "Nothing at this step waits for a person. Its advance gate never asks for one.",
+    };
+  }
+
+  if (gate === undefined) {
+    return {
+      id: "you",
+      label: "You",
+      kind: "human",
+      state: "ahead",
+      stands: "Fleet cannot say",
+      // No closing line rather than the standing amber one. Whether this tier
+      // is amber is exactly what is not known here.
+      detail: null,
+    };
+  }
+
+  const waiting = step.state === "awaiting_human";
+  const named = gate === HUMAN ? undefined : ADVANCE_GATE[gate]?.verb ?? gate;
   return {
     id: "you",
-    label: asks && named !== undefined ? `You · ${named}` : "You",
+    label: named === undefined ? "You" : `You · ${named}`,
     kind: "human",
-    state: waiting ? "waiting" : asks && step.state === "advanced" ? "cleared" : "ahead",
-    stands: waiting
-      ? "waiting on you"
-      : asks
-        ? "not reached"
-        : "this step advances without a person",
+    state: waiting ? "waiting" : step.state === "advanced" ? "cleared" : "ahead",
+    stands: waiting ? "waiting on you" : "not reached",
     // Where `advance_gate` is a manifest rule, the tier resolved at dispatch
     // from the Manifest's own policy — so two Jobs on one workflow can show
     // different gates. Naming the value is what says why.
     detail:
-      !asks || gate === HUMAN
+      gate === HUMAN
         ? undefined
         : `This step's gate is ${gate}, resolved when the Job was dispatched.`,
   };

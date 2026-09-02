@@ -83,7 +83,13 @@ button.armada-phases__control:focus-visible {
    is that hue's own 12% fill — the same value a status badge takes, so a
    cleared stage and a completed Job are visibly the same claim at two scales.
 
-   A stage still ahead takes none. It is a position, not a state. */
+   A stage still ahead takes none. It is a position, not a state.
+
+   A `never` stage takes none either, and takes this same neutral ground on
+   purpose: amber is spent on waiting on you, and hue below Job level exists
+   only where tokens/status.css declares it. It is told from `ahead` by its
+   label and by carrying no glyph, which is how every same-hue state in this
+   system differentiates. */
 .armada-phases__control[data-state="cleared"] {
   color: var(--step-advanced);
   background: var(--status-completed-success-bg);

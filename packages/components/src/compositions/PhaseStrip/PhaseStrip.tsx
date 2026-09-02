@@ -17,8 +17,9 @@ import type { PhaseCardRow, PhaseStageKind, PhaseStageState } from "../PhaseCard
  * **`You` closes the strip, always.** It is the last thing that can hold a
  * step, and a strip that stopped at the Judge said a step could only ever be
  * waiting on a machine. Where the workflow asks for no person the stage is
- * still drawn, still ahead and never lit — an absent tier is not a failed
- * tier.
+ * still drawn and still last, in the `never` state and under its own label —
+ * an absent tier is not a failed tier, and a tier that can never ask for you
+ * is not one that has not reached you yet.
  *
  * **The connectors are not decoration.** Six chips in a row with a gap between
  * them is a set; six chips joined by a line is an order, and the order is the
