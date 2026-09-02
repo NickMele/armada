@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, fn } from "storybook/test";
 
 import { JobDiffSheet, railOfPatch, type JobDiffFile } from "./JobDiffSheet";
 import { UnifiedDiff, type DiffFile } from "../UnifiedDiff/UnifiedDiff";
@@ -97,6 +97,29 @@ export const OpenedAtAStep: Story = {
     children: (
       <UnifiedDiff files={PATCH} emptyNote="This drone has not changed anything yet." />
     ),
+    onSelect: fn(),
+  },
+  /**
+   * The rail reports a path and selects nothing itself. **The path is the
+   * whole of what it reports**, because that is what the caller scrolls the
+   * patch to — an index would look right in a story with three files in the
+   * order the reading found them, and be wrong the first time a reading came
+   * back sorted.
+   *
+   * The subtitle's totals are deliberately not asserted: they are a sum, and a
+   * browser is the most expensive place to check arithmetic.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: /reducer\.ts/ }));
+    await expect(args.onSelect).toHaveBeenCalledWith("packages/settings/src/reducer.ts");
+
+    // Held by the caller, so the rail's selection has not moved — and it is
+    // `aria-current` that makes that a thing a play can read rather than a
+    // colour on a row.
+    await expect(canvas.getByRole("button", { name: /selectors\.ts/ })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
   },
 };
 

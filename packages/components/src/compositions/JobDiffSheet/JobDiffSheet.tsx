@@ -197,6 +197,10 @@ export function JobDiffSheet({
               type="button"
               className="armada-diff-sheet__file"
               data-on={file.path === selected || undefined}
+              // Which file the patch is showing, said rather than only drawn.
+              // `data-on` is the stylesheet's hook and reaches nobody who is
+              // not looking at it; `StepRow` spells the same fact this way.
+              aria-current={file.path === selected ? "true" : undefined}
               onClick={() => onSelect?.(file.path)}
             >
               {/* Truncated from the front: the end of a path is what names the

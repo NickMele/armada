@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 import { Switch } from "./Switch";
 
 const meta: Meta<typeof Switch> = {
@@ -66,6 +67,23 @@ export const Disabled: Story = {
       <Switch disabled>Auto-approve small diffs</Switch>
     </Card>
   ),
+  /**
+   * **Disabled is set back, never opacity** — which means a disabled switch
+   * looks like a quiet one, and nothing about how it is drawn says it is
+   * inert. Pressing it is the only thing that does.
+   *
+   * Pressed by its label, because that is where a person presses a switch: the
+   * whole row is the `label`, so a click anywhere in it forwards to the input.
+   * A switch that took that press while disabled would flip a setting the
+   * surface had already said was not available.
+   */
+  play: async ({ canvas, userEvent }) => {
+    const on = canvas.getByRole("switch", { name: "Escalate on stall" });
+    await expect(on).toBeChecked();
+
+    await userEvent.click(canvas.getByText("Escalate on stall"));
+    await expect(on).toBeChecked();
+  },
 };
 
 /** The description says what happens on and what happens off. */

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, fn } from "storybook/test";
 import { PhaseStrip } from "./PhaseStrip";
 
 const meta: Meta<typeof PhaseStrip> = {
@@ -82,6 +82,37 @@ export const AllFourStates: Story = {
         cardNote: "Approve, or send it back with a reason. Both are recorded on the Job.",
       },
     ],
+  },
+  /**
+   * **Hover opens, click pins, `Escape` unpins** — three behaviours the drawing
+   * asks for as one, and a run is the only place they can be seen to disagree.
+   *
+   * The pointer is moved off the chip before every assertion, which is not
+   * ceremony. Hover and pin are two reasons the same card is open, and a press
+   * leaves the cursor sitting on the chip it pressed — assert without moving
+   * away and a strip that had stopped pinning altogether would pass every line
+   * here.
+   */
+  play: async ({ canvas, userEvent }) => {
+    const checks = canvas.getByRole("button", { name: /build, test/ });
+    const away = canvas.getByText(/The Drone is working/);
+
+    await userEvent.hover(checks);
+    await expect(canvas.getByRole("dialog")).toBeVisible();
+
+    // Nothing pinned it, so leaving closes it.
+    await userEvent.hover(away);
+    await expect(canvas.queryByRole("dialog")).toBeNull();
+
+    // Pinned, and now it survives the pointer leaving.
+    await userEvent.click(checks);
+    await userEvent.hover(away);
+    await expect(canvas.getByRole("dialog")).toBeVisible();
+
+    // A card held open covers the strip it explains, and the way out should not
+    // be finding the same chip again.
+    await userEvent.keyboard("{Escape}");
+    await expect(canvas.queryByRole("dialog")).toBeNull();
   },
 };
 
@@ -257,6 +288,29 @@ export const HeldByTheCaller: Story = {
   args: {
     ...WithYouPresent.args,
     pinnedStage: "judge",
+    onPin: fn(),
+  },
+  /**
+   * **The pin does not move, and that is the assertion.** A controlled strip
+   * with nobody holding the other end reports and changes nothing. The failure
+   * mode is a component that keeps its own copy as well — which behaves
+   * correctly in every story where the caller writes back, and disagrees with
+   * the caller silently everywhere else.
+   *
+   * `Escape` is the same rule where it is easiest to miss: it reads as a
+   * dismissal rather than as a change, so it is the press most likely to reach
+   * past the caller and unpin locally.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    const judge = canvas.getByRole("button", { name: /Judge/ });
+
+    await userEvent.click(canvas.getByRole("button", { name: "You" }));
+    await expect(args.onPin).toHaveBeenCalledWith("you");
+    await expect(judge).toHaveAttribute("aria-expanded", "true");
+
+    await userEvent.keyboard("{Escape}");
+    await expect(args.onPin).toHaveBeenCalledWith(null);
+    await expect(judge).toHaveAttribute("aria-expanded", "true");
   },
 };
 

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 import { ActivityLog, type ActivityEntry } from "./ActivityLog";
 
 /**
@@ -63,6 +64,32 @@ const STREAM: ActivityEntry[] = [
  */
 export const OneStream: Story = {
   args: { entries: STREAM },
+  /**
+   * **Which lines are controls, and which are not.** A row with nothing behind
+   * it was a button carrying `aria-expanded={false}` — which tells a screen
+   * reader the line opens and then does nothing when it is pressed, the same
+   * false promise the missing chevron made to everyone else. It is stated
+   * outright in the markup, so it is the one version of the mistake a person
+   * scanning the page cannot see.
+   *
+   * The rest is the open and shut of a row that does hold something, asserted
+   * on the output itself rather than on a class: the payload is absent from the
+   * document while the row is closed.
+   */
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByText("thinking")).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: /thinking/ })).toBeNull();
+
+    const bash = canvas.getByRole("button", { name: /cargo build --workspace --locked/ });
+    await expect(bash).toHaveAttribute("aria-expanded", "false");
+    await expect(canvas.queryByText(/Finished/)).toBeNull();
+
+    await userEvent.click(bash);
+    await expect(canvas.getByText(/Finished/)).toBeVisible();
+
+    await userEvent.click(bash);
+    await expect(canvas.queryByText(/Finished/)).toBeNull();
+  },
 };
 
 /**

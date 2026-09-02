@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 import { Popover } from "./Popover";
 
 const meta: Meta<typeof Popover> = {
@@ -31,6 +32,25 @@ export const Open: Story = {
         floor, so the row shows <span className="mono">68% quota</span> left.
       </span>
     ),
+  },
+  /**
+   * Closed and opened again, because `defaultOpen` is the only state the rest
+   * of this sheet ever draws — the trigger is a `span` wrapping whatever the
+   * caller passed, so "the press reaches it" is a claim about event flow and
+   * not about markup.
+   *
+   * Esc first: it is the exit a person reaches for when the panel is over the
+   * thing they wanted to read.
+   */
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByRole("dialog")).toBeVisible();
+
+    await userEvent.keyboard("{Escape}");
+    await expect(canvas.queryByRole("dialog")).toBeNull();
+
+    // And the control that opened it is the control that opens it again.
+    await userEvent.click(canvas.getByRole("button", { name: "Spend" }));
+    await expect(canvas.getByRole("dialog")).toBeVisible();
   },
 };
 

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
 import { DropdownMenu, type DropdownMenuEntry } from "./DropdownMenu";
 
 const meta: Meta<typeof DropdownMenu> = {
@@ -29,6 +30,31 @@ export const RowMenu: Story = {
       { kind: "separator", id: "rule" },
       { kind: "item", id: "kill", label: "Kill job", shortcut: "x", danger: true },
     ],
+    onSelect: fn(),
+  },
+  /**
+   * **The trigger, which every story here bypasses.** `defaultOpen` is how the
+   * panel gets drawn on a page, and it means nothing on this sheet has ever
+   * pressed the button the menu actually opens from — so the one story that
+   * can close it and open it again does.
+   *
+   * Choosing an item closes the menu and reports the id. Both halves matter: a
+   * menu left open covers the row it belongs to, and an id that does not
+   * arrive is an item that does nothing.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByRole("menu")).toBeVisible();
+
+    // Esc closes an overlay, per the global tier.
+    await userEvent.keyboard("{Escape}");
+    await expect(canvas.queryByRole("menu")).toBeNull();
+
+    await userEvent.click(canvas.getByRole("button", { name: "More" }));
+    await expect(canvas.getByRole("menu")).toBeVisible();
+
+    await userEvent.click(canvas.getByRole("menuitem", { name: /Copy job ID/ }));
+    await expect(args.onSelect).toHaveBeenCalledWith("copy");
+    await expect(canvas.queryByRole("menu")).toBeNull();
   },
 };
 

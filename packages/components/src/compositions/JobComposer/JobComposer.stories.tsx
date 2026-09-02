@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
 import { JobComposer } from "./JobComposer";
 
 /**
@@ -33,6 +34,31 @@ export const WhatM1Renders: Story = {
       { label: "Checks", value: "build, test" },
     ],
     provenance: "Dispatched by you",
+    onCancel: fn(),
+    onDispatch: fn(),
+  },
+  /**
+   * **The project is not a control, and the workflow is.** Both are drawn at
+   * the same height on the same line so their baselines agree, which is
+   * exactly what makes the difference invisible: a disabled select would look
+   * choosable and refuse, and this reads as the fact it is.
+   *
+   * Then the two acts, which are the pair worth pinning down because swapping
+   * them draws identically and neither is recoverable. `Cancel` writes
+   * `killed` — a job never dispatched was abandoned rather than stopped — and
+   * `Approve and dispatch` lands it in `queued`.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByRole("combobox", { name: "Workflow" })).toBeEnabled();
+    await expect(canvas.queryByRole("combobox", { name: /Project/ })).toBeNull();
+    await expect(canvas.getByText("armada")).toBeVisible();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Cancel" }));
+    await expect(args.onCancel).toHaveBeenCalled();
+    await expect(args.onDispatch).not.toHaveBeenCalled();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Approve and dispatch" }));
+    await expect(args.onDispatch).toHaveBeenCalled();
   },
 };
 

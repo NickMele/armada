@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
 import { ActivityLogSheet } from "./ActivityLogSheet";
 import { ActivityLog, type ActivityEntry } from "../ActivityLog/ActivityLog";
 
@@ -67,6 +68,25 @@ export const Held: Story = {
     live: true,
     heldAt: "14:31:58",
     arrived: 31,
+    onFilter: fn(),
+  },
+  /**
+   * **The count is stated twice, and both have to be there.** The strip is at
+   * the top of the sheet and the reader is at the bottom of it, so one of the
+   * two is always off screen — which means dropping either is a change nobody
+   * looking at the sheet can see.
+   *
+   * The filters are the caller's. Pressing one reports and moves nothing,
+   * because which rows the log holds is the caller's answer and a strip
+   * holding its own copy would disagree with the stream it is filtering.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByRole("button", { name: /Jump to now/ })).toHaveTextContent("+31");
+    await expect(canvas.getByText(/31 entries arrived while you were reading/)).toBeVisible();
+
+    await userEvent.click(canvas.getByRole("tab", { name: "Fleet" }));
+    await expect(args.onFilter).toHaveBeenCalledWith("fleet");
+    await expect(canvas.getByRole("tab", { selected: true })).toHaveAccessibleName("All");
   },
 };
 
@@ -89,5 +109,17 @@ export const Escalated: Story = {
         "The suite passed and the Judge refused: the diff widens the catch block rather than " +
         "addressing the cause named in root_cause.md. Three attempts spent.",
     },
+    onClose: fn(),
+  },
+  /**
+   * **`Show me` is a labelled second face of `Esc`, not a second binding.**
+   * The escalation here names no `onShowMe`, so the control falls through to
+   * the sheet's own close — and a fallthrough is the one kind of wiring that
+   * cannot be drawn. A control that had quietly stopped falling through would
+   * render as this exact band and do nothing when pressed.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: /Show me/ }));
+    await expect(args.onClose).toHaveBeenCalled();
   },
 };

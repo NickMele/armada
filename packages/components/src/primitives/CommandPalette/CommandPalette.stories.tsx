@@ -13,6 +13,7 @@ import {
   Settings,
   Stethoscope,
 } from "lucide-react";
+import { expect } from "storybook/test";
 import { CommandPalette, type CommandPaletteEntry } from "./CommandPalette";
 import { Dialog } from "../Dialog/Dialog";
 
@@ -136,6 +137,17 @@ export const Resting: Story = {
  */
 export const AliasFindsTheLexiconTerm: Story = {
   args: { open: true, entries, defaultQuery: "terminate" },
+  /**
+   * Read off the row, which is the only place the rule can be seen: one match,
+   * and it reads the lexicon term. An alias that leaked into what renders
+   * would teach the person the word Armada does not use, from the surface
+   * whose whole job is teaching them the words it does.
+   */
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole("option")).toHaveLength(1);
+    await expect(canvas.getByRole("option")).toHaveAccessibleName(/Kill the drone/);
+    await expect(canvas.queryByText("terminate")).toBeNull();
+  },
 };
 
 /**
@@ -151,7 +163,9 @@ export const NoMatch: Story = {
  * every destructive action confirms, even from the keyboard, and in the
  * confirmation Cancel holds initial focus.
  *
- * Type, arrow to Kill the drone, press Enter.
+ * Type, arrow to Kill the drone, press Enter — which is what the `play` below
+ * does, because a safety rule described in prose is a safety rule nothing
+ * checks.
  */
 export const DestructiveEntryConfirms: Story = {
   render: () => {
@@ -177,5 +191,27 @@ export const DestructiveEntryConfirms: Story = {
         </Dialog>
       </>
     );
+  },
+  /**
+   * **Selecting Kill does not kill.** The palette hands the entry to its host
+   * and stays where it is; the host opens the confirmation over it. So the
+   * assertion is that two things are true at once after one `Enter` — the
+   * dialog is on screen, and the palette did not act and did not close.
+   *
+   * A palette that closed here would be the more natural thing to write and
+   * the wrong one: the way back from a confirmation is the list you chose from.
+   */
+  play: async ({ canvas, userEvent }) => {
+    // The query is "kill", so Kill the drone is the only match and is already
+    // the active row. Enter is the whole act.
+    await expect(canvas.getByRole("option", { selected: true })).toHaveAccessibleName(
+      /Kill the drone/,
+    );
+    await expect(canvas.queryByRole("dialog", { name: "Kill the drone on job 12?" })).toBeNull();
+
+    await userEvent.keyboard("{Enter}");
+
+    await expect(canvas.getByRole("dialog", { name: "Kill the drone on job 12?" })).toBeVisible();
+    await expect(canvas.getByRole("dialog", { name: "Command palette" })).toBeVisible();
   },
 };

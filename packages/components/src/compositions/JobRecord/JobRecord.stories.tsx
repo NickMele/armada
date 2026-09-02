@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 import { JobBrief } from "../JobBrief/JobBrief";
 import { JobLogReference } from "../JobLogReference/JobLogReference";
 import { JobRecord } from "./JobRecord";
@@ -52,6 +53,21 @@ const sections = [
 /** The strip as a finished Job draws it, opened on the first section. */
 export const FoldedRecord: Story = {
   args: { sections, defaultValue: "steps" },
+  /**
+   * **Only the open section is in the document**, which is the whole claim the
+   * fold rests on: a closed section costs nothing, so it may own a
+   * subscription. A strip that kept all four mounted and hid three with CSS
+   * would draw identically, pass every other story here, and quietly hold four
+   * live subscriptions on a Job nobody is reading.
+   */
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByText(/The workflow rail goes here/)).toBeVisible();
+    await expect(canvas.queryByText(/The transcript goes here/)).toBeNull();
+
+    await userEvent.click(canvas.getByRole("tab", { name: "The drone's turns" }));
+    await expect(canvas.getByText(/The transcript goes here/)).toBeVisible();
+    await expect(canvas.queryByText(/The workflow rail goes here/)).toBeNull();
+  },
 };
 
 /**
