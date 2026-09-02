@@ -173,18 +173,27 @@ const CLOSES_WITH: Record<PhaseStageKind, string | undefined> = {
 /**
  * Where the state changes what the tier *is*, and not only where it stands.
  *
- * **`never` is the case the two maps above cannot hold.** Both of the human
- * tier's sentences describe a tier that can stop a step: one says a step
- * sitting here is stopped with nothing wrong, the other says the chip is amber
- * rather than red. A step whose `advance_gate` never asks for a person will
- * never sit there and the chip will never be amber, so both are false — and
- * *waiting on you* is the exact claim #308 was filed to stop.
+ * **The human tier's closing line is a claim about the chip in front of you.**
+ * *Amber, not red — it is waiting on you, not broken* is true of a tier holding
+ * a step and false of every un-lit one, and the two un-lit states are false for
+ * different reasons.
  *
- * **Sparse on purpose.** A state that does not change what the tier is takes
- * the kind's own sentence, which is the property worth keeping: the common tier
- * says the standing line without any caller retyping it. This is not a severity
- * ordering either — `ahead` and `never` are both un-lit, and only one of them
- * makes the kind's sentence untrue.
+ * **`never` is a tier that will not light.** A step whose `advance_gate` never
+ * asks for a person will never sit here, so the chip will never be amber and
+ * nobody is ever waited on — and *waiting on you* is the exact claim #308 was
+ * filed to stop.
+ *
+ * **`ahead` is a tier that has not been reached.** It will light, and it has
+ * not, so the card is not amber and nothing is on the person yet. **The state
+ * that has not been reached is not the state that is waiting.** Copy that
+ * described what the card will become was the alternative and it is refused: a
+ * card describing what it will become is a card that is wrong now.
+ *
+ * **Sparse on purpose, and not a severity ordering.** A state that does not
+ * change what the tier is takes the kind's own sentence, which is the property
+ * worth keeping — the common tier says the standing line without any caller
+ * retyping it. `never` and `ahead` differ because the facts differ, not because
+ * one is worse.
  */
 const WHEN: Record<"said" | "closesWith", Partial<Record<PhaseStageKind, Partial<Record<PhaseStageState, string>>>>> = {
   said: {
@@ -193,6 +202,7 @@ const WHEN: Record<"said" | "closesWith", Partial<Record<PhaseStageKind, Partial
   closesWith: {
     human: {
       never: "Nothing at this step waits for a person. Its advance gate never asks for one.",
+      ahead: "Not amber yet. This step's gate will ask for a person, and it has not got that far.",
     },
   },
 };

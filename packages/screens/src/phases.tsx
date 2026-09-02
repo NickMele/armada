@@ -435,8 +435,11 @@ function youStage(step: StepDetail): PhaseStage {
       kind: "human",
       state: "ahead",
       stands: "Fleet cannot say",
-      // No closing line rather than the standing amber one. Whether this tier
-      // is amber is exactly what is not known here.
+      // **The one `detail` this file still writes, and `null` is the point.**
+      // The card's `ahead` line says this step's gate will ask for a person
+      // and has not got that far, which is a claim about a workflow Fleet does
+      // not hold. Whether anybody is ever asked is exactly what is not known
+      // here, so the card closes with nothing and `noteOf` names the gap.
       detail: null,
     };
   }

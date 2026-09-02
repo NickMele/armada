@@ -199,6 +199,37 @@ export const TheHumanTierThatCanNeverAsk: Story = {
 };
 
 /**
+ * **A human tier that will ask and has not been reached**, given nothing but
+ * its kind and its state. The sibling of the card above, and the same defect
+ * one state over.
+ *
+ * `ahead` is un-lit, so the chip is not amber and nothing is on you — and the
+ * standing closer said *Amber, not red. It is waiting on you, not broken*,
+ * which describes a state this card is not in. **The state that has not been
+ * reached is not the state that is waiting.** Copy that described what the
+ * card will become was the alternative and it is refused: a card describing
+ * what it will become is a card that is wrong now.
+ *
+ * The line it carries instead says why it is un-lit, which is the fact that
+ * separates it from `No one` above: this gate will ask.
+ */
+export const TheHumanTierNotReachedYet: Story = {
+  args: {
+    kind: "human",
+    name: "You",
+    state: "ahead",
+    stands: "not reached",
+  },
+  play: async ({ canvas }) => {
+    // The same assertion as the never tier, on the same word, for the same
+    // reason. The pair is why the copy avoids *waiting* rather than hedging
+    // it: one word, refused on every un-lit human tier.
+    expect(canvas.queryByText(/waiting/i)).toBeNull();
+    await expect(canvas.getByText(/Not amber yet/)).toBeVisible();
+  },
+};
+
+/**
  * The card as it opens off the strip — `--bg-overlay`, the strong edge, and
  * the arrow pointing back at the stage that opened it.
  *
