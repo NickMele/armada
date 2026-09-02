@@ -99,17 +99,20 @@
 # Each criterion is its own call, so the entry below is one more Judge call per
 # Job on Feature's cheapest step.
 #
-# **`typecheck`, `bridge_build` and `storybook` are on both diff steps.** See
-# `bug.json` for the defect they were added for. Feature is the workflow where
-# they matter most, because new behaviour is the case where a Bridge half gets
-# written at all -- and they are on `tests` as well as `implement` because
-# `tests` produces a diff too, and a diff produced in the step after the
-# compilers ran is a diff nothing compiled.
+# **`typecheck`, `bridge_build`, `storybook` and `bridge_test` are on both diff
+# steps.** See `bug.json` for the defect they were added for. Feature is the
+# workflow where they matter most, because new behaviour is the case where a
+# Bridge half gets written at all -- and they are on `tests` as well as
+# `implement` because `tests` produces a diff too, and a diff produced in the
+# step after the compilers ran is a diff nothing compiled.
 #
 # The split above them stays what it was: `implement` gates on `build` and
-# `tests` on `test`. The three Bridge Checks do not split that way, because all
-# three are compilers and this workspace has no Bridge test runner to be the
-# other half of the pair.
+# `tests` on `test`. The four Bridge Checks do not split that way, and it is no
+# longer for want of a runner: `bridge_test` is the other half of the pair and
+# it is on both steps rather than only on `tests`. A Bridge feature's tests are
+# its stories, which are written in the step that writes the component -- so a
+# Feature whose `implement` left them failing would advance to a step whose
+# whole subject is a test suite that does not pass.
 #
 # **`model: haiku` on `handoff`, and nowhere else.** `bug.json` carries the
 # reasoning and the cache cost. Here it places the same way: `scope` decides what
@@ -190,6 +193,11 @@
           "expect_exit_code": 0
         },
         {
+          "type": "manifest_check",
+          "check": "bridge_test",
+          "expect_exit_code": 0
+        },
+        {
           "type": "diff_nonempty"
         }
       ],
@@ -253,6 +261,11 @@
         {
           "type": "manifest_check",
           "check": "storybook",
+          "expect_exit_code": 0
+        },
+        {
+          "type": "manifest_check",
+          "check": "bridge_test",
           "expect_exit_code": 0
         },
         {

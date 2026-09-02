@@ -160,7 +160,23 @@ generated from, and anything that names a person or a machine.
 ```sh
 cargo nextest run --workspace --exclude acceptance   # not `cargo test`
 cargo test -p acceptance                            # the milestone's own claim
+pnpm bridge-test                                    # the TypeScript half
 ```
+
+**`pnpm bridge-test` runs two suites and needs a browser.** The first is the
+pure modules under `packages/screens` — which tab a Job is in, which render it
+takes — run in node, and it answers in under a second. The second is every
+story in `packages/components`, mounted in a real headless browser: a story that
+throws is a failure, and a story with a `play` function has its assertions run
+against what it drew.
+
+The browser is Playwright's headless Chromium shell. `pnpm install` does not
+fetch it; `armada run browsers` does, once per machine rather than once per
+checkout. Without it the second suite fails naming an executable that is not
+there, which is a missing browser and not a failing component.
+
+Watch one while you work on it, from `packages/components` or
+`packages/screens`: `pnpm exec vitest`.
 
 ## Running it locally
 
@@ -224,8 +240,10 @@ same parser, same runner, no shell, so a `run` string that pipes or redirects
 does not work here either.
 
 ```sh
-armada check test    # the Checks this repo declares: build, test
-armada run fmt       # the Commands it declares: fmt, gate
+# The Checks: build, test, format, typecheck, bridge_build, storybook, bridge_test
+armada check bridge_test
+# The Commands: bootstrap, browsers, fmt, gate
+armada run fmt
 ```
 
 The command's own exit code comes back out, so `armada check build` failing

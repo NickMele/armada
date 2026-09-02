@@ -83,6 +83,35 @@ checks:
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
 
+  bridge_test:
+    # The Bridge half had no test runner at all until this Check. `test` above
+    # is `cargo`, `typecheck` compiles TypeScript without running any of it, and
+    # `storybook` proves the stories build rather than that any of them renders
+    # what it claims. A component could be wrong in every way that is not a type
+    # error and nothing here would say so.
+    #
+    # **Two runners under one name, and neither subsumes the other.**
+    # `packages/screens` runs its pure modules in node — which tab a Job is in,
+    # which render it takes — where a hundred cases cost what one costs.
+    # `packages/components` runs every story in a real browser through
+    # `@storybook/addon-vitest`: rendering at all is the smoke test, and a story
+    # with a `play` function has its assertions run. So the drawing and the
+    # arithmetic are each checked by the thing that can check them.
+    #
+    # **The chain is in a `package.json` script, for the reason `typecheck`
+    # above gives at length: a `run` gets no shell.** Screens first, because it
+    # is the half that answers in under a second.
+    run: pnpm bridge-test
+    # No `apps/**`: `apps/desktop` carries no tests, and a change confined to it
+    # cannot fail this. `bridge_build` is the Check that reads it.
+    when:
+      - "packages/**"
+      - "crates/core-model/domain/**"
+      - "protocol-version.toml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+
   # `format`, not `fmt`: that name is a Command below and both registries
   # refuse a collision — the Command writes, this reads. No `clippy` beside it;
   # `[clippy-as-a-check]` in docs/OPEN.md is why.
@@ -95,6 +124,20 @@ commands:
   # so preparation writes nothing the Drone's diff would carry.
   bootstrap:
     run: pnpm install --frozen-lockfile
+
+  # The browser `bridge_test` mounts stories in. `setup.requires` names this
+  # too, after `bootstrap` — the binary it runs is installed by it.
+  #
+  # **A machine-level cache, not a worktree one.** Playwright puts the shell in
+  # the user's cache directory, so this is a fetch on a machine that has never
+  # run it and a version check on every one after. Left out of setup, the first
+  # Job on a fresh machine would fail `bridge_test` on a missing executable and
+  # report it as a broken test.
+  #
+  # `--only-shell`: the headless shell is what a headless run launches, and it
+  # is a third of the full browser download.
+  browsers:
+    run: pnpm -C packages/components exec playwright install chromium --only-shell
 
   fmt:
     run: cargo fmt --all
@@ -110,3 +153,4 @@ commands:
 setup:
   requires:
     - bootstrap
+    - browsers
