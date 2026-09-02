@@ -83,16 +83,25 @@ function step(over: Partial<StepDetail> = {}): StepDetail {
   };
 }
 
-/** The turn Armada opened the step with, carrying the whole brief. */
-function instructed(text: string): Turn {
+/**
+ * The turn Armada opened the step with, carrying the whole brief.
+ *
+ * `headings` is what Fleet stamps on the row — the line numbers it wrote the
+ * block headings at. Omitted is a turn with no headed blocks, and a row written
+ * before the field existed; the two are the same to a reader.
+ */
+function instructed(text: string, headings?: number[]): Turn {
   return {
     ts: "2026-09-02T13:11:00Z",
     seq: 1,
     step: "plan",
     by: "armada",
-    saw: { event: "instructed", occasion: "opening", text },
+    saw: { event: "instructed", occasion: "opening", text, ...(headings ? { headings } : {}) },
   };
 }
+
+/** Where BRIEF's three block headings are, as Fleet would have stamped them. */
+const HEADED = [0, 7, 15];
 
 /** How a document is opened, stubbed. Shared, because both surfaces take it. */
 const OPENS: Opens = {
@@ -123,6 +132,11 @@ function chapters(over: { rows?: Turn[]; step?: StepDetail } = {}) {
 /** Every `<p>`'s own text, so "on its own line" is a thing a test can read. */
 function paragraphs(markup: string): string[] {
   return [...markup.matchAll(/<p\b[^>]*>(.*?)<\/p>/gs)].map((found) => found[1] ?? "");
+}
+
+/** Every heading element's own text. What a `<p>` is not. */
+function headings(markup: string): string[] {
+  return [...markup.matchAll(/<h[1-6]\b[^>]*>(.*?)<\/h[1-6]>/gs)].map((found) => found[1] ?? "");
 }
 
 describe("the brief's blocks", () => {
@@ -209,6 +223,38 @@ describe("drone instructions", () => {
     expect(said).toContain("JOB BRIEF");
     expect(said).toContain("WHERE YOU ARE");
     expect(said).toContain("STEP: Plan the change");
+  });
+
+  // **This is the test that fails if the wiring is reverted**, and it is the
+  // whole reason the marker crossing the wire reaches a person. `chapters.tsx`
+  // hands `DroneBrief` the payload; mapped back to `line.text` the `named`
+  // values are dropped on the way and every heading below draws as a `<p>`
+  // again, with the gap above it as the only thing marking it — which is #318
+  // shipped as a seam nothing reaches.
+  it("hands the brief's marked lines to the component, so a heading is a heading", () => {
+    const markup = renderToStaticMarkup(
+      chapters({ rows: [instructed(BRIEF, HEADED)] })[0]!.preview,
+    );
+    expect(headings(markup)).toEqual(["JOB BRIEF", "WHERE YOU ARE", "STEP: Plan the change"]);
+  });
+
+  it("draws a short body line as body, whatever it looks like", () => {
+    // The definition of done's own case, one surface further out than the
+    // story: `This is done when:` is shorter than two of the headings above it
+    // and opens a block of its own, so both cheap rules would mark it.
+    const markup = renderToStaticMarkup(
+      chapters({ rows: [instructed(BRIEF, HEADED)] })[0]!.preview,
+    );
+    expect(headings(markup)).not.toContain("This is done when:");
+    expect(paragraphs(markup).some((said) => said.startsWith("This is done when:"))).toBe(true);
+  });
+
+  it("marks nothing on a turn the wire said nothing about", () => {
+    // A row written before Fleet stamped the field. It draws as it drew after
+    // #306 — blocks, no marked heading — rather than throwing or guessing.
+    const markup = renderToStaticMarkup(chapters({ rows: [instructed(BRIEF)] })[0]!.preview);
+    expect(headings(markup)).toEqual([]);
+    expect(paragraphs(markup)).toContain("JOB BRIEF");
   });
 
   it("keeps the parts rail's lines and its indent, so STOP is still a boundary", () => {
