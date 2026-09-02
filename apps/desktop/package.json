@@ -2,14 +2,15 @@
   "name": "@armada/desktop",
   "private": true,
   "version": "0.0.0",
-  "description": "Bridge \u2014 the desktop application.",
+  "description": "Bridge — the desktop application.",
   "main": "./out/main/index.js",
   "scripts": {
     "codegen": "node codegen/vocabulary.mjs",
     "dev": "electron-vite build && electron-vite preview",
     "build": "electron-vite build",
     "start": "electron-vite preview",
-    "typecheck": "tsc -b --force"
+    "typecheck": "tsc -b --force",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",
@@ -21,7 +22,8 @@
     "electron-vite": "^5.0.0",
     "tailwindcss": "^4.3.0",
     "typescript": "^5.9.0",
-    "vite": "^7.0.0"
+    "vite": "^7.0.0",
+    "vitest": "4.1.11"
   },
   "dependencies": {
     "@armada/brand": "workspace:*",
