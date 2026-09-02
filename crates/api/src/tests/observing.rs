@@ -329,6 +329,31 @@ async fn a_viewer_carries_on_when_the_job_advances_to_its_next_drone() {
     assert_eq!(prose(message), "the implement step's first word");
 }
 
+/// A viewer arriving in the middle of a Job reads the Drone writing now, and
+/// not the one the Job started on — **including where the last step's tap has
+/// not been dropped yet**, which is the ordinary case 5ms after a spawn. One
+/// slot per Job holds one Drone, and replacing it cannot depend on somebody
+/// happening to be watching when it happens.
+#[tokio::test]
+async fn a_job_on_its_second_drone_serves_that_one_and_not_the_first() {
+    let (daemon, app) = wired();
+    let job = a_job(&app).await;
+    let plan = daemon.dispatching(&job);
+    let implement = daemon.dispatching(&job);
+
+    let mut socket = connected(app, &format!("/jobs/{}/observe", job.as_str()), 8192).await;
+    let TurnMessage::Opened(opened) = read(&mut socket).await else {
+        panic!("it opens");
+    };
+    assert!(opened.live, "the second step's Drone is writing");
+
+    // Both offer. Only the second Drone's row is this viewer's, and a socket
+    // subscribed to the first would time out waiting for it.
+    plan.offer(said("the first drone's word"));
+    implement.offer(said("the second drone's word"));
+    assert_eq!(prose(read(&mut socket).await), "the second drone's word");
+}
+
 async fn board_read(socket: &mut WebSocketStream<DuplexStream>) -> StreamMessage {
     let frame = tokio::time::timeout(Duration::from_secs(5), socket.next())
         .await

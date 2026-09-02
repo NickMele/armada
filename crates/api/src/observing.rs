@@ -97,8 +97,12 @@ impl Turns {
         // the thing that will carry the next one across.
         open.retain(|_, slot| slot.borrow().strong_count() > 0 || slot.receiver_count() > 0);
         match open.get(job.as_str()) {
+            // `send_replace` and not `send`: that one is a no-op where nothing
+            // is watching, which would leave the slot naming the Drone that
+            // just exited and answer the next viewer of a working Job with
+            // nothing writing.
             Some(slot) => {
-                let _ = slot.send(Arc::downgrade(&rows));
+                slot.send_replace(Arc::downgrade(&rows));
             }
             None => {
                 open.insert(job.as_str().to_string(), Slot::new(Arc::downgrade(&rows)));
