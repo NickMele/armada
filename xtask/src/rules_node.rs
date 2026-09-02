@@ -7,10 +7,11 @@
 //! symptom read as a registry outage and cost a session to trace.
 //!
 //! A pin below the floor refuses everybody who follows it, which is loud. A pin
-//! above it is the quiet one: everyone then runs a Node the floor says is not
-//! required, and the version the floor permits is run by nobody. That warns
-//! rather than fails — the repository still installs, and what it loses is the
-//! floor meaning anything.
+//! above it is the quiet one, and **it fails too**. It was a warning first, and
+//! a warning is invisible among seventy others — while the state it describes
+//! is that nobody runs the Node the floor claims to permit. Failing it makes
+//! whoever bumps `.nvmrc` past the floor move the floor in the same commit,
+//! which is the discipline the rule exists for.
 //!
 //! **The comparison is satisfaction, not equality**, because `.nvmrc` holds an
 //! exact version and `engines.node` a range. `24.20.0` against `>=24` is the
@@ -21,6 +22,7 @@
 //! keeps no dependencies, and `verify-foundations` refuses `serde_json::from_*`
 //! outside `store` and `ipc`. Each file has one shape, and a line that does not
 //! hold it is reported rather than skipped.
+
 use std::fmt;
 use std::fs;
 use std::path::Path;
@@ -95,7 +97,7 @@ pub fn check(pin: &str, manifest: &str, report: &mut Report) {
             major = pin.major
         ));
     } else if pin.major > floor {
-        report.warn(format!(
+        report.fail(format!(
             "{PIN} pins {pin} and {MANIFEST} `{KEY}` is `>={floor}`, so nobody runs a Node {floor} \
              and the floor permits one that is never tested. Either raise the floor to \
              `>={major}` or pin a {floor}.x",

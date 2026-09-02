@@ -57,9 +57,9 @@ fn a_pin_below_the_floor_is_refused_and_names_both_values() {
 }
 
 #[test]
-fn a_pin_above_the_floor_warns_rather_than_failing() {
+fn a_pin_above_the_floor_is_refused_and_not_merely_warned_about() {
     let (failed, found) = run("26.0.1\n", &manifest(">=24"));
-    assert!(!failed, "{found:?}");
+    assert!(failed, "{found:?}");
     let found = only(found);
     assert!(
         found.contains("26.0.1") && found.contains(">=24"),
