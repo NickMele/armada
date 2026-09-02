@@ -22,6 +22,7 @@ mod docs;
 mod roadmap;
 mod rules;
 mod rules_actions;
+mod rules_bundled;
 mod rules_design;
 mod rules_docs;
 mod rules_enums;
@@ -120,6 +121,7 @@ fn verify_foundations() -> ExitCode {
         rules_actions::every_action_carries_three_columns(&root),
         rules_stories::every_story_names_its_own_path(&root),
         rules_layers::every_package_imports_downward(&root),
+        rules_bundled::no_workspace_package_is_left_for_node(&root),
         rules_stylesheets::every_stylesheet_reaches_the_sheet_the_app_loads(&root),
         rules_protocol::the_router_serves_what_the_inventory_names(&root),
         rules_protocol::version::the_version_and_its_generated_constant_agree(&root),
