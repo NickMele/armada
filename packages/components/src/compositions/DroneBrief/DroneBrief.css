@@ -11,11 +11,13 @@
      empty line box. An empty element would be a gap a reader cannot tell from
      a block that failed to render.
 
-     --space-3 rather than --space-2, because this gap is the only channel
-     marking a block boundary: a heading carries no weight and no colour of its
-     own, and marking one properly needs LogLine.named set on the wire. A sole
-     signal takes the larger step, at --text-xs in a 602px panel. */
-  gap: var(--space-3);
+     Back to --space-2. #306 widened it to --space-3 because the gap was the
+     only channel marking a block boundary — a heading carried no weight and no
+     colour of its own, so the sole signal took the larger step. A heading now
+     carries --fg-default and --weight-medium, so the extra space is paying for
+     a job something else is doing, and a tighter brief fits more of itself in
+     the chapter body. */
+  gap: var(--space-2);
   min-width: 0;
   color: var(--fg-muted);
 }
@@ -38,5 +40,28 @@
 .armada-brief__block {
   margin: 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A block heading, marked by weight and colour and never by size.
+
+   NO FONT SIZE HERE EITHER, for the reason at the top: the scale is
+   docs/contracts/design-system.md's, and this draws at whatever the chapter
+   body around it sets. A heading stepped up in size would also compete with
+   the chapter's own title directly above it.
+
+   --weight-medium and not --weight-heading. 600 is the chapter title's weight,
+   and a block heading inside that chapter's body at the same weight reads as a
+   second title rather than as a division inside one. 500 against the body's
+   400, with --fg-default against --fg-muted, is the smallest pair of steps
+   that is legible at --text-xs without claiming that rank.
+
+   The text is Fleet's own and it is already upper case, so there is no
+   text-transform and no --tracking-caps: that token is declared for 13px table
+   headers, and this is not one. */
+.armada-brief__heading {
+  margin: 0;
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
   overflow-wrap: anywhere;
 }

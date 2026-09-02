@@ -117,6 +117,7 @@ fn what_armada_said_and_what_fleet_did_reach_the_viewer_with_their_voice() {
         ..row(Saw::Instructed {
             occasion: "opening".to_string(),
             text: "Implement the route. Done means: a request reaches it.".to_string(),
+            headings: Vec::new(),
         })
     };
     let json =

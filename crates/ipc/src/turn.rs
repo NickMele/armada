@@ -230,6 +230,32 @@ pub enum Saw {
         occasion: String,
         /// What the Drone was told, exactly as it was told it.
         text: String,
+        /// Which lines of `text` its writer wrote as block headings,
+        /// zero-based, in order.
+        ///
+        /// **The one fact about the turn's shape that only the writer has.**
+        /// `fleet::briefing` writes every block of a brief as a heading, a
+        /// blank line, then the body, and that shape is known in the `format!`
+        /// that writes it and nowhere afterwards. A surface handed the text
+        /// alone can only guess — the first line of a block, or a line in
+        /// capitals — and both guesses are wrong on text `briefing` already
+        /// writes: its baseline opens with prose, and what the part before
+        /// produced opens its block with a sentence. So a short body line
+        /// would draw as a heading and nothing would catch it.
+        ///
+        /// **Line indices rather than the heading strings.** The two are
+        /// written in one act from one string, so an index names exactly one
+        /// line, where a set of strings would also mark a body line that
+        /// happened to repeat a heading.
+        ///
+        /// **Empty is a turn with no headed blocks, and also a row written
+        /// before this field existed** — the two are the same to a reader, and
+        /// deliberately: what an older row rendered as is what an unheaded turn
+        /// renders as. Unlike [`step`](TranscriptRow::step) there is nothing
+        /// unrecoverable in the absence, because every turn but the opening
+        /// brief is one block of prose.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        headings: Vec<usize>,
     },
     /// One declared Check, as Fleet ran it.
     ///

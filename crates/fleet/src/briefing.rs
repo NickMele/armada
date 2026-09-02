@@ -169,19 +169,105 @@ impl Opening {
         workflow: &FrozenWorkflow,
         at: &StepId,
         moved: Option<&TheBaseMoved>,
-    ) -> Result<Prompt, SpawnConfigRefused> {
-        let brief = match &self.attempted {
-            Attempted::No => first_turn(job, workflow, at, &self.crossed)?,
-            Attempted::Before(stopped) => resuming_turn(job, workflow, at, stopped, &self.crossed)?,
+    ) -> Result<Brief, SpawnConfigRefused> {
+        let mut blocks = match &self.attempted {
+            Attempted::No => assemble(job, workflow, at, &self.crossed),
+            Attempted::Before(stopped) => {
+                let mut blocks = assemble(job, workflow, at, &self.crossed);
+                blocks.headed(&stopped.block());
+                blocks
+            }
         };
-        let Some(moved) = moved else {
-            return Ok(brief);
+        if let Some(moved) = moved {
+            blocks.headed(Reconciling::of(moved).text());
+        }
+        blocks.brief()
+    }
+}
+
+/// A brief as it is sent: the turn, and which of its lines are block headings.
+///
+/// **The headings travel because the shape is known only where it is written.**
+/// `ipc::Saw::Instructed::headings` carries the argument, and what goes wrong
+/// for a reader that guesses instead.
+pub struct Brief {
+    prompt: Prompt,
+    headings: Vec<usize>,
+}
+
+impl Brief {
+    /// The turn, exactly as it reaches a Drone.
+    pub fn as_str(&self) -> &str {
+        self.prompt.as_str()
+    }
+
+    /// The lines that are block headings, zero-based into the turn's lines.
+    pub fn headings(&self) -> &[usize] {
+        &self.headings
+    }
+
+    /// The turn, for the harness that spawns on it.
+    pub fn prompt(self) -> Prompt {
+        self.prompt
+    }
+}
+
+/// A brief under assembly, block by block.
+///
+/// **A block says whether it is headed rather than being asked.** Every heading
+/// in this module is written as `HEADING\n\n` at the top of its block, so a
+/// reader could take the first line of every block and be right about most of
+/// them — and wrong about [`BASELINE`], which opens with prose, and wrong about
+/// what the part before produced, which opens with a sentence. The two
+/// constructors are the difference, stated by the call that appends.
+struct Blocks {
+    text: String,
+    headings: Vec<usize>,
+    /// Lines written so far, which is the line the next block starts on.
+    lines: usize,
+}
+
+impl Blocks {
+    fn opening(baseline: &str) -> Blocks {
+        let mut blocks = Blocks {
+            text: String::new(),
+            headings: Vec::new(),
+            lines: 0,
         };
-        Prompt::assembled(&format!(
-            "{}\n\n{}",
-            brief.as_str(),
-            Reconciling::of(moved).text()
-        ))
+        blocks.prose(baseline);
+        blocks
+    }
+
+    /// A block with no heading of its own.
+    fn prose(&mut self, block: &str) {
+        self.push(block, false);
+    }
+
+    /// A block whose first line is its heading.
+    fn headed(&mut self, block: &str) {
+        self.push(block, true);
+    }
+
+    fn push(&mut self, block: &str, headed: bool) {
+        if !self.text.is_empty() {
+            // The blank line between blocks, which is two more lines gone by.
+            self.text.push_str("\n\n");
+            self.lines += 2;
+        }
+        if headed {
+            self.headings.push(self.lines);
+        }
+        self.text.push_str(block);
+        self.lines += block.matches('\n').count();
+    }
+
+    /// Refuses only where the assembled text is empty, which
+    /// [`Prompt::assembled`] decides and this does not restate.
+    fn brief(self) -> Result<Brief, SpawnConfigRefused> {
+        Ok(Brief {
+            prompt: Prompt::assembled(&self.text)?,
+            headings: self.headings,
+        })
     }
 }
 
@@ -202,8 +288,8 @@ pub fn first_turn(
     workflow: &FrozenWorkflow,
     at: &StepId,
     crossed: &Crossed,
-) -> Result<Prompt, SpawnConfigRefused> {
-    Prompt::assembled(&assemble(job, workflow, at, crossed))
+) -> Result<Brief, SpawnConfigRefused> {
+    assemble(job, workflow, at, crossed).brief()
 }
 
 /// Assemble the first turn for a Drone taking over a step that stopped.
@@ -221,11 +307,10 @@ pub fn resuming_turn(
     at: &StepId,
     stopped: &Stopped,
     crossed: &Crossed,
-) -> Result<Prompt, SpawnConfigRefused> {
-    let mut text = assemble(job, workflow, at, crossed);
-    text.push_str("\n\n");
-    text.push_str(&stopped.block());
-    Prompt::assembled(&text)
+) -> Result<Brief, SpawnConfigRefused> {
+    let mut blocks = assemble(job, workflow, at, crossed);
+    blocks.headed(&stopped.block());
+    blocks.brief()
 }
 
 /// Why the step a Drone is being put on stopped, as the record holds it.
@@ -376,53 +461,44 @@ impl Stopped {
     }
 }
 
-fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed) -> String {
-    let mut text = String::from(BASELINE);
-    text.push_str("\n\n");
-    text.push_str(&notekeeping(job.id()));
-    text.push_str("\n\n");
-    text.push_str(&job_brief(job));
-    text.push_str("\n\n");
-    text.push_str(&where_you_are(workflow, at, crossed.produced()));
+fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed) -> Blocks {
+    // The baseline is the one block with no heading of its own.
+    let mut blocks = Blocks::opening(BASELINE);
+    blocks.headed(&notekeeping(job.id()));
+    blocks.headed(&job_brief(job));
+    blocks.headed(&where_you_are(workflow, at, crossed.produced()));
     // **After the rail and before the step.** The rail is what establishes
     // that there is a part before this one at all, and this says that part is
     // closed — which is only meaningful once a Drone knows it exists.
     if let Some(cleared) = crossed.cleared() {
-        text.push_str("\n\n");
-        text.push_str(&cleared.text());
+        blocks.headed(&cleared.text());
     }
     // **Before the step and not after it.** A Drone that stops reading at the
     // step block has read the instruction, and the block itself says which of
     // the two comes first — an instruction placed after the definition it
     // overrides reads as a footnote to it.
     if let Some(redirect) = crossed.redirect() {
-        text.push_str("\n\n");
-        text.push_str(&redirect.text());
+        blocks.headed(&redirect.text());
     }
     // **Before the step block, with the other things the boundary carried.**
     // It is what the part is about rather than a footnote to it: a Drone after
     // a dispatch has no other way to learn that the Jobs exist.
     if let Some(dispatched) = crossed.dispatched() {
-        text.push_str("\n\n");
-        text.push_str(dispatched.text());
+        blocks.headed(dispatched.text());
     }
     if let Some(step) = workflow.steps().iter().find(|step| step.id() == at) {
-        text.push_str("\n\n");
-        text.push_str(&step_block(step));
+        blocks.headed(&step_block(step));
         if let Some(delivers) = Delivering::at(step) {
-            text.push_str("\n\n");
-            text.push_str(delivers.text());
+            blocks.headed(delivers.text());
         }
         if let Some(asked) = Declaring::at(step) {
-            text.push_str("\n\n");
-            text.push_str(asked.text());
+            blocks.headed(asked.text());
         }
         if let Some(offered) = Checking::at(step) {
-            text.push_str("\n\n");
-            text.push_str(offered.text());
+            blocks.headed(offered.text());
         }
     }
-    text
+    blocks
 }
 
 /// The file a step is asked to write, where it declares one.

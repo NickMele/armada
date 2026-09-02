@@ -128,8 +128,8 @@ function paragraphs(markup: string): string[] {
 describe("the brief's blocks", () => {
   it("groups the lines at the blank lines the author wrote", () => {
     expect(briefBlocks(["JOB BRIEF", "", "The title"])).toEqual([
-      "JOB BRIEF",
-      "The title",
+      { text: "JOB BRIEF", heading: false },
+      { text: "The title", heading: false },
     ]);
   });
 
@@ -139,18 +139,43 @@ describe("the brief's blocks", () => {
         "  1. Plan the change — you are here",
         "     STOP. Submit when this part is done, then wait.",
       ]),
-    ).toEqual(["  1. Plan the change — you are here\n     STOP. Submit when this part is done, then wait."]);
+    ).toEqual([
+      {
+        text: "  1. Plan the change — you are here\n     STOP. Submit when this part is done, then wait.",
+        heading: false,
+      },
+    ]);
   });
 
   it("swallows a run of blank lines rather than emitting an empty block", () => {
     expect(briefBlocks(["one", "", "  ", "two"])).toEqual([
-      "one",
-      "two",
+      { text: "one", heading: false },
+      { text: "two", heading: false },
     ]);
   });
 
   it("answers nothing for a payload that is all blank", () => {
     expect(briefBlocks(["", ""])).toEqual([]);
+  });
+
+  // A bare string says nothing about the line, so nothing is a heading above
+  // and everything here turns on the marker the wire carried.
+  it("makes a block a heading only where the line it holds is named one", () => {
+    expect(
+      briefBlocks([{ text: "JOB BRIEF", named: "heading" }, { text: "" }, { text: "The title" }]),
+    ).toEqual([
+      { text: "JOB BRIEF", heading: true },
+      { text: "The title", heading: false },
+    ]);
+  });
+
+  it("leaves a named line that has body beside it as body", () => {
+    // Not a shape `briefing.rs` writes — every heading it writes has a blank
+    // line under it. Asserted so that if one ever arrives it does not drag the
+    // body into a heading, which is what deciding by the first line would do.
+    expect(
+      briefBlocks([{ text: "JOB BRIEF", named: "heading" }, { text: "The title" }]),
+    ).toEqual([{ text: "JOB BRIEF\nThe title", heading: false }]);
   });
 });
 
