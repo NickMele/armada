@@ -451,7 +451,9 @@ function youStage(step: StepDetail): PhaseStage {
     label: named === undefined ? "You" : `You · ${named}`,
     kind: "human",
     state: waiting ? "waiting" : step.state === "advanced" ? "cleared" : "ahead",
-    stands: waiting ? "waiting on you" : "not reached",
+    // **Three states, so three standings.** Two branches against three states
+    // stood a just-approved step "not reached" — #320's claim, from the caller.
+    stands: waiting ? "waiting on you" : step.state === "advanced" ? "answered" : "not reached",
     // Where `advance_gate` is a manifest rule, the tier resolved at dispatch
     // from the Manifest's own policy — so two Jobs on one workflow can show
     // different gates. Naming the value is what says why.

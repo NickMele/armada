@@ -106,6 +106,18 @@ describe("the human tier", () => {
     expect(you({ advance_gate: "auto", state: "advanced" })?.state).toBe("never");
   });
 
+  // A cleared tier is one a person answered. It stood "not reached", which is
+  // the claim the closing lines were keyed by state to stop making, arriving
+  // through the caller: the state read had three branches and the standing had
+  // two, so cleared fell into the branch written for a tier nobody has got to.
+  it("does not stand not reached on a tier a person already answered", () => {
+    expect(you({ advance_gate: "human_always", state: "advanced" })?.stands).toBe("answered");
+    expect(you({ advance_gate: "human_always", state: "awaiting_human" })?.stands).toBe(
+      "waiting on you",
+    );
+    expect(you({ advance_gate: "human_always", state: "not_started" })?.stands).toBe("not reached");
+  });
+
   // An absent `advance_gate` means Fleet does not hold the workflow this Job
   // named. A tier that cannot say whether it asks must not answer `No one`,
   // and must not close with the standing amber line either.
