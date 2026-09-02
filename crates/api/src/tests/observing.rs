@@ -288,6 +288,47 @@ async fn a_board_on_the_event_stream_sees_nothing_of_this() {
     );
 }
 
+/// A step ending is not the Job ending. **The claim #324 is about**: a Job that
+/// advances spawns its next step's Drone milliseconds after the last one
+/// exited — 5ms apart on Job `01M1HQZAKN001AJ5MT3PT09KKY`'s own move record —
+/// and a viewer told `drone_ended` there reads the rest of the Job as a step
+/// that has not started.
+#[tokio::test]
+async fn a_viewer_carries_on_when_the_job_advances_to_its_next_drone() {
+    let (daemon, app) = wired();
+    let job = a_job(&app).await;
+    let plan = daemon.dispatching(&job);
+
+    let mut socket = connected(app, &format!("/jobs/{}/observe", job.as_str()), 8192).await;
+    let TurnMessage::Opened(_) = read(&mut socket).await else {
+        panic!("it opens");
+    };
+    plan.offer(said("the plan step's last word"));
+    assert_eq!(prose(read(&mut socket).await), "the plan step's last word");
+
+    // The step's Drone exits and the next step's is spawned, in that order,
+    // because that is the order Fleet does it in.
+    drop(plan);
+    let implement = daemon.dispatching(&job);
+
+    // Offered until one is read, because the hand-over is asynchronous and a
+    // row offered into a channel nobody has subscribed to yet is dropped by
+    // design. What is asserted is that a row of the second Drone's reaches the
+    // same socket, and that no `Closed` arrives before it.
+    let offering = tokio::spawn(async move {
+        loop {
+            implement.offer(said("the implement step's first word"));
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    });
+    let message = read(&mut socket).await;
+    offering.abort();
+    let TurnMessage::Row(_) = &message else {
+        panic!("the viewer is carried across the Drone change rather than told the Job stopped: {message:?}");
+    };
+    assert_eq!(prose(message), "the implement step's first word");
+}
+
 async fn board_read(socket: &mut WebSocketStream<DuplexStream>) -> StreamMessage {
     let frame = tokio::time::timeout(Duration::from_secs(5), socket.next())
         .await

@@ -14,7 +14,9 @@ workspace = true
 ipc = { path = "../ipc" }
 axum = { version = "0.7", features = ["ws"] }
 serde = "1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+# `time`: one bounded wait, in `observing`, for the Drone a Job that advances
+# spawns next. Nothing here is on a timer.
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 
 [dev-dependencies]
 # The tests drive the router with no socket at all: `tower` calls it as the
