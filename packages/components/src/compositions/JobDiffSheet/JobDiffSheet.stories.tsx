@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, fn } from "storybook/test";
 
 import { JobDiffSheet, railOfPatch, type JobDiffFile } from "./JobDiffSheet";
 import { UnifiedDiff, type DiffFile } from "../UnifiedDiff/UnifiedDiff";
@@ -97,6 +97,25 @@ export const OpenedAtAStep: Story = {
     children: (
       <UnifiedDiff files={PATCH} emptyNote="This drone has not changed anything yet." />
     ),
+    onSelect: fn(),
+  },
+  /**
+   * The rail reports a path and selects nothing itself. **The path is the
+   * whole of what it reports**, because that is what the caller scrolls the
+   * patch to — an index would look right in a story with three files in the
+   * order the reading found them, and be wrong the first time a reading came
+   * back sorted.
+   *
+   * Two things are deliberately not asserted. The subtitle's totals are a sum,
+   * and a browser is the most expensive place to check arithmetic. And that
+   * the selection has not moved cannot be read at all: which file the rail has
+   * is carried by `data-on` and CSS, with no `aria-current` or `aria-pressed`
+   * on the row — so a screen reader is never told which file is open, and
+   * there is nothing here to assert that is not the stylesheet. Reported.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: /reducer\.ts/ }));
+    await expect(args.onSelect).toHaveBeenCalledWith("packages/settings/src/reducer.ts");
   },
 };
 
