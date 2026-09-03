@@ -12,6 +12,7 @@
 
 mod manifest;
 mod model;
+mod prerequisites;
 mod samples;
 mod scope;
 mod workflow;

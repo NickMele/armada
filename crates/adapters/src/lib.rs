@@ -60,5 +60,8 @@ pub use harness::{
 };
 pub use issue_lookup::IssueLookup;
 pub use mcp::only_the_evidence_server;
-pub use reclaim::{reclaim, BranchGone, Reclaimed, RepoUnreadable, UnmergedWork, WorktreeGone};
+pub use reclaim::{
+    reclaim, standing, BranchGone, BranchStanding, Reclaimed, RepoUnreadable, Standing,
+    UnmergedWork, WorktreeGone, WorktreeStanding,
+};
 pub use worktree::GitVcs;

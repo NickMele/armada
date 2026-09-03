@@ -51,6 +51,7 @@ use crate::dry_run::DryRuns;
 use crate::evidence::EvidenceInbox;
 use crate::gate::CheckBudget;
 use crate::headroom::{Headroom, Machine, Polling};
+use crate::holding::Reclaiming;
 use crate::judging::{Aloft, JudgeBudget, Judging, Marking};
 use crate::mint::Mint;
 use crate::noticing::{Noticing, Sweep};
@@ -145,6 +146,10 @@ pub struct Fittings<H, V, W> {
     /// [`Noticing`], and `crate::noticing` for why it is one Job a sweep rather
     /// than every Job a turn.
     pub noticing: Noticing,
+    /// How often Fleet asks what disk it could give back. See
+    /// [`Reclaiming`], and `crate::holding` for what makes a worktree one it
+    /// may take without asking anybody.
+    pub reclaiming: Reclaiming,
     /// What one Job may spend before Fleet stops starting Drones on it. **The
     /// `settings.budget-cost-cap-per-job` and `settings.budget-turn-cap-per-job`
     /// rows, enforced** — see [`Allowance`], which has no default for
@@ -268,6 +273,12 @@ pub struct Fleet<H, V, W> {
     headroom: Headroom,
     polling: Polling,
     noticing: Noticing,
+    reclaiming: Reclaiming,
+    /// When the reclaim sweep last ran. **Never written down**, for
+    /// `sweeping`'s reason: what it decides is re-derived from git and the
+    /// board every time, so a stamp that outlived the process would only make
+    /// the first sweep after a restart come later than it should.
+    swept: Mutex<Option<core_model::Timestamp>>,
     /// Where the pull-request rotation stands, and when it last ran. **Never
     /// written down**, for `polled`'s reason: a cursor that outlived the
     /// process would name a position in a list that has since changed, and the
@@ -356,6 +367,8 @@ where
             headroom: fittings.headroom,
             polling: fittings.polling,
             noticing: fittings.noticing,
+            reclaiming: fittings.reclaiming,
+            swept: Mutex::new(None),
             sweeping: Mutex::new(Sweep::default()),
             allowance: fittings.allowance,
             polled: Mutex::new(None),
@@ -784,6 +797,12 @@ where
     }
     pub(crate) fn noticing(&self) -> Noticing {
         self.noticing
+    }
+    pub(crate) fn reclaiming(&self) -> Reclaiming {
+        self.reclaiming
+    }
+    pub(crate) fn swept(&self) -> &Mutex<Option<core_model::Timestamp>> {
+        &self.swept
     }
     pub(crate) fn sweeping(&self) -> &Mutex<Sweep> {
         &self.sweeping

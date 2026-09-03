@@ -84,6 +84,33 @@ pub enum NeverRan {
         program: String,
         kind: std::io::ErrorKind,
     },
+    /// A Command the Check names in `requires` did not succeed, so the Check
+    /// was never started.
+    ///
+    /// **The failure belongs to the prerequisite and this is what says so.** A
+    /// Check reported as failing on its prerequisite's exit code tells a Drone
+    /// the wrong thing: a broken `migrate` reads as a broken test suite, and a
+    /// `fmt` that will not run reads as code that will not format. `#387` is
+    /// that shape — three attempts spent on a Check whose fix the Manifest
+    /// already declared.
+    ///
+    /// It is a [`NeverRan`] rather than a kind of failure because the Check
+    /// genuinely did not run, and every consequence of that already follows:
+    /// it cannot be compared into a pass, and it is recorded as
+    /// [`CheckOutcome::NeverRan`](core_model::CheckOutcome::NeverRan).
+    PrerequisiteFailed {
+        /// The Commands entry, as the Manifest wrote it. **What a person
+        /// edits**, and what the sentence names.
+        command: String,
+        /// The line that was executed. What a person runs by hand to see it
+        /// fail again.
+        run: String,
+        /// How the prerequisite itself ended. Boxed because a prerequisite is
+        /// a process and ends in all the ways one does, this variant included
+        /// — which makes the type recursive and the box the price of saying so
+        /// once rather than flattening four cases into a string.
+        exit: Box<Exit>,
+    },
 }
 
 /// What Fleet observed of one check.
@@ -224,6 +251,13 @@ impl CheckFailed {
             CheckFailed::Signalled { check, .. } | CheckFailed::TimedOut { check, .. } => {
                 format!("`{check}` runs to completion")
             }
+            // **The prerequisite is named in what the Check was measured
+            // against**, so the sentence a Drone reads points at the Command it
+            // should go and look at rather than at the Check it did not fail.
+            CheckFailed::NeverRan {
+                check,
+                why: NeverRan::PrerequisiteFailed { command, .. },
+            } => format!("`{check}` runs, which needs `{command}` to pass first"),
             CheckFailed::NeverRan { check, .. } => format!("`{check}` can be run"),
             CheckFailed::DiffEmpty => "the step changes at least one file".to_string(),
             CheckFailed::ArtifactNotThere { target, .. } => {
@@ -248,18 +282,7 @@ impl CheckFailed {
             CheckFailed::TimedOut { after, .. } => {
                 format!("it was still running after {}s", after.as_secs())
             }
-            CheckFailed::NeverRan { why, .. } => match why {
-                NeverRan::NothingToRun => "its command is empty".to_string(),
-                NeverRan::NoSuchCommand { program } => {
-                    format!("`{program}` is not installed")
-                }
-                NeverRan::WorktreeGone { worktree } => {
-                    format!("the worktree at {worktree} is not there")
-                }
-                NeverRan::NotSpawned { program, kind } => {
-                    format!("`{program}` could not be started ({kind:?})")
-                }
-            },
+            CheckFailed::NeverRan { why, .. } => never_ran(why),
             CheckFailed::DiffEmpty => "nothing moved while this step ran".to_string(),
             CheckFailed::ArtifactNotThere { target, found } => match found {
                 Artifact::Written => "it is there".to_string(),
@@ -288,8 +311,21 @@ impl CheckFailed {
     /// It is not a judgement about whether the Drone *will* fix it. That is a
     /// question no mechanical tier can answer, and the budget is what bounds
     /// the cost of being wrong about it.
+    /// **A blocked Check asks the same question of its prerequisite**, which is
+    /// the same rule one level down rather than a carve-out. A Command that ran
+    /// and said no is one a reattempt could change — `cargo fmt` exits non-zero
+    /// on source it cannot parse, and parsing is what the Drone's next edit
+    /// fixes. A prerequisite that never ran answers the same for ever, so the
+    /// Check it blocks does too.
     pub fn the_drone_can_answer(&self) -> bool {
-        !matches!(self, CheckFailed::NeverRan { .. })
+        match self {
+            CheckFailed::NeverRan {
+                why: NeverRan::PrerequisiteFailed { exit, .. },
+                ..
+            } => !matches!(**exit, Exit::NeverRan(_)),
+            CheckFailed::NeverRan { .. } => false,
+            _ => true,
+        }
     }
 
     /// The row this failure is written down as. **`None` for every failure of a
@@ -306,6 +342,45 @@ impl CheckFailed {
             }),
             _ => None,
         }
+    }
+}
+
+/// Why a check did not run, as the Drone is told it.
+///
+/// A free function rather than a `Display` on [`NeverRan`], because it is one
+/// clause of [`CheckFailed::produced`]'s sentence and not a message in its own
+/// right — and because it recurses through [`how`] for a prerequisite, which a
+/// `Display` would make circular to read.
+fn never_ran(why: &NeverRan) -> String {
+    match why {
+        NeverRan::NothingToRun => "its command is empty".to_string(),
+        NeverRan::NoSuchCommand { program } => format!("`{program}` is not installed"),
+        NeverRan::WorktreeGone { worktree } => {
+            format!("the worktree at {worktree} is not there")
+        }
+        NeverRan::NotSpawned { program, kind } => {
+            format!("`{program}` could not be started ({kind:?})")
+        }
+        // **The Command, the line, and how it ended.** The name is what a
+        // person edits and the line is what they re-run; a sentence with only
+        // one of the two sends them back to `armada.yml` to work out the other.
+        NeverRan::PrerequisiteFailed { command, run, exit } => format!(
+            "the Command `{command}` (`{run}`) it requires {}",
+            how(exit)
+        ),
+    }
+}
+
+/// How a process ended, as a clause. **A prerequisite's, never a Check's** —
+/// a Check that did not run has no ending of its own to report.
+fn how(exit: &Exit) -> String {
+    match exit {
+        Exit::Code(code) => format!("exited {code}"),
+        Exit::Signalled { signal } => format!("was ended by a signal ({signal})"),
+        Exit::TimedOut { after } => {
+            format!("was still running after {}s", after.as_secs())
+        }
+        Exit::NeverRan(why) => never_ran(why),
     }
 }
 

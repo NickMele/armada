@@ -94,11 +94,12 @@ pub enum Fault {
     /// maps sharing no keys, so the same name in both leaves nothing able to
     /// say which registry a reference meant.
     DeclaredInBothRegistries,
-    /// **A `setup.requires` entry naming no declared Command.** The same
-    /// question [`UnknownCheck`] asks of a workflow step, asked one file
-    /// earlier: a name that resolves to nothing is a worktree nothing prepares,
-    /// and what a person then sees is whichever Check needed what was never
-    /// installed.
+    /// **A `requires` entry naming no declared Command**, under `setup` or
+    /// under a Check. The same question [`UnknownCheck`] asks of a workflow
+    /// step, asked one file earlier: a name that resolves to nothing is a
+    /// worktree nothing prepares — or a Check nothing fixes first — and what a
+    /// person then sees is whichever Check failed for a reason nobody can
+    /// connect to it.
     NotADeclaredCommand {
         value: String,
         /// **The name is declared, under `checks`.** A different mistake with a
@@ -109,17 +110,18 @@ pub enum Fault {
         /// What the file does declare under `commands`, in order.
         declared: Vec<String>,
     },
-    /// **One `setup.requires` entry written twice.** Preparation runs once per
-    /// worktree because running an install twice costs the second one's wall
-    /// clock and changes nothing — and a parser that silently de-duplicated
-    /// would be deciding on the author's behalf what a list repeating itself
-    /// meant.
+    /// **One `requires` entry written twice in one list.** Running an install
+    /// twice costs the second one's wall clock and changes nothing — and a
+    /// parser that silently de-duplicated would be deciding on the author's
+    /// behalf what a list repeating itself meant. The index is the position in
+    /// the same list, which [`Refusal::key`] has already named.
     RequiredTwice { first_at: usize },
-    /// **A `setup.requires` entry whose Command is `destructive`.** The flag
-    /// means a Drone invoking it pauses for a person; preparation runs before
-    /// any Drone exists and before the Job has anything to show, so there is
-    /// nobody the approval could be asked of.
-    PreparedBySomethingDestructive { value: String },
+    /// **A `requires` entry whose Command is `destructive`.** The flag means a
+    /// Drone invoking it pauses for a person. Neither reader of this key has
+    /// one to ask: preparation runs before any Drone exists, and a Check's
+    /// prerequisite runs inside Fleet's own gate, where the Drone has already
+    /// submitted and is waiting on the answer.
+    RequiresSomethingDestructive { value: String },
     /// Two steps in one workflow carry one `id`. Reported on the second, and
     /// names where the first was, because the fix is to look at both.
     DuplicateStepId { first_at: usize },
@@ -239,7 +241,7 @@ impl fmt::Display for Fault {
             } => write!(
                 f,
                 "is `{value}`, which is declared as a Check, not a Command. \
-                 Preparation runs a Command"
+                 `requires` names a Command"
             ),
             Fault::NotADeclaredCommand {
                 value, declared, ..
@@ -254,14 +256,15 @@ impl fmt::Display for Fault {
             }
             Fault::RequiredTwice { first_at } => write!(
                 f,
-                "is already required by setup.requires[{first_at}], and running \
-                 it twice would cost the second run and change nothing"
+                "is already required at [{first_at}] of the same list, and \
+                 running it twice would cost the second run and change nothing"
             ),
-            Fault::PreparedBySomethingDestructive { value } => write!(
+            Fault::RequiresSomethingDestructive { value } => write!(
                 f,
                 "is `{value}`, which is declared `destructive: true`. That flag \
-                 means somebody approves before it runs, and preparation runs \
-                 before there is anybody to ask"
+                 means somebody approves before it runs, and nothing that reads \
+                 `requires` — preparing a worktree, or running a Check's \
+                 prerequisite at the gate — has anybody to ask"
             ),
             Fault::DuplicateStepId { first_at } => {
                 write!(f, "repeats the id already used by steps[{first_at}]")

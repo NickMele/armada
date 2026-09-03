@@ -114,6 +114,12 @@ Check prints nothing while it runs, which reads as a hang and is not one.
 **A name in the wrong registry is refused with the verb that would have
 worked**, and a name in neither is refused by listing what is declared.
 
+**A Check's `requires` runs here too, before the Check does.** `armada check
+format` runs `cargo fmt --all` and then reads, which is what the gate does — so
+it rewrites files in your working tree, and that is the point rather than a
+surprise. A prerequisite that fails is reported as itself: the line names the
+Command and the line it ran, and says the Check never started.
+
 **Prefer these over retyping the command they wrap.** The Check a person runs is
 the Check a Drone is measured by.
 

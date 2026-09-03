@@ -135,18 +135,25 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
                 check,
                 expect_exit_code,
             } => match manifest.check(check) {
-                // `when` is lifted here beside `run`, and for the same reason:
-                // both are the Manifest's and both are frozen onto the Job, so
-                // an edit to `armada.yml` changes the next Job rather than this
-                // one. A step cannot narrow or widen it — the owner's decision
-                // is that the repository declares once what a Check covers and
-                // every workflow inherits it, so there is no step-level key to
-                // read here and none to add.
+                // `when` and `requires` are lifted here beside `run`, and for
+                // the same reason: all three are the Manifest's and all three
+                // are frozen onto the Job, so an edit to `armada.yml` changes
+                // the next Job rather than this one. A step cannot narrow or
+                // widen any of them — the owner's decision is that the
+                // repository declares once what a Check covers and every
+                // workflow inherits it, so there is no step-level key to read
+                // here and none to add.
+                //
+                // `requires` is already resolved against the Commands registry
+                // by `Manifest::parse`, so nothing here can miss: a name that
+                // did not resolve refused the file before a workflow was
+                // looked at.
                 Some(declared) => checks.push(ResolvedCheck::ManifestCheck {
                     name: check.clone(),
                     run: declared.run().to_string(),
                     expect_exit_code: *expect_exit_code,
                     when: declared.when().cloned(),
+                    requires: declared.requires().to_vec(),
                 }),
                 None => unknown.push(UnknownCheck {
                     step: step.id().clone(),
