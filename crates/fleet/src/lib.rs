@@ -90,6 +90,7 @@ pub mod spawning;
 mod stuck;
 pub mod sub_dispatch;
 mod summarising;
+pub mod terms;
 pub mod transcript;
 pub mod turning;
 pub mod watch;

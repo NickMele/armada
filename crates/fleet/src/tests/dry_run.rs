@@ -39,12 +39,13 @@ use ipc::RunId;
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch};
 use tower::ServiceExt;
 
-use crate::briefing::{first_turn, Checking};
+use crate::briefing::first_turn;
 use crate::clock::Clock;
 use crate::converging::StepNorms;
 use crate::daemon::Fleet;
 use crate::dry_run::{DryRuns, NotRun};
 use crate::silence::Liveness;
+use crate::terms::Checking;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::checked_by_the_one;

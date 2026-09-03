@@ -31,12 +31,13 @@ use core_model::{
 use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
-use crate::briefing::{Declaring, Opening};
+use crate::briefing::Opening;
 use crate::crossing::{Cleared, Crossed, Produced};
 use crate::daemon::Fleet;
 use crate::drone::{aftermath, Aftermath, Ending, Left};
 use crate::gate::{apply, Ruling};
 use crate::session::{LiveSession, Occasion};
+use crate::terms::Declaring;
 use crate::working::Working;
 
 impl<H, V, W> Fleet<H, V, W>

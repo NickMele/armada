@@ -11,8 +11,8 @@ use config::{ResolvedStep, ResolvedWorkflow};
 use testkit::Sketch;
 use verification::{OutcomeTurn, Ran, Verified};
 
-use crate::briefing::Declaring;
 use crate::session::Turn;
+use crate::terms::Declaring;
 
 fn workflow() -> ResolvedWorkflow {
     testkit::resolved(&[
