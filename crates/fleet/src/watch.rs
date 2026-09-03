@@ -25,6 +25,7 @@
 //! own. `docs/concepts/observe.md` is the design.
 use core::fmt;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use adapter_traits::{AgentHarness, DroneEvent, Speaker};
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -32,6 +33,23 @@ use tokio::process::ChildStdout;
 use tokio::task::JoinHandle;
 
 use crate::transcript::Tap;
+
+/// How long [`Watching::drained`] waits for the pipe to close.
+///
+/// **It is not a guess at how long reading takes.** The drain is called after
+/// the Drone has been signalled and waited on, so the process that was writing
+/// is gone and what is left is whatever the kernel is holding — at most one
+/// pipe buffer, read at memory speed. On every healthy boundary this returns in
+/// under a millisecond and the bound is never reached.
+///
+/// **What the bound is for is a writer that is not gone**, which is the whole
+/// of `#211`: a tool the Drone spawned inherited the same write end, so the
+/// pipe stays open for as long as that tool runs and the drain would otherwise
+/// wait on a process nothing observed. Two seconds is three orders of magnitude
+/// above the healthy case and is paid once per step boundary by the turn loop,
+/// which is one task walking every Job — so every millisecond past it is the
+/// whole fleet standing still.
+const DRAIN: Duration = Duration::from_secs(2);
 
 /// What a Drone has said so far, and whether it has stopped saying anything.
 ///
@@ -114,6 +132,31 @@ pub struct Progress {
     /// is a line nobody could attribute. None of them is the Drone taking a
     /// turn.
     pub turned: usize,
+}
+
+/// How much of the transcript the drain got.
+///
+/// **Returned rather than discarded, because the two are different records.**
+/// A run read to end-of-file and a run whose tail was cut short both fold
+/// through [`crate::Ending`], and the fold cannot tell them apart: a
+/// terminating event that never arrived and one that was still in the pipe are
+/// both `Vanished`, which `crate::aftermath` reads as `interrupted` and
+/// escalates a Job for. Replacing a hang with a truncation is only an
+/// improvement if the truncation says so, so this is what the caller writes
+/// down.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Drained {
+    /// The pipe closed. Everything the Drone wrote has been read.
+    ToTheEnd,
+    /// The wait was cut short. **Something other than the Drone still holds
+    /// the write end** — a tool that inherited it and outlived the kill — so
+    /// the transcript may be missing whatever was written after the last line
+    /// read, including the terminating event.
+    CutShort {
+        /// How long was waited before giving up, so the record names the
+        /// number rather than a reader having to find the constant.
+        waited: Duration,
+    },
 }
 
 /// A transcript being read.
@@ -227,7 +270,7 @@ impl Watching {
             })
     }
 
-    /// Read to the end of the pipe, and only then let the reader go.
+    /// Read to the end of the pipe, bounded, and only then let the reader go.
     ///
     /// **The half of a step boundary that [`Drop`] cannot do.** Dropping a
     /// `Watching` aborts the reader where it stands, so whatever the operating
@@ -237,18 +280,31 @@ impl Watching {
     /// reader is also a transcript file missing its own final rows.
     ///
     /// **Call it after the process is gone, never before.** This returns when
-    /// the pipe closes, and the pipe closes when the last writer to it does. A
-    /// Drone that is still running is still a writer, so awaiting this over a
-    /// live process waits for the whole rest of the run.
+    /// the pipe closes, and a pipe closes when the *last* writer to it does —
+    /// a live Drone is a writer, so awaiting this over one waits out the run.
+    ///
+    /// **And the last writer need not be the Drone**, which is `#211`: a tool
+    /// it spawned inherited the same write end and is not something Fleet ever
+    /// observed, so an unbounded wait here is the turn loop stopped on a
+    /// process with no timeout, no escalation and no status. Hence the bound,
+    /// and hence [`Drained`] rather than nothing — an ending cut short must not
+    /// read as a Drone that said nothing, and the caller writes down which.
     ///
     /// Awaited by `&mut` rather than by value so that the events stay readable
     /// afterwards: what the drain was for is the fold that comes next.
-    pub async fn drained(&mut self) {
+    pub async fn drained(&mut self) -> Drained {
         // The task holds a pipe and a lock it never carries across an await, so
-        // the only `Err` here is a panic inside it — in which case whatever had
+        // the inner `Err` is a panic inside it — in which case whatever had
         // been read is already in `heard` and there is nothing further to wait
-        // for.
-        let _ = (&mut self.reader).await;
+        // for. Either way the pipe reached its end.
+        match tokio::time::timeout(DRAIN, &mut self.reader).await {
+            Ok(_) => Drained::ToTheEnd,
+            // The reader is left running rather than aborted here. `Drop` is
+            // what stops it, and dropping it closes Fleet's read end — so the
+            // tool still writing gets `EPIPE` on its next write instead of a
+            // pipe that fills and blocks it forever.
+            Err(_) => Drained::CutShort { waited: DRAIN },
+        }
     }
 
     /// Every event so far, in the order the Drone emitted them. What
