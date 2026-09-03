@@ -51,7 +51,7 @@ pub use harness::{
     AmbientServers, DroneHandle, DroneSpawnConfig, Environment, Grant, Launch, McpConfig, Model,
     Prompt, Prompting, SpawnConfigRefused, Toolbelt,
 };
-pub use judge::{Ask, JudgeCall, ModelClient};
+pub use judge::{Ask, CallProgress, Heard, JudgeCall, ModelClient};
 pub use link_lookup::{LinkLookup, LookupCall};
 pub use secret::Secret;
 pub use work_product::{
