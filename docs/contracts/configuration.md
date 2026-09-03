@@ -226,11 +226,11 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
   side goes uncaught.
 
 - **[armada-yml-schema]** What is the exact `armada.yml` schema?
-  M1 decided only a subset — `version`, `id`, `checks.<name>.run`,
-  `commands.<name>.run` and `commands.<name>.destructive` — with every
-  other key (`setup`, `permissions`, `knowledge`, `policy`,
-  `checks.*.when`, `checks.*.requires`, `commands.*.description`)
-  hard-failing as unknown until Reach. Beyond that, what is still open: the
+  M1 decided a subset — `version`, `id`, `base`, `checks.<name>.run`,
+  `checks.<name>.when`, `checks.<name>.requires`, `commands.<name>.run`,
+  `commands.<name>.destructive` and `setup.requires` — with every
+  other key (`permissions`, `knowledge`, `policy`,
+  `commands.*.description`) hard-failing as unknown until Reach. Beyond that, what is still open: the
   file syntax for how a Check declares its command; how the Commands
   registry is structured and relates to the allowlist; how Checks and
   Commands are told apart on disk; the syntax for a root Check's path

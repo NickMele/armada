@@ -232,6 +232,14 @@ impl fmt::Display for NotPrepared {
             Exit::NeverRan(NeverRan::NotSpawned { program, kind }) => {
                 write!(out, "could not start `{program}`: {kind:?}")?
             }
+            // Unreachable: a `setup.requires` entry is a Command run directly,
+            // and only a Check declares prerequisites. Spelled out rather than
+            // matched with `_` so that a preparation which one day did have
+            // them fails to compile here instead of printing a sentence about
+            // the wrong thing.
+            Exit::NeverRan(NeverRan::PrerequisiteFailed { command, .. }) => {
+                write!(out, "was blocked by `{command}`, which it should not have")?
+            }
         }
         let tail = self.tail();
         match tail.is_empty() {

@@ -1,10 +1,11 @@
 //! `armada.yml`, in the slice M1 reads.
 //!
-//! **Seven keys, and nothing else.** `version`, `id`, `base`,
-//! `checks.<name>.run`, `checks.<name>.when`, `commands.<name>.run`,
-//! `commands.<name>.destructive` and `setup.requires`. Every other section the
-//! Manifest concept page describes — permissions, secrets, ports, skills,
-//! budget, dispatch freeze, auto-merge — is a key this parser refuses.
+//! **Eight keys, and nothing else.** `version`, `id`, `base`,
+//! `checks.<name>.run`, `checks.<name>.when`, `checks.<name>.requires`,
+//! `commands.<name>.run`, `commands.<name>.destructive` and `setup.requires`.
+//! Every other section the Manifest concept page describes — permissions,
+//! secrets, ports, skills, budget, dispatch freeze, auto-merge — is a key this
+//! parser refuses.
 //!
 //! **A key nothing reads is worse than a key that is not there.** A file
 //! carrying `budget: 40` that no code consumes reads to its author as a budget
@@ -17,17 +18,15 @@
 //! parser cannot read is a refusal beside every other refusal in the file
 //! rather than a Check that quietly stops running. **Absent means always.**
 //!
-//! `setup.requires` names Commands the same file declares, each resolved to its
-//! `run` string **at load** — a name nothing declares is a refusal here rather
-//! than a worktree nothing prepares and a Check that fails for a reason nobody
-//! can connect to it. **Its code word is *preparation***, because
-//! `armada::setup` runs nothing and means something else — one word over two
-//! meanings is the second vocabulary this workspace refuses elsewhere.
+//! **Both `requires` keys name Commands this file declares, resolved at load,
+//! and share every refusal** — see [`named_commands`]. `setup`'s code word is
+//! *preparation*, because `armada::setup` runs nothing and means something
+//! else; one word over two meanings is a second vocabulary.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use core_model::{Covers, ManifestId, PathPattern, Ulid};
+use core_model::{Covers, ManifestId, PathPattern, Prerequisite, Ulid};
 use serde_yaml_ng::Value;
 
 use crate::error::{Fault, LoadError, Refusal};
@@ -36,7 +35,7 @@ use crate::yaml::{self, Table};
 /// The keys M1 reads at the top level of an `armada.yml`.
 const TOP_LEVEL: &[&str] = &["version", "id", "base", "checks", "commands", "setup"];
 /// The keys M1 reads inside `checks.<name>`.
-const CHECK_KEYS: &[&str] = &["run", "when"];
+const CHECK_KEYS: &[&str] = &["run", "when", "requires"];
 /// The keys M1 reads inside `commands.<name>`.
 const COMMAND_KEYS: &[&str] = &["run", "destructive"];
 /// The keys M1 reads inside `setup`.
@@ -52,6 +51,7 @@ const SETUP_KEYS: &[&str] = &["requires"];
 pub struct Check {
     run: String,
     when: Option<Covers>,
+    requires: Vec<Prerequisite>,
 }
 
 impl Check {
@@ -68,6 +68,17 @@ impl Check {
     /// empty one for exactly that reason.
     pub fn when(&self) -> Option<&Covers> {
         self.when.as_ref()
+    }
+
+    /// The Commands that run before this Check, **in the order the file names
+    /// them**, already resolved to their command lines.
+    ///
+    /// Empty where the file declares no `requires`, which is every Manifest
+    /// written before the key existed. `requires: []` is refused rather than
+    /// read as empty, for `when`'s reason — a list with nothing in it is a key
+    /// to delete.
+    pub fn requires(&self) -> &[Prerequisite] {
+        &self.requires
     }
 }
 
@@ -260,7 +271,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         .optional("base")
         .and_then(|value| yaml::text("base", value, out));
 
-    let checks = match top.optional("checks") {
+    let drafted = match top.optional("checks") {
         Some(value) => registry(value, "checks", CHECK_KEYS, out, check_entry),
         None => BTreeMap::new(),
     };
@@ -268,11 +279,14 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         Some(value) => registry(value, "commands", COMMAND_KEYS, out, command_entry),
         None => BTreeMap::new(),
     };
-    // After `commands`, because every entry is resolved against it. Nothing
-    // about the order of the file matters — `Table` reads by name — only that
-    // the registry is built before it is consulted.
+    // Both `requires` keys are resolved after `commands`, because every entry
+    // is resolved against it. Nothing about the order of the file matters —
+    // `Table` reads by name — only that the registry is built before it is
+    // consulted.
+    let declares: BTreeSet<String> = drafted.keys().cloned().collect();
+    let checks = required_by(drafted, &declares, &commands, out);
     let prepared_by = match top.optional("setup") {
-        Some(value) => preparation(value, &checks, &commands, out),
+        Some(value) => preparation(value, &declares, &commands, out),
         None => Vec::new(),
     };
     top.close(TOP_LEVEL, out);
@@ -312,7 +326,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
 /// bad names is one edit.
 fn preparation(
     value: &Value,
-    checks: &BTreeMap<String, Check>,
+    declares: &BTreeSet<String>,
     commands: &BTreeMap<String, Command>,
     out: &mut Vec<Refusal>,
 ) -> Vec<Preparation> {
@@ -328,43 +342,110 @@ fn preparation(
     let Some(items) = items else {
         return Vec::new();
     };
+    named_commands(texts(items, out), declares, commands, out)
+        .into_iter()
+        .map(|(name, run)| Preparation { name, run })
+        .collect()
+}
 
-    let mut built: Vec<Preparation> = Vec::with_capacity(items.len());
-    for (key, item) in items {
-        let Some(name) = yaml::text(&key, item, out) else {
-            continue;
-        };
-        if let Some(first_at) = built.iter().position(|had| had.name == name) {
+/// `checks.<name>.requires`, resolved for every Check in the file.
+///
+/// **A second pass, because a Check may name a Command declared below it.** The
+/// two registries are read independently and joined here, so a file's order is
+/// never something an author has to think about — the same reason
+/// `setup.requires` is resolved after `commands` rather than during it.
+///
+/// **A name that resolves to nothing fails the Manifest, not the Job.** That is
+/// the whole point of resolving here: a Check requiring a Command nobody
+/// declared would otherwise be found at a gate, by a Drone, with a worktree
+/// already checked out and a retry budget already being spent.
+fn required_by(
+    drafted: BTreeMap<String, DraftCheck>,
+    declares: &BTreeSet<String>,
+    commands: &BTreeMap<String, Command>,
+    out: &mut Vec<Refusal>,
+) -> BTreeMap<String, Check> {
+    let mut built = BTreeMap::new();
+    for (name, draft) in drafted {
+        let requires = draft
+            .requires
+            .map(|items| named_commands(items, declares, commands, out))
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(name, run)| Prerequisite::resolved(name, run))
+            .collect();
+        built.insert(
+            name,
+            Check {
+                run: draft.run,
+                when: draft.when,
+                requires,
+            },
+        );
+    }
+    built
+}
+
+/// A list of Command names, resolved against the Commands registry.
+///
+/// **One function for `setup.requires` and for `checks.<name>.requires`**,
+/// because the two ask the same question of the same registry and every refusal
+/// they can raise is the same refusal. Two copies would drift, and the one that
+/// drifted would be the one nobody ran.
+///
+/// Every entry is refused on its own and the walk continues, so a file with two
+/// bad names is one edit. The pairs come back in the order the file wrote them:
+/// `[migrate, seed]` is a sequence somebody wrote, and sorting it would run the
+/// second before what it depends on.
+fn named_commands(
+    items: Vec<(String, String)>,
+    declares: &BTreeSet<String>,
+    commands: &BTreeMap<String, Command>,
+    out: &mut Vec<Refusal>,
+) -> Vec<(String, String)> {
+    let mut built: Vec<(String, String)> = Vec::with_capacity(items.len());
+    for (key, name) in items {
+        if let Some(first_at) = built.iter().position(|(had, _)| *had == name) {
             out.push(Refusal::new(key, Fault::RequiredTwice { first_at }));
             continue;
         }
         match commands.get(&name) {
             // A destructive Command is withheld from a Drone by
-            // `fleet::spawning`, for the reason that makes this a refusal:
-            // the flag means *somebody approves before this runs*, and
-            // preparation runs before any Drone exists with nobody to ask.
+            // `fleet::spawning`, for the reason that makes this a refusal: the
+            // flag means *somebody approves before this runs*, and neither
+            // reader of this key has anybody to ask — preparation runs before
+            // any Drone exists, and a prerequisite runs inside a gate the Drone
+            // is already waiting on.
             Some(command) if command.is_destructive() => out.push(Refusal::new(
                 key,
-                Fault::PreparedBySomethingDestructive { value: name },
+                Fault::RequiresSomethingDestructive { value: name },
             )),
-            Some(command) => built.push(Preparation {
-                name,
-                run: command.run().to_string(),
-            }),
-            None => {
-                let is_a_check = checks.contains_key(&name);
-                out.push(Refusal::new(
-                    key,
-                    Fault::NotADeclaredCommand {
-                        value: name,
-                        is_a_check,
-                        declared: commands.keys().cloned().collect(),
-                    },
-                ));
-            }
+            Some(command) => built.push((name, command.run().to_string())),
+            None => out.push(Refusal::new(
+                key,
+                Fault::NotADeclaredCommand {
+                    is_a_check: declares.contains(&name),
+                    value: name,
+                    declared: commands.keys().cloned().collect(),
+                },
+            )),
         }
     }
     built
+}
+
+/// Every item of a list read as a string, keeping the key that names its
+/// position. An item that is not a string is refused and dropped, so one pass
+/// still reports the rest of the list.
+///
+/// Separate from [`named_commands`] because a Check's `requires` is read while
+/// the Checks registry is being walked and resolved once the Commands registry
+/// exists, and the borrow of the document does not survive between the two.
+fn texts(items: Vec<(String, &Value)>, out: &mut Vec<Refusal>) -> Vec<(String, String)> {
+    items
+        .into_iter()
+        .filter_map(|(key, item)| yaml::text(&key, item, out).map(|name| (key, name)))
+        .collect()
 }
 
 /// An open-ended map of author-chosen names to entries of one shape.
@@ -388,12 +469,27 @@ fn registry<T>(
     built
 }
 
+/// A Check whose `requires` entries have been read and not yet resolved.
+///
+/// **The Commands registry does not exist yet** when a Check is parsed — a file
+/// may declare `commands` after `checks`, and an author should never have to
+/// think about which. So each name is taken here with the key that locates it,
+/// and [`required_by`] resolves them once both registries are built.
+struct DraftCheck {
+    run: String,
+    when: Option<Covers>,
+    /// `None` where the file declares no `requires`, which is a Check nothing
+    /// runs before. Distinct from an empty list, which [`yaml::list`] refuses
+    /// outright: `requires: []` is a key to delete rather than a list to read.
+    requires: Option<Vec<(String, String)>>,
+}
+
 fn check_entry(
     at: &str,
     value: &Value,
     known: &'static [&'static str],
     out: &mut Vec<Refusal>,
-) -> Option<Check> {
+) -> Option<DraftCheck> {
     let mut table = Table::open(at, value, out)?;
     let run = table
         .required("run", out)
@@ -407,10 +503,19 @@ fn check_entry(
         None => Ok(None),
         Some(value) => covers(&table.at("when"), value, out),
     };
+    // **A `requires` the parser could not read leaves the Check with none, and
+    // the refusal is already in `out`.** No Manifest carrying one loads at all,
+    // so there is no path on which a Check with a silently emptied `requires`
+    // reaches a gate — the distinction `when` has to draw does not arise here.
+    let requires = table
+        .optional("requires")
+        .map(|value| yaml::list(&table.at("requires"), value, out).unwrap_or_default())
+        .map(|items| texts(items, out));
     table.close(known, out);
-    Some(Check {
+    Some(DraftCheck {
         run: run?,
         when: when.ok()?,
+        requires,
     })
 }
 

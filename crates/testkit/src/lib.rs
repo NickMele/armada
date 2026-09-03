@@ -38,4 +38,4 @@ pub use judge::{refusal, FakeJudge};
 pub use link_lookup::FakeLinkLookup;
 pub use vcs::{Delivered, Delivering, FakeCommit, FakeVcs, FakeVcsError};
 pub use work_product::{FakeDiffRefused, FakeWorkProduct, Holding, Written};
-pub use workflow::{frozen, modelled, resolved, retried, Gaming, Gate, Scoped, Sketch};
+pub use workflow::{frozen, modelled, requiring, resolved, retried, Gaming, Gate, Scoped, Sketch};

@@ -27,9 +27,9 @@ use core_model::{
     AcceptanceCriterion, Actor, AdvanceGate, ContextSource, Covers, CriteriaOwed, CriterionId,
     CriterionSource, DeclarePlanAt, DependencyDirection, DependencyEdge, EscalationTrigger,
     EvidenceRef, EvidenceScope, EvidenceType, FrozenWorkflow, GamingCheck, GamingPattern, JobId,
-    JudgeCheck, JudgeCriterion, ModelName, PathPattern, PilotReason, RepoPath, ResolvedCheck,
-    ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, Timestamp, TransitionReason, Ulid,
-    WorkflowId, ARTIFACT_EXISTS, DIFF_NONEMPTY, MANIFEST_CHECK,
+    JudgeCheck, JudgeCriterion, ModelName, PathPattern, PilotReason, Prerequisite, RepoPath,
+    ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, Timestamp,
+    TransitionReason, Ulid, WorkflowId, ARTIFACT_EXISTS, DIFF_NONEMPTY, MANIFEST_CHECK,
 };
 use serde_json::{json, Map, Value};
 
@@ -326,11 +326,22 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
                 })),
             })).collect::<Vec<Value>>(),
             "checks": step.checks().iter().map(|check| match check {
-                ResolvedCheck::ManifestCheck { name, run, expect_exit_code, when } => json!({
+                ResolvedCheck::ManifestCheck { name, run, expect_exit_code, when, requires } => json!({
                     "type": MANIFEST_CHECK,
                     "check": name,
                     "run": run,
                     "expect_exit_code": expect_exit_code,
+                    // Absent where the Check requires nothing, which is every
+                    // row written before the key existed and reads back the
+                    // same way. Name and command line both, because a failure
+                    // has to say what a person edits and what they re-run.
+                    "requires": match requires.is_empty() {
+                        true => None,
+                        false => Some(requires.iter().map(|needed| json!({
+                            "command": needed.name(),
+                            "run": needed.run(),
+                        })).collect::<Vec<Value>>()),
+                    },
                     // Absent rather than an empty list where the Check declares
                     // no `when`. The two mean opposite things — always, and
                     // never — and a row written before `when` existed carries
@@ -576,6 +587,7 @@ fn read_check(entry: &Map<String, Value>) -> Result<ResolvedCheck, Malformed> {
                 .as_i64()
                 .ok_or_else(|| "`expect_exit_code` is not an integer".to_string())?,
             when: read_when(entry)?,
+            requires: read_requires(entry)?,
         }),
         DIFF_NONEMPTY => Ok(ResolvedCheck::DiffNonempty),
         ARTIFACT_EXISTS => Ok(ResolvedCheck::ArtifactExists {
@@ -583,6 +595,36 @@ fn read_check(entry: &Map<String, Value>) -> Result<ResolvedCheck, Malformed> {
         }),
         other => Err(format!("`type` holds `{other}`")),
     }
+}
+
+/// What a stored Check needs run before it, in the order the row wrote them.
+///
+/// **Absent and null both read as none**, which is a Check nothing runs first.
+/// A row written before `requires` existed carries no key, and that is the same
+/// sentence — the additive case this key is built to keep working.
+///
+/// **Order is the row's and is kept.** `[migrate, seed]` is a sequence, so the
+/// list is read straight through rather than sorted or collected into a set.
+///
+/// An entry missing either half is malformed rather than repaired: a
+/// prerequisite whose name was dropped fails a gate nobody could attribute, and
+/// one whose command line was dropped runs nothing while reading as if it had.
+fn read_requires(entry: &Map<String, Value>) -> Result<Vec<Prerequisite>, Malformed> {
+    let Some(value) = entry.get("requires") else {
+        return Ok(Vec::new());
+    };
+    if value.is_null() {
+        return Ok(Vec::new());
+    }
+    let mut requires = Vec::new();
+    for item in array(value)? {
+        let needed = object(item)?;
+        requires.push(Prerequisite::resolved(
+            text(needed, "command")?,
+            text(needed, "run")?,
+        ));
+    }
+    Ok(requires)
 }
 
 /// Which paths a stored Check covers.

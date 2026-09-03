@@ -25,6 +25,12 @@ use crate::declared::{Ended, Ran};
 /// What one Check or Command did: its output, then how it ended.
 pub fn ran(ran: &Ran, verb: &str) {
     println!("{verb} {} — {}", ran.name, ran.command);
+    // Before the output, because it happened before the output — and because
+    // these write to the working tree, which is the one thing a person needs
+    // told rather than left to notice in `git status`.
+    if !ran.required.is_empty() {
+        println!("  after {}, which it requires", ran.required.join(", "));
+    }
     if ran.destructive {
         println!("  the Manifest calls this destructive");
     }
