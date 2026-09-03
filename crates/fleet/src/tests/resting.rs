@@ -21,8 +21,17 @@
 //!
 //! The cases differ by one line of shell: whether the child prints a line
 //! decoding to a terminating event, whether it prints a tool call first, and
-//! whether anything but the child holds the write end when Fleet signals it.
-//! Each stays alive holding its pipe, which is what `#371` leaves behind.
+//! whether anything but the child holds the write end when Fleet signals it —
+//! and after `#371`, that takes a tool that left the Drone's process group.
+
+// **Over 500 lines, and left as one file.** Every case here is the same
+// incident read a different way, over one clock, one fleet and one set of
+// harnesses — split by outcome, the shells that differ by one line would sit in
+// three files with three copies of the fixture between them, and the pairing is
+// what catches a change to any of it. What crossed the line is `#371`'s: a tool
+// that leaves the Drone's process group cannot be spelled in a shell on macOS,
+// so the one case that needs one carries a `perl` line and the cleanup for what
+// it deliberately leaves running.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -141,19 +150,52 @@ fn a_drone_that_ends_refused() -> FakeHarness {
         .reading("ENDED", vec![ended(3)])
 }
 
-/// The same again, with something of its own still holding the pipe.
+/// The same again, with something of its own still holding the pipe — and out
+/// of reach of the signal that ends the Drone.
 ///
-/// **`&` is the whole of `#371` in one character.** The backgrounded `sleep`
-/// inherits the same write end and is not the process Fleet signalled, so the
-/// child dies and the pipe stays open — which is a drain that would wait
-/// forever if it were not bounded, on the turn loop, for the whole fleet.
-fn a_drone_whose_tools_outlive_it() -> FakeHarness {
-    FakeHarness::running(
-        "/bin/sh",
-        &["-c", "echo CALLED; echo ENDED; sleep 30 & sleep 30"],
-    )
-    .reading("CALLED", vec![called()])
-    .reading("ENDED", vec![ended(0)])
+/// **The tool puts itself in a process group of its own, and that is now what
+/// it takes to outlive a Drone.** `#371` ends the group `setsid` made, so a
+/// plain `sleep 30 &` dies with the shell and the pipe closes; what no signal
+/// can reach is a tool that left the group, which is what a harness calling
+/// `setsid` does. That case is why `#211`'s bound stays, and this is it: the
+/// pipe outlives the process Fleet signalled, and a drain that waited on it
+/// would wait on the turn loop for the whole fleet.
+///
+/// `perl` spells it because macOS ships no `setsid` program and `setpgrp` is a
+/// builtin — no module, and nothing to install. The pid it writes down is what
+/// the case ends with, so a tool this test leaves behind is this test's to
+/// clean up.
+///
+/// **The tool writes the file itself, after it has left the group, and the
+/// shell says nothing until it appears.** Written by the shell instead, the
+/// case raced its own subject: under a loaded machine the ending reached Fleet
+/// before `perl` had run a line, the group signal caught it still inside the
+/// group, and the drain read to the end of a pipe nothing was holding.
+fn a_drone_whose_tools_outlive_it(marker: &std::path::Path) -> FakeHarness {
+    let marker = marker.display();
+    let leaves_a_tool_holding_stdout = format!(
+        "echo CALLED; \
+         /usr/bin/perl -e 'setpgrp(0,0); open my $out, \">\", \"{marker}\" or die; \
+         print $out $$; close $out; sleep 30' & \
+         while [ ! -s '{marker}' ]; do sleep 0.05; done; \
+         echo ENDED; sleep 30"
+    );
+    FakeHarness::running("/bin/sh", &["-c", leaves_a_tool_holding_stdout.as_str()])
+        .reading("CALLED", vec![called()])
+        .reading("ENDED", vec![ended(0)])
+}
+
+/// End the tool a case deliberately put out of reach, once it has proved what
+/// it is there for. **Nothing in production signals a stray tool** — the point
+/// of the case is that nothing can — so this is the test tidying up after
+/// itself rather than a claim about Fleet.
+fn the_stray_tool_ended(marker: &std::path::Path) {
+    let Ok(pid) = std::fs::read_to_string(marker) else {
+        return;
+    };
+    let _ = std::process::Command::new("/bin/kill")
+        .arg(pid.trim())
+        .status();
 }
 
 /// A Drone that talks and never comes to rest. **The other reading**, and the
@@ -321,7 +363,12 @@ async fn a_run_that_ends_with_nothing_submitted_escalates_on_the_next_turn() {
 async fn a_pipe_something_else_holds_open_does_not_hold_the_turn_loop() {
     let home = TempDir::new();
     let clock = Arc::new(Held::started());
-    let fleet = a_watched_fleet(&home, a_drone_whose_tools_outlive_it(), Arc::clone(&clock));
+    let marker = home.path().join("stray-tool.pid");
+    let fleet = a_watched_fleet(
+        &home,
+        a_drone_whose_tools_outlive_it(&marker),
+        Arc::clone(&clock),
+    );
     let job = started(&fleet, &home).await;
     assert!(spoke(&fleet, 2).await, "the run never ended");
 
@@ -346,6 +393,7 @@ async fn a_pipe_something_else_holds_open_does_not_hold_the_turn_loop() {
         "the slot was not given back"
     );
     let log = logged(&home, &job);
+    the_stray_tool_ended(&marker);
     assert!(
         log.contains("cut short"),
         "the slot came back on a transcript that was cut short and the log did \

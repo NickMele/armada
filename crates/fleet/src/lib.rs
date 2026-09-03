@@ -50,6 +50,7 @@ pub mod ending;
 pub mod evidence;
 pub mod footprint;
 mod gate;
+mod group;
 pub mod headroom;
 /// What Fleet is holding disk for, and the five tests that decide whether it
 /// may give one back without asking anybody.

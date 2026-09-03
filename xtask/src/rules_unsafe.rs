@@ -8,7 +8,7 @@
 //! second block, or the twentieth**: the relaxation is one line in a
 //! `Cargo.toml` that no diff reader looks at twice.
 //!
-//! **The list is meant to be short, not to be one.** Adding a third entry is a
+//! **The list is meant to be short, not to be one.** Adding an entry is a
 //! deliberate edit to this file, which is the whole mechanism. The shape is the
 //! manifest's — an explicit list, checked both ways: a file that speaks
 //! `unsafe` and is not listed fails, and a listed file that no longer speaks it
@@ -27,7 +27,8 @@ use crate::{crate_dirs, files_with_ext, Report};
 const RELAXED: &[(&str, &str)] = &[
     (
         "fleet",
-        "libc::setsid() in pre_exec — a Drone left in Fleet's process group dies at every restart",
+        "libc::setsid() in pre_exec — a Drone left in Fleet's process group dies at every restart \
+         — and libc::killpg over the group that call makes, so a Drone's tools end with it",
     ),
     (
         "checks-runner",
@@ -41,6 +42,13 @@ const UNSAFE_SITES: &[(&str, &str)] = &[
     (
         "crates/fleet/src/detach.rs",
         "the fork-to-exec closure that puts a Drone in its own session",
+    ),
+    (
+        "crates/fleet/src/group.rs",
+        "the pair that ends a Drone and the tools it started — a group signal, because a kill \
+         at the pid alone leaves them running on the Drone's own pipe, and the reading that \
+         says the Drone is gone without collecting it, because collecting frees the pid the \
+         group is named by",
     ),
     (
         "crates/checks-runner/src/run.rs",

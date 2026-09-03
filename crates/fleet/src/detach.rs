@@ -20,9 +20,9 @@
 //! for.
 //!
 //! **`libc` and not a shell**, because macOS ships no `/usr/bin/setsid`: a
-//! library call between fork and exec rather than a wrapper program. That makes
-//! `detach` the one place `unsafe` is spoken in this workspace, and it says why
-//! there.
+//! library call between fork and exec rather than a wrapper program — one of
+//! the `unsafe` sites `xtask/src/rules_unsafe.rs` names, and long since not the
+//! only one. The group it makes is ended in `crate::group`.
 
 use std::ffi::OsStr;
 use std::io;
@@ -143,12 +143,12 @@ impl Detached {
 /// that silently stayed attached is the failure mode this whole module exists
 /// to remove, so it must not be able to look like a successful spawn.
 ///
-/// **The one place `unsafe` is spoken in this workspace.** `pre_exec` is unsafe
-/// because its closure runs in the forked child, between fork and exec, where
-/// only async-signal-safe calls are legal — and the closure below makes exactly
-/// one and touches nothing else. `crates/fleet/Cargo.toml` therefore sets
-/// `unsafe_code = "deny"` instead of inheriting the workspace's `forbid`, so
-/// this single site can carry an `allow` while every other site in the crate
+/// **One of the sites the gate names, and it says why here.** `pre_exec` is
+/// unsafe because its closure runs in the forked child, between fork and exec,
+/// where only async-signal-safe calls are legal — and the closure below makes
+/// exactly one and touches nothing else. `crates/fleet/Cargo.toml` therefore
+/// sets `unsafe_code = "deny"` instead of inheriting the workspace's `forbid`,
+/// so a listed site can carry an `allow` while every other site in the crate
 /// still fails to compile. The deviation is one attribute wide and greppable.
 #[allow(unsafe_code)]
 fn detach(command: &mut Command) {

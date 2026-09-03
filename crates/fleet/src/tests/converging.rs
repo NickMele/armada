@@ -551,21 +551,47 @@ async fn a_drone_that_will_not_report_is_escalated_with_its_step_stopped() {
     );
 }
 
-/// **Nothing here kills a Drone.** `helm.md`: a thrashing Drone is held with
-/// its worktree intact, which is what leaves a redirect available rather than
-/// only a restart.
+/// **The chain fires once, and the place comes back.** `helm.md`: the Job is
+/// held for a person with its worktree intact, which is what leaves a redirect
+/// available rather than only a restart — and the place it was working in is
+/// not held with it, because the Drone that was in it is gone.
+///
+/// This used to read `working_on() == [job]` straight after the escalation,
+/// and what held the place open was `#371`: the cap signalled the Drone's pid
+/// alone, the `sleep` the shell was waiting on survived it holding the same
+/// stdout, and a transcript that never ends is a slot `reap` never takes. The
+/// place was held by a Drone that was already dead. Now the cap signals the
+/// group, so the ending is real and the slot comes back on a later turn.
 #[tokio::test]
-async fn the_escalation_holds_the_drone_rather_than_ending_it() {
+async fn the_escalation_gives_the_place_back_and_fires_once() {
     let home = TempDir::new();
     let fleet = a_chain_that_will_reach_the_trigger(&home, a_drone_that_will_not_answer(90));
     let job_id = started(&fleet, &home).await;
     next_stage(&fleet, "told the Drone to report").await;
     next_stage(&fleet, "escalated").await;
 
-    assert_eq!(fleet.working_on().await, vec![job_id.clone()]);
     // Once, and never again: the step is stopped and the chain has nowhere
     // further to go.
     assert!(turns(&fleet, 10).await.is_empty());
+    // Turned rather than read, because the reap is something a turn does: the
+    // pipe closes when the group dies and the slot is taken the next time
+    // round.
+    for _ in 0..100 {
+        if fleet.working_on().await.is_empty() {
+            break;
+        }
+        fleet.turn().await.expect("a turn");
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert!(
+        fleet.working_on().await.is_empty(),
+        "the place is still held by a Drone the cap ended: {job_id:?}"
+    );
+    assert_eq!(
+        fleet.load(&job_id).await.unwrap().status(),
+        JobStatus::Escalated,
+        "and the Job is still the person's to answer"
+    );
 }
 
 /// **The row is the reason, and the reason is the silence.** It used to be the

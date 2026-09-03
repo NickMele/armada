@@ -774,8 +774,9 @@ impl Working {
         &mut self.publishing
     }
 
-    /// Whether the Drone has exited, **and reap it if it has**. See
-    /// [`DroneSession::exited`].
+    /// Whether the Drone has exited, **and reap it if it has** — which now
+    /// signals the Drone's process group before collecting the child, so a
+    /// tool it left running goes with it. See [`DroneSession::exited`].
     pub(crate) async fn exited(&self) -> Result<bool, std::io::Error> {
         self.session.exited().await
     }

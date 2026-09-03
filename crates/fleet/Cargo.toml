@@ -10,8 +10,9 @@ publish = false
 # even for one line. Detaching a Drone into its own session is a `libc::setsid()`
 # between fork and exec, and `Command::pre_exec` is unsafe by construction, so
 # this crate takes `deny` instead: every unsafe block still fails to compile
-# except the single site in `detach.rs` carrying an explicit `#[allow]` and a
-# `SAFETY:` note. Recorded as a deviation rather than made silently.
+# except the sites `xtask/src/rules_unsafe.rs` names one at a time, each
+# carrying an explicit `#[allow]` and a `SAFETY:` note. Recorded as a deviation
+# rather than made silently.
 [lints.rust]
 unsafe_code = "deny"
 
