@@ -229,18 +229,16 @@ export function DispatchRequest({
               {...(proposal.payload === undefined ? {} : { payload: proposal.payload })}
               onCopied={onCopied}
               act={
-                /* Asking again is what to do, and the fault says nothing about
-                   the request — so this sends the same one rather than making
-                   somebody edit what was never the problem. Off while a call is
-                   out, like every other way out of this surface. */
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={onDispatch}
-                  disabled={disabled || reading}
-                >
-                  Dispatch again
-                </Button>
+                /* The act named, not repeated. The footer's own control is
+                   `Dispatch again` while this is up, and a second button here
+                   would be two controls for one act eight lines apart — which
+                   is the thing the error treatment's "never a second decision"
+                   rule is about. The sentence says the part the button cannot:
+                   the fault said nothing about the request, so nothing has to
+                   be edited before asking again. */
+                <span className="armada-dispatch__act">
+                  Dispatch again. The request is not what failed.
+                </span>
               }
             />
           ) : null}
@@ -268,7 +266,11 @@ export function DispatchRequest({
               onClick={onDispatch}
               disabled={reading || disabled || empty}
             >
-              {reading ? "Reading the request" : "Dispatch"}
+              {reading
+                ? "Reading the request"
+                : proposal.at === "faulted"
+                  ? "Dispatch again"
+                  : "Dispatch"}
             </Button>
           </>
         )}

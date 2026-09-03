@@ -136,10 +136,14 @@
    machine reading, and set back so the title leads. */
 .armada-dispatch__ordinal {
   flex: none;
+  /* Beside the title it numbers, not centred against a row whose height comes
+     from the two lines under it. The body's own line height is what puts it
+     there. */
+  align-self: start;
   width: var(--space-4);
   color: var(--fg-subtle);
   font-size: var(--text-xs);
-  line-height: var(--leading-xs);
+  line-height: var(--leading-sm);
   text-align: end;
 }
 
@@ -174,6 +178,14 @@
   color: var(--fg-subtle);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
+}
+
+/* What to do about a fault, where the control that does it is the footer's.
+   Set back and sans, because it is a sentence rather than a control. */
+.armada-dispatch__act {
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
 }
 
 /* What approving does, and what it does not decide. Read once, under the list
