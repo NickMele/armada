@@ -422,6 +422,13 @@ impl Stopped {
                 "An earlier attempt at this part was stopped while it was still running. \
                  Nothing it did was checked."
             }
+            // `Thrashing`'s line is true of this too and leaves out the part
+            // this attempt can do differently.
+            EscalationTrigger::NoReport => {
+                "An earlier attempt at this part was told to stop and report where it had \
+                 got to, and did not answer. It was stopped there, and nothing it did was \
+                 checked."
+            }
             EscalationTrigger::CheckTimeout => {
                 "An earlier attempt at this part was stopped because a check did not \
                  finish. Nothing was decided about the work itself."

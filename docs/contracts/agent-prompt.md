@@ -462,7 +462,8 @@ to prove would shape the work, and that is the line.
 ## The force-interrupt directive
 
 Stop and report current state now. Failure of that escalates as
-`thrashing`.
+`no_report`, not as `thrashing` — `thrashing` is the verdict the directive
+is injected on, and a Drone that answers it is not stopped at all.
 
 The mid-step Judge pass that produces the verdict does not read the Drone
 transcript. It judges the work product as the branch stands against the

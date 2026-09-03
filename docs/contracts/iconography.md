@@ -179,6 +179,12 @@ closed loop, page, shield, Y-split, broken plug, ascender-to-a-line. None
 depends on interior detail surviving 12px. The mapping is
 `packages/icons/icons.toml`, group `Escalation reason`.
 
+**A reason may draw its verb alone**, and several do — the heading says what
+the glyphs must do where there is one, not that every reason has one. Where
+none of the outlines claims the right thing, the row ships wordless and the
+glyph is filed rather than borrowed: `[no-report-glyph]` below is the worked
+case, and it is the same answer `[doctor-warn-glyph]` reached.
+
 **Why the `loop_cap` row was nearly missed.** `loop_cap` was added to the
 escalation enum on 2026-08-21 and existed for several hours with no glyph,
 because the decision landed on the Workflow and Job pages and nothing pulled
@@ -568,3 +574,22 @@ should paper over.
   dropped its glyphs for words — which would make Attestation the one
   verdict source that reads as wordless, arguably the right way to mark a
   verdict a machine did not produce.
+
+- **[no-report-glyph]** Which glyph, if any, carries the escalation reason
+  `no_report` — the step told to stop and report that never answered?
+  It ships drawing its verb alone, **went quiet**, beside the escalation
+  reasons that already draw one. What was looked at and refused:
+  `octagon-alert` is reserved to `stalled` and is the loudest shape in the
+  set; `refresh-cw` is `churning`'s and is the badge this trigger is being
+  split away from; `bell` is escalations-as-interrupt and its own note
+  keeps it clear of `octagon-alert`; `message-square` is Navigation's,
+  under a note banning metaphor outside proper nouns. The constraint that
+  makes this hard is that the trigger's whole meaning is an *absence of a
+  reply from something still working*, and a silhouette says presence more
+  easily than it says a missing answer — which is why nothing was
+  borrowed. `[conventions.step_activity_borrowing]` does not reach it
+  either: that convention lends the Job set's glyphs to step *activity*,
+  and this is an escalation reason. What decides it is whether a person
+  scanning the Board can tell this row from a `churning` row on the word
+  alone; if they can, the answer is that it stays wordless, the same way
+  Doctor's health grid settled `[doctor-warn-glyph]`.
