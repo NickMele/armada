@@ -120,6 +120,25 @@ this exists rather than later.
 The plan is written as a file in the Job's worktree, under `.armada/artifacts/`,
 which is what makes the split reviewable before any child runs.
 
+**The plan draws the split, and the drawing is what is approved.** Owner, 2 Sep
+2026, on reading one produced by hand. A wave is a set of Jobs that may run at
+once and an ordering between the sets, and prose asking a person to hold that in
+their head is asking them to redraw it themselves before they can answer. The
+plan carries a Mermaid flowchart beside the prose: a node per child Job, an edge
+per reason one waits.
+
+**Two kinds of edge, told apart, because only one of them is a fact about the
+work.** A dependency edge is one Job needing what another produced —
+`DependencyEdge` on `ProposeJob` already carries it. A sequencing edge is two
+Jobs that would write the same paths, held apart by the plan rather than by
+anything in Fleet: `#47` settled that an overlap is *surfaced, never serialised*,
+so a parent's own split is the only thing separating them and a reader has to be
+able to see it doing so.
+
+**What a person approves is the graph, and approving it is the dispatch.** The
+first wave leaves as Jobs on the approval, which is what makes this one approval
+rather than a plan followed by a second act.
+
 ## The shape is a loop, and the slate is not written at the start
 
 Owner, 31 Aug 2026. **A milestone plan is a hypothesis**, so dispatching the
