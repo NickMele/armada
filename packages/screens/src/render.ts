@@ -50,7 +50,15 @@ export function renderFor(job: JobSummary): Render {
   const base = JOB_STATUS[job.status];
   const life = JOB_LIFECYCLE[job.status];
   if (base === undefined || life === undefined) return "unrenderable";
-  if (escalation(job) !== undefined) return "stopped";
+  // An escalated Job has stopped and is waiting on a person, whatever its
+  // reason says. Where the reason is absent, or names a spelling this
+  // build's `ESCALATION_REASON` has no row for, the dead-end render has
+  // nothing to state — the same gap `base`/`life` above answers the same
+  // way, for the same reason: `unrenderable` says this build cannot
+  // describe the Job, not that nothing is wrong with it. Falling through to
+  // `working` would draw a live rail and a running clock over a Job that
+  // has stopped.
+  if (job.status === "escalated") return escalation(job) === undefined ? "unrenderable" : "stopped";
   if (base.statusToken === AT_REVIEW) return "reviewing";
   if (!life.terminal) return "working";
   return base.statusToken === SUCCEEDED ? "finished" : "stopped";
