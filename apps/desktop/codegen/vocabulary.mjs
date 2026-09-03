@@ -2,11 +2,19 @@
 //
 // `crates/core-model/domain/enum-verbs.toml` is the authority on how a variant
 // reads, `job-statuses.toml` on whether a Job is over, what it is doing and who
-// it waits on, and
-// `protocol-version.toml` on what each side of the wire speaks. All three are
+// it waits on, `actions.toml` on what every act is called and bound to, and
+// `protocol-version.toml` on what each side of the wire speaks. All of them are
 // read here and written into TypeScript, because the alternative — a verb list,
 // a glyph map or a version literal typed into a component — is the second
 // vocabulary that drifted three times before it was deleted.
+//
+// **`actions.toml` is here because it had been transcribed by hand three
+// times** — into the contract's key map, into `packages/screens/src/keys.ts`,
+// and into a 592-line `packages/components/src/actions.ts` that landed and was
+// deleted the same week. A registry with three copies has three answers the
+// day one of them is edited alone. The contract's copy stays and is held to the
+// registry by `xtask/src/rules_actions.rs`; the two TypeScript copies are now
+// this file's output.
 //
 // This is a stopgap in the honest sense: `crates/ipc/src/lib.rs` says a codegen
 // step emits TypeScript from the Rust types, and when that lands it should
@@ -27,6 +35,7 @@ const VERBS = join(repo, "crates", "core-model", "domain", "enum-verbs.toml");
 const FIELDS = join(repo, "crates", "core-model", "domain", "job-fields.toml");
 const STATUSES = join(repo, "crates", "core-model", "domain", "job-statuses.toml");
 const OUTCOMES = join(repo, "crates", "core-model", "domain", "check-outcomes.toml");
+const ACTS = join(repo, "crates", "core-model", "domain", "actions.toml");
 const VERSION = join(repo, "protocol-version.toml");
 // The vocabulary is a rendering and not a wire type: it carries the glyph each
 // variant draws as, so it imports `lucide-react`. It belongs with the
@@ -36,6 +45,11 @@ const OUT = join(repo, "packages", "components", "src", "generated", "vocabulary
 // main process both read the version, and neither may pull a glyph — a React
 // component — across the process boundary to get at a number.
 const OUT_VERSION = join(repo, "packages", "protocol", "src", "generated", "protocol-version.ts");
+// Beside the vocabulary and not inside it: a variant is a state a Job is in and
+// an act is something a person does to one, and the two are separate registries
+// with separate gates. They share a destination for the same reason the
+// vocabulary is there at all — an act draws a glyph, and a glyph is React.
+const OUT_ACTIONS = join(repo, "packages", "components", "src", "generated", "actions.ts");
 
 // The vocabularies a surface renders. `criterion_verdict_attested` is left out
 // because nothing serves an attestation.
@@ -133,9 +147,25 @@ function tables(text, path) {
     const value = line.slice(split + 1).trim();
     const table = current === null ? null : found.get(current);
     if (table === null) throw new Error(`${path}:${i + 1} — a key outside every table`);
-    table[key] = value.startsWith('"') && value.endsWith('"') ? value.slice(1, -1) : value;
+    table[key] = unquoted(value);
   });
   return found;
+}
+
+/// A basic string, a literal string, or a bare token left as it is.
+///
+/// **The literal form is read because one binding needs it.** `⌘\` is Toggle
+/// sidebar's, and a trailing backslash cannot be written in a TOML basic string
+/// without escaping — so `actions.toml` spells that one row `'⌘\'`. Every other
+/// value in every registry this script reads is double-quoted, which is why
+/// adding this changed nothing already emitted.
+function unquoted(value) {
+  for (const quote of ['"', "'"]) {
+    if (value.length >= 2 && value.startsWith(quote) && value.endsWith(quote)) {
+      return value.slice(1, -1);
+    }
+  }
+  return value;
 }
 
 /** `user-check` becomes `UserCheck`, which is what lucide-react exports it as. */
@@ -422,6 +452,225 @@ lines.push("];");
 lines.push("");
 
 const vocabularyModule = lines.join("\n");
+
+// ------------------------------------------------------------------ acts
+//
+// Every act Bridge offers, from `crates/core-model/domain/actions.toml`.
+//
+// **This generator validates and does not decide.** `xtask/src/rules_actions.rs`
+// is the gate on the registry itself — it holds the glyph column to
+// `packages/icons/icons.toml`, the whole map to the contract's key blocks, and
+// the safety rules to the QWERTY layout. What is checked here is narrower and
+// is the emitter's own business: that a row says something this script can turn
+// into TypeScript without guessing. A row it cannot read stops the build rather
+// than reaching a surface as a blank, because a palette entry with no verb is a
+// row a person presses and learns nothing from.
+
+const ACTION_KINDS = new Set(["Action", "Motion"]);
+const ACTION_TIERS = new Set(["Global", "Contextual"]);
+// Why a glyph may be missing. The registry's two words, and there is no third:
+// `undecided` is a gap the icon registry has to close, `by design` is a
+// document having closed it with "none". A surface says which it is drawing.
+const ABSENCES = new Set(["undecided", "by design"]);
+
+const acts = [];
+for (const [header, table] of tables(readFileSync(ACTS, "utf8"), "actions.toml")) {
+  const parts = header.split(".");
+  if (parts[0] !== "actions" || parts.length !== 2) {
+    throw new Error(`actions.toml — [${header}] is not an [actions.<id>] table`);
+  }
+  const id = parts[1];
+  const where = `actions.toml — [actions.${id}]`;
+  const kind = table.kind ?? "";
+  const tier = table.tier ?? "";
+  const verb = table.verb ?? "";
+  const icon = table.icon ?? "";
+  const absent = table.icon_absent ?? "";
+  const shortcut = table.shortcut ?? "";
+  const scope = table.scope ?? "";
+  const unbuilt = table.unbuilt ?? "";
+
+  if (!ACTION_KINDS.has(kind)) throw new Error(`${where} — kind is "${kind}", not Action or Motion`);
+  if (!ACTION_TIERS.has(tier)) throw new Error(`${where} — tier is "${tier}", not Global or Contextual`);
+  if (verb === "") throw new Error(`${where} — no verb, and the palette draws the verb`);
+  if (shortcut === "") throw new Error(`${where} — no shortcut, and the palette draws one per row`);
+  if (scope === "") throw new Error(`${where} — no scope, so no surface can decide whether to offer it`);
+
+  // A Motion appears in no palette, so it carries neither a glyph nor a reason
+  // for having none. An Action carries exactly one of the two.
+  if (kind === "Motion" && (icon !== "" || absent !== "")) {
+    throw new Error(`${where} — a Motion appears in no palette and carries no glyph column`);
+  }
+  if (icon !== "" && absent !== "") {
+    throw new Error(`${where} — a glyph and a reason for having none, and it is one or the other`);
+  }
+  if (kind === "Action" && icon === "" && !ABSENCES.has(absent)) {
+    throw new Error(
+      `${where} — no glyph and icon_absent = "${absent}". It is "undecided" or "by design"`,
+    );
+  }
+  // The registry names a glyph this lucide-react cannot export. The vocabulary
+  // counts that as a gap because it has a `GAPS` channel to count it in; an act
+  // has none, and drawing the row with no glyph would silently contradict a
+  // registry that says it has one.
+  if (icon !== "" && NOT_EXPORTED.has(icon)) {
+    throw new Error(`${where} — icon "${icon}" is in icons.toml and lucide-react does not export it`);
+  }
+  // `unbuilt` is an issue reference and nothing else — the same rule
+  // `rules_actions.rs` applies, restated because what is emitted is a number.
+  const built = unbuilt === "" ? null : /^#(\d+)$/.exec(unbuilt);
+  if (unbuilt !== "" && built === null) {
+    throw new Error(`${where} — unbuilt = "${unbuilt}", and it takes an issue reference`);
+  }
+  for (const [key, value] of [["destructive", table.destructive], ["confirms", table.confirms]]) {
+    if (value !== "true" && value !== "false") {
+      throw new Error(`${where} — ${key} is "${value ?? ""}", and it is true or false`);
+    }
+  }
+
+  acts.push({
+    id,
+    kind,
+    tier,
+    verb,
+    icon,
+    absent,
+    shortcut,
+    scope,
+    destructive: table.destructive === "true",
+    confirms: table.confirms === "true",
+    issue: built === null ? null : Number(built[1]),
+  });
+}
+
+if (acts.length === 0) throw new Error("actions.toml — no [actions.*] table, and Bridge draws them all");
+
+const actGlyphs = [...new Set(acts.map((act) => act.icon).filter((icon) => icon !== ""))].sort();
+// The scopes are read off the rows rather than listed here. A scope is where a
+// binding is offered and the registry decides that; a set written into this
+// script would be a fourth copy of the thing this file exists to stop having
+// four of. What holds a *new* scope to something is the emitted union: the
+// palette maps every member of it to a context, so a scope nobody has placed
+// fails `pnpm typecheck` with the scope's own name in the message.
+const scopes = [...new Set(acts.map((act) => act.scope))].sort();
+
+const actLines = [];
+actLines.push("// GENERATED by `pnpm --filter @armada/desktop codegen`. Do not hand-edit.");
+actLines.push("//");
+actLines.push("// Every act Bridge offers: what it is called, what it is bound to, and the");
+actLines.push("// glyph it draws — or why it draws none. From");
+actLines.push("// `crates/core-model/domain/actions.toml`, which is the artifact");
+actLines.push("// `docs/contracts/design-system.md` promises under \"One artifact, three");
+actLines.push("// columns\" and the authority on all three.");
+actLines.push("//");
+actLines.push("// **A Motion is here and is not an act.** `move_focus`, `open_focused` and");
+actLines.push("// `focus_chapter` move the cursor and act on nothing; the registry says they");
+actLines.push("// appear in no palette and carry no glyph, so they are emitted for");
+actLines.push("// completeness and filtered out by anything that draws a list of acts.");
+actLines.push("//");
+actLines.push("// **A blank glyph is a fact, not a default.** `iconAbsent` says which kind of");
+actLines.push("// blank it is: `undecided` means no registered silhouette means the act and");
+actLines.push("// assigning one is a decision for `packages/icons/icons.toml`; `by design`");
+actLines.push("// means a document decided the act carries none. A surface says which it is");
+actLines.push("// drawing rather than inventing a glyph to fill the column.");
+actLines.push("//");
+actLines.push("// **`unbuilt` names the issue that answers the key.** The registry is ahead");
+actLines.push("// of the app deliberately, because the map was settled by drawing. A palette");
+actLines.push("// that displays a binding beside every entry would otherwise offer a row a");
+actLines.push("// person presses and gets nothing from, which is worse than one that is");
+actLines.push("// absent.");
+actLines.push("");
+if (actGlyphs.length > 0) {
+  actLines.push(`import { ${actGlyphs.map(pascal).join(", ")} } from "lucide-react";`);
+}
+actLines.push('import type { LucideIcon } from "lucide-react";');
+actLines.push("");
+actLines.push("/** Whether the row is an act or a movement of the cursor. */");
+actLines.push('export type ActionKind = "Action" | "Motion";');
+actLines.push("");
+actLines.push("/** Modifier-based and working anywhere, or single-key and on what is focused. */");
+actLines.push('export type ActionTier = "Global" | "Contextual";');
+actLines.push("");
+actLines.push("/**");
+actLines.push(" * Where the binding is offered. The registry's own set, spelled the registry's");
+actLines.push(" * way, and read off the rows rather than declared — so a scope that appears");
+actLines.push(" * in `actions.toml` appears here and nowhere else has to be told.");
+actLines.push(" */");
+actLines.push(`export type ActionScope =${scopes.map((s) => `\n  | ${JSON.stringify(s)}`).join("")};`);
+actLines.push("");
+actLines.push("/** Why an act's glyph column is empty. `null` where it is not. */");
+actLines.push('export type IconAbsence = "undecided" | "by design";');
+actLines.push("");
+actLines.push("export type Action = {");
+actLines.push("  /** The id an implementation binds to. The registry's table key. */");
+actLines.push("  readonly id: string;");
+actLines.push("  readonly kind: ActionKind;");
+actLines.push("  readonly tier: ActionTier;");
+actLines.push("  /** What a person reads, in the lexicon's word. Never the id. */");
+actLines.push("  readonly verb: string;");
+actLines.push("  /** The glyph, or `null` — in which case `iconAbsent` says why. */");
+actLines.push("  readonly icon: LucideIcon | null;");
+actLines.push("  readonly iconAbsent: IconAbsence | null;");
+actLines.push("  /** The binding, spelled as the contract's map spells it. */");
+actLines.push("  readonly shortcut: string;");
+actLines.push("  readonly scope: ActionScope;");
+actLines.push("  readonly destructive: boolean;");
+actLines.push("  readonly confirms: boolean;");
+actLines.push("  /** The issue that gives the binding an act, on a row nothing answers yet. */");
+actLines.push("  readonly unbuilt: string | null;");
+actLines.push("};");
+actLines.push("");
+actLines.push("/**");
+actLines.push(" * An issue reference, composed rather than written.");
+actLines.push(" *");
+actLines.push(" * **Because the design gate reads a short issue number as a colour literal.**");
+actLines.push(" * Three hex digits behind a hash is exactly what a hex colour looks like, and");
+actLines.push(" * the rule that keeps raw hex out of a renderer cannot tell one from the");
+actLines.push(" * other. Writing the number apart from the hash is the smaller answer; opting");
+actLines.push(" * this file out of that rule would switch off colour checking across a file");
+actLines.push(" * of glyphs. **The underlying fix is #356**, and this helper goes when it");
+actLines.push(" * lands.");
+actLines.push(" */");
+actLines.push("function issue(n: number): string {");
+actLines.push("  return `#${n}`;");
+actLines.push("}");
+actLines.push("");
+actLines.push("/**");
+actLines.push(" * The map, in the registry's order: global first, then contextual.");
+actLines.push(" *");
+actLines.push(" * Order is load-bearing in one place only — the palette groups by section and");
+actLines.push(" * keeps registry order inside each — so nothing here is sorted.");
+actLines.push(" */");
+actLines.push("export const ACTIONS: readonly Action[] = [");
+for (const act of acts) {
+  actLines.push("  {");
+  actLines.push(`    id: ${JSON.stringify(act.id)},`);
+  actLines.push(`    kind: ${JSON.stringify(act.kind)},`);
+  actLines.push(`    tier: ${JSON.stringify(act.tier)},`);
+  actLines.push(`    verb: ${JSON.stringify(act.verb)},`);
+  actLines.push(`    icon: ${act.icon === "" ? "null" : pascal(act.icon)},`);
+  actLines.push(`    iconAbsent: ${quoted(act.absent)},`);
+  actLines.push(`    shortcut: ${JSON.stringify(act.shortcut)},`);
+  actLines.push(`    scope: ${JSON.stringify(act.scope)},`);
+  actLines.push(`    destructive: ${act.destructive},`);
+  actLines.push(`    confirms: ${act.confirms},`);
+  actLines.push(`    unbuilt: ${act.issue === null ? "null" : `issue(${act.issue})`},`);
+  actLines.push("  },");
+}
+actLines.push("];");
+actLines.push("");
+actLines.push("/**");
+actLines.push(" * One act, by the id an implementation binds to.");
+actLines.push(" *");
+actLines.push(" * `| undefined` because a caller may ask for an id this build has never");
+actLines.push(" * heard of, and a missing act is a real answer rather than a crash.");
+actLines.push(" */");
+actLines.push("export const ACTION: Readonly<Record<string, Action | undefined>> = Object.fromEntries(");
+actLines.push("  ACTIONS.map((action) => [action.id, action]),");
+actLines.push(");");
+actLines.push("");
+
+const actionsModule = actLines.join("\n");
 const versionModule = [
   "// GENERATED by `pnpm --filter @armada/desktop codegen`. Do not hand-edit.",
   "//",
@@ -447,6 +696,7 @@ const versionModule = [
 const EMITTED = [
   [OUT, vocabularyModule],
   [OUT_VERSION, versionModule],
+  [OUT_ACTIONS, actionsModule],
 ];
 
 // `--emit` writes nothing and prints `<repo-relative path>\0<text>\0` for each
@@ -478,3 +728,17 @@ summary.write(
     `${gaps.length} with a gap\n`,
 );
 for (const line of counted) summary.write(`  gap: ${line}\n`);
+
+// The acts get their own line rather than a row in `GAPS`, because a missing
+// glyph is not the same absence there. A vocabulary variant with no glyph is a
+// registry that has not decided; an act with none has either that or a decision
+// that it draws none, and the registry says which. Counting the undecided ones
+// is the number that should fall.
+const undecided = acts.filter((act) => act.absent === "undecided");
+const awaiting = acts.filter((act) => act.issue !== null);
+summary.write(
+  `actions.ts: ${acts.length} acts, ${undecided.length} with an undecided glyph, ` +
+    `${awaiting.length} not built\n`,
+);
+for (const act of undecided) summary.write(`  no glyph: ${act.id}\n`);
+for (const act of awaiting) summary.write(`  not built: ${act.id} (#${act.issue})\n`);

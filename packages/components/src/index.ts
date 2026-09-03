@@ -146,11 +146,15 @@ export * from "./generated/vocabulary";
 // How the domain is counted in words.
 export * from "./lexicon";
 
-// Every act, its verb, its glyph and its binding — transcribed from
+// Every act, its verb, its glyph and its binding, generated from
 // `crates/core-model/domain/actions.toml`. Here rather than a layer up for
 // `vocabulary.ts`'s reason: the glyph is a React component, so the file
 // belongs with the components that draw it, and a story has to be able to
 // reach the real map rather than a fixture of one.
+//
+// One line and not two: `actions.ts` re-exports the generated map beside the
+// aliases and the context filter, which are Bridge's readings of it and not
+// the registry's.
 export * from "./actions";
 
 // The token specimens: what a value looks like, read off the running sheet.
