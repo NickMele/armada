@@ -504,20 +504,43 @@ const ADMITS: Readonly<Record<ActionContext, readonly ActionScope[]>> = {
 };
 
 /**
- * The acts a context offers, in registry order.
+ * The acts a context offers on what is in front of you, in registry order.
  *
- * **Motions are dropped and the palette's own row with them.** A Motion acts on
- * nothing, so a row for it would be a row that does nothing when chosen; and
- * `command_palette` is the one act that cannot be reached from inside the
- * palette, since the palette is already open. Both follow the contract's rule
- * about unbuilt rows — a row a person presses and gets nothing from is worse
- * than one that is absent.
+ * **Contextual tier only.** The global acts reach a surface rather than a Job,
+ * so they do not belong under a block titled with the job it acts on — a
+ * palette that says `job_2d90bb` and then offers Toggle sidebar under that
+ * heading is a heading that lies. `globalActs` is where they are.
+ *
+ * **Motions are dropped.** A Motion acts on nothing, so a row for it would be
+ * a row that does nothing when chosen — the same reading the contract gives
+ * unbuilt rows, one step further along.
  */
 export function actsIn(context: ActionContext): readonly Action[] {
   return ACTIONS.filter(
     (action) =>
       action.kind === "Action" &&
-      action.id !== "command_palette" &&
+      action.tier === "Contextual" &&
       ADMITS[context].includes(action.scope),
+  );
+}
+
+/**
+ * The global acts, which reach a surface rather than a Job.
+ *
+ * **Two rows are left out and neither is an omission.** `command_palette` is
+ * the one act that cannot be reached from inside the palette, since the
+ * palette is what is already open; and `bridge_surfaces` is one registry row
+ * standing for the whole rail, because the contract's rule there is rail order
+ * rather than the digits. A palette draws the rail's destinations one per row,
+ * from the rail — which is the only thing that knows what `⌘3` currently
+ * reaches.
+ */
+export function globalActs(): readonly Action[] {
+  return ACTIONS.filter(
+    (action) =>
+      action.kind === "Action" &&
+      action.tier === "Global" &&
+      action.id !== "command_palette" &&
+      action.id !== "bridge_surfaces",
   );
 }

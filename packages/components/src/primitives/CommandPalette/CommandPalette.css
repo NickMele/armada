@@ -13,10 +13,13 @@
  * is a data surface the moment it has results.
  *
  * MISSING TOKEN on the line below.
- * --armada-hairline: no border-width token exists in packages/tokens.
+ * --armada-glyph: packages/tokens declares no icon size. The contract fixes a
+ *   palette row's leading glyph at 12px, Badge's at 12px and a dialog's at
+ *   16px, and none of the three is spellable. This aliases --space-3, which is
+ *   12px — the right value under the wrong name, and reported as such.
  */
 .armada-palette {
-  --armada-hairline: var(--border-width);
+  --armada-glyph: var(--space-3);
 }
 
 .armada-palette-layer {
@@ -25,9 +28,10 @@
   z-index: var(--z-palette);
   display: flex;
   justify-content: center;
-  /* Top-anchored, never centered. A centered dialog shifts vertically as the
-   * result count changes, and a target that moves while you type is a target
-   * you misclick. */
+  /* Top-anchored, never centered. A centered dialog rises as results fall
+   * away, so the row under the cursor changes while a person is still typing
+   * — a target that moves while you type is a target you misclick. The whole
+   * list hangs below this line, so only what is below it shrinks. */
   align-items: flex-start;
   padding-top: 20vh;
   background: var(--scrim);
@@ -41,7 +45,7 @@
   max-height: var(--palette-max-height);
   border-radius: var(--radius-lg);
   background: var(--bg-overlay);
-  border: var(--armada-hairline) solid var(--border-default);
+  border: var(--border-width) solid var(--border-default);
   box-shadow: var(--shadow-overlay);
   overflow: hidden;
 }
@@ -51,7 +55,7 @@
   height: var(--h-control);
   padding: 0 var(--space-3);
   border: none;
-  border-bottom: var(--armada-hairline) solid var(--border-subtle);
+  border-bottom: var(--border-width) solid var(--border-subtle);
   border-radius: 0;
   background: transparent;
   color: var(--fg-default);
@@ -87,18 +91,14 @@
 }
 
 .armada-palette__row {
-  width: 100%;
   display: flex;
   align-items: center;
   gap: var(--space-2);
   height: var(--h-menu-item);
   padding: 0 var(--space-3);
-  border: none;
-  background: transparent;
   color: var(--fg-default);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
-  text-align: left;
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease);
 }
@@ -107,11 +107,32 @@
   background: var(--bg-hover);
 }
 
+/* Danger is the dropdown-menu treatment: label and glyph, never a fill. A
+ * filled red row in a list of thirty reads as a failed job rather than an act,
+ * and the row it sits beside would be the same width in the same list. */
+.armada-palette__row--danger {
+  color: var(--status-completed-failed);
+}
+
+/* Registered and nothing answers it. Dimming is a token, not an alpha. */
+.armada-palette__row--unbuilt {
+  color: var(--fg-subtle);
+  cursor: default;
+}
+
 .armada-palette__glyph {
   flex: none;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: var(--armada-glyph);
   color: var(--fg-muted);
+}
+
+/* The glyph carries the row's colour where the row has one — an act that
+ * ends a job says so in both channels, which is Kill's own rule one level up. */
+.armada-palette__row--danger .armada-palette__glyph {
+  color: inherit;
 }
 
 .armada-palette__label {
@@ -122,21 +143,44 @@
   white-space: nowrap;
 }
 
-/* Never --fg-default: a shortcut hint is reference material beside the thing
- * it describes, and full contrast makes it compete with the label. */
-.armada-palette__kbd {
+/* The matched span, in weight rather than colour. The palette row has one text
+ * colour, status hue is never chosen, and the accent is reserved to
+ * interactive affordance — so weight is the channel left, and it is the one
+ * already in the type scale. */
+.armada-palette__mark {
+  background: transparent;
+  color: inherit;
+  font-weight: var(--weight-medium);
+}
+
+/* A setting states its current value, in mono, right of the label. Metadata
+ * rather than a second label, so it steps down. */
+.armada-palette__value {
   flex: none;
-  display: inline-flex;
-  align-items: center;
-  height: var(--h-kbd);
-  padding: 0 var(--space-1);
-  border-radius: var(--radius-sm);
-  border: var(--armada-hairline) solid var(--border-subtle);
-  background: var(--bg-sunken);
-  color: var(--fg-muted);
+  color: var(--fg-subtle);
   font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.armada-palette__unbuilt {
+  flex: none;
+  color: var(--fg-subtle);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
+}
+
+/* One box per key. The chord's own gap is kbd's; this only holds the group
+ * against the right edge. */
+.armada-palette__keys {
+  flex: none;
+}
+
+/* `/` between two alternatives and `–` across a range. --fg-subtle, because it
+ * is punctuation inside reference material that is already stepped down. */
+.armada-palette__between {
+  color: var(--fg-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
 }
 
 .armada-palette__empty {

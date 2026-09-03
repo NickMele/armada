@@ -1,21 +1,15 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import {
-  Activity,
-  Bell,
-  CircleDot,
-  ClipboardList,
-  CornerUpRight,
-  Eye,
-  MessageSquare,
-  Power,
-  Send,
-  Settings,
-  Stethoscope,
-} from "lucide-react";
+import { Bell, ClipboardList, Settings, Stethoscope } from "lucide-react";
 import { expect } from "storybook/test";
-import { CommandPalette, type CommandPaletteEntry } from "./CommandPalette";
+
+import { actsIn, globalActs, type Action } from "../../actions";
 import { Dialog } from "../Dialog/Dialog";
+import {
+  CommandPalette,
+  type PaletteEntry,
+  type PaletteSection,
+} from "./CommandPalette";
 
 const meta: Meta<typeof CommandPalette> = {
   title: "Primitives/CommandPalette",
@@ -25,159 +19,278 @@ export default meta;
 
 type Story = StoryObj<typeof CommandPalette>;
 
-const glyph = { size: 12, strokeWidth: 2, "aria-hidden": true } as const;
+/**
+ * The one Job the board's cursor is on. **The context block is titled with the
+ * job it acts on**, so a palette that will Kill something says which something
+ * before the row is read.
+ */
+const CONTEXT = "job_2d90bb — coalesce the session refresh";
 
 /**
- * Contents in the order the contract fixes: actions available on the current
- * context, navigation, jobs by id or name, settings. Every entry displays its
- * binding, and Kill is `x` rather than `k` — a destructive key is never
- * adjacent to a navigation key.
+ * The rail, which is four destinations. Each glyph is the icon registry's own
+ * assignment for that surface; the registry's `bridge_surfaces` row carries
+ * none by design, because a fifth glyph standing for all four is not a thing —
+ * which is also why the rail expands into rows here rather than that one row
+ * being drawn. Helm is not among them: it is a sibling surface with a registry
+ * row of its own, and it arrives through `globalActs`.
  */
-const entries: CommandPaletteEntry[] = [
-  {
-    id: "dispatch",
-    section: "Actions",
-    label: "Dispatch a job",
-    aliases: ["start", "launch", "new"],
-    shortcut: "⌘D",
-    icon: <Send {...glyph} />,
-  },
-  {
-    id: "approve",
-    section: "Actions",
-    label: "Approve dispatch",
-    aliases: ["accept", "ok"],
-    shortcut: "a",
-    icon: <Eye {...glyph} />,
-  },
-  {
-    id: "redirect",
-    section: "Actions",
-    label: "Redirect the drone",
-    aliases: ["steer", "correct"],
-    shortcut: "r",
-    icon: <CornerUpRight {...glyph} />,
-  },
-  {
-    id: "kill",
-    section: "Actions",
-    label: "Kill the drone",
-    aliases: ["terminate", "stop", "abort"],
-    shortcut: "x",
-    icon: <Power {...glyph} />,
-    destructive: true,
-  },
-  {
-    id: "board",
-    section: "Navigation",
-    label: "Job Board",
-    shortcut: "⌘1",
-    icon: <ClipboardList {...glyph} />,
-  },
-  {
-    id: "active",
-    section: "Navigation",
-    label: "Active jobs",
-    shortcut: "⌘2",
-    icon: <Activity {...glyph} />,
-  },
-  {
-    id: "alerts",
-    section: "Navigation",
-    label: "Alerts",
-    shortcut: "⌘3",
-    icon: <Bell {...glyph} />,
-  },
-  {
-    id: "doctor",
-    section: "Navigation",
-    label: "Doctor",
-    shortcut: "⌘6",
-    icon: <Stethoscope {...glyph} />,
-  },
-  {
-    id: "helm",
-    section: "Navigation",
-    label: "Helm",
-    shortcut: "⌘8",
-    icon: <MessageSquare {...glyph} />,
-  },
-  {
-    id: "job-8f2a1c",
-    section: "Jobs",
-    label: "job_8f2a1c — split the settings reducer",
-    shortcut: "↵",
-    icon: <CircleDot {...glyph} />,
-  },
-  {
-    id: "job-2d90bb",
-    section: "Jobs",
-    label: "job_2d90bb — coalesce the session refresh",
-    shortcut: "↵",
-    icon: <Eye {...glyph} />,
-  },
-  {
-    id: "kit",
-    section: "Settings",
-    label: "Kit",
-    aliases: ["skills", "allowlist", "mcp"],
-    shortcut: "⌘,",
-    icon: <Settings {...glyph} />,
-  },
+const RAIL: PaletteEntry[] = [
+  { id: "nav-board", section: "navigation", label: "Job Board", shortcut: "⌘1", icon: ClipboardList },
+  { id: "nav-alerts", section: "navigation", label: "Alerts", shortcut: "⌘2", icon: Bell },
+  { id: "nav-doctor", section: "navigation", label: "Doctor", shortcut: "⌘3", icon: Stethoscope },
+  { id: "nav-manifest", section: "navigation", label: "Manifest", shortcut: "⌘4", icon: ClipboardList },
 ];
 
-/** Resting: no query, every section in the contract's order. */
-export const Resting: Story = {
-  args: { open: true, entries },
+/** Jobs carry no key. Opening a specific job is a search result, not an act. */
+const JOBS: PaletteEntry[] = [
+  { id: "job_2d90bb", section: "jobs", label: "job_2d90bb — coalesce the session refresh" },
+  { id: "job_8f2a1c", section: "jobs", label: "job_8f2a1c — split the settings reducer" },
+  { id: "job_41c07e", section: "jobs", label: "job_41c07e — drop the stale socket on reconnect" },
+];
+
+/** A setting states its current value, in mono, right of the label. */
+const SETTINGS: PaletteEntry[] = [
+  { id: "set-model", section: "settings", label: "Default model", value: "sonnet", icon: Settings },
+  { id: "set-headroom", section: "settings", label: "Concurrent drones", value: "4", icon: Settings },
+  { id: "set-theme", section: "settings", label: "Appearance", value: "dark", icon: Settings },
+];
+
+/** Aliases are searched and never rendered. "terminate" is Kill's. */
+const ALIASES: Readonly<Record<string, readonly string[]>> = {
+  kill: ["terminate", "stop", "abort"],
+  redispatch: ["retry", "again"],
+  redirect: ["steer", "correct"],
+  new_job: ["dispatch", "start"],
+  copy_debug_info: ["clipboard", "paste", "support"],
+};
+
+/** One registry row, as a palette entry. Nothing is re-spelled on the way. */
+function asEntry(section: string) {
+  return (action: Action): PaletteEntry => ({
+    id: action.id,
+    section,
+    label: action.verb,
+    shortcut: action.shortcut,
+    ...(action.icon === null ? {} : { icon: action.icon }),
+    ...(ALIASES[action.id] === undefined ? {} : { aliases: ALIASES[action.id] }),
+    ...(action.destructive ? { destructive: true } : {}),
+    ...(action.unbuilt === null ? {} : { unbuilt: action.unbuilt }),
+  });
+}
+
+function sections(title: string): PaletteSection[] {
+  return [
+    { id: "context", title },
+    { id: "navigation", title: "Navigation" },
+    { id: "jobs", title: "Jobs" },
+    { id: "settings", title: "Settings" },
+  ];
+}
+
+/**
+ * The contents in the order the contract fixes: acts on the current context,
+ * navigation, jobs, settings.
+ *
+ * Navigation is the rail's destinations plus the global acts the rail is not.
+ * `bridge_surfaces` is one registry row over four destinations, because the
+ * rule there is rail order rather than the digits — so the rail is what
+ * expands it, and Helm arrives from the registry as the digit after the last
+ * of them.
+ */
+function entriesFor(context: "board" | "detail"): PaletteEntry[] {
+  return [
+    ...actsIn(context).map(asEntry("context")),
+    ...RAIL,
+    ...globalActs().map(asEntry("navigation")),
+    ...JOBS,
+    ...SETTINGS,
+  ];
+}
+
+/** What the host says its index covered, for the state where nothing matched. */
+const SEARCHED =
+  "every act on this job, every place in Bridge, every job on this Manifest at every " +
+  "status, and every setting";
+
+const board = {
+  open: true,
+  sections: sections(CONTEXT),
+  entries: entriesFor("board"),
+  searched: SEARCHED,
+} as const;
+
+/**
+ * **Empty query: the cheat sheet.** Every section head and every binding, which
+ * is the whole mechanism by which forty shortcuts get learned without a help
+ * screen — a person opens this to do one thing and reads three on the way past.
+ *
+ * The acts are the registry's, filtered to what the board offers, so this is
+ * the real map rather than a fixture of one. Rows with no glyph draw an empty
+ * slot that holds its width: thirteen acts have no registered silhouette and
+ * inventing one is a decision for the icon registry.
+ */
+export const EveryBindingAtRest: Story = {
+  args: board,
+  /**
+   * The claim is that nothing is missing, and the only way to state it is to
+   * count the registry rather than a number typed here — a literal would go
+   * stale the day an act is added, which is the exact failure this surface
+   * exists to prevent.
+   */
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole("option")).toHaveLength(board.entries.length);
+    for (const section of board.sections) {
+      // `getAllBy`, because the context block is titled with the job it acts
+      // on and that job is also a row under Jobs — which is the contents
+      // order working rather than a duplicate.
+      await expect(canvas.getAllByText(section.title)[0]).toBeVisible();
+    }
+  },
 };
 
 /**
- * The lexicon holding. The query is "terminate", the alias that finds Kill —
- * and the row still reads Kill, because the alias never renders.
+ * The same palette on job detail. **The context block changes; a key never
+ * does.** `r` is Review on both, and the acts a list cannot offer — Restart
+ * step, Observe, Report this job, the diff, the stage — are here because this
+ * is where they are offered.
+ *
+ * Two rows are worth reading: **Pilot appears and is not in the board's row
+ * map**, which is the superset rule doing its work, and it draws disabled with
+ * the issue that answers it, because a row a person presses and gets nothing
+ * from is worse than one that is absent.
  */
-export const AliasFindsTheLexiconTerm: Story = {
-  args: { open: true, entries, defaultQuery: "terminate" },
+export const OnJobDetail: Story = {
+  args: {
+    open: true,
+    sections: sections(CONTEXT),
+    entries: entriesFor("detail"),
+    searched: SEARCHED,
+  },
+};
+
+/**
+ * **Top-anchored, at two result counts.** The anchor holds and only what is
+ * below it shrinks. A centred dialog rises as results fall away, so the row
+ * under the cursor changes while a person is still typing.
+ */
+export const TopAnchoredAtTwoCounts: Story = {
+  args: board,
   /**
-   * Read off the row, which is the only place the rule can be seen: one match,
-   * and it reads the lexicon term. An alias that leaked into what renders
-   * would teach the person the word Armada does not use, from the surface
-   * whose whole job is teaching them the words it does.
+   * A rendering cannot show this: one frame is a palette, and the claim is
+   * about two of them. So the geometry is read off the same palette before and
+   * after the list is narrowed — the input's top edge and the first row's top
+   * edge, both to the pixel.
+   *
+   * Broken on purpose once by setting `align-items: center` on the layer, which
+   * moved both by 84px.
+   */
+  play: async ({ canvas, userEvent }) => {
+    const field = canvas.getByRole("combobox");
+    const wide = canvas.getAllByRole("option").length;
+    const inputTop = field.getBoundingClientRect().top;
+    const rowTop = canvas.getAllByRole("option")[0]!.getBoundingClientRect().top;
+
+    await userEvent.type(field, "job");
+
+    await expect(canvas.getAllByRole("option").length).toBeLessThan(wide);
+    await expect(field.getBoundingClientRect().top).toBe(inputTop);
+    await expect(canvas.getAllByRole("option")[0]!.getBoundingClientRect().top).toBe(rowTop);
+  },
+};
+
+/**
+ * **Matching across sections.** One word returning a place, a job and two
+ * settings. The section heads are what stop them reading as one list — without
+ * them a person cannot tell the Manifest surface from a Manifest setting from
+ * a job whose title says the word.
+ */
+export const MatchingAcrossSections: Story = {
+  args: { ...board, defaultQuery: "se" },
+};
+
+/**
+ * **An alias hit.** The query is "terminate", which is Kill's alias — and the
+ * row reads Kill, because the alias never renders. Other queries mark the
+ * matched span; this one has none to mark, and faking one would render the
+ * alias.
+ */
+export const AnAliasFindsTheLexiconTerm: Story = {
+  args: { ...board, defaultQuery: "terminate" },
+  /**
+   * Read off the row, which is the only place the rule can be seen. An alias
+   * that leaked into what renders would teach the person the word Armada does
+   * not use, from the surface whose whole job is teaching them the words it
+   * does — so the assertion is on all three: the term renders, the alias does
+   * not, and nothing is marked.
+   *
+   * The job whose title carries "terminate" is a real match on a real label
+   * and is expected beside it; it is the reason the mark assertion is scoped
+   * to Kill's own row rather than to the list.
    */
   play: async ({ canvas }) => {
-    await expect(canvas.getAllByRole("option")).toHaveLength(1);
-    await expect(canvas.getByRole("option")).toHaveAccessibleName(/Kill the drone/);
+    const kill = canvas.getByRole("option", { name: /^Kill/ });
+    await expect(kill).toHaveAccessibleName("Kill x");
+    await expect(kill.querySelector("mark")).toBeNull();
     await expect(canvas.queryByText("terminate")).toBeNull();
   },
 };
 
 /**
- * No match. The palette is the discovery surface, so the empty line says where
- * every action is rather than apologising.
+ * **Matching nothing.** Names the query and says what was searched. No
+ * suggestions and no did-you-mean: the palette is the discovery surface, so
+ * the honest answer to a miss is the extent of the index rather than a guess
+ * at what was meant.
  */
-export const NoMatch: Story = {
-  args: { open: true, entries, defaultQuery: "zzz" },
+export const MatchingNothing: Story = {
+  args: { ...board, defaultQuery: "zzz" },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryAllByRole("option")).toHaveLength(0);
+    await expect(canvas.getByText(/Nothing matches “zzz”/)).toBeVisible();
+    await expect(canvas.getByText(/every job on this Manifest at every status/)).toBeVisible();
+  },
+};
+
+/**
+ * **The first row is always active**, so a query narrowed to one result is a
+ * two-key act: type enough, press Enter.
+ */
+export const TheFirstRowIsActive: Story = {
+  args: { ...board, defaultQuery: "re" },
+  /**
+   * Asserted after a change to the query and not only on the resting state,
+   * because the regression is a cursor left at position four in a list that
+   * now holds two — which reads as a palette that ignored what was typed.
+   */
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByRole("option", { selected: true })).toHaveAccessibleName(/^Review/);
+
+    await userEvent.keyboard("{ArrowDown}");
+    await expect(canvas.getByRole("option", { selected: true })).not.toHaveAccessibleName(
+      /^Review/,
+    );
+
+    await userEvent.clear(canvas.getByRole("combobox"));
+    await userEvent.type(canvas.getByRole("combobox"), "kill");
+
+    await expect(canvas.getAllByRole("option")[0]).toHaveAttribute("aria-selected", "true");
+  },
 };
 
 /**
  * The safety rule, rendered. Selecting Kill from the palette does not kill —
  * every destructive action confirms, even from the keyboard, and in the
- * confirmation Cancel holds initial focus.
+ * confirmation Cancel holds initial focus and `Enter` fires it.
  *
- * Type, arrow to Kill the drone, press Enter — which is what the `play` below
- * does, because a safety rule described in prose is a safety rule nothing
- * checks.
+ * **Danger is the dropdown-menu treatment**: `--status-completed-failed` on
+ * the label and the glyph, no background. A filled red row in a list of thirty
+ * reads as a failed job rather than an act.
  */
 export const DestructiveEntryConfirms: Story = {
   render: () => {
-    const [pending, setPending] = useState<CommandPaletteEntry | undefined>(undefined);
+    const [pending, setPending] = useState<PaletteEntry | undefined>(undefined);
     return (
       <>
-        <CommandPalette
-          open
-          entries={entries}
-          defaultQuery="kill"
-          onConfirm={(entry) => setPending(entry)}
-        />
+        <CommandPalette {...board} defaultQuery="kill" onConfirm={(entry) => setPending(entry)} />
         <Dialog
           open={pending !== undefined}
           tone="destructive"
@@ -202,11 +315,7 @@ export const DestructiveEntryConfirms: Story = {
    * the wrong one: the way back from a confirmation is the list you chose from.
    */
   play: async ({ canvas, userEvent }) => {
-    // The query is "kill", so Kill the drone is the only match and is already
-    // the active row. Enter is the whole act.
-    await expect(canvas.getByRole("option", { selected: true })).toHaveAccessibleName(
-      /Kill the drone/,
-    );
+    await expect(canvas.getByRole("option", { selected: true })).toHaveAccessibleName(/^Kill/);
     await expect(canvas.queryByRole("dialog", { name: "Kill the drone on job 12?" })).toBeNull();
 
     await userEvent.keyboard("{Enter}");
