@@ -7,12 +7,12 @@
 // a palette that cannot be drawn. Nothing here decides a binding; this file
 // reads the contextual tier and says which of its keys the Board can answer.
 //
-// **It is read off prose, because the artifact the same section describes does
-// not exist.** "Every action carries a verb, an icon and a shortcut, generated
-// from one source with a test asserting no entry is missing any of the three" —
-// there is no such source in `crates/core-model/domain/` and no such test, so
-// this file is a hand transcription of a table and the codegen will replace it.
-// Issue #232.
+// **This file was read off prose, and the prose now has a source.**
+// `crates/core-model/domain/actions.toml` is the artifact the contract promised
+// and `xtask`'s action rule is the test, so the two blocks under "Two tiers"
+// are checked against it. This is still a hand transcription of that table, and
+// so is `packages/components/src/actions.ts`, which is what the palette draws
+// from. The codegen that would emit both is #232.
 //
 // # The contextual tier, and what the Board does with each key
 //
@@ -27,7 +27,7 @@
 // | `d` | redirect | here, where it is Redirect |
 // | `s` | restart step | detail only, per the contract. Absent |
 // | `p` | pilot | **not built.** Bridge has no pilot act at all, so this binds to nothing rather than to something invented |
-// | `c` | copy debug info | bound here, and reaches nothing on a Job row. `copyDebugInfoFor` takes a `Failure` and a healthy Job has none |
+// | `c` | copy debug info | bound here, and reaches nothing on a Job row. `copyDebugInfoFor` takes a `Failure` and a healthy Job has none. **The palette's row does better**: it copies the failure on screen where there is one, and says there is none where there is not |
 // | `x` | kill, confirms | here, through the confirmation every destructive act already takes |
 // | `n` | new job | here — the one key that acts on nothing on screen |
 // | `/` | search the current list | here |
@@ -227,3 +227,25 @@ export function boardPressOf(event: KeyboardEvent): BoardPress | null {
 
 /** The key that focuses the search, drawn beside the field. */
 export const SEARCH_KEY = "/";
+
+/**
+ * What the command palette can reach on the Board.
+ *
+ * **Here because it is the same map from the other side.** `boardPressOf`
+ * above says what a key means; this says what a palette row means, and the two
+ * answer the same acts — `1`–`5` and `/`. Splitting them across two files
+ * would be one act with two owners.
+ *
+ * **An imperative handle, and deliberately one.** The state filter and the
+ * search field belong to the Board. Lifting either into `App` so a palette row
+ * could set it would move a control out of the surface it is drawn on, and the
+ * filter's own rule — that choosing a tab clears the search — would then live
+ * in two places. The palette is a superset of the UI, not a second owner of
+ * its state.
+ */
+export type BoardReach = {
+  /** `1`–`5`, and the search clears with them, exactly as a tab press does. */
+  tab: (tab: BoardTab) => void;
+  /** `/` — put the cursor in the search field, selecting what is there. */
+  search: () => void;
+};

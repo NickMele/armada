@@ -31,26 +31,44 @@ export const Confirmation: Story = {
     onCancel: fn(),
   },
   /**
-   * **The keyboard contract, run rather than described** — and the reason the
-   * two sentences in `Dialog.tsx` can disagree and both still hold. Cancel
-   * holds initial focus so a destructive act is never one keystroke from a
-   * focused row, and `Enter` confirms anyway: the window handler takes the
-   * press first, and its `preventDefault` is what stops the focused button
-   * being activated as well.
+   * **The keyboard contract, run rather than described**, and it is the half
+   * the contract used to leave to an implementation. Cancel holds initial
+   * focus; `Enter` fires the focused control; so `Enter` cancels, and nothing
+   * destructive is ever one keystroke from a focused row.
    *
-   * Both halves have to be asserted together, because the regression is quiet.
-   * Drop the `preventDefault` and `Enter` cancels — nothing errors, the dialog
-   * closes, and the act the person pressed for never happened.
+   * The regression this catches is the one that was here: a `window` handler
+   * that confirmed past focused Cancel, which passes any assertion written as
+   * "Enter did something" and ends a job the person was declining to end. So
+   * both calls are asserted, not just the one that should have happened.
    */
   play: async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByRole("button", { name: "Cancel" })).toHaveFocus();
 
     await userEvent.keyboard("{Enter}");
-    await expect(args.onConfirm).toHaveBeenCalled();
-    await expect(args.onCancel).not.toHaveBeenCalled();
+    await expect(args.onCancel).toHaveBeenCalled();
+    await expect(args.onConfirm).not.toHaveBeenCalled();
+  },
+};
 
+/**
+ * `Esc` cancels too, from anywhere in the layer. Its own story rather than a
+ * third line on the one above: that one is about which control `Enter` fires,
+ * and this is about the way out working whatever holds focus.
+ */
+export const EscapeCancels: Story = {
+  args: {
+    open: true,
+    tone: "destructive",
+    title: "Kill the drone on job 12?",
+    confirmLabel: "Kill job",
+    children: "Step 3 of 5, 18 minutes in.",
+    onConfirm: fn(),
+    onCancel: fn(),
+  },
+  play: async ({ args, userEvent }) => {
     await userEvent.keyboard("{Escape}");
     await expect(args.onCancel).toHaveBeenCalled();
+    await expect(args.onConfirm).not.toHaveBeenCalled();
   },
 };
 

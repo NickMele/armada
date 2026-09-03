@@ -717,9 +717,23 @@ These are constraints on the map, not suggestions.
   `x`, never `k`, because `k` sits against `j` and a mistyped navigation
   keystroke must not be able to end a running job.
 - **Every destructive action confirms**, even from the keyboard. In the
-  confirmation dialog **Cancel holds initial focus**, `Enter` confirms,
-  `Esc` cancels. A destructive action is never one keystroke from a
-  focused row.
+  confirmation dialog **Cancel holds initial focus, so `Enter` cancels**
+  — `Enter` fires whatever holds focus, and Cancel is what holds it. The
+  kbd is drawn on Cancel, where the key actually fires; confirming is a
+  deliberate move to the other control, and `Esc` cancels as well. A
+  destructive action is never one keystroke from a focused row, which is
+  what the two rules together mean.
+  **A dialog that collects a field is the exception**, and it is not a
+  weakening of the rule: the field *is* the confirmation, nothing is
+  destroyed by pressing it, and the kbd is drawn on the confirm because
+  that is where `Enter` fires there. Redirect, Overrule and Report are
+  the three.
+  This line read "**Cancel holds initial focus**, `Enter` confirms,
+  `Esc` cancels" until 2026-09-02. Both halves were true of something
+  and the sentence did not say which won, so the implementation guessed
+  — it bound `Enter` on the window and confirmed past the focused
+  Cancel, which is exactly the one-keystroke destruction the rule above
+  refuses.
 - **Single-key shortcuts are suppressed whenever a text input holds
   focus.** Typing "axe" into a filter box must not approve, kill, and
   open something.
@@ -771,6 +785,20 @@ so that "terminate" finds Kill, but the alias never renders. This is
 where the lexicon earns its keep: one vocabulary, searchable, with the
 shortcut shown beside every entry.
 
+**A matched span is marked by weight**, at `--weight-medium`, and never
+by a second colour or a fill. A row has one text colour, status hue is
+never chosen and the accent is reserved to interactive affordance, so
+weight is the channel left — and it is already in the type scale. **An
+alias hit marks nothing**, because the match was on a word that never
+renders and there is nothing on the lexicon term to mark.
+
+**A row that cannot act draws dimmed and says why**, in `--fg-subtle` at
+`--text-2xs`, beside its binding. Two kinds reach it: a binding the
+registry carries that nothing answers, where `unbuilt` names the issue,
+and an act the app cannot reach from where you are standing. Both are
+facts rather than a list of exceptions, which is the same reasoning the
+`not built` annotation carries under Two tiers.
+
 **The palette is the discovery surface.** It is how a person learns
 forty shortcuts without a cheat sheet, which is why every entry displays
 its binding and why no action may exist outside it.
@@ -796,6 +824,10 @@ it compete with the label.
   400ms delay stands.
 - **Dropdown-menu items gain a right-aligned kbd.** Item height is
   unchanged by it.
+- **A confirmation's buttons gain a trailing kbd**, on the one control
+  `Enter` fires — Cancel on a plain confirmation, the confirm on a
+  dialog carrying a field. One per dialog, because two would be the
+  ambiguity the safety rule above was rewritten to remove.
 - **The 48px sidebar rail is more usable than it looks**, because the
   ⌘-digit bindings reach every surface without labels.
 

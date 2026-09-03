@@ -16,5 +16,6 @@ export * from "./FailureSurface";
 export * from "./fleet";
 export * from "./floor";
 export * from "./Head";
+export * from "./Palette";
 export * from "./Shell";
 export * from "./uncaught";

@@ -94,6 +94,7 @@ import {
 } from "./board";
 import { ClearTerminalControl } from "@armada/shell";
 import { boardPressOf, SEARCH_KEY, verbOf } from "./keys";
+import type { BoardReach } from "./keys";
 import { foldedNote, foldLineages, headlineOf } from "./lineage";
 import { readingOf } from "./reading";
 import { isTerminal, Row } from "./Row";
@@ -144,6 +145,15 @@ export type JobsProps = {
   onClearTerminal: (jobIds: readonly string[]) => void;
   /** A clipboard write is silent, so the surface confirms every one with a toast. */
   onCopied: (value: string) => void;
+  /**
+   * Where the cursor is, reported up. **The Board still owns it** and this
+   * only mirrors it, from the same focus handler that sets the Board's own —
+   * so the palette can title its context block with the job its acts would act
+   * on, and no second cursor exists to drift.
+   */
+  onCursor?: (jobId: string | null) => void;
+  /** Filled with what the palette can reach here. `keys.ts` says why. */
+  reach?: { current: BoardReach | null };
 };
 
 export function Jobs({
@@ -158,6 +168,8 @@ export function Jobs({
   onCompose,
   onClearTerminal,
   onCopied,
+  onCursor,
+  reach,
 }: JobsProps) {
   // Folded once for the whole board rather than per row. The dependency is the
   // array Bridge published, which is replaced on every event and never mutated,
@@ -224,6 +236,12 @@ export function Jobs({
     setQuery("");
   }
 
+  /** `/`, and the palette's Search row. Named because two callers press it. */
+  function focusSearch(): void {
+    search.current?.focus();
+    search.current?.select();
+  }
+
   /** The rows, as the DOM has them — the only place their drawn order is. */
   function rowsOnScreen(): HTMLElement[] {
     return Array.from(document.querySelectorAll<HTMLElement>("[data-job-id]"));
@@ -276,8 +294,7 @@ export function Jobs({
     const job = under();
     switch (read.act) {
       case "search":
-        search.current?.focus();
-        search.current?.select();
+        focusSearch();
         break;
       case "move":
         move(read.by);
@@ -331,6 +348,7 @@ export function Jobs({
   const latest = useRef(press);
   useEffect(() => {
     latest.current = press;
+    if (reach !== undefined) reach.current = { tab: chooseTab, search: focusSearch };
   });
   useEffect(() => {
     const listen = (event: KeyboardEvent): void => latest.current(event);
@@ -348,7 +366,9 @@ export function Jobs({
       // set the same value — two cursors that drift is the alternative.
       onFocusCapture={(event) => {
         const row = (event.target as HTMLElement).closest<HTMLElement>("[data-job-id]");
-        if (row?.dataset.jobId !== undefined) setCursor(row.dataset.jobId);
+        if (row?.dataset.jobId === undefined) return;
+        setCursor(row.dataset.jobId);
+        onCursor?.(row.dataset.jobId);
       }}
     >
       {terminalIds.length === 0 ? null : (

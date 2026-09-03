@@ -128,6 +128,9 @@
  * component builds on its own; see the report. */
 .armada-dialog__button {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   white-space: nowrap;
   height: var(--h-control);
   padding: 0 var(--space-4);
@@ -172,4 +175,13 @@
 .armada-dialog__button--primary:hover {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
+}
+
+/* The key drawn on the control it fires. kbd's own surface is --bg-sunken,
+ * which sits below the secondary's fill and reads correctly on it; on the
+ * outlined destructive and the accent-filled primary it is the same box, so
+ * the shortcut looks like one thing wherever it lands. Never --fg-default:
+ * reference material beside the label it belongs to. */
+.armada-dialog__kbd {
+  margin-right: calc(-1 * var(--space-1));
 }
