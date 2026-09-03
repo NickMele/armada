@@ -108,6 +108,12 @@ export function FailureBlock({
   return (
     <FailureNotice
       headline={failure.headline}
+      // Read off the payload rather than off a second field beside it. The
+      // chip on screen and the `code` row in the copied artifact are then the
+      // same value by construction, which is the rule the payload's single
+      // formatter already follows: two renderings that agree on the day they
+      // were written are two artifacts by the day either one changes.
+      code={failure.payload.code}
       next={failure.next}
       detailsLabel={failure.detailsLabel}
       details={failure.details}

@@ -64,6 +64,11 @@ credential cannot be put into one without it failing to compile.
 by collection, not by authorship: `cargo xtask verify-error-codes` walks
 the workspace, fails on a duplicate, and emits a checked-in manifest.
 
+**That command is specified here and not built.** `xtask/src/main.rs` serves no
+such subcommand, so nothing collects, no manifest is checked in, and a duplicate
+fails nothing today. The rule above is the intent and holds; the mechanism for
+it does not exist yet.
+
 A central registry puts every code far from the failure it names and turns
 adding one into a merge conflict. Scanning gets the closure without the
 distance — the same shape the vendor-literal rule already uses.
@@ -236,9 +241,18 @@ precedes a Job shows no `job_id` row rather than a blank one. `code` is the
 exception and renders `none`: the treatment guarantees a code on every error
 and shows it always, so a reader meeting a payload without one cannot tell
 whether the failure carried none or whether the paste was cut short, and the
-payload is read away from the screen that would have answered that. `none` is a
-fact, not a minted code — a code's declaration lives beside the variant that
-raises it, so nothing in Bridge is allowed to invent one.
+payload is read away from the screen that would have answered that.
+
+**Bridge mints a code for each of its own faults.** Only one of the failures
+Bridge draws crosses the wire that guarantees one, and the code is what
+separates an error from a failed Job. See #228.
+
+**A Bridge code is declared beside the builder that raises it**, in
+`packages/shell/src/failures.ts`, and is namespaced `bridge.`. The prefix keeps
+the Rust set and the Bridge set disjoint without a collector spanning both.
+
+**`none` is a fact, not a minted code.** No failure Bridge draws renders it; it
+is what a payload assembled outside those builders shows.
 
 **Three facts are appended that are not on the wire**, because both are the
 first thing anyone asks. Both protocol versions, written `bridge protocol 5.2`

@@ -80,6 +80,10 @@ export * from "./screens/TheShell/TheShell";
 // failed Job is Armada working — the vocabulary that keeps the two apart is
 // not a primitive and is not a composition of one.
 export * from "./errors/ErrorCode/ErrorCode";
+// The namespace Bridge mints its own codes in, beside the chip that draws
+// them. Bridge's faults never cross the wire, so nothing hands them a code —
+// and the code is one of the two channels separating an error from a status.
+export * from "./errors/ErrorCode/codes";
 export * from "./errors/ErrorNotice/ErrorNotice";
 export * from "./errors/FileAnIssue/FileAnIssue";
 

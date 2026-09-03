@@ -20,18 +20,18 @@ import { JobLogReference } from "../JobLogReference/JobLogReference";
  * for a while drew a fault in the escalation hue on a 12% tint inside a box,
  * carrying no code — four disagreements with a treatment whose whole argument
  * is that an error and a failed Job are both red and must never be mistaken
- * for each other. Three are closed here: one red, a leading edge and never a
- * box, and no tint on a data surface. See #228.
+ * for each other. All four are closed: one red, a leading edge and never a
+ * box, no tint on a data surface, and the code below. See #228.
  *
- * **A boundary fallback may have no wire code, and the chip still draws.** The
- * treatment says the code is always shown because `ipc::WireError` guarantees
- * one; a renderer that threw is built from a caught exception, and
- * `packages/shell/src/failures.ts` is right that Bridge must not
- * mint a code — an invented one is in no manifest and means nothing to the
- * lookup. So the chip carries the **region** instead: same solid fill, same
- * mono, same not-a-status claim, and honest about being a name rather than a
- * code. Where neither is supplied no chip draws, which is the remaining half
- * of #228 and is a call site's to fix, not this component's.
+ * **The code is required, and a boundary fallback has one.** The treatment
+ * says the code is always shown, and the reason it can say *always* is that
+ * the code is one of the two channels separating an error from a failed Job —
+ * an optional prop here would have made the separation optional. Only one of
+ * Bridge's five failures crosses the wire, so the other four mint their own in
+ * the `bridge.` namespace; `codes.ts` beside `ErrorCode` carries why, and
+ * `failures.ts` in `@armada/shell` carries the declarations. This drew the
+ * **region** in the chip's place for a while, which kept the fill and lost the
+ * meaning: a region names what stopped drawing, not what went wrong.
  *
  * **No glyph.** `triangle-alert` is reserved to Doctor and `octagon-alert` to
  * `stalled`, and the registry carries no mark for a Bridge failure. The code
@@ -69,19 +69,16 @@ export type FailureNoticeProps = {
   /** What broke, in one sentence. Never what threw, and never an apology. */
   headline: string;
   /**
-   * The `code` off the wire, where the failure came off the wire. It is what a
-   * person reads back to someone else, so it is shown whenever it exists.
-   */
-  code?: string;
-  /**
-   * What failed, where there is no wire code — `Job board`, `Fleet
-   * connection`. **A name, not a code**, and drawn in the code chip because
-   * the chip's job is to say *error rather than status*, which is true of a
-   * boundary fallback too.
+   * The code. Off the wire where the failure crossed it, and minted by Bridge
+   * in the `bridge.` namespace where it did not.
    *
-   * Ignored when `code` is given: a real code always outranks a region.
+   * **Required, because the treatment says always.** It is what a person reads
+   * back to someone else, and it is one of the two channels that keep a
+   * failing Armada apart from a failed Job. A caller with nothing to put here
+   * is a failure with no name, which is the gap `codes.ts` exists to close
+   * rather than a state this draws.
    */
-  region?: string;
+  code: string;
   /** What to do. A failure with nothing to do is drawn as the dead end it is. */
   next: string;
   /** The stack, the payload, the component. Present, folded, never in the way. */
@@ -105,7 +102,6 @@ const FOLD_STROKE = 2;
 export function FailureNotice({
   headline,
   code,
-  region,
   next,
   details,
   detailsLabel = "Details",
@@ -131,11 +127,9 @@ export function FailureNotice({
       {/* The chip leads nothing and closes nothing — it sits under the copy,
           where the error treatment puts it, so the sentence is what is read
           first and the value a person quotes is what is read next. */}
-      {code === undefined && region === undefined ? null : (
-        <div className="armada-failure__code">
-          <ErrorCode kind="fault" code={code ?? (region as string)} />
-        </div>
-      )}
+      <div className="armada-failure__code">
+        <ErrorCode kind="fault" code={code} />
+      </div>
 
       {folded ? (
         <details

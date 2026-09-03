@@ -32,14 +32,16 @@
  * treatment guarantees a code on every error and shows it always, so a reader
  * meeting a payload without one cannot tell whether the failure carried none
  * or whether the paste was truncated — and the payload is read away from the
- * screen that would have answered that. `none` is a statement of fact, not a
- * minted code: nothing in Bridge mints one, because a code's declaration lives
- * beside the variant that raises it and an invented one would be in no
- * manifest.
+ * screen that would have answered that.
  *
- * Two failures reach here with no code, and neither is a defect: a renderer
- * exception never went near the wire, and `UnreadableJob` is a row-level fault
- * Fleet sends as a bare sentence rather than as a `WireError`.
+ * **No failure Bridge builds reaches that fallback any more.** Two used to:
+ * a renderer exception never went near the wire, and `UnreadableJob` is a
+ * row-level fault Fleet sends as a bare sentence rather than as a `WireError`.
+ * Both now carry a code Bridge minted in its own namespace — `codes.ts` beside
+ * `ErrorCode` carries why, and `failures.ts` in `@armada/shell` carries the
+ * declarations. `none` stays for a caller outside those builders, because a
+ * payload that renders no `code` row at all is the one thing a reader cannot
+ * tell apart from a truncated paste.
  */
 
 /**
@@ -60,7 +62,14 @@ export type DebugField = {
  * both protocol versions and when it was taken.
  */
 export type DebugPayload = {
-  /** The `code` off the wire. Absent where the failure carried none. */
+  /**
+   * The code. Off the wire where the failure crossed it, minted by Bridge in
+   * the `bridge.` namespace where it did not.
+   *
+   * Optional here and required on `FailureFacts`, which is the type every
+   * failure Bridge draws is built as. The looseness is for a caller this
+   * module cannot see; it is not a case Bridge produces.
+   */
   code?: string;
   /** What failed. Always present — every failure has at least a sentence. */
   message: string;

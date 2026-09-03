@@ -6,19 +6,28 @@ import { Button } from "../../primitives/Button/Button";
 import { FailureNotice } from "./FailureNotice";
 
 /**
- * The three failures Bridge has to tell apart, drawn side by side so nobody
- * has to break the app to see one.
+ * The failures Bridge has to tell apart, drawn side by side so nobody has to
+ * break the app to see one.
  *
  * They look identical today and demand different things: Fleet unreachable
  * needs to say *which* of the four answers the runtime file gave, a renderer
  * throw needs the component and the rest of the app still usable, and a Job
  * that will not load is one bad row rather than a broken board.
  *
+ * **Every one of them carries a code, and only one of them was given one.**
+ * The chip is what says *error rather than status* on a surface where an error
+ * and a failed Job are the same red, so the code is required — and the four
+ * that never crossed the wire mint their own in the `bridge.` namespace. A
+ * story here is the visible half of that: `ARM-0412` came off a `WireError`,
+ * and every `bridge.*` value below was minted by the process that raised it.
+ *
  * Every story points at a log as a machine value — mono, copy on click, no
  * `copy` glyph, a toast confirms. A run id appears on the one failure that
  * really has one, labelled as what it is: Fleet mints it once per process, so
  * it names a session rather than a failure, and the rest show none rather than
- * a labelled blank.
+ * a labelled blank. **A minted code and no run id is not an inconsistency** —
+ * a code names a kind of failure Bridge knows, and a run id would have named a
+ * Fleet process it never reached.
  */
 const meta: Meta<typeof FailureNotice> = {
   title: "Compositions/Failure notice",
@@ -76,6 +85,7 @@ function Acts({ reload = true, dismiss = false }: { reload?: boolean; dismiss?: 
 export const FleetIsNotRunningNoFile: Story = {
   args: {
     headline: "Fleet is not running",
+    code: "bridge.fleet.not_running",
     next: "Start Fleet. Bridge reconnects on its own.",
     detailsLabel: "What the runtime file answered",
     details: [
@@ -98,6 +108,7 @@ export const FleetIsNotRunningNoFile: Story = {
 export const FleetIsNotRunningDeadPid: Story = {
   args: {
     headline: "Fleet is not running",
+    code: "bridge.fleet.not_running",
     next: "Start Fleet. Bridge reconnects on its own.",
     detailsLabel: "What the runtime file answered",
     details: [
@@ -121,6 +132,7 @@ export const FleetIsNotRunningDeadPid: Story = {
 export const FleetIsNotRunningPidReused: Story = {
   args: {
     headline: "Fleet is not running",
+    code: "bridge.fleet.not_running",
     next: "Start Fleet. Bridge reconnects on its own.",
     detailsLabel: "What the runtime file answered",
     details: [
@@ -146,6 +158,7 @@ export const FleetIsNotRunningPidReused: Story = {
 export const FleetIsUnreachable: Story = {
   args: {
     headline: "Fleet unreachable",
+    code: "bridge.fleet.unreachable",
     next: "Fleet is up and not answering. What is on the board is not live.",
     detailsLabel: "What the connection answered",
     details: [
@@ -175,10 +188,16 @@ export const FleetIsUnreachable: Story = {
  * **No run id row, and no labelled blank where one would go.** This never
  * reached Fleet, so there is no run to name; the note says what identifies it
  * instead.
+ *
+ * **One code for every boundary, not one per region.** The region names what
+ * stopped drawing rather than what went wrong, so it travels as a field where
+ * it can be joined to the component — which is the objection to the version of
+ * this that drew the region in the chip.
  */
 export const TheRendererThrew: Story = {
   args: {
     headline: "Bridge could not draw the job list",
+    code: "bridge.render.boundary",
     next: "Reload Bridge. Fleet keeps running and jobs keep progressing.",
     detailsLabel: "What threw",
     details: [
@@ -237,6 +256,7 @@ export const TheRendererThrew: Story = {
 export const AJobCannotBeRead: Story = {
   args: {
     headline: "Job 01K2Y0X6R4B7QW9V3N5T8CJ1MF did not load",
+    code: "bridge.job.unreadable",
     next: "Every other job on the board is unaffected. Read the fault, or read the job's log.",
     detailsLabel: "What the store refused",
     details: [
@@ -266,14 +286,17 @@ export const AJobCannotBeRead: Story = {
  * connection. The row is labelled "Fleet run" and the note says what that is:
  * Fleet mints it once per process, so every refusal in one session quotes it.
  *
- * The code is opaque to Bridge: looked up, never parsed, and never invented
- * here. `fields` and `chain` travel on every `WireError` and are folded away
+ * **The one code on this surface that Bridge did not mint.** It is opaque —
+ * looked up, never parsed — and it carries no `bridge.` prefix, which is how a
+ * reader tells at a glance that Fleet raised it and a manifest holds what it
+ * means. `fields` and `chain` travel on every `WireError` and are folded away
  * whole rather than summarised — a refusal's `message` names one problem even
  * where several exist, which was measured against a live daemon.
  */
 export const FleetRefusedTheCommand: Story = {
   args: {
     headline: "Manifest 01K1M8Z5V2 is not one Fleet holds",
+    code: "ARM-0412",
     next: "Nothing was sent. Change what the command names, or read the log.",
     detailsLabel: "What Fleet refused",
     details: [
@@ -300,57 +323,15 @@ export const FleetRefusedTheCommand: Story = {
  * — a failure that still names itself and still says what to do, because a
  * failure with nothing to do is drawn as the dead end it is rather than left
  * blank.
+ *
+ * The code is not among what falls away. A notice with a headline and nothing
+ * else still has to say *error rather than status*, and the chip is one of the
+ * two channels that do it.
  */
 export const NothingButTheSentence: Story = {
   args: {
     headline: "Bridge could not reach the main process",
+    code: "bridge.uncaught.rejection",
     next: "Reload Bridge. If it happens again, quit and reopen.",
-  },
-};
-
-/**
- * **A fault with the code the wire gave it.** The chip is a solid `--error`
- * fill where a Job status is a 12% tint, and it holds a code where a status
- * holds a verb — the two channels that keep a failed Job and a failing Armada
- * apart, since both are the same red.
- *
- * The notice takes a leading edge and no box. A red frame reads as a filled
- * alert, and the solid fill in this treatment belongs to the chip.
- */
-export const AFaultWithItsCode: Story = {
-  args: {
-    headline: "The job could not be read",
-    code: "job_unreadable",
-    next: "Open another job. This one stays on the board, greyed.",
-    detailsLabel: "What the store answered",
-    details: [{ label: "Job", value: "job_2d90bb" }],
-    values: [{ icon: File, iconLabel: "Log", value: AUDIT, copyValue: AUDIT }],
-    note: "The rest of the board is unaffected. One row failed to read, not the list.",
-    actions: <Acts reload={false} dismiss />,
-  },
-};
-
-/**
- * **A renderer that threw, which has no wire code.** Bridge must not mint one:
- * a code invented here is in no manifest and means nothing to the lookup
- * Bridge does. The chip carries the **region** instead — same solid fill, same
- * mono, and honest about being a name rather than a code.
- *
- * That is the answer to the open half of #228, and it is why the treatment's
- * separation still holds on a surface the wire never touched.
- */
-export const ABoundaryFallbackWithNoCode: Story = {
-  args: {
-    headline: "This part of Bridge stopped drawing",
-    region: "Job detail",
-    next: "Reload Bridge. Jobs keep running with the window closed.",
-    detailsLabel: "What threw",
-    details: [
-      { label: "Component", value: "StepPanel" },
-      { label: "Message", value: "Cannot read properties of undefined (reading 'judged')" },
-    ],
-    values: [{ icon: File, iconLabel: "Log", value: AUDIT, copyValue: AUDIT }],
-    note: "Fleet is untouched. This is the window, not the daemon.",
-    actions: <Acts />,
   },
 };
