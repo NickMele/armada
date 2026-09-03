@@ -94,6 +94,7 @@ import {
 } from "./board";
 import { ClearTerminalControl } from "@armada/shell";
 import { boardPressOf, SEARCH_KEY, verbOf } from "./keys";
+import type { BoardReach } from "./keys";
 import { foldedNote, foldLineages, headlineOf } from "./lineage";
 import { readingOf } from "./reading";
 import { isTerminal, Row } from "./Row";
@@ -104,26 +105,6 @@ import { isTerminal, Row } from "./Row";
  * it left out, which is the honest half of the same rule.
  */
 const DRAWN = 200;
-
-/**
- * What the command palette can reach on this surface.
- *
- * **An imperative handle, and deliberately one.** The state filter and the
- * search field belong to the Board; lifting either into `App` so a palette row
- * could set it would move a control out of the surface it is drawn on, and the
- * filter's own rule — that choosing a tab clears the search — would then live
- * in two places. The palette is a superset of the UI, not a second owner of
- * its state.
- *
- * It is filled on every render and read only when a row is chosen, so there is
- * no moment where the handle names a `chooseTab` from a stale board.
- */
-export type BoardReach = {
-  /** `1`–`5`, and the search clears with them, exactly as a tab press does. */
-  tab: (tab: BoardTab) => void;
-  /** `/` — put the cursor in the search field, selecting what is there. */
-  search: () => void;
-};
 
 /** What the fold sentence says once the fold has been undone. */
 const EARLIER_SHOWN = "Every dispatch is drawn, including the ones that are over.";
@@ -165,13 +146,13 @@ export type JobsProps = {
   /** A clipboard write is silent, so the surface confirms every one with a toast. */
   onCopied: (value: string) => void;
   /**
-   * Where the cursor is, reported up. **The Board still owns it** — this only
-   * mirrors it, so the command palette can title its context block with the
-   * job its acts would act on. A cursor held in two places would drift; this
-   * one is written from the same focus handler that sets the Board's own.
+   * Where the cursor is, reported up. **The Board still owns it** and this
+   * only mirrors it, from the same focus handler that sets the Board's own —
+   * so the palette can title its context block with the job its acts would act
+   * on, and no second cursor exists to drift.
    */
   onCursor?: (jobId: string | null) => void;
-  /** Filled with what the palette can reach here. See `BoardReach`. */
+  /** Filled with what the palette can reach here. `keys.ts` says why. */
   reach?: { current: BoardReach | null };
 };
 
@@ -255,10 +236,7 @@ export function Jobs({
     setQuery("");
   }
 
-  /**
-   * Put the cursor in the search field — `/`, and what the palette's Search
-   * row reaches. Named because two callers press it now.
-   */
+  /** `/`, and the palette's Search row. Named because two callers press it. */
   function focusSearch(): void {
     search.current?.focus();
     search.current?.select();

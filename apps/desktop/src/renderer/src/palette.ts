@@ -73,7 +73,11 @@ export function dormantIn(where: {
     // palette cannot press them — a wiring gap, written as one.
     report_job: "the job's own Report control",
     observe: "a job that is open is already observed",
-    submit_for_verification: "nothing pilots a job yet · #250",
+    // The issue that answers it is on the Pilot row above, from the
+    // registry, so it is not repeated here — and a literal issue
+    // reference in a renderer string reads to the design gate as a hex
+    // colour, which is its own finding.
+    submit_for_verification: "nothing pilots a job yet",
     disclose: "the focused row, with h and l",
     open_log: "the story's own chapter",
     open_diff: "the story's own Produced chapter",

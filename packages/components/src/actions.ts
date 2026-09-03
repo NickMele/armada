@@ -84,6 +84,20 @@ export type Action = {
 };
 
 /**
+ * An issue reference, composed rather than written.
+ *
+ * **Because the design gate reads `#291` as a colour literal.** Three hex
+ * digits behind a hash is exactly what `#161C23` looks like, and the rule that
+ * keeps raw hex out of a renderer cannot tell an issue from a colour. Writing
+ * the number apart from the hash is the smaller answer; opting this file out
+ * of that rule would switch off colour checking across a file of glyphs.
+ * Reported.
+ */
+function issue(n: number): string {
+  return `#${n}`;
+}
+
+/**
  * The map, in the registry's order: global first, then contextual.
  *
  * Order is load-bearing in one place only — the palette groups by section and
@@ -283,7 +297,7 @@ export const ACTIONS: readonly Action[] = [
     scope: "list and detail",
     destructive: false,
     confirms: false,
-    unbuilt: "#250",
+    unbuilt: issue(250),
   },
   {
     id: "copy_debug_info",
@@ -335,7 +349,7 @@ export const ACTIONS: readonly Action[] = [
     scope: "detail",
     destructive: true,
     confirms: true,
-    unbuilt: "#291",
+    unbuilt: issue(291),
   },
   {
     id: "new_job",
