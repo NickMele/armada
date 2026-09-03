@@ -37,6 +37,7 @@ import { DispatchJob } from "@armada/screens";
 import type { Answered } from "@armada/screens";
 import { watchOf } from "@armada/screens";
 import { Reports } from "@armada/screens";
+import { Worktrees } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
 import { ACT_LABEL, CONFIRM, reclaimed, said } from "@armada/screens";
 import { Jobs } from "@armada/screens";
@@ -67,6 +68,8 @@ export const WAITING: BridgeState = NOTHING_YET;
  * screens are a layer. */
 const readDiff = (jobId: string | null): void => void window.armada.readDiff(jobId);
 const readReports = (want: boolean): void => void window.armada.readReports(want);
+const readHeld = (want: boolean): void => void window.armada.readHeld(want);
+const reclaimOne = (jobId: string) => window.armada.reclaimWorktree(jobId);
 const readEvidence = (jobId: string | null): void => void window.armada.readEvidence(jobId);
 const readCall = (jobId: string, callId: string) => window.armada.readCall(jobId, callId);
 const openArtifact = (jobId: string, what: Artifact) => window.armada.openArtifact(jobId, what);
@@ -106,6 +109,12 @@ export function App() {
   // head gives: a report is filed about one Job and the rate is read across all
   // of them.
   const [auditing, setAuditing] = useState(false);
+  // Whether the held worktrees are open. **Its own view for the reports' kind
+  // of reason and not the same one**: what is decided there is which of a set
+  // to give back, which no Job row can be asked, and putting a disk decision on
+  // the Board would put a control nobody can act on beside rows that exist to
+  // be acted on.
+  const [clearing, setClearing] = useState(false);
   // The Manifest the rail names, and what a new Job is proposed against.
   // Bridge dispatches into the workspace it is pointed at, so this is one
   // value rather than a field on the form.
@@ -450,7 +459,7 @@ export function App() {
   }
 
   const scoped = state.holds.manifests.find((held) => held.id === scope);
-  const head = headOf({
+  const base = headOf({
     reading: reading !== null,
     composing,
     auditing,
@@ -463,6 +472,41 @@ export function App() {
     onReadReports: () => setAuditing(true),
     onRefresh: () => void refresh(),
   });
+
+  // The fifth view, composed here rather than in `headOf`.
+  //
+  // **`packages/shell` is outside this change's scope**, so the head that
+  // serves four views is left as it is and this one is assembled beside it. It
+  // is the same shape — a title, and the one control that leaves — and it
+  // belongs in that file with the other four.
+  //
+  // No `Esc` hint: the key is bound while a Job is open and nowhere else, and a
+  // hint for a key that does nothing is worse than no hint.
+  const head = clearing
+    ? {
+        title: "Held worktrees",
+        actions: (
+          <Button variant="ghost" size="sm" onClick={() => setClearing(false)}>
+            Back to the list
+          </Button>
+        ),
+      }
+    : {
+        ...base,
+        actions: (
+          <>
+            {/* Ghost, beside the other two ghosts. Giving disk back is read
+                deliberately and is queued on nobody, so it is in the head and
+                never on a row — the same argument that places `Reported`. */}
+            {reading !== null || composing || auditing ? null : (
+              <Button variant="ghost" size="sm" onClick={() => setClearing(true)}>
+                Held disk
+              </Button>
+            )}
+            {base.actions}
+          </>
+        ),
+      };
 
   return (
     <>
@@ -482,6 +526,7 @@ export function App() {
         onSurface={() => {
           setOpenJob(null);
           setComposing(false);
+          setClearing(false);
         }}
       >
         <div className="flex flex-col gap-6">
@@ -612,6 +657,23 @@ export function App() {
             <Boundary region="the filed reports" {...guarded}>
               <Reports reports={state.reports} onWant={readReports} onCopied={setCopied} />
             </Boundary>
+          ) : clearing ? (
+            /* What Fleet is holding disk for, read across every Job at once.
+               The half of the reclaim rule that is a person's: Fleet has
+               already taken back everything it could prove nobody needs, and
+               this is where the rest is chosen from, item by item. */
+            <Boundary region="the held worktrees" {...guarded}>
+              <Worktrees
+                held={state.held}
+                onWant={readHeld}
+                // The receipt belongs to the press that asked for it, so it is
+                // answered to the surface rather than published: a reclaim
+                // changes no row on the board, and a notice for one person's
+                // gesture would outlive the screen they made it on.
+                onReclaim={reclaimOne}
+                onCopied={setCopied}
+              />
+            </Boundary>
           ) : composing ? (
             /* Describing the work is the path and the form is the override, so
                the composer is what `Enter by hand` swaps to rather than what
@@ -739,6 +801,7 @@ export function App() {
               setOpenJob(null);
               setComposing(false);
               setAuditing(false);
+              setClearing(false);
             },
             filter: (tabId) => reach.current?.tab(tabId as BoardTab),
             search: () => reach.current?.search(),
