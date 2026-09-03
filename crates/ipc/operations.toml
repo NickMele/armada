@@ -680,9 +680,11 @@ to infer intent, which is the call a person is most likely to be right about.
 afterwards, and Bridge chooses its words off the same field. `gate_undecided` is
 the gate never having weighed the work at all, so advancing on it would pass a
 step nothing ruled on; whether that wants an act of its own is open. The
-mechanical tier is unreachable by construction as well as by the check: a failed
-Check is `completed_failed`, terminal, with no stopped step for any act to land
-on. `build` failing is not a matter of opinion.
+mechanical tier is unreachable by the check, and `build` failing is not a matter
+of opinion. It stopped being unreachable *by construction* when #208 landed: a
+Job whose gate-failure attempts are spent now holds at `awaiting_repair` with a
+stopped step, which is a step an act could land on. The refusal is the check
+alone now, and it is the check that has to hold.
 
 **Recorded as an override and never as a pass.** The step move is `stopped ->
 advanced` carrying the trigger it overruled, with the person as the actor, so
