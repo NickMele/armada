@@ -390,32 +390,48 @@ impl Working {
         (self.job.clone(), self.step.clone(), self.drone.clone())
     }
 
-    /// The step this Drone is on has been resumed by a person.
+    /// The **stopped** step this Drone is on has been handed back by a person.
     ///
-    /// **The chain starts again and the declaration does not.** A redirect
-    /// leaves the step and its plan exactly where they were — what is stale is
-    /// how long the step has been running and the look it already spent, and a
-    /// Drone that thrashed once and was steered can thrash again.
+    /// **What starts again is what a stopped step stopped spending.** The wall
+    /// clock and the tool-call count are readings of work being done, and none
+    /// was being done: the step was frozen at the escalation until somebody
+    /// spoke. A Drone that never stopped takes
+    /// [`steered`](Working::steered) instead, and moves neither.
     ///
-    /// **The step's baseline does not move either.** A redirect is the same
-    /// step being done again, so what it entered with is still what it entered
-    /// with — remeasuring here would hand the step whatever it had written
-    /// before the person spoke, and it would then pass `diff_nonempty` on
-    /// nothing.
+    /// **The step's baseline does not move, and nor does the declaration.** A
+    /// redirect is the same step being done again, so what it entered with is
+    /// still what it entered with — remeasuring here would hand the step
+    /// whatever it had written before the person spoke, and it would then pass
+    /// `diff_nonempty` on nothing.
     pub(crate) fn resumed(&mut self, at: Timestamp) {
         self.step_began = at.clone();
         self.calls_before = self.transcript.progress().calls;
-        self.chain = Chain::Working;
-        // The pokes go back with the chain, and for the same reason: a person
-        // has just spoken into the session, so what the Drone did before they
-        // did is not what its answer to them is measured from.
-        self.listening(at);
         // **The dry runs do not go back.** The pokes are patience and a person
         // has just spent some of theirs; a Check run is minutes of a machine,
         // and a redirect is not a refund. `checked_for` is cleared only because
         // `step_began` moved above, so the time it accounted for is already
         // outside the window.
         self.checked_for = Duration::ZERO;
+        self.steered(at);
+    }
+
+    /// A person has spoken to a Drone that **never stopped**. The healthy half
+    /// of [`resumed`](Working::resumed), and the whole difference is that no
+    /// clock moves here.
+    ///
+    /// **The step's ceilings go on meaning what they meant.** Nothing bounds
+    /// how often a person may redirect — `crate::resume` says so — so a wall
+    /// clock or a call count refilled by being spoken to is no ceiling at all,
+    /// and a Drone could be held past every one of them by somebody typing at
+    /// it. The work they count was never interrupted; only its direction was.
+    ///
+    /// **The chain and the pokes do go back**, because neither is a budget the
+    /// step spends: a Drone steered off one loop can thrash into the next and
+    /// has to be caught there, and a person who has just spoken has spent their
+    /// own patience rather than the step's.
+    pub(crate) fn steered(&mut self, at: Timestamp) {
+        self.chain = Chain::Working;
+        self.listening(at);
     }
 
     /// Fleet has started running this step's Checks for the Drone, at this
