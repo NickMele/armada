@@ -161,11 +161,24 @@ test("a fault with no code goes back as an outcome", () => {
     ok: false,
     why: "faulted",
     request: SENT,
-    outcome: { ok: false, why: "transport", detail: "socket closed" },
+    outcome: {
+      ok: false,
+      why: "transport",
+      detail: "socket closed",
+      fault: { why: "unreachable", method: "POST", path: "/jobs/from_request" },
+    },
   };
   const read = answeredAs(answer, seen());
   expect(read.proposal).toEqual({ at: "unasked" });
-  expect(read.outcome).toEqual({ ok: false, why: "transport", detail: "socket closed" });
+  expect(read.outcome).toEqual({
+    ok: false,
+    why: "transport",
+    detail: "socket closed",
+    // Carried whole. The fault is what the app's failure surface builds its
+    // code, its route and its next step from, and a reading that dropped it
+    // would put the old one-line message back.
+    fault: { why: "unreachable", method: "POST", path: "/jobs/from_request" },
+  });
   // Still echoed: the request survives a fault that said nothing about it.
   expect(read.request).toBe(SENT);
 });

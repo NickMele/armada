@@ -65,7 +65,13 @@ export function said(outcome: Outcome): string {
       // Drawn as a failure notice above, with everything it carries.
       return "";
     case "transport":
-      return `Fleet did not answer: ${outcome.detail}`;
+      // **The fallback and not the rendering.** `App.tsx` draws this through
+      // `transportFailure`, with a code, the route, the wait and something to
+      // copy — this is what is left for a surface that has only a sentence to
+      // put it in, so it names the route rather than repeating the machine's
+      // words on their own. "Fleet did not answer" is the same line whichever
+      // route it was about, and that was the whole complaint.
+      return `Fleet did not answer ${outcome.fault.method} ${outcome.fault.path}: ${outcome.detail}`;
   }
 }
 
