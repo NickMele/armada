@@ -18,8 +18,9 @@
 // failure. **Nothing here mints one.** An id from a process that writes no log
 // line joins to nothing, and a labelled blank is worse than an absent row.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Dialog } from "@armada/components";
+import { ClipboardList } from "lucide-react";
 
 import { NOTHING_YET } from "../../shared/bridge";
 import type { BridgeState } from "../../shared/bridge";
@@ -36,6 +37,10 @@ import { Reports } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
 import { ACT_LABEL, CONFIRM, said } from "@armada/screens";
 import { Jobs } from "@armada/screens";
+import { BOARD_TABS, type BoardReach, type BoardTab } from "@armada/screens";
+import { carryOut, dormantIn } from "./palette";
+import { Palette, useCommandPalette } from "@armada/shell";
+import { copyDebugInfoFor } from "@armada/shell";
 import { Shell } from "@armada/shell";
 import { watchUncaught } from "@armada/shell";
 import type { Uncaught } from "@armada/shell";
@@ -116,6 +121,15 @@ export function App() {
   // the header's act set: sharing one flag would grey out the header's kills
   // while a review note was being sent.
   const [deciding, setDeciding] = useState<string | null>(null);
+  // Whether the command palette is up, and where the Board's cursor is.
+  // **The cursor is mirrored, not owned** — the Board holds it and reports it,
+  // so the palette can title its context block with the job its acts would act
+  // on. Two cursors would drift.
+  const palette = useCommandPalette();
+  const [cursor, setCursor] = useState<string | null>(null);
+  // What the palette can reach on the Board: the state filter, and the search
+  // field. Both belong to that surface and stay there — see `BoardReach`.
+  const reach = useRef<BoardReach | null>(null);
 
   // The open Job, read out of the list rather than copied beside it. A Job that
   // leaves the list — superseded, or gone from a resync — closes its own detail
@@ -186,11 +200,20 @@ export function App() {
     setReturning(null);
   }, [returning]);
 
+  // The Job every palette act acts on: the one read whole, or the one under
+  // the Board's cursor. In that order, because a Job open on screen is
+  // unambiguously what is in front of you.
+  const onWhat = reading ?? state.jobs.find((job) => job.id === cursor);
   const live = state.connection.state === "connected";
   const statement = statementOf(state.connection, now, state.readAt);
   const fleet = fleetFailure(state.connection, statement, state.bridge, now);
   const refused = outcome !== null && !outcome.ok && outcome.why === "refused" ? outcome.error : null;
   const guarded = { bridge: state.bridge, onCopied: setCopied };
+  // The failure Copy debug info would copy, where one is on screen. Fleet
+  // being unreachable outranks a throw in a handler: it is the one that
+  // explains every other symptom, so it is the one worth sending.
+  const failing =
+    fleet ?? (uncaught === null ? null : uncaughtFailure(uncaught, state.bridge));
 
   async function propose(draft: Draft): Promise<void> {
     setOutcome(await window.armada.proposeJob(draft));
@@ -525,6 +548,8 @@ export function App() {
                   stays usable while the list says what it could not draw. */}
               <Boundary region="the job list" {...guarded}>
                 <Jobs
+                  onCursor={setCursor}
+                  reach={reach}
                   jobs={state.jobs}
                   stale={!live}
                   now={now}
@@ -574,6 +599,56 @@ export function App() {
           {CONFIRM[confirming.act].body}
         </Dialog>
       )}
+
+      {/* The palette, over everything. It is the one surface present whatever
+          else is — which is why it is a sibling of the shell rather than a
+          child of a screen — and its context is the Job being read whole where
+          there is one, and the Board where there is not. */}
+      <Palette
+        open={palette.open}
+        onClose={palette.onClose}
+        context={reading === null ? "board" : "detail"}
+        on={onWhat === undefined ? null : `${onWhat.id} — ${onWhat.title}`}
+        surfaces={[
+          { id: "board", label: "Job Board", shortcut: "⌘1", icon: ClipboardList },
+        ]}
+        filters={reading === null ? BOARD_TABS : []}
+        jobs={state.jobs.map((job) => ({ id: job.id, label: `${job.id} — ${job.title}` }))}
+        // Bridge serves no settings surface, so the section is empty and draws
+        // no head. A head over nothing is the labelled blank this app refuses.
+        settings={[]}
+        dormant={dormantIn({
+          reading: reading !== null,
+          cursor,
+          failing: failing !== null,
+        })}
+        onChoose={(choice) =>
+          carryOut(choice, onWhat?.id ?? null, {
+            openJob: setOpenJob,
+            closeJob: close,
+            compose: () => setComposing(true),
+            surface: () => {
+              setOpenJob(null);
+              setComposing(false);
+              setAuditing(false);
+            },
+            filter: (tabId) => reach.current?.tab(tabId as BoardTab),
+            search: () => reach.current?.search(),
+            copyDebugInfo: () => {
+              if (failing !== null) copyDebugInfoFor(failing, setCopied);
+            },
+            confirm: (what, jobId) => setConfirming({ act: what, jobId }),
+          })
+        }
+        // Every destructive act confirms, even from the palette. It hands the
+        // act over and stays open behind the dialog, which is the way back.
+        onConfirmAct={(id) => {
+          const jobId = onWhat?.id;
+          if (id === "kill" && jobId !== undefined) {
+            setConfirming({ act: "kill_job", jobId });
+          }
+        }}
+      />
 
       <CopiedToast copied={copied} />
       <SaidToast said={telling} />

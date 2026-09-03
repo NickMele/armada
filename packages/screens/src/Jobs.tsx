@@ -105,6 +105,26 @@ import { isTerminal, Row } from "./Row";
  */
 const DRAWN = 200;
 
+/**
+ * What the command palette can reach on this surface.
+ *
+ * **An imperative handle, and deliberately one.** The state filter and the
+ * search field belong to the Board; lifting either into `App` so a palette row
+ * could set it would move a control out of the surface it is drawn on, and the
+ * filter's own rule — that choosing a tab clears the search — would then live
+ * in two places. The palette is a superset of the UI, not a second owner of
+ * its state.
+ *
+ * It is filled on every render and read only when a row is chosen, so there is
+ * no moment where the handle names a `chooseTab` from a stale board.
+ */
+export type BoardReach = {
+  /** `1`–`5`, and the search clears with them, exactly as a tab press does. */
+  tab: (tab: BoardTab) => void;
+  /** `/` — put the cursor in the search field, selecting what is there. */
+  search: () => void;
+};
+
 /** What the fold sentence says once the fold has been undone. */
 const EARLIER_SHOWN = "Every dispatch is drawn, including the ones that are over.";
 
@@ -144,6 +164,15 @@ export type JobsProps = {
   onClearTerminal: (jobIds: readonly string[]) => void;
   /** A clipboard write is silent, so the surface confirms every one with a toast. */
   onCopied: (value: string) => void;
+  /**
+   * Where the cursor is, reported up. **The Board still owns it** — this only
+   * mirrors it, so the command palette can title its context block with the
+   * job its acts would act on. A cursor held in two places would drift; this
+   * one is written from the same focus handler that sets the Board's own.
+   */
+  onCursor?: (jobId: string | null) => void;
+  /** Filled with what the palette can reach here. See `BoardReach`. */
+  reach?: { current: BoardReach | null };
 };
 
 export function Jobs({
@@ -158,6 +187,8 @@ export function Jobs({
   onCompose,
   onClearTerminal,
   onCopied,
+  onCursor,
+  reach,
 }: JobsProps) {
   // Folded once for the whole board rather than per row. The dependency is the
   // array Bridge published, which is replaced on every event and never mutated,
@@ -224,6 +255,15 @@ export function Jobs({
     setQuery("");
   }
 
+  /**
+   * Put the cursor in the search field — `/`, and what the palette's Search
+   * row reaches. Named because two callers press it now.
+   */
+  function focusSearch(): void {
+    search.current?.focus();
+    search.current?.select();
+  }
+
   /** The rows, as the DOM has them — the only place their drawn order is. */
   function rowsOnScreen(): HTMLElement[] {
     return Array.from(document.querySelectorAll<HTMLElement>("[data-job-id]"));
@@ -276,8 +316,7 @@ export function Jobs({
     const job = under();
     switch (read.act) {
       case "search":
-        search.current?.focus();
-        search.current?.select();
+        focusSearch();
         break;
       case "move":
         move(read.by);
@@ -331,6 +370,7 @@ export function Jobs({
   const latest = useRef(press);
   useEffect(() => {
     latest.current = press;
+    if (reach !== undefined) reach.current = { tab: chooseTab, search: focusSearch };
   });
   useEffect(() => {
     const listen = (event: KeyboardEvent): void => latest.current(event);
@@ -348,7 +388,9 @@ export function Jobs({
       // set the same value — two cursors that drift is the alternative.
       onFocusCapture={(event) => {
         const row = (event.target as HTMLElement).closest<HTMLElement>("[data-job-id]");
-        if (row?.dataset.jobId !== undefined) setCursor(row.dataset.jobId);
+        if (row?.dataset.jobId === undefined) return;
+        setCursor(row.dataset.jobId);
+        onCursor?.(row.dataset.jobId);
       }}
     >
       {terminalIds.length === 0 ? null : (
