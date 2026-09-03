@@ -24,9 +24,9 @@
   line-height: var(--leading-sm);
 }
 
-/* The code, or the region standing in for one where a boundary fallback has
-   no wire code. Its own line under the copy, so the sentence is read first and
-   the value a person quotes is read next. */
+/* The code — off the wire, or minted by Bridge where the failure never crossed
+   one. Its own line under the copy, so the sentence is read first and the
+   value a person quotes is read next. */
 .armada-failure__code {
   display: flex;
 }

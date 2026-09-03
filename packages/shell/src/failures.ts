@@ -1,17 +1,31 @@
-// What each of Bridge's three failures says.
+// What each of Bridge's failures says.
 //
-// **Three builders, not one message.** Fleet unreachable, a renderer that
+// **A builder each, not one message.** Fleet unreachable, a renderer that
 // threw, and a Job the store refused are three different situations demanding
 // three different things, and folding them into one sentence is the defect this
 // file exists to repair. They share a shape — `Failure notice` — the way six
 // Job states share one row shape.
 //
-// Nothing here mints an error code. A code's declaration lives beside the
-// variant that raises it, and a code invented in Bridge would be in no manifest
-// and mean nothing to the lookup Bridge does.
+// **Bridge mints a code for each of its own faults, and they are declared
+// here.** Only one of these five failures crosses the wire, so only one arrives
+// with a code — and the error treatment's `always` is what separates an error
+// from a failed Job, both of which are the same red. The rule that a code's
+// declaration lives beside the variant that raises it is kept rather than
+// broken: the variant is the builder below, and the declaration sits above it.
+//
+// The namespace and the argument for it are in `codes.ts` beside `ErrorCode`
+// in `@armada/components`, including why these do not join the manifest
+// `cargo xtask verify-error-codes` collects. **Nothing collects these**, so the
+// bound on a duplicate is that every one is declared in this file.
 
 import { File } from "lucide-react";
-import type { DebugField, DebugPayload, FailureDetail, FailureMachineValue } from "@armada/components";
+import type {
+  BridgeCode,
+  DebugField,
+  DebugPayload,
+  FailureDetail,
+  FailureMachineValue,
+} from "@armada/components";
 
 import type { BridgeIdentity } from "@armada/protocol";
 import type { Connection } from "@armada/protocol";
@@ -45,7 +59,19 @@ import type { Uncaught } from "./uncaught";
  * a failure without naming the file the rest of it is written in is one
  * somebody has to answer with a question.
  */
-export type FailureFacts = Omit<DebugPayload, "at">;
+export type FailureFacts = Omit<DebugPayload, "at" | "code"> & {
+  /**
+   * The code, required here where the payload leaves it optional.
+   *
+   * **One field, read twice.** The chip on screen and the `code` row in the
+   * copied artifact are the same value by construction rather than by two
+   * call sites agreeing — which is the same reason `debugInfo` is the only
+   * thing that formats a payload. `DebugPayload` keeps it optional because a
+   * caller outside this file may genuinely have none; every failure built
+   * here has one, and the type is where that stops being a convention.
+   */
+  code: string;
+};
 
 export type Failure = {
   /** What broke, one sentence, in the app's voice. */
@@ -149,6 +175,18 @@ function fleetRun(runId: string): FailureMachineValue[] {
   return [{ value: runId, copyValue: runId, meta: "Fleet run" }];
 }
 
+/** Fleet's runtime file named no process Bridge could connect to. */
+const FLEET_NOT_RUNNING: BridgeCode = "bridge.fleet.not_running";
+
+/** Fleet's runtime file could not be read, so its liveness is unknown. */
+const FLEET_RUNTIME_FILE_REFUSED: BridgeCode = "bridge.fleet.runtime_file_refused";
+
+/** Fleet's process is alive and its socket has stopped answering. */
+const FLEET_UNREACHABLE: BridgeCode = "bridge.fleet.unreachable";
+
+/** Fleet speaks a protocol Bridge will not open a socket for. */
+const FLEET_VERSION_SKEW: BridgeCode = "bridge.fleet.version_skew";
+
 /**
  * Fleet, when the one connection is not a connection.
  *
@@ -182,11 +220,17 @@ export function fleetFailure(
    * different things to do about it, and the sentence above renders both as
    * Fleet being unavailable.
    *
-   * No code and no run id. Bridge never reached Fleet in any of these, and
-   * nothing here mints either.
+   * **A minted code and no run id**, which is not an inconsistency: a code
+   * names a kind of failure and Bridge knows which of the four this is, while
+   * a run id names a process instance and the one that would be quoted here is
+   * Fleet's, which Bridge never reached. The four codes are four because the
+   * four answers are four — `not_running` and `unreachable` are opposite fixes,
+   * and one code over both would be the generic message this file exists to
+   * repair, moved into the field a person quotes.
    */
-  function facts(fields: DebugField[]): FailureFacts {
+  function facts(code: BridgeCode, fields: DebugField[]): FailureFacts {
     return {
+      code,
       message: statement.headline,
       fields: [
         { key: "connection", value: connection.state },
@@ -224,7 +268,7 @@ export function fleetFailure(
       }
       return {
         ...base,
-        payload: facts(absent),
+        payload: facts(FLEET_NOT_RUNNING, absent),
         detailsLabel: "What the runtime file answered",
         details,
         note:
@@ -237,7 +281,7 @@ export function fleetFailure(
     case "runtime_file_refused":
       return {
         ...base,
-        payload: facts([
+        payload: facts(FLEET_RUNTIME_FILE_REFUSED, [
           { key: "why", value: connection.fault.why },
           { key: "runtime_file", value: connection.fault.path },
           { key: "detail", value: connection.fault.detail },
@@ -262,7 +306,7 @@ export function fleetFailure(
     case "unreachable":
       return {
         ...base,
-        payload: facts([
+        payload: facts(FLEET_UNREACHABLE, [
           { key: "pid", value: String(connection.fleet.pid) },
           { key: "port", value: String(connection.fleet.port) },
           { key: "silent_for", value: elapsed(now - connection.sinceMs) },
@@ -281,7 +325,7 @@ export function fleetFailure(
     case "version_skew":
       return {
         ...base,
-        payload: facts([
+        payload: facts(FLEET_VERSION_SKEW, [
           { key: "why", value: connection.why },
           // Not the tail's `fleet protocol`, and not always equal to it: the
           // tail carries what the runtime file said, and this is what the
@@ -333,6 +377,17 @@ export type Caught = {
 };
 
 /**
+ * A region of the window threw while drawing and its boundary caught it.
+ *
+ * One code and not one per region. **A region names what stopped drawing, not
+ * what went wrong**, so a code per region would have as many values as the app
+ * has boundaries and would say nothing about the fault — which is the whole
+ * objection to having drawn the region in the chip. The region travels as a
+ * field, where a reader can join it to the component.
+ */
+const RENDER_BOUNDARY: BridgeCode = "bridge.render.boundary";
+
+/**
  * The renderer threw.
  *
  * The headline names the region in the app's voice rather than the class of
@@ -356,9 +411,11 @@ export function rendererFailure(
     headline: `Bridge could not draw ${region}`,
     // The exception's own words, not the headline: the headline names the
     // region in the app's voice, and a person reading this in an issue needs
-    // what threw. No code and no run id — this never reached Fleet, so there
-    // is neither to quote and neither is minted here.
+    // what threw. A minted code and no run id — the code names a fault Bridge
+    // knows the kind of, and the run id would have named a Fleet process this
+    // never reached.
     payload: {
+      code: RENDER_BOUNDARY,
       message: caught.message,
       fields: [
         { key: "region", value: region },
@@ -393,6 +450,22 @@ export function rendererFailure(
 }
 
 /**
+ * Fleet returned a job row it could not read, with no code of its own.
+ *
+ * **The one minted code that names something Bridge did not do.** The failure
+ * is the store's; what Bridge mints a code for is the condition it observed —
+ * a row arriving unreadable — and the `bridge.` prefix is what keeps that
+ * honest, because it says which process minted the value rather than which one
+ * broke. Fleet is still the sole authority for the ids on the row, and nothing
+ * here invents one of those.
+ *
+ * Minting here rather than leaving the row codeless is the whole point of the
+ * decision: an exception in the rule that separates an error from a status is
+ * an exception on the surface a person meets it on.
+ */
+const JOB_UNREADABLE: BridgeCode = "bridge.job.unreadable";
+
+/**
  * A Job the store refused.
  *
  * `LoadAllError` returns what loaded beside what failed, so this is one bad row
@@ -407,8 +480,11 @@ export function jobFailure(row: UnreadableJob, bridge: BridgeIdentity): Failure 
     // **The one wire failure that is not a `WireError`.** `UnreadableJob`
     // carries a job id and a sentence, and no code, no run id and no chain, so
     // the payload of a refused row is thinner than the payload of a refused
-    // command by everything the store could have said and did not.
+    // command by everything the store could have said and did not. The code is
+    // Bridge's, minted for the condition; the run id and the chain stay absent,
+    // because those name things only Fleet could have supplied.
     payload: {
+      code: JOB_UNREADABLE,
       message: row.fault,
       ...(named ? { job_id: row.job_id } : {}),
       fields: [
@@ -457,10 +533,15 @@ export function jobFailure(row: UnreadableJob, bridge: BridgeIdentity): Failure 
  * minted on the other side of the connection. It names Fleet's run, and the row
  * says so.
  *
- * Nothing here interprets the code. It is opaque to Bridge — looked up, never
- * parsed — and the message is what renders when the lookup misses. The whole
- * `fields` map and the whole `chain` are folded away rather than summarised,
- * because a refusal's `message` names one problem even where several exist.
+ * **The one failure whose code Bridge did not mint**, and nothing here
+ * interprets it. It is opaque to Bridge — looked up, never parsed — and the
+ * message is what renders when the lookup misses. It carries no `bridge.`
+ * prefix, which is how a reader tells at a glance that Fleet raised it and a
+ * manifest holds what it means.
+ *
+ * The whole `fields` map and the whole `chain` are folded away rather than
+ * summarised, because a refusal's `message` names one problem even where
+ * several exist.
  */
 export function refusalFailure(error: WireError, bridge: BridgeIdentity): Failure {
   const details: FailureDetail[] = [
@@ -508,12 +589,22 @@ export function refusalFailure(error: WireError, bridge: BridgeIdentity): Failur
   };
 }
 
+/** A promise rejected with nothing waiting on it. */
+const UNCAUGHT_REJECTION: BridgeCode = "bridge.uncaught.rejection";
+
+/** Something threw outside a render, where no boundary could catch it. */
+const UNCAUGHT_THROW: BridgeCode = "bridge.uncaught.throw";
+
 /**
  * A throw or a rejection no boundary saw.
  *
  * The two are told apart rather than folded together: a rejection is a command
  * that never answered, and a throw is a handler that stopped halfway. What a
  * person does about them is not the same.
+ *
+ * **Two codes for the same reason the sentence is two sentences.** `from` is
+ * already a field, and a reader who has only the chip would otherwise have to
+ * open the payload to learn the one thing that decides what to do.
  */
 export function uncaughtFailure(uncaught: Uncaught, bridge: BridgeIdentity): Failure {
   const details: FailureDetail[] = [{ label: "Message", value: uncaught.message }];
@@ -522,8 +613,11 @@ export function uncaughtFailure(uncaught: Uncaught, bridge: BridgeIdentity): Fai
   return {
     // `from` leads the fields because it is the difference that matters: a
     // rejection is a command that never answered, and a throw is a handler
-    // that stopped halfway.
+    // that stopped halfway. It is the same difference the code carries, and
+    // both are here rather than one: the chip is quoted from a screenshot and
+    // the field is grepped out of a log.
     payload: {
+      code: uncaught.from === "rejection" ? UNCAUGHT_REJECTION : UNCAUGHT_THROW,
       message: uncaught.message,
       fields: [{ key: "from", value: uncaught.from }, ...logField(bridge)],
       chain: frames(uncaught.stack, uncaught.message),
