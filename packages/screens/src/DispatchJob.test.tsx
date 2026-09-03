@@ -8,21 +8,19 @@
 // it, and a guard nothing exercises is a guard nobody knows broke.
 //
 // **The button being disabled is not the test.** That is a rendering, and a
-// rendering is only as good as the caller re-rendering in time: a key repeat, a
-// synthetic click or an app that awaits before it moves the proposal all reach
-// the handler with the control still drawn live. So every case here presses a
-// control that is *enabled* and asserts on what was sent.
+// press can reach the handler with the control still drawn live: a key repeat,
+// a synthetic click, a frame not yet painted. So every case here presses a
+// control that is enabled and asserts on what was sent.
 //
 // The story in `packages/components` proves the other half — that the control
 // goes off while a call is out — because that half is a rendering and belongs
 // where renderings are agreed.
 
-import { useState } from "react";
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
-import type { Proposal } from "@armada/components";
 
 import { DispatchJob } from "./DispatchJob";
+import type { Answered } from "./proposal";
 import { mount, unmount } from "./mounted";
 
 afterEach(unmount);
@@ -30,23 +28,37 @@ afterEach(unmount);
 /** What the form is holding when the guard has to work. */
 const REQUEST = "The board flickers every time an event lands.";
 
+/** An answer that leaves the request in the field, so a second press has one. */
+const UNRESOLVED: Answered = {
+  proposal: { at: "unresolved" },
+  outcome: null,
+  request: REQUEST,
+};
+
+/** A promise the test settles, so a call can be held open across two presses. */
+function held(): { promise: Promise<Answered>; answer: (read: Answered) => void } {
+  let answer!: (read: Answered) => void;
+  const promise = new Promise<Answered>((resolve) => {
+    answer = resolve;
+  });
+  return { promise, answer };
+}
+
 /**
  * Mount it, and hand back every request that reached the caller.
  *
- * **`onDispatch` deliberately moves nothing.** A caller that answered by
- * setting `reading` would disable the control and prove the rendering rather
- * than the guard; this is the app at its slowest, which is the case the guard
- * exists for.
+ * `onPropose` answers with whatever the test hands it, so a call can be left
+ * outstanding — which is the only state the guard exists for.
  */
-function opened(proposal: Proposal = { at: "unasked" }): { sent: string[] } {
+function opened(answering: () => Promise<Answered>): { sent: string[] } {
   const sent: string[] = [];
   mount(
     <DispatchJob
-      proposal={proposal}
-      onDispatch={(request) => sent.push(request)}
-      onReset={() => {}}
+      onPropose={(request) => {
+        sent.push(request);
+        return answering();
+      }}
       onOpen={() => {}}
-      echoed={null}
       byHand={<p>The form, by hand</p>}
       disabled={false}
     />,
@@ -58,74 +70,79 @@ function field() {
   return page.getByRole("textbox", { name: "Request" });
 }
 
-test("two presses on a live control are one call", async () => {
-  const { sent } = opened();
+test("two presses in one task are one call", async () => {
+  // Never settled: the call stays out for the whole test, which is the window
+  // the second press has to be refused in.
+  const { sent } = opened(() => new Promise<Answered>(() => {}));
   await userEvent.fill(field(), REQUEST);
 
-  const dispatch = page.getByRole("button", { name: "Dispatch" });
-  // Still enabled on the second press, which is the whole point: the caller has
-  // not answered, so nothing about the rendering has changed.
-  await userEvent.click(dispatch);
-  await expect.element(dispatch).toBeEnabled();
-  await userEvent.click(dispatch);
+  // **Both presses in one task, on purpose.** React has not re-rendered between
+  // them, so the second reaches the handler with the button still enabled in
+  // the DOM — which is the whole case the ref exists for and the one a click
+  // helper that waits for the control to settle can never produce.
+  const button = page.getByRole("button", { name: "Dispatch" }).element() as HTMLButtonElement;
+  button.click();
+  button.click();
 
   expect(sent, "a second press fired a second model call").toEqual([REQUEST]);
+  // And the rendering caught up, which is the half a person sees.
+  await expect.element(page.getByRole("button", { name: "Reading the request" })).toBeDisabled();
 });
 
 /**
- * The guard releases when the answer arrives, and not before.
+ * The answer releases it, and not before.
  *
  * **The half that keeps the test above honest.** A guard that never let go
  * would pass it and wedge the surface after one dispatch, which on screen reads
  * exactly like the guard working.
  */
 test("the answer releases it", async () => {
-  const sent: string[] = [];
-  mount(<Answering sent={sent} />);
+  const first = held();
+  let next: () => Promise<Answered> = () => first.promise;
+  const { sent } = opened(() => next());
 
   await userEvent.fill(field(), REQUEST);
   await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
   expect(sent).toEqual([REQUEST]);
-  // A call is out, so the control says so and sends nothing.
-  await expect.element(page.getByRole("button", { name: "Reading the request" })).toBeDisabled();
 
-  await userEvent.click(page.getByRole("button", { name: "Answer it" }));
+  next = () => Promise.resolve(UNRESOLVED);
+  first.answer(UNRESOLVED);
+  // The refusal put the request back, so the second press has one to send.
+  await expect.element(page.getByRole("button", { name: "Dispatch" })).toBeEnabled();
+
   await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
   expect(sent, "the answer did not release the guard").toEqual([REQUEST, REQUEST]);
 });
 
 /**
- * The caller, moving the proposal the way the app does: `reading` the moment a
- * request goes out, and an answer when one comes back. The refusal it answers
- * with is the one that leaves the request in the field, so the second dispatch
- * has something to send.
+ * A call that threw leaves the surface usable. **Wedged on `reading` is worse
+ * than the throw** — nothing on screen says the call is dead, and the guard
+ * never releases — so the state goes back and the throw carries on.
  */
-function Answering({ sent }: { sent: string[] }) {
-  const [proposal, setProposal] = useState<Proposal>({ at: "unasked" });
-  return (
-    <>
-      <button type="button" onClick={() => setProposal({ at: "unresolved" })}>
-        Answer it
-      </button>
-      <DispatchJob
-        proposal={proposal}
-        onDispatch={(request) => {
-          sent.push(request);
-          setProposal({ at: "reading" });
-        }}
-        onReset={() => {}}
-        onOpen={() => {}}
-        echoed={null}
-        byHand={<p>The form, by hand</p>}
-        disabled={false}
-      />
-    </>
-  );
-}
+test("a call that threw gives the surface back", async () => {
+  // The rethrow is the point, and `dispatch` is called through `void`, so it
+  // lands as an unhandled rejection. In the app that is what `watchUncaught`
+  // draws; here it is caught so the runner does not fail the test for the
+  // behaviour the test is asserting.
+  const expected = (event: PromiseRejectionEvent) => event.preventDefault();
+  window.addEventListener("unhandledrejection", expected);
+  try {
+    const { sent } = opened(() => Promise.reject(new Error("the preload has no proposer")));
+    await userEvent.fill(field(), REQUEST);
+    await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
+
+    const dispatch = page.getByRole("button", { name: "Dispatch" });
+    await expect.element(dispatch).toBeEnabled();
+    await userEvent.click(dispatch);
+    expect(sent, "a throw left the surface unable to ask again").toEqual([REQUEST, REQUEST]);
+  } finally {
+    window.removeEventListener("unhandledrejection", expected);
+  }
+});
 
 /** Nothing is sent for a field holding only spaces, by the button or otherwise. */
 test("whitespace is not a request", async () => {
-  const { sent } = opened();
+  const { sent } = opened(() => Promise.resolve(UNRESOLVED));
   await userEvent.fill(field(), "   \t ");
   await expect.element(page.getByRole("button", { name: "Dispatch" })).toBeDisabled();
   expect(sent).toEqual([]);
@@ -137,7 +154,7 @@ test("whitespace is not a request", async () => {
  * surface that made the proposer worth building.
  */
 test("hand entry is reachable and leavable", async () => {
-  opened();
+  opened(() => Promise.resolve(UNRESOLVED));
   await userEvent.click(page.getByRole("button", { name: "Enter by hand" }));
   await expect.element(page.getByText("The form, by hand")).toBeVisible();
 

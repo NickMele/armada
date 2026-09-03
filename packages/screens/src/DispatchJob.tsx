@@ -6,45 +6,52 @@
 // them. `docs/concepts/job-proposer.md` calls hand entry the override, and the
 // composer this swaps to is what hand entry became.
 //
-// # The double-press guard is here, and it is two things
+// # The proposal is this screen's state, not the app's
+//
+// Nothing outside this surface reads it, it dies when the surface closes, and
+// the app holding it made the guard below depend on the app re-rendering in
+// time. What does cross back is the half the app draws: a refusal with no
+// drawing here is an `Outcome`, and `answeredAs` is what decides which of the
+// two an answer is.
+//
+// # The double-press guard, and why it is two things
 //
 // There is no in-flight guard on the preload call, so two presses are two model
 // calls and two drafted plans — two of everything at the gate, and somebody
 // deleting one by hand. **The form is what stops it.**
 //
 // The control being off while a call is out is the first half and the one a
-// person sees. The second half is this: a press that arrives anyway sends
-// nothing, because one request is outstanding until an answer moves the
-// proposal off `reading`. A disabled attribute is a rendering, and a rendering
-// is not a guarantee — a key repeat, a synthetic click or a caller that has not
-// re-rendered yet all reach the handler with the button still drawn live.
+// person sees. The second half is the ref: a press that arrives anyway sends
+// nothing, because one request is outstanding until its promise settles. A
+// disabled attribute is a rendering, and a rendering is not a guarantee — a key
+// repeat and a synthetic click both reach the handler with the button drawn
+// live.
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { Button, DispatchRequest } from "@armada/components";
 import type { Proposal } from "@armada/components";
 
+import type { Answered } from "./proposal";
+
 /** What the control that goes back to describing is called. */
 const BACK = "Describe the work instead";
 
 export type DispatchJobProps = {
-  /** What the proposer answered, or that it has not been asked. */
-  proposal: Proposal;
   /**
-   * Send the request. **Called at most once per answer** — see the guard
-   * above — and never with a blank one.
+   * Send the request, and answer with what came back.
+   *
+   * **A promise rather than a callback**, for the reason `onReadCall` is one:
+   * the answer belongs to the press that asked for it and to nothing else, so
+   * publishing it as app state would make one person's gesture part of what
+   * every surface re-renders on.
+   *
+   * Called at most once per answer, and never with a blank request.
    */
-  onDispatch: (request: string) => void;
-  /** Drop what came back, so the field is a fresh request again. */
-  onReset: () => void;
+  onPropose: (request: string) => Promise<Answered>;
   /** Open one of the jobs that came back, where its own gate is drawn. */
   onOpen: (jobId: string) => void;
-  /**
-   * What the field should hold, where Fleet echoed a request back. Applied
-   * when it changes and never otherwise, so nothing overwrites typing.
-   */
-  echoed: string | null;
   /** Hand entry, built by the caller. The composer, and the override. */
   byHand: ReactNode;
   /** Nothing may be dispatched while the connection is not live. */
@@ -56,17 +63,15 @@ export type DispatchJobProps = {
 };
 
 export function DispatchJob({
-  proposal,
-  onDispatch,
-  onReset,
+  onPropose,
   onOpen,
-  echoed,
   byHand,
   disabled,
   disabledNote,
   onCopied,
 }: DispatchJobProps) {
   const [request, setRequest] = useState("");
+  const [proposal, setProposal] = useState<Proposal>({ at: "unasked" });
   // Which of the two ways through this surface is open. Describing is the
   // path, so it is what the surface opens on.
   const [hand, setHand] = useState(false);
@@ -75,28 +80,31 @@ export function DispatchJob({
   // the press and the answer would be a second chance to fire.
   const outstanding = useRef(false);
 
-  // The answer released it, whatever the answer was. `reading` is the only
-  // state a call is out in, so anything else means this surface is free.
-  useEffect(() => {
-    if (proposal.at !== "reading") outstanding.current = false;
-  }, [proposal]);
-
-  // Fleet's echo, put back in the field. A refused request comes back unchanged
-  // and this is what makes that true rather than merely stated.
-  useEffect(() => {
-    if (echoed !== null) setRequest(echoed);
-  }, [echoed]);
-
-  function dispatch(): void {
+  async function dispatch(): Promise<void> {
     const asked = request.trim();
-    if (outstanding.current || proposal.at === "reading" || disabled || asked === "") return;
+    if (outstanding.current || disabled || asked === "") return;
     outstanding.current = true;
-    onDispatch(asked);
+    setProposal({ at: "reading" });
+    try {
+      const read = await onPropose(asked);
+      setProposal(read.proposal);
+      // Fleet's echo, put back in the field. A refused request comes back
+      // unchanged, and this is what makes that true rather than only stated.
+      if (read.request !== null) setRequest(read.request);
+    } catch (thrown) {
+      // A surface left on `reading` is worse than the throw: nothing on it says
+      // the call is dead and the control never comes back. The throw carries on
+      // to the app's own handler for a rejection nothing caught.
+      setProposal({ at: "unasked" });
+      throw thrown;
+    } finally {
+      outstanding.current = false;
+    }
   }
 
   function reset(): void {
     setRequest("");
-    onReset();
+    setProposal({ at: "unasked" });
   }
 
   if (hand) {
@@ -118,7 +126,7 @@ export function DispatchJob({
     <DispatchRequest
       request={request}
       onRequest={setRequest}
-      onDispatch={dispatch}
+      onDispatch={() => void dispatch()}
       onEnterByHand={() => setHand(true)}
       onReset={reset}
       onOpen={onOpen}
