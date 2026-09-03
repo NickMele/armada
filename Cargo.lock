@@ -7,6 +7,7 @@ name = "acceptance"
 version = "0.0.0"
 dependencies = [
  "adapter-traits",
+ "api",
  "config",
  "core-model",
  "fleet",
