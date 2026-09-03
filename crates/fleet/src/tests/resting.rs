@@ -292,6 +292,17 @@ async fn a_run_that_ends_with_nothing_submitted_escalates_on_the_next_turn() {
         fleet.the_only_slot().await.lock().await.is_none(),
         "the slot was not given back"
     );
+
+    // **And this is what the reap was for.** `restart_step` asks three
+    // questions and the escalation on its own answers none of them: it wants a
+    // `stopped` step, no Drone standing, and a worktree still on disk. Left
+    // `running` under a held slot it refused twice over, so the only act on
+    // offer was redispatching the whole Job.
+    let restarted = fleet
+        .restart_step(&job)
+        .await
+        .expect("a reaped step is one a person can restart");
+    assert_ne!(restarted.status(), JobStatus::Escalated);
 }
 
 /// **The reap is bounded, and it says how much it heard.**
