@@ -473,7 +473,7 @@ pub(crate) async fn turns_sent(
                         .heard()
                         .into_iter()
                         .filter_map(|event| match event {
-                            DroneEvent::Said { text } => Some(text),
+                            DroneEvent::Said { text, .. } => Some(text),
                             _ => None,
                         })
                         .collect()

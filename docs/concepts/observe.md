@@ -93,7 +93,7 @@ It used to be forced: one Drone worked a Job's steps in turn, so a step read at 
 | --- | --- | --- |
 | `Called` | The tool, the call's id, and what the call was on — a path, a command, a pattern — with a flag saying whether it was cut | The Drone reached for something, and what it did with it |
 | `Answered` | The call's id, whether the tool itself failed | What came back |
-| `Said` | The Drone's own text | Prose, which advances nothing |
+| `Said` | Text that crossed the session, and `by` says which way | Prose, which advances nothing |
 | `Refused` | The tool, the call, the harness's wording | Reached for and stopped |
 | `Started` | Session, model, MCP server count | The session, and whether confinement held |
 | `Unrecognised` | The kind | The stream carried something the vocabulary has no variant for — a new event, or the Drone's reasoning |
@@ -102,6 +102,10 @@ It used to be forced: one Drone worked a Job's steps in turn, so a step read at 
 | `Instructed` | Which turn it was, and what Armada told the Drone, whole | Armada spoke into the session |
 | `Checked` | One declared Check, as Fleet ran it — the same `CheckRun` a step's panel carries | Fleet ran something the Drone never can |
 | `Produced` | What the worktree held, by name and change kind | Fleet read what the step made |
+
+**Prose is the one `DroneEvent` that is not always the Drone's**, so the decoder carries the speaker rather than the reader recovering it. A Drone's stream is two channels: the output channel is the Drone writing, and the input channel is the harness replaying what was typed at the session — the brief a step opened with, a person's redirect, a poke. Both decoded to one variant, so what a Drone was told was recorded as what it said, and the longest thing on the pane was Armada quoting itself under the Drone's name. The channel is known at the line that carries it and nothing matches on the wording, which would break the moment `../contracts/agent-prompt.md` revised a word.
+
+**An echoed turn and an `Instructed` row are both Armada's and neither is a duplicate of the other.** `Instructed` is what Fleet wrote and sent, with the occasion it sent it for and the lines it wrote as block headings; the echo is the session confirming the words landed, and it is also where a turn the harness itself wrote arrives. A surface asking what Armada told a Drone reads `Instructed`; one drawing the conversation in order draws both.
 
 **`Missed` is the one row that is not a `DroneEvent`.** It is the sink saying how much of the record is not there, which the vocabulary has no way to say. It is written to the file and is not shown to a viewer, whose losses are the subscription's rather than the sink's.
 

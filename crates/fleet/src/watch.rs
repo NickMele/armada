@@ -26,7 +26,7 @@
 use core::fmt;
 use std::sync::{Arc, Mutex};
 
-use adapter_traits::{AgentHarness, DroneEvent};
+use adapter_traits::{AgentHarness, DroneEvent, Speaker};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::ChildStdout;
 use tokio::task::JoinHandle;
@@ -207,7 +207,15 @@ impl Watching {
                         so_far.boundaries += 1;
                         so_far.turned += 1;
                     }
-                    DroneEvent::Said { .. } | DroneEvent::Refused { .. } => so_far.turned += 1,
+                    // **The Drone's own prose only.** A turn Armada put into
+                    // the session comes back on the same stream, and counting
+                    // it made `Working::turned_since_redirect` true the moment
+                    // the harness echoed the redirect — before the Drone had
+                    // read it, on a baseline taken before it was sent.
+                    DroneEvent::Said {
+                        by: Speaker::Drone, ..
+                    }
+                    | DroneEvent::Refused { .. } => so_far.turned += 1,
                     _ => {}
                 }
                 // Outside the match, deliberately: every event is one, and an

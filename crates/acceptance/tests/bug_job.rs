@@ -28,7 +28,7 @@
 #[allow(dead_code)]
 mod bench;
 
-use adapter_traits::{CallDetail, DroneEvent, WorktreeSpec};
+use adapter_traits::{CallDetail, DroneEvent, Speaker, WorktreeSpec};
 use core_model::{
     Actor, EscalationTrigger, IllegalStepTransition, IllegalTransition, JobStatus, StepId,
     StepState, StepTarget, StepVerdict, Target, TransitionReason,
@@ -190,6 +190,7 @@ fn a_drone_that_says_it_is_done_and_leaves_escalates_rather_than_completes() {
         },
         DroneEvent::Said {
             text: String::from("I have fixed the bug and every test passes."),
+            by: Speaker::Drone,
         },
         DroneEvent::Ended {
             turns: 4,
