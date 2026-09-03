@@ -675,18 +675,19 @@ fn a_restart_after_a_gate_failure_is_told_its_work_did_not_pass() {
     assert!(said.contains("Address this and submit again"), "{said}");
 }
 
-/// **Four stops, four sentences.** A Drone acts on what it is told, so a
-/// restart after thrashing and a restart after a refusal cannot read the same
-/// — and neither may claim a check ran where none did.
+/// **Five stops, five sentences.** A refusal, a thrashing verdict and a report
+/// that never came cannot hand a Drone the same words. **This file sits on the
+/// 900-line ceiling** — a sixth needs room made for it first.
 #[test]
 fn no_two_triggers_hand_a_drone_the_same_sentence() {
-    let four = [
+    let five = [
         EscalationTrigger::GateFailure,
         EscalationTrigger::EvidenceSuspect,
         EscalationTrigger::GateUndecided,
         EscalationTrigger::Thrashing,
+        EscalationTrigger::NoReport,
     ];
-    let mut said: Vec<String> = four
+    let mut said: Vec<String> = five
         .iter()
         .map(|trigger| {
             let block = restarted(&stopped_by(*trigger));
@@ -699,7 +700,7 @@ fn no_two_triggers_hand_a_drone_the_same_sentence() {
         .collect();
     said.sort();
     said.dedup();
-    assert_eq!(said.len(), 4, "one sentence each: {said:#?}");
+    assert_eq!(said.len(), 5, "one sentence each: {said:#?}");
 
     for trigger in [
         EscalationTrigger::GateUndecided,

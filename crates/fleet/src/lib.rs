@@ -146,4 +146,4 @@ pub use slots::Concurrency;
 pub use sub_dispatch::NotDispatched;
 pub use transcript::{history, log_of, transcript_of, Live, Recording, Spine, Tap, Taps};
 pub use turning::{keep_turning, Turned, Turning, Worked};
-pub use watch::{Progress, Watching};
+pub use watch::{Drained, Progress, Watching};

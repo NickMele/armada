@@ -478,14 +478,18 @@ async fn a_drone_that_will_not_report_is_escalated_with_its_step_stopped() {
     assert_eq!(job.status(), JobStatus::Escalated);
     assert_eq!(
         fleet.last_reason(&job_id).await.unwrap(),
-        Some(TransitionReason::Escalation(EscalationTrigger::Thrashing))
+        // **`no_report` and not `thrashing`**, which is the whole of what a
+        // person reads on the badge: the Drone was told to stop and report and
+        // did not answer, and the finding that produced the directive was
+        // minutes old by the time this fired.
+        Some(TransitionReason::Escalation(EscalationTrigger::NoReport))
     );
     let step = job.step(&core_model::StepId::new("implement")).unwrap();
     assert_eq!(step.state(), StepState::Stopped);
     assert_eq!(
         step.last_verdict(),
         Some(StepVerdict::Failed(
-            stops_the_step().expect("thrashing is step-level")
+            stops_the_step().expect("no_report is step-level")
         )),
         "the step names why it stopped, which is what a restart later resumes"
     );
@@ -683,10 +687,13 @@ fn the_directive_carries_two_of_the_three_fields() {
 /// The registry types the row step-level, which is what lets it name which step
 /// stopped. A change there reads as this failing rather than as a panic in the
 /// daemon.
+///
+/// **It names `no_report` rather than `thrashing`**, so a later edit that moved
+/// the chain back onto the finding fails here rather than on a screen.
 #[test]
-fn thrashing_is_a_trigger_a_step_can_be_stopped_with() {
+fn no_report_is_a_trigger_a_step_can_be_stopped_with() {
     assert_eq!(
         stops_the_step().map(|narrowed| narrowed.trigger()),
-        Some(EscalationTrigger::Thrashing)
+        Some(EscalationTrigger::NoReport)
     );
 }

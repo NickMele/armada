@@ -29,6 +29,7 @@ mod checks;
 mod concurrency;
 mod converging;
 mod coupling;
+mod covering;
 mod crossing;
 mod daemon;
 mod delivering;
