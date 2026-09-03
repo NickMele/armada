@@ -15,6 +15,7 @@ import type {
   JobSummary,
   JudgeInFlight,
   Reason,
+  Settled,
 } from "./protocol";
 import type { QuestionInFlight } from "./waiting";
 import type { ProtocolVersion } from "./version";
@@ -46,7 +47,8 @@ export type Event =
   | ({ kind: "job.files_changed" } & JobFilesChanged)
   | ({ kind: "job.judging" } & JobJudging)
   | ({ kind: "job.asking" } & JobAsking)
-  | ({ kind: "job.forgotten" } & JobForgotten);
+  | ({ kind: "job.forgotten" } & JobForgotten)
+  | ({ kind: "job.landed" } & JobLanded);
 
 /**
  * A Job exists that did not before, carrying the row whole.
@@ -59,6 +61,29 @@ export type Event =
 export type JobCreated = {
   job: JobSummary;
   actor: string;
+  at: string;
+};
+
+/**
+ * Somebody merged, or closed, the pull request a job opened. Since protocol 6.6.
+ *
+ * **Not a state change and not a step move.** The job was finished and recorded
+ * when this happened; what moved is a pull request on a forge, outside Armada
+ * entirely. It carries the row whole, with `landed` filled in, so a list
+ * replaces the row rather than re-reading it.
+ *
+ * **Once per job, ever.** Fleet writes the answer down and never asks again, so
+ * a client may treat it as final.
+ */
+export type JobLanded = {
+  job: JobSummary;
+  /** The address, so a client can say which pull request without the detail. */
+  pull_request: string;
+  settled: Settled;
+  /**
+   * When Fleet **read** this, not when the merge happened. The two differ by up
+   * to one sweep, and the forge is where the exact instant lives.
+   */
   at: string;
 };
 

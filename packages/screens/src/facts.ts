@@ -1,4 +1,5 @@
-// The header's field run on job detail: four facts, on one line.
+// The header's field run on job detail: four facts on one line, and a fifth
+// on the few Jobs that have one.
 //
 // It is here rather than in `JobDetail.tsx` because it is one job — turning a
 // served Job into a list of labelled facts — and the screen beside it is
@@ -8,6 +9,9 @@
 // # Four, and it used to be ten
 //
 // The workflow, the branch, how long it has been alive and what it has spent.
+// A fifth joins them where somebody has merged or closed the pull request,
+// which is the one question a finished Job gets asked and is absent on every
+// Job that has not reached one.
 // Step, Manifest, Model, Origin, Urgency, Drone, Scope and the write-scope
 // overlap were all in here as well, over two lines, and none of them is in the
 // drawing's header. The ones worth reaching are under *Where things are*, which
@@ -24,6 +28,7 @@ import type { JobDetailField } from "@armada/components";
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
 import { span } from "./duration";
+import { LANDED } from "./Row";
 
 /**
  * The run, in the order the drawing runs it: what workflow this is, what branch
@@ -43,6 +48,7 @@ export function factsOf(
   return [
     ...workflowFact(job, workflow),
     ...branchFact(job),
+    ...landedFact(whole),
     ...elapsedFact(job, now),
     ...spendFact(whole),
   ];
@@ -69,6 +75,26 @@ function workflowFact(job: JobSummary, workflow: WorkflowSummary | undefined): J
 function branchFact(job: JobSummary): JobDetailField[] {
   if (job.branch === undefined) return [{ label: "No branch yet" }];
   return [{ value: job.branch, mono: true, copyValue: job.branch }];
+}
+
+/**
+ * Whether the pull request landed, beside the branch it was opened from.
+ *
+ * **Absent on nearly every Job, which is why it is beside the branch and not a
+ * fact of its own line.** It appears the moment there is something to say and
+ * takes no room until then — a Job with no remote, one still running, and one
+ * whose pull request nobody has merged yet all draw nothing here, because
+ * "nobody has merged it yet" is the state a pull request is in from the moment
+ * it exists and is not news about this Job.
+ *
+ * The address itself is not drawn. `JobDelivery.pull_request` is what a person
+ * clicks and there is nowhere in a field run for a link; this says which of the
+ * two things happened, and the *did this land* question is answered by the word
+ * alone. Reported: the header wants the pull request as a link.
+ */
+function landedFact(whole: JobWhole | null): JobDetailField[] {
+  const landed = LANDED[whole?.delivery?.landed ?? ""];
+  return landed === undefined ? [] : [{ label: landed }];
 }
 
 /** How long the Job has been alive, from `created_at`. */
