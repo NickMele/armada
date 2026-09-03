@@ -46,6 +46,7 @@ pub mod drafting;
 pub mod drone;
 mod drone_moves;
 pub mod dry_run;
+pub mod ending;
 pub mod evidence;
 pub mod footprint;
 mod gate;

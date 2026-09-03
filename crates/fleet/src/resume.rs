@@ -1,4 +1,4 @@
-//! The two acts that put a person back on a Job, and what writes their step.
+//! The two acts that put a person back on a Job without redispatching it.
 //!
 //! # Which one applies is decided by the Drone, not by the person
 //! [`redirect`](Fleet::redirect) needs a live session and [`restart_step`] is
@@ -28,8 +28,7 @@ use std::path::Path;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{
-    Actor, Component, Envelope, EscalationTrigger, Job, JobId, JobStatus, Level, StepId,
-    StepLevelTrigger, StepState, StepTarget, Target,
+    Actor, Component, Envelope, Job, JobId, JobStatus, Level, StepId, StepTarget, Target,
 };
 
 use crate::adrift::Adrift;
@@ -329,36 +328,6 @@ where
             })
     }
 
-    /// Stop the step a person has just taken the Drone off.
-    ///
-    /// **The other end of this file's subject.** Everything above consumes a
-    /// stopped step; this is the one act that makes one without the gate having
-    /// ruled on anything, and it is here rather than beside `kill_drone`
-    /// because what it has to get right is `stopped_step`'s contract and not
-    /// the process's.
-    ///
-    /// **`Ok` and unchanged where no step is running**, which is not a fault
-    /// and is the ordinary shape at a step boundary and on a Job whose steps
-    /// have all advanced. `crate::drone_moves` answers the same way about a
-    /// step holding no Drone, for the same reason: what a kill can be sure of
-    /// is the process, and everything else is read off the record.
-    pub(crate) async fn stopped_by_hand(&self, job: &Job) -> Result<Job, Adrift> {
-        let Some(step) = job
-            .current_step()
-            .filter(|row| row.state() == StepState::Running)
-            .map(|row| row.step_id().clone())
-        else {
-            return Ok(job.clone());
-        };
-        let why = StepLevelTrigger::of(EscalationTrigger::DroneKilled)
-            .expect("`drone_killed` is step-level in the registry");
-        // **Human, not Fleet.** Fleet ends a Drone of its own accord nowhere;
-        // this act exists because somebody pressed something, and a row saying
-        // Fleet took the process away would claim a decision it did not make.
-        self.move_step_by(job, &step, StepTarget::Stopped(why), Actor::Human)
-            .await
-    }
-
     /// The step a restart lands on, or why there is not one.
     ///
     /// **A step-level escalation is what makes a restart coherent.** Only a
@@ -372,6 +341,11 @@ where
     /// **A redirect does not call this to decide whether it applies.** It calls
     /// it to learn whether anything has to be unfrozen, which is a different
     /// question and is why this stopped being one predicate.
+    ///
+    /// **Two things write the row this reads.** The gate, when a step's retries
+    /// are spent, and `crate::ending` when a person takes the Drone away — the
+    /// second is the one with no ruling behind it, and it is there rather than
+    /// here because `kill_drone` is its only caller.
     fn stopped_step(&self, job: &Job) -> Result<StepId, Adrift> {
         self.held_for_a_person(job)?;
         // `Job::stopped_on` is the reading `crate::overruling`,
