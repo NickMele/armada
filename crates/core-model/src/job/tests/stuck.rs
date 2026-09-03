@@ -283,9 +283,11 @@ fn budget_spent() -> Job {
     drive(&stopped, &[Target::AwaitingRepair])
 }
 
-/// **The status this whole issue is about, classified.** A person opens it
-/// asking why, and the acts they are offered are the ones that keep the work:
-/// a redirect into the Drone still holding the session, and a redispatch.
+/// **The status this whole issue is about, classified**, and the Drone is gone
+/// because `Ruling::Failed` stands it down: a repair somebody may take a day
+/// over is `awaiting_review`'s wait under another name, and neither holds a
+/// working slot. So the acts are a restart onto the surviving worktree, which
+/// keeps every step that passed, and a redispatch, which keeps none.
 ///
 /// **The override is absent and no rule here says so.** `checks_passed` is
 /// read out of the store, the Checks did not pass, and that is the same
@@ -293,28 +295,7 @@ fn budget_spent() -> Job {
 /// which is why widening the classification to this status could not make a
 /// Check overrulable by accident. #208.
 #[test]
-fn a_spent_budget_is_redirected_and_never_overruled() {
-    let stuck = classify(
-        &budget_spent(),
-        Standing {
-            checks_passed: false,
-            ..all_there()
-        },
-    );
-
-    assert_eq!(
-        stuck.stopped_by(),
-        Some(EscalationTrigger::GateFailure),
-        "the step's own verdict is what says why"
-    );
-    assert_eq!(stuck.step(), Some(&StepId::new("repro")));
-    assert_eq!(stuck.recourse(), [Recourse::Redirect, Recourse::Redispatch]);
-}
-
-/// With the Drone gone the same Job is restartable instead — the exclusivity
-/// `escalated` already has, unchanged by the status it is read beneath.
-#[test]
-fn a_spent_budget_with_no_drone_is_restarted() {
+fn a_spent_budget_is_restarted_and_never_overruled() {
     let stuck = classify(
         &budget_spent(),
         Standing {
@@ -324,9 +305,36 @@ fn a_spent_budget_with_no_drone_is_restarted() {
     );
 
     assert_eq!(
+        stuck.stopped_by(),
+        Some(EscalationTrigger::GateFailure),
+        "the step's own verdict is what says why"
+    );
+    assert_eq!(stuck.step(), Some(&StepId::new("repro")));
+    assert_eq!(
         stuck.recourse(),
         [Recourse::RestartStep, Recourse::Redispatch]
     );
+}
+
+/// **The classification asks the slot, never the status**, so a Drone somehow
+/// standing on a Job held for repair is offered a redirect — the exclusivity
+/// `escalated` already has, read beneath a different status.
+///
+/// It is unreachable through Fleet today and asserted anyway: what keeps a
+/// redirect off this status is that no process is left to inject into, and a
+/// rule here that named the status instead would be a second answer to the
+/// same question.
+#[test]
+fn a_spent_budget_still_answers_to_the_slot_and_not_to_the_status() {
+    let stuck = classify(
+        &budget_spent(),
+        Standing {
+            checks_passed: false,
+            ..all_there()
+        },
+    );
+
+    assert_eq!(stuck.recourse(), [Recourse::Redirect, Recourse::Redispatch]);
 }
 
 /// Every trigger `overrulable` refuses is a trigger the classification refuses,

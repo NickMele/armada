@@ -95,18 +95,20 @@ why = "Every status variant owes a generated UI verb and icon, and `criterion_id
 terminal = false
 mode = "Waited on"
 who_is_acting = "Person"
-drone_process = "Alive and idle, holding the session that wrote the code. Clock suspended, for `awaiting_review`'s reason"
+drone_process = "None. The retry budget is spent, and what is left is a person's to answer — so the session ends and the working slot goes back, exactly as at `awaiting_review`. Clock suspended, for that row's reason"
 step_machine = "Frozen at the step whose budget was spent. That step is `stopped` and carries `failed(gate_failure)`, which is what it carried when this landed at `completed_failed` instead"
 step_states = ["advanced", "not_started", "retrying", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["running -> awaiting_repair"]
-transitions_out = ["awaiting_repair -> running", "awaiting_repair -> queued", "awaiting_repair -> piloted", "awaiting_repair -> completed_failed", "awaiting_repair -> killed"]
+transitions_out = ["awaiting_repair -> queued", "awaiting_repair -> piloted", "awaiting_repair -> completed_failed", "awaiting_repair -> killed"]
 in_code = "Not yet"
 notes = """
 A step spent its gate-failure retry budget and the work is unfinished. **The Job did not fail and no verdict is in dispute**, which is what `completed_failed` and `escalated` would each have said. `build` failing is not a matter of opinion — that is why a Check cannot be overruled, and it was never a reason to end the Job over one.
 
-**Nothing here is a new act.** The Drone kept its session and its worktree, so a redirect costs no respawn and consumes no attempt; a restart, a Pilot and a redispatch reach it as they reach `escalated`. What is absent is the override: `Stuck` reads `checks_passed` off the store rather than off the trigger, and the Checks did not pass here, so the one act that would wave a red suite through is unreachable without a line saying so. #208.
+**Nothing here is a new act.** A restart, a Pilot and a redispatch reach it as they reach `escalated`, and a restart is the one that keeps the work: it re-queues, and the fresh Drone opens with the verdict, the Judge's answers and the gaming flags off the record. What is absent is the override — `Stuck` reads `checks_passed` off the store rather than off the trigger, and the Checks did not pass here. #208.
+
+**The redirect is absent too, and that is this row's own correction.** #208 kept the Drone alive so an instruction would cost no respawn, which kept the working slot for as long as a person took to read the failure — the trade `awaiting_review` made and gave up on 30 Aug 2026, after one Job held the only slot from 13:42 to 18:38 while somebody read it. A repair a person may take a day over is that wait wearing another name, so the session ends, `awaiting_repair -> running` is gone rather than left unfired, and every road out goes through the queue.
 
 **The narrow `step_states` is the guard, not a row nobody looked at.** `running -> awaiting_repair` is guarded on `no_step_running` — #179's guard, carried across from the edge it used to sit on — so the step is stopped before the Job moves and `running` cannot arrive. `awaiting_human` is a state nothing writes yet.
 """
@@ -245,7 +247,7 @@ step_machine = "Live, advancing"
 step_states = ["advanced", "not_started", "retrying", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
-transitions_in = ["queued -> running", "awaiting_review -> running", "awaiting_repair -> running", "escalated -> running", "piloted -> running"]
+transitions_in = ["queued -> running", "awaiting_review -> running", "escalated -> running", "piloted -> running"]
 transitions_out = ["running -> awaiting_review", "running -> escalated", "running -> piloted", "running -> awaiting_attestation", "running -> completed_success", "running -> awaiting_repair", "running -> awaiting_approval", "running -> queued", "running -> killed"]
 in_code = "Not yet"
 notes = "The work is being done, but this does not always imply a Drone: returning from `piloted` on Submit for verification leaves `assigned_drone` null, since Fleet invokes Checks itself and the Judge reads the diff. The liveness clock keys on the Drone, not the status, so a surface never renders a heartbeat for a process that is not there."

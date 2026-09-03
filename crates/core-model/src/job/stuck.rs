@@ -197,10 +197,11 @@ impl Stuck {
             // about a step: `stalled` escalates over a live Drone with no step
             // stopped, and that is the case a redirect most obviously fits.
             //
-            // Beneath `awaiting_repair` a redirect is the ordinary answer and
-            // the reason the status exists: the Drone that wrote the code is
-            // still there holding its session, so telling it what the Check
-            // said costs no respawn and spends no attempt.
+            // **Beneath `awaiting_repair` it is always the restart**, and that
+            // is the status's own doing rather than a rule here: the Drone is
+            // stood down when the budget is spent, so `drone_holding` is false
+            // and the first arm cannot be taken. #208's redirect held the
+            // working slot for as long as a person took to read the failure.
             if standing.drone_holding {
                 recourse.push(Recourse::Redirect);
             } else if stopped.is_some() && standing.worktree_on_disk {

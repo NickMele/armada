@@ -349,7 +349,7 @@ where
                 // `running` would be refused and `last_verdict` would stay
                 // unwritten — which is exactly what left an escalated Job's
                 // step reading `running` with nothing saying why, and then a
-                // failed one's. `running -> completed_failed` is guarded on
+                // failed one's. `running -> awaiting_repair` is guarded on
                 // `no_step_running`, so this order is now the machine's rather
                 // than only this file's.
                 let job = match stopping(ruling) {
@@ -358,9 +358,10 @@ where
                 };
                 self.applied(&job, ruling).await?;
                 // Terminated without a turn, and the worktree is kept — on the
-                // two rulings that end the Job. A refusal keeps its Drone
-                // alive and idle, which is what makes a redirect cost no
-                // respawn. See `Ruling::ends_the_drone`.
+                // one ruling here that leaves a person to answer at their own
+                // pace. A spent budget frees the slot in this turn, as a human
+                // gate does; a refusal keeps its Drone alive and idle, which is
+                // what makes a redirect cost no respawn. `Ruling::ends_the_drone`.
                 if ruling.ends_the_drone() {
                     self.end_the_drone(working).await;
                 }

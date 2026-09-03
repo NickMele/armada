@@ -39,8 +39,8 @@ use crate::gate::CheckOutput;
 /// | trying again could change the answer | `CheckFailed::the_drone_can_answer` | only that type knows what each failure means |
 ///
 /// **What is exhausted is still `Failed`, and it no longer ends the Job.** It
-/// holds at `awaiting_repair` and keeps its Drone, so telling that Drone what
-/// it is missing is one instruction rather than a new Job. `#208`.
+/// holds at `awaiting_repair` and stands its Drone down there, because a repair
+/// somebody may take a day over costs no fleet time. `#208`.
 #[derive(Debug)]
 pub enum Ruling {
     /// The step passed. The Drone that worked it is ended and a fresh one takes
@@ -139,12 +139,16 @@ pub enum Ruling {
     /// asked only after the mechanical one holds, so a failing Check costs
     /// nothing.
     ///
-    /// **The Drone is kept, and that is what `#208` changed.** It was
-    /// terminated here, which put a redirect out of reach at the one moment a
-    /// person most wants one — the session holding everything the process knew
-    /// while writing the code is exactly what makes telling it what it is
-    /// missing cheap. It ends without a turn either way: what a person decides
-    /// to say is the part they were asked for.
+    /// **The Drone is terminated without a turn, and the Job is not.** Keeping
+    /// the session was tried for the fortnight this status has existed, so that
+    /// a redirect into the process that wrote the code would cost no respawn.
+    /// What it also cost was the working slot, held from the last Check to
+    /// whenever somebody read the failure — which is `awaiting_review`'s
+    /// measured hour count wearing a different name, and the owner's ruling is
+    /// that a repair is a wait like a review. The context is worth less than
+    /// the slot, and a fresh Drone opens with what stopped this one:
+    /// `crate::resume::what_stopped` reads the verdict, the Judge's answers and
+    /// the gaming flags off the record.
     ///
     /// The worktree is kept and the output below is readable, unchanged.
     Failed {
@@ -384,22 +388,27 @@ impl Ruling {
         }
     }
 
-    /// Whether the Drone's session ends here. **True on one ruling**, and it
-    /// is the one where there is nothing left to say to it: the workflow's last
-    /// step passed.
+    /// Whether the Drone's session ends here. **True where the Job is waiting
+    /// on a person and no longer only where it is over**: the workflow's last
+    /// step passed, or a step's retry budget is spent.
     ///
-    /// A refusal, a suspect verdict and a spent retry budget all stop the work
-    /// for a person, and `job-statuses.toml` gives both `escalated` and
-    /// `awaiting_repair` the Drone "alive, idle" — so the session stays,
+    /// A refusal and a suspect verdict escalate, and `job-statuses.toml` gives
+    /// `escalated` the Drone "alive, idle" — so the session stays there,
     /// holding its context, and a redirect is a turn injected into it rather
     /// than a respawn. `crate::aftermath` is what stops that idle Drone being
-    /// reaped into a second move on a Job that has already stopped.
+    /// reaped into an `escalated -> escalated` move.
     ///
-    /// [`Failed`](Ruling::Failed) was here until `#208`. Ending the Drone was
-    /// consistent while the Job ended with it, and both were the same mistake:
-    /// the process holding the context that produced the failure is the one
-    /// thing that can answer it cheaply.
+    /// **[`Failed`](Ruling::Failed) was not here for the fortnight
+    /// `awaiting_repair` existed, and the slot is why it is back.** `#208`
+    /// kept the session so a redirect would cost no respawn; what it also kept
+    /// was the working slot, for as long as a person took to read the failure.
+    /// `awaiting_review` made exactly that trade and gave it up on 30 Aug 2026,
+    /// after one Job held the only slot from 13:42 to 18:38 doing nothing —
+    /// **a person's review costs no fleet time**, and a repair somebody may
+    /// take a day over is the same wait under another name. So this ruling
+    /// ends the Drone, the Job holds at `awaiting_repair`, and what a person
+    /// types reaches a **fresh** Drone through the queue.
     pub fn ends_the_drone(&self) -> bool {
-        matches!(self, Ruling::Finished { .. })
+        matches!(self, Ruling::Finished { .. } | Ruling::Failed { .. })
     }
 }

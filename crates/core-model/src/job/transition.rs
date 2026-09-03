@@ -74,7 +74,6 @@ pub static EDGES: &[Edge] = &[
     edge(AwaitingRepair, Killed),
     edge(AwaitingRepair, Piloted),
     edge(AwaitingRepair, Queued),
-    edge(AwaitingRepair, Running),
     edge(AwaitingReview, AwaitingAttestation),
     guarded(AwaitingReview, CompletedSuccess, Guard::EveryStepAdvanced),
     triggered(AwaitingReview, Escalated, EscalationTrigger::Interrupted),

@@ -475,6 +475,30 @@ fn awaiting_repair_is_admitted_once_the_worked_step_is_stopped() {
         .all(|row| row.state() != StepState::Running));
 }
 
+/// **A Job held for repair has no road back to `running`, and that is the
+/// point.** `#208` gave it one so a redirect could answer the failure into the
+/// session that wrote the code; keeping that session kept the working slot for
+/// as long as a person took to read the failure, which is the trade
+/// `awaiting_review` measured and gave up. The Drone is stood down, so the only
+/// way on is `-> queued` and a fresh Drone that admission starts.
+///
+/// **The edge is removed rather than left unfired**, which is the same
+/// discipline `running -> completed_failed` got from the same issue: an edge
+/// nothing takes is one the next reader assumes something does.
+#[test]
+fn a_job_held_for_repair_goes_back_through_the_queue_and_never_straight_to_running() {
+    let out: Vec<JobStatus> = JobStatus::AwaitingRepair.transitions_out().collect();
+
+    assert!(
+        !out.contains(&JobStatus::Running),
+        "no session is left to resume into: {out:?}"
+    );
+    assert!(
+        out.contains(&JobStatus::Queued),
+        "a restart re-queues, as both answers at a human gate do: {out:?}"
+    );
+}
+
 /// **A step that was never entered does not hold the Job open.** The guard says
 /// no step is running, not that every step ran: a Job that fails on its first
 /// step leaves the rest `not_started`, and refusing that would make a failure
