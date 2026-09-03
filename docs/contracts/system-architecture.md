@@ -504,7 +504,7 @@ Agent. Nine invocations exist across the docs; two carry a toolset.
 | Drone | Kit + Manifest resolved, plus Evidence MCP | Yes | One Job | **Agent** |
 | Helm | Its own set, via the Fleet MCP. Manifest-scoped | No | A session | **Agent** |
 | Judge | None | No | One call | Model call, in `verification` |
-| Job proposer | None | No | One call | Model call, in `fleet`. Reads a request and proposes a Job — its workflow and its scope. Renamed from Job-shape classifier: shape became derived and workflow selection joined it, so neither half of that name survived |
+| Job proposer | None | No | One call | Model call, in `fleet`. Reads a request and proposes a Job — its workflow, its title and the split. Renamed from Job-shape classifier: shape became derived and scope became the workflow's first step, so neither half of that name survived. See [Job proposer](../concepts/job-proposer.md) |
 | Voice / copy generation | None | No | Per message | Model call |
 | Manifest scanner | Unclear | No | Wizard loop | Open item |
 | Clarification round | The Drone's | The Drone's | Within a Job | A Drone turn, not separate |
