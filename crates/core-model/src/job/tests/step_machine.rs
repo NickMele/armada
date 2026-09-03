@@ -398,6 +398,135 @@ fn gate_failure() -> Option<StepLevelTrigger> {
     StepLevelTrigger::of(EscalationTrigger::GateFailure)
 }
 
+fn drone_killed() -> StepLevelTrigger {
+    StepLevelTrigger::of(EscalationTrigger::DroneKilled).expect("drone_killed is step-level")
+}
+
+/// A Job escalated over a step that is still being worked — the `stalled`
+/// shape, and the one the freeze had no answer for.
+///
+/// The escalation is Job-level, so nothing stops the step on the way: this is
+/// the record a liveness escalation genuinely leaves, with a Drone alive and
+/// idle on a `running` row.
+fn escalated_over_a_running_step() -> Job {
+    step(&running(), &first(), StepTarget::Running)
+        .transition(
+            Target::Escalated(EscalationTrigger::Stalled),
+            Actor::Fleet,
+            when(),
+        )
+        .expect("running -> escalated")
+        .job
+}
+
+/// The second exception to the freeze: a person ending the Drone stops the step
+/// it was on, beneath `escalated`.
+///
+/// **The move is a person's and the actor says so.** Without it the row stayed
+/// `running` on a Job holding no Drone, which is neither true nor restartable —
+/// `#313`.
+#[test]
+fn a_person_ending_a_drone_stops_the_step_beneath_an_escalated_job() {
+    let job = escalated_over_a_running_step();
+    let moved = job
+        .transition_step(
+            &first(),
+            StepTarget::Stopped(drone_killed()),
+            Actor::Human,
+            when(),
+        )
+        .expect("a person may take the Drone off a step of a Job they are holding");
+
+    let row = moved.job.step(&first()).expect("the row is there");
+    assert_eq!(row.state(), StepState::Stopped);
+    assert_eq!(
+        row.last_verdict(),
+        Some(StepVerdict::Failed(drone_killed()))
+    );
+    assert_eq!(
+        moved.job.status(),
+        JobStatus::Escalated,
+        "the Job stays put"
+    );
+    assert_eq!(
+        moved.job.stopped_on().map(|(step, _)| step.clone()),
+        Some(first()),
+        "and the step a restart lands on is now findable"
+    );
+    assert_eq!(moved.event.actor(), Actor::Human);
+    assert_eq!(moved.event.under(), JobStatus::Escalated);
+}
+
+/// The exception admits that one move and nothing beside it.
+///
+/// Each case drops one of the three conditions the predicate is written from,
+/// and each is refused — which is what keeps it an exception rather than a hole
+/// in the freeze.
+#[test]
+fn the_freeze_still_holds_everywhere_the_kill_does_not_reach() {
+    let job = escalated_over_a_running_step();
+
+    // A different trigger. The gate stopping a step beneath a parked Job is
+    // exactly what the freeze exists to refuse.
+    assert!(matches!(
+        job.transition_step(
+            &first(),
+            StepTarget::Stopped(gate_failure().expect("gate_failure is step-level")),
+            Actor::Fleet,
+            when(),
+        ),
+        Err(IllegalStepTransition::StepsAreFrozen { .. })
+    ));
+
+    // A different destination. Nothing is being resumed or advanced here.
+    assert!(matches!(
+        job.transition_step(&first(), StepTarget::Running, Actor::Human, when()),
+        Err(IllegalStepTransition::StepsAreFrozen { .. })
+    ));
+
+    // A different status. `killed` is terminal and its steps are frozen for
+    // good, whoever is asking and whatever they carry.
+    assert!(matches!(
+        reach(JobStatus::Killed).transition_step(
+            &first(),
+            StepTarget::Stopped(drone_killed()),
+            Actor::Human,
+            when(),
+        ),
+        Err(IllegalStepTransition::StepsAreFrozen { .. })
+    ));
+}
+
+/// The exception closes behind the move it admitted.
+///
+/// `from == Running` is one of the three conditions, so once the step is
+/// `stopped` the predicate is false again and the freeze answers — which is
+/// what makes this an opening for one act rather than a status the inner
+/// machine now moves beneath. The refusal is the freeze's and not the edge
+/// table's, because the freeze is asked first.
+#[test]
+fn the_exception_closes_once_the_step_has_stopped() {
+    let stopped = escalated_over_a_running_step()
+        .transition_step(
+            &first(),
+            StepTarget::Stopped(drone_killed()),
+            Actor::Human,
+            when(),
+        )
+        .expect("the first kill lands")
+        .job;
+
+    assert!(matches!(
+        stopped.transition_step(
+            &first(),
+            StepTarget::Stopped(drone_killed()),
+            Actor::Human,
+            when(),
+        ),
+        Err(IllegalStepTransition::StepsAreFrozen { .. })
+    ));
+}
+
 #[test]
 fn the_registry_still_declares_all_six_states() {
     assert_eq!(

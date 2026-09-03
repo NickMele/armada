@@ -341,6 +341,11 @@ where
     /// **A redirect does not call this to decide whether it applies.** It calls
     /// it to learn whether anything has to be unfrozen, which is a different
     /// question and is why this stopped being one predicate.
+    ///
+    /// **Two things write the row this reads.** The gate, when a step's retries
+    /// are spent, and `crate::ending` when a person takes the Drone away — the
+    /// second is the one with no ruling behind it, and it is there rather than
+    /// here because `kill_drone` is its only caller.
     fn stopped_step(&self, job: &Job) -> Result<StepId, Adrift> {
         self.held_for_a_person(job)?;
         // `Job::stopped_on` is the reading `crate::overruling`,

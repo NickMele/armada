@@ -6,7 +6,7 @@
 // is none of those. Nothing here holds state, so nothing here can drift from
 // what the socket believes.
 
-import type { CallRead, Holdings, Outcome } from "@armada/protocol";
+import type { CallRead, Holdings, Outcome, TransportFault } from "@armada/protocol";
 import type { FleetCapacity, JobSummary, WireError } from "@armada/protocol";
 import type { CallArguments } from "@armada/protocol";
 import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
@@ -14,6 +14,28 @@ import { HOST } from "./runtime-file";
 
 /** How long a command waits for an answer before it is a transport failure. */
 const COMMAND_MS = 5000;
+
+/**
+ * What a route waits when a model call is inside the request.
+ *
+ * **Five seconds is a bound on a socket, not on a question.** Every route but
+ * two answers off the store and returns in milliseconds, and `COMMAND_MS` is
+ * sized for those. `POST /jobs/from_request` asks the Job proposer and
+ * `POST /jobs/:id/rerun_gate` asks the Judge — each is a model call made inside
+ * the request, and Fleet's own bound on one is `PROVISIONAL_JUDGE_BUDGET` in
+ * `crates/armada/src/serve.rs`, which is two minutes. Bridge was giving both
+ * five seconds, so proposing a Job timed out every time it was tried and the
+ * only thing a person saw was Bridge's own abort.
+ *
+ * **It is deliberately longer than Fleet's bound.** Fleet refuses a call that
+ * outran its budget with a code, a run id and a chain; Bridge aborting first
+ * throws all three away and replaces them with "aborted due to timeout". The
+ * margin is what makes Fleet's answer the one that arrives.
+ *
+ * Nothing generates this from the Rust constant — the two are coupled by this
+ * comment, and a Fleet budget raised past this is a Bridge that gives up first.
+ */
+export const MODEL_CALL_MS = 150_000;
 
 /**
  * A route under one Job. The id is a path segment, so it is encoded.
@@ -29,19 +51,32 @@ export function route(jobId: string, operation: string): string {
 /** What came back: a body to read, or the refusal to render. */
 export type Answer = { ok: true; body: unknown } | { ok: false; outcome: Outcome };
 
-/** One request to Fleet. Loopback plus the port from the runtime file. */
+/**
+ * One request to Fleet. Loopback plus the port from the runtime file.
+ *
+ * `waitMs` is the wait, and it is a parameter rather than one constant because
+ * two routes put a model call inside the request — see [`MODEL_CALL_MS`]. Every
+ * other caller takes the default and is right to.
+ *
+ * **Every failure here names the route it was about.** A transport failure
+ * carries no `WireError`, so what a person quoting it has is whatever this
+ * builds: which of the three it was, what was asked, and how long Bridge
+ * waited. See `TransportFault` for why the three are three.
+ */
 export async function ask(
   port: number,
   method: "GET" | "POST",
   path: string,
   body?: unknown,
+  waitMs: number = COMMAND_MS,
 ): Promise<Answer> {
+  const asked = { method, path };
   try {
     const answer = await fetch(`http://${HOST}:${port}${path}`, {
       method,
       headers: body === undefined ? undefined : { "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(COMMAND_MS),
+      signal: AbortSignal.timeout(waitMs),
     });
     const text = await answer.text();
     if (!answer.ok) {
@@ -50,14 +85,26 @@ export async function ask(
         ok: false,
         outcome:
           error === null
-            ? { ok: false, why: "transport", detail: `Fleet answered ${answer.status}` }
+            ? {
+                ok: false,
+                why: "transport",
+                detail: `Fleet answered ${answer.status}`,
+                fault: { ...asked, why: "unanswerable", status: answer.status },
+              }
             : { ok: false, why: "refused", error },
       };
     }
     return { ok: true, body: JSON.parse(text) };
   } catch (cause) {
     const detail = cause instanceof Error ? cause.message : String(cause);
-    return { ok: false, outcome: { ok: false, why: "transport", detail } };
+    // `AbortSignal.timeout` rejects with a `TimeoutError`, and it is the one
+    // failure here that says the request went out. Told apart by name rather
+    // than by the message, which is the vendor's wording and not a contract.
+    const fault: TransportFault =
+      cause instanceof Error && cause.name === "TimeoutError"
+        ? { ...asked, why: "timed_out", waitedMs: waitMs }
+        : { ...asked, why: "unreachable" };
+    return { ok: false, outcome: { ok: false, why: "transport", detail, fault } };
   }
 }
 

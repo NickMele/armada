@@ -30,11 +30,11 @@ use tokio::process::{Child, ChildStdin};
 use tokio::sync::Mutex;
 use verification::OutcomeTurn;
 
-use crate::briefing::{Declaring, Redeclaring};
 use crate::converging::ReportNow;
 use crate::questioning::Answer;
 use crate::resume::Redirection;
 use crate::silence::Poke;
+use crate::terms::{Declaring, Redeclaring};
 
 /// A Drone's live session, from the gate's side.
 ///
@@ -69,7 +69,7 @@ pub trait LiveSession {
     /// own**, because a step boundary is one moment and a second injected
     /// message would spend a second turn to say the other half of it. It is
     /// `Option` rather than a separate method for the reason
-    /// [`crate::briefing::Declaring::at`] returns one: most steps ask nothing,
+    /// [`crate::terms::Declaring::at`] returns one: most steps ask nothing,
     /// and a caller cannot tell which without reading the step.
     ///
     /// Asynchronous because the pipe is: a synchronous signature would either
@@ -92,7 +92,7 @@ pub trait LiveSession {
     /// **And not [`interrupt`](LiveSession::interrupt)**, which is a directive
     /// to stop and report. This one asks for nothing but the tool call that
     /// makes a plan true, and a Drone that ignores it has done nothing wrong;
-    /// see [`crate::briefing::Redeclaring`].
+    /// see [`crate::terms::Redeclaring`].
     fn notice(&self, drifted: &Redeclaring)
         -> impl Future<Output = Result<(), Self::Error>> + Send;
 

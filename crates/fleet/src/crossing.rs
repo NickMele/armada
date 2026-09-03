@@ -423,7 +423,7 @@ impl Cleared {
 /// "the Drone is asked to resolve them before continuing" means on a path with
 /// no Drone yet.
 ///
-/// **Drafted wording**, like [`Cleared`] and like `briefing::Redeclaring`.
+/// **Drafted wording**, like [`Cleared`] and like `terms::Redeclaring`.
 /// `docs/contracts/agent-prompt.md` has no sanctioned copy for it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Reconciling(String);

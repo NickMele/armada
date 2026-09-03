@@ -182,8 +182,9 @@ depends on interior detail surviving 12px. The mapping is
 **A reason may draw its verb alone**, and several do — the heading says what
 the glyphs must do where there is one, not that every reason has one. Where
 none of the outlines claims the right thing, the row ships wordless and the
-glyph is filed rather than borrowed: `[no-report-glyph]` below is the worked
-case, and it is the same answer `[doctor-warn-glyph]` reached.
+glyph is filed rather than borrowed: `[no-report-glyph]` and
+`[drone-killed-glyph]` below are the worked cases, and both reach the same
+answer `[doctor-warn-glyph]` did.
 
 **Why the `loop_cap` row was nearly missed.** `loop_cap` was added to the
 escalation enum on 2026-08-21 and existed for several hours with no glyph,
@@ -593,3 +594,25 @@ should paper over.
   scanning the Board can tell this row from a `churning` row on the word
   alone; if they can, the answer is that it stays wordless, the same way
   Doctor's health grid settled `[doctor-warn-glyph]`.
+
+- **[drone-killed-glyph]** Which glyph, if any, carries the escalation
+  reason `drone_killed` — the step whose Drone a person ended? It ships
+  drawing its verb alone, **the Drone was ended by hand**, beside the ten
+  escalation reasons that already draw one. What was looked at and
+  refused: `unplug` is `interrupted`'s, and the distinction against it is
+  the entire reason this trigger exists — a process that died and a
+  process a person pulled the plug on are opposite events wanting
+  opposite responses, so sharing the severed-plug silhouette would undo
+  the split at the one place a reader actually looks. `octagon-alert` is
+  reserved to `stalled` by its own note. `user-check` is the only human
+  silhouette in the badge set and is `awaiting_approval`'s in the Job
+  state group; the human-figure family means a person is *required*,
+  which is the opposite of a person having already acted.
+  `[conventions.step_activity_borrowing]` does not reach it — that lends
+  the Job set's glyphs to step *activity*, and this is an escalation
+  reason. What makes it hard is that every candidate says either "the
+  connection broke" or "a person is needed", and this row means "a person
+  already decided". What decides it is whether a person scanning the
+  Board can tell this row from an `interrupted` row on the words alone;
+  if they can, it stays wordless, the same way `[no-report-glyph]` above
+  and `[doctor-warn-glyph]` were left.

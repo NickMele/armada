@@ -256,7 +256,7 @@ fn every_top_level_origin_narrows_back_to_itself() {
 fn each_enums_size_is_pinned_here_and_compared_to_no_registry() {
     assert_eq!(JobStatus::ALL.len(), 12);
     assert_eq!(StepState::ALL.len(), 6);
-    assert_eq!(EscalationTrigger::ALL.len(), 20);
+    assert_eq!(EscalationTrigger::ALL.len(), 21);
     assert_eq!(Origin::ALL.len(), 5);
     assert_eq!(PilotReason::ALL.len(), 3);
     assert_eq!(CriterionSource::ALL.len(), 3);
@@ -290,6 +290,7 @@ fn every_trigger_says_whether_it_is_about_a_step_or_about_the_job() {
         vec![
             "blocked_by_policy",
             "check_timeout",
+            "drone_killed",
             "evidence_suspect",
             "evidence_too_large",
             "gate_failure",

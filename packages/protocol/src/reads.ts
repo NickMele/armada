@@ -222,7 +222,43 @@ export type Outcome =
   | { ok: false; why: "already_answering" }
   | { ok: false; why: "empty_note" }
   | { ok: false; why: "refused"; error: WireError }
-  | { ok: false; why: "transport"; detail: string };
+  | { ok: false; why: "transport"; detail: string; fault: TransportFault };
+
+/**
+ * What went wrong between Bridge and Fleet, for the one refusal that carries no
+ * `WireError`.
+ *
+ * **Three answers and not one string.** `detail` beside this is the machine's
+ * own words and says nothing a person can act on — "The operation was aborted
+ * due to timeout" is the same sentence whether Bridge waited five seconds on a
+ * read or two and a half minutes on a model call, and it never says which route
+ * it was about. What separates the three is what to do next, which is the
+ * distinction a generic transport message throws away:
+ *
+ * - `timed_out` — the request went out and no answer came back inside the wait.
+ *   **It may still have been carried out**, so the board is what says whether
+ *   to send it again.
+ * - `unreachable` — the fetch itself failed. Whether Fleet read it is unknown.
+ * - `unanswerable` — Fleet answered a status, and the body was not a refusal
+ *   Bridge could read. Fleet is running and the two disagree about the route.
+ *
+ * The method and the route travel on every one, because a failure that does not
+ * name what was asked is one somebody has to answer with a question.
+ */
+export type TransportFault = {
+  /** What Bridge sent, so the failure names the act rather than the app. */
+  method: string;
+  /** The route asked, with ids already encoded into it. */
+  path: string;
+} & (
+  | {
+      why: "timed_out";
+      /** How long Bridge waited, in milliseconds. The dial, not a guess. */
+      waitedMs: number;
+    }
+  | { why: "unreachable" }
+  | { why: "unanswerable"; status: number }
+);
 
 /**
  * What `proposeFromRequest` answered. **Not `Outcome`**, for two reasons that
