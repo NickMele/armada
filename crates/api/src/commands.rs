@@ -213,6 +213,26 @@ pub(crate) async fn forget_job<D: Daemon>(
     }
 }
 
+/// Give the Job's worktree and branch back. **The record survives** — this is
+/// disk, not the row, and `forget_job` is the act that clears the Board.
+///
+/// 409 where the Job is not yet terminal, for `forget_job`'s reason. 200 where
+/// either half was left standing: a branch holding commits the base cannot
+/// reach is kept on purpose, and the answer names it rather than failing.
+pub(crate) async fn reclaim_worktree<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served
+        .daemon()
+        .reclaim_worktree(JobId::carried(job_id))
+        .await
+    {
+        Ok(reclaimed) => answer(StatusCode::OK, &reclaimed, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// Mint a replacement for a stopped Job. **Two Jobs come back**, and
 /// the answer is 200 rather than 201 because the act a caller asked for is the
 /// recovery, not the creation — the new Job's id is in the body.

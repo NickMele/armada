@@ -29,8 +29,8 @@ use std::sync::Arc;
 
 use crate::commands::{
     answer_question, approve_dispatch, approve_review, file_report, forget_job, kill_drone,
-    kill_job, override_verdict, propose_from_request, propose_job, redirect_drone, redispatch_job,
-    reject_job, request_changes, rerun_gate, restart_step,
+    kill_job, override_verdict, propose_from_request, propose_job, reclaim_worktree,
+    redirect_drone, redispatch_job, reject_job, request_changes, rerun_gate, restart_step,
 };
 use crate::daemon::Daemon;
 use crate::queries::{
@@ -202,6 +202,14 @@ pub const SERVED: &[Route] = &[
         operation: "forget_job",
         method: "POST",
         path: "/jobs/:job_id/forget_job",
+    },
+    // The other half of the row above, and its own route because that row says
+    // why: one call with two unrelated things to fail at is worse than two
+    // calls. This one takes the disk and leaves the record.
+    Route {
+        operation: "reclaim_worktree",
+        method: "POST",
+        path: "/jobs/:job_id/reclaim_worktree",
     },
     Route {
         operation: "redispatch_job",
@@ -408,6 +416,10 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/kill_drone", post(kill_drone::<D>))
         .route("/jobs/:job_id/kill_job", post(kill_job::<D>))
         .route("/jobs/:job_id/forget_job", post(forget_job::<D>))
+        .route(
+            "/jobs/:job_id/reclaim_worktree",
+            post(reclaim_worktree::<D>),
+        )
         .route("/jobs/:job_id/redispatch", post(redispatch_job::<D>))
         .route("/jobs/:job_id/redirect", post(redirect_drone::<D>))
         .route("/jobs/:job_id/restart_step", post(restart_step::<D>))

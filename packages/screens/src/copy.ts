@@ -12,7 +12,7 @@
 
 import type { DialogTone } from "@armada/components";
 
-import type { Outcome } from "@armada/protocol";
+import type { Outcome, WorktreeReclaimed } from "@armada/protocol";
 import type { ConfirmableAct, JobAct } from "./JobDetail";
 
 /** What a refusal says. Every one names what happened and what to do. */
@@ -37,6 +37,8 @@ export function said(outcome: Outcome): string {
       return "That kill is already in flight. It was not sent twice.";
     case "already_forgetting":
       return "That job is already being forgotten. It was not sent twice.";
+    case "already_reclaiming":
+      return "That worktree is already being reclaimed. It was not sent twice.";
     case "already_redirecting":
       return "That redirect is already in flight. It was not sent twice.";
     case "already_restarting":
@@ -65,6 +67,32 @@ export function said(outcome: Outcome): string {
     case "transport":
       return `Fleet did not answer: ${outcome.detail}`;
   }
+}
+
+/**
+ * What a reclaim answered, in two sentences: one per half.
+ *
+ * **Both halves are always stated, including the one that worked.** The act
+ * asks for two things and a notice naming only the failure would leave a person
+ * guessing whether the other happened — and the ordinary answer here is a
+ * removed checkout beside a branch deliberately kept, which reads as a failure
+ * unless the sentence says otherwise.
+ *
+ * **A kept branch is not an apology.** Fleet always runs this with the safe
+ * setting and there is no force on this seam, so a branch holding work nothing
+ * has taken surviving is the rule working, and the wording says what to do
+ * about it rather than that something went wrong.
+ */
+export function reclaimed(answer: WorktreeReclaimed): string {
+  const checkout = answer.worktree.removed
+    ? `The worktree at ${answer.worktree.path} is gone.`
+    : `The worktree at ${answer.worktree.path} is still there — ${answer.worktree.why ?? "no reason was given"}.`;
+  const branch = answer.branch.deleted
+    ? `Branch ${answer.branch.branch} was deleted${answer.branch.tip === undefined ? "" : `, at ${answer.branch.tip.slice(0, 12)}`}.`
+    : answer.branch.unmerged_commits === undefined
+      ? `Branch ${answer.branch.branch} was left alone — ${answer.branch.why ?? "no reason was given"}.`
+      : `Branch ${answer.branch.branch} was kept: ${answer.branch.why}. Merge it or delete it by hand when you have taken what you want.`;
+  return `${checkout} ${branch}`;
 }
 
 /**
@@ -104,6 +132,18 @@ export const CONFIRM: Record<ConfirmableAct, { title: string; body: string; tone
       "continue: one still open is killed, and one that already ended is left as it stands. " +
       "Nothing resumes — the new job starts at the approval gate and needs releasing, and this " +
       "job's worktree and branch stay as its drone left them.",
+  },
+  // What survives is the whole subject here, and it is two different answers
+  // for two different things — so the body says both rather than promising the
+  // disk back and leaving a person to find the branch still there. Fleet always
+  // keeps a branch nothing has merged and there is no force on this seam.
+  reclaim_worktree: {
+    title: "Give this job's worktree back?",
+    body:
+      "The checkout is deleted and the disk it was using comes back. The job stays on the " +
+      "board with everything it recorded — this removes a directory, not the job. Its branch " +
+      "is deleted only if the base branch already has every commit on it; one holding work " +
+      "nothing has taken is kept, and the answer says so.",
   },
   restart_step: {
     title: "Restart this step?",
@@ -155,6 +195,7 @@ export const ACT_LABEL: Record<JobAct, string> = {
   restart_step: "Restart step",
   override_verdict: "Overrule the verdict",
   rerun_gate: "Ask the gate again",
+  reclaim_worktree: "Reclaim worktree",
 };
 
 /**
@@ -174,4 +215,5 @@ export const MENU_LABEL: Record<JobAct, string> = {
   restart_step: "Restart the step, on the same worktree",
   override_verdict: "Overrule the verdict, the refused work stands",
   rerun_gate: "Ask the gate again, on the evidence already submitted",
+  reclaim_worktree: "Reclaim worktree, the job stays on the board",
 };

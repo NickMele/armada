@@ -38,7 +38,7 @@ What holds today, and how each is known:
 step or restart it rather than starting over.
 
 [Running it locally](#running-it-locally) is how to start. Watch the
-[milestones](https://github.com/NickMele/armada/milestones) for what is next.
+[milestones](https://github.com/users/NickMele/projects/3/views/11) for what is next.
 
 ## What it is
 

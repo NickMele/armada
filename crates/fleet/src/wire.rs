@@ -8,11 +8,12 @@
 //! so the field-by-field decision is written here, where every type involved
 //! is in scope.
 
+use adapters::{BranchGone, Reclaimed, WorktreeGone};
 use core_model::Job;
 use ipc::mcp::NotRecorded;
 use ipc::{
-    CheckRun, DeclaredCheck, DeclaredJudge, Flagged, Judged, KeptDeliverable, StepFacts, StepId,
-    Submitted, WorkflowStep,
+    CheckRun, DeclaredCheck, DeclaredJudge, Flagged, Judged, KeptDeliverable, ReclaimedBranch,
+    ReclaimedWorktree, StepFacts, StepId, Submitted, WorkflowStep, WorktreeReclaimed,
 };
 use store::{LoadJobError, Moved, RecordedEvent, Store};
 
@@ -353,6 +354,103 @@ pub(crate) fn step_facts(
             }
         })
         .collect()
+}
+
+/// What a reclaim did, on the wire.
+///
+/// **Six worktree outcomes become a bool and a sentence, and five branch
+/// outcomes do the same.** `ipc::reclaimed`'s module header carries the
+/// argument: every closed set on this seam is a `core-model` registry key
+/// spelled through `as_wire`, and there is no registry for what git did to a
+/// directory — so the fact crosses as a fact and git's own words cross as
+/// words.
+///
+/// **`Absent` reads as gone.** A Job whose worktree was already swept is a Job
+/// whose disk is back, and answering "not removed" would send a person looking
+/// for a directory that is not there. The same for a branch nothing has.
+pub(crate) fn reclaimed(job_id: &core_model::JobId, gave_back: Reclaimed) -> WorktreeReclaimed {
+    WorktreeReclaimed {
+        job_id: ipc::JobId::from(job_id),
+        worktree: match gave_back.worktree {
+            WorktreeGone::Removed { path }
+            | WorktreeGone::RecordCleared { path }
+            | WorktreeGone::DirectoryRemoved { path }
+            | WorktreeGone::Absent { path } => ReclaimedWorktree {
+                path,
+                removed: true,
+                why: None,
+            },
+            // A lock is a person saying not yet, and the reason they gave is
+            // what tells them apart from a failure somebody has to fix.
+            WorktreeGone::Locked { path, reason } => ReclaimedWorktree {
+                path,
+                removed: false,
+                why: Some(format!("it is locked: {reason}")),
+            },
+            WorktreeGone::NotRemoved { path, why } => ReclaimedWorktree {
+                path,
+                removed: false,
+                why: Some(why),
+            },
+        },
+        branch: match gave_back.branch {
+            BranchGone::Deleted { branch, tip } => ReclaimedBranch {
+                branch,
+                deleted: true,
+                // **The tip is the whole point of carrying it.** A deleted
+                // branch is recoverable from its SHA and from nothing else.
+                tip: Some(tip),
+                why: None,
+                base: None,
+                unmerged_commits: None,
+            },
+            BranchGone::Absent { branch } => ReclaimedBranch {
+                branch,
+                deleted: true,
+                tip: None,
+                why: None,
+                base: None,
+                unmerged_commits: None,
+            },
+            // The safe keep, and the only arm that fills `unmerged_commits` —
+            // which is what lets a client tell a branch left standing on
+            // purpose from one that would not delete.
+            BranchGone::Kept {
+                branch,
+                tip,
+                base,
+                commits,
+            } => ReclaimedBranch {
+                branch,
+                deleted: false,
+                tip: Some(tip),
+                why: Some(format!(
+                    "{base} cannot reach {commits} of its commits, so deleting it would destroy \
+                     work nobody has taken"
+                )),
+                base: Some(base),
+                // Clamped rather than cast: a count this cannot hold is not a
+                // count that should wrap to a small one on the wire.
+                unmerged_commits: Some(u32::try_from(commits).unwrap_or(u32::MAX)),
+            },
+            BranchGone::KeptUnanswered { branch, tip, why } => ReclaimedBranch {
+                branch,
+                deleted: false,
+                tip: Some(tip),
+                why: Some(why),
+                base: None,
+                unmerged_commits: None,
+            },
+            BranchGone::NotDeleted { branch, why } => ReclaimedBranch {
+                branch,
+                deleted: false,
+                tip: None,
+                why: Some(why),
+                base: None,
+                unmerged_commits: None,
+            },
+        },
+    }
 }
 
 /// The kept copies of one step's deliverable, over every run the log holds.

@@ -69,6 +69,15 @@ const api: BridgeApi = {
   clearTerminalJobs: (jobIds: readonly string[]): Promise<ClearOutcome> =>
     ipcRenderer.invoke(CHANNELS.clearTerminalJobs, jobIds),
 
+  // The other half of the entry above, and a separate one for the reason
+  // `crates/ipc/operations.toml` gives: that one takes the record and this
+  // takes the disk, and one call with two unrelated things to fail at is
+  // worse than two calls. One id at a time — a person reclaims the Job they
+  // are looking at, and the bulk shape above exists because clearing a board
+  // is a set.
+  reclaimWorktree: (jobId: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.reclaimWorktree, jobId),
+
   redirectDrone: (jobId: string, instruction: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.redirectDrone, jobId, instruction),
   answerQuestion: (

@@ -113,6 +113,24 @@ impl fmt::Display for Adrift {
                 job.as_str(),
                 status.as_wire()
             ),
+            Adrift::NotReclaimable { job, status } => write!(
+                out,
+                "{} is {} and its worktree cannot be reclaimed. There is no disk to give back \
+                 while a Drone might still write to it — `kill_job` is how one still in flight \
+                 is ended",
+                job.as_str(),
+                status.as_wire()
+            ),
+            // The repository, named. A person fixes this by looking at that
+            // path, and a message that only said the Job would send them to
+            // the Job.
+            Adrift::NotReclaimed { job, cause } => write!(
+                out,
+                "{}'s worktree could not be reclaimed: {} would not open: {}",
+                job.as_str(),
+                cause.repo,
+                cause.why
+            ),
             Adrift::NotRedispatchable { job, status } => write!(
                 out,
                 "{} is {} and cannot be redispatched. Redispatch replaces a Job that ran and \
@@ -351,6 +369,8 @@ impl Adrift {
             | Adrift::NoSuchStep { job, .. }
             | Adrift::NotReaped { job, .. }
             | Adrift::NotForgettable { job, .. }
+            | Adrift::NotReclaimable { job, .. }
+            | Adrift::NotReclaimed { job, .. }
             | Adrift::NotRedispatchable { job, .. }
             | Adrift::NeverRan { job }
             | Adrift::NotReplaceable { job }
@@ -418,6 +438,12 @@ impl Error for Adrift {
             | Adrift::NotConfigurable { .. }
             | Adrift::NoSuchStep { .. }
             | Adrift::NotForgettable { .. }
+            // A reclaim refused on the status has nothing underneath it, and
+            // the repository that would not open carries git's own words in
+            // its own fields rather than in a chain — `RepoUnreadable` is a
+            // pair of strings and not an error type.
+            | Adrift::NotReclaimable { .. }
+            | Adrift::NotReclaimed { .. }
             | Adrift::NotRedispatchable { .. }
             | Adrift::NeverRan { .. }
             | Adrift::NotReplaceable { .. }

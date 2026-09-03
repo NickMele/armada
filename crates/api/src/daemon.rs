@@ -33,7 +33,7 @@ use ipc::{
     CallArguments, ChangesRequested, ChosenAnswer, FileReport, FleetCapacity, JobDetail, JobDiff,
     JobEvidence, JobForgotten, JobHistory, JobId, JobList, JobSummary, ManifestSummary,
     ModelChoices, ProposeJob, Redirection, Redispatched, Report, ReportList, WireError,
-    WorkflowSummary,
+    WorkflowSummary, WorktreeReclaimed,
 };
 
 /// The request-response operations M1 serves.
@@ -258,6 +258,28 @@ pub trait Daemon: Send + Sync + 'static {
         &self,
         job_id: JobId,
     ) -> impl Future<Output = Result<JobForgotten, Refusal>> + Send;
+
+    /// `reclaim_worktree` — removes one terminal Job's checkout and deletes the
+    /// branch it derived. **The other half of [`Daemon::forget_job`]**, and a
+    /// separate method for the reason that one gives for not doing it: two
+    /// unrelated things to fail at in one call is worse than two calls, and
+    /// neither one's outcome depends on the other.
+    ///
+    /// **Terminal only**, with a 409 otherwise: there is no disk to reclaim
+    /// while a Drone might still write to it.
+    ///
+    /// **A branch the base cannot reach is kept**, always. There is no force
+    /// on this seam — a live Fleet must not be the thing that deletes commits
+    /// nobody has taken — so a caller asking for the disk back may get the
+    /// checkout and not the branch, and [`ipc::WorktreeReclaimed`] says which
+    /// half happened rather than reporting one number for both.
+    ///
+    /// The record is untouched. A reclaimed Job is still on the Board, and
+    /// [`Daemon::forget_job`] is what takes the row.
+    fn reclaim_worktree(
+        &self,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<WorktreeReclaimed, Refusal>> + Send;
 
     /// `redispatch_job` — mints a replacement for a Job that ran and stopped,
     /// and kills the original where it is still killable. Intervention Ladder
