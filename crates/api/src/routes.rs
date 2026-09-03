@@ -255,7 +255,11 @@ pub const SERVED: &[Route] = &[
     },
     // Every event kind is served on the one socket, and every one is named:
     // `SERVED` is what a rule compares to the inventory, so a kind published
-    // and not listed here is a kind no rule can see.
+    // and not listed here is a kind no rule can see. The rule also compares
+    // this group to `crates/ipc/src/event.rs`'s `Event` enum, which is the
+    // closed set of kinds that can actually be published — a variant there
+    // with no row here now fails the gate rather than reading as complete
+    // while two kinds went unlisted.
     Route {
         operation: "job.created",
         method: "GET",
@@ -272,12 +276,32 @@ pub const SERVED: &[Route] = &[
         path: "/events",
     },
     Route {
+        operation: "drone.spawned",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "drone.exited",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
         operation: "job.files_changed",
         method: "GET",
         path: "/events",
     },
     Route {
+        operation: "job.judging",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
         operation: "job.asking",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "job.forgotten",
         method: "GET",
         path: "/events",
     },

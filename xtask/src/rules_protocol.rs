@@ -7,12 +7,20 @@
 //! and not a compile error, and only a rule reading both files catches an
 //! operation that is served under a name the inventory does not have.
 //!
-//! It runs one way on purpose. The inventory names every operation the seam
-//! will carry and M1 serves a subset, so one with no route is *not yet built*
-//! rather than
-//! wrong. What is wrong is the reverse: a route serving something the inventory
-//! never named, a `SERVED` row with no route under it, or a command answered on
-//! `GET`.
+//! It runs one way on purpose, against the inventory. The inventory names
+//! every operation the seam will carry and M1 serves a subset, so one with no
+//! route is *not yet built* rather than wrong. What is wrong is the reverse: a
+//! route serving something the inventory never named, a `SERVED` row with no
+//! route under it, or a command answered on `GET`.
+//!
+//! # The event half runs both ways
+//!
+//! An event kind is never "not yet built": it is a variant of
+//! `crates/ipc/src/event.rs`'s `Event` enum, which means something already
+//! constructs and publishes it, or it does not exist. So every variant needs a
+//! `SERVED` row — **this is what #124 found**, `drone.spawned` and
+//! `drone.exited` crossing the wire and invisible to every rule reading
+//! `SERVED`, tolerated because nothing compared the two.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -22,6 +30,7 @@ use crate::Report;
 
 const INVENTORY: &str = "crates/ipc/operations.toml";
 const TABLE: &str = "crates/api/src/routes.rs";
+const EVENT_ENUM: &str = "crates/ipc/src/event.rs";
 
 pub fn the_router_serves_what_the_inventory_names(root: &Path) -> Report {
     let mut report = Report::new("every route served is an operation the inventory names");
@@ -34,15 +43,25 @@ pub fn the_router_serves_what_the_inventory_names(root: &Path) -> Report {
         report.fail(format!("{TABLE} — the route table itself"));
         return report;
     };
+    let Ok(event_source) = fs::read_to_string(root.join(EVENT_ENUM)) else {
+        report.fail(format!("{EVENT_ENUM} — the closed set of published event kinds"));
+        return report;
+    };
 
-    let kinds = operations(&inventory);
-    let served = rows(&table);
+    check(&inventory, &table, &event_source, &mut report);
+    report
+}
+
+/// Every check the rule makes, over the three files as text.
+fn check(inventory: &str, table: &str, event_source: &str, report: &mut Report) {
+    let kinds = operations(inventory);
+    let served = rows(table);
     // Whitespace-blind, because `rustfmt` decides where a `.route(` call
     // breaks and the rule must not depend on that.
     let compact: String = table.chars().filter(|c| !c.is_whitespace()).collect();
     if served.is_empty() {
         report.fail(format!("{TABLE} — a SERVED table with no rows in it"));
-        return report;
+        return;
     }
 
     for (operation, method, path) in &served {
@@ -81,7 +100,16 @@ pub fn the_router_serves_what_the_inventory_names(root: &Path) -> Report {
             ));
         }
     }
-    report
+
+    let operations: Vec<&str> = served.iter().map(|(op, _, _)| op.as_str()).collect();
+    for kind in published_event_kinds(event_source) {
+        if !operations.contains(&kind.as_str()) {
+            report.fail(format!(
+                "{EVENT_ENUM} declares `{kind}`, which {TABLE} does not list — a kind already \
+                 published on /events that no rule reading SERVED can see"
+            ));
+        }
+    }
 }
 
 /// Every `[operations.<name>]` key, with its `kind`. No TOML parser: the gate
@@ -140,4 +168,28 @@ fn routes(compact: &str) -> Vec<String> {
         .collect()
 }
 
+/// Every `#[serde(rename = "...")]` kind inside `pub enum Event { ... }`, read
+/// off the block between that line and its closing brace. This is the closed
+/// set: the enum is what a value has to be shaped as before anything can
+/// publish it, so a variant here is a kind that already crosses the wire.
+///
+/// No syn, for the reason the two parsers above have none — the gate keeps no
+/// dependencies, and the enum has one shape.
+fn published_event_kinds(source: &str) -> Vec<String> {
+    let Some(start) = source.find("pub enum Event {") else {
+        return Vec::new();
+    };
+    let body = &source[start..];
+    let end = body.find("\n}").unwrap_or(body.len());
+    body[..end]
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("#[serde(rename = \""))
+        .filter_map(|rest| rest.split('"').next())
+        .map(str::to_string)
+        .collect()
+}
+
 pub mod version;
+
+#[cfg(test)]
+mod tests;
