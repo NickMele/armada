@@ -127,6 +127,38 @@ impl From<&core_model::Ulid> for QuestionId {
     }
 }
 
+/// One proposal the Job proposer is reading, by the id Fleet minted for it.
+///
+/// [`QuestionId`]'s terms exactly, and for the same reason: **a proposal in
+/// flight is not a record.** It exists between the request arriving and the
+/// Jobs being minted, and nothing stores one — a proposal that produced Jobs is
+/// those Jobs, and one that did not is a refusal. So there is no `core-model`
+/// id underneath for this to carry.
+///
+/// **It is what a stop names.** Nothing else on the wire identifies a call that
+/// has not finished: a proposal has no Job to hang off yet, which is exactly
+/// what separates it from [`JudgeInFlight`](crate::JudgeInFlight), and a stop
+/// naming a request's text would stop the wrong one the moment two people
+/// dispatch the same words.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ProposalId(String);
+
+impl ProposalId {
+    pub fn carried(value: impl Into<String>) -> Self {
+        ProposalId(value.into())
+    }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<&core_model::Ulid> for ProposalId {
+    fn from(id: &core_model::Ulid) -> Self {
+        ProposalId(id.as_str().to_string())
+    }
+}
+
 /// An acceptance criterion's frozen identifier.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]

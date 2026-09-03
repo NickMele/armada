@@ -391,6 +391,19 @@ pub struct JobRequest {
     /// verbatim**: Fleet opens no link and fetches nothing, so what the
     /// proposer reads is what was typed.
     pub request: String,
+    /// A token of the caller's own, echoed back on every event about this
+    /// proposal so the caller can recognise its own call.
+    ///
+    /// **Opaque to Fleet, which neither reads it nor keeps it.** See
+    /// [`ProposalInFlight::client_ref`](crate::ProposalInFlight::client_ref)
+    /// for what it is for and why matching on the request's text is not it.
+    ///
+    /// Optional, and absent is the ordinary case: a caller with no surface has
+    /// nothing to correlate. **It is not an id and Fleet mints nothing from
+    /// it** — a caller sending the same token twice gets two proposals, each
+    /// with its own [`ProposalId`](crate::ProposalId).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_ref: Option<String>,
 }
 
 /// One DAG link, sequencing this Job against a peer.

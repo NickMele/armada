@@ -37,7 +37,8 @@ use tokio::time::timeout;
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::drafting::StatedBy;
-use crate::judging::{said, CallFailed, JudgeBudget};
+use crate::judging::{watched, CallFailed, JudgeBudget};
+use crate::proposals::Watching;
 use crate::proposing::{Brief, NotProposed, Proposal, ProposedJob};
 use crate::transcript;
 
@@ -58,10 +59,18 @@ pub struct Proposing {
 }
 
 /// Make the call, and answer with what it proposed.
+///
+/// **Watched, always.** A proposal is the one model call in Armada made with a
+/// person sitting in front of a form waiting for it, which is the whole reason
+/// the watched runner exists — see `crate::proposals`. `making` is what decides
+/// who is told and what may stop it; the call itself is the same call either
+/// way, and a Fleet nobody is subscribed to publishes nothing.
 pub async fn proposed(
     request: &str,
     workflows: &BTreeMap<WorkflowId, ResolvedWorkflow>,
     proposing: &Proposing,
+    making: Watching,
+    client_ref: Option<String>,
 ) -> Result<Proposal, NotProposed> {
     let brief = Brief::about(request, workflows);
     let ask = Ask::put(
@@ -70,9 +79,21 @@ pub async fn proposed(
         proposing.environment.clone(),
     )
     .map_err(|_| NotProposed::Call(CallFailed::NothingToAsk))?;
-    let answer = said(proposing.client.as_ref(), &ask, proposing.budget)
-        .await
-        .map_err(NotProposed::Call)?;
+    // Begun before the call so that a person may stop one that never gets as
+    // far as the vendor — which is precisely the case worth stopping.
+    let (making, stopped) = making.begin(client_ref);
+    let answer = watched(
+        proposing.client.as_ref(),
+        &ask,
+        proposing.budget,
+        &making.telling(),
+        stopped.asked(),
+    )
+    .await
+    .map_err(NotProposed::Call)?;
+    // Held to here and no further: dropping it publishes the coming-back
+    // message, and the Jobs this becomes arrive as `job.created` after it.
+    drop(making);
     brief.read(&answer, workflows)
 }
 
@@ -158,7 +179,14 @@ where
     /// `awaiting_approval`, exactly as `propose` answers, and each takes its own
     /// approval in turn — approving one of several accepts a plan and starts
     /// nothing else.
-    pub async fn propose_from(&self, request: &str) -> Result<Vec<Job>, Adrift> {
+    /// **`client_ref` is the caller's own token and Fleet reads nothing from
+    /// it** — see `ipc::JobRequest::client_ref`. It is carried this far, echoed
+    /// onto every event about the call, and dropped with it.
+    pub async fn propose_from(
+        &self,
+        request: &str,
+        client_ref: Option<String>,
+    ) -> Result<Vec<Job>, Adrift> {
         let request = request.trim();
         if request.is_empty() {
             return Err(Adrift::NothingToPropose);
@@ -172,12 +200,18 @@ where
         };
         let request = enriched.as_str();
         let proposing = self.proposing().map_err(Adrift::NotProposable)?;
-        let proposal = proposed(request, self.workflows(), &proposing)
-            .await
-            .map_err(|cause| Adrift::NotProposed {
-                request: request.to_string(),
-                cause,
-            })?;
+        let proposal = proposed(
+            request,
+            self.workflows(),
+            &proposing,
+            self.making(),
+            client_ref,
+        )
+        .await
+        .map_err(|cause| Adrift::NotProposed {
+            request: request.to_string(),
+            cause,
+        })?;
         let plan = match proposal {
             Proposal::Resolved(jobs) => jobs,
             Proposal::Unresolved(why) => {

@@ -322,7 +322,7 @@ async fn a_dependent_whose_upstream_failed_does_not_take_the_free_place() {
     let fleet = Fleet::assembled(fittings);
 
     let made = fleet
-        .propose_from("two coupled changes")
+        .propose_from("two coupled changes", None)
         .await
         .expect("a plan");
     // The upstream runs, which is what leaves exactly one place free.

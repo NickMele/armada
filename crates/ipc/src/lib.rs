@@ -47,6 +47,7 @@ pub mod mcp;
 /// Where two Jobs claim the same paths. **A fact on the card, never a
 /// verdict** — nothing in it is readable as a refusal.
 mod overlap;
+mod proposing;
 /// What giving one Job's worktree and branch back did, half by half.
 /// **Two halves, because half of it happening is a real outcome.**
 mod reclaimed;
@@ -82,16 +83,19 @@ pub use error::{RunId, WireError, WireValue};
 pub use event::{
     ChangeKind, ChangedFile, Cursor, Delivered, DroneExited, DroneSpawned, Event, JobAsking,
     JobCreated, JobFilesChanged, JobJudging, JobLanded, JobStateChanged, JobStepAdvanced, Missed,
-    Reason, Resync, StreamMessage,
+    ProposalMoved, Reason, Resync, StreamMessage,
 };
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
-pub use ids::{CriterionId, DroneId, Instant, JobId, ManifestId, QuestionId, StepId, WorkflowId};
+pub use ids::{
+    CriterionId, DroneId, Instant, JobId, ManifestId, ProposalId, QuestionId, StepId, WorkflowId,
+};
 pub use job::{
     AttachmentRef, DependencyEdge, JobForgotten, JobList, JobRequest, JobSummary, ProposeJob,
     ProposedCriterion, ProposedPlan, Redirection, Redispatched, Subject, UnreadableJob,
 };
 pub use judged::{CitedAt, Flagged, Judged, KeptDeliverable};
 pub use overlap::{ScopeOverlap, SharedPath};
+pub use proposing::{ProposalInFlight, ProposalReach, ProposalStopped, StopProposal};
 pub use reclaimed::{ReclaimedBranch, ReclaimedWorktree, WorktreeReclaimed};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};

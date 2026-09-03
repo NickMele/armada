@@ -15,7 +15,7 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use ipc::{
     ChangesRequested, ChosenAnswer, FileReport, JobId, JobRequest, Overruled, ProposeJob,
-    Redirection,
+    Redirection, StopProposal,
 };
 
 use crate::answers::{answer, refused, undecodable};
@@ -53,6 +53,25 @@ pub(crate) async fn propose_from_request<D: Daemon>(
     };
     match served.daemon().propose_from_request(request).await {
         Ok(job) => answer(StatusCode::CREATED, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Stop a proposal that is still out.
+///
+/// **200 on both arms**, including the one where there was nothing to stop.
+/// `ipc::ProposalStopped` carries which, and a 404 for a proposal that has just
+/// landed would report a failure to somebody whose Jobs are on the board.
+pub(crate) async fn stop_proposal<D: Daemon>(
+    State(served): State<Served<D>>,
+    body: Bytes,
+) -> Response {
+    let stopping: StopProposal = match ipc::decode("a proposal to stop", &body) {
+        Ok(stopping) => stopping,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.daemon().stop_proposal(stopping.proposal_id).await {
+        Ok(stopped) => answer(StatusCode::OK, &stopped, served.run_id()),
         Err(refusal) => refused(refusal),
     }
 }

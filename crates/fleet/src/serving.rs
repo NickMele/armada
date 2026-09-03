@@ -456,7 +456,7 @@ where
         request: ipc::JobRequest,
     ) -> Result<ipc::ProposedPlan, Refusal> {
         let made = self
-            .propose_from(&request.request)
+            .propose_from(&request.request, request.client_ref)
             .await
             .map_err(|why| self.refusal(why))?;
         let mut jobs = Vec::with_capacity(made.len());
@@ -464,6 +464,20 @@ where
             jobs.push(self.summarised(job).await?);
         }
         Ok(ipc::ProposedPlan { jobs })
+    }
+
+    /// Stop a proposal that is out. **Answers rather than refuses on a
+    /// proposal that has gone** — see the trait's own note.
+    ///
+    /// It touches no store and moves no Job, which is why it is the one command
+    /// here that does not end in `summarised`: there is nothing to summarise.
+    async fn stop_proposal(
+        &self,
+        proposal_id: ipc::ProposalId,
+    ) -> Result<ipc::ProposalStopped, Refusal> {
+        Ok(ipc::ProposalStopped {
+            stopped: Fleet::stop_proposal(self, &proposal_id),
+        })
     }
 
     async fn approve_dispatch(&self, job_id: JobId) -> Result<JobSummary, Refusal> {

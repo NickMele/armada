@@ -21,7 +21,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use adapter_traits::{Ask, CallProgress, Environment, Model, ModelClient};
+use adapter_traits::{Ask, CallProgress, Environment, Model};
 use testkit::FakeJudge;
 
 use crate::judging::{watched, CallFailed, JudgeBudget};

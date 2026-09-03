@@ -216,6 +216,29 @@ pub trait Daemon: Send + Sync + 'static {
         request: ipc::JobRequest,
     ) -> impl Future<Output = Result<ipc::ProposedPlan, Refusal>> + Send;
 
+    /// `stop_proposal` — stops a Job proposer call that is still out.
+    ///
+    /// **The only thing anybody may do to a proposal**, and it exists because
+    /// a client that merely stopped waiting would leave the call running inside
+    /// Fleet, spending, until its budget expired. The control a person is
+    /// offered has to reach the process.
+    ///
+    /// # Both arms are a success
+    ///
+    /// A proposal that has already finished answers
+    /// [`ProposalStopped::stopped`](ipc::ProposalStopped::stopped) false rather
+    /// than refusing. By the time somebody presses this the call may have just
+    /// landed and the Jobs may already be on the board — reporting a failure
+    /// there would say something untrue about the only thing they care about.
+    ///
+    /// **It ends no Job, because there is no Job.** Nothing is created and
+    /// nothing moves. The request the stop interrupted answers as a fault
+    /// carrying `proposer_stopped`, which is not an error: somebody decided.
+    fn stop_proposal(
+        &self,
+        proposal_id: ipc::ProposalId,
+    ) -> impl Future<Output = Result<ipc::ProposalStopped, Refusal>> + Send;
+
     /// `approve_dispatch` — releases a Job to spawn. The primary autonomy
     /// control, and a human act: `helm_access` on this row is `No`.
     fn approve_dispatch(

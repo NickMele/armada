@@ -31,6 +31,7 @@ use crate::commands::{
     answer_question, approve_dispatch, approve_review, file_report, forget_job, kill_drone,
     kill_job, override_verdict, propose_from_request, propose_job, reclaim_worktree,
     redirect_drone, redispatch_job, reject_job, request_changes, rerun_gate, restart_step,
+    stop_proposal,
 };
 use crate::daemon::Daemon;
 use crate::queries::{
@@ -141,6 +142,15 @@ pub const SERVED: &[Route] = &[
         operation: "propose_from_request",
         method: "POST",
         path: "/jobs/from_request",
+    },
+    // Not under `/jobs`, because a proposal is not one yet — that is the whole
+    // of what it is deciding. The id is in the body rather than the path for
+    // the reason `ipc::StopProposal` states: a proposal has exactly one
+    // operation and is not a resource.
+    Route {
+        operation: "stop_proposal",
+        method: "POST",
+        path: "/proposals/stop",
     },
     Route {
         operation: "approve_dispatch",
@@ -318,6 +328,13 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/events",
     },
+    // The one kind on this stream that names no Job. A proposal is the interval
+    // before any exists, which is why it carries an id of its own.
+    Route {
+        operation: "proposal.moved",
+        method: "GET",
+        path: "/events",
+    },
 ];
 
 /// Everything a handler needs. Cloned per request, so nothing here may be
@@ -392,6 +409,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
     Router::new()
         .route("/jobs", get(list_jobs::<D>).post(propose_job::<D>))
         .route("/jobs/from_request", post(propose_from_request::<D>))
+        .route("/proposals/stop", post(stop_proposal::<D>))
         .route("/workflows", get(list_workflows::<D>))
         .route("/manifests", get(list_manifests::<D>))
         .route("/models", get(list_models::<D>))

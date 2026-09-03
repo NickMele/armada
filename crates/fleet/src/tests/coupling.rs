@@ -63,7 +63,7 @@ async fn a_killed_upstream_escalates_its_dependent_as_dependency_failed() {
         FakeJudge::saying(A_PLAN),
     );
     let made = fleet
-        .propose_from("two coupled changes")
+        .propose_from("two coupled changes", None)
         .await
         .expect("a plan");
     worktree_directory(&home, made[1].id());
@@ -109,7 +109,10 @@ async fn the_chain_below_the_first_dependent_is_left_where_it_was() {
         a_catalogue(),
         FakeJudge::saying(A_CHAIN),
     );
-    let made = fleet.propose_from("three in a line").await.expect("a plan");
+    let made = fleet
+        .propose_from("three in a line", None)
+        .await
+        .expect("a plan");
     assert_eq!(made.len(), 3);
     worktree_directory(&home, made[1].id());
     worktree_directory(&home, made[2].id());
@@ -148,7 +151,7 @@ async fn a_second_turn_strands_nothing_more() {
         FakeJudge::saying(A_PLAN),
     );
     let made = fleet
-        .propose_from("two coupled changes")
+        .propose_from("two coupled changes", None)
         .await
         .expect("a plan");
     worktree_directory(&home, made[1].id());

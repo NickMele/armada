@@ -401,7 +401,7 @@ async fn a_resolved_link_survives_two_redispatches_without_doubling_the_resolved
     );
     let request = "https://example.test/issues/9";
 
-    let made = fleet.propose_from(request).await.expect("a proposal");
+    let made = fleet.propose_from(request, None).await.expect("a proposal");
     let [job] = &made[..] else {
         panic!("one Job, not {}", made.len())
     };
@@ -452,7 +452,7 @@ async fn a_link_that_still_fails_to_resolve_on_redispatch_notes_it_on_the_replac
     let request = "https://example.test/issues/12";
 
     let made = fleet
-        .propose_from(request)
+        .propose_from(request, None)
         .await
         .expect("a lookup failing must never fail the dispatch it was meant to help");
     let [job] = &made[..] else {

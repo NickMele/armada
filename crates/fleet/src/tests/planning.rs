@@ -45,7 +45,7 @@ async fn a_plan_of_two_reaches_the_gate_with_the_second_waiting_on_the_first() {
     );
 
     let made = fleet
-        .propose_from("move the endpoint and update its consumer")
+        .propose_from("move the endpoint and update its consumer", None)
         .await
         .expect("a plan");
 
@@ -81,7 +81,7 @@ async fn an_approved_dependent_is_not_admitted_before_its_upstream_lands() {
         FakeJudge::saying(A_PLAN),
     );
     let made = fleet
-        .propose_from("two coupled changes")
+        .propose_from("two coupled changes", None)
         .await
         .expect("a plan");
     worktree_directory(&home, made[1].id());
@@ -112,7 +112,7 @@ async fn a_dependent_is_admitted_once_its_upstream_completes() {
         FakeJudge::saying(A_PLAN),
     );
     let made = fleet
-        .propose_from("two coupled changes")
+        .propose_from("two coupled changes", None)
         .await
         .expect("a plan");
     worktree_directory(&home, made[0].id());

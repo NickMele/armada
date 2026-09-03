@@ -53,7 +53,7 @@ async fn a_request_naming_a_link_that_resolves_gets_the_text_appended_and_not_re
     );
     let request = "https://example.test/issues/1";
 
-    let made = fleet.propose_from(request).await.expect("a proposal");
+    let made = fleet.propose_from(request, None).await.expect("a proposal");
 
     let [job] = &made[..] else {
         panic!("one Job, not {}", made.len())
@@ -86,7 +86,7 @@ async fn a_link_that_fails_to_resolve_leaves_the_request_unchanged_and_notes_why
     let request = "https://example.test/issues/1";
 
     let made = fleet
-        .propose_from(request)
+        .propose_from(request, None)
         .await
         .expect("a lookup failing must never fail the dispatch it was meant to help");
 
@@ -127,7 +127,7 @@ async fn resolving_a_link_runs_once_for_a_plan_of_several_jobs() {
     );
     let request = "https://example.test/issues/7";
 
-    let made = fleet.propose_from(request).await.expect("a plan");
+    let made = fleet.propose_from(request, None).await.expect("a plan");
 
     assert_eq!(made.len(), 2, "the plan this judge answers with");
     assert!(

@@ -1,36 +1,19 @@
-//! One line of a **watched one-turn call**, read for what it says about how far
-//! the call has got.
+//! One line of a **watched one-turn call**, read for how far the call has got.
 //!
-//! # It is not `crate::transcript`, and the difference is the question
+//! **Not `crate::transcript`, because the question is not the same.** That one
+//! reads a Drone's session for what the Drone did, in a vocabulary with a
+//! speaker, a turn and a tool call. This reads one call for whether it is still
+//! moving — five readings, and it has to name the moment the request reached
+//! the vendor, which a session made of a hundred of those has no variant for.
 //!
-//! That module reads a Drone's session for **what the Drone did** — turns, tool
-//! calls, what it was refused — and every line it cannot name is carried back
-//! so nothing is dropped. This one reads a single call for **whether it is
-//! still moving**, which is a much smaller question with a much smaller
-//! vocabulary: five readings, and everything else on the stream is silence.
+//! **Dropping a line is correct here and is the opposite rule.** `transcript`
+//! never answers "nothing happened", so a caller can tell a quiet Drone from a
+//! stream it stopped reading. This answers [`Heard::Nothing`] for most lines: a
+//! call prints hundreds of frames saying nothing about progress, and naming
+//! each would flood the channel that exists to say something is happening. What
+//! a caller here cannot tell from silence, it tells from the process.
 //!
-//! Folding the two together was considered and is wrong in both directions. A
-//! `DroneEvent` carries a speaker, a turn index and a tool call, none of which
-//! a one-turn call has; and this has to name the moment the request reached the
-//! vendor, which a Drone's reader has no variant for because a Drone's session
-//! is a hundred of those.
-//!
-//! # Dropping a line is the correct behaviour here, and it is the opposite rule
-//!
-//! `transcript::read` never answers "nothing happened", because a caller could
-//! not then tell a quiet Drone from a stream it stopped reading. **This one
-//! answers [`Heard::Nothing`] constantly and that is the ordinary case**: a call
-//! emits hook lines, signature deltas and per-token frames that say nothing
-//! about progress, and reporting each as an unrecognised event would put
-//! several hundred messages on a channel whose whole purpose is to say that
-//! something is happening. What a caller here cannot tell — a quiet call from a
-//! stream that stopped — it answers with the process, which it is holding.
-//!
-//! # Bytes enter through the one codec
-//!
-//! `ipc::decode`, for `crate::transcript`'s reason: gate rule five scopes the
-//! untyped-JSON entry points, and calling through the codec is how this crate
-//! reads a stream without becoming a third of them.
+//! Bytes enter through `ipc::decode`, for `crate::transcript`'s reason.
 
 use adapter_traits::{CallProgress, Heard};
 use serde::Deserialize;

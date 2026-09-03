@@ -56,6 +56,7 @@ use crate::mint::Mint;
 use crate::noticing::{Noticing, Sweep};
 use crate::peer::{attributed, Drones, NotACaller, PeerOf};
 use crate::proposal::Proposing;
+use crate::proposals::{Proposals, Watching};
 use crate::silence::Liveness;
 use crate::slots::{Concurrency, Slot, Slots};
 
@@ -230,6 +231,11 @@ pub struct Fleet<H, V, W> {
     /// state that is only ever true for as long as it takes** — it is never
     /// written down, because a record of it would outlive the fact.
     aloft: Aloft,
+    /// Every proposal in flight, for the reason `aloft` exists one Job along:
+    /// a call somebody could be waiting on has to be nameable while it is out.
+    /// **Minted here, not a fitting** — nothing outside this crate holds one,
+    /// and it is empty after a restart because a proposal is not a record.
+    proposals: Proposals,
     judge_model: Model,
     proposer_model: Model,
     links: Arc<dyn LinkLookup + Send + Sync>,
@@ -329,6 +335,7 @@ where
             judge: fittings.judge,
             judge_budget: fittings.judge_budget,
             aloft: Aloft::default(),
+            proposals: Proposals::new(),
             judge_model: fittings.judge_model,
             proposer_model: fittings.proposer_model,
             links: fittings.links,
@@ -686,6 +693,33 @@ where
                 home: &self.host.home,
             })?,
         })
+    }
+
+    /// What the dispatch path needs in order to be watched while it asks.
+    ///
+    /// **Beside `proposing` rather than inside it**, because the two answer
+    /// different questions and one of them is optional. `Proposing` is how to
+    /// make the call — the client, the model, the confinement — and is the same
+    /// whether anybody is looking. This is who to tell and what may stop it,
+    /// and a Fleet driven by a test with no stream still makes the call.
+    pub(crate) fn making(&self) -> Watching {
+        Watching {
+            proposals: self.proposals.clone(),
+            events: self.events.clone(),
+            clock: Arc::clone(&self.clock),
+            mint: Arc::clone(&self.mint),
+            budget: self.judge_budget,
+            // The spelling the call will actually be made with, so a surface
+            // naming the model names the one that is out rather than a default
+            // read from somewhere else.
+            model: self.proposer_model.as_str().to_string(),
+        }
+    }
+
+    /// Stop a proposal that is out. **The whole of what anybody may do to
+    /// one** — see `crate::proposals`.
+    pub(crate) fn stop_proposal(&self, proposal: &ipc::ProposalId) -> bool {
+        self.proposals.stop(proposal)
     }
     /// The models a Job may name. Read at creation and served by
     /// `list_models`; nothing else consults it.

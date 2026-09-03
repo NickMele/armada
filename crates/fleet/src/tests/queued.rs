@@ -30,7 +30,7 @@ async fn a_job_waiting_on_a_peer_reads_blocked_by_dependency() {
         FakeJudge::saying(A_PLAN),
     );
     let made = fleet
-        .propose_from("two coupled changes")
+        .propose_from("two coupled changes", None)
         .await
         .expect("a plan");
     worktree_directory(&home, made[1].id());
@@ -112,7 +112,7 @@ async fn what_the_board_says_is_what_admission_did() {
         FakeJudge::saying(A_PLAN),
     );
     let made = fleet
-        .propose_from("two coupled changes")
+        .propose_from("two coupled changes", None)
         .await
         .expect("a plan");
     worktree_directory(&home, made[0].id());

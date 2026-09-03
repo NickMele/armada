@@ -181,32 +181,19 @@ pub enum Heard {
 
 /// How far a watched call has got, as the call's own stream said.
 ///
-/// **The fact a wait could not state.** A model call is one process that prints
-/// nothing until it is finished, so a person watching one had the elapsed time
-/// and nothing else — and "ninety seconds and thinking hard" and "ninety
-/// seconds and never reached the API" are the same pixels under an elapsed
-/// count. They are what a person deciding whether to keep waiting is actually
-/// choosing between.
+/// **The fact a wait could not state.** A model call prints nothing until it is
+/// finished, so a person watching one had the elapsed time and nothing else —
+/// and "ninety seconds and thinking hard" and "ninety seconds and never reached
+/// the API" are the same pixels under an elapsed count. They are what somebody
+/// deciding whether to keep waiting is choosing between.
 ///
-/// # It is a report, never a result
+/// **A report, never a result.** Nothing here is the answer and no arrangement
+/// of these advances anything: a caller that lost every one would get the same
+/// outcome a beat later. A courtesy that could change a verdict would be a
+/// second authority on what the call said.
 ///
-/// Nothing here is the answer, and no arrangement of these advances anything. A
-/// call still ends the way it ended — an answer, or a `CallFailed` — and a
-/// caller that lost every one of these would get the same outcome a beat later.
-/// That is deliberate: progress is a courtesy to whoever is waiting, and a
-/// courtesy that could change a verdict would be a second authority on what the
-/// call said.
-///
-/// # The order is a sequence, and it is not guaranteed
-///
-/// [`Started`](CallProgress::Started) then
-/// [`Requesting`](CallProgress::Requesting) then some number of
-/// [`Thinking`](CallProgress::Thinking) then
-/// [`Answering`](CallProgress::Answering) then
-/// [`Ended`](CallProgress::Ended) is the ordinary run. A call may skip any of
-/// them — a model that does not think emits no `Thinking` — and a surface that
-/// requires one to have arrived before it draws the next would go blank on an
-/// ordinary call. **What each one means is that it happened**, not that the
+/// **The ordinary order is not guaranteed.** A model that does not think emits
+/// no `Thinking`, so what each one means is that it happened — never that the
 /// ones before it did.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CallProgress {

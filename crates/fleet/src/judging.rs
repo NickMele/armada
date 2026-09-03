@@ -628,30 +628,19 @@ fn model_for(check: &JudgeCheck, default: &Model) -> Result<Model, CallFailed> {
 /// Run one rendered call, reporting on it, and answer with what it said.
 ///
 /// **[`said`] with somebody waiting.** Same confinement, same failures, same
-/// budget — what differs is that the call is rendered to print what it is
-/// doing, and this reads those lines and hands each to `telling` as it
-/// arrives. A proposal is made with a person watching a blank form, and an
-/// elapsed count is the one thing that does not distinguish a model thinking
-/// from a harness that never reached the vendor.
+/// budget; the call is rendered to print what it is doing and each line goes to
+/// `telling` as it arrives.
 ///
-/// # It is a second runner, and this is the argument for it
+/// **A second runner, and [`said`]'s note against one is kept rather than
+/// broken**: every failure here is one of `said`'s, raised for the same
+/// condition. What differs is the shape of the read — `wait_with_output`
+/// collects a finished process, so nothing built on it can report on a running
+/// one, and folding them would make the unwatched call pay for a line reader it
+/// never uses.
 ///
-/// [`said`]'s own note says a second runner beside it would be a second answer
-/// to what a failed call is, and that rule is kept: **every failure here is one
-/// of [`said`]'s**, raised for the same condition, and there is no `CallFailed`
-/// this can produce that that cannot. What is genuinely different is the shape
-/// of the read — `wait_with_output` collects a finished process, and nothing
-/// built on it can report on one that has not finished. The two cannot be one
-/// function without the unwatched call paying for a line reader it never uses.
-///
-/// # The killer is the handle, and dropping it is what stops the call
-///
-/// `kill_on_drop` is set on both runners. What this adds is that the child is
-/// reachable while it runs: `stopping` is resolved when somebody asks the call
-/// to stop, and the process is killed there and then rather than left to run
-/// out Fleet's budget with nobody waiting on it. A stopped call is
-/// [`CallFailed::Stopped`], which is **not a fault** — somebody decided, and a
-/// surface drawing it in red would be telling them Armada broke.
+/// `stopping` resolves when somebody asks the call to stop, and the process is
+/// killed there rather than left to run out the budget with nobody waiting.
+/// [`CallFailed::Stopped`] is **not a fault** — somebody decided.
 pub(crate) async fn watched(
     client: &(dyn ModelClient + Send + Sync),
     ask: &Ask,

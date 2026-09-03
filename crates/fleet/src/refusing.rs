@@ -21,6 +21,8 @@ use store::{LoadJobError, WriteError};
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
+use crate::judging::CallFailed;
+use crate::proposing::NotProposed;
 
 /// The codes this boundary raises, declared beside the thing that raises them.
 ///
@@ -39,6 +41,15 @@ const NO_WORKFLOW_FITS: &str = "fleet.no_workflow_fits";
 /// that rendered an outage as "nothing fits" would tell a person their request
 /// was refused when it was never read.
 const PROPOSER_UNREACHABLE: &str = "fleet.proposer_unreachable";
+/// A person watching the proposer decided not to wait, and stopped it.
+///
+/// **Its own code because it is not a failure**, which is the same argument
+/// `NO_WORKFLOW_FITS` makes against `UNACCEPTABLE` one step along: a client
+/// that rendered this as `PROPOSER_UNREACHABLE` would tell somebody Armada
+/// broke when what happened is that they pressed a control Armada offered them.
+/// Nothing was created and what they typed comes back, so the surface returns
+/// them to the form rather than to an error.
+const PROPOSER_STOPPED: &str = "fleet.proposer_stopped";
 /// A redispatch asked for on a Job that is not waiting for a person. A 409 like
 /// a refused move, and a code of its own because the machine was never asked.
 const NOT_REDISPATCHABLE: &str = "fleet.not_redispatchable";
@@ -183,6 +194,16 @@ where
             // `NotProposable` falls to the catch-all below: a proposer that
             // could not be configured is Fleet's own fault and carries no
             // request to return.
+            // Somebody stopped it. **Told apart before the outage arm**, and
+            // still a `Fault` on the transport — 500 is what says no Job
+            // exists, and the code is what says whose doing that was.
+            Adrift::NotProposed {
+                request,
+                cause: NotProposed::Call(CallFailed::Stopped),
+            } => Refusal::Fault(
+                WireError::raised(PROPOSER_STOPPED, said, self.run_id())
+                    .with_field("request", WireValue::Str(request.clone())),
+            ),
             Adrift::NotProposed { request, .. } => Refusal::Fault(
                 WireError::raised(PROPOSER_UNREACHABLE, said, self.run_id())
                     .with_field("request", WireValue::Str(request.clone())),

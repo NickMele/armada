@@ -17,8 +17,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::detail::{JudgeInFlight, Settled};
 use crate::enums::{Actor, JobStatus, StepState};
+use crate::ids::ProposalId;
 use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
 use crate::job::{JobForgotten, JobList, JobSummary};
+use crate::proposing::ProposalInFlight;
 use crate::version::ProtocolVersion;
 use crate::waiting::QuestionInFlight;
 
@@ -104,6 +106,55 @@ pub enum Event {
     JobForgotten(JobForgotten),
     #[serde(rename = "job.landed")]
     JobLanded(JobLanded),
+    #[serde(rename = "proposal.moved")]
+    ProposalMoved(ProposalMoved),
+}
+
+/// A proposal went out, got somewhere, or came back.
+///
+/// **The one kind on this stream that names no Job**, and that is what it is
+/// for: a proposal is the interval before any Job exists, so there is no id to
+/// hang it off and no Board row that changes. [`JobCreated`] is what says the
+/// Jobs arrived, and it is a different message.
+///
+/// # More than two messages per call, unlike [`JobJudging`]
+///
+/// That kind is two per call on the stated grounds that a spinner says nothing.
+/// This one republishes as the call moves, because a person is being asked
+/// whether to keep waiting and the answer turns on whether it is moving.
+/// `crate::proposing` holds the argument and the arithmetic.
+///
+/// # What it costs the channel, stated
+///
+/// The bound is `api::stream::BACKLOG`, shared by every kind. Fleet publishes
+/// none of these while nobody is subscribed — the same decline `JobFilesChanged`
+/// makes — a reach change publishes at most four times, and a token estimate is
+/// throttled to one a second. A two-minute call watched throughout is bounded
+/// above by about a hundred and twenty-five messages, and a proposal is one at
+/// a time per person dispatching.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProposalMoved {
+    pub proposal_id: ProposalId,
+    /// The caller's own token, echoed. **On the envelope as well as inside
+    /// `proposing`**, because it is what a client filters on and the coming-back
+    /// message carries no `proposing` to read it from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_ref: Option<String>,
+    /// The call, while it is out. **Absent because it came back** — however it
+    /// came back: with Jobs, with a refusal, or stopped. What it produced
+    /// arrives as `job.created`, one per Job, exactly as an ordinary proposal
+    /// does.
+    ///
+    /// This is the field that makes the absence legible, on [`JobJudging`]'s
+    /// terms: a proposal nobody is making and one that has just landed are the
+    /// same, and they are both this message with nothing in it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proposing: Option<ProposalInFlight>,
+    /// Always the caller. A proposal is a human or Helm act — nothing here is
+    /// Fleet deciding on its own, which is [`JobCreated`]'s reason for carrying
+    /// one.
+    pub actor: Actor,
+    pub at: Instant,
 }
 
 /// A Job exists that did not before, whole enough to draw.

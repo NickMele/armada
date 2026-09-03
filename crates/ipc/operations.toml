@@ -514,6 +514,51 @@ than a guess somebody could correct.
 A call that could not be made — the network, the quota, the timeout — is a
 fault and not that refusal. The two answer different statuses because a person
 does different things about them.
+
+The call it makes is watched. A proposal is the one model call in Armada made
+with a person waiting in front of a form for it, so Fleet publishes proposal.moved
+as the call gets somewhere — started, at the vendor, thinking, answering — and a
+client draws the wait against the budget rather than against nothing. The events
+carry client_ref back unchanged where the request sent one, which is how a client
+recognises its own call before Fleet's own id has reached it. Fleet reads nothing
+from that token and keeps none of it.
+
+A caller that has waited long enough stops it with stop_proposal rather than
+abandoning the request, and the difference is real: abandoning leaves the call
+running and spending until Fleet's own budget expires, and stopping kills it. The
+request then answers as a fault carrying proposer_stopped, which is not an error —
+somebody decided, and a surface drawing it in red would say Armada broke.
+"""
+
+[operations.stop_proposal]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Stops a Job proposer call that is still out"
+notes = """
+The only thing anybody may do to a proposal in flight, and it exists because the
+alternative is worse. A client that simply stopped waiting would leave the call
+running inside Fleet, spending, until its budget expired — so the control a person
+is offered has to reach the process, not just the socket.
+
+It names a proposal_id, which Fleet minted and published on proposal.moved. Nothing
+else on the wire identifies a call that has not finished: a proposal has no Job to
+hang off, which is exactly what separates it from a Judge call, and a stop naming
+the request's text would stop the wrong one the moment two people dispatch the same
+words.
+
+A proposal that has already finished answers stopped false, and that is a success
+rather than a 404. By the time somebody presses this the call may have just landed,
+and the Jobs are on the board either way — telling them their press failed would be
+telling them something that is not true about the only thing they care about.
+
+It is not on the Intervention Ladder and it ends no Job, because there is no Job.
+Nothing is created, nothing moves, and the person is returned to the form with what
+they typed.
+
+helm_access is No for approve_dispatch's reason turned around: Helm proposes without
+a surface and has nobody waiting, so there is no wait for it to abandon — and a
+stop it could reach would let it cancel a person's dispatch.
 """
 
 [operations.pause_job]
@@ -839,6 +884,22 @@ Two messages per question and never a third. The one going out carries the quest
 
 It produces at the rate a person answers, which is the slowest rate on this channel, and it holds no queue of its own — the outstanding question lives on the working slot. So it adds nothing to the unbounded-sink risk `docs/practices/protocol.md` names.
 """
+
+[operations."proposal.moved"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A Job proposer call goes out, gets somewhere, or comes back"
+notes = """
+The one kind on this stream that names no Job, and that is what it is for. A proposal is the interval before any Job exists, so there is no id to hang it off and no Board row that changes. job.created is what says the Jobs arrived, and it is a different message.
+
+It exists because a proposal is the one model call in Armada made with a person waiting in front of a form for it. job.judging settles for two messages per call on the grounds that a surface can subtract an elapsed count for itself, and that is right for a gate, which runs with nobody watching. It is wrong here: a person who has been waiting ninety seconds is being asked whether to keep waiting, and "thinking, and here is how much" and "never reached the vendor at all" are opposite decisions that an elapsed count draws identically.
+
+So this one ticks, and what it costs is stated rather than hoped for. Fleet publishes none of these while nobody is subscribed, a reach change publishes at most four times in a call's life, and the token estimate is throttled to one message a second. A two-minute call watched the whole way through is bounded above by about a hundred and twenty-five messages; an unwatched one costs nothing at all. That is a real cost, and it buys the control stop_proposal offers.
+
+client_ref is the caller's own token, echoed back unchanged, and it is on the envelope as well as inside the payload — a client filters on it, and the coming-back message carries no payload to read it from. It is not an id: Fleet reads nothing from it, mints nothing from it and keeps none of it. A client cannot filter on proposal_id instead, because Fleet mints that when the request arrives and the client learns it from this message.
+
+Absent proposing means the call came back, however it came back — with Jobs, with a refusal, or stopped. That is job.judging's shape exactly and for the same reason: a proposal nobody is making and one that has just landed are the same thing, and they are both this message with nothing in it.
 
 [operations."job.judging"]
 kind = "event"

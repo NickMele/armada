@@ -237,6 +237,20 @@ impl Daemon for FakeDaemon {
     /// The proposer's own path, faked at the seam above it: the fake names the
     /// workflow the request asked for by naming none of its own reasoning. What
     /// `api` is under test for is the route, the status and the body.
+    /// Stop a proposal. **The fake never has one out** — it answers a proposal
+    /// without making a call — so this always reports that there was nothing to
+    /// stop, which is the arm a route test needs: it is the one that must be a
+    /// 200 and not a 404.
+    async fn stop_proposal(
+        &self,
+        _proposal_id: ipc::ProposalId,
+    ) -> Result<ipc::ProposalStopped, Refusal> {
+        if *self.mute.lock().expect("not poisoned") {
+            return Err(self.fault("the fake was told not to answer"));
+        }
+        Ok(ipc::ProposalStopped { stopped: false })
+    }
+
     async fn propose_from_request(
         &self,
         request: ipc::JobRequest,

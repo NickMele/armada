@@ -63,7 +63,7 @@ async fn a_request_that_fits_one_workflow_reaches_the_approval_gate_under_it() {
     );
 
     let made = fleet
-        .propose_from(A_REQUEST)
+        .propose_from(A_REQUEST, None)
         .await
         .expect("a request that fits one workflow");
 
@@ -112,7 +112,10 @@ async fn entry_zero_carries_the_reason_and_names_the_proposer() {
         ),
     );
 
-    let made = fleet.propose_from(A_REQUEST).await.expect("a proposal");
+    let made = fleet
+        .propose_from(A_REQUEST, None)
+        .await
+        .expect("a proposal");
 
     let [zero] = made[0].scope_revisions() else {
         panic!("exactly one entry at creation")
@@ -165,7 +168,7 @@ async fn a_request_no_workflow_fits_is_refused_and_returned_unchanged() {
     );
 
     let refused = fleet
-        .propose_from(A_REQUEST)
+        .propose_from(A_REQUEST, None)
         .await
         .expect_err("nothing on the list covers it");
 
@@ -198,7 +201,7 @@ async fn a_call_that_fails_is_not_a_refusal_to_dispatch() {
     );
 
     let failed = fleet
-        .propose_from(A_REQUEST)
+        .propose_from(A_REQUEST, None)
         .await
         .expect_err("the call did not come back");
 
@@ -227,7 +230,7 @@ async fn a_workflow_nothing_holds_does_not_become_the_nearest_one() {
     );
 
     let refused = fleet
-        .propose_from(A_REQUEST)
+        .propose_from(A_REQUEST, None)
         .await
         .expect_err("`hotfix` is not on the list it was given");
 
@@ -256,7 +259,7 @@ async fn a_blank_request_is_refused_before_the_call() {
     );
 
     let refused = fleet
-        .propose_from("   \n  ")
+        .propose_from("   \n  ", None)
         .await
         .expect_err("there is nothing in it to read");
 
