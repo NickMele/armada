@@ -19,18 +19,20 @@ export default meta;
 type Story = StoryObj<typeof StepActivityMark>;
 
 /**
- * A step that has not run shows its own number rather than a glyph. There is
- * no `not_started` entry in `packages/icons/icons.toml` and no borrowing for
- * it, and the M1 drawing answers why: a position is the only fact a step that
- * has not run carries.
+ * A step that has not run shows its own number rather than a glyph, wherever
+ * a caller supplies one. `not_started` has a glyph now — `circle-dashed`,
+ * `packages/icons/icons.toml` — but a position is more informative than a
+ * silhouette, and the ordinal displaces it here exactly as it did before the
+ * glyph existed.
  */
 export const NotStarted: Story = {
   args: { activity: "not_started", label: "Not started", ordinal: 3 },
 };
 
 /**
- * `not_started` with no ordinal supplied renders an empty slot — the visible
- * shape of a registry with no glyph for this value. Reported.
+ * `not_started` with no ordinal supplied draws `circle-dashed`: eight short
+ * dashes and nothing at its centre, the fallback for a step with no position
+ * to show.
  */
 export const NotStartedWithNoOrdinal: Story = {
   args: { activity: "not_started", label: "Not started" },
