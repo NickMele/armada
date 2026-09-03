@@ -11,8 +11,8 @@
 //! # A branch the base cannot reach is kept
 //!
 //! Fleet commits a finished Job's work, so the branch *is* the work. Only
-//! [`UnmergedWork::Delete`] removes commits nobody has taken. Which branch the
-//! base is comes from `crate::base`, shared with delivery.
+//! [`UnmergedWork::Delete`] removes commits nobody has taken, and [`standing`]
+//! asks that question without acting. `crate::base` says which branch is base.
 //!
 //! # Remove, prune, then the branch
 //!
@@ -130,6 +130,165 @@ pub struct RepoUnreadable {
     pub why: String,
 }
 
+/// What the repository says about one Job's worktree and branch, asked
+/// without touching either.
+///
+/// Two readings rather than one verdict: **whether a thing is safe to reclaim
+/// is not git's question**, and answering it here would put half of the rule
+/// in `adapters` and the other half — terminal, piloted, depended on — in
+/// Fleet, where nobody could read the whole of it in one place.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Standing {
+    pub worktree: WorktreeStanding,
+    pub branch: BranchStanding,
+}
+
+impl Standing {
+    /// Whether there is anything here to give back at all.
+    ///
+    /// A Job reclaimed on an earlier sweep answers `true`, which is what keeps
+    /// a sweep from reporting the same Job every time it runs.
+    pub fn empty_handed(&self) -> bool {
+        self.worktree == WorktreeStanding::Absent && self.branch == BranchStanding::Absent
+    }
+}
+
+/// What the checkout holds, as `git status --porcelain` reports it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WorktreeStanding {
+    /// Nothing at the path — reclaimed already, or never made.
+    Absent,
+    /// Nothing written that is not committed. Ignored files do not count:
+    /// `.gitignore` is the repository saying they are not part of it, and a
+    /// Job's own `.armada/` deliverables live under one.
+    Clean,
+    /// **The case that looks like no work at all from outside.** A Drone or a
+    /// person wrote these and committed none of them, so the branch is not
+    /// ahead of anything and the tree still reads as merged.
+    Dirty { files: Vec<String> },
+    /// Somebody locked it, which is a person saying not yet.
+    Locked { reason: String },
+    /// The checkout is there and git would not say what is in it. **Not
+    /// clean** — unanswered and clean must never read alike.
+    Unreadable { why: String },
+}
+
+/// Where the branch stands against the base, without deleting anything.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BranchStanding {
+    /// No such branch. Deleted already, or the Job never reached a dispatch.
+    Absent,
+    /// The base reaches every commit on it, so the branch holds no copy of
+    /// anything.
+    Merged { tip: String },
+    /// `commits` of its own that `base` cannot reach.
+    Ahead {
+        tip: String,
+        base: String,
+        commits: usize,
+    },
+    /// Nothing here could say. Unanswered is held, for [`BranchGone`]'s reason.
+    Unanswered { tip: String, why: String },
+}
+
+/// Read one Job's worktree and branch. **Nothing is removed.**
+pub fn standing(
+    spec: &WorktreeSpec,
+    declared_base: Option<&str>,
+) -> Result<Standing, RepoUnreadable> {
+    let repo = Repository::open(spec.repo_root()).map_err(|cause| RepoUnreadable {
+        repo: spec.repo_root().to_string(),
+        why: cause.message().to_string(),
+    })?;
+    Ok(Standing {
+        worktree: worktree_standing(&repo, spec),
+        branch: branch_standing(&repo, &spec.branch(), declared_base),
+    })
+}
+
+fn worktree_standing(repo: &Repository, spec: &WorktreeSpec) -> WorktreeStanding {
+    let path = spec.worktree_path();
+    if !std::path::Path::new(&path).exists() {
+        return WorktreeStanding::Absent;
+    }
+    // Before the status, because a locked worktree is held whatever is in it
+    // and the lock is the reason a person gave.
+    if let Ok(registered) = repo.find_worktree(spec.registration_name()) {
+        if let Ok(WorktreeLockStatus::Locked(said)) = registered.is_locked() {
+            return WorktreeStanding::Locked {
+                reason: said.unwrap_or_else(|| String::from("no reason was given")),
+            };
+        }
+    }
+    porcelain(&path)
+}
+
+/// `git status --porcelain`, run as a person would run it.
+///
+/// **The command line rather than libgit2**, which is the one place in this
+/// file that reaches outside the library. `tests/repo.rs` already recorded why:
+/// libgit2 reads a subdirectory holding a `.git` as a repository of its own
+/// and drops it, where the command line reports `?? nested/`. That difference
+/// is the difference between "clean" and a checkout holding a clone somebody
+/// has not pushed — and this reading is a *guard*, so it takes the answer a
+/// person would be shown. `crate::delivery` reaches for git the same way and
+/// for the same kind of reason.
+///
+/// **Anything that is not a clean answer is [`WorktreeStanding::Unreadable`]**,
+/// never `Clean`. git missing from `PATH` must not read as an empty tree.
+fn porcelain(path: &str) -> WorktreeStanding {
+    let run = std::process::Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(path)
+        // A daemon has no terminal for git to ask at. `crate::delivery` says
+        // the same thing about the same variable.
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output();
+    let run = match run {
+        Ok(run) => run,
+        Err(cause) => {
+            return WorktreeStanding::Unreadable {
+                why: format!("git would not run: {cause}"),
+            }
+        }
+    };
+    if !run.status.success() {
+        return WorktreeStanding::Unreadable {
+            why: String::from_utf8_lossy(&run.stderr).trim().to_string(),
+        };
+    }
+    // The three-character prefix is the two status letters and a space. The
+    // path is what a person would act on, and the letters are what this reading
+    // already decided by having any line at all.
+    let files: Vec<String> = String::from_utf8_lossy(&run.stdout)
+        .lines()
+        .map(|line| line.get(3..).unwrap_or(line).to_string())
+        .collect();
+    match files.is_empty() {
+        true => WorktreeStanding::Clean,
+        false => WorktreeStanding::Dirty { files },
+    }
+}
+
+fn branch_standing(repo: &Repository, branch: &str, declared_base: Option<&str>) -> BranchStanding {
+    let Ok(found) = repo.find_branch(branch, BranchType::Local) else {
+        return BranchStanding::Absent;
+    };
+    // A ref pointing at no commit has no commits to lose. `reclaim` does not
+    // ask about one either, and the two must agree.
+    let Some(target) = found.get().target() else {
+        return BranchStanding::Merged {
+            tip: String::from("an unresolved ref"),
+        };
+    };
+    let tip = target.to_string();
+    match standing_against_the_base(repo, declared_base, target) {
+        Reach::Merged => BranchStanding::Merged { tip },
+        Reach::Ahead { base, commits } => BranchStanding::Ahead { tip, base, commits },
+        Reach::Unanswered { why } => BranchStanding::Unanswered { tip, why },
+    }
+}
+
 /// Remove one Job's worktree, then delete the branch that Job derived.
 pub fn reclaim(
     spec: &WorktreeSpec,
@@ -235,8 +394,8 @@ fn delete_the_branch(
     // about. Everything else is, unless the caller said --force.
     if let (UnmergedWork::Keep, Some(oid)) = (unmerged, target) {
         match standing_against_the_base(repo, declared_base, oid) {
-            Standing::Merged => {}
-            Standing::Ahead { base, commits } => {
+            Reach::Merged => {}
+            Reach::Ahead { base, commits } => {
                 return BranchGone::Kept {
                     branch: branch.to_string(),
                     tip,
@@ -244,7 +403,7 @@ fn delete_the_branch(
                     commits,
                 }
             }
-            Standing::Unanswered { why } => {
+            Reach::Unanswered { why } => {
                 return BranchGone::KeptUnanswered {
                     branch: branch.to_string(),
                     tip,
@@ -267,7 +426,12 @@ fn delete_the_branch(
 }
 
 /// Where a branch stands relative to the base it would be merged into.
-enum Standing {
+///
+/// **The one answer to "is this merged".** [`reclaim`] reads it to decide
+/// whether a branch may be deleted and [`standing`] reads it to decide whether
+/// a worktree is provably safe to take back — one derivation, so a sweep and a
+/// delete cannot come to different conclusions about the same branch.
+enum Reach {
     /// The base already reaches every commit on it.
     Merged,
     Ahead {
@@ -279,13 +443,13 @@ enum Standing {
     },
 }
 
-fn standing_against_the_base(repo: &Repository, declared_base: Option<&str>, tip: Oid) -> Standing {
+fn standing_against_the_base(repo: &Repository, declared_base: Option<&str>, tip: Oid) -> Reach {
     let looked_for = crate::base::candidates(repo, declared_base);
     let Some((base, base_tip)) = looked_for
         .iter()
         .find_map(|name| the_branch_tip(repo, name).map(|oid| (name.clone(), oid)))
     else {
-        return Standing::Unanswered {
+        return Reach::Unanswered {
             why: format!(
                 "none of {} is here, so nothing says what it would be merged into",
                 looked_for.join(", ")
@@ -293,9 +457,9 @@ fn standing_against_the_base(repo: &Repository, declared_base: Option<&str>, tip
         };
     };
     match repo.graph_ahead_behind(tip, base_tip) {
-        Ok((0, _)) => Standing::Merged,
-        Ok((commits, _)) => Standing::Ahead { base, commits },
-        Err(cause) => Standing::Unanswered {
+        Ok((0, _)) => Reach::Merged,
+        Ok((commits, _)) => Reach::Ahead { base, commits },
+        Err(cause) => Reach::Unanswered {
             why: format!("{base} would not compare: {}", cause.message()),
         },
     }

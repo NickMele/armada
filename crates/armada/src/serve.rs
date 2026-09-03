@@ -33,8 +33,8 @@ use config::Roster;
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
     Allowance, Bytes, CheckBudget, Concurrency, DryRuns, Fittings, Fleet, Headroom, Host,
-    JudgeBudget, Liveness, Micros, Mint, Noticing, Polling, Spare, StepNorms, SystemClock,
-    TheMachine, UlidMint,
+    JudgeBudget, Liveness, Micros, Mint, Noticing, Polling, Reclaiming, Spare, StepNorms,
+    SystemClock, TheMachine, UlidMint,
 };
 use ipc::PROTOCOL_VERSION;
 use store::Store;
@@ -246,6 +246,20 @@ const PROVISIONAL_RESOURCE_POLL: Polling = Polling::every(Duration::from_secs(5)
 /// merged and switched windows sees it, and nobody is waiting on it faster than
 /// that.
 const PROVISIONAL_MERGE_NOTICE: Noticing = Noticing::every(Duration::from_secs(60));
+
+/// How often Fleet asks what disk it could give back.
+///
+/// **Five minutes, and not the turn interval**, for the merge notice's reason
+/// one step milder: the reading is a `git status` per worktree Fleet is still
+/// holding rather than a call over the network, and the set shrinks to nothing
+/// as the sweep works through it. Nobody is waiting on disk faster than this —
+/// what filled a disk was seventy-four worktrees over days, not five minutes of
+/// one.
+///
+/// **No `settings.toml` row yet**, exactly as the merge notice has none: there
+/// is nothing in the registry about how often to tidy up, because nothing tidied
+/// up on its own until now.
+const PROVISIONAL_RECLAIM_SWEEP: Reclaiming = Reclaiming::every(Duration::from_secs(300));
 
 /// What one Job may spend before Fleet stops starting Drones on it.
 ///
@@ -565,6 +579,7 @@ fn assemble(
         headroom: PROVISIONAL_HEADROOM,
         polling: PROVISIONAL_RESOURCE_POLL,
         noticing: PROVISIONAL_MERGE_NOTICE,
+        reclaiming: PROVISIONAL_RECLAIM_SWEEP,
         allowance: PROVISIONAL_ALLOWANCE,
         budget: CheckBudget::of(PROVISIONAL_CHECK_BUDGET),
         norms: PROVISIONAL_STEP_NORMS,

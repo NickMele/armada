@@ -105,14 +105,48 @@ pub fn cleaned(cleaned: &Cleaned) {
         }
     }
 
-    if cleaned.jobs.is_empty() && cleaned.unclaimed.is_empty() && cleaned.unreadable.is_empty() {
+    if cleaned.jobs.is_empty()
+        && cleaned.unclaimed.is_empty()
+        && cleaned.unreadable.is_empty()
+        && cleaned.uncommitted.is_empty()
+    {
         println!("\nno Jobs and no worktrees — there was nothing to give back");
     }
-    // Last, because it is the only part of this a person still has to act on.
+    // Last, because these are the only parts of this a person still has to act
+    // on. The uncommitted work first: it is the only thing here that exists
+    // nowhere else at all.
+    work_kept(cleaned);
     branches_left(cleaned);
     for fault in &cleaned.faults {
         eprintln!("  {fault}");
     }
+}
+
+/// The checkouts that are still there because nobody committed what is in
+/// them.
+///
+/// **Named file by file, not counted.** Which files they are is the decision;
+/// how much disk they hold is not.
+fn work_kept(cleaned: &Cleaned) {
+    if cleaned.uncommitted.is_empty() {
+        return;
+    }
+    println!(
+        "\n{} worktree(s) hold changes nobody has committed. They were left \
+         alone, and so were their Jobs:",
+        cleaned.uncommitted.len()
+    );
+    for kept in &cleaned.uncommitted {
+        println!("  {} — {}", kept.job_id, kept.title);
+        println!("    {}", kept.path);
+        for file in &kept.files {
+            println!("      {file}");
+        }
+    }
+    println!(
+        "Commit or discard them there, then run this again. `armada clean \
+         --force` removes them instead, and what is in them with them."
+    );
 }
 
 /// The branches that are still there, and what to do about each.

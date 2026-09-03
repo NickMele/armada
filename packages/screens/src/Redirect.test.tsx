@@ -30,6 +30,7 @@ function opened(): { sent: [string, string][] } {
   mount(
     <RedirectControl
       jobId="job_2d90bb"
+      drone="holding"
       disabled={false}
       onRedirect={(jobId, instruction) => sent.push([jobId, instruction])}
     />,

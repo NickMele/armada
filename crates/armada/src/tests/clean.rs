@@ -542,3 +542,91 @@ fn a_directory_that_is_not_a_repository_is_refused_by_naming_the_manifest() {
 
     assert!(refused.contains("armada.yml"), "{refused}");
 }
+
+/// **The loss this closes, one step earlier than the branch does.** An agent
+/// that wrote files and never committed sits on a branch with no commits ahead
+/// of the base — so it reads as fully merged, and every check that would have
+/// stopped the removal says the checkout is disposable.
+#[test]
+fn a_checkout_holding_uncommitted_work_survives_the_clean_and_is_named() {
+    let repo = a_repository();
+    let machine = TempDir::new();
+    a_job_with_a_worktree(machine.path(), repo.path(), JOB, MANIFEST_ID);
+    let at = repo.path().join(".armada/worktrees").join(JOB);
+    std::fs::write(at.join("half-done.rs"), "fn main() {}\n").expect("work nobody committed");
+
+    let cleaned = clean(
+        repo.path(),
+        machine.path(),
+        Scope::Repository,
+        UnmergedWork::Keep,
+    )
+    .expect("a clean");
+
+    assert!(at.is_dir(), "the only copy of it is still here");
+    assert_eq!(cleaned.uncommitted.len(), 1);
+    assert_eq!(cleaned.uncommitted[0].job_id, JOB);
+    assert_eq!(
+        cleaned.uncommitted[0].files,
+        vec!["half-done.rs".to_string()],
+        "named file by file — which files they are is the decision"
+    );
+    assert!(cleaned.jobs.is_empty(), "and nothing was given back");
+    assert!(
+        cleaned.faults.is_empty(),
+        "keeping a checkout is not a fault, any more than keeping a branch is"
+    );
+}
+
+/// **The record stays with it.** Forgetting the Job would leave a directory
+/// nothing can derive a name for — which is the `unclaimed` state this file
+/// already declines to remove, arrived at by the clean itself.
+#[test]
+fn the_record_behind_a_kept_checkout_is_kept_too() {
+    let repo = a_repository();
+    let machine = TempDir::new();
+    a_job_with_a_worktree(machine.path(), repo.path(), JOB, MANIFEST_ID);
+    let at = repo.path().join(".armada/worktrees").join(JOB);
+    std::fs::write(at.join("half-done.rs"), "fn main() {}\n").expect("work nobody committed");
+
+    clean(
+        repo.path(),
+        machine.path(),
+        Scope::Repository,
+        UnmergedWork::Keep,
+    )
+    .expect("a clean");
+
+    let mut store = Store::open(&machine.path().join(STORE_FILE)).expect("a store");
+    assert!(
+        store.load_job(&JobId::carried(Ulid::carried(JOB))).is_ok(),
+        "the row that derives the checkout outlives a clean that kept it"
+    );
+    assert!(
+        branches(repo.path()).contains(&format!("armada/{JOB}")),
+        "and so does the branch, which the checkout still has checked out"
+    );
+}
+
+/// `--force` is the same deliberate override a kept branch has, and it takes
+/// the uncommitted work with it.
+#[test]
+fn force_removes_a_checkout_holding_uncommitted_work() {
+    let repo = a_repository();
+    let machine = TempDir::new();
+    a_job_with_a_worktree(machine.path(), repo.path(), JOB, MANIFEST_ID);
+    let at = repo.path().join(".armada/worktrees").join(JOB);
+    std::fs::write(at.join("half-done.rs"), "fn main() {}\n").expect("work nobody committed");
+
+    let cleaned = clean(
+        repo.path(),
+        machine.path(),
+        Scope::Repository,
+        UnmergedWork::Delete,
+    )
+    .expect("a clean");
+
+    assert!(!at.exists());
+    assert!(cleaned.uncommitted.is_empty());
+    assert_eq!(cleaned.jobs.len(), 1);
+}

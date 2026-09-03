@@ -18,6 +18,7 @@ mod judge;
 mod mcp;
 mod reclaim;
 pub mod repo;
+mod standing;
 mod transcript;
 mod work_product;
 mod worktree;
