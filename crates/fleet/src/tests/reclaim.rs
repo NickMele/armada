@@ -26,7 +26,7 @@ use crate::tests::daemon::{a_fleet, a_proposal};
 use crate::tests::http::call;
 use crate::tests::tmp::TempDir;
 
-fn git(at: &Path, args: &[&str]) -> String {
+pub(crate) fn git(at: &Path, args: &[&str]) -> String {
     let run = Command::new("git")
         .arg("-C")
         .arg(at)
@@ -48,7 +48,7 @@ fn git(at: &Path, args: &[&str]) -> String {
 ///
 /// Only `README` is committed. The store's database is in this directory too
 /// and committing it would put a moving binary file under every assertion here.
-fn a_repository(home: &TempDir) {
+pub(crate) fn a_repository(home: &TempDir) {
     std::fs::write(home.path().join("README"), "the fixture\n").expect("a file to commit");
     git(
         home.path(),
@@ -58,7 +58,7 @@ fn a_repository(home: &TempDir) {
     commit(home.path(), "the first commit");
 }
 
-fn commit(at: &Path, message: &str) {
+pub(crate) fn commit(at: &Path, message: &str) {
     git(
         at,
         &[
@@ -74,7 +74,7 @@ fn commit(at: &Path, message: &str) {
     );
 }
 
-fn branches(at: &Path) -> Vec<String> {
+pub(crate) fn branches(at: &Path) -> Vec<String> {
     git(at, &["branch", "--format=%(refname:short)"])
         .lines()
         .map(str::to_string)
@@ -84,7 +84,7 @@ fn branches(at: &Path) -> Vec<String> {
 /// The worktree and branch a dispatch would have made for this Job. Made with
 /// git rather than through `Vcs`, because the fixture's version control is a
 /// fake and this file is about what git holds.
-fn a_worktree_for(home: &TempDir, job_id: &str) {
+pub(crate) fn a_worktree_for(home: &TempDir, job_id: &str) {
     let path = format!(".armada/worktrees/{job_id}");
     let branch = format!("armada/{job_id}");
     git(
@@ -95,7 +95,7 @@ fn a_worktree_for(home: &TempDir, job_id: &str) {
 
 /// A terminal Job, killed before anything spawned — which is legal from
 /// `awaiting_approval` and needs no Drone.
-async fn a_finished_job(
+pub(crate) async fn a_finished_job(
     fleet: &Fleet<testkit::FakeHarness, testkit::FakeVcs, FakeWorkProduct>,
     title: &str,
 ) -> core_model::JobId {

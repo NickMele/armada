@@ -11,8 +11,8 @@
 //! # A branch the base cannot reach is kept
 //!
 //! Fleet commits a finished Job's work, so the branch *is* the work. Only
-//! [`UnmergedWork::Delete`] removes commits nobody has taken. Which branch the
-//! base is comes from `crate::base`, shared with delivery.
+//! [`UnmergedWork::Delete`] removes commits nobody has taken, and [`standing`]
+//! asks that question without acting. `crate::base` says which branch is base.
 //!
 //! # Remove, prune, then the branch
 //!
@@ -23,8 +23,6 @@
 //! at the directory.
 //!
 //! Each half is answered on its own, so neither hides the other's fault.
-//!
-//! [`standing`] asks both questions without acting on either.
 
 use adapter_traits::WorktreeSpec;
 use git2::{BranchType, ErrorCode, Oid, Repository, WorktreeLockStatus, WorktreePruneOptions};
