@@ -36,7 +36,8 @@ use crate::daemon::Fleet;
 use crate::drone::{aftermath, Aftermath, Ending};
 use crate::session::{LiveSession, Occasion};
 use crate::transcript;
-use crate::working::Working;
+use crate::watch::Drained;
+use crate::working::{StoodDown, Working};
 
 /// How long a Drone may say nothing, and how many nudges it gets.
 ///
@@ -138,13 +139,18 @@ pub enum Vigil {
     /// `escalated`, reason `stalled`.
     Escalated { pokes: u32 },
     /// The Drone's run ended with nothing submitted and nothing outstanding for
-    /// it, so the Job escalated without a poke being spent.
+    /// it, so it was reaped, its step stopped and the Job escalated — without a
+    /// poke being spent.
     ///
     /// **It carries the trigger because there are three**, which is the whole
     /// difference from [`Vigil::Escalated`] above: that one is a Drone nobody
     /// can classify, because it stopped mid-run and said nothing about it. This
     /// one ended, and what a run reports on its way out is what tells `silent`,
     /// `blocked_by_policy` and `stalled` apart.
+    ///
+    /// **The trigger here is the Job's, and the step's is always `run_ended`.**
+    /// One Job carries both readings: what it stopped for, and what became of
+    /// the step underneath. `crate::ending` writes the second.
     AtRest { found: EscalationTrigger },
 }
 
@@ -249,7 +255,8 @@ where
             }
             Vigil::Escalated { pokes: spent }
         };
-        self.noted_quiet(&job, &step, after, &said);
+        // Nothing was reaped on this road: the poke ladder holds its Drone.
+        self.noted_quiet(&job, &step, after, &said, None);
         Ok(Some(Quiet {
             job,
             step,
@@ -258,22 +265,28 @@ where
         }))
     }
 
-    /// The Drone has finished, and the Job has to stop being `running`.
+    /// The Drone has finished, so treat the ending as one.
     ///
-    /// **No poke and no threshold**, which is the whole of `#314`: the two
+    /// **No poke and no threshold**, which is the first half of `#314`: the two
     /// pokes the ladder would spend here are two model runs asking a process
     /// that has stopped whether it has stopped.
     ///
-    /// **The Drone is held and the worktree is untouched**, exactly as
-    /// [`Vigil::Escalated`] holds one. The process is idle rather than gone —
-    /// `#371` is why it is still there — so a redirect still reaches it, and a
-    /// redirect is the cheapest recourse there is: no respawn, and the session
-    /// keeps everything it has read. A person who wants the other road takes
-    /// it through `kill_drone`, which stops the step under `drone_killed` and
-    /// makes the Job restartable. **Stopping the step here would take the
-    /// cheap road away** — `restart_step` refuses while a Drone is still in the
-    /// slot, so a stopped step under a live session is a step offering neither
-    /// act.
+    /// **The Drone is reaped, the step stops and the Job escalates**, which is
+    /// the second half and is `crate::ending`'s to carry out. This road left
+    /// the step `running` for an hour on the argument that an idle process is
+    /// still reachable, so a redirect is a cheaper recourse than a restart and
+    /// `restart_step` refuses while a Drone holds the slot. The argument is
+    /// true and is refused anyway: **the record has to say what is true**, and
+    /// a step marked `running` beneath a Drone whose run has ended is not. It
+    /// is `#313`'s defect one status over, where the registry was corrected
+    /// rather than the state sanctioned. Reaping frees the slot, and a `stopped`
+    /// row is what gives `restart_step` a target.
+    ///
+    /// **This is not Fleet killing on a judgement.** `DroneEvent::Ended` is the
+    /// Drone's own word that its run is over, and anything it does after that
+    /// is outside its contract — so a Drone that reports an ending and keeps
+    /// working loses that work. `crate::ending` holds the rest of that
+    /// argument, and the worktree is untouched either way.
     async fn at_rest(&self, working: &mut Option<Working>) -> Result<Option<Quiet>, Adrift> {
         let Some(at_work) = working.as_ref() else {
             return Ok(None);
@@ -293,6 +306,11 @@ where
         // road folds the same events through the same function; what differs
         // is only that the process has not exited, which changes nothing about
         // what the run said on its way out.
+        //
+        // **Folded before the reap and not after it**, because it is what
+        // decides whether to reap at all. The terminating event is in it by
+        // construction — `Working::at_rest` is true of nothing else — so the
+        // classification does not depend on the drain that follows.
         let Aftermath::JobMoves(target) = aftermath(
             record.status(),
             &Ending::of(&at_work.heard()),
@@ -308,16 +326,16 @@ where
             // is Fleet going down mid-Job.
             _ => return Ok(None),
         };
+        // Through `as_mut`, because the reading restarts the clock and the
+        // borrow above is an `as_ref`. It is taken before the reap for the
+        // obvious reason: afterwards there is no slot to read it off.
         let after = working
             .as_mut()
             .map(|at_work| at_work.quiet_for(&self.now()))
             .unwrap_or_default();
-        self.move_job(&record, target, Actor::Fleet).await?;
-        if let Some(at_work) = working.as_mut() {
-            at_work.waiting(self.now());
-        }
+        let reaped = self.drone_at_rest(target, working).await?;
         let said = Vigil::AtRest { found };
-        self.noted_quiet(&job, &step, after, &said);
+        self.noted_quiet(&job, &step, after, &said, reaped.as_ref());
         Ok(Some(Quiet {
             job,
             step,
@@ -360,7 +378,21 @@ where
     /// Write what the vigil did into the Job's log. **Fields, never an
     /// interpolated message**, so a query can find every step that went quiet
     /// whether or not it escalated.
-    fn noted_quiet(&self, job: &JobId, step: &StepId, after: Duration, said: &Vigil) {
+    ///
+    /// **`reaped` is the one thing the vigil does not decide and must still
+    /// say.** A slot handed back over a process that would not be signalled, or
+    /// over a transcript cut short by a tool still holding the pipe, is a slot
+    /// handed back on an incomplete reading — and `#371` is that case being
+    /// real. `boundary::noted_stood_down` writes the same two fields under the
+    /// same names for the same reason.
+    fn noted_quiet(
+        &self,
+        job: &JobId,
+        step: &StepId,
+        after: Duration,
+        said: &Vigil,
+        reaped: Option<&StoodDown>,
+    ) {
         let (level, wording) = match said {
             Vigil::Poked { .. } => (Level::Info, "the Drone has gone quiet and was poked"),
             Vigil::NotPoked { .. } => (
@@ -403,6 +435,20 @@ where
         // none of the ones this vigil classified.
         if let Some(found) = escalated_as(said) {
             envelope = envelope.with_field("found", FieldValue::Str(found.as_wire().to_string()));
+        }
+        if let Some(reaped) = reaped {
+            envelope = envelope
+                .with_field("signalled", FieldValue::Bool(reaped.terminated.is_ok()))
+                .with_field(
+                    "transcript",
+                    FieldValue::Str(String::from(match reaped.drained {
+                        Drained::ToTheEnd => "read to the end of the pipe",
+                        Drained::CutShort { .. } => {
+                            "cut short: something the Drone spawned outlived it \
+                             holding the same output"
+                        }
+                    })),
+                );
         }
         // A log line that will not write does not stop the Job, for
         // `converging::noted`'s reason: what happened is on the slot, and the

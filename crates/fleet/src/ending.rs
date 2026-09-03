@@ -1,28 +1,28 @@
-//! The three acts that take something away, and what each one leaves.
+//! The acts that take something away, and what each one leaves.
 //!
 //! Cut out of [`daemon`](mod@crate::daemon) on that module's own three-part
 //! sentence — what Fleet is made of, the slots it works in, and the things it
-//! can be asked. Most of the things it can be asked already have files of their
-//! own: `resume` holds the two that put a person back on a Job, `reviewing`
-//! holds the gate acts. These three never got one, and they are not leftovers —
-//! they are a ladder, and each rung is defined against the one below it.
+//! can be asked. `resume` and `reviewing` hold the rest; these are a ladder
+//! rather than leftovers, each rung defined against the one below it.
 //!
-//! | Act | Goes | Survives |
-//! |---|---|---|
-//! | [`kill_drone`](Fleet::kill_drone) | the process, and the step it was on | the Job, its worktree, every step that advanced |
-//! | [`kill_job`](Fleet::kill_job) | the Job, at `killed` | the record, and the worktree until `armada clean` |
-//! | [`forget_job`](Fleet::forget_job) | the record | nothing this owns; the worktree is `armada clean`'s |
+//! | Act | Asked by | Goes | Survives |
+//! |---|---|---|---|
+//! | [`kill_drone`](Fleet::kill_drone) | a person | the process, and the step it was on | the Job, its worktree, every step that advanced |
+//! | [`drone_at_rest`](Fleet::drone_at_rest) | Fleet | the same two | the same three |
+//! | [`kill_job`](Fleet::kill_job) | a person | the Job, at `killed` | the record, and the worktree until `armada clean` |
+//! | [`forget_job`](Fleet::forget_job) | a person | the record | nothing this owns; the worktree is `armada clean`'s |
 //!
-//! **Reading them apart is the whole reason they are together.** Each doc below
-//! says what it is *not*, and every one of those sentences names one of the
-//! other two: a kill that is not terminal, a terminal that is not a verdict, a
-//! deletion that is not a way to stop something still running.
+//! **Reading them apart is why they are together.** Each doc below says what
+//! it is *not*: a kill that is not terminal, a terminal that is not a verdict,
+//! a deletion that is not a way to stop something still running, and a reap
+//! nobody asked for.
 //!
-//! [`stopped_by_hand`](Fleet::stopped_by_hand) is here rather than in `resume`
-//! because `kill_drone` is its only caller and the two are one act as an
-//! operator means it — the process goes and the step it was on stops. It owes
-//! `resume`'s contract and says so; a doc link carries that, where the distance
-//! from the call site would not.
+//! **That last one needs defending, and `Ended` is the defence.** Fleet takes
+//! no process away on a judgement of its own; it takes away one whose own
+//! terminating event says its run is over.
+//!
+//! [`stopped_by_hand`](Fleet::stopped_by_hand) is here because `kill_drone` is
+//! its only caller and the two are one act as an operator means it.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
@@ -32,6 +32,7 @@ use core_model::{
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::drone::{aftermath, Aftermath, Ending};
+use crate::working::{StoodDown, Working};
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -162,6 +163,103 @@ where
     /// step holding no Drone, for the same reason: what a kill can be sure of
     /// is the process, and everything else is read off the record.
     pub(crate) async fn stopped_by_hand(&self, job: &Job) -> Result<Job, Adrift> {
+        let why = StepLevelTrigger::of(EscalationTrigger::DroneKilled)
+            .expect("`drone_killed` is step-level in the registry");
+        // **Human, not Fleet.** This act exists because somebody pressed
+        // something, and a row saying Fleet took the process away would claim a
+        // decision it did not make. [`Fleet::stopped_at_rest`] is the row that
+        // legitimately says Fleet, and the actor is the only difference between
+        // the two calls.
+        self.stopped_step_under(job, why, Actor::Human).await
+    }
+
+    /// Take away a Drone whose own run has ended, and stop the step it was on.
+    ///
+    /// **The only act on this ladder Fleet asks for**, and `DroneEvent::Ended`
+    /// is what makes it defensible rather than a judgement: the Drone said its
+    /// own run was over, and anything it does after saying so is outside what
+    /// it told Fleet. The reading is `crate::silence`'s and so is its argument.
+    ///
+    /// **The cost is written down rather than discovered.** A Drone that
+    /// reports its run has ended and then keeps working loses that work. It is
+    /// accepted because the alternative is the row this reaps: a step saying
+    /// `running` beneath a Drone that has said it is finished.
+    ///
+    /// **The order is `kill_drone`'s, and load-bearing for the same reason.**
+    /// The process, then the step, then the Job — the inner machine freezes the
+    /// moment the Job leaves `running`, so a step stopped after the move is
+    /// refused and `last_verdict` stays unwritten. The step stops while the Job
+    /// is still `running`, so this needs no `step_machine` exception of its own.
+    ///
+    /// **It will not hang on a process that will not go**, which is `#371`.
+    /// `DroneSession::terminate` sends `SIGKILL`, uncatchable, and waits on
+    /// Fleet's own direct child. The pipe is the other wait — a tool the Drone
+    /// spawned can hold it open — and [`drained`](crate::Watching::drained)
+    /// bounds it and says whether it got to the end. Both answers ride out on
+    /// [`StoodDown`]: a slot handed back over a transcript cut short must not
+    /// be handed back silently.
+    pub(crate) async fn drone_at_rest(
+        &self,
+        target: Target,
+        working: &mut Option<Working>,
+    ) -> Result<Option<StoodDown>, Adrift> {
+        let Some(at_work) = working.take() else {
+            return Ok(None);
+        };
+        let job_id = at_work.standing().0;
+        // **Not `boundary::stood_down`, and the difference is one log line.**
+        // That one writes "the Drone was ended because its step ended", which
+        // is the sentence this whole defect is about being false. The three
+        // record-keeping calls beneath it are the same three; if a third reason
+        // ever ends a Drone deliberately, the reason belongs on
+        // `noted_stood_down` as a parameter rather than in a third copy here.
+        let stood_down = at_work.stood_down(&self.now()).await;
+        self.record_spend(&stood_down.job, &stood_down.drone, &stood_down.spent)
+            .await?;
+        self.every_exit_recorded(&job_id).await?;
+        let job = self.load(&job_id).await?;
+        let job = self.stopped_at_rest(&job).await?;
+        self.move_job(&job, target, Actor::Fleet).await?;
+        // Ordinarily nothing, for `dispatch::reap`'s reason: the reading that
+        // reaches here is one where `left` answered `Left::Nothing`. It is
+        // called anyway because a Drone that submitted between that reading and
+        // this line left evidence against a step that has now stopped, and a
+        // drop nobody wrote down is the defect that pair closes.
+        let dropped = self.empty_the_inbox(&job_id);
+        self.dropped_with_the_job(&job_id, dropped);
+        Ok(Some(stood_down))
+    }
+
+    /// Stop the step Fleet has just taken a finished Drone off.
+    ///
+    /// **Fleet, and this is the one row where that is true of a Drone being
+    /// taken away.** `drone_killed` is a person's decision and says so;
+    /// `run_ended` is Fleet acting on the Drone's own last word, and a reader
+    /// who opens it finds nobody to ask about it.
+    async fn stopped_at_rest(&self, job: &Job) -> Result<Job, Adrift> {
+        let why = StepLevelTrigger::of(EscalationTrigger::RunEnded)
+            .expect("`run_ended` is step-level in the registry");
+        self.stopped_step_under(job, why, Actor::Fleet).await
+    }
+
+    /// Stop the step a Drone was working, under whichever trigger took it away.
+    ///
+    /// **What it has to get right is `Fleet::stopped_step`'s contract**, not
+    /// the process's: a `stopped` row carrying `failed(<trigger>)` is what
+    /// `restart_step` reads, and writing one without the gate having ruled on
+    /// anything is the only place in Fleet that happens.
+    ///
+    /// **`Ok` and unchanged where no step is running**, which is not a fault
+    /// and is the ordinary shape at a step boundary and on a Job whose steps
+    /// have all advanced. `crate::drone_moves` answers the same way about a
+    /// step holding no Drone, for the same reason: what an ending can be sure
+    /// of is the process, and everything else is read off the record.
+    async fn stopped_step_under(
+        &self,
+        job: &Job,
+        why: StepLevelTrigger,
+        by: Actor,
+    ) -> Result<Job, Adrift> {
         let Some(step) = job
             .current_step()
             .filter(|row| row.state() == StepState::Running)
@@ -169,12 +267,7 @@ where
         else {
             return Ok(job.clone());
         };
-        let why = StepLevelTrigger::of(EscalationTrigger::DroneKilled)
-            .expect("`drone_killed` is step-level in the registry");
-        // **Human, not Fleet.** Fleet ends a Drone of its own accord nowhere;
-        // this act exists because somebody pressed something, and a row saying
-        // Fleet took the process away would claim a decision it did not make.
-        self.move_step_by(job, &step, StepTarget::Stopped(why), Actor::Human)
+        self.move_step_by(job, &step, StepTarget::Stopped(why), by)
             .await
     }
 }
