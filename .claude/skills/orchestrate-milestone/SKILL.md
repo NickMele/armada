@@ -83,6 +83,7 @@ All of it, every time:
 
 | | |
 |---|---|
+| **Every Check `armada.yml` declares** | run the Checks, not the gate. `format` is one of them — `cargo fmt --all --check` — and a merge that skipped it left `main` failing a declared Check on 2 Sep, found by the next agent rather than by the merge |
 | The gating check passes | `cargo nextest run --workspace --exclude acceptance` |
 | The acceptance tests pass | separately; a milestone's own claim is red until the milestone lands, which is why it is written first |
 | Both halves build | Bridge too, if it was touched |

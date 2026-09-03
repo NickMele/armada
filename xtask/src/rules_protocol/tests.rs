@@ -124,13 +124,23 @@ fn parsing_reads_every_rename_between_the_braces_and_nothing_after() {
 /// rather than pass on zero comparisons.
 #[test]
 fn no_variants_found_fails_rather_than_passing_on_nothing() {
-    for source in ["// pub enum Event moved to another file", "pub enum Event {\n}\n"] {
+    for source in [
+        "// pub enum Event moved to another file",
+        "pub enum Event {\n}\n",
+    ] {
         let mut report = Report::new("test");
-        check(INVENTORY_SOURCE, &table_and_router(TABLE_SOURCE), source, &mut report);
+        check(
+            INVENTORY_SOURCE,
+            &table_and_router(TABLE_SOURCE),
+            source,
+            &mut report,
+        );
         assert!(report.failed(), "empty parse must fail: {source:?}");
         let findings = findings(&report);
         assert!(
-            findings.iter().any(|f| f.contains(EVENT_ENUM) && f.contains("no")),
+            findings
+                .iter()
+                .any(|f| f.contains(EVENT_ENUM) && f.contains("no")),
             "expected a finding saying the parser found nothing: {findings:?}"
         );
     }
