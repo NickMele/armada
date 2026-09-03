@@ -137,12 +137,15 @@ fn the_record_survives(home: &TempDir, failed: &str, dispatched: &str) {
     );
 }
 
-/// **A Check said no, which is the primary case.** The Job is terminal already,
-/// so it is left exactly where it is and the replacement is the whole act.
+/// **A Check said no, which is the primary case.** The Job holds at
+/// `awaiting_repair` (`#208`) rather than ending, so redispatching it kills it
+/// on the way out — the shape `escalated` has always had, and the reason this
+/// test is no longer *left where it stopped*. Nothing is offered twice: a
+/// replacement and a Job still open would both claim the same work.
 #[tokio::test]
-async fn a_job_a_check_failed_is_replaced_and_left_where_it_stopped() {
+async fn a_job_a_check_failed_is_replaced_and_the_original_is_cleared() {
     let home = TempDir::new();
-    // Nothing changed, so `diff_nonempty` fails and the ruling ends the Job.
+    // Nothing changed, so `diff_nonempty` fails and the ruling stops the work.
     let fleet = a_fleet(&home, FakeWorkProduct::untouched());
     let job = fleet
         .propose(a_proposal("change nothing"))
@@ -157,7 +160,7 @@ async fn a_job_a_check_failed_is_replaced_and_left_where_it_stopped() {
     fleet.turn().await.expect("a ruling");
     assert_eq!(
         fleet.load(&failed).await.expect("the Job").status(),
-        JobStatus::CompletedFailed,
+        JobStatus::AwaitingRepair,
         "the state the redispatch is asked from, reached the way it is reached"
     );
 
@@ -169,8 +172,9 @@ async fn a_job_a_check_failed_is_replaced_and_left_where_it_stopped() {
 
     assert_eq!(
         both.replaced.status.domain(),
-        JobStatus::CompletedFailed,
-        "no terminal has an outbound edge, so there is no move to make"
+        JobStatus::Killed,
+        "the original is cleared, carrying no verdict — the replacement is where \
+         the work goes now"
     );
     assert_eq!(
         both.dispatched.status.domain(),
@@ -322,7 +326,7 @@ async fn a_redispatch_freezes_the_failed_jobs_own_workflow_not_the_first_one_hel
     fleet.turn().await.expect("a ruling");
     assert_eq!(
         fleet.load(&failed).await.expect("the Job").status(),
-        JobStatus::CompletedFailed,
+        JobStatus::AwaitingRepair,
         "an empty diff fails `diff_nonempty`"
     );
 

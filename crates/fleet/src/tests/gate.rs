@@ -601,7 +601,7 @@ async fn the_diff_fleet_reads_is_of_the_job_s_own_worktree() {
 // ------------------------------------------------------- what the Job then does
 
 #[tokio::test]
-async fn a_failed_check_ends_the_job_and_fleet_is_the_actor() {
+async fn a_failed_check_holds_the_job_and_fleet_is_the_actor() {
     let workflow = workflow("/usr/bin/false");
     let worktree = worktree();
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
@@ -624,12 +624,15 @@ async fn a_failed_check_ends_the_job_and_fleet_is_the_actor() {
         .expect("the Job moves")
         .expect("a legal move");
 
-    assert_eq!(moved.job.status(), JobStatus::CompletedFailed);
+    assert_eq!(moved.job.status(), JobStatus::AwaitingRepair);
     assert_eq!(moved.event.actor(), Actor::Fleet);
-    assert!(ruling.ends_the_drone());
+    assert!(
+        !ruling.ends_the_drone(),
+        "the session that wrote the code is what a redirect is injected into"
+    );
     assert!(
         ruling.tell().is_none(),
-        "a terminated Drone was told something"
+        "the Drone is not told: what to say is the part a person was asked for"
     );
 }
 

@@ -62,11 +62,17 @@ import { clock } from "./duration";
 import { ordered } from "./facts";
 
 /**
- * The one status the two resume acts are legal on. **Kept for the words and no
+ * The statuses the two resume acts are legal on. **Kept for the words and no
  * longer for the acts**: `stuck.recourse` says which apply, and this only
  * chooses which sentence explains an absence.
+ *
+ * **Two, since #208.** It was `escalated` alone and it never meant that status
+ * — it meant *a Job a person is holding*, which `awaiting_repair` also is. Left
+ * as one, a Job whose retry budget is spent and whose worktree has been
+ * reclaimed would have been told that nothing resumes it *because of its
+ * status*, when its status is the one thing not in the way.
  */
-const ESCALATED = "escalated";
+const HELD_FOR_A_PERSON: readonly string[] = ["escalated", "awaiting_repair"];
 
 /**
  * The acts, spelled as `crates/ipc/operations.toml` keys the operation that
@@ -426,7 +432,7 @@ export function onwards(overrule: Overrule): string {
  * is one of the other three said where it is false.
  */
 function stalled(job: SummaryStatus, stuck: Stuck): string {
-  if (job.status !== ESCALATED) return notResumable(job);
+  if (!HELD_FOR_A_PERSON.includes(job.status)) return notResumable(job);
   if (stuck.step_id === undefined) return NO_STEP_STOPPED;
   if (!stuck.worktree_on_disk) return WORKTREE_GONE;
   return NOTHING_STANDS;
@@ -436,17 +442,21 @@ function stalled(job: SummaryStatus, stuck: Stuck): string {
  * `NotResumable`, in Bridge's words. **The status is named**, because "this job
  * is not escalated" is a sentence a person has to translate and "this one is
  * killed" is one they can read off the badge above it.
+ *
+ * The condition is no longer named as one status either, for the same reason:
+ * *a job a person is holding* is what both acts ask for, and two statuses
+ * answer it.
  */
 function notResumable(job: SummaryStatus): string {
   return (
     "Nothing resumes this job. Redirect and restart both take a job a person is holding, " +
-    `which is an escalated one, and this job is ${named(job)}.`
+    `and this job is ${named(job)}.`
   );
 }
 
 /** `NoStepStopped`. The Job is held, and no step of it is. */
 const NO_STEP_STOPPED =
-  "Nothing resumes this job. It escalated without stopping a step, so redirect and restart " +
+  "Nothing resumes this job. It stopped without stopping a step, so redirect and restart " +
   "have no step to land on.";
 
 /** `WorktreeGone`, stated as a fact and not a risk: Fleet read the disk. */
@@ -454,7 +464,7 @@ const WORKTREE_GONE =
   "Nothing resumes this job. Its drone is gone and so is the worktree it was working in — " +
   "fleet read the disk, and there is nothing left for a fresh drone to take over.";
 
-/** Escalated, a step stopped, a worktree on disk, and Fleet offers neither. */
+/** Held, a step stopped, a worktree on disk, and Fleet offers neither. */
 const NOTHING_STANDS =
   "Nothing resumes this job. Its step stopped and its worktree is still there, and fleet " +
   "offers neither a redirect nor a restart on it.";

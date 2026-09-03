@@ -66,6 +66,14 @@ describe("which tab a job is in", () => {
     }
   });
 
+  it("sorted a newly minted status without a line being written here", () => {
+    // `awaiting_repair` landed in `job-statuses.toml` carrying `Waited on` and
+    // `Person`, and the tab followed from the registry rather than from a list
+    // — which is the property the four positive rules exist for. The Board's
+    // filter cost nothing but the codegen run, and this case is what says so.
+    expect(tabOf(job({ status: "awaiting_repair" }))).toBe("needs-you");
+  });
+
   it("puts a queued job under Queued", () => {
     expect(tabOf(job({ status: "queued" }))).toBe("queued");
   });

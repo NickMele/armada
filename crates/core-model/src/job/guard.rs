@@ -37,11 +37,16 @@ pub enum Guard {
     EveryStepAdvanced,
     /// No step is still being worked.
     ///
-    /// **On `running -> completed_failed` alone**, and not on the two other
-    /// edges into that status: `escalated -> completed_failed` is a person
-    /// accepting the failure of a Job escalated on `stalled`, which holds a
-    /// `running` step legitimately. So `completed_failed`'s `step_states` row
-    /// does not narrow behind this guard, and is not meant to.
+    /// **On `running -> awaiting_repair` alone**, and on no edge into
+    /// `completed_failed`: both of those are a person accepting a failure, and
+    /// a Job escalated on `stalled` holds a `running` step legitimately. So
+    /// `completed_failed`'s `step_states` row does not narrow behind this
+    /// guard, and is not meant to; `awaiting_repair`'s does, and is the only
+    /// row that narrows against `running`.
+    ///
+    /// **It moved with its edge in #208**, which replaced
+    /// `running -> completed_failed`: the guard belongs to the moment a gate
+    /// stops the work, not to the destination that moment used to have.
     ///
     /// It is defence in depth — `fleet::dispatch` stops the step before the Job
     /// moves — and #179 is why it exists anyway: that path was correct at three

@@ -371,7 +371,7 @@ async fn a_dry_run_that_passed_does_not_satisfy_the_gate() {
     fleet.turn().await.expect("the gate runs");
     assert_eq!(
         fleet.load(&job).await.expect("the Job").status(),
-        JobStatus::CompletedFailed,
+        JobStatus::AwaitingRepair,
         "the gate re-ran the checks and reached its own verdict"
     );
 }

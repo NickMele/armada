@@ -456,6 +456,14 @@
   status = "Specified"
   notes = "Nodes inside the graph reuse the badge icons at 12px — a graph node and a Job Board row showing the same job must show the same glyph."
 
+[icons.wrench]
+  means = "A spanner held on a diagonal, its open jaw at one end — a tool for putting something right, and the only tool silhouette in the badge set"
+  group = "Job state"
+  size = "12px"
+  status = "Specified"
+  reserved = "job_status.awaiting_repair only. Never a settings or configuration glyph — Kit is `settings` and a Manifest is `file-cog`, and a wrench meaning preferences is the collision this reservation exists to refuse. Never an action: repairing is what a person does off this badge, not a button Armada draws."
+  notes = "Added 2026-09-03 with job_status.awaiting_repair, minted rather than borrowed. It renders `--status-escalated`, so rule 4 asks it to differ from the seven escalation-reason outlines that share that hue — octagon, closed loop, page-and-question, shield, Y-split, broken plug, ascender-to-a-line — and a diagonal shaft with an open jaw is none of them. It survives rule 3 because the jaw is a break in the outline itself rather than a mark drawn inside a stable shape, which is `circle-dashed`'s argument for the same test. What settles the choice is the family it joins: `stamp` means attest, `eye` means review, `terminal` means pilot, and each is the object for the act a person owes. A wrench means repair, which is the verb this status renders. What was refused: `user-check` is reserved to human-required and is `awaiting_approval`'s in this same group, so a second status wearing it would undo the one distinction that group's own note says the glyphs carry; `shield-x` is a failed Check and this badge is deliberately not saying what went wrong; `x` is reserved to system failure and the Job has not failed; `octagon-alert` is `stalled`'s by its own note; `circle-help` and `life-buoy` are ring outlines and collide with `circle-dot` at 12px. The status was not left wordless the way `[no-report-glyph]` and `[drone-killed-glyph]` were: those are escalation reasons, where iconography sanctions drawing a verb alone, and this is a Job status, where *Every badge carries an icon* holds because hue is a single channel and several statuses share one."
+
 [icons.x]
   means = "A bare cross, two crossed strokes"
   group = "Job state"

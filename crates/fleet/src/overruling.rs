@@ -174,6 +174,12 @@ where
     /// implies the mechanical tier held, so ordinarily it is redundant — and a
     /// guard that is redundant by an argument about tier ordering is a guard
     /// that stops holding the day the ordering changes.
+    ///
+    /// **Which is why `awaiting_repair` is refused twice over.** A Job held for
+    /// a spent retry budget carries a step stopped on `gate_failure`, the same
+    /// trigger a Judge refusal writes — so the status test above is what keeps
+    /// it out, and the Check reading would keep it out on its own. `build`
+    /// failing is not a matter of opinion, and `#208` did not make it one.
     async fn overridable(&self, job: &Job) -> Result<(StepId, StepLevelTrigger), Adrift> {
         if job.status() != JobStatus::Escalated {
             return Err(Adrift::NotResumable {

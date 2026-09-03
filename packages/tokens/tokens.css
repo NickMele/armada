@@ -145,6 +145,22 @@
   --status-awaiting-approval-bg: var(--status-awaiting-review-bg);
 }
 
+/* awaiting_repair — a step spent its retry budget and the work is unfinished.
+   Aliased from escalated, not from the other awaiting_* statuses, and the two
+   comments at the top of this file are what decide it: awaiting_review is
+   needs you, not urgent and escalated is needs you, urgent. The three amber
+   statuses are gates in the ordinary course of a Job — nothing has gone
+   wrong, and the work resumes when a person answers. Here the Job has stopped
+   and cannot go on, which is escalated's claim exactly. The glyph carries
+   which one it is: wrench against octagon-alert and the rest of the
+   escalation set, per Iconography rule 4.
+
+   It is deliberately not completed_failed's red. The Job did not fail. */
+:root {
+  --status-awaiting-repair: var(--status-escalated);
+  --status-awaiting-repair-bg: var(--status-escalated-bg);
+}
+
 /* Below Job level, amended 2026-08-20, extended 2026-08-23.
    Hue below Job level is permitted only where this file declares it, and every
    value is aliased from its Job counterpart so the mapping is declared rather

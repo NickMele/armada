@@ -46,6 +46,12 @@ const SUCCEEDED = "--status-completed-success";
  */
 const AT_REVIEW = "--status-awaiting-review";
 
+/**
+ * The status a spent retry budget holds at. **A wire value, not a token** —
+ * see the rule that reads it.
+ */
+const HELD_FOR_REPAIR = "awaiting_repair";
+
 export function renderFor(job: JobSummary): Render {
   const base = JOB_STATUS[job.status];
   const life = JOB_LIFECYCLE[job.status];
@@ -59,6 +65,22 @@ export function renderFor(job: JobSummary): Render {
   // `working` would draw a live rail and a running clock over a Job that
   // has stopped.
   if (job.status === "escalated") return escalation(job) === undefined ? "unrenderable" : "stopped";
+  // **`awaiting_repair` is the line above one status over**, and it is here
+  // rather than a row down because the failure is identical: a step spent its
+  // retry budget, the Job is waiting on a person, and falling through to
+  // `working` would draw the same live rail and running clock over it. #208.
+  //
+  // **No `unrenderable` arm, and that is the difference.** `escalated` renders
+  // its reason's verb and glyph, so a reason this build cannot name leaves the
+  // dead-end render nothing to state. This status has a verb and a glyph of its
+  // own — `needs repair`, `wrench` — and what stopped the work is on the
+  // stopped step's `last_verdict` rather than on the Job's transition, which
+  // `escalation` deliberately does not read.
+  //
+  // Keyed on the status and not on a token, unlike the two rules below: the
+  // registry key is the wire value, and a token is a rendering choice that
+  // could be renamed by somebody thinking about colour.
+  if (job.status === HELD_FOR_REPAIR) return "stopped";
   if (base.statusToken === AT_REVIEW) return "reviewing";
   if (!life.terminal) return "working";
   return base.statusToken === SUCCEEDED ? "finished" : "stopped";

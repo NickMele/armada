@@ -237,7 +237,7 @@ async fn a_step_that_resolves_none_of_a_conflicted_rebase_fails_its_diff_check()
     assert_eq!(failures, &[verification::CheckFailed::DiffEmpty]);
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),
-        JobStatus::CompletedFailed
+        JobStatus::AwaitingRepair
     );
 }
 
