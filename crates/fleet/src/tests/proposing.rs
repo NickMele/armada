@@ -442,3 +442,137 @@ pub(crate) mod over_http {
         assert_ne!(error.code, "fleet.no_workflow_fits");
     }
 }
+
+/// One answer the fake gives, kept in one place: the two cases below assert on
+/// what was published rather than on what was proposed.
+const A_PLAN: &str = "workflow: bug\ntitle: The log reader drops the last line\n\
+                      because: a defect with a reproducible symptom\nwrites: src/log.rs";
+
+/// Everything this subscription has waiting, in order.
+///
+/// **Drained after the fact rather than read live**, because the claim is about
+/// what a subscriber would have received and not about when: a reader racing
+/// the fake's shell would assert on how fast it ran.
+///
+/// It stops at the first pause rather than at a count. The broadcaster is still
+/// alive, so `next` waits forever on an empty channel, and its cursor counts
+/// every event Fleet has ever published — including any from before this
+/// subscription existed, which it will never be sent. A short wait is what
+/// separates "nothing more is coming" from "nothing yet".
+async fn published(subscription: &mut api::Subscription) -> Vec<ipc::Event> {
+    let mut seen = Vec::new();
+    while let Ok(Some(api::Next::Send(delivered))) =
+        tokio::time::timeout(std::time::Duration::from_millis(200), subscription.next()).await
+    {
+        seen.push(delivered.event);
+    }
+    seen
+}
+
+/// The whole seam, end to end: a proposal publishes what the call reached, and
+/// stops publishing when it comes back.
+///
+/// **The claim a person acts on.** A wait that says only how long it has been
+/// cannot separate a model thinking from a harness that never reached the
+/// vendor, and those take opposite decisions. This is what makes the difference
+/// available to a surface at all.
+#[tokio::test]
+async fn a_proposal_publishes_what_the_call_reached() {
+    let home = TempDir::new();
+    let fleet = a_fleet_proposing_through(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        a_catalogue(),
+        FakeJudge::saying(A_PLAN),
+    );
+    let events = fleet.events();
+    // **Opened before the call.** A subscription taken afterwards would miss
+    // the going-out message, which is the one carrying the id a stop names.
+    let mut subscription = events.subscribe();
+
+    let made = fleet
+        .propose_from(A_REQUEST, Some(String::from("window-1")))
+        .await
+        .expect("a proposal");
+    assert_eq!(made.len(), 1);
+
+    let seen = published(&mut subscription).await;
+    let moved: Vec<&ipc::ProposalMoved> = seen
+        .iter()
+        .filter_map(|event| match event {
+            ipc::Event::ProposalMoved(moved) => Some(moved),
+            _ => None,
+        })
+        .collect();
+
+    let first = moved.first().expect("the call going out was published");
+    assert_eq!(
+        first.client_ref.as_deref(),
+        Some("window-1"),
+        "the caller's own token comes back unchanged, on the envelope: it is \
+         what a window recognises its own call by, and Fleet's id is not known \
+         to the caller until this message arrives"
+    );
+    let out = first
+        .proposing
+        .as_ref()
+        .expect("the going-out message carries the call");
+    assert_eq!(out.reached, ipc::ProposalReach::Starting);
+    assert!(
+        out.budget_ms > 0,
+        "the ceiling crosses, because an elapsed figure drawn against nothing \
+         can only say `slow`"
+    );
+
+    assert!(
+        moved.iter().any(|moved| {
+            moved
+                .proposing
+                .as_ref()
+                .is_some_and(|out| out.reached == ipc::ProposalReach::Requesting)
+        }),
+        "the moment the question reached the vendor is published: {moved:?}"
+    );
+
+    let last = moved.last().expect("a last message");
+    assert!(
+        last.proposing.is_none(),
+        "the call coming back is the message with nothing in it — that absence \
+         is what clears a surface, and a stream that simply went quiet could \
+         not say it: {last:?}"
+    );
+    assert_eq!(
+        last.proposal_id, first.proposal_id,
+        "one call, one id, from going out to coming back"
+    );
+}
+
+/// **Nobody listening, nothing produced.** The first of the three bounds that
+/// hold what this kind costs the channel.
+#[tokio::test]
+async fn a_proposal_nobody_is_watching_publishes_nothing_about_the_call() {
+    let home = TempDir::new();
+    let fleet = a_fleet_proposing_through(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        a_catalogue(),
+        FakeJudge::saying(A_PLAN),
+    );
+    let events = fleet.events();
+
+    fleet
+        .propose_from(A_REQUEST, Some(String::from("window-1")))
+        .await
+        .expect("a proposal");
+
+    // Subscribed only now, so nothing above had a listener. The Jobs still
+    // exist — declining to narrate is not declining to work.
+    let mut subscription = events.subscribe();
+    let seen = published(&mut subscription).await;
+    assert!(
+        !seen
+            .iter()
+            .any(|event| matches!(event, ipc::Event::ProposalMoved(_))),
+        "a proposal nobody can see costs this channel nothing: {seen:?}"
+    );
+}
