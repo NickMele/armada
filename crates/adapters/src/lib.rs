@@ -46,6 +46,7 @@ mod judge;
 mod mcp;
 mod reclaim;
 mod transcript;
+mod watching;
 mod work_product;
 mod worktree;
 

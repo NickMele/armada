@@ -16,7 +16,7 @@ import type { JobRequest, ProposedPlan } from "@armada/protocol";
 // Read, never minted: Fleet's own spellings, and the only thing on the wire
 // that tells a declined request from a call that could not be made.
 import { FLEET_FAULT, NO_WORKFLOW_FITS, PROPOSER_UNREACHABLE } from "@armada/protocol";
-import { ask, isJobSummary } from "./request";
+import { ask, isJobSummary, MODEL_CALL_MS } from "./request";
 // Type-only, and therefore not a cycle at runtime: `Board` is what an act needs
 // of the connection, and it is declared where the acts are.
 import type { Board } from "./command";
@@ -48,7 +48,10 @@ export async function proposeFromRequest(board: Board, request: string): Promise
   }
 
   const body: JobRequest = { request: said };
-  const answer = await ask(port, "POST", "/jobs/from_request", body);
+  // **The proposer's call is inside this request**, so the wait is a model
+  // call's and not a store read's — `MODEL_CALL_MS` says what the ordinary one
+  // cost here, which was every proposal timing out before Fleet had answered.
+  const answer = await ask(port, "POST", "/jobs/from_request", body, MODEL_CALL_MS);
   if (answer.ok !== true) return notProposed(said, answer.outcome);
 
   const plan = answer.body as ProposedPlan;
@@ -80,8 +83,12 @@ export async function proposeFromRequest(board: Board, request: string): Promise
  */
 function notProposed(request: string, outcome: Outcome): Proposed {
   if (outcome.ok) return { ok: false, why: "refused", outcome };
-  // No answer at all. The request was never read, so it is the fault arm, and
-  // what comes back is what Bridge sent — there is no envelope to read it off.
+  // No answer at all, which is the fault arm — the request was declined by
+  // nothing, so it is never the `unresolved` one. What comes back is what
+  // Bridge sent, because there is no envelope to read the echo off. **Whether
+  // the proposer read it is not known here** and is not claimed: a timeout
+  // reaches Fleet and a dead socket does not, and `TransportFault` is what
+  // carries that difference to the surface a person meets it on.
   if (outcome.why === "transport") return { ok: false, why: "faulted", request, outcome };
   if (outcome.why !== "refused") return { ok: false, why: "refused", outcome };
   // Fleet returns the request unchanged on the envelope's own field, on both

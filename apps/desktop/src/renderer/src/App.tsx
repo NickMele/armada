@@ -29,7 +29,7 @@ import type { FileReport, WorktreeReclaimed } from "@armada/protocol";
 import { Boundary } from "@armada/shell";
 import { CopiedToast, SaidToast, useCopied, useSaid } from "@armada/shell";
 import { FailureBlock } from "@armada/shell";
-import { fleetFailure, jobFailure, refusalFailure, uncaughtFailure } from "@armada/shell";
+import { fleetFailure, jobFailure, refusalFailure, transportFailure, uncaughtFailure } from "@armada/shell";
 import { headOf } from "@armada/shell";
 import { statementOf } from "@armada/shell";
 import { Composer } from "@armada/screens";
@@ -215,13 +215,30 @@ export function App() {
   const live = state.connection.state === "connected";
   const statement = statementOf(state.connection, now, state.readAt);
   const fleet = fleetFailure(state.connection, statement, state.bridge, now);
-  const refused = outcome !== null && !outcome.ok && outcome.why === "refused" ? outcome.error : null;
+  // What the last command answered, where the answer was a failure rather than
+  // guidance. **Two arms and not one**: a refusal is Fleet declining with an
+  // envelope, and a transport failure is a command it did not answer at all —
+  // which used to be a single line of copy with no code and nothing to copy.
+  // Everything else `Outcome` carries is the form saying what it will not send,
+  // which is guidance and takes the `Alert` below.
+  const commandFailure =
+    outcome === null || outcome.ok
+      ? null
+      : outcome.why === "refused"
+        ? refusalFailure(outcome.error, state.bridge)
+        : outcome.why === "transport"
+          ? transportFailure(outcome, state.bridge)
+          : null;
   const guarded = { bridge: state.bridge, onCopied: setCopied };
   // The failure Copy debug info would copy, where one is on screen. Fleet
   // being unreachable outranks a throw in a handler: it is the one that
-  // explains every other symptom, so it is the one worth sending.
+  // explains every other symptom, so it is the one worth sending. A command
+  // that failed sits between them — more specific than a stray throw, and
+  // still explained by an unreachable Fleet where there is one.
   const failing =
-    fleet ?? (uncaught === null ? null : uncaughtFailure(uncaught, state.bridge));
+    fleet ??
+    commandFailure ??
+    (uncaught === null ? null : uncaughtFailure(uncaught, state.bridge));
 
   async function propose(draft: Draft): Promise<void> {
     setOutcome(await window.armada.proposeJob(draft));
@@ -507,12 +524,16 @@ export function App() {
 
           {/* A refusal Fleet named carries a `run_id`, its `fields` and its
               `chain`, so it is drawn whole rather than as one line of copy —
-              its `message` names one problem even where several exist.
-              Everything else here is the form telling you what it will not send,
-              which is guidance and not a failure. */}
-          {refused !== null ? (
+              its `message` names one problem even where several exist. A
+              command Fleet did not answer carries no envelope and is drawn
+              whole for the same reason: the code, the route and the wait are
+              the whole of what a person has to hand on. Neither is reloadable,
+              because a redraw re-runs no command. Everything else here is the
+              form telling you what it will not send, which is guidance and not
+              a failure. */}
+          {commandFailure !== null ? (
             <FailureBlock
-              failure={refusalFailure(refused, state.bridge)}
+              failure={commandFailure}
               onCopied={setCopied}
               reloadable={false}
               onDismiss={() => setOutcome(null)}

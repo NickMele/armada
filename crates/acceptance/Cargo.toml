@@ -30,6 +30,13 @@ config = { path = "../config" }
 # transitive dependency and nothing here calls it: `ipc::encode` and
 # `ipc::decode` are the seam, which is the rule gate five states.
 ipc = { path = "../ipc" }
+# **The route table, for Recovery's claim.** Half of "unstuck without leaving
+# Bridge" is that an act a Job offers is an act Fleet answers, and `api::SERVED`
+# is where that is decided — a `const` slice of operation names beside the paths
+# they are served at, which `api`'s own tests walk against the router. Reading
+# it opens nothing: it is data, `api` names no domain type, and nothing here
+# builds a `Router` or binds a listener.
+api = { path = "../api" }
 verification = { path = "../verification" }
 fleet = { path = "../fleet" }
 testkit = { path = "../testkit" }

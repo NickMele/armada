@@ -7,7 +7,7 @@
 // Job states share one row shape.
 //
 // **Bridge mints a code for each of its own faults, and they are declared
-// here.** Only one of these five failures crosses the wire, so only one arrives
+// here.** Only one of these six failures crosses the wire, so only one arrives
 // with a code — and the error treatment's `always` is what separates an error
 // from a failed Job, both of which are the same red. The rule that a code's
 // declaration lives beside the variant that raises it is kept rather than
@@ -30,7 +30,7 @@ import type {
 import type { BridgeIdentity } from "@armada/protocol";
 import type { Connection } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
-import type { UnreadableJob, WireError } from "@armada/protocol";
+import type { Outcome, UnreadableJob, WireError } from "@armada/protocol";
 import { spoken } from "@armada/protocol";
 import { elapsed } from "./fleet";
 import type { Statement } from "./fleet";
@@ -559,7 +559,7 @@ export function refusalFailure(error: WireError, bridge: BridgeIdentity): Failur
   }
 
   return {
-    // The only one of the five with everything the contract guarantees. The
+    // The only one of the six with everything the contract guarantees. The
     // wire's `fields` keys pass through with their own spelling: they are what
     // somebody greps a log for, and rewriting them into prose would break the
     // one join this payload exists to make.
@@ -633,4 +633,116 @@ export function uncaughtFailure(uncaught: Uncaught, bridge: BridgeIdentity): Fai
     values: machineLog(bridge),
     note: "No error boundary sees this: a boundary catches a render, and this happened outside one. There is no run id, because this may never have reached Fleet at all.",
   };
+}
+
+/** Bridge sent a command and no answer came back inside the wait. */
+const COMMAND_TIMED_OUT: BridgeCode = "bridge.command.timed_out";
+
+/** The request itself failed, so whether Fleet read it is unknown. */
+const COMMAND_UNREACHABLE: BridgeCode = "bridge.command.unreachable";
+
+/** Fleet answered a status, and the body under it was not a refusal. */
+const COMMAND_UNANSWERABLE: BridgeCode = "bridge.command.unanswerable";
+
+/**
+ * A command Fleet did not answer.
+ *
+ * **The sixth failure, and the one that used to be a line of text.** A refusal
+ * carries a `WireError` and reaches `refusalFailure`; everything else on the
+ * same seam — a wait that ran out, a socket that failed, a status with no
+ * refusal under it — was drawn as a single `Alert` reading "Fleet did not
+ * answer: <the machine's words>". That sentence has no code, no fold, and
+ * nothing to copy, so a person who hit it had one line and no way to hand it
+ * on. It is the generic message this file exists to repair, and it survived
+ * here because a transport failure is the one seam failure with no envelope.
+ *
+ * **Bridge mints the code, and the `bridge.` prefix is what keeps that honest**
+ * — the fault may well be Fleet's, and what Bridge is naming is the condition
+ * it observed. Three of them, because the three take three different next
+ * steps, which `TransportFault` states.
+ *
+ * **No run id, on any of the three.** Two never got an answer to carry one, and
+ * the third got a body Bridge could not read one out of. A labelled blank would
+ * claim Bridge looked and Fleet sent none.
+ */
+export function transportFailure(
+  outcome: Extract<Outcome, { ok: false; why: "transport" }>,
+  bridge: BridgeIdentity,
+): Failure {
+  const fault = outcome.fault;
+  const asked = `${fault.method} ${fault.path}`;
+  const base = {
+    detailsLabel: "What Bridge asked",
+    values: machineLog(bridge),
+  };
+  const fields: DebugField[] = [
+    { key: "why", value: fault.why },
+    { key: "method", value: fault.method },
+    { key: "path", value: fault.path },
+    { key: "detail", value: outcome.detail },
+  ];
+  const details: FailureDetail[] = [
+    { label: "Route", value: asked },
+    { label: "Detail", value: outcome.detail },
+  ];
+
+  switch (fault.why) {
+    case "timed_out": {
+      const waited = elapsed(fault.waitedMs);
+      return {
+        ...base,
+        headline: `Fleet did not answer ${asked} inside ${waited}`,
+        // **Never "nothing was sent".** The request reached Fleet and the wait
+        // ran out on this side, so the act may have been carried out — and a
+        // sentence telling somebody to send it again would be how a request
+        // becomes two Jobs. The board is the thing that knows.
+        next: "The command may still have been carried out. Read the board before sending it again.",
+        payload: {
+          code: COMMAND_TIMED_OUT,
+          message: `Fleet did not answer ${asked} inside ${waited}`,
+          fields: [...fields, { key: "waited_ms", value: String(fault.waitedMs) }, ...logField(bridge)],
+          ...versions(bridge),
+        },
+        details: [...details, { label: "Waited", value: waited }],
+        note: "The wait is Bridge's, not Fleet's. Fleet has its own budget on a call it makes, and a refusal from it would have arrived with a code — this is Bridge giving up first, so there is no Fleet run id to quote.",
+      };
+    }
+
+    case "unreachable":
+      return {
+        ...base,
+        headline: `Bridge could not reach Fleet for ${asked}`,
+        // Deliberately not "nothing was sent": a socket that failed may have
+        // failed after the bytes went out, and deciding otherwise on no
+        // evidence is what makes a duplicate.
+        next: "Whether Fleet read it is unknown. Read the board, then send it again.",
+        payload: {
+          code: COMMAND_UNREACHABLE,
+          message: outcome.detail,
+          fields: [...fields, ...logField(bridge)],
+          ...versions(bridge),
+        },
+        details,
+        note: "The connection failed rather than the command. If the status bar also says Fleet is unreachable, that notice is the one worth sending.",
+      };
+
+    case "unanswerable":
+      return {
+        ...base,
+        headline: `Fleet answered ${fault.status} on ${asked}, and Bridge could not read it`,
+        // Fleet is up. Retrying sends the same request down the same route to
+        // the same disagreement, so the sentence points at the log instead.
+        next: "Fleet is running and answered. Nothing here will change by sending it again — read the log.",
+        payload: {
+          code: COMMAND_UNANSWERABLE,
+          message: `Fleet answered ${fault.status} with a body that is not a refusal`,
+          fields: [...fields, { key: "status", value: String(fault.status) }, ...logField(bridge)],
+          ...versions(bridge),
+        },
+        details: [...details, { label: "Status", value: String(fault.status) }],
+        // The two protocol versions are already on the payload's tail, and
+        // this is the one failure where they are the first thing to look at.
+        note: "A status with no refusal under it is the two sides disagreeing about the route, not a job going wrong. The protocol versions on this record are what to check first.",
+      };
+  }
 }

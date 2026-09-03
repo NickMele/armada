@@ -130,4 +130,126 @@ impl JudgeCall {
 pub trait ModelClient {
     /// How this client would ask one question.
     fn render(&self, ask: &Ask) -> JudgeCall;
+
+    /// How this client would ask the same question **so that the asking can be
+    /// watched**.
+    ///
+    /// Same question, same model, same confinement — what differs is that the
+    /// call reports on itself while it is out, so a caller can say more than
+    /// how long it has been waiting. See [`CallProgress`] for what that buys
+    /// and why it is not free.
+    ///
+    /// **Required rather than defaulted.** A default falling back to
+    /// [`render`](ModelClient::render) would make a client that cannot be
+    /// watched indistinguishable from one nobody taught to be, and the caller
+    /// would draw a progress surface that never moves.
+    fn render_watched(&self, ask: &Ask) -> JudgeCall;
+
+    /// Read one line of what a watched call printed.
+    ///
+    /// **On the trait for the reason [`AgentHarness::read`] is on its own**: a
+    /// stream's shape belongs to whoever renders the call, and a caller that
+    /// parsed it itself would be Fleet knowing a vendor's output format. It is
+    /// the same rule from the other end as `render_watched` — the client says
+    /// how to ask, so the client says how to read the answer.
+    ///
+    /// **Total, and never an error.** A line that does not decode is
+    /// [`Heard::Nothing`], because progress is a courtesy and a courtesy must
+    /// not be able to fail a call.
+    ///
+    /// [`AgentHarness::read`]: crate::AgentHarness::read
+    fn heard(&self, line: &str) -> Heard;
+}
+
+/// What one line of a watched call said.
+///
+/// **Three arms and not two, because the answer comes down the same pipe.** A
+/// call rendered for watching prints its answer as a line of its own stream
+/// rather than as plain stdout, so a caller reading only progress would watch a
+/// call attentively and never learn what it said.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Heard {
+    /// The call moved.
+    Moved(CallProgress),
+    /// The model's answer, whole.
+    Answer(String),
+    /// Nothing the caller cares about. **The ordinary case**: a single call
+    /// prints hundreds of frames, and all but a handful say nothing about
+    /// either how far it has got or what it decided.
+    Nothing,
+}
+
+/// How far a watched call has got, as the call's own stream said.
+///
+/// **The fact a wait could not state.** A model call is one process that prints
+/// nothing until it is finished, so a person watching one had the elapsed time
+/// and nothing else — and "ninety seconds and thinking hard" and "ninety
+/// seconds and never reached the API" are the same pixels under an elapsed
+/// count. They are what a person deciding whether to keep waiting is actually
+/// choosing between.
+///
+/// # It is a report, never a result
+///
+/// Nothing here is the answer, and no arrangement of these advances anything. A
+/// call still ends the way it ended — an answer, or a `CallFailed` — and a
+/// caller that lost every one of these would get the same outcome a beat later.
+/// That is deliberate: progress is a courtesy to whoever is waiting, and a
+/// courtesy that could change a verdict would be a second authority on what the
+/// call said.
+///
+/// # The order is a sequence, and it is not guaranteed
+///
+/// [`Started`](CallProgress::Started) then
+/// [`Requesting`](CallProgress::Requesting) then some number of
+/// [`Thinking`](CallProgress::Thinking) then
+/// [`Answering`](CallProgress::Answering) then
+/// [`Ended`](CallProgress::Ended) is the ordinary run. A call may skip any of
+/// them — a model that does not think emits no `Thinking` — and a surface that
+/// requires one to have arrived before it draws the next would go blank on an
+/// ordinary call. **What each one means is that it happened**, not that the
+/// ones before it did.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CallProgress {
+    /// The process started and announced itself. **This is the one that
+    /// separates a hung harness from a slow model**: a call with no `Started`
+    /// after a minute never got as far as the vendor.
+    Started,
+    /// The question reached the model. Everything after this is the model's
+    /// time rather than the harness's.
+    Requesting,
+    /// It is thinking, and this is how much of it there has been so far.
+    ///
+    /// **Cumulative and estimated, both by the stream that says it.** It counts
+    /// up within one call and is not added across calls, and it is the
+    /// harness's own estimate rather than a billed figure — which is why it
+    /// renders as an approximation wherever it is shown.
+    Thinking { tokens: u64 },
+    /// It is writing the answer, and this is how much of it has arrived.
+    ///
+    /// Characters rather than tokens because that is what the stream carries
+    /// here, and inventing a token count from a character count would be a
+    /// second, worse answer to a question the `Thinking` arm already answers
+    /// properly.
+    Answering { characters: u64 },
+    /// The call is over, and this is what it cost. **Not the answer** — the
+    /// answer is the call's return value, and this says only that there will be
+    /// no more progress.
+    ///
+    /// **The readout `crates/config/settings.toml` says nothing can produce.**
+    /// `judge-cost-cap-per-check` is open on the grounds that a call rendered
+    /// `--output-format text` emits no result envelope, so a dollar cap there
+    /// would be enforced by nothing. A watched call emits one. This carries it
+    /// — and **enforcing a cap is still not built**, so that question is
+    /// narrowed rather than closed: what was missing was the number, and the
+    /// number now exists on the one call that is watched.
+    ///
+    /// Both are `None` where the stream ended without saying, which is what a
+    /// killed call does.
+    Ended {
+        /// What the vendor billed, in US dollars.
+        cost_usd: Option<f64>,
+        /// How long the model itself took, in milliseconds. **Not the wait** —
+        /// the wait includes starting a process and is the caller's to measure.
+        api_ms: Option<u64>,
+    },
 }

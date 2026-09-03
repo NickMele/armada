@@ -1,19 +1,19 @@
 //! The two acts that put a person back on a Job without redispatching it.
 //!
-//! # Which one applies is decided by the Drone, not by the person
-//! [`redirect`](Fleet::redirect) needs a live session and [`restart_step`] is
-//! what exists when there is none, so each refuses where the other applies —
-//! `docs/concepts/job.md` is the specification. **Neither asks the other's
-//! question**: a redirect wanted a stopped step until `stalled` escalated a Job
-//! over a live Drone.
+//! # Which one applies is decided by where the Job stands
+//! `docs/concepts/job.md` retired *"decided by the Drone, not by the person"*
+//! when a Drone became a step's, since absence is then ordinary between steps.
+//! **Neither act asks the other's question**, and each asked the other's until
+//! #145: [`redirect`](Fleet::redirect) wants a session and steers `running` and
+//! `escalated` alike, [`restart_step`] a stopped step under an escalation.
 //!
 //! # A redirect moves a stopped step; a restart moves nothing
 //! Where a step stopped, a redirect moves both machines in the one order the
 //! registry admits — `escalated -> running`, then `stopped -> running`. Where
-//! none stopped there is nothing to unfreeze, the Job stays `escalated` and
-//! returns on [`watch_redirect`](Fleet::watch_redirect) seeing the Drone turn:
-//! moved on the sending it would read as recovered whether or not anything
-//! woke.
+//! none stopped nothing is unfrozen: the Job stays where it was, and an
+//! escalated one returns only on [`watch_redirect`](Fleet::watch_redirect)
+//! seeing the Drone turn, never on the sending — moved there it would read as
+//! recovered whether or not anything woke.
 //!
 //! **A restart takes neither move**, because it spawns and since #50 nothing
 //! spawns outside admission: `escalated -> queued`, step left at `stopped`,
@@ -38,12 +38,14 @@ use crate::session::{LiveSession, Occasion};
 use crate::transcript;
 use crate::working::Working;
 
-/// A Drone that took a turn after a person redirected it, and the Job that came
-/// back to `running` with it.
+/// A Drone that took a turn after a person redirected it.
 ///
 /// **The Drone's evidence, reported rather than inferred.** It is on `Turned`
 /// beside what the liveness vigil did, because the two are one question read in
 /// the two directions: one says a Drone stopped and the other says it started.
+///
+/// **It says the answer arrived, not that anything moved**: a Job held at
+/// `escalated` for it comes back to `running`, a healthy one was never held.
 #[derive(Debug)]
 pub struct Roused {
     pub job: JobId,
@@ -94,13 +96,18 @@ where
     /// wrote the instruction from it; `docs/contracts/agent-prompt.md` gives
     /// this turn no Fleet wording for the same reason.
     ///
-    /// **What it asks for is a live session, and nothing about a step.** A
-    /// redirect is a turn injected into a process; whether some step of the Job
-    /// is frozen decides what else has to move, never whether this act applies.
-    /// It was gated on a stopped step until `stalled` arrived — the first
-    /// trigger that pauses a Job over a Drone that is still there — and the
-    /// only move left on the case a redirect most obviously fits was
-    /// kill-and-redispatch.
+    /// **What it asks for is a live session on a Job a person may steer, and
+    /// nothing about a step.** Whether some step of the Job is frozen decides
+    /// what else has to move, never whether this act applies. It was gated on a
+    /// stopped step until `stalled` arrived, and on an escalation until #145 —
+    /// which is the divergence `docs/concepts/drone.md` had named all along:
+    /// the one Drone that could not take a redirect was the healthy one, going
+    /// the wrong way with nothing yet wrong.
+    ///
+    /// **The record of it is the turn**, written whole into the Drone's
+    /// transcript by `Working::instructed`, and on a healthy Drone that is all
+    /// there is: `drone.md` gives the mid-step path a session and nothing
+    /// written down, and the note written down is `request_changes`.
     pub async fn redirect(&self, job_id: &JobId, instruction: &Redirection) -> Result<Job, Adrift> {
         let Some(slot) = self.slot_of(job_id).await else {
             return Err(Adrift::NoDroneToRedirect {
@@ -109,7 +116,7 @@ where
         };
         let mut working = slot.lock().await;
         let job = self.load(job_id).await?;
-        self.held_for_a_person(&job)?;
+        self.steerable(&job)?;
         // The live session, which is the whole difference between the two acts
         // — and it is asked of the slot rather than of the record, because the
         // slot is the only thing holding a pipe. A record saying a Drone is on
@@ -124,9 +131,12 @@ where
         // and would read as a Drone that never turned.
         let turned = at_work.turned();
 
-        // The step, where one stopped. `Err` is the `stalled` shape and is not
-        // a refusal here — a Job-level escalation freezes nothing underneath
-        // it, so there is nothing for this act to unfreeze.
+        // The step, where one stopped under a Job a person is holding. `Err` is
+        // not a refusal here and is two shapes: on a `stalled` Job nothing
+        // underneath is frozen, and on a healthy one nothing may be unfrozen. A
+        // gate stops a step before the Job escalates over it, so handing that
+        // step back because somebody typed at the Drone is exactly the restart
+        // this act must never quietly become.
         let stopped = self.stopped_step(&job).ok();
         let job = match stopped.as_ref() {
             // After both moves, never before. A turn delivered to a Drone whose
@@ -140,8 +150,10 @@ where
         // this a Drone steered off one loop is never caught in the next.
         if let Some(at_work) = working.as_mut() {
             at_work.resumed(self.now());
-            // And where nothing was unfrozen, the Job is still `escalated` and
-            // stays there until the Drone proves it heard. See
+            // And where nothing was unfrozen the Job has not moved: still
+            // `escalated` until the Drone proves it heard, or still `running`
+            // and with nothing to prove. Both wait on the same turn and only
+            // the first has a move to make when it comes. See
             // [`watch_redirect`](Fleet::watch_redirect).
             if stopped.is_none() {
                 at_work.awaiting_answer(turned, self.now());
@@ -154,6 +166,10 @@ where
     /// send. **The deferred half of [`redirect`](Fleet::redirect)**, kept beside
     /// it rather than in a watcher of its own so that the act and what completes
     /// it are read together.
+    ///
+    /// **A redirect into a healthy Drone is waited on the same way and moves
+    /// nothing when it lands** — the `escalated` test below is the whole of the
+    /// difference.
     ///
     /// **Cold on every turn but one.** The slot answers `false` unless a
     /// redirect is outstanding, so a Drone nobody has spoken to reaches no
@@ -179,9 +195,10 @@ where
         // From here it costs a store read, and only on the turn a redirect is
         // answered.
         let record = self.load(&job).await?;
-        // The Job left `escalated` some other way while the redirect was out —
-        // killed, piloted, failed. Nothing is owed and nothing is moved; what is
-        // dropped is only the wait.
+        // Nothing is owed unless the Job is still where the redirect found it:
+        // a healthy Drone's Job never left `running`, and an escalated one may
+        // have left `escalated` some other way while the redirect was out —
+        // killed, piloted, failed. What is dropped either way is only the wait.
         if record.status() == JobStatus::Escalated {
             self.move_job(&record, Target::Running, Actor::Human)
                 .await?;
@@ -207,6 +224,9 @@ where
     /// escalation put it; nothing mints a seventh status for a Job already in
     /// the one it belongs in. It says Fleet wrote to the pipe and nothing more
     /// — whether the Drone read it is the turn `watch_redirect` waits for.
+    ///
+    /// **On a healthy Drone it is the only thing that says anything happened**,
+    /// since that Job stays `running` from before the send to after the answer.
     ///
     /// `None` where nothing is outstanding, where the slot holds some other Job,
     /// and on every redirect that landed on a stopped step: that one moved both
@@ -314,11 +334,31 @@ where
         self.load(job_id).await
     }
 
-    /// The Job is one a person is holding. **What both acts need, and all
-    /// either of them needs of the status.**
+    /// The Job is one a person may say something to. **All a redirect asks of
+    /// the status**, and two rows rather than one because `job-statuses.toml`
+    /// gives exactly two a live process: `running` is "alive, working" and
+    /// `escalated` is "alive and idle where the step stopped mid-work".
+    ///
+    /// **Still where the Job stands and not whether a process exists** —
+    /// `docs/concepts/job.md`'s second Focus rule. What it catches is a Drone
+    /// outliving the status that had one: a Job crossing to `awaiting_review`,
+    /// or one being killed before its slot is reaped.
+    fn steerable(&self, job: &Job) -> Result<(), Adrift> {
+        matches!(job.status(), JobStatus::Running | JobStatus::Escalated)
+            .then_some(())
+            .ok_or_else(|| Adrift::NotResumable {
+                job: job.id().clone(),
+                status: job.status(),
+            })
+    }
+
+    /// The Job is one a person is holding. **What a restart needs of the
+    /// status, and what makes a stopped step one this file may hand back.**
     ///
     /// It is `escalated` and nothing weaker: `escalated -> running` is the edge
-    /// both acts take, and the registry has no other status it leaves from.
+    /// taken here, and the registry has no other status it leaves from. #145
+    /// stopped a redirect asking it, which it never had a move to be about
+    /// except where it found a step to unfreeze.
     fn held_for_a_person(&self, job: &Job) -> Result<(), Adrift> {
         (job.status() == JobStatus::Escalated)
             .then_some(())
@@ -340,7 +380,10 @@ where
     ///
     /// **A redirect does not call this to decide whether it applies.** It calls
     /// it to learn whether anything has to be unfrozen, which is a different
-    /// question and is why this stopped being one predicate.
+    /// question and is why this stopped being one predicate. The `escalated`
+    /// test it inherits is load-bearing for that reading too: a step stops
+    /// before the Job escalates over it, so a healthy Job can hold a stopped
+    /// step for an instant, and a redirect arriving in it must find nothing.
     ///
     /// **Two things write the row this reads.** The gate, when a step's retries
     /// are spent, and `crate::ending` when a person takes the Drone away — the

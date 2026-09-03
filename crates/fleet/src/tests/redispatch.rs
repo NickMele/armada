@@ -4,15 +4,18 @@
 //! `running` when Fleet died, and the next Fleet's boot read found a row with
 //! no process behind it. Nothing here fakes a status onto a record.
 
+use std::sync::Arc;
+
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use axum::Router;
 use core_model::{Actor, JobId, JobStatus, Target};
 use http_body_util::BodyExt;
 use ipc::{Redispatched, RunId, WireError};
-use testkit::FakeWorkProduct;
+use testkit::{FakeHarness, FakeJudge, FakeLinkLookup, FakeVcs, FakeWorkProduct};
 use tower::ServiceExt;
 
+use crate::daemon::Fleet;
 use crate::tests::daemon::{
     a_fleet, a_fleet_holding_all, a_fleet_minting_from, a_proposal, a_proposal_for, diff_evidence,
     workflow_named_gated_on_diff, worktree_directory,
@@ -345,4 +348,136 @@ async fn a_job_that_is_not_there_is_refused_as_one() {
 
     let (status, _) = call(&app, "/jobs/01NOSUCHJOB/redispatch").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+/// A Fleet whose link lookup is scripted, over the one-step catalogue
+/// `crate::tests::proposing::a_catalogue` offers — the same shape
+/// `crate::tests::linking`'s own builder uses, kept local rather than shared
+/// because nothing else in this module needs a scripted lookup.
+fn a_fleet_naming_a_link(
+    home: &TempDir,
+    proposer: FakeJudge,
+    links: Arc<FakeLinkLookup>,
+) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
+    let mut fittings =
+        crate::tests::daemon::fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
+    fittings.workflows = crate::tests::proposing::a_catalogue()
+        .into_iter()
+        .map(|workflow| (workflow.id().clone(), workflow))
+        .collect();
+    fittings.judge = Arc::new(proposer);
+    fittings.links = links;
+    Fleet::assembled(fittings)
+}
+
+/// Kill a Job by hand, the shortest path to a redispatchable status that
+/// does not need evidence or a ruling.
+async fn killed(
+    fleet: &Fleet<FakeHarness, FakeVcs, FakeWorkProduct>,
+    home: &TempDir,
+    job_id: &JobId,
+) {
+    worktree_directory(home, job_id);
+    fleet.approve(job_id).await.expect("released to run");
+    fleet.kill_job(job_id).await.expect("ended by hand");
+}
+
+/// **The idempotency case.** A link that resolved once must not resolve into
+/// the facts a second time just because the Job carrying it was redispatched
+/// — twice, here, since one redispatch is exactly the state a second one
+/// starts from. `re_enriched` in `redispatch.rs` is what this proves: it
+/// checks the resolved text is already there before appending it again.
+#[tokio::test]
+async fn a_resolved_link_survives_two_redispatches_without_doubling_the_resolved_text() {
+    let home = TempDir::new();
+    let links = Arc::new(FakeLinkLookup::resolving(
+        "example.test/issues/9",
+        "the parser drops the last line",
+    ));
+    let fleet = a_fleet_naming_a_link(
+        &home,
+        FakeJudge::saying("workflow: bug\ntitle: The log reader drops the last line"),
+        Arc::clone(&links),
+    );
+    let request = "https://example.test/issues/9";
+
+    let made = fleet.propose_from(request).await.expect("a proposal");
+    let [job] = &made[..] else {
+        panic!("one Job, not {}", made.len())
+    };
+    killed(&fleet, &home, job.id()).await;
+
+    let first = fleet
+        .redispatch(job.id())
+        .await
+        .expect("a Job that ran and stopped");
+    let first_facts = first.dispatched.facts().as_str();
+    assert_eq!(
+        first_facts
+            .matches("the parser drops the last line")
+            .count(),
+        1,
+        "resolved once, on the original dispatch: {first_facts}"
+    );
+
+    killed(&fleet, &home, first.dispatched.id()).await;
+    let second = fleet
+        .redispatch(first.dispatched.id())
+        .await
+        .expect("a Job that ran and stopped");
+    let second_facts = second.dispatched.facts().as_str();
+    assert_eq!(
+        second_facts
+            .matches("the parser drops the last line")
+            .count(),
+        1,
+        "a second redispatch re-runs the same lookup and must not append what \
+         is already there: {second_facts}"
+    );
+}
+
+/// A link that still cannot be resolved on the retry leaves the replacement's
+/// facts exactly as they arrived, and the replacement's own log — not the
+/// Job it replaced — says why nothing was added, mirroring
+/// `crate::tests::linking`'s case for the first dispatch.
+#[tokio::test]
+async fn a_link_that_still_fails_to_resolve_on_redispatch_notes_it_on_the_replacement() {
+    let home = TempDir::new();
+    let links = Arc::new(FakeLinkLookup::failing_to_resolve("example.test/issues/12"));
+    let fleet = a_fleet_naming_a_link(
+        &home,
+        FakeJudge::saying("workflow: bug\ntitle: The log reader drops the last line"),
+        Arc::clone(&links),
+    );
+    let request = "https://example.test/issues/12";
+
+    let made = fleet
+        .propose_from(request)
+        .await
+        .expect("a lookup failing must never fail the dispatch it was meant to help");
+    let [job] = &made[..] else {
+        panic!("one Job, not {}", made.len())
+    };
+    killed(&fleet, &home, job.id()).await;
+
+    let replacement = fleet
+        .redispatch(job.id())
+        .await
+        .expect("a Job that ran and stopped");
+    assert_eq!(
+        replacement.dispatched.facts().as_str(),
+        request,
+        "still the same link the retry could not resolve either"
+    );
+
+    let log = std::fs::read_to_string(crate::transcript::log_of(
+        &home.path().to_string_lossy(),
+        replacement.dispatched.id(),
+    ))
+    .expect("the replacement's own log");
+    assert!(
+        log.contains("could not be resolved"),
+        "the retry's own failure is noted on the Job it produced, not the one \
+         it replaced: {log}"
+    );
 }

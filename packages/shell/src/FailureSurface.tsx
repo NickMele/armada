@@ -1,9 +1,9 @@
 // How a failure is drawn, and what its actions do.
 //
-// The three failures are built in `failures.ts` and every one of them arrives
+// The six failures are built in `failures.ts` and every one of them arrives
 // here, because the shape is shared and the sentences are not — the same
 // discipline as six Job states through one row shape. A generic error screen is
-// three failures given one *sentence*, which is what this repairs.
+// six failures given one *sentence*, which is what this repairs.
 
 import {
   Button,
@@ -48,7 +48,7 @@ export function copyDebugInfoFor(failure: Failure, onCopied: (what: string) => v
  * **The envelope and nothing else, and the transcript's absence is said out
  * loud.** The four other items the drawing named are not reachable from a
  * failure surface: doctor is not built, a judge response and a diff belong to a
- * Job read whole that none of these five failures holds, and whether an
+ * Job read whole that none of these six failures holds, and whether an
  * observed transcript may leave the machine is `[observe-transcript-sharing]`,
  * which is open. Only the transcript is named on screen, because it is the only
  * one somebody would look for and find missing.

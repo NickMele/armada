@@ -20,7 +20,7 @@
 //! and removed none of the built-in tools. What actually bounds a Judge is
 //! having a single turn and a working directory with nothing in it.
 
-use adapter_traits::{Ask, JudgeCall, ModelClient};
+use adapter_traits::{Ask, Heard, JudgeCall, ModelClient};
 
 use crate::harness::HeadlessAgent;
 
@@ -70,24 +70,79 @@ impl HeadlessAgent {
 
 impl ModelClient for HeadlessAgent {
     fn render(&self, ask: &Ask) -> JudgeCall {
-        let args: Vec<String> = vec![
-            "-p".into(),
-            "--output-format".into(),
-            "text".into(),
-            "--model".into(),
-            ask.model().as_str().into(),
-            // One turn. A verifier that can take a second turn is a verifier
-            // that can go looking, which is the property this call is bought
-            // for.
-            "--max-turns".into(),
-            "1".into(),
-            "--permission-mode".into(),
-            "dontAsk".into(),
-            // No `--mcp-config` beside it, which is what makes the set empty.
-            "--strict-mcp-config".into(),
-            "--allowedTools".into(),
-            String::new(),
-        ];
-        JudgeCall::rendered(ask, self.program(), args)
+        JudgeCall::rendered(ask, self.program(), asking(ask, Watched::No))
     }
+
+    /// The same call, printing what it is doing while it does it.
+    ///
+    /// **Every confinement argument is the same one**, which is the property
+    /// worth stating: the two renders differ in the output format and in
+    /// nothing else, so a watched call is not a call with a longer leash. The
+    /// shared builder below is what makes that true by construction rather than
+    /// by two lists agreeing.
+    fn render_watched(&self, ask: &Ask) -> JudgeCall {
+        JudgeCall::rendered(ask, self.program(), asking(ask, Watched::Yes))
+    }
+
+    /// Read one line of what [`render_watched`](ModelClient::render_watched)
+    /// prints. **The other half of that render**, and the reason both are on
+    /// one trait: the flag that chooses the format and the reader that
+    /// understands it are one decision, and a client that changed the format
+    /// without the reader would go quiet rather than fail.
+    fn heard(&self, line: &str) -> Heard {
+        crate::watching::heard(line)
+    }
+}
+
+/// Whether the call reports on itself. The one axis the two renders differ on.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Watched {
+    No,
+    Yes,
+}
+
+/// The argument list both renders use.
+///
+/// **One builder, because the confinement is the argument list.** A Judge's
+/// bounds are `--max-turns 1`, an empty `--allowedTools` and a strict MCP
+/// config with no file — and this module's own note says the flag is a floor
+/// rather than a fence, so what actually holds is the shape of the argv. Two
+/// lists that happened to agree the day they were written would stop agreeing
+/// the first time one of them was edited, and the one that drifts is whichever
+/// is read less.
+fn asking(ask: &Ask, watched: Watched) -> Vec<String> {
+    let mut args: Vec<String> = vec!["-p".into(), "--output-format".into()];
+    match watched {
+        // The Drone's format, on a call that is not a Drone. It carries the
+        // harness's own progress lines, which is the whole reason to pay for
+        // it: `--include-partial-messages` is what makes the model's answer
+        // arrive as it is written rather than at the end. `crate::watching`
+        // reads them, and `--verbose` is what the format requires to emit them.
+        Watched::Yes => {
+            args.push("stream-json".into());
+            args.push("--verbose".into());
+            args.push("--include-partial-messages".into());
+        }
+        // Plain text: the answer on stdout and nothing else. Still the default
+        // for the Judge, whose caller has nobody waiting on it — a gate runs
+        // without a person watching, and paying for a stream nothing reads
+        // would be paying for the surface rather than the verdict.
+        Watched::No => args.push("text".into()),
+    }
+    args.extend([
+        "--model".into(),
+        ask.model().as_str().into(),
+        // One turn. A verifier that can take a second turn is a verifier
+        // that can go looking, which is the property this call is bought
+        // for.
+        "--max-turns".into(),
+        "1".into(),
+        "--permission-mode".into(),
+        "dontAsk".into(),
+        // No `--mcp-config` beside it, which is what makes the set empty.
+        "--strict-mcp-config".into(),
+        "--allowedTools".into(),
+        String::new(),
+    ]);
+    args
 }

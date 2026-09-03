@@ -18,7 +18,7 @@ import type { BridgeState } from "../shared/bridge";
 import type { ClearOutcome, Draft, Outcome } from "@armada/protocol";
 import type { ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report } from "@armada/protocol";
 import type { Proposed } from "@armada/protocol";
-import { ask, isJobSummary, route, type Answer } from "./request";
+import { ask, isJobSummary, MODEL_CALL_MS, route, type Answer } from "./request";
 import { Clearing } from "./clearing";
 import { proposeFromRequest as propose } from "./proposing";
 import { decide, type Decision } from "./review";
@@ -394,7 +394,10 @@ export class JobCommands {
    */
   async rerunGate(jobId: string): Promise<Outcome> {
     return this.act(jobId, this.rereading, "already_rereading", (port) =>
-      ask(port, "POST", route(jobId, "rerun_gate")),
+      // The Judge is asked inside this request, so it waits on a model call and
+      // not on a store read. `MODEL_CALL_MS` says why the ordinary wait is the
+      // wrong one here.
+      ask(port, "POST", route(jobId, "rerun_gate"), undefined, MODEL_CALL_MS),
     );
   }
 
