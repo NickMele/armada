@@ -23,6 +23,8 @@
 
 use std::future::Future;
 use std::io;
+use std::num::NonZeroU32;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
 use tokio::io::AsyncWriteExt;
@@ -143,7 +145,7 @@ pub trait LiveSession {
     /// interruption, which is what it must never be.
     fn poke(&self, nudge: &Poke) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
-    /// End the Drone.
+    /// End the Drone, and everything it left running.
     ///
     /// **The worktree is untouched.** Removal is driven by Job retention and
     /// never by a process ending, and there is no method in this workspace that
@@ -308,6 +310,10 @@ pub struct DroneSession {
     pid: u32,
     input: Mutex<ChildStdin>,
     child: Mutex<Child>,
+    /// Whether the child has been collected. **Read and written only under the
+    /// `child` lock**, which is what orders it, so the accesses below are
+    /// relaxed rather than carrying an ordering the mutex already gives.
+    reaped: AtomicBool,
 }
 
 impl DroneSession {
@@ -318,6 +324,7 @@ impl DroneSession {
             pid,
             input: Mutex::new(input),
             child: Mutex::new(child),
+            reaped: AtomicBool::new(false),
         }
     }
 
@@ -342,11 +349,35 @@ impl DroneSession {
     /// For a child Fleet is holding, the operating system has an exact answer
     /// and it is here.
     pub(crate) async fn exited(&self) -> Result<bool, io::Error> {
-        self.child
-            .lock()
-            .await
-            .try_wait()
-            .map(|status| status.is_some())
+        let mut child = self.child.lock().await;
+        let ended = child.try_wait()?.is_some();
+        if ended {
+            // Collecting it hands the pid back to the operating system, so from
+            // here the group it named is no longer this Drone's to signal. See
+            // [`DroneSession::group`].
+            self.reaped.store(true, Ordering::Relaxed);
+        }
+        Ok(ended)
+    }
+
+    /// The process group to signal, while it is still certainly this Drone's.
+    ///
+    /// `crate::detach` spawns every Drone through `libc::setsid()`, which makes
+    /// the child a leader of a new session **and of a new process group whose
+    /// id is its own pid** — so the pid Fleet holds is the group id, and the
+    /// group holds this Drone and whatever it started and did not detach.
+    ///
+    /// `None` once the child has been collected: the pid is the operating
+    /// system's to hand out again from that moment, and a pid that comes round
+    /// as another Drone's would turn one kill into a kill of somebody else's
+    /// work. **The claim is this type's rather than the caller's** — nothing
+    /// about the order `crate::dispatch` reaps and ends in has to stay true for
+    /// the group id to mean what it says here.
+    fn group(&self) -> Option<NonZeroU32> {
+        if self.reaped.load(Ordering::Relaxed) {
+            return None;
+        }
+        NonZeroU32::new(self.pid)
     }
 
     /// Write one turn, whole, and flush it.
@@ -404,9 +435,59 @@ impl LiveSession for DroneSession {
     /// auto-kills: anything escalated is paused with its worktree held as-is,
     /// and this is reached from the two rulings that end a Job and from a
     /// person's own Kill.
+    ///
+    /// **The group first and the pid second.** A single-pid kill ends the
+    /// Drone and leaves the tools it started, which sit in the process group
+    /// `setsid` made for it — still running, still holding the Drone's stdout,
+    /// watched by nobody. On 2 Sep one outlived its Fleet by an hour and was
+    /// found by hand.
+    ///
+    /// **It makes a cut-short drain rarer and cannot make it impossible**, so
+    /// [`Watching::drained`](crate::Watching::drained)'s bound is not something
+    /// this replaces: a tool that calls `setsid` itself leaves the group, and
+    /// then no signal reaches it. Reading this as a guarantee that the pipe
+    /// closes is the one mistake to avoid here.
     async fn terminate(&self) -> Result<(), io::Error> {
         let mut child = self.child.lock().await;
+        if let Some(group) = self.group() {
+            end_the_group(group);
+        }
+        // Sent anyway, and not folded into the group signal above: the pid is
+        // what this type is certain of, and a Drone that somehow left its own
+        // group would otherwise be waited on having been signalled by nothing.
         child.start_kill()?;
-        child.wait().await.map(|_| ())
+        let ended = child.wait().await;
+        self.reaped.store(true, Ordering::Relaxed);
+        ended.map(|_| ())
+    }
+}
+
+/// `SIGKILL` to a whole process group.
+///
+/// **The argument is a [`NonZeroU32`] because `killpg`'s dangerous arguments
+/// are the small ones.** Zero means the caller's own group — Fleet, and every
+/// process Fleet has not detached — and a negative one is wider still. Neither
+/// can be spelled at the call site, so what widens this call is a change to
+/// the type rather than a slip in an expression.
+///
+/// **A group that is already gone is not an error.** `killpg` answers `ESRCH`
+/// for a Drone that exited between the read above and this line, which is the
+/// ordinary case rather than a fault, so nothing is returned and nothing is
+/// logged. The caller learns what happened to the process from the `wait` that
+/// follows.
+#[allow(unsafe_code)]
+fn end_the_group(group: NonZeroU32) {
+    // A pid the platform cannot express is not a group, and `try_from` says so
+    // rather than a cast quietly making one up.
+    let Ok(group) = libc::pid_t::try_from(group.get()) else {
+        return;
+    };
+    // SAFETY: `killpg` is a plain system call over two integers, and this one
+    // is the pid `libc::setsid()` in `crate::detach` made a group leader — so
+    // the signal reaches this Drone and what it spawned, and stops there. The
+    // caller holds an unreaped child on that pid, which is what stops it
+    // naming anything else.
+    unsafe {
+        libc::killpg(group, libc::SIGKILL);
     }
 }

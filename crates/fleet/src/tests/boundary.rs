@@ -336,7 +336,7 @@ async fn the_drain_gives_up_on_a_pipe_a_surviving_tool_still_holds() {
 }
 
 /// **The claim the issue makes: one Drone's stray tool does not stop the
-/// fleet.**
+/// fleet** — and after `#371`, does not survive the Drone either.
 ///
 /// A step boundary runs on the turn loop's own task and the loop walks every
 /// Job in series — so a boundary that never returns is not a stuck Job, it is a
@@ -344,9 +344,14 @@ async fn the_drain_gives_up_on_a_pipe_a_surviving_tool_still_holds() {
 /// because nothing noticed.
 ///
 /// The case above asks the same thing of [`Watching`] directly, where the
-/// answer is legible. This one asks it of the boundary, which is where it bit.
+/// answer is legible. This one asks it of the boundary, which is where it bit —
+/// and where the ending now signals the process group `setsid` made, so the
+/// backgrounded `sleep` goes with the shell and the pipe closes on its own.
+/// **The bound is what makes that survivable rather than required**: a tool
+/// that leaves the group is beyond any signal, which is the case above and is
+/// why it still reads `CutShort`.
 #[tokio::test]
-async fn a_drone_whose_tool_outlives_it_does_not_wedge_the_step_boundary() {
+async fn a_drone_whose_tool_outlives_it_dies_with_it_at_the_step_boundary() {
     let at = TempDir::new();
     let (working, pid) = a_slot_with(reading_what_it_says(LEAVES_A_TOOL_HOLDING_STDOUT), &at).await;
     // The tool has to exist before the boundary, or the kill lands first and
@@ -382,9 +387,9 @@ async fn a_drone_whose_tool_outlives_it_does_not_wedge_the_step_boundary() {
          bound"
     );
     assert!(
-        matches!(stood_down.drained, Drained::CutShort { .. }),
-        "the record carries that the transcript was cut short, so an ending \
-         folded off a prefix does not read as a Drone that said nothing: {:?}",
+        matches!(stood_down.drained, Drained::ToTheEnd),
+        "the tool was in the Drone's own group, so the ending reached it and \
+         the pipe closed rather than being given up on: {:?}",
         stood_down.drained
     );
 }
