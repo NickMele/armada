@@ -10,16 +10,14 @@
 // hold one act and what it asks a person for before it sends. What stays here
 // is which of them a state offers. The words on every button are `copy.ts`'s.
 
-import { Button, SplitButton, Tooltip } from "@armada/components";
+import { Button, SplitButton } from "@armada/components";
 import type { SplitButtonItem } from "@armada/components";
 
 import { JOB_LIFECYCLE } from "@armada/components";
 import type { Outcome } from "@armada/protocol";
 import type { FileReport, JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 import { ACT_LABEL, MENU_LABEL, REPORT_LABEL } from "./copy";
-import { OverruleControl } from "./Overrule";
 import { recourseOf } from "./recovery";
-import { RedirectControl } from "./Redirect";
 import type { Render } from "./render";
 import { ReportControl } from "./Report";
 
@@ -142,13 +140,13 @@ export type ConfirmableAct = Exclude<
  * picture.
  *
  * Redirect, restart, the override and the re-run sit outside all of this: none
- * of them acts on the Job, so none reaches this header at all.
+ * of them acts on the Job, so none reaches this header at all, and since the
+ * split they are not even in this file — `StepActs.tsx` draws them.
  *
- * **Which of the four is offered is `recourseOf`'s reading and not this
- * file's.** The stopped screen states in words what resumes this Job, and a
- * header that decided it a second time here could disagree with the sentence a
- * person just read — so the one reading lives in `recovery.ts` and both sides
- * take it, down to whether overruling this step commits the Job.
+ * **What this header does read of that answer is `redispatch`**, which is
+ * `recourseOf`'s and not this file's. The stopped screen states in words what
+ * replaces this Job, and a header that decided it a second time here could
+ * disagree with the sentence a person just read.
  */
 export function Acts({
   job,
@@ -326,140 +324,6 @@ export function Acts({
   );
 }
 
-
-/**
- * The four acts that change a step rather than the Job, in the panel header
- * beside the step they act on.
- *
- * **They were rendered at Job level and four of the eight do not act on the
- * Job.** Redirecting a Drone, restarting a step, overruling the verdict on a
- * step and asking a step's gate again all leave the Job exactly where it is —
- * only the step moves. Drawn in the Job header they read as peers of the two
- * kills, which is the reading job detail was redrawn to end.
- *
- * **The accent goes with them.** The object of attention on this screen is the
- * open step, and the Job header keeps only the acts that end or replace the
- * Job. Which one takes the fill is the caller's, because it depends on which
- * act the state calls for — nothing here decides emphasis for a state it cannot
- * see.
- *
- * **Which of the four is offered is `recovery.ts`'s reading, unchanged.** It is
- * the side that can see the worktree, and a restart offered without that answer
- * was refused on the press every time the worktree had been reclaimed. Moving
- * the controls did not move that decision.
- *
- * **What each one does is on its own tooltip, with its binding.** The journey
- * says it plainly — a step's help text is a tooltip carrying its binding, shown
- * on hover and on focus — and the four sentences were being concatenated into
- * one paragraph above the buttons, which described the menu rather than the
- * step and put every sentence out of reach of the control it was about. What a
- * destructive act costs is still stated again in its confirmation.
- */
-export function StepActs({
-  job,
-  whole,
-  render,
-  acting,
-  stale,
-  onAct,
-  onRedirect,
-  onOverrule,
-  onRerun,
-}: {
-  job: JobSummary;
-  whole: JobWhole | null;
-  render: Render;
-  acting: boolean;
-  stale: boolean;
-  onAct: (act: ConfirmableAct, jobId: string) => void;
-  onRedirect: (jobId: string, instruction: string) => void;
-  /**
-   * Overrule the verdict, with the reason. Straight through like a redirect —
-   * the dialog that collected the reason is the confirmation.
-   */
-  onOverrule: (jobId: string, reason: string) => void;
-  /**
-   * Ask the gate again on a step it could not decide. **Straight through like a
-   * redirect, and for a different reason** — that one already confirmed in its
-   * own dialog, and this one has nothing to confirm.
-   */
-  onRerun: (jobId: string) => void;
-}) {
-  // Fleet's answer, on the render that carries one. A Job nothing is wrong with
-  // has no `stuck` and so offers none of these — which is the wire's reading
-  // and not a rule written here.
-  const recourse = render === "stopped" ? recourseOf(job, whole) : undefined;
-  const canRedirect = recourse?.act === "redirect";
-  const canRestart = recourse?.act === "restart_step";
-  // Beside the two rather than instead of one: which trigger stopped the step
-  // decides these, and whether a Drone is there decides those. **Never both**,
-  // because the two triggers partition — `recovery.ts` says so.
-  const overrule = recourse?.overrule;
-  const reread = recourse?.reread;
-
-  return (
-    <>
-      {/* First of the acts that resume, because it is the one that takes
-          nothing away — the refused step's own work is kept. Secondary and not
-          primary: an override that looked like an approval would be claiming
-          the work was right rather than that the Judge was wrong. */}
-      {overrule === undefined ? null : (
-        // No binding on the tooltip: `actions.toml` registers none for the
-        // override, and a tooltip promising a key the map does not hold is
-        // worse than one with no key at all.
-        <Tooltip label={recourse?.says.override_verdict ?? ACT_LABEL.override_verdict}>
-          <OverruleControl
-            jobId={job.id}
-            overrule={overrule}
-            disabled={acting || stale}
-            onOverrule={onOverrule}
-          />
-        </Tooltip>
-      )}
-      {/* Where nothing ruled, in the place the override would be: the two are
-          mutually exclusive, and both keep the step's work. **No dialog and no
-          confirmation** — a re-run destroys nothing, overrules nothing and
-          commits nothing, so stopping to ask would claim a cost Fleet does not
-          charge. */}
-      {reread === undefined ? null : (
-        <Tooltip label={recourse?.says.rerun_gate ?? ACT_LABEL.rerun_gate}>
-          <Button variant="secondary" disabled={acting || stale} onClick={() => onRerun(job.id)}>
-            {ACT_LABEL.rerun_gate}
-          </Button>
-        </Tooltip>
-      )}
-      {/* Neither ends the Job, so neither is a plain-red act. The dialog a
-          redirect opens is itself the confirmation — a person who cancels it
-          has sent nothing. */}
-      {canRedirect ? (
-        <Tooltip label={recourse?.says.redirect ?? ACT_LABEL.redirect} shortcut={REDIRECT_KEY}>
-          <RedirectControl jobId={job.id} disabled={acting || stale} onRedirect={onRedirect} />
-        </Tooltip>
-      ) : null}
-      {canRestart ? (
-        <Tooltip label={recourse?.says.restart_step ?? ACT_LABEL.restart_step} shortcut={RESTART_KEY}>
-          <Button
-            variant="secondary"
-            disabled={acting || stale}
-            onClick={() => onAct("restart_step", job.id)}
-          >
-            {ACT_LABEL.restart_step}
-          </Button>
-        </Tooltip>
-      ) : null}
-    </>
-  );
-}
-
-/**
- * The bindings the two step acts carry, from `actions.toml`'s contextual tier —
- * `d` redirect, `s` restart step. Written beside the tooltip that displays
- * them, because a tooltip promising a key the map does not hold is worse than
- * one with no key at all.
- */
-const REDIRECT_KEY = "d";
-const RESTART_KEY = "s";
-
 /**
  * The binding the report entry displays, from `actions.toml` — `report_job`,
  * scope `detail`. **Shown because this surface answers it**: `detail-keys.ts`
@@ -478,3 +342,4 @@ const REPORT_KEY = "b";
  * not.
  */
 type Lead = { act: "redispatch"; label: string } | { act: "report"; label: string };
+
