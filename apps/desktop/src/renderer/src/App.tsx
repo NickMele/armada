@@ -33,6 +33,8 @@ import { fleetFailure, jobFailure, refusalFailure, uncaughtFailure } from "@arma
 import { headOf } from "@armada/shell";
 import { statementOf } from "@armada/shell";
 import { Composer } from "@armada/screens";
+import { DispatchJob, answeredAs } from "@armada/screens";
+import type { Proposal } from "@armada/components";
 import { Reports } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
 import { ACT_LABEL, CONFIRM, said } from "@armada/screens";
@@ -98,6 +100,13 @@ export function App() {
   // `New job` is what opens it now, so the surface is the list until somebody
   // asks for the form.
   const [composing, setComposing] = useState(false);
+  // Where the Job proposer's one call has got to, and Fleet's echo of a request
+  // it refused. **Not `outcome`**, which is what every command answers: a
+  // proposal is a reading a surface draws rather than a yes or a no, and the two
+  // refusals it can carry are drawn as two different things. `proposal.ts` says
+  // which of the two pieces of state an answer lands in.
+  const [proposal, setProposal] = useState<Proposal>({ at: "unasked" });
+  const [echoed, setEchoed] = useState<string | null>(null);
   // What has been reported against the Judge. Its own view for the reason the
   // head gives: a report is filed about one Job and the rate is read across all
   // of them.
@@ -217,6 +226,39 @@ export function App() {
 
   async function propose(draft: Draft): Promise<void> {
     setOutcome(await window.armada.proposeJob(draft));
+  }
+
+  /**
+   * Describe the work and let the Job proposer answer the rest — the dispatch
+   * path, with the form behind it as the override.
+   *
+   * **Two pieces of state, because an answer is two things.** What the surface
+   * draws is the proposal; a refusal the surface has no drawing for is an
+   * `Outcome` and goes to the same failure pipeline every other command uses.
+   * `answeredAs` decides which, and it is the only thing that reads the wire.
+   *
+   * The instant is stamped once, here, when the answer arrived. A payload built
+   * at render would carry a timestamp that moved every second, which is the one
+   * thing a quotable artifact may not do.
+   */
+  async function proposeFrom(request: string): Promise<void> {
+    setProposal({ at: "reading" });
+    setEchoed(null);
+    const read = answeredAs(await window.armada.proposeFromRequest(request), {
+      sent: request,
+      workflows: state.holds.workflows,
+      bridge: state.bridge,
+      at: new Date().toISOString(),
+    });
+    setProposal(read.proposal);
+    setEchoed(read.request);
+    if (read.outcome !== null) setOutcome(read.outcome);
+  }
+
+  /** Drop what came back, so the surface is a fresh request again. */
+  function forgetProposal(): void {
+    setProposal({ at: "unasked" });
+    setEchoed(null);
   }
 
   async function approve(jobId: string): Promise<void> {
@@ -419,6 +461,9 @@ export function App() {
         onSurface={() => {
           setOpenJob(null);
           setComposing(false);
+          // A proposal left on screen after the surface closed is a reading of
+          // an answer nobody is looking at. The jobs it named are on the board.
+          forgetProposal();
         }}
       >
         <div className="flex flex-col gap-6">
@@ -525,20 +570,40 @@ export function App() {
               <Reports reports={state.reports} onWant={readReports} onCopied={setCopied} />
             </Boundary>
           ) : composing ? (
-            /* What Fleet holds, read over the one connection. Not scraped off
-               the Jobs already on the board, which is what this offered before
-               `list_workflows` and `list_manifests` existed. */
+            /* Describing the work is the path and the form is the override, so
+               the composer is what `Enter by hand` swaps to rather than what
+               opens. What Fleet holds is read over the one connection and not
+               scraped off the Jobs already on the board, which is what this
+               offered before `list_workflows` and `list_manifests` existed. */
             <Boundary region="the job composer" {...guarded}>
-              <Composer
-                workflows={state.holds.workflows}
-                onStage={stageAttachment}
-                manifest={scoped}
-                models={state.holds.models}
-                disabled={!live}
-                onPropose={(draft) => {
-                  void propose(draft);
+              <DispatchJob
+                proposal={proposal}
+                onDispatch={(request) => void proposeFrom(request)}
+                onReset={forgetProposal}
+                // A proposed Job is opened, never approved from here: approval
+                // is a second act from detail, and this is the same signpost the
+                // Board's own `awaiting_approval` row carries.
+                onOpen={(jobId) => {
                   setComposing(false);
+                  forgetProposal();
+                  setOpenJob(jobId);
                 }}
+                echoed={echoed}
+                disabled={!live}
+                onCopied={setCopied}
+                byHand={
+                  <Composer
+                    workflows={state.holds.workflows}
+                    onStage={stageAttachment}
+                    manifest={scoped}
+                    models={state.holds.models}
+                    disabled={!live}
+                    onPropose={(draft) => {
+                      void propose(draft);
+                      setComposing(false);
+                    }}
+                  />
+                }
               />
             </Boundary>
           ) : (
