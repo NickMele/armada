@@ -258,6 +258,22 @@ async fn last_mover(fleet: &Fixture, job: &JobId) -> Actor {
         .expect("a Job that has moved at least once")
 }
 
+/// How many status moves the Job has made. **The reading that catches a move
+/// nobody meant to make**, which `last_mover` cannot: a redirect that moved a
+/// `running` Job to `running` would be recorded against a person and read
+/// exactly like one that moved nothing.
+async fn job_moves(fleet: &Fixture, job: &JobId) -> usize {
+    fleet
+        .store()
+        .lock()
+        .await
+        .events_for(job)
+        .expect("the Job's log")
+        .iter()
+        .filter(|event| matches!(event.moved(), Moved::Job { .. }))
+        .count()
+}
+
 /// Which state the one step is in.
 async fn step_state(fleet: &Fixture, job: &JobId) -> StepState {
     fleet
@@ -512,30 +528,137 @@ async fn a_job_escalated_with_its_drone_gone_still_refuses_both_acts() {
     ));
 }
 
-/// A Job nobody is holding takes neither act, and the status is what says so.
+/// **`#145`, as a case.** A healthy Drone working normally takes a redirect,
+/// and refused one until now: `docs/concepts/drone.md` promises all of Redirect,
+/// Kill and Pause on a non-escalated Drone, and the one Drone this act could not
+/// reach was the one going the wrong way with nothing yet wrong.
+///
+/// A restart is still refused, and that pairing is the point — the two acts stop
+/// sharing a predicate without starting to overlap.
 #[tokio::test]
-async fn a_running_job_takes_neither_act() {
+async fn a_healthy_job_takes_a_redirect_and_still_refuses_a_restart() {
     let home = TempDir::new();
     let fleet = a_fleet_with(&home, a_drone_that_answers());
     let job = started(&fleet, &home).await;
+    let moved = job_moves(&fleet, &job).await;
 
+    let after = fleet
+        .redirect(&job, &advice())
+        .await
+        .expect("a Drone that is working can be told something");
+
+    assert_eq!(after.status(), JobStatus::Running);
+    assert_eq!(
+        step_state(&fleet, &job).await,
+        StepState::Running,
+        "nothing was frozen, so nothing was unfrozen"
+    );
+    assert_eq!(
+        job_moves(&fleet, &job).await,
+        moved,
+        "a redirect into a healthy Drone moves the Job nowhere at all"
+    );
     assert!(
         matches!(
-            fleet.redirect(&job, &advice()).await,
+            fleet.restart_step(&job).await,
             Err(Adrift::NotResumable {
                 status: JobStatus::Running,
                 ..
             })
         ),
-        "a live Drone is not enough — the Job has to be one a person is holding"
+        "a restart still wants a Job a person is holding"
     );
-    assert!(matches!(
-        fleet.restart_step(&job).await,
-        Err(Adrift::NotResumable {
-            status: JobStatus::Running,
-            ..
-        })
-    ));
+}
+
+/// The wait rides on a healthy Job the same way, and **it is the only thing
+/// that says anything happened** — this Job is `running` before the send and
+/// `running` after, so a person with no `redirecting` on the wire cannot tell a
+/// Drone that was steered from one that was not.
+#[tokio::test]
+async fn a_healthy_job_carries_the_wait_and_moves_nothing_when_it_is_answered() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_answers());
+    let job = started(&fleet, &home).await;
+    let moved = job_moves(&fleet, &job).await;
+
+    fleet.redirect(&job, &advice()).await.unwrap();
+    assert!(detail(&fleet, &job).await.redirecting.is_some());
+
+    let roused = until_roused(&fleet).await;
+    assert_eq!(roused.job, job);
+
+    let after = detail(&fleet, &job).await;
+    assert_eq!(after.job.status.domain(), JobStatus::Running);
+    assert!(
+        after.redirecting.is_none(),
+        "the Drone answered, so nothing is waiting on it"
+    );
+    assert_eq!(
+        job_moves(&fleet, &job).await,
+        moved,
+        "the answer landed on a Job that was never held for it"
+    );
+}
+
+/// **The restart this act must never quietly become.** A gate stops a step
+/// before the Job escalates over it, so a `running` Job holds a `stopped` step
+/// for an instant — and a redirect arriving in that instant must leave it
+/// stopped. Handing it back would be a person's sentence silently re-running a
+/// step the gate had ended, which is `docs/concepts/job.md`'s
+/// *"a redirect that respawns is a restart that threw away the session"* one
+/// rung shallower.
+#[tokio::test]
+async fn a_redirect_does_not_unfreeze_a_step_under_a_job_nobody_escalated() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_answers());
+    let job = started(&fleet, &home).await;
+    let record = fleet.load(&job).await.unwrap();
+    fleet
+        .move_step(
+            &record,
+            &StepId::new(IMPLEMENT),
+            StepTarget::Stopped(
+                StepLevelTrigger::of(EscalationTrigger::GateFailure).expect("a step-level trigger"),
+            ),
+        )
+        .await
+        .unwrap();
+
+    let after = fleet.redirect(&job, &advice()).await.unwrap();
+
+    assert_eq!(after.status(), JobStatus::Running);
+    assert_eq!(
+        step_state(&fleet, &job).await,
+        StepState::Stopped,
+        "the gate stopped this step and only the gate's own recovery may start it"
+    );
+}
+
+/// The status is still a real question, and what it catches is a Drone that
+/// outlives the status which had one. A Job at `awaiting_review` has been
+/// answered by its machine gates; the act there is `request_changes`, whose note
+/// waits for the next Drone.
+#[tokio::test]
+async fn a_job_past_its_step_refuses_a_redirect_even_with_a_drone_in_the_slot() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_answers());
+    let job = started(&fleet, &home).await;
+    let record = fleet.load(&job).await.unwrap();
+    fleet
+        .move_job(&record, Target::AwaitingReview, Actor::Fleet)
+        .await
+        .unwrap();
+
+    assert!(
+        matches!(
+            fleet.redirect(&job, &advice()).await,
+            Err(Adrift::NotResumable {
+                status: JobStatus::AwaitingReview,
+                ..
+            })
+        ),
+        "the slot still holds a Drone, and where the Job stands is what decides"
+    );
 }
 
 /// **What the screen could not say before.** A redirect that is waiting and one
