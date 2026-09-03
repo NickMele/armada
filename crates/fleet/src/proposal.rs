@@ -16,9 +16,10 @@
 //!
 //! `write_targets` is `None` and `atomic` is false, and `None` is the honest
 //! value — **not empty**, which would claim the Job writes nothing. Shape is
-//! underivable until the scope step runs, which is what
-//! `docs/concepts/job-proposer.md` will need to say: it currently has the
-//! proposer settling scope before dispatch.
+//! underivable until the scope step runs, which
+//! `docs/concepts/job-proposer.md` now says under *Scope is not among them* —
+//! it read the other way until 3 Sep 2026, when four documents were corrected
+//! against this module rather than the other way round.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
