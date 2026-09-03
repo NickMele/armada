@@ -47,6 +47,7 @@ mod gate;
 mod headings;
 mod headroom;
 mod history;
+mod holding;
 mod host;
 mod http;
 mod judging;

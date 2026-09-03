@@ -39,6 +39,7 @@ use crate::delivery::Delivered;
 use crate::drone::Aftermath;
 use crate::evidence::Decline;
 use crate::gate::Ruling;
+use crate::holding::GaveBack;
 use crate::noticing::Noticed;
 use crate::resume::Roused;
 use crate::scope::Drifting;
@@ -127,6 +128,14 @@ pub struct Turned {
     /// one pull request every sweep. Empty on every other turn, which is nearly
     /// all of them.
     pub noticed: Option<Noticed>,
+    /// The Jobs whose worktrees Fleet gave back on this turn, having proved
+    /// every one of `crate::holding`'s tests.
+    ///
+    /// **On the turn for `stranded`'s reason.** A terminal Job holds no slot
+    /// and has no [`Worked`] entry to sit on, and the sweep reads the whole
+    /// board once rather than once per working Job. Empty on nearly every turn:
+    /// the sweep is on its own interval, and most turns are not one.
+    pub reclaimed: Vec<GaveBack>,
 }
 
 impl Turned {
@@ -237,6 +246,12 @@ where
         // its reason: this touches no slot and starts nothing, so what it
         // wants is only to run once for the turn rather than once per Drone.
         turned.noticed = self.notice_a_merge().await?;
+        // Beside the merge notice and for the same two reasons: it touches no
+        // slot, and what it reads is the whole board rather than one Drone.
+        // **After the notice**, because a merge read this turn is what makes a
+        // branch reachable from the base — so a Job whose pull request just
+        // landed is provably safe on this turn rather than on the next sweep.
+        turned.reclaimed = self.reclaim_what_is_safe().await?;
         turned.admitted = self.admit_next().await?;
         Ok(turned)
     }

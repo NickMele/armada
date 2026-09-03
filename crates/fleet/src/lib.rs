@@ -51,6 +51,9 @@ pub mod evidence;
 pub mod footprint;
 mod gate;
 pub mod headroom;
+/// What Fleet is holding disk for, and the five tests that decide whether it
+/// may give one back without asking anybody.
+pub mod holding;
 pub mod judging;
 pub mod keeping;
 mod landing;
@@ -123,6 +126,7 @@ pub use evidence::{
 };
 pub use gate::{apply, rule_on, CheckBudget, CheckOutput, Ruling};
 pub use headroom::{Bytes, Headroom, InUse, Machine, Polling, Reading, Short, Spare, TheMachine};
+pub use holding::{GaveBack, Held, Holding, Reclaiming};
 pub use judging::{Aloft, CallFailed, JudgeBudget, Judging, Look, Marking};
 pub use keeping::{deliverables_dir, kept_deliverables, Keeping};
 pub use mint::{Mint, UlidMint};

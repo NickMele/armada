@@ -41,6 +41,7 @@ use crate::dry_run::DryRuns;
 use crate::evidence::Call;
 use crate::gate::{CheckBudget, Ruling};
 use crate::headroom::{Bytes, Headroom, Polling, Spare};
+use crate::holding::Reclaiming;
 use crate::judging::JudgeBudget;
 use crate::noticing::Noticing;
 use crate::silence::Liveness;
@@ -296,6 +297,10 @@ pub fn fitted_with(
         polling: Polling::every(Duration::ZERO),
         // Never due, so no test asks a fake forge anything unless it says to.
         noticing: Noticing::every(Duration::from_secs(86_400)),
+        // A day, for `noticing`'s reason: a fixture that swept on its own would
+        // have every other test in this crate racing a worktree removal. The
+        // tests that want a sweep ask for one.
+        reclaiming: Reclaiming::every(Duration::from_secs(86_400)),
         // **Far more than any fixture spends**, so no test but `allowance`'s
         // own is ever held back by the budget. The fakes report a `cost_micros`
         // of zero, and a cap set at the shipped number would still be reached

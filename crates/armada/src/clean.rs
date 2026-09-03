@@ -13,17 +13,17 @@
 //! of this store, not off a glob. Confusing the two left `--all` as the only
 //! recovery from a migration that orphaned four rows.
 //!
-//! # A branch holding work nothing has taken is kept
+//! # Work nothing has taken is kept, committed or not
 //!
 //! Fleet commits a finished Job's work, so its branch is the only copy. A
 //! branch the base cannot reach is named and left, on the same grounds as an
-//! unclaimed worktree; its worktree still goes, the checkout being reproducible
-//! and the commit not. `--force` deletes it.
+//! unclaimed worktree. A checkout holding *uncommitted* work is the same claim
+//! one step earlier — see [`WorkKept`]. `--force` takes both.
 
 use std::path::{Path, PathBuf};
 
 use adapter_traits::WorktreeSpec;
-use adapters::{BranchGone, Reclaimed, UnmergedWork};
+use adapters::{BranchGone, Reclaimed, UnmergedWork, WorktreeStanding};
 use config::Manifest;
 use core_model::JobId;
 use fleet::runtime::{self, Presence};
@@ -82,6 +82,29 @@ pub struct RowCleared {
     pub forgotten: Forgotten,
 }
 
+/// A Job whose checkout holds work nothing has taken.
+///
+/// **Left where it is, and its record with it.** An unmerged branch is kept
+/// because the commit is the only copy; uncommitted work is that with nothing
+/// even holding it, and it is the case that reads as no work at all from
+/// outside — the branch is level with its base, so every merged-ness reading
+/// says the checkout is disposable. The record stays because the record is what
+/// derives the checkout: forgetting it would leave a directory nothing can
+/// name, which is the `unclaimed` state this file already declines to remove.
+///
+/// `--force` takes it, which is the same escape a kept branch has.
+#[derive(Debug)]
+pub struct WorkKept {
+    pub job_id: String,
+    /// The Job's title, or — for a row that would not rebuild and so has none
+    /// — why it would not.
+    pub title: String,
+    pub path: String,
+    /// What `git status --porcelain` reported, so a person can look before
+    /// they decide rather than read a byte count afterwards.
+    pub files: Vec<String>,
+}
+
 /// A machine file `--all` was asked about.
 #[derive(Debug, PartialEq, Eq)]
 pub enum FileGone {
@@ -102,6 +125,8 @@ pub struct Cleaned {
     pub machine: Vec<FileGone>,
     /// Rows this Manifest owns that would not rebuild, cleared by id.
     pub unreadable: Vec<RowCleared>,
+    /// Checkouts holding uncommitted work. **Left alone**, records and all.
+    pub uncommitted: Vec<WorkKept>,
     /// Rows that would not rebuild and belong to some other Manifest. Left for
     /// the repository that owns them, and counted so a person is not told
     /// nothing about rows they can see in Fleet's boot line.
@@ -287,6 +312,12 @@ fn forget_this_manifests_jobs(
                 reclaimed,
                 forgotten,
             }),
+            GaveBack::HeldUncommitted { path, files } => cleaned.uncommitted.push(WorkKept {
+                job_id: job_id.as_str().to_string(),
+                title,
+                path,
+                files,
+            }),
             GaveBack::Skipped => continue,
             GaveBack::RepositoryClosed => return,
         }
@@ -335,6 +366,14 @@ fn clear_this_manifests_unreadable_rows(
                 reclaimed,
                 forgotten,
             }),
+            GaveBack::HeldUncommitted { path, files } => cleaned.uncommitted.push(WorkKept {
+                job_id: named.job_id.as_str().to_string(),
+                // A row that would not rebuild has no title to carry, and the
+                // reason it would not is what a person needs instead.
+                title: why,
+                path,
+                files,
+            }),
             GaveBack::Skipped => continue,
             GaveBack::RepositoryClosed => return,
         }
@@ -347,6 +386,10 @@ enum GaveBack {
         reclaimed: Reclaimed,
         forgotten: Forgotten,
     },
+    /// Its checkout holds work nobody has committed, so neither the checkout
+    /// nor the record went. Reported by the caller, which is the one that knows
+    /// the Job's title.
+    HeldUncommitted { path: String, files: Vec<String> },
     /// This id did not come back; the next may.
     Skipped,
     /// The repository itself would not open, so no id will do better.
@@ -374,6 +417,20 @@ fn give_back(
             return GaveBack::Skipped;
         }
     };
+    // **Before the removal, because after it there is nothing left to ask.**
+    // The same reading `adapters::reclaim` takes on its way to the branch, and
+    // the same one Fleet's own sweep is gated on — one derivation of what is
+    // safe, so a clean and a sweep cannot come to different answers.
+    if unmerged == UnmergedWork::Keep {
+        if let Ok(WorktreeStanding::Dirty { files }) =
+            adapters::standing(&spec, base).map(|stands| stands.worktree)
+        {
+            return GaveBack::HeldUncommitted {
+                path: spec.worktree_path(),
+                files,
+            };
+        }
+    }
     let reclaimed = match adapters::reclaim(&spec, base, unmerged) {
         Ok(reclaimed) => reclaimed,
         Err(why) => {
