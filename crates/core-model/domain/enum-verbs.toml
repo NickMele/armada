@@ -345,6 +345,14 @@ vocabulary = "Escalation reason"
 in_code = "In code"
 notes = "Filed as a trigger Aug 2026 with neither a verb nor a glyph, and unreachable until `crates/fleet/src/coupling.rs` began raising it. The verb names what happened to the Job this one waited on rather than anything this Job did, because it did nothing — which is the whole of what a person needs to read here. The article follows `a check timed out`. No glyph: the `shield-*` family is reserved to gates and Checks, so the natural candidate is not this row's to take, and the glyph stays owed beside `blocked_by_policy` and `check_timeout`."
 
+[verbs.escalation_reason.drone_killed]
+verb = "the Drone was ended by hand"
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = ""
+notes = "**\"By hand\" is the whole verb, not padding.** `interrupted` renders as `interrupted` and draws `unplug`, a connection lost; this is a person pulling the plug on purpose, from a step they mean to run again. Drop the last two words and the two badges say the same thing about opposite events, and a reader is sent looking for a dead Drone that somebody ended deliberately. Not `stalled`, which is what a person usually killed the Drone *for* and which the Job's own escalation reason keeps. The passive follows `the worktree was unusable` and `the Drone would not start`; the actor is not named because the badge is read by the person who acted. No glyph: `unplug` is `interrupted`'s and the distinction against it is the point, `octagon-alert` is reserved to `stalled`, and `user-check` is the only human silhouette in the badge set and is `awaiting_approval`'s in the Job state group. Nothing in `packages/icons/icons.toml` claims a person ending something on purpose, so it ships drawing its verb alone beside `blocked_by_policy`, `check_timeout`, `dependency_failed`, `evidence_too_large`, `no_report`, `no_worktree`, `not_configurable`, `not_prepared`, `resource_exhausted` and `would_not_start`."
+
 [verbs.escalation_reason.evidence_suspect]
 verb = "evidence disputed"
 icon = "file-question-mark"
@@ -399,6 +407,7 @@ icon = "unplug"
 status_token = "--status-escalated"
 vocabulary = "Escalation reason"
 in_code = "In code"
+notes = "A process that was there and is not, which is what `unplug`'s gap draws. **Nobody chose it** — a person who ends a Drone deliberately reads `the Drone was ended by hand` on the step, and this word would send them hunting for the failure they had just caused."
 
 [verbs.escalation_reason.loop_cap]
 verb = "hit the iteration cap"

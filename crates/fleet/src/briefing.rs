@@ -418,7 +418,8 @@ impl Stopped {
                 "An earlier attempt at this part was never checked. Something the check \
                  needed could not be read, so nothing was decided about the work itself."
             }
-            EscalationTrigger::Thrashing => {
+            // A Drone a person ended stopped mid-run with nothing checked too.
+            EscalationTrigger::DroneKilled | EscalationTrigger::Thrashing => {
                 "An earlier attempt at this part was stopped while it was still running. \
                  Nothing it did was checked."
             }

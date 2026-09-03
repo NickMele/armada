@@ -1452,6 +1452,16 @@ collapses them has erased the trigger. It is not **churning** either:
 that is the finding this followed, and the Drone may have been writing
 the whole time it was said of.
 
+`drone_killed` renders as **the Drone was ended by hand**, and the last
+three words are the verb rather than padding. `interrupted` renders as
+**interrupted** and draws a severed plug, a connection lost; this is a
+person pulling it out on purpose, from a step they mean to run again.
+Drop "by hand" and the two badges say the same thing about opposite
+events, and a reader goes looking for a failure somebody caused
+deliberately. It is not **stalled** either — that is usually what the
+person killed the Drone *for*, and the Job's own escalation reason
+keeps it. This one is the step's.
+
 `evidence_suspect` renders as
 **evidence disputed**, with Judge in the source field, which keeps
 attribution out of the headline so P5 holds. Avoid "Judge rejected the

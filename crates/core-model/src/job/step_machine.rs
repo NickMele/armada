@@ -19,13 +19,13 @@
 //!
 //! **The outer machine gates the inner one**, and [`ADVANCING_STATUSES`] is
 //! that rule — which is why a step stops *before* the Job escalates, and why a
-//! step move and a status move belong in one log in one order. It has one
-//! exception, [`overruled_while_frozen`], which is a predicate rather than a
-//! third entry in the list, for the reason given there.
+//! step move and a status move belong in one log in one order. It has two
+//! exceptions, [`overruled_while_frozen`] and [`taken_from_a_person`], each a
+//! predicate rather than a third entry in the list, for the reason given there.
 
 use core::fmt;
 
-use crate::job::escalation::StepLevelTrigger;
+use crate::job::escalation::{EscalationTrigger, StepLevelTrigger};
 use crate::job::ids::StepId;
 use crate::job::status::{JobStatus, StepState};
 
@@ -319,6 +319,34 @@ impl fmt::Display for Advancing {
     }
 }
 
+/// The other move a person may make on a step the outer machine has frozen:
+/// `running -> stopped` as a kill, beneath `escalated`.
+///
+/// **Both exceptions are a person acting on a Job they already hold**, which is
+/// the whole of what they share. The freeze keeps the *machine* out of a Job
+/// parked for somebody, and neither predicate lets it back in. A third that is
+/// not a person's act is a change to the rule rather than another case of it.
+///
+/// **A predicate for [`overruled_while_frozen`]'s reason, and it admits one
+/// move.** A Job escalated on a Job-level trigger — `stalled` over a Drone that
+/// is still there — freezes nothing underneath it, so the step it was working
+/// reads `running` with a live process on it, which is true. When a person then
+/// ends that process the reading stops being true, and nothing could write the
+/// correction: `escalated` is not in [`ADVANCING_STATUSES`], so the step sat
+/// `running` on a Job holding no Drone, `Job::stopped_on` found nothing, and
+/// `fleet::resume` had neither act to offer. `#313`.
+///
+/// `EscalationTrigger::DroneKilled` is the capability, and all three conditions
+/// are load-bearing exactly as the override's are. Drop the trigger and this
+/// admits the gate stopping a step beneath a parked Job; drop `from` and it
+/// admits stopping a step nobody was working; drop the status and it says
+/// nothing [`ADVANCING_STATUSES`] does not already say.
+fn taken_from_a_person(status: JobStatus, from: StepState, to: &StepTarget) -> bool {
+    status == JobStatus::Escalated
+        && from == StepState::Running
+        && matches!(to, StepTarget::Stopped(why) if why.trigger() == EscalationTrigger::DroneKilled)
+}
+
 /// Whether the machine admits this move, and why not if it does not.
 pub(crate) fn admits_step(
     status: JobStatus,
@@ -326,7 +354,9 @@ pub(crate) fn admits_step(
     from: StepState,
     to: &StepTarget,
 ) -> Result<(), IllegalStepTransition> {
-    if !ADVANCING_STATUSES.contains(&status) && !overruled_while_frozen(status, from, to) {
+    let by_a_person =
+        overruled_while_frozen(status, from, to) || taken_from_a_person(status, from, to);
+    if !ADVANCING_STATUSES.contains(&status) && !by_a_person {
         return Err(IllegalStepTransition::StepsAreFrozen {
             step_id: step_id.clone(),
             status,

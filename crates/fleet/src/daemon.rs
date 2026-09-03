@@ -478,6 +478,12 @@ where
     /// method's: a process that is gone having left no evidence pauses the Job
     /// for a person. That is not terminal, so nothing here ends a Job — and it
     /// is not `running` either, which is the state the milestone refuses.
+    ///
+    /// **The step moves too, and that is what makes the Job recoverable.** On
+    /// both endings that leave a person holding it the step the Drone was on
+    /// stops under `drone_killed`; on the third it does not, because evidence
+    /// is waiting and something is already queued that will rule on it.
+    /// [`Fleet::stopped_by_hand`] is the move, and `#313` is what it cost.
     pub async fn kill_drone(&self, job_id: &JobId) -> Result<Job, Adrift> {
         if let Some(slot) = self.slot_of(job_id).await {
             let mut working = slot.lock().await;
@@ -491,9 +497,25 @@ where
                 let standing = self.load(job_id).await?.status();
                 self.end_the_drone(&mut working).await;
                 let job = self.load(job_id).await?;
-                if let Aftermath::JobMoves(target) = aftermath(standing, &ending, self.left(job_id))
-                {
-                    self.move_job(&job, target, Actor::Human).await?;
+                match aftermath(standing, &ending, self.left(job_id)) {
+                    // **The step first, and the order is `crate::dispatch`'s.**
+                    // The inner machine is frozen the moment the Job leaves
+                    // `running`, so a step stopped after the move would be
+                    // refused and `last_verdict` would stay unwritten — which
+                    // is the whole of what this call used to leave behind.
+                    Aftermath::JobMoves(target) => {
+                        let job = self.stopped_by_hand(&job).await?;
+                        self.move_job(&job, target, Actor::Human).await?;
+                    }
+                    // The Job had already stopped and stays where it is; its
+                    // step has not, and it is the same reading that is now
+                    // wrong. `escalated` freezes the inner machine, so this one
+                    // crosses on `step_machine`'s named exception rather than
+                    // on the order above.
+                    Aftermath::AlreadyStopped => {
+                        self.stopped_by_hand(&job).await?;
+                    }
+                    Aftermath::TheGateDecides => {}
                 }
             }
         }

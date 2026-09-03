@@ -31,7 +31,10 @@
 #                     step-level row is one that can name which step stopped
 #   meaning         - the condition, in one sentence
 #   job_transitions - the edge this trigger fires. A "from -> to" pair whose
-#                     ends are keys in job-statuses.toml
+#                     ends are keys in job-statuses.toml. Absent ordinarily
+#                     means the default edge below; on a row that says it names
+#                     a step and never a Job, it means there is no Job edge at
+#                     all, and the row is where that is stated
 #   in_code         - what the source recorded, and provenance rather than fact.
 #                     It recorded "In code" for evidence_suspect, fan_out,
 #                     gate_failure, stalled, thrashing — that was v1, and v1 is
@@ -74,6 +77,30 @@ why = """
 Cascading the failure would write `completed_failed` onto work that never ran, against a diff and worktree that don't exist. Fleet writes that terminal without a person, so one failure could silently terminate an arbitrarily deep dependency chain; escalating stops at the first dependent and asks instead.
 
 Leaving the Job queued under a new readiness reason fails differently: CPU headroom self-clears, but a failed upstream never does, so the Job would wait indefinitely behind a label with no action attached. Every escalation trigger names a malfunction, and a failed upstream is one — which is why `awaiting_attestation` has no home under `escalated` and this trigger does.
+"""
+
+[triggers.drone_killed]
+kind = "Trigger"
+level = "Step"
+meaning = "A person ended the Drone working this step, so the step stopped where it stood."
+in_code = ""
+notes = """
+**It names a step and never a Job, which no other row does.** Every other trigger answers "why did the Job stop"; this one answers "what became of the step underneath". A person ending a Drone is already acting on a Job that has stopped or is about to, and what it stopped *for* — `stalled`, `interrupted`, `silent`, `blocked_by_policy` — is the ending's own classification and stays on the Job's transition. This is what the step carries so that a person can restart it. `job_transitions` is absent for that reason rather than the usual one, and the field's own description says so.
+
+Not `interrupted`, and the two are the pair that must not merge. That one is a process that was there and is not, found by Fleet, and it is Job-level because nobody chose it. This is a person taking the process away, on purpose, from a step they intend to run again — which is exactly what makes it step-level. Borrowing `interrupted` would send whoever read the badge hunting for a dead Drone that a person had just ended deliberately.
+
+Not `stalled` or its `silent` sub-kind either, though one of them is usually the reason a person reaches for the kill. Those are the liveness clock's readings of a Drone, they are Job-level for the reason `stalled`'s own row gives, and the Job keeps whichever of them applied.
+
+Not `gate_failure` and not `thrashing`: nothing weighed the work. No evidence was submitted, no Check ran and no Judge was asked, so there is no verdict here for a person to disagree with — `overrulable` is false, and `Recourse::OverrideVerdict` is withheld on a step nothing ruled on.
+
+`in_code` is empty rather than "Not yet" for `gate_undecided`'s reason — the row was authored here and has no source value to carry.
+"""
+why = """
+`kill_drone` moved the Job and cleared the Drone and never moved the step, so the step and its attempt sat `running` beneath a Job that was `escalated` with no Drone on it. `restart_step` reads a `stopped` row and `redirect_drone` needs a live session, so both had nothing to land on, and the only act a person was offered was redispatching the whole Job — which throws away every step that already advanced, its verdicts and its deliverable. `#313` is 6m29s of passed work discarded to recover from a stall on the step after it.
+
+Stopping the step with no verdict at all was the alternative, and it is the honest shape of what happened: nothing was weighed. It is refused because a person opening the Job a week later would read an absence where the record could have carried a reason, and because `Job::stopped_on` answers the step and the trigger together — four acts and one classification make that reading, and a `stopped` row saying nothing would be one they all find and none can explain.
+
+Re-levelling `interrupted` or `stalled` to Step was the other, and is refused on those rows' own reasoning: both are facts about a Drone rather than about a step, and both are raised by Fleet noticing something rather than by a person deciding something.
 """
 
 [triggers.evidence_suspect]
