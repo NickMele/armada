@@ -17,7 +17,7 @@
 import type { BridgeState } from "../shared/bridge";
 import type { ClearOutcome, Draft, Outcome } from "@armada/protocol";
 import type { ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report } from "@armada/protocol";
-import type { Proposed } from "@armada/protocol";
+import type { ProposalInFlight, Proposed } from "@armada/protocol";
 import { ask, isJobSummary, MODEL_CALL_MS, route, type Answer } from "./request";
 import { Clearing } from "./clearing";
 import { proposeFromRequest as propose } from "./proposing";
@@ -46,6 +46,16 @@ export type Board = {
   /** The open Job and its history again, where the act was about that Job. */
   refresh: (port: number, jobId: string) => void;
   publish: (change: Partial<BridgeState>) => void;
+  /**
+   * Remember, or forget, the proposal this window is waiting on.
+   *
+   * The token is the window's own and Fleet echoes it unchanged; nothing here
+   * reads it. See `FleetConnection.proposalRef` for why the correlation runs
+   * this way round rather than off the id Fleet mints.
+   */
+  watchProposal: (clientRef: string | null) => void;
+  /** The proposal this window is waiting on, as Fleet last described it. */
+  proposalOut: () => ProposalInFlight | null;
 };
 
 /**
@@ -203,6 +213,30 @@ export class JobCommands {
    */
   async proposeFromRequest(request: string): Promise<Proposed> {
     return propose(this.board, request);
+  }
+
+  /**
+   * Stop the proposal this window is waiting on.
+   *
+   * **No id from the caller.** What may be stopped is what this window started,
+   * and an id taken from the renderer would let one window kill another's call.
+   *
+   * **Not through `act`.** That helper guards a second press on one Job, and
+   * there is no Job here — the guard that matters is the state itself: a window
+   * waiting on nothing has nothing to stop, and Fleet answers a proposal that
+   * has already landed without refusing it.
+   */
+  async stopProposal(): Promise<Outcome> {
+    const port = this.board.port();
+    if (port === null) return { ok: false, why: "not_connected" };
+    const out = this.board.proposalOut();
+    // Nothing in flight. Not a refusal Fleet should be asked about: the call
+    // this would have stopped is over, and the Jobs are already arriving.
+    if (out === null) return { ok: true };
+    const answer = await ask(port, "POST", "/proposals/stop", {
+      proposal_id: out.proposal_id,
+    });
+    return answer.ok === true ? { ok: true } : answer.outcome;
   }
 
   // ------------------------------------------------------------ dispatching

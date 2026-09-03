@@ -20,22 +20,34 @@ const COMMAND_MS = 5000;
  *
  * **Five seconds is a bound on a socket, not on a question.** Every route but
  * two answers off the store and returns in milliseconds, and `COMMAND_MS` is
- * sized for those. `POST /jobs/from_request` asks the Job proposer and
- * `POST /jobs/:id/rerun_gate` asks the Judge — each is a model call made inside
- * the request, and Fleet's own bound on one is `PROVISIONAL_JUDGE_BUDGET` in
- * `crates/armada/src/serve.rs`, which is two minutes. Bridge was giving both
- * five seconds, so proposing a Job timed out every time it was tried and the
- * only thing a person saw was Bridge's own abort.
+ * sized for those. `POST /jobs/:id/rerun_gate` asks the Judge inside the
+ * request, and Fleet's own bound on one call is `PROVISIONAL_JUDGE_BUDGET` in
+ * `crates/armada/src/serve.rs` — two minutes, and a gate re-run may make
+ * several. Bridge was giving it five seconds.
  *
- * **It is deliberately longer than Fleet's bound.** Fleet refuses a call that
- * outran its budget with a code, a run id and a chain; Bridge aborting first
- * throws all three away and replaces them with "aborted due to timeout". The
- * margin is what makes Fleet's answer the one that arrives.
- *
- * Nothing generates this from the Rust constant — the two are coupled by this
- * comment, and a Fleet budget raised past this is a Bridge that gives up first.
+ * **Deliberately longer than Fleet's bound**, so that Fleet's own refusal —
+ * with a code, a run id and a chain — is what arrives rather than Bridge's
+ * abort. Nothing generates this from the Rust constant; the two are coupled by
+ * this comment.
  */
 export const MODEL_CALL_MS = 150_000;
+
+/**
+ * No wait at all. **What `POST /jobs/from_request` takes**, and the only route
+ * that does.
+ *
+ * A wait is a guess about how long is too long, made by the side that knows
+ * least and enforced on somebody who was not asked. It was worth making while
+ * Bridge had nothing else to offer — a socket held open forever with a blank
+ * form in front of it is worse than an abort. It is not worth making now:
+ * `proposal.moved` says how far the call has got and `stopProposal` kills it,
+ * so the person watching decides, with Fleet's budget as the backstop.
+ *
+ * **Bridge giving up first is strictly worse than either.** It throws away
+ * Fleet's coded answer, and it leaves the call running and spending with nobody
+ * to read what it decides.
+ */
+export const NO_WAIT = 0;
 
 /**
  * A route under one Job. The id is a path segment, so it is encoded.
@@ -76,7 +88,9 @@ export async function ask(
       method,
       headers: body === undefined ? undefined : { "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(waitMs),
+      // Zero is no signal at all rather than an immediate abort — see
+      // `NO_WAIT`. `AbortSignal.timeout(0)` would fire on the next tick.
+      ...(waitMs === NO_WAIT ? {} : { signal: AbortSignal.timeout(waitMs) }),
     });
     const text = await answer.text();
     if (!answer.ok) {

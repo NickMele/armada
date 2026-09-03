@@ -43,6 +43,7 @@ const api: BridgeApi = {
   // capability taking which would read as one act and perform two.
   proposeFromRequest: (request: string): Promise<Proposed> =>
     ipcRenderer.invoke(CHANNELS.proposeFromRequest, request),
+  stopProposal: (): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.stopProposal),
 
   // Bytes never round-trip through `proposeJob`'s JSON channel as base64 —
   // this writes them to a staging file and hands back the path a later

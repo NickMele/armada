@@ -25,7 +25,7 @@ import type {
   Watched,
   connectedTo,
 } from "@armada/protocol";
-import type { FileReport, FleetCapacity, JobDetail, JobFilesChanged, JobSummary, Report, ReportList, UnreadableJob, WireError } from "@armada/protocol";
+import type { FileReport, FleetCapacity, JobDetail, JobFilesChanged, JobSummary, ProposalInFlight, Report, ReportList, UnreadableJob, WireError } from "@armada/protocol";
 import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
 import type { Artifact, Opened } from "@armada/protocol";
 import type { Recorded } from "@armada/protocol";
@@ -85,6 +85,21 @@ export type BridgeState = {
   readAt: number | null;
   /** Jobs with an approval in flight. What stops a second dispatch. */
   approving: string[];
+  /**
+   * The proposal this window is waiting on, or `null` where it is waiting on
+   * none.
+   *
+   * **The one piece of state here that is not about a Job**, because a proposal
+   * is the interval before any Job exists. It appears when Fleet says the call
+   * went out, moves as the call gets somewhere, and is `null` again the moment
+   * the call comes back — however it came back.
+   *
+   * **This window's own, matched on the token it sent.** Fleet publishes every
+   * proposal on one stream and two windows may be dispatching at once; a state
+   * that folded whichever arrived last would draw somebody else's call as
+   * yours, and offer a stop that killed it.
+   */
+  proposing: ProposalInFlight | null;
   /**
    * What Fleet holds, and therefore what a proposal may name.
    *
@@ -184,6 +199,19 @@ export type BridgeApi = {
    * asked again.
    */
   proposeFromRequest: (request: string) => Promise<Proposed>;
+  /**
+   * Stop the proposal this window is waiting on.
+   *
+   * **It kills the call rather than stopping the wait.** A window that merely
+   * dropped the request would leave the proposer running inside Fleet, spending
+   * against the budget, with nobody left to read what it decided.
+   *
+   * Takes no id: `BridgeState.proposing` is what this window is waiting on, and
+   * an id from the renderer would let one window stop another's call. Answers
+   * whether there was still one to stop — pressing this a beat after the Jobs
+   * landed is being late rather than failing, and the surface says so.
+   */
+  stopProposal: () => Promise<Outcome>;
   /**
    * Write pasted or picked bytes to a staging file before a Job exists —
    * there is no Job id yet to key storage on; one is minted at `propose`
@@ -429,6 +457,7 @@ export const NOTHING_YET: BridgeState = {
   missed: 0,
   readAt: null,
   approving: [],
+  proposing: null,
   holds: { workflows: [], manifests: [], models: null },
   watched: { state: "none" },
   observed: { state: "none" },
@@ -445,6 +474,7 @@ export const CHANNELS = {
   changed: "bridge:changed",
   proposeJob: "bridge:propose-job",
   proposeFromRequest: "bridge:propose-from-request",
+  stopProposal: "bridge:stop-proposal",
   stageAttachment: "bridge:stage-attachment",
   approveDispatch: "bridge:approve-dispatch",
   redispatchJob: "bridge:redispatch-job",

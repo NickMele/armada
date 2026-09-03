@@ -141,6 +141,9 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.proposeFromRequest, (_event, request: string) =>
     connection?.commands.proposeFromRequest(request),
   );
+  // No argument: what may be stopped is what this window started. See
+  // `JobCommands.stopProposal`.
+  ipcMain.handle(CHANNELS.stopProposal, () => connection?.commands.stopProposal());
   // Staging happens before a Job exists — there is no id yet to key storage
   // on, and one is minted at `propose` time. Fleet is not involved here at
   // all; this only writes bytes to a temp file `proposeJob` later names.

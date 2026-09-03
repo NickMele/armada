@@ -1,19 +1,22 @@
 // What a proposal waits for, and what a failure on that seam carries.
 //
 // **Against a real listener, because the wait is the subject.** `ask` builds
-// one `fetch` with one `AbortSignal.timeout`, and a fake that resolves on the
-// next tick proves nothing about a budget — the defect being held down here is
-// that the budget was five seconds while Fleet's own bound on the proposer's
-// model call is two minutes, so every proposal a person made aborted on this
-// side and the only thing they saw was `Fleet did not answer: The operation was
-// aborted due to timeout`.
+// one `fetch`, and a fake that resolves on the next tick proves nothing about
+// a budget — the defect being held down here is that this route had a
+// five-second one while Fleet's own bound on the proposer's model call is two
+// minutes, so every proposal a person made aborted on this side and all they
+// saw was `Fleet did not answer: The operation was aborted due to timeout`.
+//
+// The route now has no Bridge-side wait at all. What bounds it is Fleet's
+// budget and a person pressing stop, which is why the first case here is worth
+// keeping: it fails against any version that reintroduces a guess.
 //
 // The second subject is what that sentence had under it, which was nothing. A
 // transport failure carries no `WireError`, so what a person quoting one has is
-// whatever `TransportFault` holds: which of the three it was, the route, and
-// the wait. These assert on that record rather than on any rendering of it.
+// whatever `TransportFault` holds: which of the three it was and the route.
+// These assert on that record rather than on any rendering of it.
 
-import { createServer, type Server } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { afterEach, expect, it } from "vitest";
@@ -55,7 +58,7 @@ async function fleetThat(answer: (respond: Respond) => void): Promise<number> {
   return (server.address() as AddressInfo).port;
 }
 
-type Respond = Parameters<Parameters<typeof createServer>[1]>[1];
+type Respond = ServerResponse<IncomingMessage>;
 
 /** The board a proposal folds into. Nothing here is under test. */
 function boardOn(port: number): Board {
@@ -66,6 +69,8 @@ function boardOn(port: number): Board {
     reread: async () => {},
     refresh: () => {},
     publish: () => {},
+    watchProposal: () => {},
+    proposalOut: () => null,
   };
 }
 
@@ -73,6 +78,11 @@ function boardOn(port: number): Board {
  * The bug, held down. A proposer answering after six seconds is a proposer
  * answering — six seconds is unremarkable for a model call, and Fleet is
  * allowed two minutes of them.
+ *
+ * Bridge now waits without a budget of its own: what bounds the call is Fleet's
+ * budget at one end and a person pressing stop at the other. Six seconds is
+ * chosen because it outran the wait this route used to have, so the case still
+ * fails against the version that had one.
  */
 it(
   "waits out a proposer that takes longer than an ordinary command",

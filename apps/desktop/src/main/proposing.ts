@@ -16,7 +16,9 @@ import type { JobRequest, ProposedPlan } from "@armada/protocol";
 // Read, never minted: Fleet's own spellings, and the only thing on the wire
 // that tells a declined request from a call that could not be made.
 import { FLEET_FAULT, NO_WORKFLOW_FITS, PROPOSER_UNREACHABLE } from "@armada/protocol";
-import { ask, isJobSummary, MODEL_CALL_MS } from "./request";
+import { randomUUID } from "node:crypto";
+
+import { ask, isJobSummary, NO_WAIT } from "./request";
 // Type-only, and therefore not a cycle at runtime: `Board` is what an act needs
 // of the connection, and it is declared where the acts are.
 import type { Board } from "./command";
@@ -47,14 +49,34 @@ export async function proposeFromRequest(board: Board, request: string): Promise
     return { ok: false, why: "refused", outcome: { ok: false, why: "not_connected" } };
   }
 
-  const body: JobRequest = { request: said };
-  // **The proposer's call is inside this request**, so the wait is a model
-  // call's and not a store read's — `MODEL_CALL_MS` says what the ordinary one
-  // cost here, which was every proposal timing out before Fleet had answered.
-  const answer = await ask(port, "POST", "/jobs/from_request", body, MODEL_CALL_MS);
-  if (answer.ok !== true) return notProposed(said, answer.outcome);
+  // The token this window recognises its own call by. Minted here because the
+  // request is where it has to travel, and Fleet echoes it back without reading
+  // it — `ipc::JobRequest::client_ref` says why matching on the request's own
+  // text would match the wrong call.
+  const clientRef = randomUUID();
+  const body: JobRequest = { request: said, client_ref: clientRef };
+  board.watchProposal(clientRef);
+  try {
+    // **No wait at all, which is the change.** A model call inside a request
+    // outlives any budget Bridge could pick, and a Bridge that gave up first
+    // threw away Fleet's own coded answer and left the call running and
+    // spending with nobody to read it. What bounds this now is Fleet's budget
+    // at one end and `stopProposal` at the other — a control that reaches the
+    // process, offered to somebody who can see how far the call has got.
+    const answer = await ask(port, "POST", "/jobs/from_request", body, NO_WAIT);
+    if (answer.ok !== true) return notProposed(said, answer.outcome);
+    return proposedFrom(board, port, answer.body);
+  } finally {
+    // However it ended. The event that clears the published state is Fleet's
+    // coming-back message, and this is the token — a window that kept one would
+    // fold the next proposal's events into a call that is over.
+    board.watchProposal(null);
+  }
+}
 
-  const plan = answer.body as ProposedPlan;
+/** The Jobs a plan came back with, onto the board. */
+async function proposedFrom(board: Board, port: number, body: unknown): Promise<Proposed> {
+  const plan = body as ProposedPlan;
   const proposed = Array.isArray(plan?.jobs) ? plan.jobs : [];
   const jobs = proposed.filter(isJobSummary);
   for (const job of jobs) board.fold(job);

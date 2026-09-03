@@ -28,6 +28,18 @@ import type { JobSummary } from "./protocol";
  */
 export type JobRequest = {
   request: string;
+  /**
+   * A token of the caller's own, echoed back on every `proposal.moved` about
+   * this call so the caller can recognise its own.
+   *
+   * **Opaque to Fleet, which neither reads it nor keeps it.** It is not an id:
+   * the same token sent twice is two proposals, each with its own
+   * `proposal_id`. Matching on `request` instead would match the wrong call the
+   * moment two people dispatch the same words.
+   *
+   * Absent is ordinary — a caller with no surface has nothing to correlate.
+   */
+  client_ref?: string;
 };
 
 /**

@@ -14,6 +14,7 @@ import type {
   JobList,
   JobSummary,
   JudgeInFlight,
+  ProposalInFlight,
   Reason,
   Settled,
 } from "./protocol";
@@ -48,7 +49,8 @@ export type Event =
   | ({ kind: "job.judging" } & JobJudging)
   | ({ kind: "job.asking" } & JobAsking)
   | ({ kind: "job.forgotten" } & JobForgotten)
-  | ({ kind: "job.landed" } & JobLanded);
+  | ({ kind: "job.landed" } & JobLanded)
+  | ({ kind: "proposal.moved" } & ProposalMoved);
 
 /**
  * A Job exists that did not before, carrying the row whole.
@@ -190,6 +192,38 @@ export type JobAsking = {
   step_id: string;
   /** The question that went out, or absent because it was answered. */
   asking?: QuestionInFlight;
+  actor: string;
+  at: string;
+};
+
+/**
+ * A proposal went out, got somewhere, or came back. `crates/ipc/src/event.rs`.
+ *
+ * **The one kind here that names no Job**, and that is what it is for: a
+ * proposal is the interval before any Job exists. `job.created` is what says
+ * the Jobs arrived, and it is a different message.
+ *
+ * **More than two messages per call, unlike `job.judging`.** That one settles
+ * for two because a surface can subtract an elapsed count for itself, which is
+ * right for a gate nobody watches. Here somebody is being asked whether to keep
+ * waiting, and the answer turns on whether the call is moving. Fleet publishes
+ * none of these while nothing is subscribed, and throttles the token estimate
+ * to one a second.
+ */
+export type ProposalMoved = {
+  proposal_id: string;
+  /**
+   * The caller's own token, echoed. **On the envelope as well as inside
+   * `proposing`** — it is what a client filters on, and the coming-back message
+   * carries no `proposing` to read it from.
+   */
+  client_ref?: string;
+  /**
+   * The call while it is out, or **absent because it came back** — however it
+   * came back: with Jobs, with a refusal, or stopped. What it produced arrives
+   * as `job.created`, one per Job.
+   */
+  proposing?: ProposalInFlight;
   actor: string;
   at: string;
 };

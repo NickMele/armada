@@ -76,6 +76,19 @@ export class FleetConnection {
   private readonly history: JobReader<{ moves: Recorded[] }>;
   /** The Job whose turns are open. A second socket to Fleet — see `observe.ts`. */
   private observing: string | null = null;
+  /**
+   * The token this window sent with the proposal it is waiting on, or `null`.
+   *
+   * **What tells this window's proposal from anybody else's.** Fleet publishes
+   * every proposal on one stream, and the id it mints is not known until the
+   * first event arrives — so the correlation has to run the other way, on a
+   * token the window chose before it sent.
+   *
+   * Held here rather than on `BridgeState` because it is not a fact about the
+   * app; it is how this object recognises its own messages, and a renderer that
+   * could read it could claim another window's call.
+   */
+  private proposalRef: string | null = null;
   private readonly turns: ObserveSocket;
   /** The claims and the patch, each read when a surface asks — see `review.ts`. */
   private readonly material: ReviewMaterial;
@@ -126,6 +139,16 @@ export class FleetConnection {
       reread: (port) => this.reread(port),
       refresh: (port, jobId) => this.refresh(port, jobId),
       publish: (change) => this.publish(change),
+      watchProposal: (clientRef) => {
+        this.proposalRef = clientRef;
+        // A window that starts a proposal has nothing to show until Fleet says
+        // the call went out; one that has finished with a proposal shows
+        // nothing either. Both are the same clear, and it is here rather than
+        // only on the coming-back event so that a request which never reached
+        // Fleet does not leave a card standing.
+        if (clientRef === null) this.publish({ proposing: null });
+      },
+      proposalOut: () => this.current.proposing,
     });
   }
 
@@ -359,6 +382,27 @@ export class FleetConnection {
       // per question against a wait as long as a person takes.
       this.publish({ connection });
       this.refresh(fleet.port, event.job_id);
+      return;
+    }
+
+    if (event.kind === "proposal.moved") {
+      // **This window's own, matched on the token it sent.** Fleet publishes
+      // every proposal on one stream and two windows may be dispatching at
+      // once — folding whichever arrived last would draw somebody else's call
+      // as yours and offer a stop that killed it.
+      //
+      // Absent `proposing` is the call coming back, however it came back, and
+      // clears the state. The Jobs it produced arrive as `job.created` and are
+      // folded there; nothing here puts a row on the board.
+      if (event.client_ref !== undefined && event.client_ref === this.proposalRef) {
+        const proposing = event.proposing ?? null;
+        if (proposing === null) this.proposalRef = null;
+        this.publish({ connection, proposing });
+        return;
+      }
+      // Somebody else's, or one this window did not start. The connection is
+      // still current, which is what the publish says and all it says.
+      this.publish({ connection });
       return;
     }
 
