@@ -7,16 +7,16 @@
 //! | Tripwire | tool calls, wall-clock, the plan against the live diff | nothing |
 //! | The look | one Judge call, **only** once a tripwire fired | one call |
 //! | The directive | "stop and report your current state now" | a turn |
-//! | `thrashing` | **when that also fails** | the escalation |
+//! | `no_report` | **when that also fails** | the escalation |
 //!
-//! `escalation-triggers.toml`: *"active but not converging, **and the forced
-//! report also failed**"*. A Drone that thrashes and then reports when told to
-//! has not thrashed by that definition. Escalating at stage one would make
-//! `thrashing` mean "took a while"; at stage two it would spend a call and
-//! ignore what it said.
+//! A Drone that is not converging and then reports when told to is not stopped
+//! at all. Escalating at stage one would make the trigger mean "took a while";
+//! at stage two it would spend a call and ignore what it said.
 //!
-//! **Stage four asks about silence, not about the finding** — [`NoReport`] is
-//! the reason, and a Drone still writing inside its plan re-arms the grace.
+//! **Stage four asks about silence, not about the finding**, which is why the
+//! escalation is not `thrashing` — that is stage two's verdict, and it named
+//! stage four too while one detection produced both. [`NoReport`] stops the
+//! step, and a Drone still writing inside its plan re-arms the grace.
 //!
 //! [`Chain`] holds where a step stands and is cleared when the step changes, so
 //! a tripwire that stays tripped — drift does — buys no second call.
@@ -148,7 +148,7 @@ pub enum Stage {
     /// still is cut on the next window.
     StillWriting { since: Vec<RepoPath> },
     /// The report did not arrive inside the grace and nothing moved. The step
-    /// is stopped and the Job is escalated as `thrashing`.
+    /// is stopped and the Job is escalated as `no_report`.
     Escalated { quiet: NoReport },
     /// The look could not be made. **Nothing escalates**: a machine that cannot
     /// answer must not produce a verdict, in either direction.
@@ -158,7 +158,13 @@ pub enum Stage {
     },
 }
 
-/// `thrashing`, narrowed to what a step may be stopped with.
+/// `no_report`, narrowed to what a step may be stopped with.
+///
+/// **Not `thrashing`, and the difference is which fact stopped the step.** The
+/// look's finding is stale by the time this runs and nothing re-checked it;
+/// what stage four saw is silence against a directive, and a step badged
+/// `churning` tells a person the work was going nowhere when the Drone may
+/// have been writing throughout.
 ///
 /// `Some` for as long as `escalation-triggers.toml` types the row step-level,
 /// which is what lets it reach a step's `last_verdict` and makes restarting
@@ -166,7 +172,7 @@ pub enum Stage {
 /// unwrapped, so a registry change reads as the chain going quiet in one place
 /// instead of as a panic in the daemon.
 pub(crate) fn stops_the_step() -> Option<StepLevelTrigger> {
-    StepLevelTrigger::of(EscalationTrigger::Thrashing)
+    StepLevelTrigger::of(EscalationTrigger::NoReport)
 }
 
 /// What the Drone is told at stage three.
@@ -451,7 +457,7 @@ where
             .await?;
         self.move_job(
             &record,
-            Target::Escalated(EscalationTrigger::Thrashing),
+            Target::Escalated(EscalationTrigger::NoReport),
             Actor::Fleet,
         )
         .await?;
@@ -588,7 +594,9 @@ where
             ),
             // **`no_report` and not `thrashing`.** The finding was made two
             // minutes earlier and nothing re-checked it; what this line saw is
-            // silence, and the log said the word the record says instead.
+            // silence. It said so while the escalation still said `thrashing`,
+            // and the trigger is spelled the same way now — so the log line,
+            // the `forced_report` row and the badge are one claim.
             Stage::Escalated { .. } => {
                 (Level::Warn, "the forced report did not arrive", "no_report")
             }

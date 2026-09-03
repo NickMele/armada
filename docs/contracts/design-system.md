@@ -1441,7 +1441,18 @@ behaves differently, and it does not.
 
 `thrashing` renders as **churning**. The enum name is OS jargon, and
 the distinction that has to survive is busy-but-going-nowhere against
-silent, since `stalled` owns silent. `evidence_suspect` renders as
+silent, since `stalled` owns silent.
+
+`no_report` renders as **went quiet**, and it means the Drone said
+nothing back — never that the Drone did nothing. That word belongs to
+`stalled`, which is a Drone producing nothing at all; this one was
+producing plenty and ignored an instruction to stop and report. The two
+badge apart because a person answers them differently, and a reader who
+collapses them has erased the trigger. It is not **churning** either:
+that is the finding this followed, and the Drone may have been writing
+the whole time it was said of.
+
+`evidence_suspect` renders as
 **evidence disputed**, with Judge in the source field, which keeps
 attribution out of the headline so P5 holds. Avoid "Judge rejected the
 evidence", since `rejected` is already a job state.
