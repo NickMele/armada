@@ -28,6 +28,7 @@ use std::error::Error;
 use std::io;
 
 use adapter_traits::{NotDelivered, SpawnConfigRefused, WorktreeSpecRefused};
+use adapters::RepoUnreadable;
 use core_model::{
     EscalationTrigger, IllegalDroneMove, IllegalStepTransition, IllegalTransition, JobId,
     JobStatus, RedirectAlreadyWaiting, StepId,
@@ -150,6 +151,22 @@ pub enum Adrift {
     /// at all — it deletes the row — so there is no edge for a refusal to
     /// point at, only the status the Job is still standing in.
     NotForgettable { job: JobId, status: JobStatus },
+    /// A reclaim was asked for on a Job that has not reached a terminal status.
+    ///
+    /// **Its own variant beside `NotForgettable`, not a reuse of it.** The two
+    /// acts refuse on the same predicate and name different acts as the answer
+    /// — forgetting takes the record and this takes the disk — and a message
+    /// naming the wrong one sends a person to the wrong button.
+    NotReclaimable { job: JobId, status: JobStatus },
+    /// The repository a Job's worktree is in would not open, so neither half
+    /// of the reclaim was attempted.
+    ///
+    /// **Never a silent success.** A root that is not a repository at all — a
+    /// bare directory where `armada.yml` says a checkout is — comes back here
+    /// naming the repository and what git said about it, because the
+    /// alternative reading is "there was nothing to reclaim" and that is the
+    /// answer a person would act on by never looking again.
+    NotReclaimed { job: JobId, cause: RepoUnreadable },
     /// A redispatch was asked for on a Job that has not stopped.
     ///
     /// **Not an illegal transition**, which is why it is its own variant: the

@@ -16,7 +16,7 @@
 
 import type { BridgeState } from "../shared/bridge";
 import type { ClearOutcome, Draft, Outcome } from "@armada/protocol";
-import type { ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report } from "@armada/protocol";
+import type { ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report, WorktreeReclaimed } from "@armada/protocol";
 import type { Proposed } from "@armada/protocol";
 import { ask, isJobSummary, type Answer } from "./request";
 import { proposeFromRequest as propose } from "./proposing";
@@ -58,6 +58,7 @@ export type Board = {
 type Busy =
   | "already_killing"
   | "already_forgetting"
+  | "already_reclaiming"
   | "already_redirecting"
   | "already_restarting"
   | "already_overruling"
@@ -84,6 +85,12 @@ export class JobCommands {
   private readonly redispatching = new Set<string>();
   private readonly killing = new Set<string>();
   private readonly forgetting = new Set<string>();
+  /**
+   * Jobs with a reclaim in flight. Its own set beside the forget's: the two
+   * acts are halves of one clearing-up and a person may well send both, so one
+   * set would refuse the second press for being the first.
+   */
+  private readonly reclaiming = new Set<string>();
   private readonly redirecting = new Set<string>();
   private readonly restarting = new Set<string>();
   /** Jobs with an override in flight. Its own set: it is its own act. */
@@ -332,6 +339,37 @@ export class JobCommands {
       else failed.push({ jobId, outcome });
     }
     return { cleared, failed };
+  }
+
+  // ---------------------------------------------------------------- reclaiming
+  /**
+   * Give one terminal Job's worktree and branch back, while Fleet is running.
+   *
+   * **Not through `act` either, and not for `forgetJob`'s reason.** That helper
+   * folds a `JobSummary` and this answers with a receipt rather than a row —
+   * the Job is untouched and stays exactly where it is on the board, because
+   * what was reclaimed is disk and not the record. `forgetJob` is the other
+   * half and takes the row.
+   *
+   * **A kept branch comes back as a success.** Fleet always runs this with
+   * `UnmergedWork::Keep` and there is no force on this seam, so a branch
+   * holding commits the base cannot reach survives and says so — which is a
+   * true answer to the act, not a refusal of it. The caller reads
+   * `reclaimed.branch` to find out.
+   */
+  async reclaimWorktree(jobId: string): Promise<Outcome> {
+    if (this.reclaiming.has(jobId)) return { ok: false, why: "already_reclaiming" };
+    const port = this.board.port();
+    if (port === null) return { ok: false, why: "not_connected" };
+
+    this.reclaiming.add(jobId);
+    try {
+      const answer = await ask(port, "POST", route(jobId, "reclaim_worktree"));
+      if (answer.ok !== true) return answer.outcome;
+      return { ok: true, reclaimed: answer.body as WorktreeReclaimed };
+    } finally {
+      this.reclaiming.delete(jobId);
+    }
   }
 
   // --------------------------------------------------------------- resuming

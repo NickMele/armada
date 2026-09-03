@@ -59,6 +59,15 @@ const NOT_RESUMABLE: &str = "fleet.not_resumable";
 /// like the other status conflicts — the machine was never asked, only the
 /// row itself, and `kill_job` is the act on a Job still in flight.
 const NOT_FORGETTABLE: &str = "fleet.not_forgettable";
+/// A reclaim asked for on a Job that has not reached a terminal status. A 409
+/// beside [`NOT_FORGETTABLE`] and not the same code: the two acts refuse on the
+/// same predicate and a client telling a person which one to try next has to be
+/// able to tell them apart.
+const NOT_RECLAIMABLE: &str = "fleet.not_reclaimable";
+/// The repository a Job's worktree is in would not open. **A 500 and never a
+/// 200 with both halves absent** — a client reading "nothing to reclaim" would
+/// draw a Job whose disk is back when the disk is still there.
+const NOT_RECLAIMED: &str = "fleet.not_reclaimed";
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -104,6 +113,20 @@ where
             // still live.
             Adrift::NotForgettable { job, .. } => Refusal::IllegalMove(
                 WireError::raised(NOT_FORGETTABLE, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
+            // A reclaim on a Job that is not yet terminal. The same shape as
+            // the forget above and a code of its own, because the act a person
+            // is told to try instead is not the same one.
+            Adrift::NotReclaimable { job, .. } => Refusal::IllegalMove(
+                WireError::raised(NOT_RECLAIMABLE, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
+            // The repository would not open, so neither half was attempted.
+            // Fleet's own ground failed and nothing about the request is
+            // wrong, which is the 500 this variant is for.
+            Adrift::NotReclaimed { job, .. } => Refusal::Fault(
+                WireError::raised(NOT_RECLAIMED, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
             ),
             // What an act on a stopped step refuses with — plus a redirect

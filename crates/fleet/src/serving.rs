@@ -28,7 +28,7 @@ use ipc::{
     CallArguments, ChangesRequested, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence,
     JobForgotten, JobHistory, JobId, JobList, JobSpend, JobSummary, ManifestId, ManifestSummary,
     ModelChoices, Overruled, ProposeJob, Redirection, Redispatched, Work, WorkflowId,
-    WorkflowSummary,
+    WorkflowSummary, WorktreeReclaimed,
 };
 use store::LoadJobError;
 
@@ -571,6 +571,18 @@ where
             .await
             .map_err(|why| self.refusal(why))?;
         Ok(JobForgotten { job_id })
+    }
+
+    /// The disk, given back, with the record left standing. **Nothing is
+    /// redacted here either** — every field of the answer is about a directory
+    /// and a branch this Job derived, and there is no path in it a person
+    /// clearing their own disk should not be shown.
+    async fn reclaim_worktree(&self, job_id: JobId) -> Result<WorktreeReclaimed, Refusal> {
+        let id = job_id.to_domain();
+        let gave_back = Fleet::reclaim_worktree(self, &id)
+            .await
+            .map_err(|why| self.refusal(why))?;
+        Ok(crate::wire::reclaimed(&id, gave_back))
     }
 
     /// **Two Jobs, redacted separately.** The failed one is now `killed`; the

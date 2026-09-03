@@ -435,6 +435,43 @@ unrelated things to fail at, and a person deleting a finished Job's record
 should not also have to think about a directory.
 """
 
+[operations.reclaim_worktree]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Gives one terminal Job's worktree and branch back"
+notes = """
+**The other half of `forget_job`, and deliberately not part of it.** That row
+says it does not reclaim the worktree or the branch, because one call with two
+unrelated things to fail at is worse than two calls; this is the act it left
+out. A caller wanting both sends both, in either order, and neither one's
+outcome depends on the other.
+
+Every piece of the act already existed and only the CLI could reach it —
+`armada clean`, which refuses while Fleet is running. So the one time a person
+most wants a finished Job's disk back is the one time nothing could give it.
+This is the same `adapters::reclaim`, one Job at a time, from inside the running
+daemon; it is not `armada clean`'s whole-Manifest sweep, which selects every Job
+in a Manifest and is a different act.
+
+**Refused on a Job that is not yet terminal**, for `forget_job`'s reason: there
+is no disk to reclaim while a Drone might still write to it.
+
+**Runs with `UnmergedWork::Keep`**, matching `armada clean` without `--force`.
+A branch holding commits the base cannot reach survives, is named in the answer
+with the count that kept it, and there is no equivalent of `--force` on this
+seam — a live Fleet must not be the thing that deletes work nobody has taken.
+
+The answer carries the two halves separately, because a removed checkout with a
+surviving branch is a real outcome and a single flag would have to lie about
+one of them. A repository that will not open is a refusal naming the repository
+and never a silent success.
+
+Not on the Intervention Ladder, for `kill_job`'s reason: it is destructive
+rather than an act on a Drone, and `helm_access` on a command is the ladder
+rung.
+"""
+
 [operations.propose_job]
 kind = "command"
 transport = "HTTP"
