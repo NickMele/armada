@@ -122,27 +122,40 @@ describe("prose, and who said it", () => {
     expect(row.actor).toBe("drone");
   });
 
-  it("names armada's turn rather than quoting it as the row", () => {
-    // #110. The turn Armada injects came back on the drone's stream as the
-    // same `said` row, so the longest thing on the pane was Armada quoting
-    // itself under the drone's name.
-    const row = drawn(said(BRIEFED, "armada"));
-    expect(row.actor).toBe("armada");
-    expect(row.message).not.toContain("JOB BRIEF");
-  });
-
-  it("keeps every word of it in the payload", () => {
-    // Attributed, never hidden: what a drone was told is what a reader needs
-    // to judge what it did.
-    const row = drawn(said(BRIEFED, "armada"));
-    expect(row.payload.map((line) => line.text)).toEqual(BRIEFED.split("\n"));
-  });
-
   it("carries the wire's kind, so a surface can select the turns fleet sent", () => {
     // Chapter one is `instructed` and not everything in Armada's voice — the
     // two stopped being one set when the echo started arriving attributed.
-    expect(drawn(said(BRIEFED, "armada")).kind).toBe("said");
+    expect(drawn(said("Reading the module first.", "drone")).kind).toBe("said");
     expect(drawn(instructed(BRIEFED)).kind).toBe("instructed");
+  });
+});
+
+describe("the echo of a turn fleet already sent", () => {
+  const BRIEFED = "JOB BRIEF\n\nDispatching two Jobs against the same repo collides.";
+
+  it("withholds an armada-voiced said row the way quota_moved and missed are withheld", () => {
+    // PR 350 attributed it rather than dropping it, so the harness's echo of
+    // Fleet's own turn started arriving as a second row beside the
+    // `instructed` one carrying the same text. Nothing here is a reversal of
+    // #110: the text is still on the transcript, on the row that named an
+    // author first.
+    const rows = entriesOf([said(BRIEFED, "armada")], "plan");
+    expect(rows).toHaveLength(0);
+  });
+
+  it("leaves the drone's own said row alone", () => {
+    // The one row a Drone's prose has. Nothing else on the transcript is its
+    // author, so nothing here withholds it.
+    const rows = entriesOf([said("Reading the module first.", "drone")], "plan");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.message).toBe("Reading the module first.");
+  });
+
+  it("still draws the first-hand instructed row beside the withheld echo", () => {
+    const rows = entriesOf([instructed(BRIEFED), said(BRIEFED, "armada")], "plan");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.kind).toBe("instructed");
+    expect(rows[0]!.payload.map((line) => line.text)).toEqual(BRIEFED.split("\n"));
   });
 });
 

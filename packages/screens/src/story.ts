@@ -107,15 +107,32 @@ export type CutCall = {
 };
 
 /**
- * What a turn from the input channel is called on its row.
+ * Whether a row is the echo PR 350 made visible, and never drawn.
  *
- * **The channel and not the author.** A turn Fleet sent and a continuation
- * nudge the harness wrote arrive on the same channel and the wire cannot tell
- * them apart, so the sentence says what is known — this reached the Drone
- * rather than came from it. `instructed` is the row that names an author, and
- * it is the same text arriving first-hand.
+ * **Withheld the way `quota_moved` and `missed` are** — `crates/ipc/src/
+ * turn.rs`'s `Shown::of` refuses those two before they leave Fleet, and this
+ * is the same refusal one layer up: a row that arrives and is dropped before
+ * it becomes a [`LogRow`], rather than a case `rowOf` special-cases.
+ *
+ * Fleet stamps a `said` row `armada` for exactly one reason — the harness
+ * echoed a turn back off the Drone's own input channel — and Fleet owns that
+ * channel outright: every text it ever puts there goes down as an
+ * `instructed` row first, at the send site itself (`crates/fleet/src/
+ * dispatch.rs`, `converging.rs`, `resume.rs`, `scope.rs`, `silence.rs`,
+ * `questioning.rs`, `reviewing.rs`, `working.rs`, one call per occasion). So
+ * an `armada`-voiced echo never arrives without its first-hand row already on
+ * the transcript, and withholding it loses nothing — the text is on the
+ * transcript from its author, which is `instructed`, not this row.
+ *
+ * **The Drone's own `said` is never withheld on this reasoning**, because
+ * nothing else on the transcript is its author. #110 attributed it rather
+ * than dropped it, and this is not a reversal of that: it is the one row a
+ * Drone's prose has, kept, beside a second row of Fleet's own prose that had
+ * two.
  */
-const REPLAYED = "The session replayed what the Drone was told";
+function isEcho(row: Turn): boolean {
+  return row.saw.event === "said" && row.by === "armada";
+}
 
 /** What a step with no rows says. Ordinary, and never an error. */
 export const NOTHING_YET_ON_THIS_STEP =
@@ -182,6 +199,7 @@ function whyItEnded(because: string): string {
 export function entriesOf(rows: readonly Turn[], stepId: string | undefined): LogRow[] {
   return rows
     .filter((row) => stepId === undefined || row.step === undefined || row.step === stepId)
+    .filter((row) => !isEcho(row))
     .map(rowOf);
 }
 
@@ -272,15 +290,11 @@ function rowOf(row: Turn): LogRow {
         payload: [{ text: saw.call, named: saw.failed ? "failed" : "meta" }],
       };
     case "said":
-      // **Whose prose decides what the row's one line is.** The Drone's own is
-      // the message, because reading it is the point of watching. Armada's is
-      // named and its text goes in the payload — a 1,323-character brief as a
-      // row's headline is the longest thing on the pane, and it is context
-      // rather than the Drone working. Attributed and never dropped: what a
-      // Drone was told is what a reader needs to judge what it did.
-      return actor === "drone"
-        ? { id, at, actor, kind, message: saw.text, payload: lines(saw.text) }
-        : { id, at, actor, kind, message: REPLAYED, payload: lines(saw.text) };
+      // **The only `said` row `entriesOf` still hands this function is the
+      // Drone's own.** `isEcho` withholds an `armada`-voiced one before this
+      // runs, so there is no second prose to name apart from — reading the
+      // Drone's own words is the point of watching, and they are the message.
+      return { id, at, actor, kind, message: saw.text, payload: lines(saw.text) };
     case "refused":
       return {
         id,
