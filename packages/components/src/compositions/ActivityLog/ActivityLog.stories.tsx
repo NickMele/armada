@@ -206,8 +206,10 @@ export const NothingYet: Story = {
 
 // The wire's own sentence for a turn that reached the Drone on the input
 // channel rather than arriving as the Drone's own prose — `REPLAYED` in
-// packages/screens/src/story.ts. Quoted rather than paraphrased; copied here
-// because a component cannot depend on `@armada/screens`.
+// packages/screens/src/story.ts, until `entriesOf` started withholding the
+// row it named. Quoted rather than paraphrased in this file's history, and
+// kept here as the string a `play` proves absent — a component cannot depend
+// on `@armada/screens` to import the constant itself.
 const REPLAYED = "The session replayed what the Drone was told";
 
 const STEP_BRIEF = [
@@ -223,19 +225,29 @@ const STEP_BRIEF = [
 ].join("\n");
 
 /**
- * The same text, on the transcript twice, in the shape it actually arrives:
- * the step's opening `instructed` row, first-hand and with its occasion — and
- * later, once Fleet's turn comes back on the Drone's own input channel, a
- * one-line `said` row reading exactly `REPLAYED`, with that same text folded
- * behind it rather than in front of it.
+ * `TheBriefAndItsEcho` drew a pair: the step's opening `instructed` row,
+ * first-hand and with its occasion, and beside it a one-line `said` row
+ * reading exactly `REPLAYED`, with the same text folded behind it instead of
+ * in front of it — Fleet's own turn, come back off the Drone's input channel.
+ * That story asked whether the second row earned its place beside
+ * `quota_moved` and `missed` without deciding it.
  *
- * **What the reader is being asked to judge.** Whether the second row earns
- * its place beside `quota_moved` and `missed` — kept, or withheld the way
- * those are — is not decided here. This only draws the pair as it now reads
- * in a real stream, so the decision is made against the rendering rather than
- * a description of it.
+ * **It is decided.** `crates/ipc/src/turn.rs`'s `Shown::of` refuses
+ * `quota_moved` and `missed` before either leaves Fleet; `story.ts`'s
+ * `entriesOf` now refuses an `armada`-voiced `said` row the same way, one
+ * layer up, because Fleet owns the Drone's input channel outright and never
+ * puts a turn there without an `instructed` row first — the echo names
+ * nothing the first-hand row does not already carry. This pane never draws
+ * it, so this story draws what a step's stream now reads as: the brief once,
+ * first-hand, with nothing folded behind a second sentence quoting it back.
+ *
+ * **The Drone's own prose is not this.** Its `said` rows are untouched —
+ * #110 attributed them rather than dropping them, and nothing here reverses
+ * that. What is withheld is a row whose only content was already on the
+ * transcript under its own author's name; a Drone's words have no such
+ * duplicate.
  */
-export const TheBriefAndItsEcho: Story = {
+export const TheBriefWithoutItsEcho: Story = {
   args: {
     entries: [
       {
@@ -252,14 +264,22 @@ export const TheBriefAndItsEcho: Story = {
         summary: "Reading the wire's own row shape before touching the story.",
       },
       { id: "3", at: "09:15:07", actor: "drone", summary: "Read", subject: "packages/screens/src/story.ts" },
-      {
-        id: "4",
-        at: "09:15:41",
-        actor: "armada",
-        summary: REPLAYED,
-        payload: STEP_BRIEF,
-      },
-      { id: "5", at: "09:16:20", actor: "drone", summary: "Edit", subject: "ActivityLog.stories.tsx" },
+      { id: "4", at: "09:16:20", actor: "drone", summary: "Edit", subject: "ActivityLog.stories.tsx" },
     ],
+  },
+  /**
+   * The brief opens to its one copy of the text, and `REPLAYED` — the
+   * sentence the withheld row used to carry — is nowhere in the document.
+   * A story that only omitted the fourth entry would pass by construction;
+   * this reads the render rather than the fixture.
+   */
+  play: async ({ canvas, userEvent }) => {
+    const brief = canvas.getByRole("button", { name: /Armada opened the step\./ });
+    await expect(canvas.queryByText(/STEP: Add the echo comparison story/)).toBeNull();
+
+    await userEvent.click(brief);
+    await expect(canvas.getByText(/STEP: Add the echo comparison story/)).toBeVisible();
+
+    await expect(canvas.queryByText(REPLAYED)).toBeNull();
   },
 };
