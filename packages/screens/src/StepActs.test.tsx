@@ -10,15 +10,15 @@
 // is a question about the rendered tree and not about a function's return.
 //
 // The step's own acts are asserted here and the job's are not: the two kills
-// are `Acts`, unchanged, and drawn from the same pointer they always were.
+// are `Acts.tsx`'s, unchanged, and drawn from the same pointer they always were.
 
 import { afterEach, expect, test } from "vitest";
 import { page } from "vitest/browser";
 
 import type { JobSummary } from "@armada/protocol";
-import { StepActs } from "./Acts";
 import { ACT_LABEL } from "./copy";
 import { mount, unmount } from "./mounted";
+import { StepActs } from "./StepActs";
 
 afterEach(unmount);
 

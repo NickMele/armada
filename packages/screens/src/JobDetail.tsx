@@ -65,7 +65,7 @@ import type { Diff, Evidence, Footprint, Observed, Outcome, Turn, Watched } from
 import type { FileReport, JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import type { JobFootprint } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
-import { Acts, StepActs, type ConfirmableAct } from "./Acts";
+import { Acts, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type Calls, type ReadCall } from "./calls";
 import type { OpenArtifact } from "./opening";
 import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
@@ -79,6 +79,7 @@ import { Opening, phasesOf, type Opens } from "./phases";
 import { recourseOf } from "./recovery";
 import { escalation, renderFor } from "./render";
 import { runOf } from "./run";
+import { StepActs } from "./StepActs";
 import { steeringOf } from "./steering";
 import { entriesOf, whyNotWatching } from "./story";
 import { readingOf } from "./reading";
