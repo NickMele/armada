@@ -94,12 +94,20 @@ fn a_drone_that_will_not_answer(calls: u32) -> FakeHarness {
 /// The same Drone, except that it answers every turn injected into it. Its
 /// answer is a terminating event, because coming to rest is what `boundaries`
 /// counts and what the forced report is read against.
+///
+/// **The opening brief is swallowed and not answered**, which is the one line
+/// of shell this whole file rests on. A real Drone works for minutes on the
+/// turn it is briefed with; this one would have finished it in microseconds,
+/// and a run that ends having submitted nothing is what `crate::silence` now
+/// escalates on sight — so the chain would never reach its own stage three.
+/// What the case is about is the answer to the *directive*, and this is what
+/// makes the first turn stop standing in for it.
 fn a_drone_that_answers(calls: u32) -> FakeHarness {
     FakeHarness::running(
         "/bin/sh",
         &[
             "-c",
-            "echo BUSY; while IFS= read -r line; do echo RESTED; done",
+            "echo BUSY; IFS= read -r _; while IFS= read -r line; do echo RESTED; done",
         ],
     )
     .reading("BUSY", called(calls))
@@ -421,10 +429,18 @@ async fn a_look_that_could_not_be_made_escalates_nothing() {
 
 /// **The distinction the trigger turns on.** A Drone that thrashes and then
 /// reports when it is told to has not thrashed by the registry's definition,
-/// and nothing here may escalate it.
+/// and **nothing in this chain may escalate it**.
 ///
 /// The grace is the same two seconds the escalating case uses, so the only
-/// thing standing between this Job and `thrashing` is that the Drone answered.
+/// thing standing between this Job and `no_report` is that the Drone answered.
+///
+/// **What it is held for instead is `stalled`, and by the other vigil.** The
+/// Drone came to rest having submitted nothing, which `crate::silence` reads as
+/// a run that has ended — so what this case asserts is the trigger and the
+/// absent `stopped` row rather than the status, because those are the two
+/// claims that belong to this chain. It asserted `Running` until `#314`, over a
+/// Drone that had just done the last thing it was ever going to do; the poke
+/// ladder reached `stalled` about it six minutes later.
 #[tokio::test]
 async fn a_drone_that_reports_when_it_is_interrupted_has_not_thrashed() {
     let home = TempDir::new();
@@ -442,9 +458,16 @@ async fn a_drone_that_reports_when_it_is_interrupted_has_not_thrashed() {
         said.is_empty(),
         "the Drone came to rest when told to, which is not thrashing: {said:?}"
     );
-    let job = fleet.load(&job).await.unwrap();
-    assert_eq!(job.status(), JobStatus::Running);
-    assert!(job
+    let record = fleet.load(&job).await.unwrap();
+    assert_ne!(
+        fleet.last_reason(&job).await.unwrap(),
+        Some(TransitionReason::Escalation(EscalationTrigger::NoReport)),
+        "the Drone answered the directive, so this chain had nothing to escalate"
+    );
+    // **No `stopped` row**, which is the half of `no_report` a person acts on:
+    // the step is still the Drone's, and the recourse is a redirect into a
+    // session that is still there.
+    assert!(record
         .steps()
         .iter()
         .all(|step| step.state() != StepState::Stopped));

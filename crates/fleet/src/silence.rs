@@ -1,28 +1,28 @@
-//! Catching a Drone that has stopped speaking.
+//! Catching a Drone that has stopped speaking, and one that has stopped.
 //!
 //! # Silence is the signal. Elapsed time is not, and calls cannot be
 //!
 //! Spike 9 measured 31 completed steps: the longest silence inside an honest
-//! one was **79s**, against a step wall clock whose p90 was 437s. **Every stuck
-//! step was quiet, not long** — a `scope` step quiet for 1636 seconds, process
-//! alive and 33 calls made, was killed two seconds before the wall clock would
-//! have fired. So neither tripwire in [`converging`](mod@crate::converging)
-//! reaches this: that one fires on a slow honest step long before it catches a
-//! quiet one, and the call count **cannot fire at all** on a Drone that has
-//! stopped making calls — the counter freezes and reads as merely early.
-//! # Three stages, and no Judge in any of them
+//! one was **79s**, against a step wall clock whose p90 was 437s. **Every
+//! stuck step was quiet, not long.** So neither tripwire in
+//! [`converging`](mod@crate::converging) reaches this, and the call count
+//! **cannot fire at all** on a Drone that has stopped making calls.
 //!
-//! | Stage | What | Costs |
+//! # Two readings, and the ladder is under only one of them
+//!
+//! | Reading | What | Then |
 //! |---|---|---|
-//! | The clock | time since the last Drone event, read off the slot | nothing |
-//! | The poke | "nothing has arrived from you for N minutes" | a turn |
-//! | `stalled` | **once `poke_limit` is spent** | the escalation |
+//! | At rest | the run Armada's last turn began has ended | the escalation, now |
+//! | Quiet | nothing for `quiet_after`, and the run has not ended | a poke, then `stalled` once `poke_limit` is spent |
+//!
+//! **An ended run is not a gap, and poking one was `#314`.** A quiet Drone may
+//! be inside a long command, which is what the poke is for; one that has ended
+//! produces nothing further unless spoken to, and nothing is queued to. That
+//! cost 360 seconds and two paid model runs. What it is held for is
+//! `crate::aftermath`'s three answers, which this road flattened to `stalled`.
 //!
 //! **Two silences are declined outright**: evidence at the gate, and a question
-//! waiting on a person — neither is silent, see `crate::questioning`.
-//! `escalation-triggers.toml` types the trigger and this builds what it says.
-//! **No model is asked anything**: whether the Drone spoke is a count, and *why*
-//! it stopped is another issue's.
+//! waiting on a person — see `crate::questioning`. **No model is asked.**
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
@@ -33,6 +33,7 @@ use core_model::{
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
+use crate::drone::{aftermath, Aftermath, Ending};
 use crate::session::{LiveSession, Occasion};
 use crate::transcript;
 use crate::working::Working;
@@ -112,6 +113,11 @@ pub struct Quiet {
     pub job: JobId,
     pub step: StepId,
     /// How long the Drone had said nothing when this was decided.
+    ///
+    /// **Ordinarily under a second on [`Vigil::AtRest`]**, and that is the
+    /// reading rather than a missing one: what decided that case was the run
+    /// having ended, not a gap, so the gap is however long the turn loop took
+    /// to come round.
     pub after: Duration,
     pub said: Vigil,
 }
@@ -131,6 +137,15 @@ pub enum Vigil {
     /// The pokes are spent and the silence outlived them. The Job is
     /// `escalated`, reason `stalled`.
     Escalated { pokes: u32 },
+    /// The Drone's run ended with nothing submitted and nothing outstanding for
+    /// it, so the Job escalated without a poke being spent.
+    ///
+    /// **It carries the trigger because there are three**, which is the whole
+    /// difference from [`Vigil::Escalated`] above: that one is a Drone nobody
+    /// can classify, because it stopped mid-run and said nothing about it. This
+    /// one ended, and what a run reports on its way out is what tells `silent`,
+    /// `blocked_by_policy` and `stalled` apart.
+    AtRest { found: EscalationTrigger },
 }
 
 impl<H, V, W> Fleet<H, V, W>
@@ -143,12 +158,14 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// Read the silence clock, and act on it where it has run out.
+    /// Read whether the run has ended and how long the silence has run, and act
+    /// on whichever says something.
     ///
-    /// **Cold on an ordinary turn.** The reading is a subtraction over two
-    /// numbers held on the slot, so a Drone that is talking reaches no store, no
+    /// **Cold on an ordinary turn.** Both readings are comparisons over counts
+    /// held on the slot, so a Drone that is talking reaches no store, no
     /// worktree and no model — and neither does a Drone that is quiet for less
-    /// than the threshold.
+    /// than the threshold. Only a Drone that has ended or has outlasted the
+    /// threshold costs the one store read.
     pub(crate) async fn watch_silence(
         &self,
         working: &mut Option<Working>,
@@ -183,6 +200,14 @@ where
         if crate::questioning::waiting_on_an_answer(at_work) {
             at_work.waiting(self.now());
             return Ok(None);
+        }
+        // **And a Drone whose run has ended is not quiet either — it is
+        // finished.** Read before the clock and not after it, because it is not
+        // a question about elapsed time: nothing is outstanding for the process,
+        // so waiting `quiet_after` to ask again would be waiting to be told the
+        // same thing. `Working::at_rest` is the reading, and it is free.
+        if at_work.at_rest() {
+            return self.at_rest(working).await;
         }
         let now = self.now();
         let after = at_work.quiet_for(&now);
@@ -224,6 +249,74 @@ where
             }
             Vigil::Escalated { pokes: spent }
         };
+        self.noted_quiet(&job, &step, after, &said);
+        Ok(Some(Quiet {
+            job,
+            step,
+            after,
+            said,
+        }))
+    }
+
+    /// The Drone has finished, and the Job has to stop being `running`.
+    ///
+    /// **No poke and no threshold**, which is the whole of `#314`: the two
+    /// pokes the ladder would spend here are two model runs asking a process
+    /// that has stopped whether it has stopped.
+    ///
+    /// **The Drone is held and the worktree is untouched**, exactly as
+    /// [`Vigil::Escalated`] holds one. The process is idle rather than gone —
+    /// `#371` is why it is still there — so a redirect still reaches it, and a
+    /// redirect is the cheapest recourse there is: no respawn, and the session
+    /// keeps everything it has read. A person who wants the other road takes
+    /// it through `kill_drone`, which stops the step under `drone_killed` and
+    /// makes the Job restartable. **Stopping the step here would take the
+    /// cheap road away** — `restart_step` refuses while a Drone is still in the
+    /// slot, so a stopped step under a live session is a step offering neither
+    /// act.
+    async fn at_rest(&self, working: &mut Option<Working>) -> Result<Option<Quiet>, Adrift> {
+        let Some(at_work) = working.as_ref() else {
+            return Ok(None);
+        };
+        let (job, step, _) = at_work.standing();
+        let record = self.load(&job).await?;
+        // The registry's own rule again, and it has to be asked here too: a
+        // Job at a human gate or already escalated holds an idle Drone by
+        // design, and an idle Drone is at rest by construction.
+        if record.status() != JobStatus::Running {
+            if let Some(at_work) = working.as_mut() {
+                at_work.waiting(self.now());
+            }
+            return Ok(None);
+        }
+        // **`crate::aftermath`'s three answers, not a fourth.** The reaping
+        // road folds the same events through the same function; what differs
+        // is only that the process has not exited, which changes nothing about
+        // what the run said on its way out.
+        let Aftermath::JobMoves(target) = aftermath(
+            record.status(),
+            &Ending::of(&at_work.heard()),
+            self.left(&job),
+        ) else {
+            return Ok(None);
+        };
+        let found = match &target {
+            Target::Escalated(trigger) => trigger.clone(),
+            // Unreachable while `aftermath` answers `JobMoves` only with an
+            // escalation, and carried rather than unwrapped for
+            // `gate::rule_on`'s reason: an unreachable panic on the turn loop
+            // is Fleet going down mid-Job.
+            _ => return Ok(None),
+        };
+        let after = working
+            .as_mut()
+            .map(|at_work| at_work.quiet_for(&self.now()))
+            .unwrap_or_default();
+        self.move_job(&record, target, Actor::Fleet).await?;
+        if let Some(at_work) = working.as_mut() {
+            at_work.waiting(self.now());
+        }
+        let said = Vigil::AtRest { found };
         self.noted_quiet(&job, &step, after, &said);
         Ok(Some(Quiet {
             job,
@@ -278,6 +371,10 @@ where
                 Level::Warn,
                 "the Drone stayed quiet through every poke it had",
             ),
+            Vigil::AtRest { .. } => (
+                Level::Warn,
+                "the Drone's run ended and nothing had been submitted",
+            ),
         };
         let mut envelope = Envelope::new(
             self.now(),
@@ -294,17 +391,31 @@ where
             FieldValue::Int(i64::from(match said {
                 Vigil::Poked { spent } | Vigil::NotPoked { spent, .. } => *spent,
                 Vigil::Escalated { pokes } => *pokes,
+                // **Zero, and it is the interesting number.** What this line
+                // says is that the escalation was reached without spending the
+                // ladder at all.
+                Vigil::AtRest { .. } => 0,
             })),
         );
-        if let Vigil::Escalated { .. } = said {
-            envelope = envelope.with_field(
-                "found",
-                FieldValue::Str(EscalationTrigger::Stalled.as_wire().to_string()),
-            );
+        // **The trigger the escalation was actually raised under.** It was
+        // hard-coded to `stalled` while one road reached this, and there are
+        // three now — a query looking for every `silent` Drone would have found
+        // none of the ones this vigil classified.
+        if let Some(found) = escalated_as(said) {
+            envelope = envelope.with_field("found", FieldValue::Str(found.as_wire().to_string()));
         }
         // A log line that will not write does not stop the Job, for
         // `converging::noted`'s reason: what happened is on the slot, and the
         // escalation is a transition of its own.
         let _ = transcript::note(&self.host().repo_root, job, &envelope);
+    }
+}
+
+/// Which trigger the vigil escalated under, where it escalated at all.
+fn escalated_as(said: &Vigil) -> Option<EscalationTrigger> {
+    match said {
+        Vigil::Escalated { .. } => Some(EscalationTrigger::Stalled),
+        Vigil::AtRest { found } => Some(found.clone()),
+        Vigil::Poked { .. } | Vigil::NotPoked { .. } => None,
     }
 }
