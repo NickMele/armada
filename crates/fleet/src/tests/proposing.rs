@@ -9,6 +9,9 @@
 //! made, and a plan whose second Job does not start before its first has
 //! landed. So is the one they all exist to prevent: a workflow assigned because
 //! it was the nearest thing on the list.
+//!
+//! What a request's own link resolves to before any of this runs is
+//! [`crate::tests::linking`]'s — a different claim about a different call.
 
 use std::collections::BTreeMap;
 

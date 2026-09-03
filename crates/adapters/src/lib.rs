@@ -31,12 +31,17 @@
 //! see `adapter_traits::AgentHarness` for the three things that split buys, the
 //! first of which is that every confinement property here is a value a test
 //! reads rather than a process a test has to start.
+//!
+//! [`IssueLookup`] is the same split again: it renders the call that
+//! would resolve a bare issue link, and `fleet` is what has a network to run
+//! it with.
 
 mod base;
 mod commit;
 mod delivery;
 mod error;
 mod harness;
+mod issue_lookup;
 mod judge;
 mod mcp;
 mod reclaim;
@@ -52,6 +57,7 @@ pub use harness::{
     ask_tool, checks_tool, dispatch_tool, evidence_server, evidence_tool, scope_tool,
     HarnessRefused, HeadlessAgent,
 };
+pub use issue_lookup::IssueLookup;
 pub use mcp::only_the_evidence_server;
 pub use reclaim::{reclaim, BranchGone, Reclaimed, RepoUnreadable, UnmergedWork, WorktreeGone};
 pub use worktree::GitVcs;

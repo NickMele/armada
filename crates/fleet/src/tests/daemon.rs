@@ -31,7 +31,7 @@ use adapter_traits::{Model, WorktreeSpec};
 use config::{EvidenceType, Manifest};
 use core_model::{JobStatus, StepState};
 use store::Store;
-use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch};
+use testkit::{FakeHarness, FakeJudge, FakeLinkLookup, FakeVcs, FakeWorkProduct, Gate, Sketch};
 use verification::{Claimed, NotClaimed, ShownBy};
 
 use crate::allowance::{Allowance, Micros};
@@ -314,6 +314,10 @@ pub fn fitted_with(
         judge_budget: JudgeBudget::of(Duration::from_secs(5)),
         judge_model: Model::named("the-cheap-model").expect("a model name"),
         proposer_model: Model::named("the-cheap-model").expect("a model name"),
+        // Resolves nothing, so every fixture but `proposing`'s own behaves
+        // exactly as it did before this seam existed. The cases about it
+        // plant their own.
+        links: Arc::new(FakeLinkLookup::resolving_nothing()),
         // Planted, not read. The composition root resolves these from the
         // environment and the adapter; a test that read the same sources would
         // be asserting against a machine rather than against Fleet.

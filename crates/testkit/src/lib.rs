@@ -27,6 +27,7 @@
 mod harness;
 mod job;
 mod judge;
+mod link_lookup;
 mod vcs;
 mod work_product;
 mod workflow;
@@ -34,6 +35,7 @@ mod workflow;
 pub use harness::{FakeHarness, FakeHarnessRefused};
 pub use job::{asked_for, asking};
 pub use judge::{refusal, FakeJudge};
+pub use link_lookup::FakeLinkLookup;
 pub use vcs::{Delivered, Delivering, FakeCommit, FakeVcs, FakeVcsError};
 pub use work_product::{FakeDiffRefused, FakeWorkProduct, Holding, Written};
 pub use workflow::{frozen, modelled, resolved, retried, Gaming, Gate, Scoped, Sketch};
