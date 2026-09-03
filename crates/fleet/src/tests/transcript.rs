@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use adapter_traits::DroneEvent;
+use adapter_traits::{DroneEvent, Speaker};
 use core_model::{DroneId, JobId, StepId, Ulid};
 use testkit::{FakeHarness, FakeWorkProduct};
 
@@ -218,6 +218,7 @@ async fn a_queue_that_fills_drops_rows_rather_than_holding_up_the_loop() {
     let said: Vec<DroneEvent> = (0..4_000)
         .map(|n| DroneEvent::Said {
             text: format!("{n}"),
+            by: Speaker::Drone,
         })
         .collect();
 
@@ -264,6 +265,7 @@ async fn the_history_is_found_through_the_log_that_names_each_transcript() {
     let recording = recording(&at, drone);
     recording.saw(&[DroneEvent::Said {
         text: String::from("what happened earlier"),
+        by: Speaker::Drone,
     }]);
     recording.settled().await;
 
@@ -280,6 +282,49 @@ async fn the_history_is_found_through_the_log_that_names_each_transcript() {
         ipc::Saw::Said {
             text: String::from("what happened earlier"),
         }
+    );
+}
+
+/// **The record's three voices, from a stream that only knows two.** A decoded
+/// event is the Drone's unless the line it came off says otherwise, and the one
+/// kind that says otherwise is prose that arrived on the session's input
+/// channel. #110: without this the brief a step opened with was written down
+/// twice, once as Armada's `instructed` row and once as the Drone's own prose.
+#[tokio::test]
+async fn a_turn_armada_put_into_the_session_is_not_written_down_as_the_drones() {
+    let at = TempDir::new();
+    let recording = recording(&at, "01DRONELLLLLLLLLLLLLLLLLLL");
+    recording.saw(&[
+        DroneEvent::Said {
+            text: String::from("Go on to Implement."),
+            by: Speaker::Armada,
+        },
+        DroneEvent::Said {
+            text: String::from("Reading the module first."),
+            by: Speaker::Drone,
+        },
+    ]);
+    recording.settled().await;
+
+    let (rows, _) = history(
+        &at.path().to_string_lossy(),
+        &JobId::carried(Ulid::carried(JOB)),
+    )
+    .await;
+
+    let voiced: Vec<(ipc::Voice, String)> = rows
+        .iter()
+        .filter_map(|row| match &row.saw {
+            ipc::Saw::Said { text } => Some((row.by, text.clone())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        voiced,
+        vec![
+            (ipc::Voice::Armada, String::from("Go on to Implement.")),
+            (ipc::Voice::Drone, String::from("Reading the module first.")),
+        ]
     );
 }
 
@@ -403,6 +448,7 @@ async fn a_retrys_rows_follow_the_first_attempts_under_the_one_job() {
         let recording = recording(&at, drone);
         recording.saw(&[DroneEvent::Said {
             text: String::from(what),
+            by: Speaker::Drone,
         }]);
         recording.settled().await;
     }
@@ -670,5 +716,58 @@ async fn progress_counts_calls_as_they_arrive_and_never_the_reported_turn_count(
         progress.calls, 69,
         "the harness's turn count is not the live count, and reading it as one \
          is the defect this test exists for"
+    );
+}
+
+/// **A turn Armada sent is not the Drone answering it.**
+///
+/// The count this reads is the baseline `Working::turned_since_redirect`
+/// compares against, and it is taken *before* the instruction goes down the
+/// pipe. The harness replays that instruction on the same stream, so counting
+/// replayed prose as a turn moved the Job off `escalated` the instant the echo
+/// arrived — a person's redirect marked answered before the Drone had read it.
+#[tokio::test]
+async fn a_turn_armada_sent_does_not_count_as_the_drone_having_turned() {
+    let at = TempDir::new();
+    let harness = Arc::new(
+        FakeHarness::running("/bin/sh", &["-c", SAYS_THREE])
+            .reading(
+                "one",
+                vec![DroneEvent::Said {
+                    text: String::from("Go on to Implement."),
+                    by: Speaker::Armada,
+                }],
+            )
+            .reading(
+                "two",
+                vec![DroneEvent::Said {
+                    text: String::from("Reading the module first."),
+                    by: Speaker::Drone,
+                }],
+            )
+            .reading(
+                "three",
+                vec![DroneEvent::Said {
+                    text: String::from("Poking you."),
+                    by: Speaker::Armada,
+                }],
+            ),
+    );
+    let started = start(harness.as_ref(), &config(&at))
+        .await
+        .expect("a shell starts and reads its first turn");
+    let watching = Watching::reading(started.transcript, harness, Vec::new());
+    for _ in 0..200 {
+        if watching.transcript_ended() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+
+    let progress = watching.progress();
+    assert_eq!(progress.heard, 3, "every line is still read and kept");
+    assert_eq!(
+        progress.turned, 1,
+        "only the Drone's own prose is the Drone taking a turn"
     );
 }

@@ -13,7 +13,7 @@
 
 use std::collections::BTreeMap;
 
-use adapter_traits::DroneEvent;
+use adapter_traits::{DroneEvent, Speaker};
 use core_model::{Envelope, FieldValue, StepId, Timestamp};
 use ipc::{Instant, Saw, TranscriptRow};
 use serde::Serialize;
@@ -31,7 +31,7 @@ pub(crate) fn seen(at: &Timestamp, step: &StepId, event: &DroneEvent) -> Transcr
     TranscriptRow {
         ts: Instant::carried(at.as_str()),
         step: Some(ipc::StepId::from(step)),
-        by: ipc::Voice::Drone,
+        by: voice_of(event),
         saw: match event {
             DroneEvent::Started {
                 session,
@@ -59,7 +59,7 @@ pub(crate) fn seen(at: &Timestamp, step: &StepId, event: &DroneEvent) -> Transcr
                 call: call.clone(),
                 failed: *failed,
             },
-            DroneEvent::Said { text } => Saw::Said { text: text.clone() },
+            DroneEvent::Said { text, .. } => Saw::Said { text: text.clone() },
             DroneEvent::Refused {
                 tool,
                 call,
@@ -88,6 +88,29 @@ pub(crate) fn seen(at: &Timestamp, step: &StepId, event: &DroneEvent) -> Transcr
                 why: why.clone(),
             },
         },
+    }
+}
+
+/// Whose row a decoded event is.
+///
+/// **Drone unless the stream itself says otherwise**, which it does for exactly
+/// one kind: prose that arrived on the session's input channel rather than its
+/// output. Everything else in a Drone's stream is the run — a tool result is
+/// the Drone's call answering, and an opening or an ending is its process.
+///
+/// **This is where two values widen onto three.** `adapter_traits::Speaker`
+/// names what a decoder can witness and `ipc::Voice` names what the record
+/// distinguishes; `Voice::Fleet` has no `Speaker` because Fleet acts on the Job
+/// around the Drone and never inside its stream. A `match` rather than a
+/// `From`, because the widening belongs beside the mapping it serves and
+/// neither crate may depend on the other.
+fn voice_of(event: &DroneEvent) -> ipc::Voice {
+    match event {
+        DroneEvent::Said {
+            by: Speaker::Armada,
+            ..
+        } => ipc::Voice::Armada,
+        _ => ipc::Voice::Drone,
     }
 }
 

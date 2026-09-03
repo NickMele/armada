@@ -24,7 +24,7 @@
 //! on [`DroneEvent::Ended`] to put them in, and a gate cannot read one by
 //! mistake.
 
-use adapter_traits::{CallDetail, DroneEvent};
+use adapter_traits::{CallDetail, DroneEvent, Speaker};
 use serde::Deserialize;
 
 /// How much of an unreadable line is carried back.
@@ -80,7 +80,10 @@ pub fn read(line: &str) -> Vec<DroneEvent> {
 
     match read {
         Line::System(system) => vec![system_event(system)],
-        Line::Assistant(message) | Line::User(message) => blocks(message),
+        // **The one place the speaker is known**, and it is the line's own
+        // tag rather than anything the text says. See `Speaker`.
+        Line::Assistant(message) => blocks(message, Speaker::Drone),
+        Line::User(message) => blocks(message, Speaker::Armada),
         Line::Result(result) => vec![DroneEvent::Ended {
             turns: result.num_turns,
             cost_micros: micros(result.total_cost_usd),
@@ -130,13 +133,14 @@ fn system_event(system: SystemLine) -> DroneEvent {
 /// What shipped applied it only to a turn that had nothing else, so a turn that
 /// reasoned and then made a call rendered as the call alone and a reader could
 /// not tell that anything had been taken out.
-fn blocks(message: MessageLine) -> Vec<DroneEvent> {
+fn blocks(message: MessageLine, by: Speaker) -> Vec<DroneEvent> {
     let blocks = match message.message.content {
         // An injected turn is replayed with its content as a plain string.
         // Carried as prose, because that is what it is: Fleet's own words
-        // coming back as the acknowledgement that they landed.
+        // coming back as the acknowledgement that they landed — stamped with
+        // whose, which is #110.
         Content::Prose(text) => {
-            return vec![DroneEvent::Said { text }];
+            return vec![DroneEvent::Said { text, by }];
         }
         Content::Blocks(blocks) => blocks,
     };
@@ -157,7 +161,9 @@ fn blocks(message: MessageLine) -> Vec<DroneEvent> {
                 call: tool_use_id,
                 failed: is_error,
             }),
-            Block::Text { text } => Some(DroneEvent::Said { text }),
+            // **A block list is not the Drone's by construction**: an
+            // injected turn arrives as one wherever the caller wrote blocks.
+            Block::Text { text } => Some(DroneEvent::Said { text, by }),
             // **One row per turn, not one per block.** What a reader is owed is
             // that the turn reasoned, which is a fact about the turn; a turn's
             // working arrives as several blocks, and a row each would put

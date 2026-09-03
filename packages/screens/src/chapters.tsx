@@ -115,7 +115,12 @@ export function chaptersOf({
   onOpenSheet: (which: "log" | "diff") => void;
 }): StepChapter[] {
   const rows = watching === null ? [] : entriesOf(watching.rows, step.step_id);
-  const told = rows.filter((row) => row.actor === "armada");
+  // **The turns Fleet sent, and not everything in Armada's voice.** The two
+  // were the same set until a turn the harness replays onto the Drone's stream
+  // started arriving attributed (#110) — since then each of Armada's turns is
+  // on the transcript twice, once as what Fleet wrote and once as the session
+  // echoing it back. This chapter is the first of those.
+  const told = rows.filter((row) => row.kind === "instructed");
   const opened = told[0];
   const produced = producedIn(kept, readingFor(footprint, job.id));
   // Read once, here, and drawn twice: the same call builds the Submitted
@@ -129,7 +134,8 @@ export function chaptersOf({
       title: "Drone instructions",
       // The turn the step opened with, in the words the Drone was given.
       // Armada's own turns are on the transcript beside the Drone's, so this
-      // is the same stream chapter two draws, filtered to one voice.
+      // is the same stream chapter two draws, filtered to the rows Fleet
+      // authored.
       summary: opened === undefined ? undefined : opened.at,
       preview:
         opened === undefined ? (

@@ -20,7 +20,7 @@
 
 use std::path::PathBuf;
 
-use adapter_traits::{CallDetail, DroneEvent};
+use adapter_traits::{CallDetail, DroneEvent, Speaker};
 
 use crate::transcript::read;
 
@@ -145,6 +145,67 @@ fn a_run_with_an_injected_turn_reads_end_to_end_too() {
         endings > 1,
         "one process emitted more than one terminating event, which is why an \
          ending is a turn boundary and not a lifetime"
+    );
+}
+
+/// **The defect #110 names, on the capture that carries it.** The injected
+/// turn and the Drone's own prose are the same variant, so a pane drawing both
+/// as the Drone put a job brief at the top of the transcript under the Drone's
+/// name. The speaker is on the line that carried it and nothing infers it from
+/// the words.
+#[test]
+fn an_injected_turn_is_armadas_and_the_drones_prose_is_the_drones() {
+    let events = all_of("004-transcript-idle-session.ndjson");
+    let said: Vec<(&str, Speaker)> = events
+        .iter()
+        .filter_map(|event| match event {
+            DroneEvent::Said { text, by } => Some((text.as_str(), *by)),
+            _ => None,
+        })
+        .collect();
+
+    let injected: Vec<&(&str, Speaker)> = said
+        .iter()
+        .filter(|(_, by)| *by == Speaker::Armada)
+        .collect();
+    assert_eq!(
+        injected.len(),
+        2,
+        "the capture carries the opening turn and the one injected mid-run: {said:?}"
+    );
+    assert!(
+        injected[0].0.starts_with("Run the command"),
+        "the opening turn is what a person typed at the session: {injected:?}"
+    );
+    assert!(
+        said.iter().any(|(_, by)| *by == Speaker::Drone),
+        "and the Drone's own answers are still the Drone's: {said:?}"
+    );
+}
+
+/// **A block list is not a Drone's by construction**, which is the reading a
+/// decoder that looked at the content's shape would get wrong. This capture
+/// carries an injected turn written as one `text` block and the Drone's own
+/// answer written the same way, and only the line's own tag tells them apart.
+#[test]
+fn a_turn_injected_as_a_text_block_is_armadas_too() {
+    let said: Vec<(String, Speaker)> = all_of("012-transcript-five-drones-one.ndjson")
+        .into_iter()
+        .filter_map(|event| match event {
+            DroneEvent::Said { text, by } => Some((text, by)),
+            _ => None,
+        })
+        .collect();
+
+    assert!(
+        said.iter()
+            .any(|(text, by)| *by == Speaker::Armada && text.starts_with("Call the whoami tool")),
+        "the instruction arrived as a block and is still not the Drone's: {said:?}"
+    );
+    assert!(
+        said.iter()
+            .any(|(text, by)| *by == Speaker::Drone && text.starts_with("Done.")),
+        "the Drone's own answer arrived as a block as well: {said:?}"
     );
 }
 
