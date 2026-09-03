@@ -83,7 +83,10 @@ pub async fn proposed(
 const LOOKUP_BUDGET: Duration = Duration::from_secs(10);
 
 /// What became of the request's own link, once [`propose_from`] looked.
-enum Enriched {
+///
+/// `pub(crate)`: `redispatch::mint_replacement` runs the same lookup against a
+/// failed Job's own `facts`, so it needs to read what came of it too.
+pub(crate) enum Enriched {
     /// Nothing in the request named a link this could resolve.
     AsGiven,
     /// Resolved, and appended — the URL is never replaced, only added to.
@@ -98,7 +101,7 @@ enum Enriched {
 /// **The one call this makes**, however many Jobs the plan mints — every
 /// member's `facts` carries the same request, so a second fetch per Job would
 /// read the same page twice for nothing.
-async fn enrich(request: &str, links: &(dyn LinkLookup + Send + Sync)) -> Enriched {
+pub(crate) async fn enrich(request: &str, links: &(dyn LinkLookup + Send + Sync)) -> Enriched {
     match links.resolve(request) {
         None => Enriched::AsGiven,
         Some(call) => match resolved(&call).await {
@@ -224,7 +227,10 @@ where
     /// Not surfaced as a refusal: the request goes through exactly as
     /// written, which is what it did before this lookup existed. A person or
     /// a Judge reading the Job later can still see why nothing was added.
-    fn noted_lookup_failed(&self, job: &core_model::JobId, cause: &str) {
+    ///
+    /// `pub(crate)`: shared with `redispatch::mint_replacement`, which notes
+    /// the same kind of failure against the replacement it mints.
+    pub(crate) fn noted_lookup_failed(&self, job: &core_model::JobId, cause: &str) {
         let envelope = Envelope::new(
             self.now(),
             Level::Warn,

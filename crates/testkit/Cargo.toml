@@ -12,6 +12,10 @@ workspace = true
 # dependency of anything that ships.
 [dependencies]
 adapter-traits = { path = "../adapter-traits" }
+# For `FakeJudge::heard` only, which delegates to the shipped reader rather than
+# carrying a second one — a fake with its own parser lets a suite pass against a
+# format the real client cannot read.
+adapters = { path = "../adapters" }
 config = { path = "../config" }
 core-model = { path = "../core-model" }
 # For `wreckage` only. A test that has to clear a row the store cannot rebuild

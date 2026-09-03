@@ -1073,6 +1073,7 @@ name = "testkit"
 version = "0.0.0"
 dependencies = [
  "adapter-traits",
+ "adapters",
  "config",
  "core-model",
  "store",

@@ -23,10 +23,11 @@
 //! the approval gate beside a still-escalated one: visible and recoverable.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
-use core_model::{Job, JobId, JobStatus, NewJob, StepSeed};
+use core_model::{Facts, Job, JobId, JobStatus, NewJob, StepSeed};
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
+use crate::proposal::{enrich, Enriched};
 
 /// What a redispatch left behind: the failed Job, and the one replacing it.
 #[derive(Clone, Debug)]
@@ -95,8 +96,13 @@ where
     /// the failed Job's own `workflow_id` — not copied from the failed Job's
     /// frozen copy. A redispatch is a new Job, and a new Job freezes the
     /// definition as it currently stands, which is how an edit made in
-    /// response to the failure reaches the retry. Everything else is carried
-    /// across unchanged.
+    /// response to the failure reaches the retry.
+    ///
+    /// `facts` gets the same treatment, for the same reason: `propose_from`'s
+    /// own link lookup runs again on the failed Job's `facts`, since a lookup
+    /// that failed the first time (a network blip, an issue that was private
+    /// and is not anymore) is exactly the kind of thing worth retrying rather
+    /// than freezing. Everything else is carried across unchanged.
     async fn mint_replacement(&self, failed: &Job) -> Result<Job, Adrift> {
         let at = self.now();
         // The file may have been renamed or deleted since the original Job was
@@ -110,6 +116,8 @@ where
                     workflow_id: failed.workflow_id().as_str().to_string(),
                 })?;
         let frozen = workflow.frozen();
+        let outcome = enrich(failed.facts().as_str(), self.links().as_ref()).await;
+        let facts = self.re_enriched(failed.facts(), &outcome);
         let new = NewJob {
             id: JobId::carried(self.mint().ulid()),
             title: failed.title().clone(),
@@ -133,7 +141,7 @@ where
             write_targets: failed.write_targets().cloned(),
             subject: failed.subject().cloned(),
             redispatched_from: Some(failed.id().clone()),
-            facts: failed.facts().clone(),
+            facts,
             scope_revisions: failed.scope_revisions().to_vec(),
             attachments: failed.attachments().to_vec(),
         };
@@ -157,6 +165,27 @@ where
             actor: core_model::Actor::Human.into(),
             at: (&at).into(),
         }));
+        if let Enriched::Failed(cause) = &outcome {
+            self.noted_lookup_failed(job.id(), cause);
+        }
         Ok(job)
+    }
+
+    /// `failed`'s own facts, re-run through the same link lookup
+    /// `propose_from` used to mint it, once more for a retry.
+    ///
+    /// **Idempotent against a Job already carrying resolved text.** A link is
+    /// never removed once resolved (`Enriched::Resolved`'s own doc comment),
+    /// so a second or third redispatch finds the same link and would resolve
+    /// and append it again for nothing — or, worse, twice. Checking that the
+    /// resolved text is already present is cheaper than tracking which link
+    /// was already fetched, and it is the one check that stays correct even
+    /// if the fetch itself is what changed between redispatches.
+    fn re_enriched(&self, facts: &Facts, outcome: &Enriched) -> Facts {
+        match outcome {
+            Enriched::AsGiven | Enriched::Failed(_) => facts.clone(),
+            Enriched::Resolved(text) if facts.as_str().contains(text.as_str()) => facts.clone(),
+            Enriched::Resolved(text) => Facts::new(format!("{}\n\n{text}", facts.as_str())),
+        }
     }
 }
