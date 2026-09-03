@@ -42,6 +42,8 @@
 #                     by reading Fleet, never by this field.
 #   open_questions  - questions the source left open against this row
 #   notes           - the reasoning the row's page carried
+#   why             - why the row exists at all, and what was refused in its
+#                     place. Carried by the rows argued in this repository
 
 [triggers.blocked_by_policy]
 kind = "Trigger"
@@ -187,6 +189,28 @@ Nothing failed — the loop simply did not converge, which is why the count that
 Because `retry_count` resets on each loop return, a looping step can burn `retry_limit × iteration_cap` attempts before this fires, and `completed_failed` is unreachable on such a step — `loop_cap` always gets there first. The aggregate attempt cap in `default_gate_policy` bounds that.
 """
 
+[triggers.no_report]
+kind = "Trigger"
+level = "Step"
+meaning = "A step found not to be converging was told to stop and report where it stood, and no report arrived."
+in_code = ""
+notes = """
+**Said nothing back, and never did nothing.** `stalled` is the Drone that produced nothing at all, and its `silent` sub-kind is the Drone that called no tool — both belong to the liveness clock and both are Job-level. This is the opposite Drone: the one this was minted for wrote five files in the ninety seconds after the directive and answered none of it. A reader who collapses the two has erased the trigger, and the badge would send a person hunting for a dead process instead of an ignored instruction.
+
+Not `thrashing`, which is the finding this follows rather than the thing this records. The mid-step look finds a step not converging and injects the directive; that is the whole of `thrashing` now. This fires one stage later and on a different fact — silence against the directive — and the two want opposite responses: a Drone that ignored an instruction while still doing the work can be redirected, a Drone that has run out of road cannot. `hatch_unbidden`'s notes hold the same principle, that a trigger standing in place of `thrashing` gets a row of its own.
+
+A Drone still writing inside its declared plan is not this. `crates/fleet/src/converging.rs` re-reads the declared paths when the grace expires and re-arms the deadline where they have grown, so a late answer is not silence. What this names is the Drone that has neither answered nor moved.
+
+Step-level, like `thrashing`: the grace is measured against one step, and the finding quoted on that step's `forced_report` row is that step's work product.
+
+`in_code` is empty rather than "Not yet" for `gate_undecided`'s reason — the row was authored here and has no source value to carry.
+"""
+why = """
+Both cases badged as `churning`, and a person reading `churning` on a step whose Drone was still writing is being told the work was going nowhere. That was the one thing the record could not support: the mid-step finding was minutes old by the time the step stopped and nothing re-checked it, so what the step was stopped for was the silence and not the finding.
+
+A sub-kind under `thrashing` was the alternative and is refused for `silent`'s reason read backwards. A sub-kind renders as its parent, so `escalation_reason` would still say `thrashing` on the wire and `churning` on the badge, which is the whole of what is being fixed.
+"""
+
 [triggers.no_worktree]
 kind = "Trigger"
 level = "Job"
@@ -286,12 +310,14 @@ Job-level: a Drone that stopped producing anything at all is a fact about the Dr
 [triggers.thrashing]
 kind = "Trigger"
 level = "Step"
-meaning = "Active but not converging, and the forced report also failed."
+meaning = "Active but not converging, as the mid-step look found it."
 in_code = "Not yet"
 notes = """
 Detected mechanically — turn count against the step norm, wall-clock against an expected ceiling, and where `declare_plan_at: step_start` is set, a file-plan-versus-live-diff check. No model judgement is needed to *detect* it.
 
-A mid-step Judge pass runs only once a mechanical trigger fires, never on a schedule. It judges the work product so far, never the Drone's turns. If it finds thrashing, the Drone is force-interrupted with a "stop, report current state now" directive; this trigger fires when that also fails.
+A mid-step Judge pass runs only once a mechanical trigger fires, never on a schedule. It judges the work product so far, never the Drone's turns. If it finds thrashing, the Drone is force-interrupted with a "stop, report current state now" directive, and this trigger is the finding that directive is injected on.
+
+**Whether the directive was answered is a second detection and a second row.** It read "and the forced report also failed" while one detection produced both; a report that never arrives is `no_report` now, and the two take opposite responses.
 
 Step-level: it is measured against a step's turn count and a step's wall-clock, and the mid-step Judge look judges that step's work product.
 

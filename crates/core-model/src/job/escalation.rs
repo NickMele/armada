@@ -88,6 +88,25 @@ pub enum EscalationTrigger {
     /// loop did not converge, which is why the count that tripped it is
     /// `iteration_count` and never the retry budget.
     LoopCap,
+    /// A step found not to be converging was told to stop and report where it
+    /// stood, and no report arrived.
+    ///
+    /// **It says the Drone answered nothing, never that the Drone did
+    /// nothing.** [`Stalled`](Self::Stalled) and its
+    /// [`Silent`](Self::Silent) sub-kind are the Drone that produced nothing at
+    /// all, which is the liveness clock's finding and Job-level; this is the
+    /// Drone that was producing plenty and ignored the instruction. Collapsing
+    /// the two erases the trigger, and sends whoever reads the badge looking
+    /// for a dead process.
+    ///
+    /// Not [`Thrashing`](Self::Thrashing), which is the finding this follows.
+    /// That one is the mid-step look deciding a step is not converging, and it
+    /// is what the directive is injected on; this is the separate stage that
+    /// asks whether the directive was answered. They took one name while one
+    /// detection produced both, and they take opposite responses. A Drone
+    /// still writing inside its declared plan is neither — the grace re-arms
+    /// instead, so a late answer is not silence.
+    NoReport,
     /// Git or the filesystem could not put the Job in a worktree work could
     /// start in: none was created, the attachments would not copy into one,
     /// the one an earlier step used has been reclaimed, or the branch would
@@ -138,7 +157,12 @@ pub enum EscalationTrigger {
     /// Fleet has no signal despite the Job having been active. Detected by the
     /// liveness timer, which runs only while the Job is `running`.
     Stalled,
-    /// Active but not converging, and the forced report also failed.
+    /// Active but not converging, as the mid-step look found it.
+    ///
+    /// It read "and the forced report also failed" while one detection
+    /// produced both. Whether the Drone answered the directive is
+    /// [`NoReport`](Self::NoReport)'s, and the step is stopped under that name
+    /// rather than this one.
     Thrashing,
     /// Everything the spawn needed resolved and the machine still would not
     /// start it: the transcript would not open on disk, or the harness refused
@@ -233,6 +257,7 @@ impl StepLevelTrigger {
             | EscalationTrigger::CheckTimeout
             | EscalationTrigger::EvidenceTooLarge
             | EscalationTrigger::LoopCap
+            | EscalationTrigger::NoReport
             | EscalationTrigger::Thrashing => false,
             EscalationTrigger::DependencyFailed
             | EscalationTrigger::FanOut
@@ -263,6 +288,7 @@ impl EscalationTrigger {
         EscalationTrigger::HatchUnbidden,
         EscalationTrigger::Interrupted,
         EscalationTrigger::LoopCap,
+        EscalationTrigger::NoReport,
         EscalationTrigger::NoWorktree,
         EscalationTrigger::NotConfigurable,
         EscalationTrigger::NotPrepared,
@@ -287,6 +313,7 @@ impl EscalationTrigger {
             EscalationTrigger::HatchUnbidden => "hatch_unbidden",
             EscalationTrigger::Interrupted => "interrupted",
             EscalationTrigger::LoopCap => "loop_cap",
+            EscalationTrigger::NoReport => "no_report",
             EscalationTrigger::NoWorktree => "no_worktree",
             EscalationTrigger::NotConfigurable => "not_configurable",
             EscalationTrigger::NotPrepared => "not_prepared",
@@ -338,6 +365,7 @@ impl EscalationTrigger {
             | EscalationTrigger::GateFailure
             | EscalationTrigger::GateUndecided
             | EscalationTrigger::LoopCap
+            | EscalationTrigger::NoReport
             | EscalationTrigger::Thrashing => TriggerLevel::Step,
             EscalationTrigger::DependencyFailed
             | EscalationTrigger::FanOut

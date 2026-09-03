@@ -407,6 +407,14 @@ status_token = "--status-escalated"
 vocabulary = "Escalation reason"
 in_code = "Not yet"
 
+[verbs.escalation_reason.no_report]
+verb = "went quiet"
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = ""
+notes = "**It means the Drone said nothing back, never that the Drone did nothing.** `stalled`, `silent` and `hatch_unbidden` all draw the verb `stalled`, and `escalation-triggers.toml` gives that word to a Drone that produced nothing at all; the Drone this was minted for was producing plenty and answered none of it. A reader who collapses the two has erased the trigger, and this note is where the distinction is kept from eroding. Lowercase and in the plain past, the pattern `churning`, `interrupted` and `stopped at the gate` already use. Not `churning`, which is `thrashing`'s: that is the finding this one followed, and drawing them alike is the confusion the split exists to end. No glyph, and not for want of looking — `octagon-alert` is reserved to `stalled` and is the loudest shape in the set, `refresh-cw` is `churning`'s, `bell` is escalations-as-interrupt and its own note keeps it clear of `octagon-alert`, and `message-square` is Navigation's under a note banning metaphor outside proper nouns. Nothing in `packages/icons/icons.toml` claims the right thing, so the glyph is filed open as `[no-report-glyph]` on `docs/contracts/iconography.md` rather than borrowed. It draws a verb alone beside `blocked_by_policy`, `check_timeout`, `dependency_failed`, `evidence_too_large`, `no_worktree`, `not_configurable`, `not_prepared`, `resource_exhausted` and `would_not_start`."
+
 [verbs.escalation_reason.no_worktree]
 verb = "the worktree was unusable"
 icon = ""
@@ -460,7 +468,7 @@ icon = "refresh-cw"
 status_token = "--status-escalated"
 vocabulary = "Escalation reason"
 in_code = "In code"
-notes = "The enum name is OS jargon. What has to survive is busy-but-going-nowhere against silent, and stalled already owns silent."
+notes = "The enum name is OS jargon. What has to survive is busy-but-going-nowhere against silent, and stalled already owns silent. It stopped covering the step told to report that never answered: that is `no_report`, drawn `went quiet`, and a Drone still writing when it was cut is not going nowhere."
 
 [verbs.escalation_reason.would_not_start]
 verb = "the Drone would not start"

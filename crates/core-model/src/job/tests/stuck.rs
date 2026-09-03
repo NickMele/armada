@@ -190,6 +190,31 @@ fn a_restart_and_a_redirect_are_never_offered_together() {
     }
 }
 
+/// **A new trigger that changed what a person may do would be the defect.**
+/// `no_report` was split out of `thrashing` so the two read differently on the
+/// Board; nothing about them behaves differently, and the acts are the proof.
+///
+/// The standing is `drone_gone` because that is the one the chain leaves: the
+/// convergence chain is the single place Fleet stops a Drone itself, so by the
+/// time anybody classifies this Job the slot is empty.
+#[test]
+fn going_quiet_offers_exactly_what_churning_offers() {
+    let quiet = classify(&stopped_on(EscalationTrigger::NoReport), drone_gone());
+    let churning = classify(&stopped_on(EscalationTrigger::Thrashing), drone_gone());
+
+    assert_eq!(quiet.stopped_by(), Some(EscalationTrigger::NoReport));
+    assert_eq!(quiet.step(), Some(&StepId::new("repro")));
+    assert_eq!(
+        quiet.recourse(),
+        [Recourse::RestartStep, Recourse::Redispatch]
+    );
+    assert_eq!(quiet.recourse(), churning.recourse());
+    assert!(
+        !quiet.admits(Recourse::OverrideVerdict),
+        "nothing weighed the work, so there is no verdict to overrule"
+    );
+}
+
 /// A gate that could not decide is asked again, and is never overruled: there
 /// is no ruling to disagree with.
 #[test]
