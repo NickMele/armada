@@ -498,6 +498,13 @@ impl EvidenceType {
 }
 
 impl AdvanceGate {
+    /// Every variant, in the order the tiers run.
+    pub const ALL: &'static [AdvanceGate] = &[
+        AdvanceGate::Auto,
+        AdvanceGate::AutoIfJudgePasses,
+        AdvanceGate::HumanAlways,
+    ];
+
     pub fn as_wire(&self) -> &'static str {
         match self {
             AdvanceGate::Auto => "auto",

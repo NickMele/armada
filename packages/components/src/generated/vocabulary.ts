@@ -12,7 +12,7 @@
 // one is listed in `GAPS` so a surface can say what it could not render instead
 // of inventing copy for it.
 
-import { Archive, ArrowUpToLine, Ban, Check, CircleCheck, CircleDot, CircleMinus, CircleX, Clock, Cpu, Eye, FileQuestionMark, Link, OctagonAlert, Power, RefreshCw, ShieldCheck, ShieldMinus, ShieldOff, ShieldX, Split, Stamp, Terminal, Unplug, UserCheck, X } from "lucide-react";
+import { Archive, ArrowUpToLine, Ban, Check, CircleCheck, CircleDot, CircleMinus, CircleX, Clock, Cpu, Eye, FileQuestionMark, Flag, Link, OctagonAlert, Power, RefreshCw, RotateCw, ShieldCheck, ShieldMinus, ShieldOff, ShieldX, Split, Stamp, Terminal, Unplug, UserCheck, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /** How one variant reads. `null` where the registry carries no answer. */
@@ -108,11 +108,22 @@ export const CRITERION_VERDICT_JUDGE: Readonly<Record<string, Rendering | undefi
   "not_met": { verb: "refused", icon: CircleX, badgeStatus: null, statusToken: null },
 };
 
-/** `step_state` — **no rows in `enum-verbs.toml`.** Every variant is a gap. */
-export const STEP_STATE: Readonly<Record<string, Rendering | undefined>> = {};
+/** `step_state`, keyed by the wire value. */
+export const STEP_STATE: Readonly<Record<string, Rendering | undefined>> = {
+  "advanced": { verb: "advanced", icon: Check, badgeStatus: null, statusToken: null },
+  "awaiting_human": { verb: "awaiting review", icon: Eye, badgeStatus: null, statusToken: null },
+  "not_started": { verb: "not started", icon: null, badgeStatus: null, statusToken: null },
+  "retrying": { verb: "retrying", icon: RotateCw, badgeStatus: null, statusToken: null },
+  "running": { verb: "running", icon: CircleDot, badgeStatus: null, statusToken: null },
+  "stopped": { verb: "stopped", icon: Flag, badgeStatus: null, statusToken: null },
+};
 
-/** `advance_gate` — **no rows in `enum-verbs.toml`.** Every variant is a gap. */
-export const ADVANCE_GATE: Readonly<Record<string, Rendering | undefined>> = {};
+/** `advance_gate`, keyed by the wire value. */
+export const ADVANCE_GATE: Readonly<Record<string, Rendering | undefined>> = {
+  "auto": { verb: "the checks decide", icon: null, badgeStatus: null, statusToken: null },
+  "auto_if_judge_passes": { verb: "the checks decide, unless the Judge objects", icon: null, badgeStatus: null, statusToken: null },
+  "human_always": { verb: "a person answers", icon: null, badgeStatus: null, statusToken: null },
+};
 
 /** `gaming_pattern`, keyed by the wire value. */
 export const GAMING_PATTERN: Readonly<Record<string, Rendering | undefined>> = {
@@ -125,6 +136,47 @@ export const GAMING_PATTERN: Readonly<Record<string, Rendering | undefined>> = {
   "no_findings_on_substantial_diff": { verb: "a review that found nothing in a substantial change", icon: null, badgeStatus: null, statusToken: null },
   "findings_not_tied_to_changed_lines": { verb: "findings that name nothing this change touched", icon: null, badgeStatus: null, statusToken: null },
   "findings_generic": { verb: "findings that would fit any change", icon: null, badgeStatus: null, statusToken: null },
+};
+
+/** `evidence_type`, keyed by the wire value. */
+export const EVIDENCE_TYPE: Readonly<Record<string, Rendering | undefined>> = {
+  "diff": { verb: "a diff", icon: null, badgeStatus: null, statusToken: null },
+  "failing_test": { verb: "a failing test", icon: null, badgeStatus: null, statusToken: null },
+  "facts_note": { verb: "a note of facts", icon: null, badgeStatus: null, statusToken: null },
+  "test_suite_run": { verb: "a test suite run", icon: null, badgeStatus: null, statusToken: null },
+  "bundle": { verb: "the earlier steps' evidence, assembled", icon: null, badgeStatus: null, statusToken: null },
+  "document": { verb: "a document", icon: null, badgeStatus: null, statusToken: null },
+};
+
+/** `change_kind`, keyed by the wire value. */
+export const CHANGE_KIND: Readonly<Record<string, Rendering | undefined>> = {
+  "added": { verb: "added", icon: null, badgeStatus: null, statusToken: null },
+  "modified": { verb: "modified", icon: null, badgeStatus: null, statusToken: null },
+  "deleted": { verb: "deleted", icon: null, badgeStatus: null, statusToken: null },
+  "renamed": { verb: "renamed", icon: null, badgeStatus: null, statusToken: null },
+  "copied": { verb: "copied", icon: null, badgeStatus: null, statusToken: null },
+  "type_changed": { verb: "type changed", icon: null, badgeStatus: null, statusToken: null },
+  "conflicted": { verb: "conflicted", icon: null, badgeStatus: null, statusToken: null },
+  "unreadable": { verb: "could not be read", icon: null, badgeStatus: null, statusToken: null },
+};
+
+/** `movement_kind`, keyed by the wire value. */
+export const MOVEMENT_KIND: Readonly<Record<string, Rendering | undefined>> = {
+  "status": { verb: "status", icon: null, badgeStatus: null, statusToken: null },
+  "step": { verb: "step", icon: null, badgeStatus: null, statusToken: null },
+  "drone": { verb: "drone", icon: null, badgeStatus: null, statusToken: null },
+};
+
+/** `drone_presence`, keyed by the wire value. */
+export const DRONE_PRESENCE: Readonly<Record<string, Rendering | undefined>> = {
+  "drone_spawned": { verb: "a drone started", icon: null, badgeStatus: null, statusToken: null },
+  "drone_exited": { verb: "a drone left", icon: null, badgeStatus: null, statusToken: null },
+};
+
+/** `silence`, keyed by the wire value. */
+export const SILENCE: Readonly<Record<string, Rendering | undefined>> = {
+  "drone_ended": { verb: "the drone that was writing has finished", icon: null, badgeStatus: null, statusToken: null },
+  "nothing_writing": { verb: "no drone is writing this transcript", icon: null, badgeStatus: null, statusToken: null },
 };
 
 /** Where a Job is in its life, from `job-statuses.toml`. Not a rendering. */
@@ -187,6 +239,12 @@ export type Gap = {
 
 export const GAPS: readonly Gap[] = [
   { vocabulary: "job_status", variant: "escalated", missing: ["verb", "icon"] },
+  { vocabulary: "step_state", variant: "advanced", missing: ["token"] },
+  { vocabulary: "step_state", variant: "awaiting_human", missing: ["token"] },
+  { vocabulary: "step_state", variant: "not_started", missing: ["icon", "token"] },
+  { vocabulary: "step_state", variant: "retrying", missing: ["token"] },
+  { vocabulary: "step_state", variant: "running", missing: ["token"] },
+  { vocabulary: "step_state", variant: "stopped", missing: ["token"] },
   { vocabulary: "queued_reason", variant: "over_budget", missing: ["icon"] },
   { vocabulary: "admission_hold", variant: "concurrency_bound", missing: ["icon"] },
   { vocabulary: "admission_hold", variant: "cpu", missing: ["icon"] },
@@ -218,4 +276,28 @@ export const GAPS: readonly Gap[] = [
   { vocabulary: "gaming_pattern", variant: "no_findings_on_substantial_diff", missing: ["icon", "token"] },
   { vocabulary: "gaming_pattern", variant: "findings_not_tied_to_changed_lines", missing: ["icon", "token"] },
   { vocabulary: "gaming_pattern", variant: "findings_generic", missing: ["icon", "token"] },
+  { vocabulary: "advance_gate", variant: "auto", missing: ["icon", "token"] },
+  { vocabulary: "advance_gate", variant: "auto_if_judge_passes", missing: ["icon", "token"] },
+  { vocabulary: "advance_gate", variant: "human_always", missing: ["icon", "token"] },
+  { vocabulary: "evidence_type", variant: "diff", missing: ["icon", "token"] },
+  { vocabulary: "evidence_type", variant: "failing_test", missing: ["icon", "token"] },
+  { vocabulary: "evidence_type", variant: "facts_note", missing: ["icon", "token"] },
+  { vocabulary: "evidence_type", variant: "test_suite_run", missing: ["icon", "token"] },
+  { vocabulary: "evidence_type", variant: "bundle", missing: ["icon", "token"] },
+  { vocabulary: "evidence_type", variant: "document", missing: ["icon", "token"] },
+  { vocabulary: "change_kind", variant: "added", missing: ["icon", "token"] },
+  { vocabulary: "change_kind", variant: "modified", missing: ["icon", "token"] },
+  { vocabulary: "change_kind", variant: "deleted", missing: ["icon", "token"] },
+  { vocabulary: "change_kind", variant: "renamed", missing: ["icon", "token"] },
+  { vocabulary: "change_kind", variant: "copied", missing: ["icon", "token"] },
+  { vocabulary: "change_kind", variant: "type_changed", missing: ["icon", "token"] },
+  { vocabulary: "change_kind", variant: "conflicted", missing: ["icon", "token"] },
+  { vocabulary: "change_kind", variant: "unreadable", missing: ["icon", "token"] },
+  { vocabulary: "movement_kind", variant: "status", missing: ["icon", "token"] },
+  { vocabulary: "movement_kind", variant: "step", missing: ["icon", "token"] },
+  { vocabulary: "movement_kind", variant: "drone", missing: ["icon", "token"] },
+  { vocabulary: "drone_presence", variant: "drone_spawned", missing: ["icon", "token"] },
+  { vocabulary: "drone_presence", variant: "drone_exited", missing: ["icon", "token"] },
+  { vocabulary: "silence", variant: "drone_ended", missing: ["icon", "token"] },
+  { vocabulary: "silence", variant: "nothing_writing", missing: ["icon", "token"] },
 ];

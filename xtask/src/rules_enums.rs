@@ -83,6 +83,18 @@ const ENUMS: &[EnumSource] = &[
         name: "GamingPattern",
         path: "crates/core-model/src/job/gaming.rs",
     },
+    EnumSource {
+        name: "AdvanceGate",
+        path: "crates/core-model/src/job/workflow.rs",
+    },
+    EnumSource {
+        name: "EvidenceType",
+        path: "crates/core-model/src/job/workflow.rs",
+    },
+    EnumSource {
+        name: "DronePresence",
+        path: "crates/core-model/src/job/drone.rs",
+    },
 ];
 
 /// A registry table, and the enum whose wire spellings its keys must be.
@@ -186,6 +198,39 @@ const PAIRINGS: &[Pairing] = &[
         prefix: "verbs.gaming_pattern.",
         enum_name: "GamingPattern",
     },
+    // The inner half of the two-level machine. `step-states.toml` is paired
+    // above and this is the second half of the same set — a state present
+    // there and absent here is a rail row rendering its own wire spelling,
+    // which is what these four rows were added to end.
+    Pairing {
+        registry: "enum-verbs.toml",
+        prefix: "verbs.step_state.",
+        enum_name: "StepState",
+    },
+    // What it takes to advance past a step, and it has no registry file of its
+    // own: `workflowdef-fields.toml` names the schema's four forms as prose,
+    // three of which reach an enum at all. The rail draws one of these words on
+    // every gated step.
+    Pairing {
+        registry: "enum-verbs.toml",
+        prefix: "verbs.advance_gate.",
+        enum_name: "AdvanceGate",
+    },
+    // What a step produces as its work product, and it has no registry file of
+    // its own: `job-fields.toml`'s `evidence_type` row names the six as prose.
+    Pairing {
+        registry: "enum-verbs.toml",
+        prefix: "verbs.evidence_type.",
+        enum_name: "EvidenceType",
+    },
+    // Whether a Drone arrived on a step or left it. No registry file of its own
+    // either — `assigned_drone` is a pointer with no states, so the verbs are
+    // the only place the two moments are spelled key by key.
+    Pairing {
+        registry: "enum-verbs.toml",
+        prefix: "verbs.drone_presence.",
+        enum_name: "DronePresence",
+    },
 ];
 
 /// The vocabularies `enum-verbs.toml` declares in its own header.
@@ -196,6 +241,11 @@ const PAIRINGS: &[Pairing] = &[
 /// Checked because a typo in an outer key — `job_statuses` for `job_status` —
 /// does not fail the pairing above, it empties it. A comparison that silently
 /// has nothing to compare is the failure this whole rule exists to end.
+///
+/// **Being on this list is not being paired**, and the registry's own header
+/// says which are which. `change_kind`, `movement_kind` and `silence` cannot be
+/// paired as things stand: their enums are `crates/ipc`'s and carry a serde
+/// derive instead of the `ALL` and `as_wire` pair [`read_enum`] reads.
 const VOCABULARIES: &[&str] = &[
     "job_status",
     "queued_reason",
@@ -203,11 +253,18 @@ const VOCABULARIES: &[&str] = &[
     "resumption",
     "escalation_reason",
     "step_verdict",
+    "step_state",
+    "advance_gate",
     "check_outcome",
     "criterion_verdict_check",
     "criterion_verdict_judge",
     "criterion_verdict_attested",
     "gaming_pattern",
+    "evidence_type",
+    "change_kind",
+    "movement_kind",
+    "drone_presence",
+    "silence",
     "origin",
 ];
 
