@@ -296,6 +296,7 @@ impl Daemon for FakeDaemon {
             redispatched_from: None,
             // No slot, so nothing is waiting. See `Daemon::ask_question`.
             asking: false,
+            landed: None,
         };
         self.jobs.lock().expect("not poisoned").push(job.clone());
         self.events.publish(Event::JobCreated(JobCreated {

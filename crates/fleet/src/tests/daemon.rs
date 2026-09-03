@@ -42,6 +42,7 @@ use crate::evidence::Call;
 use crate::gate::{CheckBudget, Ruling};
 use crate::headroom::{Bytes, Headroom, Polling, Spare};
 use crate::judging::JudgeBudget;
+use crate::noticing::Noticing;
 use crate::silence::Liveness;
 use crate::slots::Concurrency;
 pub use crate::tests::planted::{Counted, Ticking};
@@ -293,6 +294,8 @@ pub fn fitted_with(
         // No interval, so a fixture that moves the machine sees it move. The
         // one case about the interval sets its own.
         polling: Polling::every(Duration::ZERO),
+        // Never due, so no test asks a fake forge anything unless it says to.
+        noticing: Noticing::every(Duration::from_secs(86_400)),
         // **Far more than any fixture spends**, so no test but `allowance`'s
         // own is ever held back by the budget. The fakes report a `cost_micros`
         // of zero, and a cap set at the shipped number would still be reached

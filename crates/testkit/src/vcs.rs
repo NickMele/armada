@@ -29,7 +29,7 @@ use std::fmt;
 use std::sync::Mutex;
 
 use adapter_traits::{
-    Base, BroughtUpToDate, Change, CommitTime, Committed, Delivery, Landed, NotDelivered, Opened,
+    Base, BroughtUpToDate, Change, CommitTime, Committed, Delivery, Landing, NotDelivered, Opened,
     Pushed, Review, Standing, Vcs, Worktree, WorktreeSpec,
 };
 
@@ -111,7 +111,7 @@ pub enum Delivered {
     /// as well as answered**, because the whole design of the asking is how
     /// rarely it happens — a test that could not see the calls could not tell a
     /// sweep that asks once from one that asks every turn.
-    AskedWhatBecameOfIt { branch: String },
+    AskedWhatBecameOfIt { pull_request: String },
 }
 
 /// What the fake's version control looks like from the delivery side.
@@ -132,7 +132,7 @@ pub struct Delivering {
     /// What the forge says became of the pull request afterwards. `Unknown` by
     /// default, which is the answer on a machine with no forge and the one a
     /// test gets unless it says a merge happened.
-    pub landed: Landed,
+    pub landed: Landing,
 }
 
 impl Default for Delivering {
@@ -152,7 +152,7 @@ impl Default for Delivering {
             },
             // Nobody has merged it. A default that said `Merged` would have
             // every existing test's Job land the moment anything asked.
-            landed: Landed::Unknown,
+            landed: Landing::Unknown,
         }
     }
 }
@@ -229,6 +229,29 @@ impl FakeVcs {
     pub fn delivering(self, delivering: Delivering) -> FakeVcs {
         *self.delivery.lock().expect("not poisoned") = delivering;
         self
+    }
+
+    /// Say that somebody has merged, or closed, the pull request — **after the
+    /// Job that opened it has finished**, which is the only order the real
+    /// thing happens in.
+    ///
+    /// `&self` and not `self`, unlike every other setter here: the fake is
+    /// inside a Fleet by the time a person could merge anything, so a
+    /// consuming builder could not express the case at all.
+    pub fn now_landed(&self, landed: Landing) {
+        self.delivery.lock().expect("not poisoned").landed = landed;
+    }
+
+    /// How many times the forge has been asked what became of a pull request.
+    /// **The whole design of the asking is how rarely it happens**, so this is
+    /// what a test about the rotation counts.
+    pub fn times_asked_what_became_of_it(&self) -> usize {
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .iter()
+            .filter(|done| matches!(done, Delivered::AskedWhatBecameOfIt { .. }))
+            .count()
     }
 
     /// A rebase that writes these files, into the worktree this
@@ -340,12 +363,12 @@ impl Delivery for FakeVcs {
         Ok(self.delivery.lock().expect("not poisoned").review.clone())
     }
 
-    fn landed(&self, worktree: &Worktree) -> Landed {
+    fn landed(&self, _in_repo: &str, pull_request: &str) -> Landing {
         self.delivered
             .lock()
             .expect("not poisoned")
             .push(Delivered::AskedWhatBecameOfIt {
-                branch: worktree.branch().to_string(),
+                pull_request: pull_request.to_string(),
             });
         self.delivery.lock().expect("not poisoned").landed.clone()
     }

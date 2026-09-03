@@ -22,7 +22,7 @@
 
 use std::collections::BTreeMap;
 
-use adapter_traits::Landed;
+use adapter_traits::Landing;
 use core_model::{JobId, Ulid};
 
 use crate::error::{fault, WriteError};
@@ -77,12 +77,12 @@ pub struct Delivery {
     /// absence here because neither is news, and a column that stored "still
     /// open" would be storing the absence of it.
     ///
-    /// [`adapter_traits::Landed`] and not a word of this crate's own, for the
+    /// [`adapter_traits::Landing`] and not a word of this crate's own, for the
     /// reason the `change` column takes the adapter's vocabulary: a third
     /// spelling of the same three states is a third thing to keep in step. The
     /// URL it carries is [`pull_request`](Delivery::pull_request) — the column
     /// holds the state alone, so a row cannot say two addresses.
-    pub landed: Option<Landed>,
+    pub landed: Option<Landing>,
 }
 
 impl Delivery {
@@ -107,15 +107,13 @@ fn unreadable(cause: rusqlite::Error) -> crate::error::LoadJobError {
 
 /// A Job whose pull request exists and whose fate nobody has read yet.
 ///
-/// **The branch is what the forge is asked about**, and it is on this row
-/// rather than derived: a Job's own worktree is reclaimed long before anybody
-/// merges its work, so the question is asked from the repository root with this
-/// name. The URL is carried so a caller can say which pull request settled
-/// without a second read.
+/// **The address and not the branch**, because the address is what the forge is
+/// asked about: a merged branch is usually deleted, and a Job's worktree is
+/// reclaimed long before anybody merges its work — so the one handle that still
+/// resolves when the answer matters is the URL the record kept.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Unsettled {
     pub job_id: JobId,
-    pub branch: String,
     pub url: String,
 }
 
@@ -123,13 +121,13 @@ pub struct Unsettled {
 ///
 /// **`Open` and `Unknown` have no word**, which is the column's whole shape:
 /// only a settled answer is written down, so a `None` here refuses to store the
-/// absence of news. [`Landed::is_settled`] is the same rule said at the call
+/// absence of news. [`Landing::is_settled`] is the same rule said at the call
 /// site, and the two are read together.
-fn as_stored(landed: &Landed) -> Option<&'static str> {
+fn as_stored(landed: &Landing) -> Option<&'static str> {
     match landed {
-        Landed::Merged { .. } => Some("merged"),
-        Landed::ClosedUnmerged { .. } => Some("closed_unmerged"),
-        Landed::Open { .. } | Landed::Unknown => None,
+        Landing::Merged { .. } => Some("merged"),
+        Landing::ClosedUnmerged { .. } => Some("closed_unmerged"),
+        Landing::Open { .. } | Landing::Unknown => None,
     }
 }
 
@@ -137,11 +135,11 @@ fn as_stored(landed: &Landed) -> Option<&'static str> {
 ///
 /// A word this version does not know, and a settled state with no address to
 /// go with it, are both `None`: neither is something a surface could draw.
-fn from_stored(word: Option<String>, url: Option<&String>) -> Option<Landed> {
+fn from_stored(word: Option<String>, url: Option<&String>) -> Option<Landing> {
     let url = url?.clone();
     match word?.as_str() {
-        "merged" => Some(Landed::Merged { url }),
-        "closed_unmerged" => Some(Landed::ClosedUnmerged { url }),
+        "merged" => Some(Landing::Merged { url }),
+        "closed_unmerged" => Some(Landing::ClosedUnmerged { url }),
         _ => None,
     }
 }
@@ -198,7 +196,7 @@ impl Store {
     /// **Only a settled answer is written.** `Open` and `Unknown` return
     /// without touching the row: neither is news, and the next sweep asks
     /// again. That is what makes a merge recorded once and never re-asked.
-    pub fn record_landed(&mut self, job_id: &JobId, landed: &Landed) -> Result<(), WriteError> {
+    pub fn record_landed(&mut self, job_id: &JobId, landed: &Landing) -> Result<(), WriteError> {
         let Some(word) = as_stored(landed) else {
             return Ok(());
         };
@@ -229,17 +227,16 @@ impl Store {
         let mut asking = self
             .conn
             .prepare(
-                "SELECT job_id, branch, delivery_pull_request FROM jobs \
+                "SELECT job_id, delivery_pull_request FROM jobs \
                  WHERE delivery_pull_request IS NOT NULL AND delivery_landed IS NULL \
-                 AND branch IS NOT NULL ORDER BY job_id",
+                 ORDER BY job_id",
             )
             .map_err(unreadable)?;
         let rows = asking
             .query_map((), |row| {
                 Ok(Unsettled {
                     job_id: JobId::carried(Ulid::carried(row.get::<_, String>(0)?)),
-                    branch: row.get(1)?,
-                    url: row.get(2)?,
+                    url: row.get(1)?,
                 })
             })
             .map_err(unreadable)?;
@@ -252,7 +249,7 @@ impl Store {
     /// **One query, for the same reason as the one above.** The Board draws
     /// every row it holds, and a merge read per row would be a query per row on
     /// a list that redraws on every event.
-    pub fn landed_by_job(&self) -> Result<BTreeMap<JobId, Landed>, crate::error::LoadJobError> {
+    pub fn landed_by_job(&self) -> Result<BTreeMap<JobId, Landing>, crate::error::LoadJobError> {
         let mut asking = self
             .conn
             .prepare(

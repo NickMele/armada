@@ -42,7 +42,7 @@ mod worktree;
 
 pub use commit::{CommitTime, Committed};
 pub use delivery::{
-    how_the_base_was_found, Base, BroughtUpToDate, Delivery, Landed, NotDelivered, Opened, Pushed,
+    how_the_base_was_found, Base, BroughtUpToDate, Delivery, Landing, NotDelivered, Opened, Pushed,
     Review, Standing,
 };
 pub use event::{CallDetail, DroneEvent, Speaker};

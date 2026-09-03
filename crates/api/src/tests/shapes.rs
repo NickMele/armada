@@ -112,6 +112,7 @@ pub fn job_at(id: &str, spelling: &str) -> JobSummary {
         assigned_drone: None,
         redispatched_from: None,
         asking: false,
+        landed: None,
     }
 }
 

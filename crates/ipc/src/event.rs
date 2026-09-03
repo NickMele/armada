@@ -11,11 +11,11 @@
 //! **Over 500 lines and left as one file.** One `#[serde(tag = "kind")]` enum
 //! is the closed set a rule compares against `operations.toml` row by row, so a
 //! split would assemble that roster from two places. It was at exactly 500
-//! before `job.asking`.
+//! before `job.asking` and crossed the warning with `job.landed`.
 
 use serde::{Deserialize, Serialize};
 
-use crate::detail::JudgeInFlight;
+use crate::detail::{JudgeInFlight, Settled};
 use crate::enums::{Actor, JobStatus, StepState};
 use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
 use crate::job::{JobForgotten, JobList, JobSummary};
@@ -102,6 +102,8 @@ pub enum Event {
     JobAsking(JobAsking),
     #[serde(rename = "job.forgotten")]
     JobForgotten(JobForgotten),
+    #[serde(rename = "job.landed")]
+    JobLanded(JobLanded),
 }
 
 /// A Job exists that did not before, whole enough to draw.
@@ -116,6 +118,33 @@ pub struct JobCreated {
     /// Who created it. A proposal is a human or Helm act; nothing here is Fleet
     /// deciding on its own.
     pub actor: Actor,
+    pub at: Instant,
+}
+
+/// Somebody merged, or closed, the pull request a Job opened. **The Job did
+/// not move**, and there is no status here for that reason: the work was
+/// already finished and recorded when this happened, and what changed is a fact
+/// about the world outside Armada.
+///
+/// It carries the whole [`JobSummary`] for [`JobStepAdvanced`]'s reason — a
+/// client told only that something happened would re-read the row it was just
+/// told about — and the row it carries has [`JobSummary::landed`] filled in,
+/// which is the change.
+///
+/// **Fired once per Job, ever.** The answer is written down and a settled Job
+/// is never asked about again, so a client may treat this as final.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobLanded {
+    /// The Job as it now stands. Replaces the row whole.
+    pub job: JobSummary,
+    /// The address, so a client can say which pull request without reading the
+    /// detail.
+    pub pull_request: String,
+    pub settled: Settled,
+    /// When Fleet **read** this, not when the merge happened. The two differ by
+    /// up to one sweep of the rotation, and the forge is where the exact
+    /// instant lives — a second answer here would be the nearer one and the
+    /// wrong one.
     pub at: Instant,
 }
 
