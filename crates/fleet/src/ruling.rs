@@ -25,12 +25,12 @@ use crate::gate::CheckOutput;
 /// advances nothing — so no Drone reaches the far side of a human gate.
 ///
 /// **A failed Check goes back to the Drone before it goes to a person.**
-/// [`Ruling::Failed`] is terminal and used to be every mechanical failure: the
-/// Job that produced [`Ruling::HandedBack`] failed one Check on a one-line
-/// regression and was thrown away on its first attempt, with a live Drone
-/// holding the whole context needed to fix it. `HandedBack` is that failure
-/// inside a budget, and three things must be true, each decided where the
-/// question is visible:
+/// [`Ruling::Failed`] was every mechanical failure and ended the Job: the one
+/// that produced [`Ruling::HandedBack`] failed a Check on a one-line regression
+/// and was thrown away on its first attempt, with a live Drone holding the
+/// whole context needed to fix it. `HandedBack` is that failure inside a
+/// budget, and three things must be true, each decided where the question is
+/// visible:
 ///
 /// | | Asked of | Why there |
 /// |---|---|---|
@@ -38,9 +38,9 @@ use crate::gate::CheckOutput;
 /// | this run is inside it | `AtStep::attempt` | derived from the step's log, never from a caller |
 /// | trying again could change the answer | `CheckFailed::the_drone_can_answer` | only that type knows what each failure means |
 ///
-/// **What is exhausted is still `Failed`**, and still ends the Job at
-/// `completed_failed`. Whether a spent budget belongs there is
-/// `[retries-exhausted-destination]` in `docs/OPEN.md`, and a person's to say.
+/// **What is exhausted is still `Failed`, and it no longer ends the Job.** It
+/// holds at `awaiting_repair` and keeps its Drone, so telling that Drone what
+/// it is missing is one instruction rather than a new Job. `#208`.
 #[derive(Debug)]
 pub enum Ruling {
     /// The step passed. The Drone that worked it is ended and a fresh one takes
@@ -132,12 +132,21 @@ pub enum Ruling {
         /// through to [`Failed`](Ruling::Failed) instead.
         retrying: StepLevelTrigger,
     },
-    /// A Check did not pass and nothing is left to do about it: the step
-    /// declared no retry budget, or spent it, or the failure is one no
-    /// reattempt could answer. **The Job ends**, and **the Judge never ran** —
-    /// the semantic tier is asked only after the mechanical one holds, so a
-    /// failing Check costs nothing. The worktree is kept, the output below is
-    /// readable, and the Drone is terminated without a turn.
+    /// A Check did not pass and nothing is left for the Drone to do about it
+    /// unprompted: the step declared no retry budget, or spent it, or the
+    /// failure is one no reattempt could answer. **The Job holds at
+    /// `awaiting_repair`**, and **the Judge never ran** — the semantic tier is
+    /// asked only after the mechanical one holds, so a failing Check costs
+    /// nothing.
+    ///
+    /// **The Drone is kept, and that is what `#208` changed.** It was
+    /// terminated here, which put a redirect out of reach at the one moment a
+    /// person most wants one — the session holding everything the process knew
+    /// while writing the code is exactly what makes telling it what it is
+    /// missing cheap. It ends without a turn either way: what a person decides
+    /// to say is the part they were asked for.
+    ///
+    /// The worktree is kept and the output below is readable, unchanged.
     Failed {
         /// Never empty.
         failures: Vec<CheckFailed>,
@@ -326,12 +335,13 @@ impl Ruling {
     ///
     /// [`Ruling::Failed`] answers `None` **and its step is stopped anyway**, by
     /// [`dispatch::stopping`](crate::dispatch::stopping) — spelled there
-    /// because this method is what an escalation is derived from and a failure
-    /// escalates nothing, the Job being over. It stopped no step at all until
-    /// #179, which left a step reading `running` beneath a terminal Job with
-    /// `last_verdict` null; `stopped` means *"retries spent"*, exactly true
-    /// here. Where a spent budget belongs is
-    /// `[retries-exhausted-destination]`, a person's question.
+    /// because this method is what an escalation is derived from and a spent
+    /// budget escalates nothing: it holds the Job at `awaiting_repair`, which
+    /// is a status of its own rather than an escalation reason. It stopped no
+    /// step at all until #179, which left a step reading `running` beneath a
+    /// terminal Job with `last_verdict` null; `stopped` means *"retries
+    /// spent"*, exactly true here, and `running -> awaiting_repair` is guarded
+    /// on it.
     pub fn stops_the_step(&self) -> Option<StepLevelTrigger> {
         match self {
             Ruling::Refused { .. } => StepLevelTrigger::of(EscalationTrigger::GateFailure),
@@ -374,15 +384,22 @@ impl Ruling {
         }
     }
 
-    /// Whether the Drone's session ends here. **True only where the Job is
-    /// over.**
+    /// Whether the Drone's session ends here. **True on one ruling**, and it
+    /// is the one where there is nothing left to say to it: the workflow's last
+    /// step passed.
     ///
-    /// A refusal and a suspect verdict escalate, and `job-statuses.toml` gives
-    /// `escalated` the Drone "alive, idle" — so the session stays, holding its
-    /// context, and a redirect is a turn injected into it rather than a
-    /// respawn. `crate::aftermath` is what stops that idle Drone being reaped
-    /// into an `escalated -> escalated` move.
+    /// A refusal, a suspect verdict and a spent retry budget all stop the work
+    /// for a person, and `job-statuses.toml` gives both `escalated` and
+    /// `awaiting_repair` the Drone "alive, idle" — so the session stays,
+    /// holding its context, and a redirect is a turn injected into it rather
+    /// than a respawn. `crate::aftermath` is what stops that idle Drone being
+    /// reaped into a second move on a Job that has already stopped.
+    ///
+    /// [`Failed`](Ruling::Failed) was here until `#208`. Ending the Drone was
+    /// consistent while the Job ended with it, and both were the same mistake:
+    /// the process holding the context that produced the failure is the one
+    /// thing that can answer it cheaply.
     pub fn ends_the_drone(&self) -> bool {
-        matches!(self, Ruling::Finished { .. } | Ruling::Failed { .. })
+        matches!(self, Ruling::Finished { .. })
     }
 }

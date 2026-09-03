@@ -431,9 +431,14 @@ async fn a_gaming_flag_is_overruled_and_the_step_advances_still_carrying_it() {
 
 /// **A failed mechanical Check is not a matter of opinion.**
 ///
-/// A Check that did not pass ends the Job at `completed_failed`, which is
-/// terminal and stops no step, so there is nothing for this act to land on —
-/// and it says so rather than finding somewhere to land.
+/// **And this is the case #208 had to leave alone.** The Job used to be
+/// terminal here, so the act was refused by terminality and by nothing else; it
+/// now holds at `awaiting_repair`, over a step that is `stopped` carrying
+/// `failed(gate_failure)` — the very shape an override lands on beneath
+/// `escalated`. What refuses it is the status, and behind that `Stuck` reads
+/// `checks_passed` out of the store rather than reading the trigger. A person
+/// still cannot wave a red suite through; what changed is who is asked to fix
+/// it.
 #[tokio::test]
 async fn a_failed_mechanical_check_cannot_be_overruled() {
     let home = TempDir::new();
@@ -464,8 +469,8 @@ async fn a_failed_mechanical_check_cannot_be_overruled() {
     match fleet.override_verdict(&job_id, &a_reason()).await {
         Err(Adrift::NotResumable { status, .. }) => assert_eq!(
             status,
-            JobStatus::CompletedFailed,
-            "a Check that failed ends the Job, and no act reopens a terminal"
+            JobStatus::AwaitingRepair,
+            "a Job held for repair is not a Job with a verdict to disagree with"
         ),
         other => panic!("a failed Check was overruled: {other:?}"),
     }

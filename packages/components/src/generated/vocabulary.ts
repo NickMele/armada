@@ -12,7 +12,7 @@
 // one is listed in `GAPS` so a surface can say what it could not render instead
 // of inventing copy for it.
 
-import { Archive, ArrowUpToLine, Ban, Check, CircleCheck, CircleDashed, CircleDot, CircleMinus, CircleX, Clock, Cpu, Eye, FileQuestionMark, Flag, Link, OctagonAlert, Power, RefreshCw, RotateCw, ShieldCheck, ShieldMinus, ShieldOff, ShieldX, Split, Stamp, Terminal, Unplug, UserCheck, X } from "lucide-react";
+import { Archive, ArrowUpToLine, Ban, Check, CircleCheck, CircleDashed, CircleDot, CircleMinus, CircleX, Clock, Cpu, Eye, FileQuestionMark, Flag, Link, OctagonAlert, Power, RefreshCw, RotateCw, ShieldCheck, ShieldMinus, ShieldOff, ShieldX, Split, Stamp, Terminal, Unplug, UserCheck, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /** How one variant reads. `null` where the registry carries no answer. */
@@ -28,6 +28,7 @@ export type Rendering = {
 export const JOB_STATUS: Readonly<Record<string, Rendering | undefined>> = {
   "awaiting_approval": { verb: "needs approval", icon: UserCheck, badgeStatus: "awaiting-approval", statusToken: "--status-awaiting-approval" },
   "awaiting_attestation": { verb: "awaiting attestation", icon: Stamp, badgeStatus: "awaiting-attestation", statusToken: "--status-awaiting-attestation" },
+  "awaiting_repair": { verb: "needs repair", icon: Wrench, badgeStatus: "awaiting-repair", statusToken: "--status-awaiting-repair" },
   "awaiting_review": { verb: "awaiting review", icon: Eye, badgeStatus: "awaiting-review", statusToken: "--status-awaiting-review" },
   "completed_failed": { verb: "failed", icon: X, badgeStatus: "completed-failed", statusToken: "--status-completed-failed" },
   "completed_success": { verb: "done", icon: Check, badgeStatus: "completed-success", statusToken: "--status-completed-success" },
@@ -203,6 +204,7 @@ export type Lifecycle = {
 export const JOB_LIFECYCLE: Readonly<Record<string, Lifecycle | undefined>> = {
   "awaiting_approval": { terminal: false, mode: "Waited on", whoIsActing: "Person" },
   "awaiting_attestation": { terminal: false, mode: "Waited on", whoIsActing: "Person" },
+  "awaiting_repair": { terminal: false, mode: "Waited on", whoIsActing: "Person" },
   "awaiting_review": { terminal: false, mode: "Waited on", whoIsActing: "Person" },
   "completed_failed": { terminal: true, mode: "N/A", whoIsActing: "None" },
   "completed_success": { terminal: true, mode: "N/A", whoIsActing: "None" },

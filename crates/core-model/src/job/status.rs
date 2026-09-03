@@ -268,27 +268,21 @@ impl StepState {
     /// **Only `advanced` answers with every status, and that is the machine.**
     /// A status change looks at a step only where the edge carries a
     /// [`Guard`](crate::Guard); across every unguarded edge a frozen step is
-    /// carried holding what it held, which is why three of these answer with
-    /// almost all of them. Four answered far more narrowly until issue #184,
-    /// and `escalated` was the one that made it concrete: `stopped` claimed it
-    /// alone, while a Job escalated on `stalled` arrives holding a step that is
-    /// `running`.
+    /// carried holding what it held. Four answered far more narrowly until
+    /// issue #184, and `escalated` made it concrete: `stopped` claimed it
+    /// alone, while a Job escalated on `stalled` arrives holding a `running`
+    /// step.
     ///
-    /// **`completed_success` is the exception, and it is the guard.** Every
-    /// edge arriving there is guarded on `every_step_advanced`, so no other
-    /// state is carried across one and no other state answers with it. That is
-    /// issue #189, and it is what a row narrowing on something other than a
-    /// widening looks like.
+    /// **Two statuses narrow, and each is a guard.** Every edge into
+    /// `completed_success` is guarded on `every_step_advanced`, so no state but
+    /// `advanced` crosses one (#189); the one edge into `awaiting_repair` is
+    /// guarded on `no_step_running`, so `running` is the state that cannot be
+    /// beneath it (#208, carrying #179's guard across from the edge that used
+    /// to end the Job).
     ///
-    /// **`awaiting_repair` is the second, and it narrows the other way.** Its
-    /// one inbound edge is guarded on `no_step_running`, so `running` is the
-    /// single state that cannot be beneath it — which is #179's guard carried
-    /// across from the edge that used to end the Job instead (#208).
-    ///
-    /// The two narrowest answers are the two states nothing reaches yet:
-    /// `awaiting_human` has no [`StepTarget`](crate::StepTarget) and `retrying`
-    /// has no retry budget, so each is where its design puts it rather than
-    /// where a walk found it.
+    /// `awaiting_human` is the narrowest answer and the one state nothing
+    /// reaches: it has no [`StepTarget`](crate::StepTarget), so it is where its
+    /// design puts it rather than where a walk found it.
     pub fn seen_under(&self) -> &'static [JobStatus] {
         match self {
             StepState::Advanced => JobStatus::ALL,

@@ -267,12 +267,15 @@ fn target(event: &RecordedEvent) -> Result<Target, RowError> {
     }
 }
 
-/// The eight destinations whose `reason_storage` is `None`.
+/// The nine destinations whose `reason_storage` is `None`.
 fn unqualified(status: JobStatus) -> Option<Target> {
     match status {
         JobStatus::AwaitingApproval => Some(Target::AwaitingApproval),
         JobStatus::Running => Some(Target::Running),
         JobStatus::AwaitingReview => Some(Target::AwaitingReview),
+        // What stopped the work is on the stopped step's own `last_verdict`,
+        // so the Job's transition carries nothing to fit. See `Target`.
+        JobStatus::AwaitingRepair => Some(Target::AwaitingRepair),
         JobStatus::CompletedSuccess => Some(Target::CompletedSuccess),
         JobStatus::CompletedFailed => Some(Target::CompletedFailed),
         JobStatus::Rejected => Some(Target::Rejected),

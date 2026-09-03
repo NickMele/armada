@@ -51,10 +51,14 @@ where
 {
     /// Replace a Job that ran and stopped.
     ///
-    /// **`escalated`, `completed_failed` and `killed`.** A Check said no, or
-    /// you stopped it deliberately; either way you change something and go
-    /// again, and that loop is what this is. A running Job is redirected
-    /// instead, and one at a gate has not stopped.
+    /// **`escalated`, `awaiting_repair`, `completed_failed` and `killed`.** A
+    /// Check said no, or you stopped it deliberately; either way you change
+    /// something and go again, and that loop is what this is. A running Job is
+    /// redirected instead, and one at a gate has not stopped.
+    ///
+    /// `awaiting_repair` is the newest and the one to reach for last: the
+    /// Drone is still there holding the session, so a redirect answers the
+    /// failure without discarding a single step that passed. `#208`.
     ///
     /// **`rejected` is refused because it never ran.** There is no Facts and no
     /// Evidence to carry into a replacement, so what is being asked for is a
@@ -65,7 +69,10 @@ where
     pub async fn redispatch(&self, job_id: &JobId) -> Result<Replacement, Adrift> {
         let failed = self.load(job_id).await?;
         match failed.status() {
-            JobStatus::Escalated | JobStatus::CompletedFailed | JobStatus::Killed => {}
+            JobStatus::Escalated
+            | JobStatus::AwaitingRepair
+            | JobStatus::CompletedFailed
+            | JobStatus::Killed => {}
             JobStatus::Rejected => {
                 return Err(Adrift::NeverRan {
                     job: failed.id().clone(),

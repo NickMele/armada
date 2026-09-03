@@ -623,9 +623,11 @@ async fn a_job_is_driven_from_created_to_completed_and_survives_a_reopen() {
     );
 }
 
-/// A failed Check ends the Job, and the worktree stays exactly where it is.
+/// A failed Check holds the Job for a person, and the worktree stays exactly
+/// where it is. The Drone stays too, which is what makes a redirect the
+/// cheapest answer — `#208`, which retitled this from *ends the Job*.
 #[tokio::test]
-async fn a_failed_check_ends_the_job_and_keeps_the_worktree() {
+async fn a_failed_check_holds_the_job_and_keeps_the_worktree() {
     let home = TempDir::new();
     // Nothing changed, so `diff_nonempty` fails. A reading that failed and a
     // diff that was empty are different things, and this is the second.
@@ -642,9 +644,13 @@ async fn a_failed_check_ends_the_job_and_keeps_the_worktree() {
     };
     assert_eq!(failures.len(), 1);
 
-    let ended = fleet.load(job.id()).await.unwrap();
-    assert_eq!(ended.status(), JobStatus::CompletedFailed);
-    assert!(fleet.working_on().await.is_empty());
+    let held = fleet.load(job.id()).await.unwrap();
+    assert_eq!(held.status(), JobStatus::AwaitingRepair);
+    assert_eq!(
+        fleet.working_on().await,
+        vec![job.id().clone()],
+        "the Drone that wrote the code is still there to be told what is missing"
+    );
 
     let spec = WorktreeSpec::for_job(&home.path().to_string_lossy(), job.id().as_str()).unwrap();
     assert!(
@@ -875,6 +881,6 @@ async fn a_second_step_that_writes_nothing_is_not_credited_with_the_first_step_s
     assert_eq!(failures, &[verification::CheckFailed::DiffEmpty]);
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),
-        JobStatus::CompletedFailed
+        JobStatus::AwaitingRepair
     );
 }

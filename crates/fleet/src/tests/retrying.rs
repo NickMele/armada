@@ -104,8 +104,10 @@ async fn a_failed_check_inside_the_budget_goes_back_to_the_drone() {
     );
 }
 
-/// **The other half.** The budget is spent and the failure stands, exactly as
-/// it did before there was a budget.
+/// **The other half.** The budget is spent, the hand-backs stop, and the Job
+/// waits for a person rather than ending — `#208`. The assertion below used to
+/// cite the open question that asked where a spent budget lands, and said in as
+/// many words that it was written to be changed by the answer.
 #[tokio::test]
 async fn a_spent_budget_stops() {
     let home = TempDir::new();
@@ -142,9 +144,8 @@ async fn a_spent_budget_stops() {
 
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),
-        JobStatus::CompletedFailed,
-        "where a spent budget lands is `[retries-exhausted-destination]` and is \
-         unchanged by the budget existing"
+        JobStatus::AwaitingRepair,
+        "a spent budget holds the Job for a person rather than ending it"
     );
 }
 
@@ -175,7 +176,7 @@ async fn a_step_with_no_budget_fails_on_its_first_failed_check() {
     assert!(matches!(ruled, Ruling::Failed { .. }), "{ruled:?}");
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),
-        JobStatus::CompletedFailed
+        JobStatus::AwaitingRepair
     );
 }
 
@@ -187,11 +188,12 @@ async fn a_step_with_no_budget_fails_on_its_first_failed_check() {
 /// keys on. #156 made `gate_undecided` stop its step; the failure path was not
 /// changed with it, and this is the same fix on the fourth ruling.
 ///
-/// The order is the one thing that matters: a step is frozen beneath a terminal
-/// status, so a stop attempted after the Job ended would be refused and the
-/// verdict never written. `running -> completed_failed` is guarded on
-/// `no_step_running`, so a caller that got the order wrong is refused rather
-/// than silently leaving this behind.
+/// The order is the one thing that matters: a step is frozen beneath every
+/// status but two, so a stop attempted after the Job moved would be refused and
+/// the verdict never written. That is unchanged by the Job now holding at
+/// `awaiting_repair` rather than ending — `running -> awaiting_repair` carries
+/// the `no_step_running` guard the old edge carried, so a caller that got the
+/// order wrong is refused rather than silently leaving this behind. #208.
 #[tokio::test]
 async fn a_failed_check_stops_the_step_and_writes_its_verdict() {
     let home = TempDir::new();
@@ -216,14 +218,14 @@ async fn a_failed_check_stops_the_step_and_writes_its_verdict() {
     assert!(matches!(ruled, Ruling::Failed { .. }), "{ruled:?}");
 
     let ended = fleet.load(job.id()).await.unwrap();
-    assert_eq!(ended.status(), JobStatus::CompletedFailed);
+    assert_eq!(ended.status(), JobStatus::AwaitingRepair);
     let step = ended
         .step(&StepId::new("implement"))
         .expect("the row is there");
     assert_eq!(
         step.state(),
         StepState::Stopped,
-        "a step left running beneath a terminal Job is one nothing can find a way out of"
+        "a step left running beneath a held Job is one nothing can find a way out of"
     );
     assert_eq!(
         step.last_verdict(),
@@ -265,7 +267,7 @@ async fn a_spent_budget_stops_the_step_the_same_way() {
     assert!(matches!(second, Ruling::Failed { .. }), "{second:?}");
 
     let ended = fleet.load(job.id()).await.unwrap();
-    assert_eq!(ended.status(), JobStatus::CompletedFailed);
+    assert_eq!(ended.status(), JobStatus::AwaitingRepair);
     let step = ended
         .step(&StepId::new("implement"))
         .expect("the row is there");

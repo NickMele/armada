@@ -578,12 +578,15 @@ where
 /// its own evidence led to, which is what the recorded event has to say: the
 /// evidence was a signal and Fleet made the decision.
 ///
-/// # A failure and a refusal go to different statuses
+/// # A failure and a refusal go to different statuses, and neither ends the Job
 ///
-/// A Check failing is the work being broken and is terminal. A refusal is the
-/// work running and not being what was asked for, which is a person's to
-/// answer — so it is `escalated`, from which redispatch and Pilot are both
-/// reachable and `completed_failed` still is, once a person agrees.
+/// A Check failing is the work being unfinished: the budget for answering it is
+/// spent, and what is left is a person telling the Drone what it is missing. So
+/// it is `awaiting_repair`, which says what is owed rather than that the Job
+/// failed — `running -> completed_failed` no longer exists (`#208`). A refusal
+/// is the work running and not being what was asked for, which is a different
+/// thing for a person to answer — so it is `escalated`. Redispatch, Pilot and
+/// `completed_failed` are reachable from both, once a person agrees.
 ///
 /// The trigger comes from [`Ruling::stops_the_step`] and is not spelled here:
 /// the step that stopped and the Job that escalated are stating one fact, and
@@ -600,7 +603,7 @@ pub fn apply(
 ) -> Option<Result<Transitioned, IllegalTransition>> {
     let target = match ruling {
         Ruling::Finished { .. } => Target::CompletedSuccess,
-        Ruling::Failed { .. } => Target::CompletedFailed,
+        Ruling::Failed { .. } => Target::AwaitingRepair,
         // The one move in this function that is not an ending. `running ->
         // awaiting_review` is the edge `fleet::reviewing`'s three acts all
         // start from, and Fleet is the actor: the person has not answered yet,

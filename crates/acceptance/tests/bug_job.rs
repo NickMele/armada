@@ -17,6 +17,7 @@
 //! | The loop | `Fleet::approve` starts a detached child before it can gate anything and there is no seam that lets it not, so the loop's own end-to-end test spawns `/bin/cat`. What this file drives is the machine and the gate the loop calls |
 //! | The workflow's checks frozen onto the Job | `Job` freezes each step's id and ordinal at creation; the checks are read from Fleet's current `ResolvedWorkflow` when the gate runs, so an `armada.yml` edited while a Job waits at the approval gate changes the bar that Job faces — which is what `fleet::drafting` says freezing prevents. Asserted below as far as it holds, and no further |
 //! | A live model | The Judge call goes through Fleet's own runner against a scripted verdict, because a suite that reached a model would cost money and need a network |
+//! | Where a failed Check leaves the Job | **Excluded from this claim by `#208`.** M1 promised it ends at `completed_failed`; a spent retry budget now holds at `awaiting_repair`, and where a Job stops for a person and how it is unstuck is the Recovery milestone's claim. What is still asserted below is the half that did not move: nothing rescues a failed Check, the step stops carrying `failed(gate_failure)`, and the branch survives |
 //!
 //! Everything below is an assertion. The apparatus — the planted clock and
 //! mint, the workflow fixture, and the Job that can only be moved by
@@ -222,15 +223,23 @@ fn a_drone_that_says_it_is_done_and_leaves_escalates_rather_than_completes() {
     );
 }
 
-/// Nothing rescues a failed check, and the Job ends.
+/// Nothing rescues a failed check, and the Job stops for a person.
 ///
 /// The direction people forget is the other one — a passing judgement feels
 /// like permission — and at M1 it cannot even be expressed: `verification`'s
 /// `decide` takes the evidence and the check results and nothing else, and
 /// returns `Failed` whenever a check did not pass. There is no third argument
 /// through which anything could vouch for it.
+///
+/// **The ending was excluded from this claim by `#208`, and the rescue was
+/// not.** M1 promised that a failed Check ends the Job; Recovery replaced the
+/// destination with `awaiting_repair`, on the reading that a failing test is
+/// unfinished work rather than a failed Job. What this test still asserts is
+/// every part that did not move: nothing vouches for a failed Check, the step
+/// stops carrying its verdict, and the branch survives. Where the Job lands is
+/// now a claim of the Recovery milestone's test.
 #[tokio::test]
-async fn a_failed_check_ends_the_job_and_the_branch_survives() {
+async fn a_failed_check_stops_the_job_and_the_branch_survives() {
     // Nothing changed, so `diff_nonempty` fails. A reading that failed and a
     // diff that was empty are different things, and this is the second.
     let bench = Bench::with(FakeWorkProduct::untouched());
@@ -247,12 +256,17 @@ async fn a_failed_check_ends_the_job_and_the_branch_survives() {
     assert_eq!(failures.len(), 1);
     bench.settled(&mut run, &bench.step(1), &ruling);
 
-    assert_eq!(run.job.status(), JobStatus::CompletedFailed);
+    assert_eq!(run.job.status(), JobStatus::AwaitingRepair);
+    assert!(
+        !run.job.status().is_terminal(),
+        "the work is unfinished, which is not the same as failed"
+    );
     // **Stopped, not left running.** #179: the Job went `completed_failed`
     // while its step still read `running` and carried no verdict, so the only
     // record that the step had failed was the Check run. The step is stopped
-    // before the Job ends, `last_verdict` says `failed(gate_failure)`, and
-    // `running -> completed_failed` is guarded so it cannot be otherwise.
+    // before the Job moves, `last_verdict` says `failed(gate_failure)`, and
+    // `running -> awaiting_repair` carries the same guard the ending edge did,
+    // so it cannot be otherwise.
     assert_eq!(
         states(&run.job),
         [

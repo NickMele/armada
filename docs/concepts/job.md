@@ -107,6 +107,10 @@ flowchart LR
   R -->|criterion owed outside| AT["awaiting_attestation"]
   AR -->|"approve, criterion owed"| AT
 
+  R -->|retries spent| REP["awaiting_repair"]
+  REP -->|redirect| R
+  REP -->|restart| Q
+
   Q -->|dependency_failed| ESC["escalated"]
   R -->|escalation trigger| ESC
   AR -->|interrupted| ESC
@@ -116,6 +120,7 @@ flowchart LR
   R -->|escape_hatch| P["piloted"]
   AR -->|escape_hatch| P
   AT -->|escape_hatch| P
+  REP -->|Pilot| P
   ESC -->|Pilot| P
   P -->|submit for verification| R
 
@@ -124,7 +129,7 @@ flowchart LR
 
   class AA gate
   class Q,R drone
-  class AR,ESC,AT waited
+  class AR,REP,ESC,AT waited
   class P worked
 ```
 
@@ -162,18 +167,30 @@ gate-failure retry limit. `build` failing is not a matter of opinion — which i
 why it cannot be overruled, and not a reason to end the Job over it. A failing
 test is work, and the Drone that wrote the code is the thing that should fix it.
 
-**Where a spent budget lands is open** — `[retries-exhausted-destination]`. It
-ends the Job at `completed_failed` today, which is what `crates/fleet/src/gate.rs`
-says it makes askable rather than answers: the module made the budget spendable
-and left the destination to a person.
+**A spent budget lands at `awaiting_repair`.** Not `completed_failed`, which
+says the Job failed when the work is merely unfinished, and not `escalated`,
+which says a machine's
+decision is waiting to be overruled — neither is true when nothing is in
+dispute. It says what is owed rather than what went wrong, and it joins the
+three `awaiting_*` statuses because it carries their axis: waited on, by a
+person.
 
-What is settled is only that `completed_failed` is the reading under question,
-because it says the Job failed when the work is merely unfinished. The Drone keeps its session and
-its worktree, so a redirect costs no respawn and consumes no attempt, which is
-the act a person actually wants at that moment and was unreachable while the Job
-went terminal first. A step left `running` beneath a terminal Job was one nothing
-could read a verdict off (#179), and that guard is unaffected: the step is
-stopped carrying `failed(gate_failure)` either way.
+The Drone keeps its session and its worktree, so a redirect costs no respawn and
+consumes no attempt — the act a person actually wants at that moment, and one
+that was unreachable while the Job went terminal first. A restart, a Pilot and a
+redispatch reach it too, and none of them is new. The act that does *not* reach
+it is the override: `Stuck` reads whether the step's Checks passed out of the
+record rather than inferring the tier from the trigger, and they did not pass
+here. `build` failing is still not a matter of opinion.
+
+A step left `running` beneath a Job nothing could read a verdict off (#179) is
+unaffected: `running -> awaiting_repair` carries the `no_step_running` guard the
+ending edge carried, so the step is stopped carrying `failed(gate_failure)`
+before the Job moves.
+
+**Nothing mechanical writes `completed_failed` any more.** The `running` edge
+into it is gone rather than left unfired, so a Job ends failed only where a
+person accepted the failure or an attestation could not be done.
 
 **An escalated Job usually keeps its Drone, and a redirect does not depend on
 it.** `job-statuses.toml` records `drone_process = "Alive, idle. Gone only on
@@ -322,7 +339,7 @@ flowchart LR
   AT["awaiting_attestation"] -->|attested| CS
   P["piloted"] -->|attest complete| CS
 
-  R -->|retries exhausted| CF["completed_failed"]
+  REP["awaiting_repair"] -->|accept failure| CF["completed_failed"]
   ESC["escalated"] -->|accept failure| CF
   AT -->|cannot be done| CF
 
@@ -335,7 +352,7 @@ flowchart LR
 
   class AA gate
   class R drone
-  class AR,ESC,AT waited
+  class AR,REP,ESC,AT waited
   class P worked
   class CS good
   class CF,REJ bad

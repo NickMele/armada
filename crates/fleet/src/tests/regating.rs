@@ -298,8 +298,9 @@ async fn a_re_run_that_reaches_a_failing_check_rules_on_it() {
 
     assert_eq!(
         job.status(),
-        JobStatus::CompletedFailed,
-        "a Check that ran and failed is a verdict, and this act carries it out"
+        JobStatus::AwaitingRepair,
+        "a Check that ran and failed is an answer, and this act carries it out — \
+         to the status a failing Check reaches anywhere else"
     );
     let written = logged(&home, &job_id);
     assert!(

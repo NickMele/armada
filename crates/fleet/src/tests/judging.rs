@@ -155,11 +155,14 @@ async fn a_veto_stops_a_step_whose_check_passed() {
 }
 
 /// **The two verdicts read differently, and that is the point of the change.**
-/// A Check failing means the work is broken and the Job is over. A Judge
-/// refusing means the work runs and is not what was asked for, which is a
-/// person's to answer.
+/// A Check failing means the work is unfinished, so the Job waits at
+/// `awaiting_repair` for somebody to say what is missing. A Judge refusing
+/// means the work runs and is not what was asked for, which is a different
+/// question and lands at `escalated`. Neither is terminal, and #208 is why the
+/// first stopped being — what the two still do not share is the trigger, the
+/// acts offered, or whether a person may overrule it.
 #[tokio::test]
-async fn a_failed_check_still_ends_the_job_where_a_refusal_does_not() {
+async fn a_failed_check_holds_the_job_somewhere_else_than_a_refusal() {
     let worktree = worktree();
     let workflow = testkit::resolved(&[Sketch {
         id: "implement",
@@ -203,8 +206,16 @@ async fn a_failed_check_still_ends_the_job_where_a_refusal_does_not() {
     )
     .expect("a failure moves the Job")
     .expect("a legal move");
-    assert_eq!(moved.job.status(), JobStatus::CompletedFailed);
-    assert!(moved.job.status().is_terminal());
+    assert_eq!(moved.job.status(), JobStatus::AwaitingRepair);
+    assert!(
+        !moved.job.status().is_terminal(),
+        "unfinished work is not a failed Job"
+    );
+    assert_ne!(
+        moved.job.status(),
+        JobStatus::Escalated,
+        "and it is not a verdict waiting to be overruled either"
+    );
 }
 
 /// **A refusal stops the step; it does not un-run the Checks.** What the
