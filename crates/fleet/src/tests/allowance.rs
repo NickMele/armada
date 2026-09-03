@@ -11,7 +11,7 @@
 
 use std::time::Duration;
 
-use adapter_traits::DroneEvent;
+use adapter_traits::{DroneEvent, Speaker};
 use api::Daemon;
 use store::Spend;
 use testkit::FakeWorkProduct;
@@ -170,6 +170,7 @@ fn a_drone_that_never_reported_folds_to_nothing_rather_than_to_nothing_at_all() 
     let folded = spent(
         &[DroneEvent::Said {
             text: "working on it".to_string(),
+            by: Speaker::Drone,
         }],
         Duration::from_millis(400),
     );

@@ -45,6 +45,13 @@ export type Opening = {
  * **Absent is `drone`.** Every row written before Fleet stamped this field
  * decoded from a Drone's own output, so an older row read back without it is
  * read back correctly.
+ *
+ * **`armada` reaches a `said` row as well as an `instructed` one, and they are
+ * not duplicates.** `instructed` is what Fleet wrote and sent, carrying the
+ * occasion and the block headings; a `said` row in this voice is the drone's
+ * own stream replaying those words back off its input channel. A surface asking
+ * what Armada told a drone reads `instructed`; one drawing the conversation in
+ * order draws both.
  */
 export type Voice = "armada" | "drone" | "fleet";
 
@@ -117,6 +124,18 @@ export type Saw =
       detail_length?: number;
     }
   | { event: "answered"; call: string; failed: boolean }
+  /**
+   * Prose that crossed the session. **Whose it is, is `by` on the row** — it
+   * stamps every kind, and a second speaker on this one would be two answers to
+   * one question.
+   *
+   * Every one of these used to arrive as the drone's, because the decoder threw
+   * away the channel the line came in on. So the brief a step opened with was
+   * recorded as the drone's own prose and drew as the longest thing on the
+   * pane. No shape here changed when that was fixed: the field, the union and
+   * the spelling are what they were, and only which of the three a row carries
+   * moved.
+   */
   | { event: "said"; text: string }
   | { event: "refused"; tool: string; call: string; because: string }
   /**

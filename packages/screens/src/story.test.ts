@@ -39,6 +39,24 @@ function instructed(text: string, headings?: number[]): Turn {
   };
 }
 
+/** One `said` row, in whichever voice the wire stamped it with. */
+function said(text: string, by: Turn["by"]): Turn {
+  return {
+    ts: "2026-09-02T13:11:00Z",
+    seq: 2,
+    step: "plan",
+    by,
+    saw: { event: "said", text },
+  };
+}
+
+/** The one row, as the log draws it. */
+function drawn(row: Turn) {
+  const rows = entriesOf([row], "plan");
+  expect(rows).toHaveLength(1);
+  return rows[0]!;
+}
+
 /** The one row's payload. */
 function payload(row: Turn) {
   const rows = entriesOf([row], "plan");
@@ -92,6 +110,39 @@ describe("why the log is not being read", () => {
   it("says the transcript is being opened rather than that nothing happened", () => {
     expect(whyNotWatching({ state: "opening", jobId: A_JOB })).toBeDefined();
     expect(whyNotWatching({ state: "none" })).toBeDefined();
+  });
+});
+
+describe("prose, and who said it", () => {
+  const BRIEFED = "JOB BRIEF\n\nDispatching two Jobs against the same repo collides.";
+
+  it("draws the drone's own prose as the line", () => {
+    const row = drawn(said("Reading the module first.", "drone"));
+    expect(row.message).toBe("Reading the module first.");
+    expect(row.actor).toBe("drone");
+  });
+
+  it("names armada's turn rather than quoting it as the row", () => {
+    // #110. The turn Armada injects came back on the drone's stream as the
+    // same `said` row, so the longest thing on the pane was Armada quoting
+    // itself under the drone's name.
+    const row = drawn(said(BRIEFED, "armada"));
+    expect(row.actor).toBe("armada");
+    expect(row.message).not.toContain("JOB BRIEF");
+  });
+
+  it("keeps every word of it in the payload", () => {
+    // Attributed, never hidden: what a drone was told is what a reader needs
+    // to judge what it did.
+    const row = drawn(said(BRIEFED, "armada"));
+    expect(row.payload.map((line) => line.text)).toEqual(BRIEFED.split("\n"));
+  });
+
+  it("carries the wire's kind, so a surface can select the turns fleet sent", () => {
+    // Chapter one is `instructed` and not everything in Armada's voice — the
+    // two stopped being one set when the echo started arriving attributed.
+    expect(drawn(said(BRIEFED, "armada")).kind).toBe("said");
+    expect(drawn(instructed(BRIEFED)).kind).toBe("instructed");
   });
 });
 

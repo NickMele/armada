@@ -67,6 +67,16 @@ export type LogRow = {
   id: string;
   at: string;
   actor: LogActor;
+  /**
+   * The wire's own kind for the row.
+   *
+   * **Carried so a surface can select rows without re-reading `saw`.** Chapter
+   * one is the turns Fleet sent, which is `instructed` and not "everything in
+   * Armada's voice" — the two stopped being the same set once a turn the
+   * harness replays onto the Drone's stream started arriving correctly
+   * attributed, and selecting by voice counted each of Armada's turns twice.
+   */
+  kind: Turn["saw"]["event"];
   /** The one line the row shows closed. */
   message: string;
   /** Whether `message` is machine-derived. Sans names work, mono names machinery. */
@@ -95,6 +105,17 @@ export type CutCall = {
   /** Characters the argument had. Absent on a pre-existing transcript. */
   length?: number;
 };
+
+/**
+ * What a turn from the input channel is called on its row.
+ *
+ * **The channel and not the author.** A turn Fleet sent and a continuation
+ * nudge the harness wrote arrive on the same channel and the wire cannot tell
+ * them apart, so the sentence says what is known — this reached the Drone
+ * rather than came from it. `instructed` is the row that names an author, and
+ * it is the same text arriving first-hand.
+ */
+const REPLAYED = "The session replayed what the Drone was told";
 
 /** What a step with no rows says. Ordinary, and never an error. */
 export const NOTHING_YET_ON_THIS_STEP =
@@ -174,12 +195,14 @@ function rowOf(row: Turn): LogRow {
   const at = clock(row.ts);
   const id = String(row.seq);
   const actor = row.by;
+  const kind = saw.event;
   switch (saw.event) {
     case "instructed":
       return {
         id,
         at,
         actor,
+        kind,
         message: opening(saw.occasion),
         payload: lines(saw.text, saw.headings),
       };
@@ -188,6 +211,7 @@ function rowOf(row: Turn): LogRow {
         id,
         at,
         actor,
+        kind,
         message: checked(saw.run),
         payload: ranTo(saw.run),
       };
@@ -196,6 +220,7 @@ function rowOf(row: Turn): LogRow {
         id,
         at,
         actor,
+        kind,
         message: produced(saw.files),
         payload: saw.files.map((file) => ({ text: `${file.change}  ${file.path}` })),
       };
@@ -204,6 +229,7 @@ function rowOf(row: Turn): LogRow {
         id,
         at,
         actor,
+        kind,
         message: `A Drone run opened on ${saw.model}`,
         payload: [
           { text: saw.session, named: "meta" },
@@ -216,6 +242,7 @@ function rowOf(row: Turn): LogRow {
         id,
         at,
         actor,
+        kind,
         message: saw.detail === "" ? `${saw.tool}  ${saw.call}` : `${saw.tool}  ${saw.detail}`,
         mono: true,
         // What was sent, and how much of it there is where the wire said. The
@@ -240,16 +267,26 @@ function rowOf(row: Turn): LogRow {
         id,
         at,
         actor,
+        kind,
         message: saw.failed ? "The call failed" : "The call answered",
         payload: [{ text: saw.call, named: saw.failed ? "failed" : "meta" }],
       };
     case "said":
-      return { id, at, actor, message: saw.text, payload: lines(saw.text) };
+      // **Whose prose decides what the row's one line is.** The Drone's own is
+      // the message, because reading it is the point of watching. Armada's is
+      // named and its text goes in the payload — a 1,323-character brief as a
+      // row's headline is the longest thing on the pane, and it is context
+      // rather than the Drone working. Attributed and never dropped: what a
+      // Drone was told is what a reader needs to judge what it did.
+      return actor === "drone"
+        ? { id, at, actor, kind, message: saw.text, payload: lines(saw.text) }
+        : { id, at, actor, kind, message: REPLAYED, payload: lines(saw.text) };
     case "refused":
       return {
         id,
         at,
         actor,
+        kind,
         message: `The harness refused ${saw.tool}`,
         payload: [
           { text: saw.because, named: "failed" },
@@ -261,6 +298,7 @@ function rowOf(row: Turn): LogRow {
         id,
         at,
         actor,
+        kind,
         message: "The Drone run ended",
         payload: [{ text: endedOf(saw.turns, saw.cost_micros, saw.refusals), named: "meta" }],
       };
@@ -271,6 +309,7 @@ function rowOf(row: Turn): LogRow {
         id,
         at,
         actor,
+        kind,
         message: "A row this Bridge has no reading for",
         payload: [{ text: saw.kind, named: "meta" }],
       };
@@ -279,6 +318,7 @@ function rowOf(row: Turn): LogRow {
         id,
         at,
         actor,
+        kind,
         message: "A line the reader could not parse",
         payload: [{ text: saw.line }, { text: saw.why, named: "meta" }],
       };

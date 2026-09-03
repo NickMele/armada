@@ -45,7 +45,7 @@ pub use delivery::{
     how_the_base_was_found, Base, BroughtUpToDate, Delivery, NotDelivered, Opened, Pushed, Review,
     Standing,
 };
-pub use event::{CallDetail, DroneEvent};
+pub use event::{CallDetail, DroneEvent, Speaker};
 pub use harness::{
     AmbientServers, DroneHandle, DroneSpawnConfig, Environment, Grant, Launch, McpConfig, Model,
     Prompt, Prompting, SpawnConfigRefused, Toolbelt,

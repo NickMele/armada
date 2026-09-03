@@ -29,7 +29,7 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Mutex;
 
-use adapter_traits::{AgentHarness, DroneEvent, DroneSpawnConfig, Launch};
+use adapter_traits::{AgentHarness, DroneEvent, DroneSpawnConfig, Launch, Speaker};
 
 /// A harness that renders a harmless program.
 ///
@@ -163,8 +163,12 @@ impl AgentHarness for FakeHarness {
     fn read(&self, line: &str) -> Vec<DroneEvent> {
         match self.scripted.get(line) {
             Some(events) => events.clone(),
+            // The Drone's, because a scripted line stands in for something a
+            // Drone wrote. A test that wants Armada's turn echoed back scripts
+            // the event itself.
             None => vec![DroneEvent::Said {
                 text: String::from(line),
+                by: Speaker::Drone,
             }],
         }
     }

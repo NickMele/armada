@@ -110,6 +110,14 @@ impl TranscriptRow {
 pub enum Voice {
     /// Armada speaking into the Drone's session: the instruction a step opened
     /// with, a person's redirect carried in, an answer to a question, a nudge.
+    ///
+    /// **Two rows carry it and they are not duplicates.**
+    /// [`Saw::Instructed`] is what Fleet wrote and sent, with the occasion it
+    /// sent it for; a [`Saw::Said`] in this voice is the Drone's own stream
+    /// replaying the same words back off its input channel, which is where a
+    /// turn the harness itself wrote also lands. A surface asking what Armada
+    /// told a Drone reads the first; one drawing the conversation in order
+    /// draws both.
     Armada,
     /// The Drone's own output, decoded. **The default**, because every row
     /// written before this field existed is one.
@@ -175,6 +183,16 @@ pub enum Saw {
         call: String,
         failed: bool,
     },
+    /// Prose that crossed the session. **Whose is
+    /// [`TranscriptRow::by`](TranscriptRow::by) and not a field here** — the
+    /// row already stamps every kind, and a second speaker on one variant would
+    /// be two answers to one question.
+    ///
+    /// Every one of these used to be the Drone's, because the decoder discarded
+    /// the channel the line arrived on. So the brief a step opened with was
+    /// written down as the Drone's own prose and drew as the longest thing on
+    /// the pane — `adapter_traits::Speaker` is where that fact is now carried,
+    /// and `fleet::transcript::row` is where it becomes this row's voice.
     Said {
         text: String,
     },

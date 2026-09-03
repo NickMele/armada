@@ -20,7 +20,8 @@
 //! not on what Fleet intended.
 
 use adapter_traits::{
-    DroneEvent, DroneSpawnConfig, Environment, McpConfig, Model, Prompt, Toolbelt, Worktree,
+    DroneEvent, DroneSpawnConfig, Environment, McpConfig, Model, Prompt, Speaker, Toolbelt,
+    Worktree,
 };
 use core_model::{EscalationTrigger, Target};
 use testkit::FakeHarness;
@@ -262,7 +263,8 @@ async fn fleet_starts_exactly_what_the_harness_rendered() {
 fn a_run_with_no_terminating_event_vanished() {
     assert_eq!(
         Ending::of(&[DroneEvent::Said {
-            text: String::from("working on it")
+            text: String::from("working on it"),
+            by: Speaker::Drone
         }]),
         Ending::Vanished
     );
