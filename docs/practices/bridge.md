@@ -246,6 +246,24 @@ importing across them at the source level would silently blur exactly the line
 renderer code from main or vice versa, that want is a sign the code belongs in
 `packages/`, not that the import should happen.
 
+**Bridge never retypes a registry — it runs the codegen.** `pnpm --filter
+@armada/desktop codegen` reads the registries under
+`crates/core-model/domain/` and `protocol-version.toml` and writes the
+TypeScript Bridge imports: the vocabulary each domain variant renders as, the
+protocol version, and every act with its verb, its glyph and its binding. It
+needs nothing built and nothing installed — the script imports only from
+`node:` — and it prints one line per output plus the gaps it found, which is a
+report rather than a failure: a variant with no word and an act with no glyph
+are facts about the registry.
+
+**Run it after editing anything under `crates/core-model/domain/`, and commit
+what it writes.** The output is checked in, because a browser cannot read a
+TOML file. `cargo xtask verify-foundations` runs the same generator with
+`--emit`, which writes nothing, and fails naming any file that is not what a
+fresh run would produce — so a registry change nobody regenerated is caught
+rather than rendering the old words. The gate refuses and never rewrites; the
+fix is to run the command yourself.
+
 **What Bridge does with a failure is not decided here.** The wire fields it can
 rely on, the unknown-code fallback, and the rule that where a message appears is
 chosen by blast radius rather than severity all live in

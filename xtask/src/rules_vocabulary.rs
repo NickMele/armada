@@ -50,8 +50,14 @@ const WRITE: &str = "pnpm --filter @armada/desktop codegen";
 /// copy; `@armada/protocol` is a package both depend on, so the duplicate
 /// collapsed. The vocabulary itself stayed with the components: a glyph is a
 /// React component, and the wire package imports nothing.
+/// **`actions.ts` is here because it was a hand transcription first.** 592
+/// lines of `actions.toml` retyped into `packages/components/src/`, the third
+/// copy of one registry — it went the day the generator learned to emit it, and
+/// a generated file nothing compares to its source is the same drift wearing a
+/// banner that says it is not.
 const REQUIRED: &[&str] = &[
     "packages/components/src/generated/vocabulary.ts",
+    "packages/components/src/generated/actions.ts",
     "packages/protocol/src/generated/protocol-version.ts",
 ];
 
