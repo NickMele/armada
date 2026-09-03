@@ -143,7 +143,7 @@ pub struct Stuck {
 impl Stuck {
     /// Classify a Job that stopped. `None` where it has not.
     ///
-    /// **The four statuses a person opens a Job asking *why* about**, and the
+    /// **The five statuses a person opens a Job asking *why* about**, and the
     /// absence is as much of the answer as the presence: a Job that is queued,
     /// running, at a gate, piloted, superseded or landed is not stuck, and a
     /// classification on one of those would be a screen offering acts against a
@@ -162,14 +162,25 @@ impl Stuck {
         let stopped = job
             .stopped_on()
             .map(|(step, trigger)| (step.clone(), trigger));
-        let escalated = job.status() == JobStatus::Escalated;
+        let stopped_and_asking = matches!(
+            job.status(),
+            JobStatus::Escalated | JobStatus::AwaitingRepair
+        );
         let mut recourse = Vec::new();
 
-        if escalated {
+        if stopped_and_asking {
             if let Some((_, trigger)) = &stopped {
                 // Both need the worktree: overruling advances the Job onto the
                 // work that is meant to be sitting in it, and a gate re-run
                 // reads the same artifacts the first reading could not.
+                //
+                // **`checks_passed` is also what keeps a Check unoverrulable
+                // beneath `awaiting_repair`.** Both statuses can hold a step
+                // stopped on `gate_failure` — a Judge wrote it there and a
+                // mechanical Check wrote it here — and the trigger cannot tell
+                // them apart. The store can: nothing that failed a Check
+                // reaches this arm, so #208 widened the status test above and
+                // needed no rule of its own to keep the override out.
                 if trigger.overrulable() && standing.checks_passed && standing.worktree_on_disk {
                     recourse.push(Recourse::OverrideVerdict);
                 }
@@ -185,6 +196,11 @@ impl Stuck {
             // `docs/concepts/job.md` says they are. A redirect asks nothing
             // about a step: `stalled` escalates over a live Drone with no step
             // stopped, and that is the case a redirect most obviously fits.
+            //
+            // Beneath `awaiting_repair` a redirect is the ordinary answer and
+            // the reason the status exists: the Drone that wrote the code is
+            // still there holding its session, so telling it what the Check
+            // said costs no respawn and spends no attempt.
             if standing.drone_holding {
                 recourse.push(Recourse::Redirect);
             } else if stopped.is_some() && standing.worktree_on_disk {
@@ -214,10 +230,12 @@ impl Stuck {
     /// being told `None`. It is the same rule `of` applies and not a copy of
     /// it.
     ///
-    /// `escalated` is Fleet stopping and asking. The three terminals are the
-    /// ways a Job ends without landing — and `rejected` is among them because
-    /// "nothing resumes this and nothing replaces it either" is an answer,
-    /// where saying nothing at all is not.
+    /// `escalated` is Fleet stopping and asking, and `awaiting_repair` is
+    /// Fleet stopping and asking for one thing in particular — a step's retry
+    /// budget is spent and the work is unfinished (#208). The three terminals
+    /// are the ways a Job ends without landing, and `rejected` is among them
+    /// because "nothing resumes this and nothing replaces it either" is an
+    /// answer, where saying nothing at all is not.
     ///
     /// `superseded` is not: the work landed outside the Job, so the record has
     /// nothing left to say and nothing went wrong. `piloted` is not either — a
@@ -226,6 +244,7 @@ impl Stuck {
         matches!(
             status,
             JobStatus::Escalated
+                | JobStatus::AwaitingRepair
                 | JobStatus::CompletedFailed
                 | JobStatus::Killed
                 | JobStatus::Rejected
@@ -274,7 +293,10 @@ impl Stuck {
 fn redispatchable(job: &Job, standing: &Standing) -> bool {
     matches!(
         job.status(),
-        JobStatus::Escalated | JobStatus::CompletedFailed | JobStatus::Killed
+        JobStatus::Escalated
+            | JobStatus::AwaitingRepair
+            | JobStatus::CompletedFailed
+            | JobStatus::Killed
     ) && job.origin().top_level().is_some()
         && standing.workflow_held
 }

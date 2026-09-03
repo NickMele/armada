@@ -255,6 +255,80 @@ fn a_failed_check_takes_the_override_away() {
     assert!(stuck.admits(Recourse::Redirect), "the Drone is still there");
 }
 
+/// A Job whose step spent its retry budget: the step stopped carrying
+/// `gate_failure`, then the Job took `running -> awaiting_repair` — the order
+/// the guard on that edge enforces.
+fn budget_spent() -> Job {
+    let running = drive(&created(), &[Target::Queued, Target::Running]);
+    let step = StepId::new("repro");
+    let stopped = running
+        .transition_step(
+            &step,
+            StepTarget::Running,
+            Actor::Fleet,
+            at("2026-08-26T09:02:00.000Z"),
+        )
+        .expect("not_started -> running")
+        .job
+        .transition_step(
+            &step,
+            StepTarget::Stopped(
+                StepLevelTrigger::of(EscalationTrigger::GateFailure).expect("a step-level trigger"),
+            ),
+            Actor::Fleet,
+            at("2026-08-26T09:03:00.000Z"),
+        )
+        .expect("running -> stopped")
+        .job;
+    drive(&stopped, &[Target::AwaitingRepair])
+}
+
+/// **The status this whole issue is about, classified.** A person opens it
+/// asking why, and the acts they are offered are the ones that keep the work:
+/// a redirect into the Drone still holding the session, and a redispatch.
+///
+/// **The override is absent and no rule here says so.** `checks_passed` is
+/// read out of the store, the Checks did not pass, and that is the same
+/// sentence `a_failed_check_takes_the_override_away` asserts one status over —
+/// which is why widening the classification to this status could not make a
+/// Check overrulable by accident. #208.
+#[test]
+fn a_spent_budget_is_redirected_and_never_overruled() {
+    let stuck = classify(
+        &budget_spent(),
+        Standing {
+            checks_passed: false,
+            ..all_there()
+        },
+    );
+
+    assert_eq!(
+        stuck.stopped_by(),
+        Some(EscalationTrigger::GateFailure),
+        "the step's own verdict is what says why"
+    );
+    assert_eq!(stuck.step(), Some(&StepId::new("repro")));
+    assert_eq!(stuck.recourse(), [Recourse::Redirect, Recourse::Redispatch]);
+}
+
+/// With the Drone gone the same Job is restartable instead — the exclusivity
+/// `escalated` already has, unchanged by the status it is read beneath.
+#[test]
+fn a_spent_budget_with_no_drone_is_restarted() {
+    let stuck = classify(
+        &budget_spent(),
+        Standing {
+            checks_passed: false,
+            ..drone_gone()
+        },
+    );
+
+    assert_eq!(
+        stuck.recourse(),
+        [Recourse::RestartStep, Recourse::Redispatch]
+    );
+}
+
 /// Every trigger `overrulable` refuses is a trigger the classification refuses,
 /// and the two are the same match rather than two that agree today.
 #[test]

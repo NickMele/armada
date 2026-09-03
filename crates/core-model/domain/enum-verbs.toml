@@ -122,6 +122,14 @@ vocabulary = "Job status"
 in_code = ""
 notes = "Reads as the act the person owes. Grounded once the third verification source was named Attestation — the status and the source use the same word because they are the same thing at two moments, one waiting for it and one recording it."
 
+[verbs.job_status.awaiting_repair]
+verb = "needs repair"
+icon = "wrench"
+status_token = "--status-awaiting-repair"
+vocabulary = "Job status"
+in_code = ""
+notes = "**`needs` for `awaiting_approval`'s reason, and the enum name keeps `awaiting_` for a different one.** The badge means a person must act rather than that time is passing, which is the word that row settled; the key belongs to the family whose axis is *waited on, by a person*, and the two questions have different answers here exactly as they do there. What needs repair is the work, not the Job — the Job is unfinished, which is the reading `failed` was getting wrong. `needs fixing` was refused as the register a person uses about a machine that is broken, and the Drone is not; `stalled` is a Drone gone silent and `stopped` is the step-level word. `wrench` is minted in `packages/icons/icons.toml` rather than borrowed, and its own row carries what was refused."
+
 [verbs.job_status.awaiting_review]
 verb = "awaiting review"
 icon = "eye"

@@ -6,7 +6,7 @@
 //!
 //! # The set is the registry's, not this file's
 //!
-//! The twelve variants are the twelve keys of `domain/job-statuses.toml`,
+//! The thirteen variants are the thirteen keys of `domain/job-statuses.toml`,
 //! spelled exactly as that file spells them, because the key *is* the wire
 //! value — a rule comparing the two needs a set lookup and no mapping in
 //! between. Issue #92 is that rule; [`JobStatus::ALL`] and
@@ -23,7 +23,7 @@
 
 use crate::job::transition::EDGES;
 
-/// Where a Job is. Twelve, from `domain/job-statuses.toml`.
+/// Where a Job is. Thirteen, from `domain/job-statuses.toml`.
 ///
 /// Ordered as the registry orders its tables, alphabetically by wire value, so
 /// that reading the two side by side is a line-for-line comparison.
@@ -35,12 +35,21 @@ pub enum JobStatus {
     /// The work landed; a criterion needs an action outside Armada. The reason
     /// is the criterion ids owed — a reference, not an enum.
     AwaitingAttestation,
+    /// A step spent its gate-failure retry budget and the work is unfinished.
+    /// The Drone is alive and idle, still holding the session that wrote the
+    /// code, so answering the failure costs no respawn. **Not
+    /// [`CompletedFailed`](Self::CompletedFailed)**, which says the Job failed,
+    /// and not [`Escalated`](Self::Escalated), which says a machine's decision
+    /// is waiting to be overruled.
+    AwaitingRepair,
     /// A human advance gate is open. The work passed the step's machine gates,
     /// which is what ends a Drone, so the gate holds none — the worktree is
     /// kept and the liveness clock is suspended.
     AwaitingReview,
-    /// Terminal. Retries exhausted, a failed Check at M1, or a person accepting
-    /// the failure as the outcome.
+    /// Terminal. A person accepting the failure as the outcome, from
+    /// [`Escalated`](Self::Escalated) or [`AwaitingRepair`](Self::AwaitingRepair),
+    /// or an attestation that cannot be done. **Nothing mechanical writes it**
+    /// since #208.
     CompletedFailed,
     /// Terminal. Last step advanced, every criterion verified. Immutable once
     /// reached: a merge that later breaks main produces a new Job.
@@ -77,6 +86,7 @@ impl JobStatus {
     pub const ALL: &'static [JobStatus] = &[
         JobStatus::AwaitingApproval,
         JobStatus::AwaitingAttestation,
+        JobStatus::AwaitingRepair,
         JobStatus::AwaitingReview,
         JobStatus::CompletedFailed,
         JobStatus::CompletedSuccess,
@@ -96,6 +106,7 @@ impl JobStatus {
         match self {
             JobStatus::AwaitingApproval => "awaiting_approval",
             JobStatus::AwaitingAttestation => "awaiting_attestation",
+            JobStatus::AwaitingRepair => "awaiting_repair",
             JobStatus::AwaitingReview => "awaiting_review",
             JobStatus::CompletedFailed => "completed_failed",
             JobStatus::CompletedSuccess => "completed_success",
@@ -110,7 +121,7 @@ impl JobStatus {
     }
 
     /// Read a stored column back. `None` where the value is not one of the
-    /// twelve, which is a row written by something that did not share this
+    /// thirteen, which is a row written by something that did not share this
     /// enum — the caller decides what that means rather than getting a default.
     pub fn from_wire(value: &str) -> Option<JobStatus> {
         JobStatus::ALL
@@ -155,6 +166,29 @@ impl JobStatus {
 /// as text. A `const fn` filter would answer correctly and be unreadable by the
 /// rule that keeps it honest.
 const NOT_UNDER_COMPLETED_SUCCESS: &[JobStatus] = &[
+    JobStatus::AwaitingApproval,
+    JobStatus::AwaitingAttestation,
+    JobStatus::AwaitingRepair,
+    JobStatus::AwaitingReview,
+    JobStatus::CompletedFailed,
+    JobStatus::Escalated,
+    JobStatus::Killed,
+    JobStatus::Piloted,
+    JobStatus::Queued,
+    JobStatus::Rejected,
+    JobStatus::Running,
+    JobStatus::Superseded,
+];
+
+/// The same list without `awaiting_repair`, which is the second status a guard
+/// narrows and the only one that narrows against `running`.
+///
+/// `running -> awaiting_repair` is guarded on
+/// [`NoStepRunning`](crate::Guard::NoStepRunning), so a step still being worked
+/// cannot cross into it — the gate stops the step before the Job moves, and
+/// #179 is why the machine says so rather than only `fleet::dispatch`. Written
+/// out for the constant above's reason.
+const NOT_UNDER_A_SPENT_BUDGET: &[JobStatus] = &[
     JobStatus::AwaitingApproval,
     JobStatus::AwaitingAttestation,
     JobStatus::AwaitingReview,
@@ -246,6 +280,11 @@ impl StepState {
     /// issue #189, and it is what a row narrowing on something other than a
     /// widening looks like.
     ///
+    /// **`awaiting_repair` is the second, and it narrows the other way.** Its
+    /// one inbound edge is guarded on `no_step_running`, so `running` is the
+    /// single state that cannot be beneath it — which is #179's guard carried
+    /// across from the edge that used to end the Job instead (#208).
+    ///
     /// The two narrowest answers are the two states nothing reaches yet:
     /// `awaiting_human` has no [`StepTarget`](crate::StepTarget) and `retrying`
     /// has no retry budget, so each is where its design puts it rather than
@@ -256,7 +295,7 @@ impl StepState {
             StepState::AwaitingHuman => &[JobStatus::AwaitingReview],
             StepState::NotStarted => NOT_UNDER_COMPLETED_SUCCESS,
             StepState::Retrying => NOT_UNDER_COMPLETED_SUCCESS,
-            StepState::Running => NOT_UNDER_COMPLETED_SUCCESS,
+            StepState::Running => NOT_UNDER_A_SPENT_BUDGET,
             StepState::Stopped => NOT_UNDER_COMPLETED_SUCCESS,
         }
     }
