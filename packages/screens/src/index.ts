@@ -13,6 +13,7 @@
 export * from "./Acts";
 export * from "./Composer";
 export * from "./Decide";
+export * from "./DispatchJob";
 export * from "./JobDetail";
 export * from "./Jobs";
 export * from "./Log";
@@ -38,6 +39,7 @@ export * from "./opening";
 export * from "./phases";
 export * from "./preview";
 export * from "./produced";
+export * from "./proposal";
 export * from "./reading";
 export * from "./recovery";
 export * from "./render";

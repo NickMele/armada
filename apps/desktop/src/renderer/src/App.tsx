@@ -33,12 +33,15 @@ import { fleetFailure, jobFailure, refusalFailure, uncaughtFailure } from "@arma
 import { headOf } from "@armada/shell";
 import { statementOf } from "@armada/shell";
 import { Composer } from "@armada/screens";
+import { DispatchJob } from "@armada/screens";
+import type { Answered } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
 import { ACT_LABEL, CONFIRM, said } from "@armada/screens";
 import { Jobs } from "@armada/screens";
 import { BOARD_TABS, type BoardReach, type BoardTab } from "@armada/screens";
 import { carryOut, dormantIn } from "./palette";
+import { proposeRequest } from "./dispatch";
 import { Palette, useCommandPalette } from "@armada/shell";
 import { copyDebugInfoFor } from "@armada/shell";
 import { Shell } from "@armada/shell";
@@ -217,6 +220,20 @@ export function App() {
 
   async function propose(draft: Draft): Promise<void> {
     setOutcome(await window.armada.proposeJob(draft));
+  }
+
+  /**
+   * The app's half of a proposer answer: a refusal the dispatch surface has no
+   * drawing for goes to the same pipeline every other command failure uses.
+   * `dispatch.ts` makes the call and decides which half an answer is.
+   */
+  async function proposeFrom(request: string): Promise<Answered> {
+    const read = await proposeRequest(request, {
+      workflows: state.holds.workflows,
+      bridge: state.bridge,
+    });
+    if (read.outcome !== null) setOutcome(read.outcome);
+    return read;
   }
 
   async function approve(jobId: string): Promise<void> {
@@ -525,20 +542,36 @@ export function App() {
               <Reports reports={state.reports} onWant={readReports} onCopied={setCopied} />
             </Boundary>
           ) : composing ? (
-            /* What Fleet holds, read over the one connection. Not scraped off
-               the Jobs already on the board, which is what this offered before
-               `list_workflows` and `list_manifests` existed. */
+            /* Describing the work is the path and the form is the override, so
+               the composer is what `Enter by hand` swaps to rather than what
+               opens. What Fleet holds is read over the one connection and not
+               scraped off the Jobs already on the board, which is what this
+               offered before `list_workflows` and `list_manifests` existed. */
             <Boundary region="the job composer" {...guarded}>
-              <Composer
-                workflows={state.holds.workflows}
-                onStage={stageAttachment}
-                manifest={scoped}
-                models={state.holds.models}
-                disabled={!live}
-                onPropose={(draft) => {
-                  void propose(draft);
+              <DispatchJob
+                onPropose={proposeFrom}
+                // A proposed Job is opened, never approved from here: approval
+                // is a second act from detail, and this is the same signpost the
+                // Board's own `awaiting_approval` row carries.
+                onOpen={(jobId) => {
                   setComposing(false);
+                  setOpenJob(jobId);
                 }}
+                disabled={!live}
+                onCopied={setCopied}
+                byHand={
+                  <Composer
+                    workflows={state.holds.workflows}
+                    onStage={stageAttachment}
+                    manifest={scoped}
+                    models={state.holds.models}
+                    disabled={!live}
+                    onPropose={(draft) => {
+                      void propose(draft);
+                      setComposing(false);
+                    }}
+                  />
+                }
               />
             </Boundary>
           ) : (

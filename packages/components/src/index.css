@@ -129,3 +129,7 @@
 /* What Armada told the Drone, in the blocks Fleet wrote it in. Appended, per
    the rule at the head of this file. */
 @import "./compositions/DroneBrief/DroneBrief.css";
+
+/* Dispatch a job by describing the work — the Job proposer's surface.
+   Appended, per the rule at the head of this file. */
+@import "./compositions/DispatchRequest/DispatchRequest.css";

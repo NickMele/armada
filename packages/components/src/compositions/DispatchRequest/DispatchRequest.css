@@ -1,0 +1,208 @@
+/* Dispatch request — one field, one press, and what the request became.
+ *
+ * The card's own geometry comes from Card: --bg-raised, a --border-default
+ * edge, --radius-md and --pad-card. Only what the card does not answer is
+ * spelled here.
+ *
+ * **Nothing here animates.** The wait is a control that changed its label and
+ * went dead, which is Bridge's built idiom for an act in flight — and the one
+ * continuous animation the design contract allows is the running step mark,
+ * which this is not. */
+.armada-dispatch {
+  /* The surface is laid out by whatever holds it, and a flex or grid child
+     with no floor refuses to narrow past its content. */
+  min-width: 0;
+}
+
+.armada-dispatch__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* What this surface does, in one line above the field. Set back, because it is
+   read once and the field is what the eye goes to. */
+.armada-dispatch__lede {
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+/* The wait. Sans, muted, no mark: a call is out and nothing is arriving in
+   pieces, so there is nothing for a mark to be about. */
+.armada-dispatch__waiting {
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-wrap: pretty;
+}
+
+/* Why the controls are off, where they are. */
+.armada-dispatch__note {
+  min-width: 0;
+  color: var(--fg-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+/* --- No workflow resolved ------------------------------------------------- */
+
+/* Fleet answered and declined, which is Armada working rather than failing. So
+   no red, no fill and no code chip — the rule on the left is --step-waiting,
+   the tone that means needs you and not urgent, and it is the same rule the
+   drone-question box takes for the same reason. */
+.armada-dispatch__unresolved {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--border-width) solid var(--step-waiting);
+}
+
+.armada-dispatch__unresolved-head {
+  min-width: 0;
+  color: var(--fg-default);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+}
+
+.armada-dispatch__unresolved-body {
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  text-wrap: pretty;
+}
+
+/* --- What the request became ---------------------------------------------- */
+
+.armada-dispatch__answered {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The request, kept on screen after it was sent. Quoted with a rule rather
+   than framed: it is what was asked, not a field any more, and a second box
+   under the card would read as a second surface. */
+.armada-dispatch__asked {
+  min-width: 0;
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--border-width) solid var(--border-default);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-wrap: pretty;
+}
+
+.armada-dispatch__became {
+  min-width: 0;
+  color: var(--fg-default);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+}
+
+/* The jobs, in the order they must land in. A well, because they are what
+   Armada answered rather than anything typed — the same separation the
+   composer's glance strip draws. */
+.armada-dispatch__jobs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  list-style: none;
+}
+
+.armada-dispatch__job {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The position, and the whole of the graph: a proposal of several is a chain,
+   so the number is what says which waits on which. Mono, because it is a
+   machine reading, and set back so the title leads. */
+.armada-dispatch__ordinal {
+  flex: none;
+  /* Beside the title it numbers, not centred against a row whose height comes
+     from the two lines under it. The body's own line height is what puts it
+     there. */
+  align-self: start;
+  width: var(--space-4);
+  color: var(--fg-subtle);
+  font-size: var(--text-xs);
+  line-height: var(--leading-sm);
+  text-align: end;
+}
+
+.armada-dispatch__job-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+/* What the proposer called it. Sans and full strength: nobody typed it, and it
+   is the one thing on this row a person is checking. */
+.armada-dispatch__title {
+  min-width: 0;
+  color: var(--fg-default);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+/* The workflow's name, never its id. Plain sans in --fg-muted — a workflow is
+   not a status, so it is never a chip. */
+.armada-dispatch__workflow {
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+.armada-dispatch__waits {
+  min-width: 0;
+  color: var(--fg-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+/* What to do about a fault, where the control that does it is the footer's.
+   Set back and sans, because it is a sentence rather than a control. */
+.armada-dispatch__act {
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+/* What approving does, and what it does not decide. Read once, under the list
+   it is about. */
+.armada-dispatch__gate {
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  text-wrap: pretty;
+}
+
+/* Cancel-side first, the accent at the trailing edge where the reading ends —
+   the same order the job composer's own footer takes. */
+.armada-dispatch__foot {
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--border-subtle);
+}

@@ -1340,11 +1340,13 @@ read plausibly under a different job has failed.
   group.
 - **Job Board** the open queue. Never the queue, the backlog.
 - **Job proposer** the model call that reads a request — a prompt, a
-  ticket link — and proposes a Job: its workflow, its scope, and where
-  the work is several Jobs, the graph. Lowercase, because it is a call
-  rather than a component. Never the classifier, the Job-shape
-  classifier, the shape classifier. What it produces is a **Job
-  proposal**, and that is what the dispatch gate approves.
+  ticket link — and proposes a Job: its workflow, what to call it, and
+  where the work is several Jobs, the order between them. Scope is not
+  among them, and [Job proposer](../concepts/job-proposer.md) owns why.
+  Lowercase, because it is a call rather than a component. Never the
+  classifier, the Job-shape classifier, the shape classifier. What it
+  produces is a **Job proposal**, and that is what the dispatch gate
+  approves.
 - **Kit** the tool set you bring — Skills, MCP, sub agents, Agent
   files, Plugins, Commands, the allowlist, the models list. Never
   global settings, preferences. Replaces Guild, retired Aug 2026.
@@ -1382,7 +1384,7 @@ page.
 | --- | --- | --- |
 | Guild | **Kit** and **Machine** | A split, not a rename. Tools and the allowlist became Kit; resources, timing, budget, interface and notification routing became Machine. Each site needs judgment about which one it was |
 | Armada Server | **Armada API** | Named for the `api` crate |
-| Job-shape classifier | **Job proposer** | It stopped classifying a shape when shape became derived, and stopped only stating scope when workflow selection joined it. Neither half of the old name survived, and both halves misled — the second reading hid the fact that nothing chose a Job's workflow at all. A page still calling it a classifier is describing a narrower call than the one that exists |
+| Job-shape classifier | **Job proposer** | It stopped classifying a shape when shape became derived, and stopped naming scope at all when scope became the workflow's first step. Neither half of the old name survived, and both halves misled — the second reading hid the fact that nothing chose a Job's workflow at all. A page still calling it a classifier, or saying it proposes scope, is describing a different call from the one that exists |
 | Daemon | **Fleet** | Dropped as a redundant second name for the same process |
 | Ground Zero | **M0 — Foundations** | Archived with the phase plan |
 | Phase 0 through Phase 6, and numbered implementation steps | **Milestones** and their **Steps** | The nine-phase plan and its ~110 Steps live under "Archive — v2 phase plan" and are reference only. Milestone Steps are disposable and discarded when the milestone is met |
