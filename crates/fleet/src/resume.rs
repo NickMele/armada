@@ -19,8 +19,8 @@
 //! spawns outside admission: `escalated -> queued`, step left at `stopped`,
 //! and `crate::readmitting` makes both moves when there is room.
 //!
-//! **Nothing here is bounded.** A person who can redirect can redirect for
-//! ever; whether that is capped is decided in no document.
+//! **Nothing here is bounded, so a redirect buys no time.** No document caps
+//! how often a person may, so only a stopped step gets its clocks back.
 //!
 //! [`restart_step`]: Fleet::restart_step
 
@@ -146,17 +146,31 @@ where
             None => job,
         };
         self.instruct(job_id, instruction, &working).await?;
-        // The step is running again, so the thrashing chain is too. Without
-        // this a Drone steered off one loop is never caught in the next.
         if let Some(at_work) = working.as_mut() {
-            at_work.resumed(self.now());
-            // And where nothing was unfrozen the Job has not moved: still
-            // `escalated` until the Drone proves it heard, or still `running`
-            // and with nothing to prove. Both wait on the same turn and only
-            // the first has a move to make when it comes. See
-            // [`watch_redirect`](Fleet::watch_redirect).
-            if stopped.is_none() {
-                at_work.awaiting_answer(turned, self.now());
+            // **The two paths differ on the step's clocks, and on nothing
+            // else.** Both start the thrashing chain again — without that a
+            // Drone steered off one loop is never caught in the next — and
+            // what only one of them may do is put the step's wall clock and
+            // call count back to zero.
+            match stopped.as_ref() {
+                // A step that stopped stopped spending: the Drone stood idle
+                // at the escalation, so the readings it is measured by are
+                // measuring a step whose work is beginning again.
+                Some(_) => at_work.resumed(self.now()),
+                // **A healthy Drone keeps its clocks**, because nothing
+                // interrupted the work they count. Refilling them would make
+                // the ceilings mean "since somebody last typed", and #145 put
+                // no cap on how often a person may — so a Drone could be held
+                // alive past every ceiling by being spoken to.
+                None => {
+                    at_work.steered(self.now());
+                    // And where nothing was unfrozen the Job has not moved:
+                    // still `escalated` until the Drone proves it heard, or
+                    // still `running` and with nothing to prove. Both wait on
+                    // the same turn and only the first has a move to make when
+                    // it comes. See [`watch_redirect`](Fleet::watch_redirect).
+                    at_work.awaiting_answer(turned, self.now());
+                }
             }
         }
         Ok(job)
