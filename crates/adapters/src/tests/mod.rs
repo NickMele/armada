@@ -13,6 +13,7 @@
 mod commit;
 mod delivery;
 mod harness;
+mod issue_lookup;
 mod judge;
 mod mcp;
 mod reclaim;

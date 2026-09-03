@@ -28,7 +28,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use adapters::{GitVcs, HeadlessAgent};
+use adapters::{GitVcs, HeadlessAgent, IssueLookup};
 use config::Roster;
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
@@ -556,6 +556,9 @@ fn assemble(
         judge_budget: JudgeBudget::of(PROVISIONAL_JUDGE_BUDGET),
         judge_model,
         proposer_model,
+        // The one link shape resolved before dispatch. See
+        // `adapters::IssueLookup` for why it is the only one.
+        links: Arc::new(IssueLookup),
         models,
         events: api::Broadcaster::new(),
     }))

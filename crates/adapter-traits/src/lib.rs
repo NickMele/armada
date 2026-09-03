@@ -36,6 +36,7 @@ mod delivery;
 mod event;
 mod harness;
 mod judge;
+mod link_lookup;
 mod secret;
 mod work_product;
 mod worktree;
@@ -51,6 +52,7 @@ pub use harness::{
     Prompt, Prompting, SpawnConfigRefused, Toolbelt,
 };
 pub use judge::{Ask, JudgeCall, ModelClient};
+pub use link_lookup::{LinkLookup, LookupCall};
 pub use secret::Secret;
 pub use work_product::{
     Change, Changed, ChangedFile, Counted, CountedFile, Footprint, LineCount, Patch, WorkProduct,

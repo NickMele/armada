@@ -27,7 +27,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use adapter_traits::{
-    AgentHarness, Delivery, Model, ModelClient, SpawnConfigRefused, Vcs, WorkProduct,
+    AgentHarness, Delivery, LinkLookup, Model, ModelClient, SpawnConfigRefused, Vcs, WorkProduct,
 };
 use config::{Manifest, ResolvedWorkflow};
 use core_model::{
@@ -178,6 +178,10 @@ pub struct Fittings<H, V, W> {
     /// — this call fires on every dispatch rather than on every criterion, so
     /// the two are raised for different reasons and at different prices.
     pub proposer_model: Model,
+    /// What a request's own link resolves to, before it becomes a Job's
+    /// `facts`. **A pointer rather than a type parameter**, for `judge`'s
+    /// reason: rendering cannot fail, so nothing about it needs to be generic.
+    pub links: Arc<dyn LinkLookup + Send + Sync>,
     /// The models a Job may name, and the one it gets when it names none.
     ///
     /// **Resolved by the composition root, like every other input here.**
@@ -228,6 +232,7 @@ pub struct Fleet<H, V, W> {
     aloft: Aloft,
     judge_model: Model,
     proposer_model: Model,
+    links: Arc<dyn LinkLookup + Send + Sync>,
     models: ipc::ModelChoices,
     events: api::Broadcaster,
     /// Every Job somebody could be watching. **Minted here, not a fitting** —
@@ -326,6 +331,7 @@ where
             aloft: Aloft::default(),
             judge_model: fittings.judge_model,
             proposer_model: fittings.proposer_model,
+            links: fittings.links,
             models: fittings.models,
             events: fittings.events,
             turns: api::Turns::new(),
@@ -769,6 +775,11 @@ where
     /// `list_models`; nothing else consults it.
     pub(crate) fn models(&self) -> &ipc::ModelChoices {
         &self.models
+    }
+    /// What a request's own link resolves to. Read by `crate::proposal`
+    /// before a request becomes a Job's `facts`.
+    pub(crate) fn links(&self) -> &Arc<dyn LinkLookup + Send + Sync> {
+        &self.links
     }
     pub(crate) fn mint(&self) -> &Arc<dyn Mint> {
         &self.mint
