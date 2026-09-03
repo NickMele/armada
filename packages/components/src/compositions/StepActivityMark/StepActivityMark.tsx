@@ -1,4 +1,4 @@
-import { Check, CircleDot, Eye, Flag, Power, RotateCw, X, type LucideIcon } from "lucide-react";
+import { Check, CircleDashed, CircleDot, Eye, Flag, Power, RotateCw, X, type LucideIcon } from "lucide-react";
 
 /**
  * Step activity mark — the glyph one rail row carries, and the single place
@@ -34,9 +34,12 @@ export type StepActivity =
  * Activity to glyph. The roster is the registry's, not this file's — every
  * entry here names a glyph with a table in `packages/icons/icons.toml`.
  *
- * `not_started` has no glyph anywhere in the registry, and the M1 drawing
- * answers why: a step that has not run shows **its own number** in the mark's
- * slot, not a silhouette. `ordinal` is how the rail supplies it.
+ * `not_started` takes `circle-dashed`, minted for this value alone rather
+ * than borrowed. It is a fallback, never a first choice: a step's position is
+ * more informative than a silhouette, so wherever a caller supplies an
+ * `ordinal` — `WorkflowRail` and `StepRow` both do today — the number wins
+ * and the glyph never displaces it. The glyph draws only where no ordinal
+ * reaches this component.
  *
  * `awaiting_human` takes `eye`. The registry's borrowing convention lists
  * `eye` and does not list `clock`, and the hue agrees: `--step-waiting`
@@ -50,8 +53,8 @@ export type StepActivity =
  * names its glyph, so the borrowing convention is what sanctions this one.
  * Reported.
  */
-const GLYPH: Record<StepActivity, LucideIcon | undefined> = {
-  not_started: undefined,
+const GLYPH: Record<StepActivity, LucideIcon> = {
+  not_started: CircleDashed,
   running: CircleDot,
   awaiting_human: Eye,
   retrying: RotateCw,
@@ -104,22 +107,21 @@ export function StepActivityMark({ activity, label, ordinal, pulsing = false }: 
   // Only the running mark pulses. Motion carries "still working", which is a
   // claim no other activity value makes.
   const animates = pulsing && activity === "running";
+  // `circle-dashed` is a fallback for `not_started` alone, not a first
+  // choice: an ordinal is more informative than a silhouette, so it wins
+  // wherever a caller supplies one. Every other activity's glyph is a claim
+  // about what happened, and an `ordinal` a caller passes alongside it (as
+  // `WorkflowRail` does for every row) is not a competing rendering — that
+  // glyph always wins, unchanged from before this value had one.
+  const showOrdinal = activity === "not_started" && ordinal !== undefined;
   return (
     <span className="armada-step-mark" data-activity={activity} data-pulsing={animates || undefined}>
-      {Icon ? (
-        <Icon size={MARK_ICON} strokeWidth={MARK_STROKE} aria-hidden />
-      ) : ordinal !== undefined ? (
+      {showOrdinal ? (
         <span className="armada-step-mark__ordinal" aria-hidden>
           {ordinal}
         </span>
       ) : (
-        // A step that has not run, with no number to stand in for it: the
-        // Journey 4 drawing gives it a hollow ring, and the slot rendered
-        // nothing at all before. Not a glyph — the icon registry carries no
-        // bare circle and `packages/icons/` is not this component's to write
-        // — so it is a ring in the stylesheet, the same class of object as
-        // the running dot and the degraded dot already drawn there. Reported.
-        <span className="armada-step-mark__ring" aria-hidden />
+        <Icon size={MARK_ICON} strokeWidth={MARK_STROKE} aria-hidden />
       )}
       <span className="armada-step-mark__name">{label}</span>
     </span>

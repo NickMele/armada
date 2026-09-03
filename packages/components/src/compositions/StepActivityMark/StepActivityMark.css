@@ -41,18 +41,6 @@
   color: var(--fg-subtle);
 }
 
-/* A step that has not run and has no number either — job detail's tree, where
-   a list number in six rows says only that the tree has six rows. A hollow
-   ring: the drawn mark, and the one silhouette in the set that depicts nothing
-   having happened. Sized to the glyph beside it, not to the slot, so a ringed
-   row and a glyphed row share an optical centre. */
-.armada-step-mark__ring {
-  width: var(--space-3);
-  height: var(--space-3);
-  border: var(--border-width) solid currentcolor;
-  border-radius: 50%;
-}
-
 /* --- Hue, one line per declared value ------------------------------------- */
 
 .armada-step-mark[data-activity="advanced"] {

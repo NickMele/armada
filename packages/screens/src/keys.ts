@@ -10,9 +10,11 @@
 // **This file was read off prose, and the prose now has a source.**
 // `crates/core-model/domain/actions.toml` is the artifact the contract promised
 // and `xtask`'s action rule is the test, so the two blocks under "Two tiers"
-// are checked against it. This is still a hand transcription of that table, and
-// so is `packages/components/src/actions.ts`, which is what the palette draws
-// from. The codegen that would emit both is #232.
+// are checked against it. The registry reaches TypeScript through
+// `@armada/components`' generated map, which is where `ROW_VERBS` below now
+// reads its four keys and four words from — the table in this comment is prose
+// about what the Board does with each key, and is no longer a second copy of
+// what the keys are.
 //
 // # The contextual tier, and what the Board does with each key
 //
@@ -66,27 +68,59 @@
 // - **A modifier means this map is not the one being addressed.** `⌘K` is the
 //   palette's and `⌘1`–`⌘5` are the rail's; a bare key is this tier's.
 
+import { ACTION } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
 import { BOARD_TABS, type BoardTab } from "./board";
 
-/** The verb a row's one control names. Four, and a row carries exactly one. */
+/**
+ * The verb a row's one control names. Four, and a row carries exactly one.
+ *
+ * **Each is an id in `actions.toml`**, which is what lets the table below read
+ * its word and its key off the registry instead of restating them.
+ */
 export type RowVerb = "review" | "attest" | "redirect" | "open";
 
 /**
- * The key for each verb, and its label.
+ * The key for each verb, and its label, from the act registry.
  *
  * **The label is the button's word and the key is its initial**, which is the
  * whole mnemonic — so they live in one row and a rename cannot leave the key
  * standing for a word nobody sees. Redirect is the exception: `r` is review,
  * settled 2026-08-31, because review is on every needs-you row and is the
  * most-pressed contextual key in the app.
+ *
+ * That mnemonic is exactly why this is read rather than typed. The four words
+ * and the four keys were decided in `crates/core-model/domain/actions.toml` and
+ * were written out again here, so renaming Redirect in the registry left the
+ * Board drawing the old word under the registry's key.
  */
 export const ROW_VERBS: Readonly<Record<RowVerb, { key: string; label: string }>> = {
-  review: { key: "r", label: "Review" },
-  attest: { key: "t", label: "Attest" },
-  redirect: { key: "d", label: "Redirect" },
-  open: { key: "o", label: "Open" },
+  review: rowBinding("review"),
+  attest: rowBinding("attest"),
+  redirect: rowBinding("redirect"),
+  open: rowBinding("open"),
 };
+
+/**
+ * One row verb's word and key, or a stop.
+ *
+ * **It throws rather than falling back**, because every fallback available is
+ * worse than not loading: an empty label draws a button with no word on it, and
+ * a guessed key binds a keystroke the registry did not sanction. The registry
+ * is checked in and gated, so this can only fire on a build where the generated
+ * map and this file disagree — which is the moment to find out.
+ */
+function rowBinding(id: RowVerb): { key: string; label: string } {
+  const act = ACTION[id];
+  if (act === undefined) throw new Error(`actions.toml has no [actions.${id}]`);
+  // A row's control draws its key as a single cap. The registry spells some
+  // bindings as a pair or a range — `⌘[ ⌘]`, `1–5` — and one of those on a row
+  // would render as a caption rather than a key.
+  if ([...act.shortcut].length !== 1) {
+    throw new Error(`actions.toml — ${id} is bound to "${act.shortcut}", and a row draws one key`);
+  }
+  return { key: act.shortcut, label: act.verb };
+}
 
 /**
  * Which verb a row carries, from the summary and nothing else.

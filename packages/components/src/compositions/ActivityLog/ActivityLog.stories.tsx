@@ -203,3 +203,63 @@ export const TheStreamCut: Story = {
 export const NothingYet: Story = {
   args: { entries: [] },
 };
+
+// The wire's own sentence for a turn that reached the Drone on the input
+// channel rather than arriving as the Drone's own prose — `REPLAYED` in
+// packages/screens/src/story.ts. Quoted rather than paraphrased; copied here
+// because a component cannot depend on `@armada/screens`.
+const REPLAYED = "The session replayed what the Drone was told";
+
+const STEP_BRIEF = [
+  "STEP: Add the echo comparison story",
+  "",
+  "PR 350 attributed DroneEvent::Said, so Armada's injected turns stop reading",
+  "as the Drone's own prose. Fleet still writes an `instructed` row for every",
+  "turn it sends, and the same text now also comes back on the Drone's input",
+  "channel as an echo, so it is on the transcript twice.",
+  "",
+  "What you claim should be what the work now does, not that you finished. An",
+  "adjacent problem you notice and leave alone goes under Not claimed.",
+].join("\n");
+
+/**
+ * The same text, on the transcript twice, in the shape it actually arrives:
+ * the step's opening `instructed` row, first-hand and with its occasion — and
+ * later, once Fleet's turn comes back on the Drone's own input channel, a
+ * one-line `said` row reading exactly `REPLAYED`, with that same text folded
+ * behind it rather than in front of it.
+ *
+ * **What the reader is being asked to judge.** Whether the second row earns
+ * its place beside `quota_moved` and `missed` — kept, or withheld the way
+ * those are — is not decided here. This only draws the pair as it now reads
+ * in a real stream, so the decision is made against the rendering rather than
+ * a description of it.
+ */
+export const TheBriefAndItsEcho: Story = {
+  args: {
+    entries: [
+      {
+        id: "1",
+        at: "09:14:02",
+        actor: "armada",
+        summary: "Armada opened the step.",
+        payload: STEP_BRIEF,
+      },
+      {
+        id: "2",
+        at: "09:14:39",
+        actor: "drone",
+        summary: "Reading the wire's own row shape before touching the story.",
+      },
+      { id: "3", at: "09:15:07", actor: "drone", summary: "Read", subject: "packages/screens/src/story.ts" },
+      {
+        id: "4",
+        at: "09:15:41",
+        actor: "armada",
+        summary: REPLAYED,
+        payload: STEP_BRIEF,
+      },
+      { id: "5", at: "09:16:20", actor: "drone", summary: "Edit", subject: "ActivityLog.stories.tsx" },
+    ],
+  },
+};
