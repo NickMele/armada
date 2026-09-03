@@ -22,7 +22,7 @@
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
-use adapter_traits::{Ask, JudgeCall, ModelClient};
+use adapter_traits::{Ask, Heard, JudgeCall, ModelClient};
 
 /// A judge that answers whatever the test wrote.
 #[derive(Debug)]
@@ -119,6 +119,106 @@ impl ModelClient for FakeJudge {
         }
         JudgeCall::rendered(ask, "/bin/sh", args)
     }
+
+    /// The same answer, printed as a watched call prints one.
+    ///
+    /// **A real stream, slowly.** The script emits the three lines a caller
+    /// reads progress off — the harness starting, the request reaching the
+    /// vendor, the model thinking — then the answer, with a beat between each,
+    /// so a test watching a call actually sees it move rather than seeing one
+    /// batch arrive at the end. The beats are what make a stop reachable: a
+    /// call that finished before anybody could ask it to stop proves nothing
+    /// about stopping.
+    ///
+    /// **The lines are built here and printed there.** Assembling JSON inside a
+    /// shell script means quoting an answer through two languages, and the
+    /// first answer containing a quotation mark would produce a line the reader
+    /// silently drops — a fake that goes quiet where the real one would not. So
+    /// each line is a finished string by the time the shell sees it, and the
+    /// shell only writes what it is handed.
+    ///
+    /// A failing judge still fails **after** the progress: a call that dies
+    /// before it says anything is a different case, and
+    /// [`FakeJudge::that_fails`]'s unwatched render is where that one lives.
+    fn render_watched(&self, ask: &Ask) -> JudgeCall {
+        self.asked
+            .lock()
+            .expect("not poisoned")
+            .push(ask.question().to_string());
+        let mut lines = vec![
+            String::from(r#"{"type":"system","subtype":"init"}"#),
+            String::from(r#"{"type":"system","subtype":"status","status":"requesting"}"#),
+            String::from(r#"{"type":"system","subtype":"thinking_tokens","estimated_tokens":120}"#),
+        ];
+        if self.failing.is_none() {
+            if let Some(answer) = self.answer(ask.question()) {
+                lines.push(assistant(&answer));
+            }
+        }
+        // One `printf` per line with a beat between, then the exit the fake is
+        // scripted for. `$0`-style splicing is deliberately not used: every
+        // line is already a literal by the time it reaches the shell.
+        let mut script = String::from("cat >/dev/null; ");
+        for line in &lines {
+            script.push_str(&format!("printf '%s\n' {}; sleep 0.05; ", quoted(line)));
+        }
+        script.push_str(match self.failing {
+            Some(_) => "exit 3",
+            None => "true",
+        });
+        JudgeCall::rendered(ask, "/bin/sh", vec![String::from("-c"), script])
+    }
+
+    /// Read a line the way the real client does. **Delegated rather than
+    /// re-implemented**: a fake with its own reader would let a suite pass
+    /// against a format the shipped reader cannot parse, which is the one thing
+    /// a fake at this seam must not do.
+    fn heard(&self, line: &str) -> Heard {
+        adapters::HeadlessAgent::at("/bin/false").heard(line)
+    }
+}
+
+/// One `assistant` line carrying `answer`, as the real stream carries one.
+///
+/// **The answer is escaped rather than interpolated.** A refusal cites three
+/// fields on three lines and any answer may hold a quotation mark, so a
+/// `format!` that dropped the string in raw would produce a line that is not
+/// JSON — and `heard` would return `Nothing` for it, which is a fake going
+/// quiet exactly where the real client would not.
+///
+/// No JSON library: testkit depends on none, the shape is three nested objects
+/// fixed at compile time, and the only variable in it is one string. What that
+/// string needs is [`escaped`], which is below and is six lines.
+fn assistant(answer: &str) -> String {
+    format!(
+        r#"{{"type":"assistant","message":{{"content":[{{"type":"text","text":"{}"}}]}}}}"#,
+        escaped(answer)
+    )
+}
+
+/// One JSON string body. The five escapes RFC 8259 requires of a bare string,
+/// plus the `\u` form for the remaining control characters — a criterion's
+/// answer is prose and a tab in it should not end the line.
+fn escaped(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for character in value.chars() {
+        match character {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            other if (other as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", other as u32)),
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+/// A string the shell will hand back unchanged. Single quotes, with the one
+/// character that ends them spliced.
+fn quoted(value: &str) -> String {
+    format!("'{}'", value.replace('\'', r"'\''"))
 }
 
 /// One refusal, as the record holds it.

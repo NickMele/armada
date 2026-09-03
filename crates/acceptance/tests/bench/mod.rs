@@ -26,6 +26,9 @@ pub mod board;
 /// Focus's own apparatus, which reaches this module's private seams rather
 /// than making a second copy of them. See its own header.
 pub mod focus;
+/// Recovery's own apparatus: the two moves a person makes on a Job, and a
+/// detail assembled against a standing the caller names. See its own header.
+pub mod recovery;
 
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicU64, Ordering};

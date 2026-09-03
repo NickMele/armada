@@ -30,11 +30,11 @@ use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use adapter_traits::{Ask, Environment, Model, ModelClient, Patch};
+use adapter_traits::{Ask, CallProgress, Environment, Heard, Model, ModelClient, Patch};
 use core_model::{
     DeclaredPaths, GamingFlag, JudgeCheck, Judgment, RepoPath, ResolvedStep, StepEvidence, StepId,
 };
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::process::Command;
 use verification::{
     Accepted, Answered, Baseline, Brief, Convergence, ConvergenceBrief, Delivered, Flagged,
@@ -625,17 +625,112 @@ fn model_for(check: &JudgeCheck, default: &Model) -> Result<Model, CallFailed> {
     }
 }
 
-/// Run one rendered call and answer with what it printed.
+/// Run one rendered call, reporting on it, and answer with what it said.
 ///
-/// `pub(crate)` because the Job proposer's call is the same call: one turn, one
-/// question on stdin, a directory with no repository under it. A second runner
-/// beside this one would be a second answer to what a failed call is.
-pub(crate) async fn said(
+/// **[`said`] with somebody waiting.** Same confinement, same failures, same
+/// budget — what differs is that the call is rendered to print what it is
+/// doing, and this reads those lines and hands each to `telling` as it
+/// arrives. A proposal is made with a person watching a blank form, and an
+/// elapsed count is the one thing that does not distinguish a model thinking
+/// from a harness that never reached the vendor.
+///
+/// # It is a second runner, and this is the argument for it
+///
+/// [`said`]'s own note says a second runner beside it would be a second answer
+/// to what a failed call is, and that rule is kept: **every failure here is one
+/// of [`said`]'s**, raised for the same condition, and there is no `CallFailed`
+/// this can produce that that cannot. What is genuinely different is the shape
+/// of the read — `wait_with_output` collects a finished process, and nothing
+/// built on it can report on one that has not finished. The two cannot be one
+/// function without the unwatched call paying for a line reader it never uses.
+///
+/// # The killer is the handle, and dropping it is what stops the call
+///
+/// `kill_on_drop` is set on both runners. What this adds is that the child is
+/// reachable while it runs: `stopping` is resolved when somebody asks the call
+/// to stop, and the process is killed there and then rather than left to run
+/// out Fleet's budget with nobody waiting on it. A stopped call is
+/// [`CallFailed::Stopped`], which is **not a fault** — somebody decided, and a
+/// surface drawing it in red would be telling them Armada broke.
+pub(crate) async fn watched(
     client: &(dyn ModelClient + Send + Sync),
     ask: &Ask,
     budget: JudgeBudget,
+    telling: &(dyn Fn(CallProgress) + Send + Sync),
+    stopping: impl std::future::Future<Output = ()> + Send,
 ) -> Result<String, CallFailed> {
-    let call = client.render(ask);
+    let call = client.render_watched(ask);
+    let mut child = started(&call)?;
+    // Taken before the reader borrows the child, so the wait below owns what it
+    // waits on. The pipe is `Stdio::piped()` on both runners; only this one
+    // reads it a line at a time.
+    let stdout = child.stdout.take();
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(call.question().as_bytes())
+            .await
+            .map_err(|error| CallFailed::NotAsked { kind: error.kind() })?;
+        drop(stdin);
+    }
+
+    let reading = async {
+        let mut said: Option<String> = None;
+        if let Some(stdout) = stdout {
+            let mut lines = tokio::io::BufReader::new(stdout).lines();
+            // A read that fails ends the reading rather than the call: the
+            // process is still what decides, and its exit status below is the
+            // authority on whether this worked. Losing the tail of a stream
+            // costs the progress surface and nothing else.
+            while let Ok(Some(line)) = lines.next_line().await {
+                match client.heard(&line) {
+                    // **Last one wins, and there is only ever one.** A turn
+                    // prints its `assistant` line once; taking the last rather
+                    // than the first is what keeps a harness that reprints one
+                    // from being read as two answers.
+                    Heard::Answer(answer) => said = Some(answer),
+                    Heard::Moved(progress) => telling(progress),
+                    Heard::Nothing => {}
+                }
+            }
+        }
+        said
+    };
+
+    tokio::pin!(stopping);
+    let said = tokio::select! {
+        // **The stop wins over the budget and over the reading**, which is the
+        // point of it: a person who has decided not to wait is not made to wait
+        // out the rest of Fleet's budget. Dropping `child` kills the process,
+        // and `kill_on_drop` is what makes that true.
+        () = &mut stopping => return Err(CallFailed::Stopped),
+        read = tokio::time::timeout(budget.duration(), reading) => match read {
+            Ok(said) => said,
+            Err(_) => return Err(CallFailed::TimedOut),
+        },
+    };
+
+    // The stream is closed, so the process is finished or nearly. It is still
+    // the exit status that decides, for `said`'s reason: a call that printed an
+    // answer and then failed did not answer.
+    let status = child
+        .wait()
+        .await
+        .map_err(|error| CallFailed::NotAsked { kind: error.kind() })?;
+    if !status.success() {
+        return Err(CallFailed::Refused {
+            code: status.code(),
+        });
+    }
+    match said {
+        Some(said) if !said.trim().is_empty() => Ok(said),
+        _ => Err(CallFailed::SaidNothing),
+    }
+}
+
+/// Start a rendered call. **The confinement, and the one place it is applied**
+/// — both runners spawn through here, so a flag added to one is added to both
+/// and neither can quietly run somewhere the other does not.
+fn started(call: &adapter_traits::JudgeCall) -> Result<tokio::process::Child, CallFailed> {
     let mut spawning = Command::new(call.program());
     spawning
         .args(call.args())
@@ -648,11 +743,24 @@ pub(crate) async fn said(
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     spawning.process_group(0);
-
-    let mut child = spawning.spawn().map_err(|error| CallFailed::NotStarted {
+    spawning.spawn().map_err(|error| CallFailed::NotStarted {
         program: call.program().to_string(),
         kind: error.kind(),
-    })?;
+    })
+}
+
+/// Run one rendered call and answer with what it printed.
+///
+/// `pub(crate)` because the Job proposer's call is the same call: one turn, one
+/// question on stdin, a directory with no repository under it. A second runner
+/// beside this one would be a second answer to what a failed call is.
+pub(crate) async fn said(
+    client: &(dyn ModelClient + Send + Sync),
+    ask: &Ask,
+    budget: JudgeBudget,
+) -> Result<String, CallFailed> {
+    let call = client.render(ask);
+    let mut child = started(&call)?;
     if let Some(mut stdin) = child.stdin.take() {
         // A failed write is a failed call: a model that was never given the
         // question cannot have answered it.
@@ -697,6 +805,15 @@ pub enum CallFailed {
     /// It was still running when the budget expired. **The latency case**, and
     /// the one a person waiting at the gate feels.
     TimedOut,
+    /// Somebody watching it decided not to wait, and it was killed.
+    ///
+    /// **Not a fault, and that is the whole reason it is its own variant.**
+    /// Every other arm here is something going wrong; this one is a person
+    /// exercising a control that was offered to them, and a surface that folded
+    /// it into [`Refused`](CallFailed::Refused) would draw a decision as a
+    /// failure. It can only arise on [`watched`], because it is the only call
+    /// anybody can reach while it is out.
+    Stopped,
     /// It ended badly — the network, the quota, an expired credential.
     Refused { code: Option<i32> },
     /// It ended well and printed nothing.
@@ -725,6 +842,7 @@ impl fmt::Display for CallFailed {
                 write!(out, "the question could not be delivered: {kind}")
             }
             CallFailed::TimedOut => out.write_str("the Judge did not answer inside its budget"),
+            CallFailed::Stopped => out.write_str("the call was stopped before it answered"),
             CallFailed::Refused { code: Some(code) } => {
                 write!(out, "the Judge call ended with code {code}")
             }
