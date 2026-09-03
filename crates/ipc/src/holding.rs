@@ -1,45 +1,14 @@
-//! What Fleet is holding disk for, and the test each one did not pass.
+//! What Fleet is holding disk for, and the test each one did not pass. The
+//! wire form of `crates/fleet/src/holding.rs`, which is the definition.
 //!
-//! # The reason is the payload, not a label on it
+//! **Nothing here says how large a worktree is.** Bytes are not the decision —
+//! which commits go, whether anything else has them, and which uncommitted
+//! files exist nowhere but that checkout is — and a size beside those would be
+//! the figure read first and meaning least.
 //!
-//! `crates/fleet/src/holding.rs` is the definition and this is its wire form.
-//! Not-provably-safe is one word for several situations a person answers
-//! differently — a branch the base cannot reach, files nobody committed, a Job
-//! still moving, a Job something else is waiting on — so each reason carries
-//! what that particular decision needs rather than a sentence somebody has to
-//! read and guess from.
-//!
-//! # A piloted worktree is not on this wire at all
-//!
-//! `#367`: a person is at an unrestricted toolset in it, and an act that is
-//! drawn is an act somebody eventually clicks. Fleet filters on
-//! `Holding::offerable`, which is its own predicate rather than a second
-//! reading — so there is no `piloted` variant below to be rendered by mistake,
-//! and Bridge cannot offer what it was never sent.
-//!
-//! # No byte count, deliberately
-//!
-//! Nothing here says how large a worktree is. Bytes are not the decision: what
-//! a person is deciding is which commits go, whether anything else has them,
-//! and which uncommitted files exist nowhere but that directory. A number of
-//! megabytes beside those facts is the one figure that would be read first and
-//! mean least.
-//!
-//! # Why the reasons are not a `wire_enum`
-//!
-//! `enums`'s rule is that a closed set on this seam is a `core-model` registry
-//! key spelled through `as_wire`. There is no registry for this one, and
-//! `reclaimed` already argued why minting one would be wrong for the same kind
-//! of value: the set is a reading of git and of Fleet's own scheduler, not a
-//! state the Job machine can be in. The authority is
-//! `crates/fleet/src/holding.rs`, which is the single place the five tests are
-//! written.
-//!
-//! **Widening the set is a major bump, not a minor one.** Bridge branches on
-//! `why` to decide which facts to put in front of the decision, which is the
-//! `docs/practices/protocol.md` row for a variant the other side matches on —
-//! the caveat that makes `FleetCapacity.held_by` minor does not apply here,
-//! because nothing renders these opaquely.
+//! **A piloted worktree is not on this wire at all**, so there is no variant
+//! below to render by mistake. `#367`, and Fleet drops it through
+//! `Holding::offerable` rather than trusting a client with a flag.
 
 use serde::{Deserialize, Serialize};
 
@@ -91,6 +60,15 @@ impl WorktreeHeld {
 /// **Tagged on `why`, and each arm carries what its own decision needs.** The
 /// count of commits without the branch they are on, or a claim of uncommitted
 /// work without the filenames, is a row that asks somebody to guess.
+///
+/// **Not a `wire_enum`, because there is no registry for it.** `enums`'s rule
+/// is a `core-model` key spelled through `as_wire`, and `reclaimed` already
+/// argued the exception for this kind of value: the set is a reading of git and
+/// of Fleet's scheduler, not a state the Job machine can be in.
+///
+/// **Widening it is a major bump.** Bridge branches on `why` to pick which
+/// facts to show, which is `docs/practices/protocol.md`'s row for a variant the
+/// other side matches on — `FleetCapacity.held_by`'s caveat does not reach it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "why", rename_all = "snake_case")]
 pub enum HeldReason {

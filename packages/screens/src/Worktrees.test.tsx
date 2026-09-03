@@ -30,7 +30,7 @@ function held(over: Partial<WorktreeHeld> = {}): WorktreeHeld {
     job_id: "01JOB0001",
     job_title: "Port the settings selectors",
     status: "completed_success",
-    path: "/work/.armada/worktrees/01JOB0001",
+    path: "/Users/user/armada/.armada/worktrees/01JOB0001",
     branch: "armada/01JOB0001",
     held: [],
     ...over,

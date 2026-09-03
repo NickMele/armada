@@ -19,7 +19,7 @@ function held(over: Partial<WorktreeHeld> = {}): WorktreeHeld {
     job_id: "01JOBHELD0001",
     job_title: "Port the settings selectors",
     status: "completed_success",
-    path: "/Users/work/armada/.armada/worktrees/01JOBHELD0001",
+    path: "/Users/user/armada/.armada/worktrees/01JOBHELD0001",
     branch: "armada/01JOBHELD0001",
     held: [],
     ...over,
@@ -204,7 +204,7 @@ export const OneHalfHappened: Story = {
     reclaimed: {
       job_id: "01JOBHELD0001",
       worktree: {
-        path: "/Users/work/armada/.armada/worktrees/01JOBHELD0001",
+        path: "/Users/user/armada/.armada/worktrees/01JOBHELD0001",
         removed: true,
       },
       branch: {
@@ -237,7 +237,7 @@ export const NeitherHalfHappened: Story = {
     reclaimed: {
       job_id: "01JOBHELD0001",
       worktree: {
-        path: "/Users/work/armada/.armada/worktrees/01JOBHELD0001",
+        path: "/Users/user/armada/.armada/worktrees/01JOBHELD0001",
         removed: false,
         why: "mid-bisect, do not touch",
       },
