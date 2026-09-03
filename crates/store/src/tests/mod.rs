@@ -33,9 +33,9 @@ use core_model::{
     CriterionSource, DeclarePlanAt, DependencyDirection, DependencyEdge, DispatchOrigin,
     EvidenceRef, EvidenceScope, EvidenceType, Facts, FrozenWorkflow, GamingCheck, GamingPattern,
     GateManifest, GateOutcome, Job, JobId, JudgeCheck, JudgeCriterion, ManifestId, ModelName,
-    NewJob, NotRunReason, PathPattern, RepoPath, ResolvedCheck, ResolvedStep, ScopeRevision,
-    ScopeRevisionOutcome, StepId, StepSeed, Subject, Timestamp, Title, TopLevelOrigin, Ulid,
-    Urgency, WorkflowId, WriteTargets,
+    NewJob, NotRunReason, PathPattern, Prerequisite, RepoPath, ResolvedCheck, ResolvedStep,
+    ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject, Timestamp, Title,
+    TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
 };
 
 use crate::Store;
@@ -102,7 +102,14 @@ pub fn workflow() -> FrozenWorkflow {
                         // of its own, so every roundtrip in this crate walks a
                         // Check that declares which paths it covers.
                         when: Covers::of(vec![PathPattern::parse("crates/**").expect("a pattern")]),
-                        requires: Vec::new(),
+                        // Carried here for `when`'s reason, and a list of one
+                        // is enough to catch the failure that matters: a
+                        // prerequisite dropped on the way to a row is a Job
+                        // that stops running its own fix and nothing says so.
+                        requires: vec![Prerequisite::resolved(
+                            "fmt".to_string(),
+                            "cargo fmt --all".to_string(),
+                        )],
                     },
                     ResolvedCheck::DiffNonempty,
                     // Carried on the shared fixture for `when`'s reason: every

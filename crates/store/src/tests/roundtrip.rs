@@ -6,8 +6,8 @@
 use core_model::{
     Actor, AdvanceGate, Attachment, CheckOutcome, ContextSource, Covers, CriterionId,
     DeclarePlanAt, DroneId, EvidenceRef, EvidenceType, GamingPattern, Job, JobStatus, JobStep,
-    JudgeVerdict, Judgment, ModelName, PathPattern, RedirectWaiting, RepoPath, ResolvedCheck,
-    StepCheck, StepEvidence, StepId, Target, Ulid, WriteTargets,
+    JudgeVerdict, Judgment, ModelName, PathPattern, Prerequisite, RedirectWaiting, RepoPath,
+    ResolvedCheck, StepCheck, StepEvidence, StepId, Target, Ulid, WriteTargets,
 };
 
 use crate::tests::{created_at, job_id, open, sub_dispatched, top_level, TempDir};
@@ -447,7 +447,10 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
                 run: "cargo build".to_string(),
                 expect_exit_code: 0,
                 when: Covers::of(vec![PathPattern::parse("crates/**").expect("a pattern")]),
-                requires: Vec::new(),
+                requires: vec![Prerequisite::resolved(
+                    "fmt".to_string(),
+                    "cargo fmt --all".to_string(),
+                )],
             },
             ResolvedCheck::DiffNonempty,
             ResolvedCheck::ArtifactExists {
@@ -470,6 +473,13 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
     // prevent.
     assert!(fix.checks()[0].covers(&["crates/store/src/read.rs".to_string()]));
     assert!(!fix.checks()[0].covers(&["packages/components/src/Badge.tsx".to_string()]));
+    // **And so is what runs before it.** Both halves: a row that lost the name
+    // gives a failure nobody can attribute, and one that lost the command line
+    // reads as a prerequisite that ran while running nothing.
+    let requires = fix.checks()[0].requires();
+    assert_eq!(requires.len(), 1);
+    assert_eq!(requires[0].name(), "fmt");
+    assert_eq!(requires[0].run(), "cargo fmt --all");
     // The bar the Judge measures against is frozen with the rest of the step.
     // A criterion edited in `.armada/workflows/` changes the next Job, not this
     // one, which is the whole reason the declaration is on the record.

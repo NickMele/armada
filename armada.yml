@@ -133,8 +133,17 @@ checks:
   # `format`, not `fmt`: that name is a Command below and both registries
   # refuse a collision — the Command writes, this reads. No `clippy` beside it;
   # `[clippy-as-a-check]` in docs/OPEN.md is why.
+  #
+  # **`requires: [fmt]` is here because of a Job that burned its whole retry
+  # budget without it.** Every other Check passed on all three `implement`
+  # attempts; this one failed each time at a different unformatted line, while
+  # the Command that fixes it sat below in this same file. Fleet now runs `fmt`
+  # once per gate evaluation before this reads, and a failure in it is reported
+  # as `fmt`'s rather than as this Check's. #387.
   format:
     run: cargo fmt --all --check
+    requires:
+      - fmt
 
 # Commands gate nothing — they are what a Drone is given to run.
 commands:

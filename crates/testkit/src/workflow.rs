@@ -142,7 +142,37 @@ pub fn modelled(steps: &[Sketch<'_>], models: &[(&str, &str)]) -> ResolvedWorkfl
     built(steps, 0, models)
 }
 
+/// The same fixture with a Commands registry, and some Checks requiring from
+/// it.
+///
+/// `commands` is `(name, run)`; `requires` is `(check name, [command names])`
+/// and the inner order is the order the Manifest writes, which is the order
+/// Fleet runs.
+///
+/// **Whole-fixture arguments rather than a fifth field on [`Gate::Check`]**,
+/// for [`retried`]'s reason and more sharply: sixty-odd `Gate::Check` literals
+/// would each have to state an empty list about a key they do not use. A
+/// prerequisite is the whole subject of the handful of tests that want one and
+/// is noise on every other.
+pub fn requiring(
+    steps: &[Sketch<'_>],
+    commands: &[(&str, &str)],
+    requires: &[(&str, &[&str])],
+) -> ResolvedWorkflow {
+    assembled(steps, 0, &[], commands, requires)
+}
+
 fn built(steps: &[Sketch<'_>], retry_limit: u32, models: &[(&str, &str)]) -> ResolvedWorkflow {
+    assembled(steps, retry_limit, models, &[], &[])
+}
+
+fn assembled(
+    steps: &[Sketch<'_>],
+    retry_limit: u32,
+    models: &[(&str, &str)],
+    commands: &[(&str, &str)],
+    requires: &[(&str, &[&str])],
+) -> ResolvedWorkflow {
     let roster = Roster::of(models.iter().map(|(_, model)| *model));
     let def = WorkflowDef::parse(
         Path::new("fixture-workflow.yml"),
@@ -150,8 +180,11 @@ fn built(steps: &[Sketch<'_>], retry_limit: u32, models: &[(&str, &str)]) -> Res
         &roster,
     )
     .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
-    let manifest = Manifest::parse(Path::new("fixture-armada.yml"), &manifest_text(steps))
-        .unwrap_or_else(|refused| panic!("the fixture manifest did not parse: {refused}"));
+    let manifest = Manifest::parse(
+        Path::new("fixture-armada.yml"),
+        &manifest_text(steps, commands, requires),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture manifest did not parse: {refused}"));
     ResolvedWorkflow::resolve(&def, &manifest)
         .unwrap_or_else(|refused| panic!("the fixture did not resolve: {refused}"))
 }
@@ -251,7 +284,11 @@ fn workflow_text(steps: &[Sketch<'_>], retry_limit: u32, models: &[(&str, &str)]
 /// Every Check any step named, declared once. A name used twice with two
 /// commands is a mistake in the test and the second wins loudly enough to see
 /// in the resolved command.
-fn manifest_text(steps: &[Sketch<'_>]) -> String {
+fn manifest_text(
+    steps: &[Sketch<'_>],
+    commands: &[(&str, &str)],
+    requires: &[(&str, &[&str])],
+) -> String {
     let mut declared: BTreeMap<&str, (&str, &[&str])> = BTreeMap::new();
     for step in steps {
         for gate in step.gates {
@@ -264,10 +301,12 @@ fn manifest_text(steps: &[Sketch<'_>]) -> String {
         }
     }
     let mut text = String::from("version: 1\nid: 01FIXTUREMANIFEST\n");
-    if declared.is_empty() {
+    if declared.is_empty() && commands.is_empty() {
         return text;
     }
-    text.push_str("checks:\n");
+    if !declared.is_empty() {
+        text.push_str("checks:\n");
+    }
     for (name, (run, when)) in declared {
         text.push_str(&format!("  {name}:\n    run: \"{run}\"\n"));
         // No key at all where the fixture declares no path, because that is
@@ -277,6 +316,18 @@ fn manifest_text(steps: &[Sketch<'_>]) -> String {
             let quoted: Vec<String> = when.iter().map(|p| format!("\"{p}\"")).collect();
             text.push_str(&format!("    when: [{}]\n", quoted.join(", ")));
         }
+        // Same rule: absent rather than empty. A fixture naming a Command the
+        // `commands` argument does not declare is refused by the real parser,
+        // which is the point of writing YAML at all.
+        if let Some((_, needed)) = requires.iter().find(|(check, _)| check == &name) {
+            text.push_str(&format!("    requires: [{}]\n", needed.join(", ")));
+        }
+    }
+    if !commands.is_empty() {
+        text.push_str("commands:\n");
+    }
+    for (name, run) in commands {
+        text.push_str(&format!("  {name}:\n    run: \"{run}\"\n"));
     }
     text
 }

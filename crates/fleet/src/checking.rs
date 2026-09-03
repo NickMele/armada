@@ -1,4 +1,5 @@
-//! Running one step's Checks, several at a time, bounded.
+//! Running one step's Checks, several at a time, bounded — and, before them,
+//! what their `requires` names. [`beforehand`] owns that half.
 //!
 //! # One observation per declared Check, in the step's order
 //!
@@ -22,33 +23,6 @@
 //!
 //! A failing Check cancels none of the others. Someone reading a failed step
 //! wants every result, and the second failure often explains the first.
-//!
-//! # Prerequisites run first, one at a time, and the context is this call
-//!
-//! `checks.<name>.requires` names Commands that must have run before a Check.
-//! [`beforehand`] runs them, and it runs **all of them before any Check is
-//! spawned** rather than each Check's own immediately before it. Two reasons,
-//! and the second is the one that decides it:
-//!
-//! - A prerequisite exists to change the worktree — `cargo fmt --all` is the
-//!   case that filed `#387`. Every Check in this batch shares that worktree, so
-//!   a prerequisite running beside a Check would be rewriting files underneath
-//!   a command already reading them.
-//! - The order is the Manifest's. Running the union serially, first occurrence
-//!   winning, is the only arrangement that honours every Check's list at once.
-//!
-//! **A context is one call to [`ran`]** — one gate evaluation of one step, or
-//! one dry run. That is what "skipped if already run in the same context" is
-//! defined as here, and the definition follows from what a prerequisite leaves
-//! behind: its effect is in the worktree, and this call is the span over which
-//! that worktree is not being edited by anything else. A Drone edits between
-//! attempts, so the next attempt is a new context and `fmt` runs again — which
-//! it must, or the second attempt gates on the first attempt's formatting. A
-//! Check running in its own container would be a third context and would find
-//! no hit, which is `docs/concepts/manifest.md`'s own reading.
-//!
-//! A Check the step's changes do not cover contributes no prerequisites. Its
-//! `migrate` would be minutes spent for a Check that is not going to run.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -173,18 +147,22 @@ impl NotMet {
 
 /// Run every prerequisite the batch's runnable Checks name, in order, once each.
 ///
-/// **Serial, not concurrent.** These mutate the worktree by design; running two
-/// at once, or one beside a Check, is a race with no upper bound on how it goes
-/// wrong. The batch pays the wall clock, which is the cost of the guarantee.
+/// **A context is one call to [`ran`]** — one gate evaluation of one step, or
+/// one dry run — and that is what "skipped if already run in the same context"
+/// means here. It follows from where a prerequisite's effect lives: in the
+/// worktree, over the span nothing else is editing it. A Drone edits between
+/// attempts, so the next attempt is a new context and `fmt` runs again, which
+/// it must or the second attempt gates on the first one's formatting. A Check
+/// in its own container is a third context and finds no hit, which is
+/// `docs/concepts/manifest.md`'s own reading.
 ///
-/// **First occurrence wins and the rest are skipped.** Two Checks naming
-/// `migrate` run it once, which is the skip `docs/concepts/manifest.md`
-/// specifies — and the skip is by name rather than by command line, because a
-/// name is what the Manifest's own de-duplication is written in.
+/// **Serial, and before anything spawns.** These mutate the worktree by design;
+/// one running beside a Check would rewrite files under a command already
+/// reading them. The batch pays the wall clock for the guarantee.
 ///
-/// **`requires` guarantees *has run*, not *has just run*.** A Check needing
-/// genuinely fresh state resets what it needs in its own command; nothing here
-/// re-runs a prerequisite for the second Check that named it.
+/// **First occurrence wins, by name.** Two Checks naming `migrate` run it once.
+/// So `requires` guarantees *has run*, not *has just run* — a Check needing
+/// genuinely fresh state resets what it needs in its own command.
 async fn beforehand(
     needed: &[&Prerequisite],
     worktree: &Path,

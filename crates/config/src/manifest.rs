@@ -18,20 +18,10 @@
 //! parser cannot read is a refusal beside every other refusal in the file
 //! rather than a Check that quietly stops running. **Absent means always.**
 //!
-//! `setup.requires` names Commands the same file declares, each resolved to its
-//! `run` string **at load** — a name nothing declares is a refusal here rather
-//! than a worktree nothing prepares and a Check that fails for a reason nobody
-//! can connect to it. **Its code word is *preparation***, because
-//! `armada::setup` runs nothing and means something else — one word over two
-//! meanings is the second vocabulary this workspace refuses elsewhere.
-//!
-//! `checks.<name>.requires` names Commands the same way and is resolved the
-//! same way, into [`core_model::Prerequisite`]. The two keys ask the same
-//! question of the same registry at two scopes — once per worktree, and before
-//! one Check — so they share every refusal: an undeclared name, a name written
-//! twice, and a Command flagged `destructive`. **A prerequisite runs with
-//! nobody to approve it**, which is the whole of why the third is refused: the
-//! flag means a person answers first, and Fleet at a gate has no one to ask.
+//! **Both `requires` keys name Commands this file declares, resolved at load,
+//! and share every refusal** — see [`named_commands`]. `setup`'s code word is
+//! *preparation*, because `armada::setup` runs nothing and means something
+//! else; one word over two meanings is a second vocabulary.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
