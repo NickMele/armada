@@ -52,6 +52,7 @@ const JOBS: PaletteEntry[] = [
 const SETTINGS: PaletteEntry[] = [
   { id: "set-model", section: "settings", label: "Default model", value: "sonnet", icon: Settings },
   { id: "set-headroom", section: "settings", label: "Concurrent drones", value: "4", icon: Settings },
+  { id: "set-history", section: "settings", label: "Job history kept", value: "30 days", icon: Settings },
   { id: "set-theme", section: "settings", label: "Appearance", value: "dark", icon: Settings },
 ];
 
@@ -190,13 +191,23 @@ export const TopAnchoredAtTwoCounts: Story = {
 };
 
 /**
- * **Matching across sections.** One word returning a place, a job and two
- * settings. The section heads are what stop them reading as one list — without
- * them a person cannot tell the Manifest surface from a Manifest setting from
- * a job whose title says the word.
+ * **Matching across sections.** One word returning acts, a place, three jobs
+ * and a setting. The section heads are what stop them reading as one list —
+ * without them a person cannot tell the Job Board surface from a job whose
+ * title carries the word from the setting that decides how long jobs are kept.
  */
 export const MatchingAcrossSections: Story = {
-  args: { ...board, defaultQuery: "se" },
+  args: { ...board, defaultQuery: "job" },
+  /**
+   * The claim is about the heads, not the rows: four kinds of result under
+   * four names. A palette that dropped the heads would pass any assertion
+   * counting matches and would be the flat list this state exists to refuse.
+   */
+  play: async ({ canvas }) => {
+    for (const title of [CONTEXT, "Navigation", "Jobs", "Settings"]) {
+      await expect(canvas.getAllByText(title)[0]).toBeVisible();
+    }
+  },
 };
 
 /**
