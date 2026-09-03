@@ -25,6 +25,7 @@ import type {
   WorkflowSummary,
   WireError,
   WorktreeReclaimed,
+  WorktreesHeld,
 } from "./index";
 
 /**
@@ -39,6 +40,21 @@ export type Reports =
   | { state: "none" }
   | { state: "reading" }
   | { state: "read"; list: ReportList }
+  | { state: "failed"; outcome: Outcome };
+
+/**
+ * `GET /worktrees`, where a surface asked for it.
+ *
+ * **`Reports`'s shape and not a `JobRead`**, for the same reason: there is no
+ * id to check an answer against. What is being decided here is which of a set
+ * to give back, which is a question about the set — a per-Job read could not
+ * ask it, and a Job that has none of the four reasons is exactly the row a
+ * person needs to see is missing.
+ */
+export type HeldWorktrees =
+  | { state: "none" }
+  | { state: "reading" }
+  | { state: "read"; held: WorktreesHeld }
   | { state: "failed"; outcome: Outcome };
 
 /**

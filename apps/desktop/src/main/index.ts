@@ -175,9 +175,14 @@ void app.whenReady().then(() => {
   // The disk rather than the record, and the one act here `armada clean` could
   // already do — but only with Fleet stopped, which is never when a person
   // wants the space back. The Job stays on the board afterwards.
-  ipcMain.handle(CHANNELS.reclaimWorktree, (_event, jobId: string) =>
-    connection?.commands.reclaimWorktree(jobId),
-  );
+  // The re-read afterwards is not bookkeeping: whether the row is still held is
+  // Fleet's reading, and a checkout that would not go has to stay on the list.
+  // Folding the receipt in instead would be Bridge deciding a worktree is gone.
+  ipcMain.handle(CHANNELS.reclaimWorktree, async (_event, jobId: string) => {
+    const outcome = await connection?.commands.reclaimWorktree(jobId);
+    await connection?.rereadHeld();
+    return outcome;
+  });
   // The two acts that resume a step without redispatching. Which applies is
   // decided by whether the Job still holds a Drone; Fleet is the authority
   // and refuses the wrong one rather than Bridge picking silently.
@@ -248,6 +253,12 @@ void app.whenReady().then(() => {
   // reading. Read-only, and nothing on this channel can file or withdraw one.
   ipcMain.handle(CHANNELS.readReports, (_event, want: boolean) =>
     connection?.readReports(want),
+  );
+  // What fleet is holding disk for, while somebody is deciding about it. The
+  // second read here that names no Job, and read-only: the act beside it is
+  // `reclaimWorktree`, which already has its own channel and takes one id.
+  ipcMain.handle(CHANNELS.readHeld, (_event, want: boolean) =>
+    connection?.readHeld(want),
   );
   // The three decisions on the work, and they stay three channels. Approving
   // takes it, requesting changes sends the drone back to the same step, and
