@@ -4,7 +4,7 @@
 //!
 //! [`CheckReport`] is built from rows and nothing else. There is no field a
 //! caller fills with prose, so the text a Drone reads is a function of what the
-//! Checks did — the same property `fleet::briefing::Declaring` has, stated on
+//! Checks did — the same property `fleet::terms::Declaring` has, stated on
 //! the answering side of the seam because this crosses `api::Daemon` and that
 //! trait speaks this crate's vocabulary.
 //!

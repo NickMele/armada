@@ -29,9 +29,9 @@ use core_model::{Component, DeclaredPaths, Envelope, FieldValue, JobId, Level, R
 use ipc::mcp::DeclareScope;
 use verification::{drifted, InScope, OutsideScope};
 
-use crate::briefing::Redeclaring;
 use crate::daemon::Fleet;
 use crate::session::{LiveSession, Occasion};
+use crate::terms::Redeclaring;
 use crate::transcript;
 use crate::working::Working;
 

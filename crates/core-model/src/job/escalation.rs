@@ -34,6 +34,26 @@ pub enum EscalationTrigger {
     /// An upstream Job this one depends on reached a terminal status other than
     /// `completed_success`. `superseded` is the exception.
     DependencyFailed,
+    /// A person ended the Drone working this step, so the step stopped where it
+    /// stood.
+    ///
+    /// **It names a step and never a Job**, which no other variant does. What
+    /// the Job stopped *for* is the ending's own classification —
+    /// [`Stalled`](Self::Stalled), [`Interrupted`](Self::Interrupted),
+    /// [`Silent`](Self::Silent), [`BlockedByPolicy`](Self::BlockedByPolicy) —
+    /// and stays on the Job's transition. This is what the step carries, so
+    /// that `fleet::resume` has a `stopped` row to restart and a person keeps
+    /// every step that already advanced.
+    ///
+    /// **Not [`Interrupted`](Self::Interrupted), and the two must not merge.**
+    /// That one is a process that was there and is not, found by Fleet, and it
+    /// is Job-level because nobody chose it. This is a person taking the
+    /// process away on purpose, from a step they mean to run again — which is
+    /// what makes it step-level.
+    ///
+    /// Nothing weighed the work, so there is no verdict to disagree with and
+    /// [`StepLevelTrigger::overrulable`] is false.
+    DroneKilled,
     /// Mechanically passed, semantically flagged as likely gamed.
     /// Resubmission under the same instructions would reproduce the gaming, so
     /// the retry flow is the wrong destination.
@@ -255,6 +275,7 @@ impl StepLevelTrigger {
             EscalationTrigger::GateUndecided
             | EscalationTrigger::BlockedByPolicy
             | EscalationTrigger::CheckTimeout
+            | EscalationTrigger::DroneKilled
             | EscalationTrigger::EvidenceTooLarge
             | EscalationTrigger::LoopCap
             | EscalationTrigger::NoReport
@@ -280,6 +301,7 @@ impl EscalationTrigger {
         EscalationTrigger::BlockedByPolicy,
         EscalationTrigger::CheckTimeout,
         EscalationTrigger::DependencyFailed,
+        EscalationTrigger::DroneKilled,
         EscalationTrigger::EvidenceSuspect,
         EscalationTrigger::EvidenceTooLarge,
         EscalationTrigger::FanOut,
@@ -305,6 +327,7 @@ impl EscalationTrigger {
             EscalationTrigger::BlockedByPolicy => "blocked_by_policy",
             EscalationTrigger::CheckTimeout => "check_timeout",
             EscalationTrigger::DependencyFailed => "dependency_failed",
+            EscalationTrigger::DroneKilled => "drone_killed",
             EscalationTrigger::EvidenceSuspect => "evidence_suspect",
             EscalationTrigger::EvidenceTooLarge => "evidence_too_large",
             EscalationTrigger::FanOut => "fan_out",
@@ -362,6 +385,7 @@ impl EscalationTrigger {
             | EscalationTrigger::CheckTimeout
             | EscalationTrigger::EvidenceSuspect
             | EscalationTrigger::EvidenceTooLarge
+            | EscalationTrigger::DroneKilled
             | EscalationTrigger::GateFailure
             | EscalationTrigger::GateUndecided
             | EscalationTrigger::LoopCap

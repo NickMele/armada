@@ -23,7 +23,7 @@ use adapter_traits::{CallDetail, DroneEvent, WorktreeSpec};
 use config::ResolvedWorkflow;
 use core_model::{
     Actor, EscalationTrigger, JobId, JobStatus, StepId, StepLevelTrigger, StepState, StepTarget,
-    Target,
+    StepVerdict, Target,
 };
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};
 
@@ -36,6 +36,32 @@ use crate::tests::tmp::TempDir;
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
 const IMPLEMENT: &str = "implement";
+const PLAN: &str = "plan";
+
+/// The shape `#313` was hit on: a step that passes, and the step after it that
+/// the Drone stalled on.
+fn two_steps() -> ResolvedWorkflow {
+    testkit::resolved(&[
+        Sketch {
+            id: PLAN,
+            label: "Plan",
+            evidence_type: Some("facts_note"),
+            gates: &[],
+            judged_on: &[],
+            scope: None,
+            gaming: None,
+        },
+        Sketch {
+            id: IMPLEMENT,
+            label: "Implement",
+            evidence_type: Some("diff"),
+            gates: &[],
+            judged_on: &[],
+            scope: None,
+            gaming: None,
+        },
+    ])
+}
 
 fn one_step() -> ResolvedWorkflow {
     testkit::resolved(&[Sketch {
@@ -353,6 +379,147 @@ async fn the_step_named_is_the_step_that_stopped() {
         stuck.step_id.as_ref().map(ipc::StepId::as_str),
         Some(step.as_str())
     );
+}
+
+/// **The case `#313` was filed for**, on the Job that is still `running`
+/// because nothing noticed the Drone had gone quiet.
+///
+/// Ending the Drone stops the step it was on, so the classification names a
+/// step and the act it offers is the one Fleet takes. Before this, the step and
+/// its attempt sat `running` beneath a Job that was `escalated` with no Drone
+/// on it, and the only act left was redispatching the whole Job.
+#[tokio::test]
+async fn killing_a_running_jobs_drone_leaves_a_step_a_restart_lands_on() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_stays());
+    let job = started(&fleet, &home).await;
+
+    fleet.kill_drone(&job).await.expect("the Drone ends");
+
+    let record = fleet.load(&job).await.unwrap();
+    assert_eq!(record.status(), JobStatus::Escalated);
+    let row = record.step(&StepId::new(IMPLEMENT)).expect("the step");
+    assert_eq!(row.state(), StepState::Stopped);
+    assert_eq!(
+        row.last_verdict(),
+        Some(StepVerdict::Failed(
+            StepLevelTrigger::of(EscalationTrigger::DroneKilled).expect("a step-level trigger")
+        )),
+        "the row says why, so a person a week later reads a reason and not an absence"
+    );
+
+    let stuck = detail(&fleet, &job).await.stuck.expect("it stopped");
+    assert_eq!(stuck.stopped_by.as_deref(), Some("drone_killed"));
+    assert_eq!(
+        stuck.step_id.as_ref().map(ipc::StepId::as_str),
+        Some(IMPLEMENT)
+    );
+    assert_eq!(
+        spelled(&stuck),
+        ["restart_step", "redispatch_job"],
+        "no override: nothing weighed the work, so there is no verdict to disagree with"
+    );
+
+    fleet
+        .restart_step(&job)
+        .await
+        .expect("the act the classification named");
+}
+
+/// The same dead end reached the other way, which is the one the issue's title
+/// names: the vigil escalated the Job on `stalled` first, over a Drone that was
+/// still there, and a person ended it afterwards.
+///
+/// **The Job does not move and the step does.** `Aftermath::AlreadyStopped`
+/// already said this Job becomes restartable rather than redirectable; nothing
+/// wrote the step move that would make it true, because `escalated` freezes the
+/// inner machine. It crosses on `step_machine`'s named exception now.
+#[tokio::test]
+async fn killing_a_stalled_jobs_drone_turns_the_redirect_into_a_restart() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_stays());
+    let job = stalled(&fleet, &home).await;
+
+    let before = detail(&fleet, &job).await.stuck.expect("it stopped");
+    assert_eq!(spelled(&before), ["redirect_drone", "redispatch_job"]);
+
+    fleet.kill_drone(&job).await.expect("the Drone ends");
+
+    let record = fleet.load(&job).await.unwrap();
+    assert_eq!(
+        record.status(),
+        JobStatus::Escalated,
+        "a Job that had already stopped does not stop again"
+    );
+    assert_eq!(
+        record.step(&StepId::new(IMPLEMENT)).map(|row| row.state()),
+        Some(StepState::Stopped)
+    );
+
+    let stuck = detail(&fleet, &job).await.stuck.expect("it stopped");
+    assert_eq!(
+        spelled(&stuck),
+        ["restart_step", "redispatch_job"],
+        "the redirect goes with the Drone and the restart arrives with the stopped step"
+    );
+    // **What it stopped for is not lost.** `stalled` is what the vigil
+    // recorded on the Job's own transition and it is still there; the step
+    // carries what became of it, which is a different sentence about a
+    // different machine.
+    assert_eq!(
+        detail(&fleet, &job)
+            .await
+            .job
+            .reason
+            .and_then(|reason| reason.named),
+        Some(String::from("stalled"))
+    );
+    assert_eq!(stuck.stopped_by.as_deref(), Some("drone_killed"));
+}
+
+/// The half the issue is actually about: **the step that already passed
+/// survives the recovery.**
+///
+/// A Job on its second step, killed there. Restarting takes the second step
+/// again and the first keeps its state and its verdict, which is the 6m29s of
+/// work redispatching would have thrown away.
+#[tokio::test]
+async fn a_restart_after_a_kill_keeps_the_step_that_already_advanced() {
+    let home = TempDir::new();
+    let mut fittings = fitted_with(
+        &home,
+        FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
+        a_drone_that_stays(),
+    );
+    fittings.workflows = one(two_steps());
+    fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about this"));
+    let fleet: Fixture = Fleet::assembled(fittings);
+
+    let job = started(&fleet, &home).await;
+    // The first step passes and the second is entered — moved rather than
+    // driven, for `crate::tests::restarting`'s reason: what is under test here
+    // is the kill and not the gate.
+    let record = fleet.load(&job).await.unwrap();
+    let record = fleet
+        .move_step(&record, &StepId::new(PLAN), StepTarget::Advanced)
+        .await
+        .unwrap();
+    fleet
+        .move_step(&record, &StepId::new(IMPLEMENT), StepTarget::Running)
+        .await
+        .unwrap();
+
+    fleet.kill_drone(&job).await.expect("the Drone ends");
+    fleet.restart_step(&job).await.expect("a restart lands");
+
+    let record = fleet.load(&job).await.unwrap();
+    let plan = record.step(&StepId::new(PLAN)).expect("the first step");
+    assert_eq!(
+        plan.state(),
+        StepState::Advanced,
+        "the step that passed is untouched by the recovery"
+    );
+    assert_eq!(plan.last_verdict(), Some(StepVerdict::Passed));
 }
 
 /// The acts, as the wire spells them.
