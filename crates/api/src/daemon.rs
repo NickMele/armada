@@ -33,7 +33,7 @@ use ipc::{
     CallArguments, ChangesRequested, ChosenAnswer, FileReport, FleetCapacity, JobDetail, JobDiff,
     JobEvidence, JobForgotten, JobHistory, JobId, JobList, JobSummary, ManifestSummary,
     ModelChoices, ProposeJob, Redirection, Redispatched, Report, ReportList, WireError,
-    WorkflowSummary, WorktreeReclaimed,
+    WorkflowSummary, WorktreeReclaimed, WorktreesHeld,
 };
 
 /// The request-response operations M1 serves.
@@ -501,6 +501,23 @@ pub trait Daemon: Send + Sync + 'static {
     /// forgets a Job and its report stays; a listing reachable only through a
     /// Job would lose exactly the reports that most need reading.
     fn list_reports(&self) -> impl Future<Output = Result<ReportList, Refusal>> + Send;
+
+    /// `list_worktrees` — every worktree Fleet is holding disk for, and the
+    /// test each one did not pass.
+    ///
+    /// **The read half of the rule [`Daemon::reclaim_worktree`] acts on.**
+    /// Fleet gives back what passes all five tests without asking; this is what
+    /// the rest is chosen from, and the reasons are the whole point of it — an
+    /// unmerged branch, uncommitted files and a Job still moving are answered
+    /// differently by the person reading them.
+    ///
+    /// **Not scoped to a Job.** The question is which of these to give back,
+    /// which is asked of the set rather than of any one row.
+    ///
+    /// **A piloted Job's worktree is not in the answer** — `#367`. It is
+    /// dropped where the rule lives rather than hidden by a client, because an
+    /// act that is drawn is an act somebody eventually clicks.
+    fn list_worktrees(&self) -> impl Future<Output = Result<WorktreesHeld, Refusal>> + Send;
 
     /// `observe_job` — one Job's turns, the history and then the live ones.
     ///

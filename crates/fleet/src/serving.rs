@@ -28,7 +28,7 @@ use ipc::{
     CallArguments, ChangesRequested, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence,
     JobForgotten, JobHistory, JobId, JobList, JobSpend, JobSummary, ManifestId, ManifestSummary,
     ModelChoices, Overruled, ProposeJob, Redirection, Redispatched, Work, WorkflowId,
-    WorkflowSummary, WorktreeReclaimed,
+    WorkflowSummary, WorktreeReclaimed, WorktreesHeld,
 };
 use store::LoadJobError;
 
@@ -42,7 +42,7 @@ use crate::overruling::Overruling;
 use crate::reporting::Filed;
 use crate::resume::Redirection as Instruction;
 use crate::wire::{
-    canonical, declared, recorded, reported, step_facts, step_moves, submitted, told,
+    canonical, declared, recorded, reported, step_facts, step_moves, submitted, told, worktree_held,
 };
 
 impl<H, V, W> Daemon for Fleet<H, V, W>
@@ -670,6 +670,30 @@ where
             .await
             .map_err(|why| self.refusal(why))?;
         reported(&filed).map_err(|why| self.refusal(why))
+    }
+
+    /// Every worktree Fleet is holding disk for, and the test each one failed.
+    ///
+    /// **`Fleet::worktrees_held` is the derivation and this only redacts it.**
+    /// The five tests are written once, in `crate::holding`, and the sweep and
+    /// `armada clean` already read that same answer; a filter here that decided
+    /// for itself what is safe would be the third opinion the sharing exists to
+    /// prevent.
+    ///
+    /// **The one thing dropped is a piloted Job's checkout**, and it is dropped
+    /// through `Holding::offerable` rather than by matching a status here —
+    /// `#367`, and the predicate belongs beside the tests it reads.
+    async fn list_worktrees(&self) -> Result<WorktreesHeld, Refusal> {
+        let holding = Fleet::worktrees_held(self)
+            .await
+            .map_err(|why| self.refusal(why))?;
+        Ok(WorktreesHeld {
+            worktrees: holding
+                .iter()
+                .filter(|one| one.offerable())
+                .map(worktree_held)
+                .collect(),
+        })
     }
 
     /// Every report filed, newest first, with the counts they are read beside.

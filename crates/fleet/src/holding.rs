@@ -28,7 +28,7 @@ use std::time::Duration;
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, WorktreeSpec};
 use adapters::{BranchStanding, Reclaimed, UnmergedWork, WorktreeStanding};
 use core_model::{
-    Component, DependencyDirection, Envelope, FieldValue, Job, JobId, JobStatus, Level,
+    Component, DependencyDirection, Envelope, FieldValue, Job, JobId, JobStatus, Level, Timestamp,
 };
 
 use crate::adrift::Adrift;
@@ -96,9 +96,35 @@ pub enum Held {
 /// **An empty `held` is the whole of the safety claim.** A sweep acts on that
 /// and nothing else, so a test added to this module is a test the sweep starts
 /// applying with no second place to change.
+///
+/// **The checkout and the branch are carried, not left to be derived again.**
+/// [`Fleet::holding_of`] already holds the `WorktreeSpec` that produced them,
+/// and a caller that re-derived a path from a Job id would be the second
+/// derivation this module exists to avoid — the one that disagrees the day
+/// `WorktreeSpec` changes. `#385` draws both: a path is what a person goes and
+/// looks at, and a branch is what the commits are recoverable from.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Holding {
     pub job: JobId,
+    /// What the Job is called, and where it got to. **Read off the same Job
+    /// the tests were applied to**, so a row cannot describe one Job and be
+    /// held for another's reasons.
+    pub title: String,
+    pub status: JobStatus,
+    /// When Armada last moved anything on this Job — the latest step move, or
+    /// the creation instant where no step has moved.
+    ///
+    /// **It is not when the files in the checkout were last written**, and
+    /// nothing here can be: `git status --porcelain` answers names and not
+    /// times. What it is good for is the reading `#385` asks for on uncommitted
+    /// work — a checkout whose Job stopped four days ago has been sitting at
+    /// least that long, and *twenty minutes* and *four days* are different
+    /// decisions.
+    pub last_moved: Timestamp,
+    /// The checkout on disk, derived once.
+    pub path: String,
+    /// The branch the Job derived. Named even where it is already gone.
+    pub branch: String,
     /// Empty where every test passed.
     pub held: Vec<Held>,
 }
@@ -254,6 +280,11 @@ where
         }
         Some(Holding {
             job: job.id().clone(),
+            title: job.title().as_str().to_string(),
+            status: job.status(),
+            last_moved: last_moved(job),
+            path: spec.worktree_path(),
+            branch: spec.branch(),
             held,
         })
     }
@@ -310,6 +341,22 @@ where
         .with_field("cause", FieldValue::Str(why.to_string()));
         let _ = transcript::note(&self.host().repo_root, job, &envelope);
     }
+}
+
+/// When Armada last moved anything on this Job.
+///
+/// **The latest step move, and `created_at` where no step has one.** There is
+/// no `updated_at` on a Job — the field lives on the step rows, which is where
+/// every move is written — so the Job's own answer is the maximum over them.
+/// A Job with no steps has never moved, and its creation instant is the only
+/// true thing left to say.
+fn last_moved(job: &Job) -> Timestamp {
+    job.steps()
+        .iter()
+        .map(|step| step.updated_at())
+        .max()
+        .unwrap_or_else(|| job.created_at())
+        .clone()
 }
 
 /// The Jobs that named this one and have not finished.

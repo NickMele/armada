@@ -36,6 +36,7 @@ import type { JobDetail, JobSummary, StreamMessage } from "@armada/protocol";
 import { JobCommands } from "./command";
 import { ObserveSocket } from "./observe";
 import { JobReader } from "./reader";
+import { HeldReader } from "./holding";
 import { ReportsReader } from "./reports";
 import { ask, callArgumentsOf, capacityOf, holdingsOf } from "./request";
 import { ReviewMaterial } from "./review";
@@ -97,6 +98,12 @@ export class FleetConnection {
    * read here no Job scopes**, because a report outlives the Job it is about.
    */
   private readonly reports = new ReportsReader((reports) => this.publish({ reports }));
+  /**
+   * What Fleet is holding disk for, where a surface asked — see `holding.ts`.
+   * **Scoped to nothing, like the reports above it**: what is being decided is
+   * which of a set to give back, and no Job id asks that.
+   */
+  private readonly held = new HeldReader((held) => this.publish({ held }));
   /**
    * Every act on a Job — see `command.ts`. Reached through this rather than
    * re-exported one method at a time: a delegator carries no reasoning, and
@@ -171,6 +178,10 @@ export class FleetConnection {
       // report, so the list moves when somebody presses a button in a window —
       // and a second window is a second somebody, which is what Refresh is for.
       await this.reports.again(fleet.port);
+      // What is held changes when a Job ends, when a sweep runs, and when
+      // somebody reclaims one. A refresh is the cheapest of the three to be
+      // sure about.
+      await this.held.again(fleet.port);
     }
     return this.current;
   }
@@ -194,6 +205,7 @@ export class FleetConnection {
     this.turns.close();
     this.material.close();
     this.reports.close();
+    this.held.close();
   }
 
   // -------------------------------------------------------------- connecting
@@ -566,6 +578,30 @@ export class FleetConnection {
    */
   async readReports(want: boolean): Promise<void> {
     await this.reports.want(this.connected()?.port ?? null, want);
+  }
+
+  // ------------------------------------------- what Fleet is holding disk for
+  /**
+   * Read what Fleet is holding, or drop it. **The second read here no Job
+   * scopes**, and for a different reason from the reports: this one is a
+   * question about the set — which of these to give back — which no per-Job
+   * field could be asked.
+   */
+  async readHeld(want: boolean): Promise<void> {
+    await this.held.want(this.connected()?.port ?? null, want);
+  }
+
+  /**
+   * Read it again, after something that changes what is held.
+   *
+   * **Nothing folds a reclaim's receipt into the list.** That answer says what
+   * happened to one Job; whether the row is gone is Fleet's reading, and a row
+   * whose checkout would not go has to stay. A no-op where nobody has the
+   * surface open.
+   */
+  async rereadHeld(): Promise<void> {
+    const port = this.connected()?.port ?? null;
+    if (port !== null) await this.held.again(port);
   }
 
   private connected(): BridgeStateFleet | null {

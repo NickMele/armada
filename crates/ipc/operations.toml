@@ -286,6 +286,27 @@ A step was a bare id until `mechanical_checks` was added to it. Bridge printed "
 **A step now carries its advance gate and what it asks the Judge, which is the whole of what this answers that `get_job` does not answer sooner.** This is where a person decides whether to approve a dispatch: afterwards the rail says what happened, and here they are agreeing to it. A workflow that will stop and wait for them at `handoff`, and spend Judge calls at `implement`, previewed as neither. Both are the shapes the rail already uses, and the criteria themselves stay off the wire — counts and states, never a question.
 """
 
+[operations.list_worktrees]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "Every worktree Fleet is holding disk for, and the test each one did not pass"
+notes = """
+**The read half of the owner's rule.** Fleet reclaims what passes all five tests without asking anybody; everything else is an explicit choice, item by item, and this is what that choice is made from. `crates/fleet/src/holding.rs` is the one place the tests are written, and this serves its answer rather than deriving a second one — `armada clean` and the sweep already share that derivation, and a third would be the disagreement the sharing exists to prevent.
+
+**Complete, including the worktrees the sweep is about to take.** Filtering to the held ones would answer with a list the next sweep changes, and a person who came looking for a worktree that is not on it could not tell "already given back" from "held and not said".
+
+**A piloted Job's worktree is absent** — `#367`. A person is at an unrestricted toolset in it, so it is not Fleet's to offer, and it is dropped in Fleet rather than hidden by a client: an act that is drawn is an act somebody eventually clicks.
+
+**No byte count.** How much disk a worktree holds is not the decision. Which commits go, whether anything else has them, and which uncommitted files exist nowhere else is — so the reasons carry those, and nothing carries a size.
+
+**`last_moved_at` is a floor and says so.** It is when Armada last moved the Job, which is the closest true answer to *how long has this been sitting* that this seam can give: the dirty reading is `git status --porcelain`, which answers names and not times. It is carried for the uncommitted reason, where the act ends something and a checkout abandoned twenty minutes ago and one abandoned four days ago are answered differently.
+
+It is not scoped to a Job. What is held is read across every Job at once, which is the reading a per-Job field cannot give: the question is which of these to give back, and that is asked of the set.
+
+`helm_access` is `Yes` for `list_reports`'s reason — reading what is held decides nothing, and `reclaim_worktree` beside it is `No`.
+"""
+
 [operations.observe_job]
 kind = "query"
 transport = "WebSocket"

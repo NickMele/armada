@@ -159,3 +159,17 @@ pub(crate) async fn list_reports<D: Daemon>(State(served): State<Served<D>>) -> 
         Err(refusal) => refused(refusal),
     }
 }
+
+/// Every worktree Fleet is holding disk for, and the test each one did not
+/// pass. **Read across every Job at once**, which is the reading a field on
+/// `get_job` could not give: what is being decided is which of these to give
+/// back, and that is a question about the set.
+///
+/// A piloted Job's worktree is not in the answer. Fleet drops it — `#367` — so
+/// there is nothing here to filter and nothing a client could show by mistake.
+pub(crate) async fn list_worktrees<D: Daemon>(State(served): State<Served<D>>) -> Response {
+    match served.daemon().list_worktrees().await {
+        Ok(held) => answer(StatusCode::OK, &held, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}

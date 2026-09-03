@@ -36,7 +36,7 @@ use crate::commands::{
 use crate::daemon::Daemon;
 use crate::queries::{
     get_call, get_capacity, get_diff, get_evidence, get_job, get_job_events, list_jobs,
-    list_manifests, list_models, list_reports, list_workflows,
+    list_manifests, list_models, list_reports, list_workflows, list_worktrees,
 };
 use crate::sockets::{events, observe_job};
 use crate::stream::Broadcaster;
@@ -129,6 +129,14 @@ pub const SERVED: &[Route] = &[
         operation: "list_models",
         method: "GET",
         path: "/models",
+    },
+    // What Fleet is holding disk for, read across every Job at once. Not under
+    // `/jobs/:job_id` and not a field on one: the question is which of these to
+    // give back, which is asked of the set and answered by comparing them.
+    Route {
+        operation: "list_worktrees",
+        method: "GET",
+        path: "/worktrees",
     },
     Route {
         operation: "propose_job",
@@ -444,6 +452,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/answer_question", post(answer_question::<D>))
         .route("/jobs/:job_id/report", post(file_report::<D>))
         .route("/reports", get(list_reports::<D>))
+        .route("/worktrees", get(list_worktrees::<D>))
         .route("/jobs/:job_id/observe", get(observe_job::<D>))
         .route("/events", get(events::<D>))
         // The Evidence endpoint, on the same listener and deliberately not in

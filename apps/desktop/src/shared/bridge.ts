@@ -14,6 +14,7 @@ import type {
   Draft,
   Evidence,
   Footprint,
+  HeldWorktrees,
   History,
   Holdings,
   Observed,
@@ -172,6 +173,17 @@ export type BridgeState = {
    * pays for them until somebody is reading them.
    */
   reports: Reports;
+  /**
+   * What Fleet is holding disk for, where a surface asked.
+   *
+   * **The second read here no Job scopes**, and not for the reports' reason: a
+   * report outlives the Job it names, while this is a question that only makes
+   * sense of the set — which of these to give back. A field on a Job could
+   * carry the reasons and could not carry the choice.
+   *
+   * Read when the surface opens and dropped when it closes, like the reports.
+   */
+  held: HeldWorktrees;
 };
 
 
@@ -406,6 +418,22 @@ export type BridgeApi = {
    */
   readReports: (want: boolean) => Promise<void>;
   /**
+   * Read what Fleet is holding disk for, or drop it.
+   *
+   * **Read-only, and the reasons are the payload.** What comes back is every
+   * worktree Fleet is holding and the test each one failed, so a person can
+   * decide about them one at a time — Fleet has already given back everything
+   * that passed all five, without being asked.
+   *
+   * **A piloted Job's checkout is not in it.** Fleet drops it before answering,
+   * so there is nothing here to hide and nothing that could be drawn by
+   * mistake: a person is at an unrestricted toolset in that directory.
+   *
+   * A boolean rather than an id, for `readReports`'s reason: there is nothing
+   * to scope it to, only whether somebody is looking.
+   */
+  readHeld: (want: boolean) => Promise<void>;
+  /**
    * Take the work. **The counterpart to `approveDispatch`, at the other end of
    * the Job.** On the workflow's last step Fleet commits and delivers before
    * recording the Job done. Legal only at `awaiting_review`, like the two below.
@@ -466,6 +494,7 @@ export const NOTHING_YET: BridgeState = {
   evidence: { state: "none" },
   diff: { state: "none" },
   reports: { state: "none" },
+  held: { state: "none" },
 };
 
 /** The channels the preload is allowed to name. There is no general `invoke`. */
@@ -495,6 +524,7 @@ export const CHANNELS = {
   readDiff: "bridge:read-diff",
   readCall: "bridge:read-call",
   readReports: "bridge:read-reports",
+  readHeld: "bridge:read-held",
   approveReview: "bridge:approve-review",
   requestChanges: "bridge:request-changes",
   rejectWork: "bridge:reject-work",

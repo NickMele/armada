@@ -37,6 +37,9 @@ mod enums;
 mod error;
 mod event;
 mod history;
+/// What Fleet is holding disk for, and the test each one did not pass.
+/// **A piloted worktree is not on this wire at all** — `#367`.
+mod holding;
 mod ids;
 mod job;
 mod judged;
@@ -86,6 +89,7 @@ pub use event::{
     ProposalMoved, Reason, Resync, StreamMessage,
 };
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
+pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};
 pub use ids::{
     CriterionId, DroneId, Instant, JobId, ManifestId, ProposalId, QuestionId, StepId, WorkflowId,
 };
