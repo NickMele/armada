@@ -90,6 +90,26 @@ pub const PROVISIONAL_CHECK_BUDGET: Duration = Duration::from_secs(900);
 /// cost. A dollar cap there would be enforced by nothing.
 pub const PROVISIONAL_JUDGE_BUDGET: Duration = Duration::from_secs(120);
 
+/// How long the Job proposer's call may take.
+///
+/// **Longer than the Judge's, and the difference is who is waiting.** A Judge
+/// runs at a gate with nobody watching, so its budget is the only thing that
+/// can end a call that will not answer — two minutes is a bound chosen on a
+/// person's behalf because there is no person to choose.
+///
+/// A proposal is watched. Fleet publishes what the call has reached and
+/// `stop_proposal` kills it, so the person in front of the form is the one
+/// ending a call that is going nowhere — and a budget tight enough to be that
+/// backstop would take the decision away from them. Ten minutes is the outer
+/// bound on a call nobody is left to stop, not a wait anybody is expected to
+/// sit through: Bridge asks after two, which is `PROPOSAL_IS_SLOW` in
+/// `packages/screens`.
+///
+/// **Provisional, and measured on nothing.** The two-minute figure above was
+/// chosen the same way. What would settle it is a distribution of real proposal
+/// latencies, which nothing collects yet.
+pub const PROVISIONAL_PROPOSER_BUDGET: Duration = Duration::from_secs(600);
+
 /// What a step is expected to cost before the thrashing chain looks at it.
 ///
 /// **Provisional, and measured on one repository rather than on none.**
@@ -554,6 +574,7 @@ fn assemble(
         // spelling of the model is the adapter's; this crate never learns it.
         judge: Arc::new(HeadlessAgent::at(judge_binary)),
         judge_budget: JudgeBudget::of(PROVISIONAL_JUDGE_BUDGET),
+        proposer_budget: JudgeBudget::of(PROVISIONAL_PROPOSER_BUDGET),
         judge_model,
         proposer_model,
         // The one link shape resolved before dispatch. See

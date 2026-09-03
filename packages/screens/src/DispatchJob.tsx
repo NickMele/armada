@@ -31,9 +31,10 @@ import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { Button, DispatchRequest } from "@armada/components";
-import type { Proposal } from "@armada/components";
+import type { Proposal, ProposalWatch } from "@armada/components";
 
 import type { Answered } from "./proposal";
+import { PROPOSAL_IS_SLOW } from "./proposal";
 
 /** What the control that goes back to describing is called. */
 const BACK = "Describe the work instead";
@@ -54,6 +55,21 @@ export type DispatchJobProps = {
   onOpen: (jobId: string) => void;
   /** Hand entry, built by the caller. The composer, and the override. */
   byHand: ReactNode;
+  /**
+   * What Fleet says the call in flight is doing, or `null`.
+   *
+   * **The app's, where the proposal is this screen's.** The two are not the
+   * same fact and cannot come from the same place: the proposal is what the
+   * press asked for and belongs to the press, and this arrives on the event
+   * stream between the asking and the answer. A screen holding its own copy
+   * would have nothing to fill it from.
+   */
+  watching: ProposalWatch | null;
+  /**
+   * Stop the call. **Kills it rather than stopping the wait** — a wait
+   * abandoned leaves the proposer running inside Fleet and spending.
+   */
+  onStop: () => void;
   /** Nothing may be dispatched while the connection is not live. */
   disabled: boolean;
   /** Why the controls are off, where they are. */
@@ -66,6 +82,8 @@ export function DispatchJob({
   onPropose,
   onOpen,
   byHand,
+  watching,
+  onStop,
   disabled,
   disabledNote,
   onCopied,
@@ -130,7 +148,17 @@ export function DispatchJob({
       onEnterByHand={() => setHand(true)}
       onReset={reset}
       onOpen={onOpen}
-      proposal={proposal}
+      // The two facts are joined here and nowhere else: the proposal is this
+      // screen's and the watch is the app's, and the component takes one value.
+      // A screen still `reading` with nothing published yet draws the wait
+      // without a reading, which is the sentence that was always there.
+      proposal={
+        proposal.at === "reading" && watching !== null
+          ? { at: "reading", watch: watching }
+          : proposal
+      }
+      onStop={onStop}
+      slowAfterMs={PROPOSAL_IS_SLOW}
       disabled={disabled}
       disabledNote={disabledNote}
       onCopied={onCopied}

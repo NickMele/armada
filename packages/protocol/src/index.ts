@@ -20,6 +20,7 @@ export * from "./generated/protocol-version";
 export * from "./history";
 export * from "./proposal";
 export * from "./protocol";
+export * from "./proposing";
 export * from "./reads";
 export * from "./reclaimed";
 export * from "./report";

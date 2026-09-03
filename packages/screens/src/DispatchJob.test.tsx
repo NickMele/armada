@@ -60,6 +60,11 @@ function opened(answering: () => Promise<Answered>): { sent: string[] } {
       }}
       onOpen={() => {}}
       byHand={<p>The form, by hand</p>}
+      // Nothing published, which is the state before Fleet's first message and
+      // the one these cases are about: what the guard does is not a function of
+      // how far the call has got.
+      watching={null}
+      onStop={() => {}}
       disabled={false}
     />,
   );

@@ -32,11 +32,12 @@
 // producer that whole arrangement exists to prevent. So it goes back as an
 // `Outcome` too, and the app draws it where it draws every other one.
 
-import type { Proposal, ProposedJob } from "@armada/components";
+import type { Proposal, ProposalWatch, ProposedJob } from "@armada/components";
 import type {
   BridgeIdentity,
   JobSummary,
   Outcome,
+  ProposalInFlight,
   Proposed,
   WorkflowSummary,
 } from "@armada/protocol";
@@ -137,5 +138,56 @@ function became(job: JobSummary, workflows: readonly WorkflowSummary[]): Propose
     title: job.title,
     workflow: workflow === undefined ? job.workflow_id : workflow.name,
     status: job.status,
+  };
+}
+
+
+/**
+ * How long a proposal may run before the surface asks whether to keep waiting.
+ *
+ * **A prompt and not a limit.** Nothing happens at this mark: the call keeps
+ * running until Fleet's own budget or until somebody presses stop. What it
+ * decides is when the question is put in front of a person rather than left for
+ * them to wonder about.
+ *
+ * Two minutes, chosen against the wait it replaced — Bridge used to abort the
+ * request at five seconds, and before that a proposal that took this long was
+ * simply lost. It is deliberately well inside Fleet's own proposer budget
+ * (`PROVISIONAL_PROPOSER_BUDGET`, ten minutes): a question asked as the call
+ * dies is not a question, it is an epitaph.
+ *
+ * **Unmeasured, like the budget it sits inside.** What would settle it is a
+ * distribution of real proposal latencies, which nothing collects yet.
+ */
+export const PROPOSAL_IS_SLOW = 120_000;
+
+/**
+ * What Fleet says about the call in flight, as the surface draws it.
+ *
+ * `null` where nothing is out, or where the instant will not read — a wait that
+ * cannot say how long it has been is drawn as a wait with nothing known about
+ * it rather than as one that has been running since the epoch.
+ *
+ * **The clock is the caller's.** Elapsed is resolved here, against a `now` the
+ * app already ticks for everything else, so this figure and every other elapsed
+ * figure on screen come from one reading.
+ */
+export function watchOf(proposing: ProposalInFlight | null, now: number): ProposalWatch | null {
+  if (proposing === null) return null;
+  const since = Date.parse(proposing.since);
+  if (Number.isNaN(since)) return null;
+  return {
+    reached: proposing.reached,
+    // Never negative. A clock a few milliseconds behind Fleet's would otherwise
+    // draw a call that has not started yet.
+    elapsedMs: Math.max(0, now - since),
+    budgetMs: proposing.budget_ms,
+    model: proposing.model,
+    ...(proposing.thinking_tokens === undefined
+      ? {}
+      : { thinkingTokens: proposing.thinking_tokens }),
+    ...(proposing.answered_characters === undefined
+      ? {}
+      : { answeredCharacters: proposing.answered_characters }),
   };
 }

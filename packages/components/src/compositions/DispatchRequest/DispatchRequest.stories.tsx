@@ -28,6 +28,7 @@ const meta: Meta<typeof DispatchRequest> = {
     onEnterByHand: fn(),
     onReset: fn(),
     onOpen: fn(),
+    onStop: fn(),
     proposal: { at: "unasked" } satisfies Proposal,
   },
 };
@@ -103,6 +104,124 @@ export const Reading: Story = {
     await expect(dispatch).toBeDisabled();
     await userEvent.click(dispatch);
     await expect(args.onDispatch).not.toHaveBeenCalled();
+  },
+};
+
+/**
+ * The call has reached the vendor and is thinking. **What a wait is for**: the
+ * reach, the elapsed figure against Fleet's ceiling, and how much thinking
+ * there has been — none of which an elapsed count alone can say.
+ *
+ * Well inside `slowAfterMs`, so no question is asked and no stop is offered.
+ * Waiting is what should happen here and the surface says nothing else.
+ */
+export const ReadingWithProgress: Story = {
+  args: {
+    request: REQUEST,
+    proposal: {
+      at: "reading",
+      watch: {
+        reached: "thinking",
+        elapsedMs: 41_000,
+        budgetMs: 600_000,
+        model: "haiku",
+        thinkingTokens: 763,
+      },
+    },
+    slowAfterMs: 120_000,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("The model is thinking")).toBeVisible();
+    await expect(canvas.getByText("41s")).toBeVisible();
+    // No question and no stop: the wait is ordinary.
+    await expect(canvas.queryByRole("button", { name: "Stop the proposer" })).toBeNull();
+  },
+};
+
+/**
+ * Past the mark, and the surface asks.
+ *
+ * **The stop is the only control offered.** Waiting is what happens if nothing
+ * is pressed, so a `Keep waiting` button would perform no act — and dismissing
+ * the notice would hide the one way out of the wait.
+ */
+export const ReadingAndSlow: Story = {
+  args: {
+    request: REQUEST,
+    proposal: {
+      at: "reading",
+      watch: {
+        reached: "thinking",
+        elapsedMs: 142_000,
+        budgetMs: 600_000,
+        model: "haiku",
+        thinkingTokens: 4_210,
+      },
+    },
+    slowAfterMs: 120_000,
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByText(/taking longer than expected/)).toBeVisible();
+    await expect(canvas.getByText("2m 22s")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Stop the proposer" }));
+    await expect(args.onStop).toHaveBeenCalled();
+  },
+};
+
+/**
+ * **The case worth telling apart from every other.** Two minutes in and the
+ * harness has still not announced itself, so the call never reached the vendor
+ * at all — a credential or a harness problem, which will not resolve by
+ * waiting. Under an elapsed count alone this is indistinguishable from a model
+ * thinking hard, and the two take opposite decisions.
+ */
+export const ReadingAndStuckStarting: Story = {
+  args: {
+    request: REQUEST,
+    proposal: {
+      at: "reading",
+      watch: {
+        reached: "starting",
+        elapsedMs: 130_000,
+        budgetMs: 600_000,
+        model: "haiku",
+      },
+    },
+    slowAfterMs: 120_000,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("Starting the proposer")).toBeVisible();
+    // Nothing has been thought and nothing answered, so neither count is drawn.
+    // Absent rather than zeroed: `0 tokens` would read as a model that thought
+    // about nothing, which is a different and much less alarming fact.
+    await expect(canvas.queryByText(/tokens of thinking/)).toBeNull();
+    await expect(canvas.getByRole("button", { name: "Stop the proposer" })).toBeVisible();
+  },
+};
+
+/**
+ * The answer is arriving. **Nearly over** — stopping here would throw away work
+ * about to land, which is what the reach is for.
+ */
+export const ReadingAndAnswering: Story = {
+  args: {
+    request: REQUEST,
+    proposal: {
+      at: "reading",
+      watch: {
+        reached: "answering",
+        elapsedMs: 88_000,
+        budgetMs: 600_000,
+        model: "haiku",
+        thinkingTokens: 2_100,
+        answeredCharacters: 340,
+      },
+    },
+    slowAfterMs: 120_000,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("The answer is arriving")).toBeVisible();
+    await expect(canvas.getByText(/340 characters of answer/)).toBeVisible();
   },
 };
 

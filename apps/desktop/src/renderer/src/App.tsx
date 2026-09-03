@@ -35,6 +35,7 @@ import { statementOf } from "@armada/shell";
 import { Composer } from "@armada/screens";
 import { DispatchJob } from "@armada/screens";
 import type { Answered } from "@armada/screens";
+import { watchOf } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
 import { ACT_LABEL, CONFIRM, reclaimed, said } from "@armada/screens";
@@ -249,6 +250,20 @@ export function App() {
    * drawing for goes to the same pipeline every other command failure uses.
    * `dispatch.ts` makes the call and decides which half an answer is.
    */
+  /**
+   * Stop the proposal that is out. **Kills the call rather than stopping the
+   * wait** — see `JobCommands.stopProposal`.
+   *
+   * A refusal goes to the same pipeline every other command failure uses. A
+   * success says nothing: what a person sees is the wait ending, which the
+   * event stream draws a beat later, and a toast on top of it would announce an
+   * outcome they are already looking at.
+   */
+  async function stopProposal(): Promise<void> {
+    const answer = await window.armada.stopProposal();
+    if (!answer.ok) setOutcome(answer);
+  }
+
   async function proposeFrom(request: string): Promise<Answered> {
     const read = await proposeRequest(request, {
       workflows: state.holds.workflows,
@@ -606,6 +621,10 @@ export function App() {
             <Boundary region="the job composer" {...guarded}>
               <DispatchJob
                 onPropose={proposeFrom}
+                // What Fleet says the call is doing, against the same `now`
+                // every other elapsed figure on screen is drawn from.
+                watching={watchOf(state.proposing, now)}
+                onStop={() => void stopProposal()}
                 // A proposed Job is opened, never approved from here: approval
                 // is a second act from detail, and this is the same signpost the
                 // Board's own `awaiting_approval` row carries.

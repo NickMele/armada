@@ -14,10 +14,10 @@ import type {
   JobList,
   JobSummary,
   JudgeInFlight,
-  ProposalInFlight,
   Reason,
   Settled,
 } from "./protocol";
+import type { ProposalInFlight } from "./proposing";
 import type { QuestionInFlight } from "./waiting";
 import type { ProtocolVersion } from "./version";
 

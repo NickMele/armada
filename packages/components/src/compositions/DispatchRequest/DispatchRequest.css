@@ -4,10 +4,12 @@
  * edge, --radius-md and --pad-card. Only what the card does not answer is
  * spelled here.
  *
- * **Nothing here animates.** The wait is a control that changed its label and
- * went dead, which is Bridge's built idiom for an act in flight — and the one
- * continuous animation the design contract allows is the running step mark,
- * which this is not. */
+ * **Nothing here animates.** The wait moves because the numbers in it change,
+ * which is a fact arriving rather than a decoration — and the one continuous
+ * animation the design contract allows is the running step mark, which this is
+ * not. The wait read as a dead button until Fleet could say what the call was
+ * doing; a spinner was refused then and is refused now, for the better reason
+ * that there is something real to draw instead. */
 .armada-dispatch {
   /* The surface is laid out by whatever holds it, and a flex or grid child
      with no floor refuses to narrow past its content. */
@@ -30,11 +32,78 @@
   line-height: var(--leading-xs);
 }
 
-/* The wait. Sans, muted, no mark: a call is out and nothing is arriving in
-   pieces, so there is nothing for a mark to be about. */
+/* The wait, where Fleet has said nothing about the call — an older Fleet, or
+   the moment before the first message. Sans, muted, no mark. */
 .armada-dispatch__waiting {
   min-width: 0;
   color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-wrap: pretty;
+}
+
+/* The wait, described. Set on the same inline rule the refusals use, because
+   it is the same kind of thing: the surface saying what is true right now about
+   an act, beside the field rather than over it. `--step-running` and not
+   `--step-waiting`: something is happening. */
+.armada-dispatch__wait {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--border-width) solid var(--step-running);
+}
+
+/* What it is doing, and for how long — one line, the two ends apart. The
+   elapsed figure is tabular so it does not jog as the digits change. */
+.armada-dispatch__wait-head {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.armada-dispatch__wait-what {
+  min-width: 0;
+  color: var(--fg-default);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+}
+
+.armada-dispatch__wait-for {
+  flex: none;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.armada-dispatch__wait-where,
+.armada-dispatch__wait-count {
+  min-width: 0;
+  color: var(--fg-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Where the surface asks. Separated from the readings above it, because it is
+   a question rather than another fact. */
+.armada-dispatch__wait-slow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+  margin-block-start: var(--space-2);
+}
+
+.armada-dispatch__wait-ask {
+  min-width: 0;
+  color: var(--fg-default);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
   text-wrap: pretty;

@@ -312,6 +312,11 @@ pub fn fitted_with(
         // regression pass unseen.
         judge: Arc::new(FakeJudge::that_fails("a Judge that should never be asked")),
         judge_budget: JudgeBudget::of(Duration::from_secs(5)),
+        // The same five seconds. A suite's proposals answer in milliseconds, so
+        // the split that matters in production — a watched call outliving an
+        // unwatched one — buys a test nothing but a slower failure when one
+        // hangs.
+        proposer_budget: JudgeBudget::of(Duration::from_secs(5)),
         judge_model: Model::named("the-cheap-model").expect("a model name"),
         proposer_model: Model::named("the-cheap-model").expect("a model name"),
         // Resolves nothing, so every fixture but `proposing`'s own behaves

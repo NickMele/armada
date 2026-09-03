@@ -171,6 +171,11 @@ pub struct Fittings<H, V, W> {
     /// How long one Judge call may take. See [`JudgeBudget`] for why it has no
     /// default.
     pub judge_budget: JudgeBudget,
+    /// How long one Job proposer call may take. **Not `judge_budget`** — the
+    /// call is the same call and the wait is not: a Judge's is the only thing
+    /// that can end a call nobody is watching, and a proposal has somebody who
+    /// can end it themselves.
+    pub proposer_budget: JudgeBudget,
     /// What a step naming no model of its own is judged by. **Resolved by the
     /// composition root**, like every other input here — which model is cheap
     /// is a vendor's fact, and nothing below Fleet may spell one.
@@ -227,6 +232,7 @@ pub struct Fleet<H, V, W> {
     dry_runs: DryRuns,
     judge: Arc<dyn ModelClient + Send + Sync>,
     judge_budget: JudgeBudget,
+    proposer_budget: JudgeBudget,
     /// The Judge call that is out right now, or none. **The one piece of Fleet
     /// state that is only ever true for as long as it takes** — it is never
     /// written down, because a record of it would outlive the fact.
@@ -334,6 +340,7 @@ where
             dry_runs: fittings.dry_runs,
             judge: fittings.judge,
             judge_budget: fittings.judge_budget,
+            proposer_budget: fittings.proposer_budget,
             aloft: Aloft::default(),
             proposals: Proposals::new(),
             judge_model: fittings.judge_model,
@@ -679,13 +686,17 @@ where
     }
     /// What the dispatch path needs in order to ask the proposer.
     ///
-    /// **The Judge's client and the Judge's budget**, because the call is the
-    /// same call: one turn, no toolset, no directory. Only the model differs,
-    /// and only because it is a separate dial.
+    /// **The Judge's client, and the proposer's own budget.** The call is the
+    /// same call — one turn, no toolset, no directory — so the client is
+    /// shared. The wait is not: a Judge's budget is the only thing that can end
+    /// a call nobody is watching, and a proposal has a person who can end it,
+    /// so a budget tight enough to be that backstop would take the decision
+    /// away from them. It read `judge_budget` until the proposal wait was made
+    /// watchable and stoppable.
     pub(crate) fn proposing(&self) -> Result<Proposing, SpawnConfigRefused> {
         Ok(Proposing {
             client: Arc::clone(&self.judge),
-            budget: self.judge_budget,
+            budget: self.proposer_budget,
             model: self.proposer_model.clone(),
             environment: environment(HostPaths {
                 path: &self.host.path,
@@ -708,7 +719,7 @@ where
             events: self.events.clone(),
             clock: Arc::clone(&self.clock),
             mint: Arc::clone(&self.mint),
-            budget: self.judge_budget,
+            budget: self.proposer_budget,
             // The spelling the call will actually be made with, so a surface
             // naming the model names the one that is out rather than a default
             // read from somewhere else.

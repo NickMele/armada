@@ -21,14 +21,33 @@ import { JOB_STATUS } from "../../generated/vocabulary";
  * before you can ask for anything. Hand entry is one control away and is the
  * exception.
  *
- * # It does not fill in progressively, and this does not pretend it does
+ * # The wait says what the call is doing, and offers a way out of it
  *
- * The policy describes the proposal "filling in as it is worked out". What
- * shipped is one request and one response, with no stream behind it, so the
- * wait here is Bridge's own built idiom for an act in flight: the control takes
- * a present-participle label and goes dead, exactly as `Approve dispatch`
- * becomes `Approving`. A skeleton would claim rows are arriving one at a time,
- * which is the thing that is not happening.
+ * This read, until the proposal wait was made watchable: "there is no stream
+ * behind it, so the wait here is Bridge's own idiom for an act in flight — the
+ * control takes a present-participle label and goes dead". There is a stream
+ * now. Fleet publishes what the call has reached and what it may be stopped by,
+ * so the wait draws that instead of a dead button.
+ *
+ * **It still does not fill the proposal in progressively, and must not look as
+ * though it does.** The Jobs arrive whole, once, at the end. What moves here is
+ * the call's own progress — reached the vendor, thinking, answering — which is
+ * a fact about the wait rather than a preview of the answer. A skeleton of Job
+ * rows would claim rows are arriving one at a time, which is still not
+ * happening.
+ *
+ * # Why a wait needs more than an elapsed count
+ *
+ * A person watching one is deciding whether to keep waiting, and that turns
+ * entirely on whether the call is getting anywhere. "Ninety seconds and
+ * thinking" and "ninety seconds and never reached the vendor" take opposite
+ * decisions and, under an elapsed count alone, are the same pixels. So the
+ * reach is drawn, and after `slowAfterMs` the surface says so and offers the
+ * stop rather than waiting for somebody to wonder.
+ *
+ * **Stopping kills the call.** It is not this window giving up: a wait
+ * abandoned leaves the proposer running inside Fleet and spending, with nobody
+ * left to read what it decides.
  *
  * # Two refusals, drawn as two different things
  *
@@ -76,6 +95,25 @@ export type DispatchRequestProps = {
   onOpen: (jobId: string) => void;
   /** What the proposer answered, or that it has not been asked. */
   proposal: Proposal;
+  /**
+   * Stop the call that is out. **Kills it rather than stopping the wait** — a
+   * wait abandoned leaves the proposer running inside Fleet and spending, with
+   * nobody left to read what it decides.
+   *
+   * Absent where stopping is not offered, which draws no control rather than a
+   * dead one.
+   */
+  onStop?: () => void;
+  /**
+   * How long a wait may run before the surface says so and puts the stop in
+   * front of the person, in milliseconds.
+   *
+   * **A prompt, not a limit.** Nothing happens at this mark except that the
+   * question is asked: the call keeps running until Fleet's own budget or until
+   * somebody presses stop. It is the caller's because what counts as long is a
+   * property of the deployment rather than of this component.
+   */
+  slowAfterMs?: number;
   /** Nothing may be dispatched while the connection is not live. */
   disabled?: boolean;
   /** Why the controls are off, where they are. A dead control with no reason reads as broken. */
@@ -87,20 +125,57 @@ export type DispatchRequestProps = {
 /**
  * Where the one call has got to.
  *
- * **Five states and no sixth.** There is no partial proposal, because there is
- * no stream: the call is asked once and answers once.
+ * **Five states and no sixth.** There is no partial proposal: the call is asked
+ * once and answers once. What `reading` gained is a description of the wait,
+ * which is not a partial answer — see the type's own note.
  */
 export type Proposal =
   /** Nothing asked. The ordinary opening state, and where a reset returns to. */
   | { at: "unasked" }
-  /** Asked, and waiting. Nothing arrives until all of it does. */
-  | { at: "reading" }
+  /**
+   * Asked, and waiting. **The proposal still arrives whole**; `watch` describes
+   * the call, not the answer.
+   *
+   * Absent where Fleet has not said anything about the call yet, which is every
+   * moment before the first event and every Fleet too old to send one. The
+   * surface draws the wait without it rather than drawing nothing.
+   */
+  | { at: "reading"; watch?: ProposalWatch }
   /** Answered. Every job here exists already, at `awaiting_approval`. */
   | { at: "proposed"; request: string; jobs: readonly ProposedJob[] }
   /** No workflow resolved. The request is unchanged and no job was created. */
   | { at: "unresolved" }
   /** The call could not be made. A fault, and it carries a code. */
   | { at: "faulted"; code: string; message: ReactNode; payload?: DebugPayload };
+
+/**
+ * What the call is doing, while it does it.
+ *
+ * **Every number here is already resolved by the caller.** Elapsed is a
+ * subtraction against a clock, and a component that read one would tick on its
+ * own schedule and disagree with every other elapsed figure on screen.
+ */
+export type ProposalWatch = {
+  /**
+   * How far the call has got. `starting` is **the one worth telling apart**: a
+   * call still there after a minute never reached the vendor at all, which will
+   * not resolve by waiting.
+   */
+  reached: "starting" | "started" | "requesting" | "thinking" | "answering";
+  /** How long the call has been out, in milliseconds. */
+  elapsedMs: number;
+  /** Fleet's own ceiling for this call, in milliseconds. */
+  budgetMs: number;
+  /** Which model is reading it. What the wait costs, roughly. */
+  model: string;
+  /**
+   * The harness's running estimate of how much the model has thought. **Drawn
+   * as an approximation**, because that is what it is.
+   */
+  thinkingTokens?: number;
+  /** How much of the answer has arrived, in characters. */
+  answeredCharacters?: number;
+};
 
 /** One job the request became. **No scope, because none was proposed.** */
 export type ProposedJob = {
@@ -156,6 +231,8 @@ export function DispatchRequest({
   onReset,
   onOpen,
   proposal,
+  onStop,
+  slowAfterMs,
   disabled = false,
   disabledNote,
   onCopied,
@@ -190,12 +267,15 @@ export function DispatchRequest({
             />
           )}
 
-          {/* The wait, in the one register that is true: a call is out and
-              nothing is arriving in pieces. */}
-          {reading ? (
-            <p className="armada-dispatch__waiting">
-              The proposer is reading the request. It answers once, whole.
-            </p>
+          {/* The wait. The proposal still arrives whole; what moves here is
+              the call's own progress, which is a fact about the wait rather
+              than a preview of the answer. */}
+          {proposal.at === "reading" ? (
+            <Waiting
+              {...(proposal.watch === undefined ? {} : { watch: proposal.watch })}
+              {...(onStop === undefined ? {} : { onStop })}
+              {...(slowAfterMs === undefined ? {} : { slowAfterMs })}
+            />
           ) : null}
 
           {/* Refusal one. No red, no code — Fleet answered and declined, which
@@ -277,6 +357,119 @@ export function DispatchRequest({
       </CardFooter>
     </Card>
   );
+}
+
+/**
+ * The wait, and what to do about it.
+ *
+ * **Three registers, and which one is drawn turns on one thing**: whether the
+ * wait has passed the mark where a person should be asked. Before it, the wait
+ * is ordinary and says what the call is doing. After it, the surface says so
+ * and puts the stop in front of them — rather than leaving somebody to wonder
+ * whether anything is happening and find no way to end it.
+ *
+ * **Nothing here ticks.** Every figure is resolved by the caller against one
+ * clock, so this and the rest of the window cannot disagree about how long a
+ * thing has taken.
+ */
+function Waiting({
+  watch,
+  onStop,
+  slowAfterMs,
+}: {
+  watch?: ProposalWatch;
+  onStop?: () => void;
+  slowAfterMs?: number;
+}) {
+  // No reading yet, and no mark to have passed. **The sentence that was here
+  // before any of this**, kept for a Fleet that sends no progress and for the
+  // moment before the first message lands.
+  if (watch === undefined) {
+    return (
+      <p className="armada-dispatch__waiting" role="status">
+        The proposer is reading the request. It answers once, whole.
+      </p>
+    );
+  }
+
+  const slow = slowAfterMs !== undefined && watch.elapsedMs >= slowAfterMs;
+  const left = Math.max(0, watch.budgetMs - watch.elapsedMs);
+
+  return (
+    <div className="armada-dispatch__wait" role="status">
+      <p className="armada-dispatch__wait-head">
+        <span className="armada-dispatch__wait-what">{REACHED[watch.reached]}</span>
+        <span className="armada-dispatch__wait-for">{lasting(watch.elapsedMs)}</span>
+      </p>
+      {/* The model and the ceiling on one line. The ceiling is what makes the
+          elapsed figure mean anything: against nothing it can only say "slow",
+          and against the budget it says how much of the decision is left. */}
+      <p className="armada-dispatch__wait-where">
+        {watch.model} · {left === 0 ? "out of time" : `${lasting(left)} left`}
+      </p>
+      {/* What it has actually done. Absent rather than zeroed: a call that has
+          not started thinking and one thinking about nothing are different
+          things, and a `0` would draw them the same. */}
+      {watch.thinkingTokens === undefined ? null : (
+        <p className="armada-dispatch__wait-count">
+          about {watch.thinkingTokens.toLocaleString()} tokens of thinking
+        </p>
+      )}
+      {watch.answeredCharacters === undefined ? null : (
+        <p className="armada-dispatch__wait-count">
+          {watch.answeredCharacters.toLocaleString()} characters of answer so far
+        </p>
+      )}
+      {slow ? (
+        <div className="armada-dispatch__wait-slow">
+          <p className="armada-dispatch__wait-ask">
+            This is taking longer than expected. It is still running — waiting is
+            reasonable, and so is stopping.
+          </p>
+          {/* Only the stop. **There is no `Keep waiting` control**, and the
+              absence is the design: waiting is what happens if nothing is
+              pressed, and a button for it would be a control that performs no
+              act — the one thing a surface must not offer. Dismissing the
+              notice would be worse again, hiding the only way out of the wait.
+              */}
+          {onStop === undefined ? null : (
+            <Button variant="secondary" onClick={onStop}>
+              Stop the proposer
+            </Button>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * What each reach is called on screen.
+ *
+ * **`starting` is the one that says something is wrong.** A call that has not
+ * announced itself never reached the vendor, so its sentence names the harness
+ * rather than the model — that is the reading a person needs in order to stop
+ * rather than wait.
+ */
+const REACHED: Record<ProposalWatch["reached"], string> = {
+  starting: "Starting the proposer",
+  started: "Waiting to reach the model",
+  requesting: "Asking the model",
+  thinking: "The model is thinking",
+  answering: "The answer is arriving",
+};
+
+/**
+ * A duration, in the coarsest unit that is still true. Seconds under a minute,
+ * then minutes and seconds — a wait is read at a glance, and `142s` is a number
+ * somebody has to divide.
+ */
+function lasting(ms: number): string {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`;
 }
 
 /**
