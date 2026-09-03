@@ -785,6 +785,20 @@ so that "terminate" finds Kill, but the alias never renders. This is
 where the lexicon earns its keep: one vocabulary, searchable, with the
 shortcut shown beside every entry.
 
+**A matched span is marked by weight**, at `--weight-medium`, and never
+by a second colour or a fill. A row has one text colour, status hue is
+never chosen and the accent is reserved to interactive affordance, so
+weight is the channel left — and it is already in the type scale. **An
+alias hit marks nothing**, because the match was on a word that never
+renders and there is nothing on the lexicon term to mark.
+
+**A row that cannot act draws dimmed and says why**, in `--fg-subtle` at
+`--text-2xs`, beside its binding. Two kinds reach it: a binding the
+registry carries that nothing answers, where `unbuilt` names the issue,
+and an act the app cannot reach from where you are standing. Both are
+facts rather than a list of exceptions, which is the same reasoning the
+`not built` annotation carries under Two tiers.
+
 **The palette is the discovery surface.** It is how a person learns
 forty shortcuts without a cheat sheet, which is why every entry displays
 its binding and why no action may exist outside it.
