@@ -1462,6 +1462,15 @@ deliberately. It is not **stalled** either — that is usually what the
 person killed the Drone *for*, and the Job's own escalation reason
 keeps it. This one is the step's.
 
+`run_ended` renders as **the Drone's run ended**, and it is
+`drone_killed`'s sibling one actor over: there a person took the process
+away, here the Drone said its own run was over and Fleet took it at that
+word. Both are passive and neither names who acted, because what a step
+badge answers is what became of the step. Not **stalled** for the same
+reason as above — that is what the *Job* is held for, and one Job carries
+both: the step says what happened to it, the Job says what it happened
+for.
+
 `evidence_suspect` renders as
 **evidence disputed**, with Judge in the source field, which keeps
 attribution out of the headline so P5 holds. Avoid "Judge rejected the

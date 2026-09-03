@@ -436,6 +436,18 @@ impl Stopped {
                 "An earlier attempt at this part was ended by a person while it was still \
                  running. Nothing it did was checked, and nothing about it was judged."
             }
+            // **Not `DroneKilled`'s line, and the difference is who acted.**
+            // There a person took the process away mid-run; here the Drone
+            // said its own run was over and Fleet took it at its word. Told
+            // the wrong one, a Drone goes looking for the instruction that
+            // stopped it and there was none. The second sentence is the
+            // accepted cost said out loud: a run that reports it has ended and
+            // then carries on loses whatever it did after saying so.
+            EscalationTrigger::RunEnded => {
+                "An earlier attempt at this part said its run was over without having \
+                 submitted anything, and was stopped there. Nothing it did was checked, \
+                 and anything it did after saying so was not kept."
+            }
             // `Thrashing`'s line is true of this too and leaves out the part
             // this attempt can do differently.
             EscalationTrigger::NoReport => {

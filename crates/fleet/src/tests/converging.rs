@@ -21,7 +21,8 @@ use std::time::Duration;
 use adapter_traits::{CallDetail, Change, DroneEvent};
 use config::ResolvedWorkflow;
 use core_model::{
-    EscalationTrigger, JobStatus, StepCheck, StepState, StepVerdict, TransitionReason,
+    EscalationTrigger, JobStatus, StepCheck, StepLevelTrigger, StepState, StepVerdict,
+    TransitionReason,
 };
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Scoped, Sketch};
 use verification::{Convergence, NotConverging};
@@ -436,11 +437,12 @@ async fn a_look_that_could_not_be_made_escalates_nothing() {
 ///
 /// **What it is held for instead is `stalled`, and by the other vigil.** The
 /// Drone came to rest having submitted nothing, which `crate::silence` reads as
-/// a run that has ended — so what this case asserts is the trigger and the
-/// absent `stopped` row rather than the status, because those are the two
-/// claims that belong to this chain. It asserted `Running` until `#314`, over a
-/// Drone that had just done the last thing it was ever going to do; the poke
-/// ladder reached `stalled` about it six minutes later.
+/// a run that has ended — it is reaped, its step stops under `run_ended` and
+/// the Job escalates. So what this case asserts is which trigger, on the Job
+/// and on the step, rather than the status: both rows exist and neither is this
+/// chain's. It asserted `Running` until `#314`, over a Drone that had just done
+/// the last thing it was ever going to do; the poke ladder reached `stalled`
+/// about it six minutes later.
 #[tokio::test]
 async fn a_drone_that_reports_when_it_is_interrupted_has_not_thrashed() {
     let home = TempDir::new();
@@ -464,13 +466,23 @@ async fn a_drone_that_reports_when_it_is_interrupted_has_not_thrashed() {
         Some(TransitionReason::Escalation(EscalationTrigger::NoReport)),
         "the Drone answered the directive, so this chain had nothing to escalate"
     );
-    // **No `stopped` row**, which is the half of `no_report` a person acts on:
-    // the step is still the Drone's, and the recourse is a redirect into a
-    // session that is still there.
-    assert!(record
+    // **The `stopped` row is the other vigil's, and it has to say so.** `#313`
+    // gave a person the step back by writing a reason onto it rather than an
+    // absence; a row here reading `no_report` would send them looking for a
+    // directive this Drone answered.
+    let stopped: Vec<_> = record
         .steps()
         .iter()
-        .all(|step| step.state() != StepState::Stopped));
+        .filter(|step| step.state() == StepState::Stopped)
+        .filter_map(|step| step.last_verdict())
+        .collect();
+    assert_eq!(
+        stopped,
+        vec![StepVerdict::Failed(
+            StepLevelTrigger::of(EscalationTrigger::RunEnded).expect("a step-level trigger")
+        )],
+        "the run ended, which is not this chain's finding about it"
+    );
 }
 
 /// The one case that reaches the trigger: told to stop, and it did not.
