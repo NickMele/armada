@@ -17,8 +17,8 @@ flowchart TD
   CALL --> PROP["Proposal - workflow_id, title, the graph"]
   PROP --> GATE["Dispatch approval gate - approve or override"]
   GATE -->|one Job| ONE["Approving dispatches it"]
-  GATE -->|several Jobs| PLAN["Approving accepts a plan"]
-  PLAN --> EACH["Each Job takes its own approval in turn"]
+  GATE -->|several Jobs| MANY["All of them are already at the gate"]
+  MANY --> EACH["Each takes its own approval in turn"]
 ```
 
 ## What it is
@@ -92,22 +92,23 @@ Skipping it where the answer looks obvious would cost the Job its entry zero, wh
 | --- | --- |
 | 1 | A person opens Dispatch a Job |
 | 2 | They describe the work — typed, or a link to a ticket or a Notion document |
-| 3 | They dispatch. The proposer reads the request and a Job is created from it |
+| 3 | They dispatch. The proposer reads the request and every Job it became is created |
 | 4 | The proposal is visible filling in as it is worked out |
 | 5 | The person approves. That is what starts the work |
 
 At step 3 the proposer works out what kind of work it is and which workflow it runs under. At step 4 the proposal fills in progressively rather than appearing complete at the end.
 
-**The Job exists before it is approved.** Step 3 creates it at `awaiting_approval` and step 5 dispatches it — see [Job Board](job-board.md), Job status on the Board.
+**Every Job exists before any of them is approved.** Step 3 creates each at `awaiting_approval` and step 5 dispatches the one it is pressed on — see [Job Board](job-board.md), Job status on the Board.
 
-What step 5 does depends on how much was proposed.
+**Approving a Job dispatches that Job, and it is the only approval act on this path.**
+Why: every Job the request became already stands at `awaiting_approval`, so a plan-level act would have nothing left to create.
 
-| What was proposed | What approving it does |
-| --- | --- |
-| One Job | Dispatches it. The ordinary case, and the one the steps above describe |
-| Several Jobs | Accepts a plan and starts nothing |
+| What was proposed | What step 5 dispatches | What is left at the gate |
+| --- | --- | --- |
+| One Job | That Job. The ordinary case | Nothing |
+| Several Jobs | The one it was pressed on | The rest, each awaiting its own turn |
 
-Where several Jobs were proposed, each still takes its own one-by-one dispatch approval when its turn comes, so [Fleet](fleet.md)'s strictly-one-by-one rule and the no-batch-approve rule both hold.
+[Fleet](fleet.md) holds the order at admission rather than reading it off the order approvals arrive in, so the strictly-one-by-one rule and the no-batch-approve rule both hold.
 
 **It is the dispatch gate, not a gate of its own.** A proposal is approved where a mid-flight scope revision is approved, so the things called approval on a Job's path stay two — this gate, and a workflow's own human gate over finished work.
 
