@@ -44,7 +44,9 @@ pub fn the_router_serves_what_the_inventory_names(root: &Path) -> Report {
         return report;
     };
     let Ok(event_source) = fs::read_to_string(root.join(EVENT_ENUM)) else {
-        report.fail(format!("{EVENT_ENUM} — the closed set of published event kinds"));
+        report.fail(format!(
+            "{EVENT_ENUM} — the closed set of published event kinds"
+        ));
         return report;
     };
 
