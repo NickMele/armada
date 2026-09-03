@@ -47,6 +47,9 @@ pub mod mcp;
 /// Where two Jobs claim the same paths. **A fact on the card, never a
 /// verdict** — nothing in it is readable as a refusal.
 mod overlap;
+/// What giving one Job's worktree and branch back did, half by half.
+/// **Two halves, because half of it happening is a real outcome.**
+mod reclaimed;
 /// What a person says went wrong, with the Job's own record attached.
 mod report;
 mod setup;
@@ -89,6 +92,7 @@ pub use job::{
 };
 pub use judged::{CitedAt, Flagged, Judged, KeptDeliverable};
 pub use overlap::{ScopeOverlap, SharedPath};
+pub use reclaimed::{ReclaimedBranch, ReclaimedWorktree, WorktreeReclaimed};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
 pub use turn::{

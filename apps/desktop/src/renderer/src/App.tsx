@@ -25,7 +25,7 @@ import { ClipboardList } from "lucide-react";
 import { NOTHING_YET } from "../../shared/bridge";
 import type { BridgeState } from "../../shared/bridge";
 import type { Artifact, Draft, Outcome } from "@armada/protocol";
-import type { FileReport } from "@armada/protocol";
+import type { FileReport, WorktreeReclaimed } from "@armada/protocol";
 import { Boundary } from "@armada/shell";
 import { CopiedToast, SaidToast, useCopied, useSaid } from "@armada/shell";
 import { FailureBlock } from "@armada/shell";
@@ -37,7 +37,7 @@ import { DispatchJob } from "@armada/screens";
 import type { Answered } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
-import { ACT_LABEL, CONFIRM, said } from "@armada/screens";
+import { ACT_LABEL, CONFIRM, reclaimed, said } from "@armada/screens";
 import { Jobs } from "@armada/screens";
 import { BOARD_TABS, type BoardReach, type BoardTab } from "@armada/screens";
 import { carryOut, dormantIn } from "./palette";
@@ -119,6 +119,11 @@ export function App() {
   const [confirming, setConfirming] = useState<{ act: ConfirmableAct; jobId: string } | null>(
     null,
   );
+  // What the last reclaim answered. **Its own state and not `outcome`** — that
+  // one draws refusals, and this is a success worth reading: the act asks for
+  // two things, the halves can disagree, and a kept branch is something a
+  // person has to go and deal with by hand.
+  const [givenBack, setGivenBack] = useState<WorktreeReclaimed | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   // Which Job has a decision on its work in flight. Separate from `acting`,
   // the header's act set: sharing one flag would grey out the header's kills
@@ -252,13 +257,19 @@ export function App() {
   }
 
   /**
-   * Do the confirmed act. **Four preload calls, not one with a discriminator**
+   * Do the confirmed act. **Five preload calls, not one with a discriminator**
    * — killing a Drone leaves the Job, killing the Job ends it, a redispatch
-   * mints a replacement, and a restart puts a fresh Drone on the same worktree
-   * at the step that stopped.
+   * mints a replacement, a restart puts a fresh Drone on the same worktree at
+   * the step that stopped, and a reclaim takes the worktree away and leaves
+   * the Job exactly where it is.
    *
    * A redispatch answers with the replacement's id, and the detail follows it:
    * the Job that was open is over, and the one worth reading is the new one.
+   *
+   * **A reclaim answers with a receipt, which is shown rather than folded.**
+   * Nothing on the board changes — the record survives, `clearTerminalJobs` is
+   * what takes it — and the answer's two halves can disagree, so what happened
+   * is stated instead of being left to a silent success.
    */
   async function act(act: ConfirmableAct, jobId: string): Promise<void> {
     setConfirming(null);
@@ -271,8 +282,11 @@ export function App() {
             ? await window.armada.killDrone(jobId)
             : act === "restart_step"
               ? await window.armada.restartStep(jobId)
-              : await window.armada.killJob(jobId);
+              : act === "reclaim_worktree"
+                ? await window.armada.reclaimWorktree(jobId)
+                : await window.armada.killJob(jobId);
       setOutcome(answer);
+      if (answer.ok && answer.reclaimed !== undefined) setGivenBack(answer.reclaimed);
       if (answer.ok && answer.jobId !== undefined) setOpenJob(answer.jobId);
     } finally {
       setActing(null);
@@ -467,6 +481,27 @@ export function App() {
               }
             >
               {`${state.missed} events will never arrive. Fleet resynced current state after each drop, so the list below is repaired.`}
+            </Alert>
+          )}
+
+          {/* What a reclaim gave back. **Neutral, because nothing is wrong** —
+              a branch kept for holding work nothing has taken is the safe
+              setting working, and drawing it in the escalation hue would tell
+              somebody the act failed when it did exactly what it promised.
+              Dismissed by hand: a directory and a branch are what a person goes
+              and looks at, and a notice that vanished while they did is one
+              they cannot get back. */}
+          {givenBack === null ? null : (
+            <Alert
+              tone="neutral"
+              title="Worktree reclaimed"
+              action={
+                <Button variant="ghost" size="sm" onClick={() => setGivenBack(null)}>
+                  Dismiss
+                </Button>
+              }
+            >
+              {reclaimed(givenBack)}
             </Alert>
           )}
 

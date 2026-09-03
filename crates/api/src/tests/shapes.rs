@@ -17,8 +17,8 @@ use ipc::mcp::{CheckRan, CheckReport};
 use ipc::{
     Actor, CallArguments, EvidenceType, FleetCapacity, Instant, JobDetail, JobDiff, JobEvidence,
     JobHistory, JobId, JobStatus, JobSummary, ManifestId, ManifestSummary, ModelChoices, Movement,
-    Origin, Recorded, RunId, StatusMoved, StepId, Submitted, Urgency, Work, WorkflowId,
-    WorkflowSummary,
+    Origin, ReclaimedBranch, ReclaimedWorktree, Recorded, RunId, StatusMoved, StepId, Submitted,
+    Urgency, Work, WorkflowId, WorkflowSummary, WorktreeReclaimed,
 };
 
 /// A spelling the registry has. Panics in a test rather than returning an
@@ -238,6 +238,34 @@ pub fn diff(job_id: JobId) -> JobDiff {
                 "--- a/crates/store/src/read.rs\n+++ b/crates/store/src/read.rs\n".to_string(),
             ),
         }),
+    }
+}
+
+/// One Job's disk, given back. **The checkout goes and the branch is kept**,
+/// which is the shape a caller most needs to be able to read: `UnmergedWork`
+/// on this seam is always `Keep`, so a branch nothing has merged surviving its
+/// own worktree is the ordinary answer and not the exceptional one.
+///
+/// The fake has no repository, so this asserts nothing about git. What it
+/// carries is the two halves disagreeing, which is what the transport has to
+/// be able to say.
+pub fn reclaimed(job_id: JobId) -> WorktreeReclaimed {
+    let branch = format!("armada/{}", job_id.as_str());
+    WorktreeReclaimed {
+        job_id,
+        worktree: ReclaimedWorktree {
+            path: format!(".armada/worktrees/{branch}"),
+            removed: true,
+            why: None,
+        },
+        branch: ReclaimedBranch {
+            branch,
+            deleted: false,
+            tip: Some("0f1e2d3c4b5a69788796a5b4c3d2e1f001234567".to_string()),
+            why: Some("main cannot reach 3 of its commits".to_string()),
+            base: Some("main".to_string()),
+            unmerged_commits: Some(3),
+        },
     }
 }
 

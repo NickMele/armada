@@ -19,7 +19,7 @@ use ipc::{
     Actor, CallArguments, ChangesRequested, Event, FleetCapacity, Instant, JobCreated, JobDetail,
     JobDiff, JobEvidence, JobForgotten, JobHistory, JobId, JobList, JobStateChanged, JobSummary,
     ManifestId, ManifestSummary, ModelChoices, Origin, ProposeJob, Redispatched, UnreadableJob,
-    Urgency, WorkflowId, WorkflowSummary,
+    Urgency, WorkflowId, WorkflowSummary, WorktreeReclaimed,
 };
 
 use super::shapes;
@@ -410,6 +410,27 @@ impl Daemon for FakeDaemon {
         }
         jobs.retain(|job| job.id != job_id);
         Ok(JobForgotten { job_id })
+    }
+
+    /// The disk, given back. **The record stays** — that is the whole
+    /// difference from the method above, and the fake keeps the row so a test
+    /// that reclaims and then reads the Job still finds it.
+    ///
+    /// Terminality is the domain's, read through the DTO rather than restated,
+    /// for `kill_job`'s reason.
+    async fn reclaim_worktree(&self, job_id: JobId) -> Result<WorktreeReclaimed, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+            return Err(self.no_such_job(&job_id));
+        };
+        if !job.status.domain().is_terminal() {
+            return Err(Refusal::IllegalMove(ipc::WireError::raised(
+                "fake.not_reclaimable",
+                format!("a Job at {} has no disk to give back", job.status.as_wire()),
+                run_id(),
+            )));
+        }
+        Ok(shapes::reclaimed(job_id))
     }
 
     /// Mint a replacement for a stopped Job. **The fake asserts one thing about

@@ -169,6 +169,12 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.clearTerminalJobs, (_event, jobIds: string[]) =>
     connection?.commands.clearTerminalJobs(jobIds),
   );
+  // The disk rather than the record, and the one act here `armada clean` could
+  // already do — but only with Fleet stopped, which is never when a person
+  // wants the space back. The Job stays on the board afterwards.
+  ipcMain.handle(CHANNELS.reclaimWorktree, (_event, jobId: string) =>
+    connection?.commands.reclaimWorktree(jobId),
+  );
   // The two acts that resume a step without redispatching. Which applies is
   // decided by whether the Job still holds a Drone; Fleet is the authority
   // and refuses the wrong one rather than Bridge picking silently.

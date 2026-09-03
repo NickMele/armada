@@ -39,7 +39,11 @@ export type JobAct =
   | "redirect"
   | "restart_step"
   | "override_verdict"
-  | "rerun_gate";
+  | "rerun_gate"
+  // The eighth, and the only one that acts on disk rather than on the record
+  // or the machine. `armada clean` could already do it and refuses while Fleet
+  // is running, which is exactly when a person wants the space back.
+  | "reclaim_worktree";
 
 /**
  * The acts that confirm through the shared dialog. **Redirect and the override
@@ -60,20 +64,23 @@ export type ConfirmableAct = Exclude<
 /**
  * What can be done to this Job from here.
  *
- * **Eight acts, and none of them collapses into another.** Killing the Drone
+ * **Nine acts, and none of them collapses into another.** Killing the Drone
  * ends a process and leaves the Job open with its worktree held; killing the
  * Job ends the Job at `killed`, terminal; redispatch does the second and mints
  * a replacement; approving lets a Job at the gate run. Redirect and restart are
  * the two acts that put a person back on a Job rather than ending or replacing
  * it, and they are never offered together — a redirect wants a live session and
- * a restart wants the Drone gone.
+ * a restart wants the Drone gone. Reclaiming the worktree is the one act on
+ * disk rather than on the Job: the record stays exactly where it is, and
+ * clearing the row is the board's own act.
  *
- * **Five of the eight are drawn on Fleet's answer and not on the row.**
+ * **Five of the nine are drawn on Fleet's answer and not on the row.**
  * `stuck.recourse` on `GET /jobs/:job_id` is the acts Fleet will take now, and
  * `#193` moved them here from a derivation that could not read the filesystem
  * and so offered a restart onto a worktree that had been reclaimed. The two
- * kills are the exception and stay derived: neither is recourse, and a Drone to
- * kill is presence on the row.
+ * kills and the reclaim are the exceptions and stay derived: none of them is
+ * recourse — recourse is how a Job goes forward and these three do not carry
+ * one forward — and a Drone to kill is presence on the row.
  *
  * | Act | Drawn on | Confirms |
  * |---|---|---|
@@ -81,6 +88,7 @@ export type ConfirmableAct = Exclude<
  * | `redispatch` | `recourse` names `redispatch_job` | yes |
  * | `kill_drone` | a Job holding an `assigned_drone` | yes |
  * | `kill_job` | every non-terminal status | yes |
+ * | `reclaim_worktree` | every terminal status | yes |
  * | `redirect` | `recourse` names `redirect_drone` | its own dialog |
  * | `restart_step` | `recourse` names `restart_step` | yes |
  * | `override_verdict` | `recourse` names `override_verdict` | its own dialog |
@@ -199,6 +207,12 @@ export function Acts({
     // Fleet's answer and not the status: a replacement also needs the workflow
     // this Job named to be one Fleet still holds, which no row carries.
     ...(recourse?.redispatch === true ? (["redispatch"] as ConfirmableAct[]) : []),
+    // Terminal, and the row is what says so — no recourse names this act,
+    // because reclaiming is not a way to carry the Job forward. Fleet refuses
+    // it on anything still in flight, so this is the same predicate rather
+    // than a second one: there is no disk to give back while a Drone might
+    // still write to it.
+    ...(over ? (["reclaim_worktree"] as ConfirmableAct[]) : []),
     // `assigned_drone` is presence rather than state: there is nothing to kill
     // without one.
     ...(job.assigned_drone === undefined ? [] : (["kill_drone"] as ConfirmableAct[])),
@@ -227,8 +241,9 @@ export function Acts({
             .filter((act) => act !== lead.act)
             .map((act) => ({
               label: MENU_LABEL[act],
-              // Both kills end something, and the menu draws that rather than
-              // the control announcing it in red on the face.
+              // Both kills end something and the reclaim removes a directory,
+              // and the menu draws that rather than the control announcing it
+              // in red on the face.
               danger: true,
               onSelect: () => onAct(act, job.id),
             })),

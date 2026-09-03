@@ -24,6 +24,7 @@ import type {
   Work,
   WorkflowSummary,
   WireError,
+  WorktreeReclaimed,
 } from "./index";
 
 /**
@@ -190,8 +191,15 @@ export type Outcome =
    * needs next, and it is not app state — nothing on the board changes and the
    * surface that asked is the only one that shows it, so keeping it here would
    * leave a filed report on screen after the dialog that filed it closed.
+   *
+   * `reclaimed` rides on the same terms as `report`, and for the same reason.
+   * Giving a worktree back changes no row — the Job stays exactly where it is
+   * — so what came back is a receipt the surface that asked shows once. **It
+   * is not derivable from `ok`**: a branch holding commits the base cannot
+   * reach is kept on purpose, so a successful reclaim can honestly report that
+   * half of it did not happen.
    */
-  | { ok: true; jobId?: string; report?: Report }
+  | { ok: true; jobId?: string; report?: Report; reclaimed?: WorktreeReclaimed }
   | { ok: false; why: "not_connected" }
   | { ok: false; why: "empty_brief" }
   | { ok: false; why: "empty_title" }
@@ -201,6 +209,7 @@ export type Outcome =
   | { ok: false; why: "already_redispatching" }
   | { ok: false; why: "already_killing" }
   | { ok: false; why: "already_forgetting" }
+  | { ok: false; why: "already_reclaiming" }
   | { ok: false; why: "already_redirecting" }
   | { ok: false; why: "already_restarting" }
   | { ok: false; why: "already_overruling" }

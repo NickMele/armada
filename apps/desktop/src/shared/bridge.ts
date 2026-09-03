@@ -214,6 +214,20 @@ export type BridgeApi = {
    */
   clearTerminalJobs: (jobIds: readonly string[]) => Promise<ClearOutcome>;
   /**
+   * Give one terminal Job's worktree and branch back, **without waiting for
+   * Fleet to stop**. `armada clean` is the same act from the CLI and refuses
+   * while the daemon is running, which is exactly when a person wants the disk.
+   *
+   * **The record survives.** This takes the directory and the branch;
+   * `clearTerminalJobs` takes the row. Sending both is ordinary and the order
+   * does not matter.
+   *
+   * **A branch nothing has merged is kept**, always — there is no force here —
+   * so the outcome's `reclaimed` says which half happened rather than reducing
+   * both to one flag.
+   */
+  reclaimWorktree: (jobId: string) => Promise<Outcome>;
+  /**
    * Inject an instruction into the Drone that is there. **Legal only on an
    * escalated Job that still holds one** — Fleet refuses 409 where the Drone
    * is gone, naming `restartStep` as the act that applies. Nothing is
@@ -437,6 +451,7 @@ export const CHANNELS = {
   killDrone: "bridge:kill-drone",
   killJob: "bridge:kill-job",
   clearTerminalJobs: "bridge:clear-terminal-jobs",
+  reclaimWorktree: "bridge:reclaim-worktree",
   redirectDrone: "bridge:redirect-drone",
   answerQuestion: "bridge:answer-question",
   restartStep: "bridge:restart-step",

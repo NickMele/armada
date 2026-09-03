@@ -21,6 +21,7 @@ export * from "./history";
 export * from "./proposal";
 export * from "./protocol";
 export * from "./reads";
+export * from "./reclaimed";
 export * from "./report";
 export * from "./setup";
 export * from "./turn";
