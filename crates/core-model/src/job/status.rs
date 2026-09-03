@@ -36,11 +36,11 @@ pub enum JobStatus {
     /// is the criterion ids owed — a reference, not an enum.
     AwaitingAttestation,
     /// A step spent its gate-failure retry budget and the work is unfinished.
-    /// The Drone is alive and idle, still holding the session that wrote the
-    /// code, so answering the failure costs no respawn. **Not
-    /// [`CompletedFailed`](Self::CompletedFailed)**, which says the Job failed,
-    /// and not [`Escalated`](Self::Escalated), which says a machine's decision
-    /// is waiting to be overruled.
+    /// The Drone is stood down, as at [`AwaitingReview`](Self::AwaitingReview)
+    /// and for its reason: a repair somebody may take a day over costs no fleet
+    /// time. **Not [`CompletedFailed`](Self::CompletedFailed)**, which says the
+    /// Job failed, and not [`Escalated`](Self::Escalated), which says a
+    /// machine's decision is waiting to be overruled.
     AwaitingRepair,
     /// A human advance gate is open. The work passed the step's machine gates,
     /// which is what ends a Drone, so the gate holds none — the worktree is

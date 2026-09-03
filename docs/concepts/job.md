@@ -108,7 +108,6 @@ flowchart LR
   AR -->|"approve, criterion owed"| AT
 
   R -->|retries spent| REP["awaiting_repair"]
-  REP -->|redirect| R
   REP -->|restart| Q
 
   Q -->|dependency_failed| ESC["escalated"]
@@ -175,13 +174,27 @@ dispute. It says what is owed rather than what went wrong, and it joins the
 three `awaiting_*` statuses because it carries their axis: waited on, by a
 person.
 
-The Drone keeps its session and its worktree, so a redirect costs no respawn and
-consumes no attempt — the act a person actually wants at that moment, and one
-that was unreachable while the Job went terminal first. A restart, a Pilot and a
-redispatch reach it too, and none of them is new. The act that does *not* reach
-it is the override: `Stuck` reads whether the step's Checks passed out of the
-record rather than inferring the tier from the trigger, and they did not pass
-here. `build` failing is still not a matter of opinion.
+**The Drone is stood down and the worktree is kept**, which is the bargain
+`awaiting_review` makes: a person's answer costs no fleet time. The Drone was
+kept alive at first, so that telling it what it was missing would cost no
+respawn — and the working slot went with the session, held for as long as a
+person took to read the failure. That is the same hour count `awaiting_review`
+measured on 30 Aug 2026 and gave up the session over, and a repair somebody may
+take a day over is that wait wearing another name.
+
+So a restart is the act: it re-queues, and admission puts a fresh Drone on the
+step that failed, opening it with the verdict, the Judge's answers and the
+gaming flags off the record. Every earlier step's work is on the branch, which
+is what separates it from a redispatch. A Pilot and a redispatch reach the
+status too, and none of the three is new. The act that does *not* reach it is
+the override: `Stuck` reads whether the step's Checks passed out of the record
+rather than inferring the tier from the trigger, and they did not pass here.
+`build` failing is still not a matter of opinion.
+
+**What a person types has no road from here yet.** `request_changes` gives
+`awaiting_review`'s note somewhere to wait — on the Job's own record, delivered
+into one Drone's opening brief and cleared there — and no act reaches that road
+from `awaiting_repair`. A restart carries no words.
 
 A step left `running` beneath a Job nothing could read a verdict off (#179) is
 unaffected: `running -> awaiting_repair` carries the `no_step_running` guard the

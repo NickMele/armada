@@ -5,7 +5,7 @@
 //! when a Drone became a step's, since absence is then ordinary between steps.
 //! **Neither act asks the other's question**, and each asked the other's until
 //! #145: [`redirect`](Fleet::redirect) wants a session and steers `running` and
-//! `escalated` alike, [`restart_step`] a stopped step under an escalation.
+//! `escalated`, [`restart_step`] a stopped step a person is holding.
 //!
 //! # A redirect moves a stopped step; a restart moves nothing
 //! Where a step stopped, a redirect moves both machines in the one order the
@@ -16,8 +16,8 @@
 //! recovered whether or not anything woke.
 //!
 //! **A restart takes neither move**, because it spawns and since #50 nothing
-//! spawns outside admission: `escalated -> queued`, step left at `stopped`,
-//! and `crate::readmitting` makes both moves when there is room.
+//! spawns outside admission: `-> queued` from either held status, step left at
+//! `stopped`. **It alone reaches `awaiting_repair`**, whose Drone is gone.
 //!
 //! **Nothing here is bounded, so a redirect buys no time.** No document caps
 //! how often a person may, so only a stopped step gets its clocks back.
@@ -210,15 +210,12 @@ where
         // answered.
         let record = self.load(&job).await?;
         // Nothing is owed unless the Job is still where the redirect found it:
-        // a healthy Drone's Job never left `running`, and a stopped one may
-        // have left the status some other way while the redirect was out —
-        // killed, piloted, given up on. What is dropped either way is only the
-        // wait. Both held statuses are asked about, because both hold a live
-        // session a redirect reaches.
-        if matches!(
-            record.status(),
-            JobStatus::Escalated | JobStatus::AwaitingRepair
-        ) {
+        // a healthy Drone's Job never left `running`, and an escalated one may
+        // have left `escalated` some other way while the redirect was out —
+        // killed, piloted, failed. What is dropped either way is only the wait.
+        // `awaiting_repair` is not asked about and cannot be: it holds no
+        // session, so no redirect was ever outstanding on one.
+        if record.status() == JobStatus::Escalated {
             self.move_job(&record, Target::Running, Actor::Human)
                 .await?;
             self.noted_roused(&job, &step);
@@ -284,12 +281,13 @@ where
     /// Ask for a fresh Drone on the worktree the last one left. **The second
     /// act**, and what exists when the Drone is gone.
     ///
-    /// **It asks; it does not start one.** The Job takes `escalated -> queued`
-    /// and `crate::readmitting` spawns when `concurrency-cap` has room, which
-    /// is the shape `approve_review` has had since #50 — and the reversal
-    /// `job-transitions.toml` records on the edge itself. **Never refused
-    /// because the cap is spent**: the act lands and the Job says
-    /// `waiting_on_resources`.
+    /// **It asks; it does not start one.** The Job takes `-> queued` from
+    /// either held status and `crate::readmitting` spawns when
+    /// `concurrency-cap` has room — the shape `approve_review` has had since
+    /// #50. **Never refused because the cap is spent**: the act lands and the
+    /// Job says `waiting_on_resources`. On a spent retry budget it is the
+    /// *only* act, since the Drone is stood down there, and it carries no
+    /// words: the fresh Drone opens with what stopped the last one.
     ///
     /// **The step does not move here either**, because `store::attempt` counts
     /// entries into `running` as runs and a run belongs to a Drone. It waits at
@@ -301,11 +299,10 @@ where
     /// unrecorded. Deferred, they would answer about a different instant.
     ///
     /// **The worktree, the branch and every earlier step's work survive**, and
-    /// the branch is caught up inside
-    /// [`put_a_drone_on`](Fleet::put_a_drone_on) rather than here — #180. A
-    /// restart is the case a rebase most often conflicts on, since it re-runs
-    /// the same step on a tree already holding an attempt; the markers ride the
-    /// opening brief. **Nothing is inherited from the Drone before it.**
+    /// the branch is caught up inside [`put_a_drone_on`](Fleet::put_a_drone_on)
+    /// rather than here — #180. A restart is the case a rebase most often
+    /// conflicts on, since it re-runs the same step on a tree already holding an
+    /// attempt; the markers ride the opening brief. **Nothing is inherited.**
     pub async fn restart_step(&self, job_id: &JobId) -> Result<Job, Adrift> {
         // Looked up rather than opened: this act starts nothing, so it needs no
         // place in the roster. What it wants the slot for is the one question
@@ -354,38 +351,42 @@ where
     }
 
     /// The Job is one a person may say something to. **All a redirect asks of
-    /// the status**, and three rows rather than one because `job-statuses.toml`
-    /// gives exactly three a live process: `running` is "alive, working",
-    /// `escalated` is "alive and idle where the step stopped mid-work", and
-    /// `awaiting_repair` is alive and idle holding the session that wrote the
-    /// code (`#208`) — which is the status where a redirect is the ordinary
-    /// answer rather than one of five.
+    /// the status**, and two rows rather than one because `job-statuses.toml`
+    /// gives exactly two a live process: `running` is "alive, working" and
+    /// `escalated` is "alive and idle where the step stopped mid-work".
+    ///
+    /// **`awaiting_repair` was a third for a fortnight and is not one now.**
+    /// `#208` kept the Drone there so a redirect would cost no respawn, and the
+    /// slot it kept with it is what the owner took back: a repair somebody may
+    /// take a day over is `awaiting_review`'s wait under another name. What
+    /// answers a spent budget is [`restart_step`](Fleet::restart_step).
     ///
     /// **Still where the Job stands and not whether a process exists** —
     /// `docs/concepts/job.md`'s second Focus rule. What it catches is a Drone
     /// outliving the status that had one: a Job crossing to `awaiting_review`,
     /// or one being killed before its slot is reaped.
     fn steerable(&self, job: &Job) -> Result<(), Adrift> {
-        matches!(
-            job.status(),
-            JobStatus::Running | JobStatus::Escalated | JobStatus::AwaitingRepair
-        )
-        .then_some(())
-        .ok_or_else(|| Adrift::NotResumable {
-            job: job.id().clone(),
-            status: job.status(),
-        })
+        matches!(job.status(), JobStatus::Running | JobStatus::Escalated)
+            .then_some(())
+            .ok_or_else(|| Adrift::NotResumable {
+                job: job.id().clone(),
+                status: job.status(),
+            })
     }
 
     /// The Job is one a person is holding. **What a restart needs of the
     /// status, and what makes a stopped step one this file may hand back.**
     ///
-    /// It is the two statuses a person is holding and nothing weaker:
-    /// `escalated -> running` and `awaiting_repair -> running` are the edges
-    /// taken here, and the registry has no others they leave from. #145 stopped
-    /// a redirect asking it, which it never had a move to be about except where
-    /// it found a step to unfreeze; #208 added the second status, where the
-    /// stopped step is the whole reason the Job is being held.
+    /// It is the two statuses a person is holding and nothing weaker. #145
+    /// stopped a redirect asking it, which it never had a move to be about
+    /// except where it found a step to unfreeze; #208 added the second status,
+    /// where the stopped step is the whole reason the Job is being held.
+    ///
+    /// **The two leave by different edges, and only a restart reaches both.**
+    /// `escalated -> running` is a redirect's, taken by
+    /// [`resumed`](Fleet::resumed) where it found a step to unfreeze;
+    /// `awaiting_repair` has no edge to `running` at all, because the Drone is
+    /// gone by the time a person sees it and a restart takes `-> queued`.
     fn held_for_a_person(&self, job: &Job) -> Result<(), Adrift> {
         matches!(
             job.status(),

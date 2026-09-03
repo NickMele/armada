@@ -581,12 +581,12 @@ where
 /// # A failure and a refusal go to different statuses, and neither ends the Job
 ///
 /// A Check failing is the work being unfinished: the budget for answering it is
-/// spent, and what is left is a person telling the Drone what it is missing. So
-/// it is `awaiting_repair`, which says what is owed rather than that the Job
-/// failed — `running -> completed_failed` no longer exists (`#208`). A refusal
-/// is the work running and not being what was asked for, which is a different
-/// thing for a person to answer — so it is `escalated`. Redispatch, Pilot and
-/// `completed_failed` are reachable from both, once a person agrees.
+/// spent, and what is left is a person saying what to fix. So it is
+/// `awaiting_repair` — `running -> completed_failed` no longer exists (`#208`)
+/// — and the Drone is stood down as at `awaiting_review`, so the wait costs no
+/// slot. A refusal is the work running and not being what was asked for, which
+/// is a different thing for a person to answer — so it is `escalated`, and that
+/// one keeps its Drone. Redispatch, Pilot and `completed_failed` reach both.
 ///
 /// The trigger comes from [`Ruling::stops_the_step`] and is not spelled here:
 /// the step that stopped and the Job that escalated are stating one fact, and
