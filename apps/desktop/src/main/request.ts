@@ -15,6 +15,17 @@ import { HOST } from "./runtime-file";
 /** How long a command waits for an answer before it is a transport failure. */
 const COMMAND_MS = 5000;
 
+/**
+ * A route under one Job. The id is a path segment, so it is encoded.
+ *
+ * **Beside `ask` rather than beside the acts**, because two modules send acts
+ * now: `command.ts` and `clearing.ts`. A copy in each is the same three lines
+ * twice, and the one that drifts is whichever is edited second.
+ */
+export function route(jobId: string, operation: string): string {
+  return `/jobs/${encodeURIComponent(jobId)}/${operation}`;
+}
+
 /** What came back: a body to read, or the refusal to render. */
 export type Answer = { ok: true; body: unknown } | { ok: false; outcome: Outcome };
 

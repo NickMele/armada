@@ -16,9 +16,10 @@
 
 import type { BridgeState } from "../shared/bridge";
 import type { ClearOutcome, Draft, Outcome } from "@armada/protocol";
-import type { ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report, WorktreeReclaimed } from "@armada/protocol";
+import type { ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report } from "@armada/protocol";
 import type { Proposed } from "@armada/protocol";
-import { ask, isJobSummary, type Answer } from "./request";
+import { ask, isJobSummary, route, type Answer } from "./request";
+import { Clearing } from "./clearing";
 import { proposeFromRequest as propose } from "./proposing";
 import { decide, type Decision } from "./review";
 
@@ -48,7 +49,9 @@ export type Board = {
 };
 
 /**
- * The refusal a second press answers with.
+ * The refusal a second press answers with, **for the acts that go through
+ * `act`**. `clearing.ts` keeps its own two: neither of those uses this helper,
+ * so listing them here would say a press this file cannot make is refused here.
  *
  * **Written out rather than derived from the route.** Two routes share
  * `already_killing` and three share `already_deciding`, because what is in
@@ -57,8 +60,6 @@ export type Board = {
  */
 type Busy =
   | "already_killing"
-  | "already_forgetting"
-  | "already_reclaiming"
   | "already_redirecting"
   | "already_restarting"
   | "already_overruling"
@@ -66,11 +67,6 @@ type Busy =
   | "already_reporting"
   | "already_deciding"
   | "already_answering";
-
-/** A route under one Job. The id is a path segment, so it is encoded. */
-function route(jobId: string, operation: string): string {
-  return `/jobs/${encodeURIComponent(jobId)}/${operation}`;
-}
 
 /**
  * The acts, and which of them are in flight.
@@ -81,16 +77,14 @@ function route(jobId: string, operation: string): string {
  */
 export class JobCommands {
   private readonly board: Board;
+  /**
+   * The record and the disk, once a Job has ended. **Not acts on a Job**, which
+   * is what everything else here is — see `clearing.ts` for the seam.
+   */
+  private readonly clearing: Clearing;
   private readonly approving = new Set<string>();
   private readonly redispatching = new Set<string>();
   private readonly killing = new Set<string>();
-  private readonly forgetting = new Set<string>();
-  /**
-   * Jobs with a reclaim in flight. Its own set beside the forget's: the two
-   * acts are halves of one clearing-up and a person may well send both, so one
-   * set would refuse the second press for being the first.
-   */
-  private readonly reclaiming = new Set<string>();
   private readonly redirecting = new Set<string>();
   private readonly restarting = new Set<string>();
   /** Jobs with an override in flight. Its own set: it is its own act. */
@@ -115,6 +109,7 @@ export class JobCommands {
 
   constructor(board: Board) {
     this.board = board;
+    this.clearing = new Clearing(board);
   }
 
   /**
@@ -297,79 +292,22 @@ export class JobCommands {
     );
   }
 
-  // ---------------------------------------------------------------- forgetting
+  // ---------------------------------------------------- clearing up after one
   /**
-   * Delete one terminal Job's whole record. **Not through `act`** — that
-   * helper folds a `JobSummary` and re-reads the open Job, and there is no
-   * row left to fold and nothing left to re-read once this answers. `board.forget`
-   * is what actually removes the row; `job.forgotten` on the stream does the
-   * same thing for a window that did not make the call itself.
+   * Delete every terminal Job's whole record. **Real deletion, and there is no
+   * undo** — `clearing.ts` holds it, with the reclaim beside it.
    */
-  private async forgetJob(jobId: string): Promise<Outcome> {
-    if (this.forgetting.has(jobId)) return { ok: false, why: "already_forgetting" };
-    const port = this.board.port();
-    if (port === null) return { ok: false, why: "not_connected" };
-
-    this.forgetting.add(jobId);
-    try {
-      const answer = await ask(port, "POST", route(jobId, "forget_job"));
-      if (answer.ok !== true) return answer.outcome;
-      this.board.forget(jobId);
-      return { ok: true };
-    } finally {
-      this.forgetting.delete(jobId);
-    }
+  clearTerminalJobs(jobIds: readonly string[]): Promise<ClearOutcome> {
+    return this.clearing.clearTerminal(jobIds);
   }
 
   /**
-   * Clear every terminal Job at once. **One `forget_job` per id, sent in
-   * turn** — there is no bulk route on the wire, and each Job is forgotten
-   * independently, so a status that moved between the press and this call
-   * (or an id already gone) does not stop the rest.
-   *
-   * **The caller decides which ids are terminal.** This sends exactly what it
-   * is given; Fleet's 409 is the safety net, not the gate.
+   * Give one terminal Job's worktree and branch back while Fleet is running.
+   * **The record survives**, which is the whole of what separates it from the
+   * act above.
    */
-  async clearTerminalJobs(jobIds: readonly string[]): Promise<ClearOutcome> {
-    const cleared: string[] = [];
-    const failed: { jobId: string; outcome: Outcome }[] = [];
-    for (const jobId of jobIds) {
-      const outcome = await this.forgetJob(jobId);
-      if (outcome.ok) cleared.push(jobId);
-      else failed.push({ jobId, outcome });
-    }
-    return { cleared, failed };
-  }
-
-  // ---------------------------------------------------------------- reclaiming
-  /**
-   * Give one terminal Job's worktree and branch back, while Fleet is running.
-   *
-   * **Not through `act` either, and not for `forgetJob`'s reason.** That helper
-   * folds a `JobSummary` and this answers with a receipt rather than a row —
-   * the Job is untouched and stays exactly where it is on the board, because
-   * what was reclaimed is disk and not the record. `forgetJob` is the other
-   * half and takes the row.
-   *
-   * **A kept branch comes back as a success.** Fleet always runs this with
-   * `UnmergedWork::Keep` and there is no force on this seam, so a branch
-   * holding commits the base cannot reach survives and says so — which is a
-   * true answer to the act, not a refusal of it. The caller reads
-   * `reclaimed.branch` to find out.
-   */
-  async reclaimWorktree(jobId: string): Promise<Outcome> {
-    if (this.reclaiming.has(jobId)) return { ok: false, why: "already_reclaiming" };
-    const port = this.board.port();
-    if (port === null) return { ok: false, why: "not_connected" };
-
-    this.reclaiming.add(jobId);
-    try {
-      const answer = await ask(port, "POST", route(jobId, "reclaim_worktree"));
-      if (answer.ok !== true) return answer.outcome;
-      return { ok: true, reclaimed: answer.body as WorktreeReclaimed };
-    } finally {
-      this.reclaiming.delete(jobId);
-    }
+  reclaimWorktree(jobId: string): Promise<Outcome> {
+    return this.clearing.reclaim(jobId);
   }
 
   // --------------------------------------------------------------- resuming
