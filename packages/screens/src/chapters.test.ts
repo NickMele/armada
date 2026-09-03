@@ -100,6 +100,24 @@ function instructed(text: string, headings?: number[]): Turn {
   };
 }
 
+/**
+ * The same turn as the drone's own stream replays it back.
+ *
+ * The harness echoes what was typed at the session onto the drone's output, so
+ * every turn Fleet sends is on the transcript twice — once as what Fleet wrote
+ * and once as this. Both are Armada's voice, and only the first is a turn Fleet
+ * sent. #110.
+ */
+function echoed(text: string): Turn {
+  return {
+    ts: "2026-09-02T13:11:01Z",
+    seq: 2,
+    step: "plan",
+    by: "armada",
+    saw: { event: "said", text },
+  };
+}
+
 /** Where BRIEF's three block headings are, as Fleet would have stamped them. */
 const HEADED = [0, 7, 15];
 
@@ -268,6 +286,23 @@ describe("drone instructions", () => {
     expect(rail?.startsWith("    1.")).toBe(true);
     // Whether a reader sees those newlines is `white-space`, which is a
     // rendering — `DroneBrief.stories.tsx` reads it off the browser.
+  });
+
+  it("counts the turns fleet sent and not the session's echo of them", () => {
+    // Selecting by voice counted each of Armada's turns twice the moment the
+    // echo started arriving attributed rather than as the drone's own prose.
+    const one = chapters({ rows: [instructed(BRIEF, HEADED), echoed(BRIEF)] })[0]!;
+    expect(one.openLabel).toBeUndefined();
+    expect(one.content).toBeUndefined();
+  });
+
+  it("previews the turn fleet wrote, which is the one carrying the headings", () => {
+    // `Instructed` carries `headings` and the echo cannot: nothing downstream
+    // recovers which line was a heading, so drawing the echo would lose them.
+    const markup = renderToStaticMarkup(
+      chapters({ rows: [instructed(BRIEF, HEADED), echoed(BRIEF)] })[0]!.preview,
+    );
+    expect(headings(markup)).toEqual(["JOB BRIEF", "WHERE YOU ARE", "STEP: Plan the change"]);
   });
 
   it("keeps the parts list a list rather than a sentence", () => {

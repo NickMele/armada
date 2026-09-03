@@ -81,15 +81,21 @@ looking mixed-weight. 2 everywhere is lint-enforceable and holds the set
 together. Never use `absoluteStrokeWidth` — a 2px stroke inside a 12px box is
 a blob.
 
-**Contrast floor.** Icons never render in `--fg-subtle`, with one exception:
-`circle-minus`, below. `--fg-subtle` was `#5D6B7C` on `--bg-raised`, ~3.2:1,
-which a 1px stroke does not survive, so `--fg-muted` was the minimum for
-chrome and for badges alike. The 20 Aug legibility lift raised `--fg-subtle`
-to `#7E8CA0`, 4.58:1 on `--bg-overlay` (`packages/tokens/src/colors.css`), which
-clears the floor the earlier value could not. `circle-minus` is the one
-glyph drawn against it, because `gate_undecided` reads as unjudged rather
-than judged, and a verdict hue would say the wrong thing — see Judge
-criterion verdicts below.
+**Contrast floor.** Icons never render in `--fg-subtle`, with two exceptions:
+`circle-minus` and `circle-dashed`, below. `--fg-subtle` was `#5D6B7C` on
+`--bg-raised`, ~3.2:1, which a 1px stroke does not survive, so `--fg-muted`
+was the minimum for chrome and for badges alike. The 20 Aug legibility lift
+raised `--fg-subtle` to `#7E8CA0`, 4.58:1 on `--bg-overlay`
+(`packages/tokens/src/colors.css`), which clears the floor the earlier value
+could not. Both are drawn against it because neither may carry a status hue.
+`circle-minus` is `gate_undecided`'s mark: it reads as unjudged rather than
+judged, and a verdict hue would say the wrong thing — see Judge criterion
+verdicts below. `circle-dashed` is `step_state.not_started`'s mark alone — a
+dormant step, never a loading state — where a hue would claim an activity
+that has not begun; `--fg-muted` was rejected for the same row because it is
+`retrying`'s colour, and `packages/tokens/src/status.css` keeps `not_started`
+one step dimmer than `retrying` on purpose. Full argument in
+`packages/icons/icons.toml`.
 
 > **Flag for the parent document.** The grey badges are the weakest in the
 > set — `--status-not-started` measures 4.39:1 as badge text on its own tint
@@ -461,9 +467,9 @@ no table has not been decided, whatever it looks like in a mockup.
 4. The outline must differ from every other icon **sharing its hue**.
    Across hue groups, collisions are fine.
 5. Never reuse a reserved glyph above.
-6. Never render an icon in `--fg-subtle`, except `circle-minus` — see
-   Contrast floor above — and never let an icon carry colour independently
-   of its badge.
+6. Never render an icon in `--fg-subtle`, except `circle-minus` and
+   `circle-dashed` (`step_state.not_started` only) — see Contrast floor
+   above — and never let an icon carry colour independently of its badge.
 7. **A new enum variant must add a table here.** The codegen test asserting
    every variant has a verb asserts it has an icon in the same pass, so a
    new reason cannot ship iconless.

@@ -130,6 +130,39 @@ impl CallDetail {
     }
 }
 
+/// Who put a line of prose into the session.
+///
+/// **A Drone's stream is two channels and prose arrives on both.** The output
+/// channel is the Drone writing; the input channel is the harness replaying
+/// what was typed at it — the brief a step opened with, a person's redirect, a
+/// poke. Both used to decode to the same [`DroneEvent::Said`], so the longest
+/// thing on a transcript was Armada quoting itself back under the Drone's name.
+///
+/// **Two values and not `ipc::Voice`'s three.** This crate has no
+/// dependencies, deliberately, so importing that one is not available — but it
+/// would be the wrong set anyway. `Fleet` names Fleet acting on the Job around
+/// the Drone, and Fleet's own acts appear in a Drone's output stream never.
+/// These are the two a decoder can witness, and `fleet::transcript::row` is
+/// where they widen onto the record's three.
+///
+/// **The channel and never the wording.** Matching an injected turn's text
+/// would break the moment `docs/contracts/agent-prompt.md` revised a word, and
+/// the fact is already in hand at the line that carries it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Speaker {
+    /// The Drone's own output. **The default**, because that is what a stream
+    /// is mostly made of and what a caller building an event means.
+    #[default]
+    Drone,
+    /// A turn put into the Drone's session, coming back on its input channel.
+    ///
+    /// **Armada's, or the harness's own.** A continuation nudge the CLI writes
+    /// arrives here too and is indistinguishable from a turn Fleet sent — which
+    /// costs nothing this variant is for, since the question it answers is
+    /// whether the Drone wrote it.
+    Armada,
+}
+
 /// One line of a Drone's output.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DroneEvent {
@@ -160,9 +193,17 @@ pub enum DroneEvent {
     /// A tool answered. `failed` is the tool's own failure and not a verdict on
     /// the step.
     Answered { call: String, failed: bool },
-    /// The Drone wrote prose. **Advances nothing**: prose is not a completion
-    /// claim, and there is no path from this variant to a transition.
-    Said { text: String },
+    /// Prose crossed the session, and [`Speaker`] says which way.
+    ///
+    /// **Advances nothing**: prose is not a completion claim, and there is no
+    /// path from this variant to a transition.
+    ///
+    /// **Only the Drone's counts as the Drone having turned.** `fleet::watch`
+    /// folds these into a turn count that `Working::turned_since_redirect`
+    /// compares against a baseline taken before an instruction is sent — so
+    /// with no speaker on the row, the harness echoing the redirect answered
+    /// the redirect.
+    Said { text: String, by: Speaker },
     /// A call was refused. Silent to the Drone, and never silent here.
     Refused {
         tool: String,

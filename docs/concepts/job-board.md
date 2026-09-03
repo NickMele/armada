@@ -18,7 +18,7 @@ Your lens on **every Job and what it is doing** — picking work to dispatch, wa
 
 **Reviews is a filter here, and a fast one.** A Job at `awaiting_review` is a Job, and a queue of them is this list filtered to that status. It is not a destination of its own: it was one, and folding it in is what makes "what needs me" a single gesture rather than a second place to check.
 
-**A filter changes a row's field set, and that is not the row dropping a field.** A Job at review is at its last step with its cost settled, so a step bar and a spend figure say nothing there — the Reviews field run was drawn without them. Field sets already vary by status; the rule that no field is dropped is about width, never about state.
+**A filter narrows which Jobs are on screen, not what a shown row draws.** A Job at review is at its last step with its cost settled, and its row still carries the same field run as any other: the step bar draws empty rather than dropping, the same as it does at the approval gate, and spend is not on a Board row at any status — it is a `JobDetail` field, read one click away. The rule that no field is dropped is about width, never about state.
 
 **One list rather than four surfaces.** Splitting not-yet-started, running, awaiting-review and finished across separate destinations divided one population four ways, made a person learn which surface held which state, and gave four lists of Jobs four chances to disagree about what a Job row looks like. What used to be Active Jobs is this list filtered to what is running, what used to be Reviews is it filtered to `awaiting_review`, and there is no Activity Feed: finished Jobs are this list filtered to what is over.
 
