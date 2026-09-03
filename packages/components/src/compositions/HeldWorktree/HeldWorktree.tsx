@@ -52,6 +52,20 @@ export type HeldWorktreeProps = {
    * checkout that would not go is the row staying exactly where it is.
    */
   reclaimed?: WorktreeReclaimed;
+  /**
+   * How long the checkout has been sitting, as a phrase — `4 days`.
+   *
+   * **Formatted by the caller, like every other elapsed figure in this
+   * package.** A component that held a clock would redraw on somebody else's
+   * tick, and the screens own the one `now` every figure on a screen is drawn
+   * from.
+   *
+   * Drawn under `uncommitted` and nowhere else: that is the one reason where
+   * the act ends something, and *twenty minutes* and *four days* are answered
+   * differently there. Absent where the stamp would not parse, which draws the
+   * reason without the age rather than an age measured from zero.
+   */
+  sitting?: string;
   /** A clipboard write is silent, so the surface confirms it. */
   onCopied?: (value: string) => void;
 };
@@ -61,6 +75,7 @@ export function HeldWorktree({
   selected,
   onSelect,
   reclaimed,
+  sitting,
   onCopied,
 }: HeldWorktreeProps) {
   const badge = badgeOf(held.status);
@@ -79,7 +94,17 @@ export function HeldWorktree({
         ) : (
           <span className="armada-held__title">{held.job_title}</span>
         )}
-        {badge === null ? null : (
+        {badge === null ? (
+          /* The registry carries no verb or glyph for this status — `escalated`
+             is the one a held worktree meets — so there is no badge to draw and
+             none is invented. **The wire's own spelling renders instead**,
+             which is `ChangedFiles`'s answer to the same gap: the value is the
+             registry key, so showing it is not a second vocabulary, and a blank
+             where a status goes leaves a person unable to tell an escalated job
+             from a finished one. Reported rather than papered over — the fix is
+             a row in `enum-verbs.toml`. */
+          <span className="armada-held__unworded">{held.status}</span>
+        ) : (
           <Badge status={badge.status} icon={badge.icon}>
             {badge.verb}
           </Badge>
@@ -100,7 +125,7 @@ export function HeldWorktree({
       ) : (
         <ul className="armada-held__reasons">
           {held.held.map((reason) => (
-            <Reason key={reason.why} reason={reason} />
+            <Reason key={reason.why} reason={reason} sitting={sitting} />
           ))}
         </ul>
       )}
@@ -187,7 +212,7 @@ function Automatic() {
 }
 
 /** One test, and the facts that particular decision is made on. */
-function Reason({ reason }: { reason: HeldReason }) {
+function Reason({ reason, sitting }: { reason: HeldReason; sitting?: string }) {
   switch (reason.why) {
     case "not_terminal":
       return (
@@ -226,7 +251,15 @@ function Reason({ reason }: { reason: HeldReason }) {
           <span className="armada-held__lost">
             Reclaiming destroys these. No branch carries them, so the checkout is the only
             copy.
-          </span>
+          </span>{" "}
+          {/* How long it has sat, which is half of what makes this decidable —
+              work abandoned twenty minutes ago and work abandoned four days ago
+              are answered differently. It is the last time armada moved the
+              job, said in those words: the dirty reading answers names and not
+              times, so nothing here knows when a file was written. */}
+          {sitting === undefined
+            ? null
+            : `Armada last moved this job ${sitting} ago, so they have sat at least that long.`}
           <ul className="armada-held__files">
             {reason.files.map((file) => (
               <li key={file} className="armada-held__mono">

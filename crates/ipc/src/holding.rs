@@ -13,7 +13,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::enums::JobStatus;
-use crate::ids::JobId;
+use crate::ids::{Instant, JobId};
 
 /// Every worktree Fleet is holding disk for, ordered by Job id.
 ///
@@ -36,6 +36,15 @@ pub struct WorktreeHeld {
     pub job_id: JobId,
     pub job_title: String,
     pub status: JobStatus,
+    /// When Armada last moved anything on this Job.
+    ///
+    /// **Not when the files in the checkout were last written**, and nothing
+    /// on this seam can be: the dirty reading is `git status --porcelain`,
+    /// which answers names and not times. It is a floor — a checkout whose Job
+    /// stopped four days ago has been sitting at least that long — and it is
+    /// carried because *twenty minutes* and *four days* are different decisions
+    /// on the one reason where reclaiming destroys something.
+    pub last_moved_at: Instant,
     /// The checkout on disk. **What a person goes and looks at**, and the one
     /// value here that is worth copying.
     pub path: String,

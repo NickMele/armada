@@ -333,6 +333,42 @@ async fn a_worktree_failing_two_tests_carries_both_reasons() {
     assert!(!held[0].provably_safe());
 }
 
+/// **How long it has sat**, which is the fact the uncommitted reason is read
+/// against — *twenty minutes* and *four days* are different decisions on the
+/// one reason where reclaiming ends something.
+///
+/// It is the Job's own last move and never a file's mtime: there is no
+/// `updated_at` on a Job, so this is the maximum over its step rows, and the
+/// dirty reading underneath answers names and not times.
+#[tokio::test]
+async fn a_held_worktree_says_when_armada_last_moved_the_job() {
+    let home = TempDir::new();
+    let fleet = a_fleet_sweeping_every_turn(&home);
+    a_repository(&home);
+    let job_id = a_finished_job(&fleet, "sat for a while").await;
+    a_worktree_for(&home, job_id.as_str());
+    std::fs::write(
+        worktree_of(&home, &job_id).join("scratch.txt"),
+        "written and committed nowhere",
+    )
+    .expect("something uncommitted");
+    let job = fleet.load(&job_id).await.expect("the Job reads");
+    let latest = job
+        .steps()
+        .iter()
+        .map(|step| step.updated_at().as_str().to_string())
+        .max()
+        .expect("a Job that ran has steps");
+
+    let held = fleet.worktrees_held().await.expect("the held list");
+
+    assert_eq!(held[0].last_moved.as_str(), latest);
+    assert!(matches!(
+        held[0].held.as_slice(),
+        [Held::Uncommitted { .. }]
+    ));
+}
+
 /// The list over HTTP, which is what `#385` reads.
 ///
 /// **The row names the checkout and the branch.** A person deciding goes and
@@ -364,6 +400,10 @@ async fn the_held_list_names_the_checkout_the_branch_and_why() {
         one.path
     );
     assert!(one.branch.contains(job_id.as_str()), "{}", one.branch);
+    assert!(
+        !one.last_moved_at.as_str().is_empty(),
+        "how long it has sat crosses with the rest of the row"
+    );
     assert!(!one.provably_safe());
     assert!(matches!(
         one.held.as_slice(),

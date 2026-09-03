@@ -213,3 +213,18 @@
   color: var(--text-body);
   text-wrap: pretty;
 }
+
+/* A status the registry has no verb or glyph for, in the wire's own spelling.
+
+   Mono and muted, which is what `ChangedFiles` does with an unworded change
+   kind: it is machine-derived and it is deliberately not a badge, because a
+   badge is a job state drawn with its glyph and there is no glyph to draw. No
+   hue — status colour is the registry's to hand out, and this is the case where
+   it has not. */
+.armada-held__unworded {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--text-label);
+  white-space: nowrap;
+}

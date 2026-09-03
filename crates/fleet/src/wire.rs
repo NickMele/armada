@@ -499,6 +499,7 @@ pub(crate) fn worktree_held(holding: &Holding) -> WorktreeHeld {
         job_id: ipc::JobId::from(&holding.job),
         job_title: holding.title.clone(),
         status: holding.status.into(),
+        last_moved_at: (&holding.last_moved).into(),
         path: holding.path.clone(),
         branch: holding.branch.clone(),
         held: holding.held.iter().filter_map(held_reason).collect(),

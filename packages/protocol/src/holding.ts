@@ -32,6 +32,16 @@ export type WorktreeHeld = {
   job_id: string;
   job_title: string;
   status: string;
+  /**
+   * When armada last moved anything on this job.
+   *
+   * **Not when the files in the checkout were last written**, and nothing on
+   * this seam can be: the dirty reading answers names and not times. It is a
+   * floor — a checkout whose job stopped four days ago has been sitting at
+   * least that long — and it is here because it is read against `uncommitted`,
+   * the one reason where reclaiming ends something.
+   */
+  last_moved_at: string;
   /** The checkout on disk — what a person goes and looks at. */
   path: string;
   /** The branch the job derived, named even where it is already gone. */

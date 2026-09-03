@@ -46,7 +46,15 @@ import {
 
 import type { HeldWorktrees, Outcome, WorktreeHeld, WorktreeReclaimed } from "@armada/protocol";
 import { said } from "./copy";
-import { confirmOpening, confirmTitle, divided, filesDestroyed, losing, NOTHING_IS_LOST } from "./held";
+import {
+  confirmOpening,
+  confirmTitle,
+  divided,
+  filesDestroyed,
+  losing,
+  NOTHING_IS_LOST,
+  sitting,
+} from "./held";
 
 export type WorktreesProps = {
   /**
@@ -69,6 +77,14 @@ export type WorktreesProps = {
    * part of what every surface re-renders on.
    */
   onReclaim: (jobId: string) => Promise<Outcome>;
+  /**
+   * The clock every elapsed figure on this surface is drawn from.
+   *
+   * **The app's one `now`, not a `Date.now()` per row.** Two clocks on one
+   * screen drift, and a test that could not fix the instant would be asserting
+   * against the wall.
+   */
+  now: number;
   /** A clipboard write is silent, so the surface confirms it. */
   onCopied: (value: string) => void;
 };
@@ -82,7 +98,7 @@ export type WorktreesProps = {
  * hundreds of held worktrees, that is a fleet not sweeping rather than a list
  * needing windowing.
  */
-export function Worktrees({ onWant, held, onReclaim, onCopied }: WorktreesProps) {
+export function Worktrees({ onWant, held, onReclaim, now, onCopied }: WorktreesProps) {
   useEffect(() => {
     onWant(true);
     return () => onWant(false);
@@ -177,6 +193,7 @@ export function Worktrees({ onWant, held, onReclaim, onCopied }: WorktreesProps)
                   selected={chosen.includes(one.job_id)}
                   onSelect={choose}
                   reclaimed={receipts[one.job_id]}
+                  sitting={sitting(one.last_moved_at, now) ?? undefined}
                   onCopied={onCopied}
                 />
               ))}
@@ -207,7 +224,12 @@ export function Worktrees({ onWant, held, onReclaim, onCopied }: WorktreesProps)
             </p>
             <ul className="flex flex-col gap-4">
               {groups.waiting.map((one) => (
-                <HeldWorktree key={one.job_id} held={one} onCopied={onCopied} />
+                <HeldWorktree
+                  key={one.job_id}
+                  held={one}
+                  sitting={sitting(one.last_moved_at, now) ?? undefined}
+                  onCopied={onCopied}
+                />
               ))}
             </ul>
           </CardContent>
@@ -227,7 +249,12 @@ export function Worktrees({ onWant, held, onReclaim, onCopied }: WorktreesProps)
             </p>
             <ul className="flex flex-col gap-4">
               {groups.automatic.map((one) => (
-                <HeldWorktree key={one.job_id} held={one} onCopied={onCopied} />
+                <HeldWorktree
+                  key={one.job_id}
+                  held={one}
+                  sitting={sitting(one.last_moved_at, now) ?? undefined}
+                  onCopied={onCopied}
+                />
               ))}
             </ul>
           </CardContent>
@@ -242,7 +269,7 @@ export function Worktrees({ onWant, held, onReclaim, onCopied }: WorktreesProps)
         onCancel={() => setConfirming(false)}
         onConfirm={() => void reclaim()}
       >
-        <WhatItCosts picked={picked} cost={cost} />
+        <WhatItCosts picked={picked} cost={cost} now={now} />
       </Dialog>
     </div>
   );
@@ -259,9 +286,11 @@ export function Worktrees({ onWant, held, onReclaim, onCopied }: WorktreesProps)
 function WhatItCosts({
   picked,
   cost,
+  now,
 }: {
   picked: readonly WorktreeHeld[];
   cost: ReturnType<typeof losing>;
+  now: number;
 }) {
   const files = filesDestroyed(cost);
   return (
@@ -281,7 +310,10 @@ function WhatItCosts({
           </p>
           {cost.destroying.map((one) => (
             <div key={one.jobId}>
-              <p>{one.title}</p>
+              {/* How long they have sat, on the confirmation as well as the
+                  row: this is the last screen before they are gone, and it is
+                  where a person recognises work they had forgotten. */}
+              <p>{sittingSaid(one.title, one.lastMovedAt, now)}</p>
               <ul>
                 {one.files.map((file) => (
                   <li key={file} className="mono">
@@ -314,6 +346,18 @@ function WhatItCosts({
       {picked.length === 0 ? <p>Nothing is chosen, so nothing happens.</p> : null}
     </>
   );
+}
+
+/**
+ * The job, and how long its checkout has been sitting.
+ *
+ * **The age is on the same line as the title, not a footnote.** It is the fact
+ * that separates work somebody is mid-way through from work they have
+ * forgotten, and it is the last chance to notice the difference.
+ */
+function sittingSaid(title: string, at: string, now: number): string {
+  const age = sitting(at, now);
+  return age === null ? title : `${title} — last moved ${age} ago`;
 }
 
 /**

@@ -300,6 +300,8 @@ notes = """
 
 **No byte count.** How much disk a worktree holds is not the decision. Which commits go, whether anything else has them, and which uncommitted files exist nowhere else is — so the reasons carry those, and nothing carries a size.
 
+**`last_moved_at` is a floor and says so.** It is when Armada last moved the Job, which is the closest true answer to *how long has this been sitting* that this seam can give: the dirty reading is `git status --porcelain`, which answers names and not times. It is carried for the uncommitted reason, where the act ends something and a checkout abandoned twenty minutes ago and one abandoned four days ago are answered differently.
+
 It is not scoped to a Job. What is held is read across every Job at once, which is the reading a per-Job field cannot give: the question is which of these to give back, and that is asked of the set.
 
 `helm_access` is `Yes` for `list_reports`'s reason — reading what is held decides nothing, and `reclaim_worktree` beside it is `No`.

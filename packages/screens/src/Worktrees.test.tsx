@@ -25,11 +25,15 @@ afterEach(unmount);
 /** Stable, because the surface depends on it in an effect. */
 const WANT = (): void => {};
 
+/** A fixed instant, so an age on screen is arithmetic and not a race. */
+const NOW = Date.parse("2026-09-03T12:00:00Z");
+
 function held(over: Partial<WorktreeHeld> = {}): WorktreeHeld {
   return {
     job_id: "01JOB0001",
     job_title: "Port the settings selectors",
     status: "completed_success",
+    last_moved_at: "2026-08-30T09:14:00Z",
     path: "/Users/user/armada/.armada/worktrees/01JOB0001",
     branch: "armada/01JOB0001",
     held: [],
@@ -54,6 +58,7 @@ function opened(
         sent.push(jobId);
         return Promise.resolve(answer(jobId));
       }}
+      now={NOW}
       onCopied={() => {}}
     />,
   );
@@ -202,6 +207,7 @@ test("a read that failed says so rather than drawing an empty page", async () =>
       onWant={WANT}
       held={{ state: "failed", outcome: { ok: false, why: "not_connected" } }}
       onReclaim={() => Promise.resolve({ ok: true })}
+      now={NOW}
       onCopied={() => {}}
     />,
   );
@@ -210,4 +216,50 @@ test("a read that failed says so rather than drawing an empty page", async () =>
     .element(page.getByText("What fleet is holding could not be read"))
     .toBeInTheDocument();
   expect(page.getByRole("checkbox").elements()).toHaveLength(0);
+});
+
+/**
+ * **How long it has sat is on the row that can lose something, and on nothing
+ * else.** An unmerged branch survives the act, so an age beside it is a number
+ * with no decision attached; uncommitted files do not survive, and the age is
+ * half of what makes that answerable.
+ */
+test("only the row where something is destroyed says how long it has sat", async () => {
+  opened([
+    held({
+      job_id: "a",
+      job_title: "Forgotten",
+      held: [{ why: "uncommitted", files: ["src/log.rs"] }],
+    }),
+    held({ job_id: "b", job_title: "Merged away", held: [UNMERGED] }),
+  ]);
+
+  await expect
+    .element(page.getByText(/Armada last moved this job 4 days ago/))
+    .toBeInTheDocument();
+  expect(
+    page.getByText(/Armada last moved this job/).elements(),
+    "the unmerged row carries no age",
+  ).toHaveLength(1);
+});
+
+/**
+ * And it survives onto the confirmation, which is the last screen before the
+ * files are gone — the place a person recognises work they had forgotten.
+ */
+test("the confirmation says how long the work it is about to destroy has sat", async () => {
+  opened([
+    held({
+      job_id: "a",
+      job_title: "Forgotten",
+      held: [{ why: "uncommitted", files: ["src/log.rs"] }],
+    }),
+  ]);
+
+  await userEvent.click(page.getByRole("checkbox", { name: "Forgotten" }));
+  await userEvent.click(reclaim());
+
+  await expect
+    .element(page.getByRole("dialog"))
+    .toHaveTextContent("Forgotten — last moved 4 days ago");
 });

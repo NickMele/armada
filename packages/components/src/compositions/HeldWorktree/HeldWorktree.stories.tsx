@@ -19,6 +19,7 @@ function held(over: Partial<WorktreeHeld> = {}): WorktreeHeld {
     job_id: "01JOBHELD0001",
     job_title: "Port the settings selectors",
     status: "completed_success",
+    last_moved_at: "2026-08-30T09:14:00Z",
     path: "/Users/user/armada/.armada/worktrees/01JOBHELD0001",
     branch: "armada/01JOBHELD0001",
     held: [],
@@ -67,6 +68,13 @@ export const ABranchTheBaseCannotReach: Story = {
  * these files, so the checkout is the only copy — which is why they are named
  * one by one rather than counted, and why this is the row a person opens the
  * directory before answering.
+ *
+ * **And the only row that carries an age.** Work abandoned twenty minutes ago
+ * and work abandoned four days ago are answered differently, and without the
+ * second number the row asks somebody to guess at the moment guessing costs
+ * work. It is said as what it is — when armada last moved the job — because the
+ * dirty reading answers names and not times, so nothing knows when a file was
+ * written.
  */
 export const FilesCommittedNowhere: Story = {
   args: {
@@ -82,6 +90,7 @@ export const FilesCommittedNowhere: Story = {
     }),
     selected: false,
     onSelect: () => {},
+    sitting: "4 days",
   },
 };
 
@@ -108,6 +117,12 @@ export const AJobThatHasNotEnded: Story = {
  *
  * This is also the pair that reads in opposite directions: the branch survives
  * the reclaim and the two loose files do not.
+ *
+ * **And it is the status with no badge.** `enum-verbs.toml` carries no verb and
+ * no glyph for `escalated`, so there is nothing to draw one from — the wire's
+ * own spelling renders in mono instead, which is what `ChangedFiles` does with
+ * an unworded change kind. A blank there would leave a person unable to tell an
+ * escalated job from a finished one. The fix is a registry row, not a component.
  */
 export const TwoReasonsOnOneWorktree: Story = {
   args: {
