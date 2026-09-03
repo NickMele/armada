@@ -12,7 +12,7 @@
 // one is listed in `GAPS` so a surface can say what it could not render instead
 // of inventing copy for it.
 
-import { Archive, ArrowUpToLine, Ban, Check, CircleCheck, CircleDot, CircleMinus, CircleX, Clock, Cpu, Eye, FileQuestionMark, Flag, Link, OctagonAlert, Power, RefreshCw, RotateCw, ShieldCheck, ShieldMinus, ShieldOff, ShieldX, Split, Stamp, Terminal, Unplug, UserCheck, X } from "lucide-react";
+import { Archive, ArrowUpToLine, Ban, Check, CircleCheck, CircleDashed, CircleDot, CircleMinus, CircleX, Clock, Cpu, Eye, FileQuestionMark, Flag, Link, OctagonAlert, Power, RefreshCw, RotateCw, ShieldCheck, ShieldMinus, ShieldOff, ShieldX, Split, Stamp, Terminal, Unplug, UserCheck, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /** How one variant reads. `null` where the registry carries no answer. */
@@ -112,7 +112,7 @@ export const CRITERION_VERDICT_JUDGE: Readonly<Record<string, Rendering | undefi
 export const STEP_STATE: Readonly<Record<string, Rendering | undefined>> = {
   "advanced": { verb: "advanced", icon: Check, badgeStatus: null, statusToken: null },
   "awaiting_human": { verb: "awaiting review", icon: Eye, badgeStatus: null, statusToken: null },
-  "not_started": { verb: "not started", icon: null, badgeStatus: null, statusToken: null },
+  "not_started": { verb: "not started", icon: CircleDashed, badgeStatus: null, statusToken: null },
   "retrying": { verb: "retrying", icon: RotateCw, badgeStatus: null, statusToken: null },
   "running": { verb: "running", icon: CircleDot, badgeStatus: null, statusToken: null },
   "stopped": { verb: "stopped", icon: Flag, badgeStatus: null, statusToken: null },
@@ -241,7 +241,7 @@ export const GAPS: readonly Gap[] = [
   { vocabulary: "job_status", variant: "escalated", missing: ["verb", "icon"] },
   { vocabulary: "step_state", variant: "advanced", missing: ["token"] },
   { vocabulary: "step_state", variant: "awaiting_human", missing: ["token"] },
-  { vocabulary: "step_state", variant: "not_started", missing: ["icon", "token"] },
+  { vocabulary: "step_state", variant: "not_started", missing: ["token"] },
   { vocabulary: "step_state", variant: "retrying", missing: ["token"] },
   { vocabulary: "step_state", variant: "running", missing: ["token"] },
   { vocabulary: "step_state", variant: "stopped", missing: ["token"] },

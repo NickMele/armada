@@ -212,11 +212,11 @@ notes = "The same words as `job_status.awaiting_review`, because it is the same 
 
 [verbs.step_state.not_started]
 verb = "not started"
-icon = ""
+icon = "circle-dashed"
 status_token = ""
 vocabulary = "Step state"
 in_code = ""
-notes = "Written at Job creation for every step of the frozen WorkflowDef, so it is the state most rail rows are in and the one that must read as ordinary rather than as something withheld. The enum's spelling with its underscore taken out. No glyph, and this is the one step state that owes one: `[conventions.step_activity_borrowing]` names five borrowings and none of them is this, `clock` is `queued`'s badge, and a mark invented here would be the second vocabulary the file exists to prevent. No token by decision rather than by omission — `packages/tokens/src/status.css` says outright that not-started takes no hue and renders in `--fg-subtle`."
+notes = "Written at Job creation for every step of the frozen WorkflowDef, so it is the state most rail rows are in and the one that must read as ordinary rather than as something withheld. The enum's spelling with its underscore taken out. `circle-dashed`, minted rather than borrowed — see `packages/icons/icons.toml` for the full argument against `circle-dot` and rule 3. It is the fallback `StepActivityMark` draws only where no ordinal reaches it; the ordinal keeps the mark's slot wherever `WorkflowRail` or `StepRow` supplies one, and this glyph must not be read as a reason to take that away. No token by decision rather than by omission — `packages/tokens/src/status.css` says outright that not-started takes no hue and renders in `--fg-subtle`, which `circle-dashed` inherits unchanged."
 
 [verbs.step_state.retrying]
 verb = "retrying"
