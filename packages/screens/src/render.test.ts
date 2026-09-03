@@ -84,19 +84,16 @@ describe("the escalation reason", () => {
   });
 
   /**
-   * **Pinned as observed, and reported rather than fixed here.** `escalated` is
-   * non-terminal and carries no `--status-awaiting-review` token, so a job whose
-   * reason the registry cannot name — or that arrives with no `reason` at all —
-   * falls past every test in `renderFor` and takes the *working* render: a live
-   * rail and a running clock over a job that has stopped.
-   *
-   * The wire permits it. `Reason.named` is optional and `escalated` is the one
-   * status where the render turns on it. This test exists so the day somebody
-   * decides what that job should draw, the change is visible here rather than
-   * discovered on screen.
+   * `escalated` is the one status where the render turns on the reason, not
+   * just the status. Where the reason the job carries is a spelling
+   * `ESCALATION_REASON` has no row for — or the job arrives with no `reason`
+   * at all, which the wire permits — the dead-end render has nothing to
+   * state. `unrenderable` says this build cannot describe the job; falling
+   * back to `working` would draw a live rail and a running clock over a job
+   * that has stopped and is waiting on a person.
    */
-  it("falls back to the working render where an escalated job names no reason", () => {
-    expect(renderFor(job({ status: "escalated", reason: { named: "sat_down" } }))).toBe("working");
-    expect(renderFor(job({ status: "escalated" }))).toBe("working");
+  it("draws an escalated job with no nameable reason as unrenderable, not as working", () => {
+    expect(renderFor(job({ status: "escalated", reason: { named: "sat_down" } }))).toBe("unrenderable");
+    expect(renderFor(job({ status: "escalated" }))).toBe("unrenderable");
   });
 });
