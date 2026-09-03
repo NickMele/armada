@@ -254,7 +254,7 @@ fn every_top_level_origin_narrows_back_to_itself() {
 /// registry, not evidence that anyone did.
 #[test]
 fn each_enums_size_is_pinned_here_and_compared_to_no_registry() {
-    assert_eq!(JobStatus::ALL.len(), 12);
+    assert_eq!(JobStatus::ALL.len(), 13);
     assert_eq!(StepState::ALL.len(), 6);
     assert_eq!(EscalationTrigger::ALL.len(), 22);
     assert_eq!(Origin::ALL.len(), 5);
@@ -316,10 +316,12 @@ fn every_trigger_says_whether_it_is_about_a_step_or_about_the_job() {
 /// never the only one. A frozen step crosses an unguarded edge holding what it
 /// held.
 ///
-/// **`completed_success` is the one status that is not everywhere**, which is
-/// issue #189: every edge arriving there is guarded on `every_step_advanced`,
-/// so no state but `advanced` can be carried across one. That is the whole
-/// difference a guard makes to this relation, stated once.
+/// **Two statuses are not everywhere, and each is a guard.**
+/// `completed_success` is issue #189: every edge arriving there is guarded on
+/// `every_step_advanced`, so no state but `advanced` can be carried across one.
+/// `awaiting_repair` is #208 carrying #179's guard across from the edge that
+/// used to end the Job — `no_step_running` admits every state but `running`, so
+/// `running` is the one state it excludes and the only state excluded from two.
 #[test]
 fn a_step_state_the_machine_reaches_is_seen_beneath_every_status_but_the_guarded_one() {
     assert_eq!(StepState::Advanced.seen_under(), JobStatus::ALL);
@@ -334,13 +336,20 @@ fn a_step_state_the_machine_reaches_is_seen_beneath_every_status_but_the_guarded
             "{} is seen beneath a status guarded against it",
             state.as_wire()
         );
+        let excluded = if state == StepState::Running { 2 } else { 1 };
         assert_eq!(
             state.seen_under().len(),
-            JobStatus::ALL.len() - 1,
-            "{} is seen beneath every status but the guarded one",
+            JobStatus::ALL.len() - excluded,
+            "{} is seen beneath every status but the guarded ones",
             state.as_wire()
         );
     }
+    assert!(
+        !StepState::Running
+            .seen_under()
+            .contains(&JobStatus::AwaitingRepair),
+        "a step still being worked cannot be beneath a Job held for repair"
+    );
     // The one nothing reaches yet is where its design puts it. `retrying`
     // was beside it here and does not belong: `Running -> Retrying` is a
     // real edge, so a step between attempts is carried across an unguarded

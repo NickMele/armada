@@ -130,6 +130,7 @@ fn target_for(status: JobStatus, trigger: Option<EscalationTrigger>) -> Target {
         JobStatus::Queued => Target::Queued,
         JobStatus::Running => Target::Running,
         JobStatus::AwaitingReview => Target::AwaitingReview,
+        JobStatus::AwaitingRepair => Target::AwaitingRepair,
         JobStatus::Escalated => {
             Target::Escalated(trigger.unwrap_or(EscalationTrigger::GateFailure))
         }
@@ -236,7 +237,15 @@ fn reach(status: JobStatus) -> Job {
         ]
         .concat(),
         JobStatus::Piloted => [&running[..], &[Target::Piloted(PilotReason::TakeOver)]].concat(),
-        JobStatus::CompletedFailed => [&running[..], &[Target::CompletedFailed]].concat(),
+        JobStatus::AwaitingRepair => [&running[..], &[Target::AwaitingRepair]].concat(),
+        // No longer reached from `running`: a spent retry budget lands at
+        // `awaiting_repair`, and a person accepting the failure is what takes
+        // it the last step. #208.
+        JobStatus::CompletedFailed => [
+            &running[..],
+            &[Target::AwaitingRepair, Target::CompletedFailed],
+        ]
+        .concat(),
         JobStatus::Rejected => vec![Target::Rejected],
         JobStatus::Superseded => [
             &running[..],

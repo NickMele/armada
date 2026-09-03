@@ -435,13 +435,14 @@ async fn work_that_fails_a_check_never_reaches_the_person() {
 
     assert!(
         matches!(turned.ruled(), Some(Ruling::Failed { .. })),
-        "the mechanical tier still ends the Job: {:?}",
+        "the mechanical tier still stops the work: {:?}",
         turned.ruled()
     );
     assert_eq!(
         fleet.load(job.id()).await.expect("the Job").status(),
-        JobStatus::CompletedFailed,
-        "and it ends rather than waiting for someone to approve it"
+        JobStatus::AwaitingRepair,
+        "and it waits to be repaired rather than to be approved — a human gate \
+         is not reached by work that did not pass the machine tier"
     );
 }
 

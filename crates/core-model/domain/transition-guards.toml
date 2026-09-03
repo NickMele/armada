@@ -51,11 +51,13 @@ The inner machine is frozen everywhere but `running` and `awaiting_review`, so a
 [guards.no_step_running]
 asserts = "No step is still being worked"
 holds_steps = ["advanced", "awaiting_human", "not_started", "retrying", "stopped"]
-on_edges = ["running -> completed_failed"]
+on_edges = ["running -> awaiting_repair"]
 refused_as = "GuardRefused"
 in_code = "Yes"
 notes = """
-On one inbound edge of `completed_failed` and deliberately not on the other two, which is where this guard parts company with `every_step_advanced`. That one guards all four edges into `completed_success` because a status is the union of what arrives at it. Here one inbound edge legitimately carries a running step: `escalated -> completed_failed` is a person accepting the failure of a Job escalated on `stalled`, and such a Job holds a step that is still `running` — which is the row #184 corrected `escalated` to admit. **So `completed_failed`'s `step_states` cannot narrow, and that is this machine read honestly rather than a guard left half-applied.**
+On the one edge a gate takes when it stops the work, and on no inbound edge of `completed_failed` at all — which is where this guard parts company with `every_step_advanced`. That one guards all four edges into `completed_success` because a status is the union of what arrives at it. Here the two edges into `completed_failed` legitimately carry a running step: `escalated -> completed_failed` is a person accepting the failure of a Job escalated on `stalled`, and such a Job holds a step that is still `running` — which is the row #184 corrected `escalated` to admit. **So `completed_failed`'s `step_states` cannot narrow, and that is this machine read honestly rather than a guard left half-applied.**
+
+**It moved with its edge.** #208 replaced `running -> completed_failed` with `running -> awaiting_repair` — a spent retry budget is unfinished work rather than a failed Job — and the guard belongs to the moment the gate stops the work, not to the destination it used to have. `awaiting_repair` is the one status whose `step_states` narrows behind it, which is what makes the row say something a reader learns from.
 
 Everything but `running` is admitted, because the guard asserts what its name says and no more. `retrying` is passed through rather than rested in — see `step_machine` — and `awaiting_human` is a state nothing writes yet.
 

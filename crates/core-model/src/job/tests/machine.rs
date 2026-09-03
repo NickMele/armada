@@ -360,7 +360,7 @@ fn only_the_two_endings_out_of_running_carry_a_condition() {
     for edge in EDGES.iter().filter(|e| e.from == JobStatus::Running) {
         let expected = match edge.to {
             JobStatus::CompletedSuccess => Some(Guard::EveryStepAdvanced),
-            JobStatus::CompletedFailed => Some(Guard::NoStepRunning),
+            JobStatus::AwaitingRepair => Some(Guard::NoStepRunning),
             _ => None,
         };
         assert_eq!(
@@ -373,31 +373,42 @@ fn only_the_two_endings_out_of_running_carry_a_condition() {
     }
 }
 
-/// **The guard is on the one inbound edge, and the other two are unguarded on
-/// purpose.** `escalated -> completed_failed` is a person accepting the failure
-/// of a Job escalated on `stalled`, which holds a `running` step legitimately —
-/// so `completed_failed`'s `step_states` row does not narrow behind this guard
-/// and is not waiting to. Guarding all three, the way `every_step_advanced`
-/// guards all four of its own, would refuse that person's decision.
+/// **No edge into `completed_failed` carries a condition, and that is on
+/// purpose.** Every one of them is a person accepting a failure — from
+/// `escalated`, from `awaiting_repair`, or an attestation that cannot be done —
+/// and a Job escalated on `stalled` holds a `running` step legitimately, so
+/// `completed_failed`'s `step_states` row does not narrow and is not waiting
+/// to. Guarding them, the way `every_step_advanced` guards all four of its own,
+/// would refuse that person's decision.
+///
+/// The guard sits on the edge the *gate* takes instead: #208 moved it to
+/// `running -> awaiting_repair`, which is where a spent retry budget now lands.
 #[test]
-fn only_the_edge_from_running_ends_a_job_on_a_condition() {
+fn no_edge_a_person_ends_a_job_on_carries_a_condition() {
     for edge in EDGES.iter().filter(|e| e.to == JobStatus::CompletedFailed) {
         assert_eq!(
-            edge.guard.is_some(),
-            edge.from == JobStatus::Running,
-            "{} -> {} carries the wrong condition",
+            edge.guard,
+            None,
+            "{} -> {} carries a condition on a person's decision",
             edge.from.as_wire(),
             edge.to.as_wire()
         );
     }
+    let guarded: Vec<&Edge> = EDGES
+        .iter()
+        .filter(|e| e.guard == Some(Guard::NoStepRunning))
+        .collect();
+    assert_eq!(guarded.len(), 1, "{guarded:?}");
+    assert_eq!(guarded[0].from, JobStatus::Running);
+    assert_eq!(guarded[0].to, JobStatus::AwaitingRepair);
 }
 
 /// The write #179 observed, refused. A Job whose step is still being worked
-/// cannot be ended as failed from `running`, and the refusal names the step
-/// rather than only the Job — "cannot complete" is useless, "step `fix` is
-/// running" is the finding.
+/// cannot be moved to `awaiting_repair`, and the refusal names the step rather
+/// than only the Job — "cannot complete" is useless, "step `fix` is running" is
+/// the finding. The destination changed in #208 and the guard did not.
 #[test]
-fn completed_failed_is_refused_from_running_while_a_step_is_being_worked() {
+fn awaiting_repair_is_refused_from_running_while_a_step_is_being_worked() {
     let job = reach(JobStatus::Running);
     let job = job
         .transition_step(
@@ -410,16 +421,16 @@ fn completed_failed_is_refused_from_running_while_a_step_is_being_worked() {
         .job;
     let error = job
         .transition(
-            Target::CompletedFailed,
+            Target::AwaitingRepair,
             Actor::Fleet,
             at("2026-08-26T10:00:00.000Z"),
         )
-        .expect_err("a step still being worked cannot be left running beneath a terminal Job");
+        .expect_err("a step still being worked cannot be left running beneath a held Job");
     assert_eq!(
         error,
         IllegalTransition::GuardRefused {
             from: JobStatus::Running,
-            to: JobStatus::CompletedFailed,
+            to: JobStatus::AwaitingRepair,
             guard: Guard::NoStepRunning,
             step_id: StepId::new("fix"),
             holding: StepState::Running,
@@ -431,11 +442,11 @@ fn completed_failed_is_refused_from_running_while_a_step_is_being_worked() {
 }
 
 /// The half the guard would be useless without: the step is stopped with the
-/// trigger that stopped it, and the Job then ends. **This is the order
+/// trigger that stopped it, and the Job then holds. **This is the order
 /// `fleet::dispatch` walks**, and the states the machine leaves behind are the
-/// ones `completed_failed` declares.
+/// ones `awaiting_repair` declares.
 #[test]
-fn completed_failed_is_admitted_once_the_worked_step_is_stopped() {
+fn awaiting_repair_is_admitted_once_the_worked_step_is_stopped() {
     let why = StepLevelTrigger::of(EscalationTrigger::GateFailure).expect("a step-level trigger");
     let mut job = reach(JobStatus::Running);
     for target in [StepTarget::Running, StepTarget::Stopped(why)] {
@@ -451,12 +462,12 @@ fn completed_failed_is_admitted_once_the_worked_step_is_stopped() {
     }
     let moved = job
         .transition(
-            Target::CompletedFailed,
+            Target::AwaitingRepair,
             Actor::Fleet,
             at("2026-08-26T10:00:00.000Z"),
         )
         .expect("no step is running");
-    assert_eq!(moved.job.status(), JobStatus::CompletedFailed);
+    assert_eq!(moved.job.status(), JobStatus::AwaitingRepair);
     assert!(moved
         .job
         .steps()
@@ -473,12 +484,12 @@ fn a_step_that_never_started_does_not_refuse_the_ending() {
     let job = reach(JobStatus::Running);
     let moved = job
         .transition(
-            Target::CompletedFailed,
+            Target::AwaitingRepair,
             Actor::Fleet,
             at("2026-08-26T10:00:00.000Z"),
         )
         .expect("a step that was never entered is not being worked");
-    assert_eq!(moved.job.status(), JobStatus::CompletedFailed);
+    assert_eq!(moved.job.status(), JobStatus::AwaitingRepair);
 }
 
 // ------------------------------------------------------- what does not move

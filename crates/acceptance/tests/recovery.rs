@@ -61,17 +61,20 @@ use bench::{a_fix_diff, a_root_cause_note, bug_workflow_with_the_fix_judged, sta
 /// Which Jobs carry an answer, and which carry none.
 ///
 /// **The absence is half the claim.** A screen that offered acts against a Job
-/// nothing is wrong with would make "needs me" mean nothing, so the four
-/// statuses a person opens a Job asking *why* about are named, and every other
-/// status in the registry is asserted to answer nothing at all — over
+/// nothing is wrong with would make "needs me" mean nothing, so the statuses a
+/// person opens a Job asking *why* about are named, and every other status in
+/// the registry is asserted to answer nothing at all — over
 /// [`JobStatus::ALL`], so a status minted tomorrow is sorted here or the
-/// assertion fails.
+/// assertion fails. **`awaiting_repair` is the one that was**, and it sorted
+/// in: `#208` minted it for a step whose retry budget is spent, which is Fleet
+/// stopping and asking as much as `escalated` is.
 ///
-/// **A Job at a gate needs a person too and is not one of the four.**
+/// **A Job at a gate needs a person too and is not one of them.**
 /// `awaiting_approval` and `awaiting_review` are Jobs waiting on somebody, and
 /// what they need is in the status itself: there is no *why* to ask, and no act
-/// to choose between. The classification exists for the Jobs where both
-/// questions are open.
+/// to choose between. The name they share with `awaiting_repair` is the family
+/// axis — waited on, by a person — and not this question. The classification
+/// exists for the Jobs where both questions are open.
 #[tokio::test]
 async fn the_jobs_that_need_a_person_are_the_ones_that_carry_an_answer() {
     let asked: Vec<&str> = JobStatus::ALL
@@ -81,11 +84,17 @@ async fn the_jobs_that_need_a_person_are_the_ones_that_carry_an_answer() {
         .collect();
     assert_eq!(
         asked,
-        vec!["completed_failed", "escalated", "killed", "rejected"],
-        "Fleet stopping and asking, and the three ways a Job ends without \
-         landing — and `superseded` and `piloted` are not among them, because \
-         nothing went wrong and nothing is Fleet's to offer. The order is \
-         `JobStatus::ALL`'s, which is the registry's"
+        vec![
+            "awaiting_repair",
+            "completed_failed",
+            "escalated",
+            "killed",
+            "rejected"
+        ],
+        "the two ways Fleet stops and asks, and the three ways a Job ends \
+         without landing — and `superseded` and `piloted` are not among them, \
+         because nothing went wrong and nothing is Fleet's to offer. The order \
+         is `JobStatus::ALL`'s, which is the registry's"
     );
 
     // And a Job with work in flight says so by saying nothing, over the wire
@@ -501,14 +510,22 @@ async fn a_step_that_never_reported() -> (Run, Option<TransitionReason>) {
 }
 
 /// A Job whose second step submitted a diff that changed nothing, so
-/// `diff_nonempty` failed and the Job ended rather than escalating. **Terminal,
-/// which is what a reclaim needs**, and one of the four a person still asks
-/// about.
+/// `diff_nonempty` failed — and then a person who accepted the failure.
+///
+/// **Two moves rather than one, since `#208`.** A spent retry budget holds the
+/// Job at `awaiting_repair`, which is not terminal and is deliberately not
+/// reclaimable: a Job somebody may still repair still needs its worktree. What
+/// makes it terminal is a person saying the failure stands —
+/// `awaiting_repair -> completed_failed`, the edge `escalated` has always had —
+/// and that is the state a reclaim reaches. **Terminal, which is what a reclaim
+/// needs**, and one of the statuses a person still asks about.
 async fn a_job_whose_check_failed() -> (Run, Option<TransitionReason>) {
     let bench = Bench::with(FakeWorkProduct::untouched());
     let mut run = on_its_second_step(&bench, "change nothing").await;
     let ruling = bench.gate(&run, &bench.step(1), &a_fix_diff()).await;
     bench.settled(&mut run, &bench.step(1), &ruling);
+    assert_eq!(run.job.status(), JobStatus::AwaitingRepair);
+    bench.moved(&mut run, Target::CompletedFailed, Actor::Human);
     assert_eq!(run.job.status(), JobStatus::CompletedFailed);
     (run, bench.reasons().last().cloned())
 }

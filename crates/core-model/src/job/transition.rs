@@ -70,6 +70,11 @@ pub static EDGES: &[Edge] = &[
     ),
     edge(AwaitingAttestation, Killed),
     edge(AwaitingAttestation, Piloted),
+    edge(AwaitingRepair, CompletedFailed),
+    edge(AwaitingRepair, Killed),
+    edge(AwaitingRepair, Piloted),
+    edge(AwaitingRepair, Queued),
+    edge(AwaitingRepair, Running),
     edge(AwaitingReview, AwaitingAttestation),
     guarded(AwaitingReview, CompletedSuccess, Guard::EveryStepAdvanced),
     triggered(AwaitingReview, Escalated, EscalationTrigger::Interrupted),
@@ -94,7 +99,7 @@ pub static EDGES: &[Edge] = &[
     edge(Running, AwaitingApproval),
     edge(Running, AwaitingAttestation),
     edge(Running, AwaitingReview),
-    guarded(Running, CompletedFailed, Guard::NoStepRunning),
+    guarded(Running, AwaitingRepair, Guard::NoStepRunning),
     guarded(Running, CompletedSuccess, Guard::EveryStepAdvanced),
     edge(Running, Escalated),
     edge(Running, Killed),
@@ -204,9 +209,9 @@ impl CriteriaOwed {
 
 /// Where a Job is going, carrying whatever that destination stores.
 ///
-/// Twelve variants for twelve statuses. The four that the registry says store a
-/// reason take it as a payload; the eight whose `reason_storage` is `None` — or
-/// `Derived`, in `Queued`'s case — take nothing.
+/// Thirteen variants for thirteen statuses. The four that the registry says
+/// store a reason take it as a payload; the nine whose `reason_storage` is
+/// `None` — or `Derived`, in `Queued`'s case — take nothing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Target {
     AwaitingApproval,
@@ -217,6 +222,11 @@ pub enum Target {
     Queued,
     Running,
     AwaitingReview,
+    /// A step's retry budget is spent. **It takes nothing**, and that is the
+    /// difference from `Escalated` beside it: what stopped the work is on the
+    /// stopped step's own `last_verdict` as `gate_failure`, and a second
+    /// spelling on the Job's transition is how the two would come to disagree.
+    AwaitingRepair,
     Escalated(EscalationTrigger),
     Piloted(PilotReason),
     AwaitingAttestation(CriteriaOwed),
@@ -235,6 +245,7 @@ impl Target {
             Target::Queued => JobStatus::Queued,
             Target::Running => JobStatus::Running,
             Target::AwaitingReview => JobStatus::AwaitingReview,
+            Target::AwaitingRepair => JobStatus::AwaitingRepair,
             Target::Escalated(_) => JobStatus::Escalated,
             Target::Piloted(_) => JobStatus::Piloted,
             Target::AwaitingAttestation(_) => JobStatus::AwaitingAttestation,
@@ -261,7 +272,7 @@ impl Target {
 /// The qualifying reason a transition carries, as stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TransitionReason {
-    /// The destination's `reason_storage` is `None`. Eight statuses.
+    /// The destination's `reason_storage` is `None`. Nine statuses.
     Unqualified,
     /// `queued`'s readiness reason, which is recomputed at read time from
     /// `dependencies` and live headroom rather than stored.

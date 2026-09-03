@@ -17,7 +17,10 @@
 # job-statuses.toml's own header: a frozen step crosses an unguarded edge
 # holding what it held. `completed_success` is absent from four of these rows
 # because every edge arriving there is guarded on `every_step_advanced`, so a
-# step in any other state cannot be carried across one.
+# step in any other state cannot be carried across one. `awaiting_repair` is
+# absent from exactly one — `running` — for the mirror-image reason: its single
+# inbound edge is guarded on `no_step_running`, so a step still being worked
+# cannot be carried into it. #208.
 #
 # Fields:
 #   meaning    - what the state asserts about the step
@@ -27,7 +30,7 @@
 
 [states.advanced]
 meaning = "The step passed its advance gate"
-seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_review", "completed_failed", "completed_success", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
+seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_repair", "awaiting_review", "completed_failed", "completed_success", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
 in_code = "Not yet"
 notes = "Reached a second way, from `stopped`, when a person overrules the gate that refused it. The state is the same and the verdict is not: an overridden step keeps `failed(<trigger>)`, so a step the gate cleared and a step a person cleared over the gate are told apart by the pair and never by the state alone."
 
@@ -38,12 +41,12 @@ in_code = "Not yet"
 
 [states.not_started]
 meaning = "Written at Job creation for every step of the frozen WorkflowDef"
-seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_review", "completed_failed", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
+seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_repair", "awaiting_review", "completed_failed", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
 in_code = "Not yet"
 
 [states.retrying]
 meaning = "The step failed and is being reattempted inside its retry budget"
-seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_review", "completed_failed", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
+seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_repair", "awaiting_review", "completed_failed", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
 in_code = "Not yet"
 notes = "This row said `running` alone until the transpose was read against the machine. A Job does not stop moving because a step is between attempts: whatever freezes it — a kill, an escalation, an approval sent back — freezes the step mid-retry, and a frozen step is never cleared. See job-statuses.toml's header."
 
@@ -51,10 +54,11 @@ notes = "This row said `running` alone until the transpose was read against the 
 meaning = "The step is being worked"
 seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_review", "completed_failed", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
 in_code = "Not yet"
+notes = "**The one row narrowed by a guard other than `every_step_advanced`.** `running -> awaiting_repair` is admitted only where no step is being worked, so a Job held for repair never holds a `running` step — the gate stops it first, which is #179's finding and #208's edge."
 
 [states.stopped]
 meaning = "Retries spent"
-seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_review", "completed_failed", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
+seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_repair", "awaiting_review", "completed_failed", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
 in_code = "Not yet"
 notes = "The step's retries are spent; it is neither retrying nor waiting on a person."
 why = "Folding it into `retrying` or `awaiting_human` would make a designed human gate and a dead stop render alike."

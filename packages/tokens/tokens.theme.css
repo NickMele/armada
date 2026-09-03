@@ -82,6 +82,8 @@
   --color-status-superseded-bg: var(--status-superseded-bg);
   --color-status-awaiting-approval: var(--status-awaiting-approval);
   --color-status-awaiting-approval-bg: var(--status-awaiting-approval-bg);
+  --color-status-awaiting-repair: var(--status-awaiting-repair);
+  --color-status-awaiting-repair-bg: var(--status-awaiting-repair-bg);
   --color-step-advanced: var(--step-advanced);
   --color-step-running: var(--step-running);
   --color-step-waiting: var(--step-waiting);

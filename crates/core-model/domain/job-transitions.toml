@@ -66,6 +66,38 @@ to = "piloted"
 in_code = "Not yet"
 
 [[transitions]]
+from = "awaiting_repair"
+to = "completed_failed"
+on = "A person accepts the failure as the outcome"
+in_code = "Not yet"
+notes = "The same act `escalated -> completed_failed` carries, and after #208 the two are the only ways a Job ends failed. Nothing mechanical writes this status any more, which is the point: a red suite is a thing to fix, and deciding it will not be fixed is a person's."
+
+[[transitions]]
+from = "awaiting_repair"
+to = "killed"
+in_code = "Not yet"
+
+[[transitions]]
+from = "awaiting_repair"
+to = "piloted"
+on = "Pilot"
+in_code = "Not yet"
+
+[[transitions]]
+from = "awaiting_repair"
+to = "queued"
+on = "restart_step"
+in_code = "Not yet"
+notes = "**`restart_step` and not `override_verdict`**, which is where this parts company with `escalated -> queued`. An override lifts `gate_failure` where a Judge wrote it; here a Check wrote it, and a Check is not overrulable. `Stuck` reaches that answer without a rule of its own — it reads `checks_passed` off the store rather than off the trigger, and the Checks did not pass. The waiting is the neighbouring edge's: the act lands whether or not `concurrency-cap` has room, and admission is the only thing that spawns."
+
+[[transitions]]
+from = "awaiting_repair"
+to = "running"
+on = "A redirect: the failure is answered into the session the Drone is still holding"
+in_code = "Not yet"
+notes = "**The act this status exists to make reachable.** The Drone that wrote the code kept its session and its worktree, so telling it what it is missing costs no respawn and consumes no attempt — and while a spent budget ended the Job, that act was behind a terminal status. It spawns nothing, so it needs no slot and consults no bound, exactly as `escalated -> running` does."
+
+[[transitions]]
 from = "awaiting_review"
 to = "awaiting_attestation"
 on = "approve, with a criterion still owed outside"
@@ -221,11 +253,11 @@ in_code = "Not yet"
 
 [[transitions]]
 from = "running"
-to = "completed_failed"
-on = "Retries exhausted. At M1, a failed Check"
+to = "awaiting_repair"
+on = "A step's gate-failure retry budget is spent, or the failure is one no reattempt could answer"
 guard = "no_step_running"
 in_code = "Not yet"
-notes = "The step that failed is stopped and carries its verdict before the Job ends — #156 made `gate_undecided` do that and #179 found the failure path had not. The guard is on this edge alone: `escalated -> completed_failed` is a person accepting a `stalled` Job's failure and legitimately holds a `running` step, so `completed_failed`'s `step_states` does not narrow behind it."
+notes = "**This edge was `running -> completed_failed` and the destination is the whole change.** A failing Check said the Job had failed, when what it says is that the work is unfinished; ending the Job there put every act out of reach and left redispatching the whole thing as the only lever on one assertion. #208. The guard came with it: the step that failed is stopped and carries its verdict before the Job moves — #156 made `gate_undecided` do that and #179 found the failure path had not. It is on this edge alone, so `completed_failed`'s `step_states` does not narrow behind it: `escalated -> completed_failed` is a person accepting a `stalled` Job's failure and legitimately holds a `running` step."
 
 [[transitions]]
 from = "running"

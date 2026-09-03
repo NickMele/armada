@@ -118,7 +118,8 @@ async fn a_job_that_changed_nothing_is_answered_rather_than_committed() {
     );
 }
 
-/// A Job that fails a Check leaves no commit behind.
+/// A Job whose Check failed leaves no commit behind. Nothing lands off work
+/// that did not pass, whether the Job ends there or waits to be repaired.
 #[tokio::test]
 async fn a_job_that_fails_mid_workflow_gets_no_commit() {
     let home = TempDir::new();
@@ -134,11 +135,11 @@ async fn a_job_that_fails_mid_workflow_gets_no_commit() {
 
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),
-        JobStatus::CompletedFailed
+        JobStatus::AwaitingRepair
     );
     assert!(
         fleet.vcs().committed().is_empty(),
-        "uncommitted is what makes a failed Job's branch unmistakably not mergeable"
+        "uncommitted is what makes an unrepaired Job's branch unmistakably not mergeable"
     );
 }
 
