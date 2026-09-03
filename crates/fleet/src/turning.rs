@@ -39,6 +39,7 @@ use crate::delivery::Delivered;
 use crate::drone::Aftermath;
 use crate::evidence::Decline;
 use crate::gate::Ruling;
+use crate::noticing::Noticed;
 use crate::resume::Roused;
 use crate::scope::Drifting;
 use crate::silence::Quiet;
@@ -117,6 +118,15 @@ pub struct Turned {
     /// slot for the walk to have visited — and the walk itself reads the whole
     /// board once rather than once per working Job.
     pub stranded: Vec<JobId>,
+    /// The Job whose pull request somebody merged, on the turn Fleet read that
+    /// they had.
+    ///
+    /// **On the turn for `stranded`'s reason and one more.** A Job that
+    /// finished holds no slot and has no `Worked` entry to sit on — and there
+    /// is at most one a turn by construction, because the rotation asks about
+    /// one pull request every sweep. Empty on every other turn, which is nearly
+    /// all of them.
+    pub noticed: Option<Noticed>,
 }
 
 impl Turned {
@@ -222,6 +232,11 @@ where
         // reads the whole board, and a walk per working Job would read it twice
         // to reach the same answer.
         turned.stranded = self.strand_dependents().await?;
+        // After everything that can end a Job and before admission, which is
+        // where the dependent walk already sits — and for a milder version of
+        // its reason: this touches no slot and starts nothing, so what it
+        // wants is only to run once for the turn rather than once per Drone.
+        turned.noticed = self.notice_a_merge().await?;
         turned.admitted = self.admit_next().await?;
         Ok(turned)
     }

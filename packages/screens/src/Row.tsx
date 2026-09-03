@@ -72,7 +72,7 @@
 
 import { Button, JobRowStacked, SplitButton, StepBar } from "@armada/components";
 import type { JobRowField } from "@armada/components";
-import { GitBranch, Layers } from "lucide-react";
+import { GitBranch, GitPullRequest, Layers } from "lucide-react";
 
 import { JOB_LIFECYCLE } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
@@ -86,6 +86,21 @@ import { readingOf } from "./reading";
 export function isTerminal(job: JobSummary): boolean {
   return JOB_LIFECYCLE[job.status]?.terminal === true;
 }
+
+/**
+ * What a settled pull request reads as. **Written here rather than generated**,
+ * unlike every status verb: `Settled` is a wire set of `crates/ipc`'s and not a
+ * row in `crates/core-model/domain/`, so `enum-verbs.toml` has nothing to say
+ * about it. A registry row would be the better home the day a third state
+ * exists, and there is no third state — a pull request merges or it does not.
+ *
+ * The same two words are used on the detail, imported from here rather than
+ * written twice.
+ */
+export const LANDED: Record<string, string | undefined> = {
+  merged: "Merged",
+  closed_unmerged: "Closed, not merged",
+};
 
 export function Row({
   job,
@@ -180,6 +195,21 @@ export function Row({
       ? { value: "Not started", quiet: true }
       : { value: job.current_step_id, mono: true, emphasis: true },
   ];
+
+  // **Did this land**, appended rather than always drawn, for track four's
+  // reason. It is absent on every Job that has not opened a pull request and
+  // on every one nobody has merged yet — which are one absence on the wire,
+  // because neither is news. Drawing "not merged yet" on every finished row
+  // would put a label on the state a pull request is in from the moment it
+  // exists.
+  //
+  // `git-pull-request` for exactly what the icon registry reserves it for.
+  // The word carries the fact and the glyph says which fact it is about; the
+  // address is on the detail, where a click can reach it.
+  const landed = LANDED[job.landed ?? ""];
+  if (landed !== undefined) {
+    fields.push({ icon: GitPullRequest, value: landed });
+  }
 
   // Track four, appended rather than always drawn: a Job with neither an
   // elapsed reading nor a readable `created_at` loses the field, for the

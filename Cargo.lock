@@ -10,6 +10,7 @@ dependencies = [
  "config",
  "core-model",
  "fleet",
+ "ipc",
  "testkit",
  "tokio",
  "verification",

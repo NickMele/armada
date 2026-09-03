@@ -8,6 +8,8 @@
 //! that turn.
 
 use crate::tests::{open, top_level, TempDir};
+use adapter_traits::Landing;
+
 use crate::{Delivery, Store};
 
 fn a_job(store: &mut Store, id: &str) {
@@ -27,6 +29,7 @@ fn what_the_branch_came_to_is_read_back() {
         commit: Some("5375d705cb7713a21a91681c1028166b98a0d6de".to_string()),
         pushed: Some("origin/armada/01DELIVERY000000000000001".to_string()),
         pull_request: Some("https://example.invalid/armada/pull/229".to_string()),
+        landed: None,
     };
     store
         .record_delivery(&crate::tests::job_id("01DELIVERY000000000000001"), &came_to)
@@ -53,6 +56,7 @@ fn a_commit_with_no_push_keeps_the_other_two_absent() {
                 commit: Some("abc123".to_string()),
                 pushed: Some("no remote".to_string()),
                 pull_request: None,
+                landed: None,
             },
         )
         .expect("the delivery is recorded");
@@ -97,6 +101,7 @@ fn a_second_delivery_clears_what_the_first_one_wrote() {
                 commit: Some("first".to_string()),
                 pushed: Some("origin/first".to_string()),
                 pull_request: Some("https://example.invalid/pull/1".to_string()),
+                landed: None,
             },
         )
         .expect("the first delivery is recorded");
@@ -107,6 +112,7 @@ fn a_second_delivery_clears_what_the_first_one_wrote() {
                 commit: Some("second".to_string()),
                 pushed: Some("origin/second".to_string()),
                 pull_request: None,
+                landed: None,
             },
         )
         .expect("the second delivery is recorded");
@@ -115,6 +121,87 @@ fn a_second_delivery_clears_what_the_first_one_wrote() {
     assert!(
         read.pull_request.is_none(),
         "the second run opened none, and the first run's URL does not survive it"
+    );
+}
+
+/// A merge is recorded beside the pull request it happened to, and neither the
+/// commit nor the push is disturbed by it. **The two writers are separate for
+/// exactly this reason**: a merge is read by a later turn than the one that
+/// pushed, and one `UPDATE` for both would have that turn restate the commit.
+#[test]
+fn a_merge_is_recorded_without_touching_what_the_branch_came_to() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01DELIVERY000000000000006");
+    let id = crate::tests::job_id("01DELIVERY000000000000006");
+    store
+        .record_delivery(
+            &id,
+            &Delivery {
+                commit: Some("abc123".to_string()),
+                pushed: Some("origin/armada/01DELIVERY000000000000006".to_string()),
+                pull_request: Some("https://example.invalid/armada/pull/337".to_string()),
+                landed: None,
+            },
+        )
+        .expect("the delivery is recorded");
+
+    store
+        .record_landed(
+            &id,
+            &Landing::Merged {
+                url: String::from("https://example.invalid/armada/pull/337"),
+            },
+        )
+        .expect("the merge is recorded");
+
+    let read = store.delivery_for(&id).expect("the delivery is read");
+    assert_eq!(read.commit.as_deref(), Some("abc123"));
+    assert!(read.pushed.is_some(), "the push survives the merge");
+    assert!(
+        matches!(read.landed, Some(Landing::Merged { .. })),
+        "the record answers `did this land`"
+    );
+    assert!(
+        store.pull_requests_unsettled().unwrap().is_empty(),
+        "a settled pull request leaves the rotation"
+    );
+}
+
+/// **Still open is not written down**, which is the whole shape of the column:
+/// it stores an answer and never the absence of one, so a Job asked about and
+/// found unchanged stays in the rotation.
+#[test]
+fn an_open_or_unknown_answer_is_not_written_down() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01DELIVERY000000000000007");
+    let id = crate::tests::job_id("01DELIVERY000000000000007");
+    let url = String::from("https://example.invalid/armada/pull/338");
+    store
+        .record_delivery(
+            &id,
+            &Delivery {
+                commit: Some("abc123".to_string()),
+                pushed: Some("origin/one".to_string()),
+                pull_request: Some(url.clone()),
+                landed: None,
+            },
+        )
+        .expect("the delivery is recorded");
+
+    store
+        .record_landed(&id, &Landing::Open { url })
+        .expect("an open pull request is not a failure to record");
+    store
+        .record_landed(&id, &Landing::Unknown)
+        .expect("a forge that could not say is not a failure to record");
+
+    assert!(store.delivery_for(&id).unwrap().landed.is_none());
+    assert_eq!(
+        store.pull_requests_unsettled().unwrap().len(),
+        1,
+        "the Job is still one to ask about"
     );
 }
 

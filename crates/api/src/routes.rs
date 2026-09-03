@@ -305,6 +305,11 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/events",
     },
+    Route {
+        operation: "job.landed",
+        method: "GET",
+        path: "/events",
+    },
 ];
 
 /// Everything a handler needs. Cloned per request, so nothing here may be

@@ -771,6 +771,21 @@ there is no row left to carry, so the id is the whole of what a client needs
 to drop it from whatever it is holding.
 """
 
+[operations."job.landed"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "Somebody merged, or closed, the pull request a Job opened"
+notes = """
+**Not a status change, and not a step move.** The Job was already finished and recorded when this happened; what moved is a pull request on a forge, which is outside Armada entirely. `completed_success` is immutable once reached — `job-statuses.toml` says so on the row — so there is no edge this could fire and no reason to invent one. What a person wanted was the fact, not a different status.
+
+It carries the row whole, for `job.step_advanced`'s reason: a client told only that something happened re-reads what it was just told about.
+
+**Once per Job, ever.** Fleet asks the forge about one unsettled pull request every sweep and rotates through them; an answer of *merged* or *closed* is written down and that Job leaves the rotation. Still-open and could-not-say are not recorded and produce no message — a kind that fired to say nothing had happened would fire on every sweep of every open pull request forever.
+
+**Armada does not merge.** `docs/scope.md` and the `handoff` step's `human_always` gate both say a person does. Knowing that a merge happened is a different capability from performing one, and this is only the first.
+"""
+
 [operations."job.asking"]
 kind = "event"
 transport = "WebSocket"

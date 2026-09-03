@@ -67,8 +67,8 @@ pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use detail::{
-    Criterion, Dependency, JobDelivery, JobDetail, JobSpend, JudgeInFlight, StepDetail, StepFacts,
-    Stuck, Verdict,
+    Criterion, Dependency, JobDelivery, JobDetail, JobSpend, JudgeInFlight, Settled, StepDetail,
+    StepFacts, Stuck, Verdict,
 };
 pub use enums::{
     Actor, AdvanceGate, CheckOutcome, CriterionSource, DependencyDirection, DronePresence,
@@ -78,8 +78,8 @@ pub use enums::{
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
     ChangeKind, ChangedFile, Cursor, Delivered, DroneExited, DroneSpawned, Event, JobAsking,
-    JobCreated, JobFilesChanged, JobJudging, JobStateChanged, JobStepAdvanced, Missed, Reason,
-    Resync, StreamMessage,
+    JobCreated, JobFilesChanged, JobJudging, JobLanded, JobStateChanged, JobStepAdvanced, Missed,
+    Reason, Resync, StreamMessage,
 };
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use ids::{CriterionId, DroneId, Instant, JobId, ManifestId, QuestionId, StepId, WorkflowId};

@@ -362,6 +362,18 @@ export class FleetConnection {
       return;
     }
 
+    if (event.kind === "job.landed") {
+      // **`job.step_advanced`'s shape, and for its reason.** The row travels
+      // whole with `landed` already on it, so the board redraws without a
+      // round trip — and the status has not moved, so there is nothing to fold
+      // by hand. The detail is re-read because the pull request's state is
+      // also a field on `delivery`, which the open Job draws.
+      this.publish({ connection });
+      this.fold(event.job);
+      this.refresh(fleet.port, event.job.id);
+      return;
+    }
+
     if (event.kind === "job.forgotten") {
       // The opposite of `job.created`: the id, and nothing to fold — the row
       // is gone at Fleet by the time this arrives, so it is dropped here

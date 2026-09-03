@@ -54,6 +54,9 @@ pub mod judging;
 pub mod keeping;
 mod landing;
 pub mod mint;
+/// Noticing that somebody merged a Job's pull request. **Armada opens one and
+/// a person merges it** — nothing here merges anything.
+pub mod noticing;
 /// Where two Jobs claim the same paths, worked out at read time. **A
 /// warning and nothing else** — no dispatch path reaches it.
 pub mod overlap;
@@ -119,6 +122,7 @@ pub use headroom::{Bytes, Headroom, InUse, Machine, Polling, Reading, Short, Spa
 pub use judging::{Aloft, CallFailed, JudgeBudget, Judging, Look, Marking};
 pub use keeping::{deliverables_dir, kept_deliverables, Keeping};
 pub use mint::{Mint, UlidMint};
+pub use noticing::{Noticed, Noticing};
 pub use overruling::Overruling;
 pub use peer::{NotACaller, PeerOf};
 pub use process::{holder_of, Holder, ProbeFailed, StartedAt};

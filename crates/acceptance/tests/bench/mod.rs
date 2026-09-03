@@ -20,6 +20,9 @@
 //! clock therefore writes its own. Named here as a gap rather than left to be
 //! discovered as a coincidence.
 
+/// Board's own apparatus: the record-to-wire conversions, and the round trip
+/// every assertion in `board.rs` is made through. See its own header.
+pub mod board;
 /// Focus's own apparatus, which reaches this module's private seams rather
 /// than making a second copy of them. See its own header.
 pub mod focus;
