@@ -26,7 +26,9 @@
 use std::path::Path;
 use std::process::{Command, Output};
 
-use adapter_traits::{Base, BroughtUpToDate, Delivery, NotDelivered, Opened, Pushed, Review};
+use adapter_traits::{
+    Base, BroughtUpToDate, Delivery, Landing, NotDelivered, Opened, Pushed, Review,
+};
 use adapter_traits::{Standing, Worktree};
 use git2::{BranchType, Repository};
 
@@ -154,30 +156,56 @@ impl Delivery for GitVcs {
             false => Err(NotDelivered::of("the pull request", said(&run))),
         }
     }
+
+    fn landed(&self, in_repo: &str, pull_request: &str) -> Landing {
+        // The state alone. The address is the argument, so asking for it back
+        // would be asking the forge to confirm what was just handed to it.
+        let Some(state) = asked(in_repo, pull_request, "state", ".state") else {
+            return Landing::Unknown;
+        };
+        let url = pull_request.to_string();
+        match state.as_str() {
+            "MERGED" => Landing::Merged { url },
+            "OPEN" => Landing::Open { url },
+            "CLOSED" => Landing::ClosedUnmerged { url },
+            // A word this forge has and Armada has not. Saying nothing is the
+            // honest answer, and it costs one more ask later.
+            _ => Landing::Unknown,
+        }
+    }
+}
+
+/// Ask the forge one thing about one pull request, named as the forge names
+/// them — a branch, a number or an address, all of which `pr view` takes.
+///
+/// **Every failure is `None`**, which is the rule [`Landing`] and
+/// [`already_open`] share: no tool, not signed in, no such pull request, a
+/// network that would not answer. Nothing follows differently from any of them,
+/// and where one is followed by a second call, that call is what says which it
+/// was — putting the same fault on two lines is what this avoids.
+///
+/// **`--jq` and not a parse.** The forge does the reading, so bytes enter this
+/// process as one line of text and `store` and `ipc` stay the only two places
+/// that deserialise anything.
+fn asked(in_dir: &str, named: &str, fields: &str, jq: &str) -> Option<String> {
+    let run = run_in(
+        in_dir,
+        FORGE,
+        &["pr", "view", named, "--json", fields, "--jq", jq],
+    )
+    .ok()?;
+    run.status
+        .success()
+        .then(|| last_line(&run))
+        .filter(|said| !said.is_empty())
 }
 
 /// The pull request already open for this branch, if there is one.
 ///
-/// Every failure is `None`: no tool, not signed in, no such pull request. The
-/// call that follows says which of those it was, and saying it twice would put
-/// the same fault on two lines.
+/// Every failure is `None` — see [`asked`], which is where that rule lives now
+/// that two callers keep it.
 fn already_open(worktree: &Worktree) -> Option<String> {
-    let run = run(
-        worktree,
-        FORGE,
-        &[
-            "pr",
-            "view",
-            worktree.branch(),
-            "--json",
-            "url",
-            "--jq",
-            ".url",
-        ],
-    )
-    .ok()?;
-    let url = last_line(&run);
-    (run.status.success() && !url.is_empty()).then_some(url)
+    asked(worktree.path(), worktree.branch(), "url", ".url")
 }
 
 /// The remote to push to: `origin` where there is one, otherwise the only other
@@ -261,9 +289,16 @@ fn git(worktree: &Worktree, args: &[&str]) -> Result<Output, NotDelivered> {
 }
 
 fn run(worktree: &Worktree, program: &str, args: &[&str]) -> Result<Output, std::io::Error> {
+    run_in(worktree.path(), program, args)
+}
+
+/// The same, in a directory that is not a Job's worktree. **The one caller is
+/// the merge question**, which is asked long after the worktree it was written
+/// in has been reclaimed.
+fn run_in(dir: &str, program: &str, args: &[&str]) -> Result<Output, std::io::Error> {
     Command::new(program)
         .args(args)
-        .current_dir(worktree.path())
+        .current_dir(dir)
         // A tool that stops to ask has nobody to ask: Fleet is a daemon and
         // there is no terminal on the other end of this. Refusing is the
         // answer, and it comes back as the sentence the tool printed.

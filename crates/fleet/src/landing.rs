@@ -167,6 +167,11 @@ where
                 }
                 _ => None,
             },
+            // **Cleared, never carried.** Nothing has become of a pull request
+            // opened a line ago, and a redispatched Job delivering again must
+            // not inherit the last run's merge — which is the reason every
+            // other field here is written including its `None`.
+            landed: None,
         };
         if delivery.is_empty() {
             return Ok(());

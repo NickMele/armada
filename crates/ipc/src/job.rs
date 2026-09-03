@@ -26,6 +26,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::detail::Settled;
 use crate::event::Reason;
 use crate::ids::{DroneId, Instant, JobId, ManifestId, StepId, WorkflowId};
 
@@ -131,15 +132,15 @@ pub struct JobSummary {
     /// a paragraph of prose per row to say a single true-or-false is the cost
     /// [`facts`](crate::JobDetail::facts) is redacted from the summary for.
     ///
-    /// # It is the one thing on the row that is not from the record
+    /// # One of the two things on the row that are not from the record
     ///
-    /// Every other field here is read off `core_model::Job`. This is read off
-    /// the working slot, which is why [`JobSummary::of`] takes it rather than
-    /// finding it — and why it is `false` on every summary built where no slot
-    /// was in hand, which is every event publish. That is correct rather than a
-    /// gap: a Job being created, advancing a step or losing its Drone is not a
-    /// Job that has just asked something, and the one message that says a
-    /// question exists is `job.asking`.
+    /// [`landed`](JobSummary::landed) is the other. Every other field is read
+    /// off `core_model::Job`; this is read off the working slot, which is why
+    /// [`JobSummary::of`] takes it rather than finding it — and why it is
+    /// `false` on every summary built where no slot was in hand, which is
+    /// every event publish. That is correct rather than a gap: a Job created,
+    /// advancing a step or losing its Drone has not just asked something, and
+    /// the one message that says a question exists is `job.asking`.
     ///
     /// # Why the Board needs it at all
     ///
@@ -148,6 +149,28 @@ pub struct JobSummary {
     /// is invisible. `docs/concepts/job-board.md` carries the rule.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub asking: bool,
+    /// What became of the pull request this Job opened. **Absent is every Job
+    /// that has not opened one, and every one whose pull request nobody has
+    /// merged yet** — the two are one absence because neither is news, and the
+    /// board draws nothing for either.
+    ///
+    /// # The second field here that is not from the record
+    ///
+    /// [`asking`](JobSummary::asking) is the other. This one is read from the
+    /// delivery columns beside the row rather than from `core_model::Job`,
+    /// which has no field for it: Armada opens a pull request and a person
+    /// merges it, so what became of it is not something the Job's own machine
+    /// could ever know. `JobSummary::of` leaves it `None` and the Board fills
+    /// it in from one read for the whole list — a read per row would be a query
+    /// per row on a list that redraws on every event.
+    ///
+    /// # Why the board needs it
+    ///
+    /// It is the only question anybody has about finished work. Without it,
+    /// every terminal row on the board says the same thing whether the work is
+    /// in `main` or has been sitting unread for a week.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub landed: Option<Settled>,
 }
 
 impl JobSummary {
@@ -187,6 +210,13 @@ impl JobSummary {
             assigned_drone: job.assigned_drone().map(DroneId::from),
             redispatched_from: job.redispatched_from().map(JobId::from),
             asking,
+            // Filled by the caller that has it, and `None` here on purpose:
+            // it is not a field of `core_model::Job` at all — it is what a
+            // person did to the pull request afterwards, which lives in three
+            // columns beside the row. A Board reads it for every row at once
+            // and a single-Job answer leaves it out, because the alternative
+            // is a store read per row on a list that redraws on every event.
+            landed: None,
         }
     }
 }

@@ -33,8 +33,8 @@ use config::Roster;
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
     Allowance, Bytes, CheckBudget, Concurrency, DryRuns, Fittings, Fleet, Headroom, Host,
-    JudgeBudget, Liveness, Micros, Mint, Polling, Spare, StepNorms, SystemClock, TheMachine,
-    UlidMint,
+    JudgeBudget, Liveness, Micros, Mint, Noticing, Polling, Spare, StepNorms, SystemClock,
+    TheMachine, UlidMint,
 };
 use ipc::PROTOCOL_VERSION;
 use store::Store;
@@ -209,6 +209,23 @@ const PROVISIONAL_HEADROOM: Headroom = Headroom::of(Spare::percent(15), Bytes::g
 /// twenty turns, and what the staleness can cost is one Job admitted against a
 /// machine that filled since: the bound is what stops that being unbounded.
 const PROVISIONAL_RESOURCE_POLL: Polling = Polling::every(Duration::from_secs(5));
+
+/// How often Fleet asks the forge what became of one pull request.
+///
+/// **One pull request a minute, not every Job on a turn.** The turn interval is
+/// 250ms and the question is a process — asking about every unsettled Job four
+/// times a second would spend more of a machine on the question than on the
+/// work. A pull request that is open needs asking rarely and one that has
+/// merged never needs asking again, so `fleet::noticing` rotates and this is
+/// how fast the rotation moves: ten open pull requests is each of them asked
+/// every ten minutes, and the set only ever shrinks.
+///
+/// **No `settings.toml` row yet.** There is nothing in the registry about how
+/// often to ask a forge anything, because nothing asked one until now. A minute
+/// is the latency of a merge appearing on the Board — a person who has just
+/// merged and switched windows sees it, and nobody is waiting on it faster than
+/// that.
+const PROVISIONAL_MERGE_NOTICE: Noticing = Noticing::every(Duration::from_secs(60));
 
 /// What one Job may spend before Fleet stops starting Drones on it.
 ///
@@ -527,6 +544,7 @@ fn assemble(
         machine: Arc::new(TheMachine::watching(&repo_root)),
         headroom: PROVISIONAL_HEADROOM,
         polling: PROVISIONAL_RESOURCE_POLL,
+        noticing: PROVISIONAL_MERGE_NOTICE,
         allowance: PROVISIONAL_ALLOWANCE,
         budget: CheckBudget::of(PROVISIONAL_CHECK_BUDGET),
         norms: PROVISIONAL_STEP_NORMS,

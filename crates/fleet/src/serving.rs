@@ -62,9 +62,23 @@ where
     /// that shows nine is not.
     async fn list_jobs(&self) -> Result<JobList, Refusal> {
         let (loaded, unreadable) = self.every_job().await.map_err(|why| self.refusal(why))?;
+        // **One read for the whole list**, filled in afterwards rather than
+        // passed into `JobSummary::of`. What became of a Job's pull request is
+        // not on `core_model::Job` — it is in the delivery columns beside the
+        // row — and reading it per Job would be a query per row on a list that
+        // redraws on every event. Ordinarily an empty map: it holds only the
+        // Jobs somebody has merged or closed.
+        let landed = self
+            .store()
+            .lock()
+            .await
+            .landed_by_job()
+            .map_err(|why| self.refusal(Adrift::Reading(why)))?;
         let mut jobs = Vec::with_capacity(loaded.jobs.len());
         for job in &loaded.jobs {
-            jobs.push(self.summarised(job).await?);
+            let mut summary = self.summarised(job).await?;
+            summary.landed = landed.get(job.id()).and_then(crate::noticing::settled);
+            jobs.push(summary);
         }
         Ok(JobList {
             jobs,
@@ -185,6 +199,7 @@ where
                         commit: came_to.commit,
                         pushed: came_to.pushed,
                         pull_request: came_to.pull_request,
+                        landed: came_to.landed.as_ref().and_then(crate::noticing::settled),
                     }),
                 }
             }

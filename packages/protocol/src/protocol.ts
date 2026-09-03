@@ -77,12 +77,21 @@ export type JobSummary = {
    * optional field here — fleet omits it when it is not set rather than sending
    * `false`, because a bool has no third reading for absence to carry.
    *
-   * It is the one field on the row that is not read off the record. It comes
-   * from the working slot, so it is false on every summary built where no slot
-   * was in hand, which is every event publish — correct rather than a gap, since
-   * `job.asking` is the message that says a question exists.
+   * One of two fields on the row not read off the record — `landed` is the
+   * other. It comes from the working slot, so it is false on every summary
+   * built where no slot was in hand, which is every event publish — correct
+   * rather than a gap, since `job.asking` says a question exists.
    */
   asking?: boolean;
+  /**
+   * What became of the pull request this job opened. Since protocol 6.6.
+   *
+   * **Absent is every job that has not opened one, and every one nobody has
+   * merged yet** — one absence, because neither is news. It is the only
+   * question anybody has about finished work: without it a terminal row says
+   * the same thing whether the change is in `main` or has sat unread a week.
+   */
+  landed?: Settled;
   /**
    * When the Job was created. On the row rather than only on the detail,
    * because elapsed is what answers "is this stuck" without opening it, and
@@ -313,7 +322,22 @@ export type JobDelivery = {
   pushed?: string;
   /** The address a person clicks. */
   pull_request?: string;
+  /**
+   * What became of that pull request. Since protocol 6.6. **Absent is unasked
+   * or still open** — one absence, because Armada opens a pull request and a
+   * person merges it, so "still open" is the fact that nothing has happened.
+   */
+  landed?: Settled;
 };
+
+/**
+ * The two ends a pull request comes to, and the whole of the set. Since 6.6.
+ *
+ * **Neither open nor unknown is here**, which is what makes it closed: a pull
+ * request that has not settled is the absence of the value, so no variant
+ * means "no news" and nothing tells one kind of nothing from another.
+ */
+export type Settled = "merged" | "closed_unmerged";
 
 /** One step: which, where in the order, and where it got to. */
 export type StepDetail = {
@@ -824,6 +848,7 @@ export type {
   JobCreated,
   JobFilesChanged,
   JobJudging,
+  JobLanded,
   JobStateChanged,
   JobStepAdvanced,
   Missed,

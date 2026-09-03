@@ -53,6 +53,7 @@ use crate::gate::CheckBudget;
 use crate::headroom::{Headroom, Machine, Polling};
 use crate::judging::{Aloft, JudgeBudget, Judging, Marking};
 use crate::mint::Mint;
+use crate::noticing::{Noticing, Sweep};
 use crate::peer::{attributed, Drones, NotACaller, PeerOf};
 use crate::proposal::Proposing;
 use crate::silence::Liveness;
@@ -139,6 +140,10 @@ pub struct Fittings<H, V, W> {
     /// `settings.fleet-health-check-resource-poll-interval` row** — see
     /// [`Polling`] for why it is a freshness bound rather than a second timer.
     pub polling: Polling,
+    /// How often the forge is asked what became of one pull request. See
+    /// [`Noticing`], and `crate::noticing` for why it is one Job a sweep rather
+    /// than every Job a turn.
+    pub noticing: Noticing,
     /// What one Job may spend before Fleet stops starting Drones on it. **The
     /// `settings.budget-cost-cap-per-job` and `settings.budget-turn-cap-per-job`
     /// rows, enforced** — see [`Allowance`], which has no default for
@@ -245,6 +250,12 @@ pub struct Fleet<H, V, W> {
     machine: Arc<dyn Machine>,
     headroom: Headroom,
     polling: Polling,
+    noticing: Noticing,
+    /// Where the pull-request rotation stands, and when it last ran. **Never
+    /// written down**, for `polled`'s reason: a cursor that outlived the
+    /// process would name a position in a list that has since changed, and the
+    /// answers it produces are on the record already.
+    sweeping: Mutex<Sweep>,
     /// What one Job may spend. **Held rather than read** — like every other
     /// dial here, the composition root resolves it and nothing below Fleet
     /// reads configuration.
@@ -324,6 +335,8 @@ where
             machine: fittings.machine,
             headroom: fittings.headroom,
             polling: fittings.polling,
+            noticing: fittings.noticing,
+            sweeping: Mutex::new(Sweep::default()),
             allowance: fittings.allowance,
             polled: Mutex::new(None),
             drones: std::sync::Mutex::new(Drones::default()),
@@ -796,6 +809,12 @@ where
     }
     pub(crate) fn polling(&self) -> Polling {
         self.polling
+    }
+    pub(crate) fn noticing(&self) -> Noticing {
+        self.noticing
+    }
+    pub(crate) fn sweeping(&self) -> &Mutex<Sweep> {
+        &self.sweeping
     }
     pub(crate) fn polled(&self) -> &Mutex<Option<Polled>> {
         &self.polled
