@@ -23,6 +23,7 @@
 //! [`Working::heard`] answers with the whole run, because what anybody asks a
 //! transcript is what it folds to. A per-event accessor would invite reading a
 //! Drone's claim, which the gate exists to refuse.
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use std::time::Duration;
@@ -151,6 +152,29 @@ pub(crate) struct Working {
     /// held, because a Drone that could stack questions would be holding a
     /// conversation and a queue is a thing a person answers out of order.
     asked: Option<Question>,
+    /// What [`Progress::boundaries`](crate::Progress::boundaries) read when
+    /// Armada last put a turn into this session.
+    ///
+    /// **The baseline that tells a Drone at rest from a Drone that owes an
+    /// answer.** A terminating event is a turn boundary and not a lifetime —
+    /// `Ending::Reported` says so — because Armada injects turns and the same
+    /// process runs again. Which of the two a boundary is depends entirely on
+    /// whether anything is outstanding for it, and that is not a question the
+    /// transcript can answer on its own.
+    ///
+    /// **Written before the send at every site**, which is what makes it
+    /// exact rather than probable: [`Working::instructed`] is called by every
+    /// caller that speaks into a session, and every one of them calls it
+    /// before it writes. A baseline taken afterwards would have the answer
+    /// inside it — [`rested`](Working::rested)'s hazard, and it costs the same
+    /// care.
+    ///
+    /// An atomic because `instructed` is `&self`, like the [`told`] it is
+    /// built on: a slot is read through a shared reference while a turn goes
+    /// down the pipe, and none of the six senders holds it mutably.
+    ///
+    /// [`told`]: Working::told
+    told_after: AtomicUsize,
     /// How many liveness pokes this step has spent.
     ///
     /// **The step's budget, not the episode's.** A Drone that answers a poke
@@ -293,6 +317,7 @@ impl Working {
             heard: 0,
             answering: None,
             asked: None,
+            told_after: AtomicUsize::new(0),
             pokes: 0,
             publishing: Publishing::default(),
             entered_with: None,
@@ -478,6 +503,25 @@ impl Working {
     /// like from outside — and reading the words would be reading self-report.
     pub(crate) fn came_to_rest(&self) -> bool {
         self.transcript.progress().boundaries > self.rested_before
+    }
+
+    /// Whether the Drone's run has ended with nothing outstanding for it.
+    ///
+    /// **At rest, which is not the same as quiet.** A quiet Drone may be
+    /// inside a long command with a heartbeat Armada has no variant for; this
+    /// one has finished the run Armada's last turn started and has been given
+    /// nothing since, so there is no turn left for it to be part-way through.
+    /// It will say nothing further unless it is spoken to, and nothing is
+    /// queued to speak to it.
+    ///
+    /// **Not `boundaries > 0`.** A Drone that came to rest and was then poked,
+    /// redirected, answered or told a verdict is working again, and every one
+    /// of those moves the baseline — so the reading is false for as long as a
+    /// turn is outstanding, whether or not the Drone has got to it yet.
+    ///
+    /// Read by `crate::silence`, which is where what to do about it lives.
+    pub(crate) fn at_rest(&self) -> bool {
+        self.transcript.progress().boundaries > self.told_after.load(Ordering::SeqCst)
     }
 
     pub(crate) fn chain(&self) -> &Chain {
@@ -749,6 +793,7 @@ impl Working {
     /// drops it, which is why the brief a step opened with was recoverable from
     /// nowhere once the process had gone.
     pub(crate) fn instructed(&self, occasion: Occasion, text: &str) {
+        self.owed_a_turn();
         self.told(
             ipc::Voice::Armada,
             ipc::Saw::Instructed {
@@ -769,6 +814,12 @@ impl Working {
     /// `headings` argument on the common path would be six call sites saying
     /// they have none. What the field is for is
     /// `ipc::Saw::Instructed::headings`.
+    /// **It does not touch [`told_after`](Working::at_rest), and it must not.**
+    /// The opening brief went down the pipe inside `drone::start`, before this
+    /// slot existed — so by the time this runs the Drone may already have
+    /// finished the run that turn began, and taking a reading here would move
+    /// the baseline past an ending nobody had acted on. Zero is the reading the
+    /// opening turn deserves, and the field starts there.
     pub(crate) fn briefed(&self, text: &str, headings: Vec<usize>) {
         self.told(
             ipc::Voice::Armada,
@@ -778,6 +829,18 @@ impl Working {
                 headings,
             },
         );
+    }
+
+    /// Armada has just put a turn into this session, so the Drone owes an
+    /// answer from here.
+    ///
+    /// **Called from the writer of the record and not from the six senders**,
+    /// which is what keeps it from being a rule six call sites have to
+    /// remember: every send site already writes down what it sent, before it
+    /// sends it, and that is the moment this is true.
+    fn owed_a_turn(&self) {
+        self.told_after
+            .store(self.transcript.progress().boundaries, Ordering::SeqCst);
     }
 
     pub(crate) fn transcript_ended(&self) -> bool {
