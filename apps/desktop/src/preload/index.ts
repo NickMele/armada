@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import { CHANNELS } from "../shared/bridge";
 import type { BridgeApi, BridgeState } from "../shared/bridge";
-import type { CallRead, ClearOutcome, Draft, Outcome } from "@armada/protocol";
+import type { CallRead, ClearOutcome, Draft, Outcome, Proposed } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
 import type { Artifact, Opened } from "@armada/protocol";
 import type { ProtocolVersion } from "@armada/protocol";
@@ -36,6 +36,13 @@ const api: BridgeApi = {
 
   proposeJob: (draft: Draft): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.proposeJob, draft),
+
+  // Describing the work instead of naming a workflow. Its own entry beside
+  // `proposeJob` rather than a mode on it: one carries a workflow the person
+  // chose and the other carries the sentence they wrote, and a single
+  // capability taking which would read as one act and perform two.
+  proposeFromRequest: (request: string): Promise<Proposed> =>
+    ipcRenderer.invoke(CHANNELS.proposeFromRequest, request),
 
   // Bytes never round-trip through `proposeJob`'s JSON channel as base64 —
   // this writes them to a staging file and hands back the path a later

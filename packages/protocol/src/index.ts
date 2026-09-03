@@ -18,6 +18,7 @@ export * from "./events";
 export * from "./footprint";
 export * from "./generated/protocol-version";
 export * from "./history";
+export * from "./proposal";
 export * from "./protocol";
 export * from "./reads";
 export * from "./report";
