@@ -79,6 +79,7 @@ import { Opening, phasesOf, type Opens } from "./phases";
 import { recourseOf } from "./recovery";
 import { escalation, renderFor } from "./render";
 import { runOf } from "./run";
+import { steeringOf } from "./steering";
 import { entriesOf, whyNotWatching } from "./story";
 import { readingOf } from "./reading";
 import { briefOf, whyNoWork, workOf } from "./work";
@@ -662,6 +663,15 @@ function noticeOf(
       title: "Nothing is wrong. The workflow asks for a person here.",
       children: "Everything mechanical has cleared. Nothing advances until you answer.",
     };
+  }
+  // **The one thing a redirect into a healthy drone leaves behind.** That job
+  // is `running` before the send and `running` after the answer, so nothing
+  // else on the screen says a person spoke to it — and a press that changed
+  // nothing reads as a press that failed. `note` and never a hue: nothing is
+  // wrong, and the band is not announcing a stop.
+  if (render === "working") {
+    const sent = steeringOf(job, whole).sent;
+    return sent === undefined ? undefined : { tone: "note", children: sent };
   }
   if (render !== "stopped") return undefined;
   const reason = escalation(job);

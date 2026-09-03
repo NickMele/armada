@@ -22,6 +22,7 @@ import { recourseOf } from "./recovery";
 import { RedirectControl } from "./Redirect";
 import type { Render } from "./render";
 import { ReportControl } from "./Report";
+import { steeringOf } from "./steering";
 
 /**
  * What the two kills, the redispatch, the two step-resuming acts and the two
@@ -348,6 +349,13 @@ export function Acts({
  * was refused on the press every time the worktree had been reclaimed. Moving
  * the controls did not move that decision.
  *
+ * **On a Job that is working, one of the four is still offered, and by a second
+ * reading.** `stuck` is absent on a Job that has not stopped — it is the record
+ * of a stop — so `steering.ts` answers for that Job instead, off the pointer
+ * this header already draws `kill_drone` from. A redirect is legal on a healthy
+ * Drone since #145 and reached no control anywhere in Bridge, which is #383.
+ * The two readings never both apply: a Job has stopped or it has not.
+ *
  * **What each one does is on its own tooltip, with its binding.** The journey
  * says it plainly — a step's help text is a tooltip carrying its binding, shown
  * on hover and on focus — and the four sentences were being concatenated into
@@ -389,7 +397,21 @@ export function StepActs({
   // has no `stuck` and so offers none of these — which is the wire's reading
   // and not a rule written here.
   const recourse = render === "stopped" ? recourseOf(job, whole) : undefined;
-  const canRedirect = recourse?.act === "redirect";
+  // The other reading, on the render `stuck` says nothing about. **Never both**
+  // — a Job has stopped or it has not — and the two are separate calls rather
+  // than one widened answer, which is the whole of #383: `stuck` is the record
+  // of a stop, and a Job that has not stopped has no stop to describe.
+  const steering = render === "working" ? steeringOf(job, whole) : undefined;
+  // One control, two states that reach it. Since #145 a redirect is legal on a
+  // healthy Drone as well as one holding at a step that stopped, and what
+  // differs is which sentence it is offered in — `docs/concepts/drone.md` had
+  // said so all along, and nothing on this screen drew it.
+  const redirect: Redirect | undefined =
+    recourse?.act === "redirect"
+      ? { drone: "holding", says: recourse.says.redirect }
+      : steering?.act === "redirect"
+        ? { drone: "working", says: steering.says.redirect }
+        : undefined;
   const canRestart = recourse?.act === "restart_step";
   // Beside the two rather than instead of one: which trigger stopped the step
   // decides these, and whether a Drone is there decides those. **Never both**,
@@ -431,11 +453,16 @@ export function StepActs({
       {/* Neither ends the Job, so neither is a plain-red act. The dialog a
           redirect opens is itself the confirmation — a person who cancels it
           has sent nothing. */}
-      {canRedirect ? (
-        <Tooltip label={recourse?.says.redirect ?? ACT_LABEL.redirect} shortcut={REDIRECT_KEY}>
-          <RedirectControl jobId={job.id} disabled={acting || stale} onRedirect={onRedirect} />
+      {redirect === undefined ? null : (
+        <Tooltip label={redirect.says ?? ACT_LABEL.redirect} shortcut={REDIRECT_KEY}>
+          <RedirectControl
+            jobId={job.id}
+            drone={redirect.drone}
+            disabled={acting || stale}
+            onRedirect={onRedirect}
+          />
         </Tooltip>
-      ) : null}
+      )}
       {canRestart ? (
         <Tooltip label={recourse?.says.restart_step ?? ACT_LABEL.restart_step} shortcut={RESTART_KEY}>
           <Button
@@ -478,3 +505,14 @@ const REPORT_KEY = "b";
  * not.
  */
 type Lead = { act: "redispatch"; label: string } | { act: "report"; label: string };
+
+/**
+ * The redirect on offer, and which job it is about. **Which reading produced it
+ * is not carried** — the control takes one act and one wait, and the two
+ * readings that reach it have already agreed on both by the time they get here.
+ */
+type Redirect = {
+  drone: "holding" | "working";
+  /** The act's own sentence, where the reading had one. */
+  says: string | undefined;
+};
