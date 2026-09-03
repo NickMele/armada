@@ -158,12 +158,14 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// Read the silence clock, and act on it where it has run out.
+    /// Read whether the run has ended and how long the silence has run, and act
+    /// on whichever says something.
     ///
-    /// **Cold on an ordinary turn.** The reading is a subtraction over two
-    /// numbers held on the slot, so a Drone that is talking reaches no store, no
+    /// **Cold on an ordinary turn.** Both readings are comparisons over counts
+    /// held on the slot, so a Drone that is talking reaches no store, no
     /// worktree and no model — and neither does a Drone that is quiet for less
-    /// than the threshold.
+    /// than the threshold. Only a Drone that has ended or has outlasted the
+    /// threshold costs the one store read.
     pub(crate) async fn watch_silence(
         &self,
         working: &mut Option<Working>,
