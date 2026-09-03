@@ -482,6 +482,38 @@ export const ACTIONS: readonly Action[] = [
   },
 ];
 
+/**
+ * What a person might type looking for an act, and never what renders.
+ *
+ * **Bridge's, not the registry's.** `actions.toml` carries no alias column and
+ * should not: it is the authority on what an act *is called*, and the lexicon's
+ * whole point is that one word wins. The search index is a different artifact —
+ * the contract says so in as many words, that the index may carry aliases so
+ * "terminate" finds Kill and the alias never renders.
+ *
+ * So a word here is a way in, and adding one costs nothing. What it may never
+ * do is reach the screen: the palette is where a person learns Armada's
+ * vocabulary, and a surface that answers "terminate" with the word "terminate"
+ * has taught them the wrong one.
+ */
+export const ALIASES: Readonly<Record<string, readonly string[] | undefined>> = {
+  kill: ["terminate", "stop", "abort", "end"],
+  kill_and_redispatch: ["terminate and retry", "restart the job"],
+  redispatch: ["retry", "again", "rerun"],
+  redirect: ["steer", "correct", "instruct"],
+  restart_step: ["retry the step", "run the step again"],
+  new_job: ["dispatch", "start", "compose"],
+  copy_debug_info: ["clipboard", "support", "envelope"],
+  report_job: ["bug", "file", "wrong"],
+  observe: ["watch", "transcript", "terminal"],
+  open_diff: ["patch", "changes", "files"],
+  open_log: ["activity", "turns", "history"],
+  open_stage: ["gate", "phase", "check"],
+  state_filter: ["tab", "narrow", "status"],
+  toggle_sidebar: ["rail", "hide the rail"],
+  submit_for_verification: ["hand back", "verify"],
+};
+
 /** One act, by the id an implementation binds to. */
 export const ACTION: Readonly<Record<string, Action | undefined>> = Object.fromEntries(
   ACTIONS.map((action) => [action.id, action]),

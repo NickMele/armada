@@ -66,11 +66,18 @@ export type PaletteEntry = {
   /** Danger is the dropdown-menu treatment: red label and glyph, no fill. */
   destructive?: boolean;
   /**
-   * The issue that gives this binding an act, where nothing answers it yet.
-   * The row draws disabled and names it — the registry's `unbuilt` column is
-   * the fact, so no list of exceptions is kept here.
+   * Why this row cannot be chosen, in a few words, where it cannot be. The row
+   * draws dimmed and says so beside its binding.
+   *
+   * **Two kinds of dormancy, one rendering.** A binding the registry carries
+   * and nothing answers — `not built · #250`, from `unbuilt` — and an act this
+   * app cannot reach right now, like copying debug info with no failure on
+   * screen. Both are facts the caller holds; neither is a list of exceptions
+   * kept in here. The contract's rule is that a row a person presses and gets
+   * nothing from is worse than one that is absent, and a dimmed row carrying
+   * the reason is neither.
    */
-  unbuilt?: string;
+  dormant?: string;
 };
 
 export type PaletteSection = {
@@ -175,10 +182,10 @@ export function CommandPalette({
 
   function choose(held: Hit | undefined) {
     if (held === undefined) return;
-    // Registered and nothing answers it. The row is drawn so the binding can
-    // be learned; pressing it does nothing rather than reaching something
+    // Drawn so the binding can be learned, and inert because the row already
+    // says why. Pressing it does nothing rather than reaching something
     // invented.
-    if (held.entry.unbuilt !== undefined) return;
+    if (held.entry.dormant !== undefined) return;
     if (held.entry.destructive === true) {
       onConfirm?.(held.entry);
       return;
@@ -289,12 +296,12 @@ function Row({
 }) {
   const { entry } = held;
   const Glyph = entry.icon;
-  const unbuilt = entry.unbuilt !== undefined;
+  const dormant = entry.dormant !== undefined;
   const classes = [
     "armada-palette__row",
     active ? "armada-palette__row--active" : "",
     entry.destructive === true ? "armada-palette__row--danger" : "",
-    unbuilt ? "armada-palette__row--unbuilt" : "",
+    dormant ? "armada-palette__row--dormant" : "",
   ]
     .filter((held) => held !== "")
     .join(" ");
@@ -308,7 +315,7 @@ function Row({
       id={rowId(entry)}
       role="option"
       aria-selected={active}
-      aria-disabled={unbuilt ? true : undefined}
+      aria-disabled={dormant ? true : undefined}
       className={classes}
       onMouseEnter={onEnter}
       onClick={onChoose}
@@ -324,7 +331,7 @@ function Row({
       {entry.value === undefined ? null : (
         <span className="armada-palette__value">{entry.value}</span>
       )}
-      {unbuilt ? <span className="armada-palette__unbuilt">{`not built · ${entry.unbuilt}`}</span> : null}
+      {dormant ? <span className="armada-palette__dormant">{entry.dormant}</span> : null}
       {entry.shortcut === undefined ? null : <Shortcut shortcut={entry.shortcut} />}
     </div>
   );

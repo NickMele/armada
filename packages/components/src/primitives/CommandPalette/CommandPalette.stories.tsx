@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Bell, ClipboardList, Settings, Stethoscope } from "lucide-react";
 import { expect } from "storybook/test";
 
-import { actsIn, globalActs, type Action } from "../../actions";
+import { actsIn, ALIASES, globalActs, type Action } from "../../actions";
 import { Dialog } from "../Dialog/Dialog";
 import {
   CommandPalette,
@@ -55,15 +55,6 @@ const SETTINGS: PaletteEntry[] = [
   { id: "set-theme", section: "settings", label: "Appearance", value: "dark", icon: Settings },
 ];
 
-/** Aliases are searched and never rendered. "terminate" is Kill's. */
-const ALIASES: Readonly<Record<string, readonly string[]>> = {
-  kill: ["terminate", "stop", "abort"],
-  redispatch: ["retry", "again"],
-  redirect: ["steer", "correct"],
-  new_job: ["dispatch", "start"],
-  copy_debug_info: ["clipboard", "paste", "support"],
-};
-
 /** One registry row, as a palette entry. Nothing is re-spelled on the way. */
 function asEntry(section: string) {
   return (action: Action): PaletteEntry => ({
@@ -74,7 +65,7 @@ function asEntry(section: string) {
     ...(action.icon === null ? {} : { icon: action.icon }),
     ...(ALIASES[action.id] === undefined ? {} : { aliases: ALIASES[action.id] }),
     ...(action.destructive ? { destructive: true } : {}),
-    ...(action.unbuilt === null ? {} : { unbuilt: action.unbuilt }),
+    ...(action.unbuilt === null ? {} : { dormant: `not built · ${action.unbuilt}` }),
   });
 }
 

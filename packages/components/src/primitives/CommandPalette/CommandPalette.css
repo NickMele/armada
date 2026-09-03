@@ -114,8 +114,9 @@
   color: var(--status-completed-failed);
 }
 
-/* Registered and nothing answers it. Dimming is a token, not an alpha. */
-.armada-palette__row--unbuilt {
+/* Drawn so the binding can be read, and inert because the row says why.
+ * Dimming is a token, not an alpha. */
+.armada-palette__row--dormant {
   color: var(--fg-subtle);
   cursor: default;
 }
@@ -162,7 +163,7 @@
   font-size: var(--text-xs);
 }
 
-.armada-palette__unbuilt {
+.armada-palette__dormant {
   flex: none;
   color: var(--fg-subtle);
   font-size: var(--text-2xs);
