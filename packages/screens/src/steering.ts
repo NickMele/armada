@@ -35,6 +35,18 @@
 // that stopped, and the same difference stated twice: one of them is a reading
 // only Fleet can make, and this one is a pointer.
 //
+// # The rule this does not break
+//
+// `docs/journeys/monitor-active-work.md` warns off exactly this pointer, and
+// what it warns off is a surface that keys on it **to choose between Redirect
+// and Restart Step** — the act is decided by where the job stands, and a drone's
+// absence stopped being evidence that anything went wrong once a drone became a
+// step's. Nothing is chosen here. A restart is legal only on an escalated job,
+// which is `recovery.ts`'s half, so on a working job there is no second act for
+// this bit to pick wrongly between: it decides whether the one legal act has
+// somewhere to land, which is the question `redirect_drone` itself answers 409
+// to.
+//
 // # What that costs, said rather than hidden
 //
 // `assigned_drone` is the record's pointer, and a redirect needs the pipe —

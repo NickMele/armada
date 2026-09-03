@@ -93,7 +93,8 @@ export function RedirectControl({
           <p>
             This job is running and stays running: nothing on screen moves when the instruction
             lands, and sending is not evidence that the drone read anything. It buys no time
-            either — the step's clocks and its ceilings go on from where they are.
+            either — the step's clocks and its ceilings go on from where they are. Where it shows
+            up is the step's activity log, as a turn a person asked for.
           </p>
         )}
         {/* No `autoFocus`: the dialog's own contract puts initial focus on
