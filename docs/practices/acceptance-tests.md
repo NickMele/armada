@@ -21,6 +21,7 @@ the gate asserts about it.
 |---|---|---|
 | M1 — Dogfood | A Bug Job runs from the approval gate to `completed_success` | `crates/acceptance/tests/bug_job.rs` |
 | Focus | A Drone belongs to the step it was given | `crates/acceptance/tests/drone_per_step.rs` |
+| Board | Every Job is a row, and opening one says what it did | `crates/acceptance/tests/board.rs` |
 
 The apparatus is `crates/acceptance/tests/bench/`, shared, with a file per
 milestone. Claim and apparatus are separated so that what a milestone claims and
@@ -123,3 +124,25 @@ not available at this price.
 assertions are in the order a Job meets them names the earliest unmet one. On
 Focus that is the order the milestone is built in, so each step landing moves
 the failure down the file rather than clearing it.
+
+## What Board's test proves, and the layer it stops at
+
+Board's claim is about a screen — every Job on a board a person can scan, and
+opening one telling them what it did. Nothing in this workspace renders, so
+`crates/acceptance/tests/board.rs` proves the record-to-wire seam the screen is
+drawn from and names the screen as unproved. Every assertion is made against a
+value that has been through `ipc::encode` and back, so it is an assertion about
+what a Board receives.
+
+| Proved | Not proved |
+|---|---|
+| Every Job the record holds becomes a row, whatever its status | That a person scanning the result learns anything |
+| A Job that will not load rides beside the ones that did | That `store` hands back every row it holds |
+| Steps, their order and state, and the gate's verdict on each | That Fleet hands the assembled facts in |
+| The Judge's citation, against a criterion the Job carries | The evidence, the declared Checks, the changed files |
+| What each Check did, and what a stopped Job's recourse is | Whether the work landed — #337 |
+
+The reasons in the right-hand column are in the test's own header, and three of
+them are the hermetic rule biting: `store` has no in-memory constructor, and
+`fleet`'s conversions for evidence, declared Checks and a footprint are
+`pub(crate)`.

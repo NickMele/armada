@@ -24,6 +24,12 @@ workspace = true
 core-model = { path = "../core-model" }
 adapter-traits = { path = "../adapter-traits" }
 config = { path = "../config" }
+# **The wire vocabulary, for Board's claim.** `ipc` is where the record becomes
+# what a Board is served, and `JobSummary::of`, `JobDetail::of` and the codec
+# are the conversion that claim is about. It brings `serde_json` in as a
+# transitive dependency and nothing here calls it: `ipc::encode` and
+# `ipc::decode` are the seam, which is the rule gate five states.
+ipc = { path = "../ipc" }
 verification = { path = "../verification" }
 fleet = { path = "../fleet" }
 testkit = { path = "../testkit" }
