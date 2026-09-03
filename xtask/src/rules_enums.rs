@@ -102,11 +102,6 @@ const ENUMS: &[EnumSource] = &[
 /// `enum-verbs.toml` appears twice because it nests one level: the outer key
 /// names which enum an inner table belongs to, which is what lets
 /// `evidence_suspect` be a variant of two enums at once.
-///
-/// **This table is why the file is over 500 lines, and it stays here.** It,
-/// [`ENUMS`] and [`VOCABULARIES`] are data carrying why each entry is there;
-/// moving one out to buy lines puts the set in a file with no rule in it, which
-/// is where the next vocabulary would then be added.
 struct Pairing {
     registry: &'static str,
     prefix: &'static str,
