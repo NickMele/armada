@@ -100,6 +100,43 @@ pub enum Opened {
     NoTool { why: String },
 }
 
+/// What became of the pull request after it was opened. **The question a
+/// person actually has about finished work**, and the one the record could not
+/// answer: Armada opens a pull request and a person merges it, so what happened
+/// next is only ever knowable by asking.
+///
+/// **Every failure is [`Unknown`](Landed::Unknown)**, which is the rule
+/// [`Opened`] already keeps one call earlier: no tool, not signed in, no such
+/// pull request and a forge that would not answer are one absence here, because
+/// nothing follows differently from any of them. A caller records nothing and
+/// asks again later.
+///
+/// **`Unknown` is not `Open`.** A merge that Armada could not read about must
+/// not render as a pull request still waiting for somebody — that is the same
+/// sentence as the one the record already got wrong.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Landed {
+    /// Somebody merged it. **The end of the asking** — this never changes back,
+    /// so a caller that records it never asks again.
+    Merged { url: String },
+    /// It is open and nobody has merged it yet.
+    Open { url: String },
+    /// It was closed and never merged. Also terminal, and a different sentence:
+    /// the work was published and turned down.
+    ClosedUnmerged { url: String },
+    /// Nothing on this machine could say.
+    Unknown,
+}
+
+impl Landed {
+    /// Whether this is an answer worth writing down. **`Open` is not** — it is
+    /// the state a pull request is in from the moment it exists, so recording
+    /// it would store the absence of news.
+    pub fn is_settled(&self) -> bool {
+        matches!(self, Landed::Merged { .. } | Landed::ClosedUnmerged { .. })
+    }
+}
+
 /// A pull request's contents, assembled before anything is opened.
 ///
 /// **Two owned strings and no builder.** What goes in them is assembled by the
@@ -209,6 +246,20 @@ pub trait Delivery {
         base: &Base,
         review: &Review,
     ) -> Result<Opened, NotDelivered>;
+
+    /// What became of the pull request this branch already has.
+    ///
+    /// **No `Result`, unlike every method above it.** There is nothing a caller
+    /// could do differently about a forge that would not answer than about a
+    /// branch with no pull request: both mean ask again later, so both are
+    /// [`Landed::Unknown`] and there is no error to handle. The same reasoning
+    /// `already_open` has kept since delivery shipped, made into a type.
+    ///
+    /// `worktree` names where the question is asked from, which is any checkout
+    /// of the repository — **a Job's own worktree is reclaimed long before
+    /// anybody merges its work**, so the caller passes the repository root and
+    /// the Job's branch.
+    fn landed(&self, worktree: &Worktree) -> Landed;
 }
 
 /// A line for a person about where the base came from. Built here so the two

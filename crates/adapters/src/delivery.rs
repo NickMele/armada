@@ -26,7 +26,9 @@
 use std::path::Path;
 use std::process::{Command, Output};
 
-use adapter_traits::{Base, BroughtUpToDate, Delivery, NotDelivered, Opened, Pushed, Review};
+use adapter_traits::{
+    Base, BroughtUpToDate, Delivery, Landed, NotDelivered, Opened, Pushed, Review,
+};
 use adapter_traits::{Standing, Worktree};
 use git2::{BranchType, Repository};
 
@@ -154,30 +156,57 @@ impl Delivery for GitVcs {
             false => Err(NotDelivered::of("the pull request", said(&run))),
         }
     }
+
+    fn landed(&self, worktree: &Worktree) -> Landed {
+        // `state` and `url` come back on one line, joined by the forge's own
+        // `jq` rather than parsed here — `serde_json::from_*` lives in `store`
+        // and `ipc` alone, and a two-field answer is not a reason for a third
+        // place bytes are deserialised.
+        let Some(said) = asked(worktree, "state,url", "[.state,.url]|@tsv") else {
+            return Landed::Unknown;
+        };
+        let mut fields = said.split('\t');
+        let (Some(state), Some(url)) = (fields.next(), fields.next()) else {
+            return Landed::Unknown;
+        };
+        if url.is_empty() {
+            return Landed::Unknown;
+        }
+        let url = url.to_string();
+        match state {
+            "MERGED" => Landed::Merged { url },
+            "OPEN" => Landed::Open { url },
+            "CLOSED" => Landed::ClosedUnmerged { url },
+            // A word this forge has and Armada has not. Saying nothing is the
+            // honest answer, and it costs one more ask later.
+            _ => Landed::Unknown,
+        }
+    }
+}
+
+/// Ask the forge about the pull request for this worktree's branch.
+///
+/// **Every failure is `None`**, which is the rule [`Landed`] and
+/// [`already_open`] share: no tool, not signed in, no pull request for this
+/// branch, a network that would not answer. Nothing follows differently from
+/// any of them, and where one is followed by a second call, that call is what
+/// says which it was — putting the same fault on two lines is what this avoids.
+fn asked(worktree: &Worktree, fields: &str, jq: &str) -> Option<String> {
+    let run = run(
+        worktree,
+        FORGE,
+        &["pr", "view", worktree.branch(), "--json", fields, "--jq", jq],
+    )
+    .ok()?;
+    run.status.success().then(|| last_line(&run))
 }
 
 /// The pull request already open for this branch, if there is one.
 ///
-/// Every failure is `None`: no tool, not signed in, no such pull request. The
-/// call that follows says which of those it was, and saying it twice would put
-/// the same fault on two lines.
+/// Every failure is `None` — see [`asked`], which is where that rule lives now
+/// that two callers keep it.
 fn already_open(worktree: &Worktree) -> Option<String> {
-    let run = run(
-        worktree,
-        FORGE,
-        &[
-            "pr",
-            "view",
-            worktree.branch(),
-            "--json",
-            "url",
-            "--jq",
-            ".url",
-        ],
-    )
-    .ok()?;
-    let url = last_line(&run);
-    (run.status.success() && !url.is_empty()).then_some(url)
+    asked(worktree, "url", ".url").filter(|url| !url.is_empty())
 }
 
 /// The remote to push to: `origin` where there is one, otherwise the only other

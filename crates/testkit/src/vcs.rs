@@ -29,8 +29,8 @@ use std::fmt;
 use std::sync::Mutex;
 
 use adapter_traits::{
-    Base, BroughtUpToDate, Change, CommitTime, Committed, Delivery, NotDelivered, Opened, Pushed,
-    Review, Standing, Vcs, Worktree, WorktreeSpec,
+    Base, BroughtUpToDate, Change, CommitTime, Committed, Delivery, Landed, NotDelivered, Opened,
+    Pushed, Review, Standing, Vcs, Worktree, WorktreeSpec,
 };
 
 use crate::work_product::Holding;
@@ -107,6 +107,11 @@ pub enum Delivered {
     Pushed { branch: String },
     /// A pull request was opened, carrying this.
     OpenedForReview { base: String, review: Review },
+    /// The forge was asked what became of the branch's pull request. **Counted
+    /// as well as answered**, because the whole design of the asking is how
+    /// rarely it happens — a test that could not see the calls could not tell a
+    /// sweep that asks once from one that asks every turn.
+    AskedWhatBecameOfIt { branch: String },
 }
 
 /// What the fake's version control looks like from the delivery side.
@@ -124,6 +129,10 @@ pub struct Delivering {
     pub rebase: Option<BroughtUpToDate>,
     pub push: Pushed,
     pub review: Opened,
+    /// What the forge says became of the pull request afterwards. `Unknown` by
+    /// default, which is the answer on a machine with no forge and the one a
+    /// test gets unless it says a merge happened.
+    pub landed: Landed,
 }
 
 impl Default for Delivering {
@@ -141,6 +150,9 @@ impl Default for Delivering {
             review: Opened::PullRequest {
                 url: String::from("https://forge.invalid/armada/pull/1"),
             },
+            // Nobody has merged it. A default that said `Merged` would have
+            // every existing test's Job land the moment anything asked.
+            landed: Landed::Unknown,
         }
     }
 }
@@ -326,6 +338,16 @@ impl Delivery for FakeVcs {
                 review: review.clone(),
             });
         Ok(self.delivery.lock().expect("not poisoned").review.clone())
+    }
+
+    fn landed(&self, worktree: &Worktree) -> Landed {
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .push(Delivered::AskedWhatBecameOfIt {
+                branch: worktree.branch().to_string(),
+            });
+        self.delivery.lock().expect("not poisoned").landed.clone()
     }
 }
 
