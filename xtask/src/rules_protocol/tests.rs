@@ -115,3 +115,23 @@ fn parsing_reads_every_rename_between_the_braces_and_nothing_after() {
     let kinds = published_event_kinds(&source);
     assert_eq!(kinds, vec!["job.created", "drone.spawned"]);
 }
+
+/// **The gate's own failure mode.** A rule that finds nothing to compare must
+/// not read as agreement — that is a hand-kept inventory silently tolerating a
+/// missing row, one level up from what #124 was about. Both ways the parser
+/// can find nothing — the enum renamed or moved, and the enum present but
+/// reformatted past every `#[serde(rename = ...)]` line it matches — fail
+/// rather than pass on zero comparisons.
+#[test]
+fn no_variants_found_fails_rather_than_passing_on_nothing() {
+    for source in ["// pub enum Event moved to another file", "pub enum Event {\n}\n"] {
+        let mut report = Report::new("test");
+        check(INVENTORY_SOURCE, &table_and_router(TABLE_SOURCE), source, &mut report);
+        assert!(report.failed(), "empty parse must fail: {source:?}");
+        let findings = findings(&report);
+        assert!(
+            findings.iter().any(|f| f.contains(EVENT_ENUM) && f.contains("no")),
+            "expected a finding saying the parser found nothing: {findings:?}"
+        );
+    }
+}

@@ -101,8 +101,24 @@ fn check(inventory: &str, table: &str, event_source: &str, report: &mut Report) 
         }
     }
 
+    let published = published_event_kinds(event_source);
+    if published.is_empty() {
+        // A rule that finds nothing to compare is the failure this rule
+        // exists to end, one level up: `pub enum Event {` moved, was
+        // reformatted past what the parser matches, or lost every
+        // `#[serde(rename = ...)]` line, and a silent zero-comparison run
+        // reads as green. Refuse rather than pass on an empty set.
+        report.fail(format!(
+            "{EVENT_ENUM} — no `#[serde(rename = \"...\")]` variant found inside `pub enum \
+             Event {{ ... }}`. Either the file holds no events, which this repository has never \
+             been true, or the parser no longer matches its shape — either way this check compared \
+             nothing and could not have caught #124 again"
+        ));
+        return;
+    }
+
     let operations: Vec<&str> = served.iter().map(|(op, _, _)| op.as_str()).collect();
-    for kind in published_event_kinds(event_source) {
+    for kind in published {
         if !operations.contains(&kind.as_str()) {
             report.fail(format!(
                 "{EVENT_ENUM} declares `{kind}`, which {TABLE} does not list — a kind already \
