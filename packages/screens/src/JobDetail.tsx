@@ -48,7 +48,7 @@
 // region is gone: the turns are chapter two, the files are chapter three, and
 // the raw event table is not something this screen needs at all.
 
-import { GAMING_PATTERN } from "@armada/components";
+import { GAMING_PATTERN, JOB_LIFECYCLE } from "@armada/components";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -692,7 +692,14 @@ function noticeOf(
   return {
     // A Job that is over is red; one holding with a live Drone is not, because
     // a person deciding what happens next is not a failure.
-    tone: job.status === "escalated" ? "stopped" : "failed",
+    //
+    // **Terminality is read, never listed**, which is `frozen.ts`'s rule and is
+    // what this sentence has always described. Naming `escalated` alone was the
+    // same claim with one status hard-coded into it, and `awaiting_repair` is
+    // the status that made the difference visible: a spent retry budget holds
+    // the Job for a person, nothing has failed, and it would have drawn red.
+    // #208.
+    tone: JOB_LIFECYCLE[job.status]?.terminal === false ? "stopped" : "failed",
     title: (
       <>
         {said.length === 0 ? "This Job stopped." : said.join(" · ")}

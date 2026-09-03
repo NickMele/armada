@@ -59,6 +59,27 @@ describe("which render a job takes", () => {
     ).toBe("stopped");
   });
 
+  /**
+   * The same defect as the escalation rule above, one status over, and it is
+   * the reason that rule is not written as "escalated only". `awaiting_repair`
+   * is non-terminal and does not carry the review token, so every rule in
+   * `renderFor` would have passed it down to `working` — a live rail and a
+   * running clock over a Job whose step spent its retry budget and is waiting
+   * for somebody to say what is missing. #208.
+   *
+   * **And it never answers `unrenderable`**, which `escalated` does. That
+   * status draws its reason's verb and glyph, so a reason this build cannot
+   * name leaves the dead-end render nothing to state. This one has a verb and a
+   * glyph of its own, and what stopped the work is on the stopped step rather
+   * than on the Job — so a Job carrying no reason at all still renders.
+   */
+  it("draws a job held for repair as stopped, whatever reason it carries", () => {
+    expect(renderFor(job({ status: "awaiting_repair" }))).toBe("stopped");
+    expect(renderFor(job({ status: "awaiting_repair", reason: { named: "sat_down" } }))).toBe(
+      "stopped",
+    );
+  });
+
   it("refuses to draw a status this build has no vocabulary for", () => {
     // Unrenderable is a real answer. Falling back to `working` would draw a
     // live rail over a status nothing in this build can name.
@@ -81,6 +102,19 @@ describe("the escalation reason", () => {
 
   it("carries no reason where the registry has no such spelling", () => {
     expect(escalation(job({ status: "escalated", reason: { named: "sat_down" } }))).toBeUndefined();
+  });
+
+  it("carries no reason for a job held for repair, which stopped no verdict", () => {
+    // A spent retry budget stores nothing on the Job's transition: what
+    // stopped the work is `failed(gate_failure)` on the step it stopped. So
+    // this reads `undefined` and the render is decided without it, which is
+    // what lets that status draw at all where `escalated` would not.
+    expect(
+      escalation(job({ status: "awaiting_repair", reason: { named: "gate_failure" } })),
+    ).toBeUndefined();
+    expect(
+      renderFor(job({ status: "awaiting_repair", reason: { named: "gate_failure" } })),
+    ).toBe("stopped");
   });
 
   /**
