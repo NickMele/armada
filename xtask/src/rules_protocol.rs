@@ -110,9 +110,9 @@ fn check(inventory: &str, table: &str, event_source: &str, report: &mut Report) 
         // reads as green. Refuse rather than pass on an empty set.
         report.fail(format!(
             "{EVENT_ENUM} — no `#[serde(rename = \"...\")]` variant found inside `pub enum \
-             Event {{ ... }}`. Either the file holds no events, which this repository has never \
-             been true, or the parser no longer matches its shape — either way this check compared \
-             nothing and could not have caught #124 again"
+             Event {{ ... }}`. Either this file holds no events, which has never been true here, \
+             or the parser no longer matches its shape — either way this check compared nothing \
+             and could not have caught #124 again"
         ));
         return;
     }
