@@ -9,6 +9,10 @@ description: Running a whole milestone by dispatching agents at its issues — s
 briefing, checking what comes back, and merging. `work-issue` is what each agent
 loads; this is what you do.
 
+**When the owner approves the milestone once rather than issue by issue**, load
+`epic-as-one-job` as well — it is this, run as a bounded loop from a single
+approval, and it defers to this skill for everything below the loop.
+
 Focus was run this way on 30–31 Aug 2026 — eight issues, merged in a night, and
 the milestone's own acceptance test passing at the end. Everything here is what
 that cost to learn.

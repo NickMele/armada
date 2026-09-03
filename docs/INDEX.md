@@ -187,4 +187,5 @@ can find them.
 | Working one issue end to end — worktree, plan, implement, test, commit, merge | `work-issue` |
 | Cutting an agent worktree, and giving it back when its branch merges | `agent-worktrees` |
 | Running a whole milestone by dispatching agents at its issues | `orchestrate-milestone` |
+| Running a whole milestone from one approval, wave by wave | `epic-as-one-job` |
 | Closing a session — what the work just made untrue, and what to update | `reflect` |
