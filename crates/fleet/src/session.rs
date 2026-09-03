@@ -33,6 +33,7 @@ use tokio::sync::Mutex;
 use verification::OutcomeTurn;
 
 use crate::converging::ReportNow;
+use crate::group::{end_the_group, run_is_over};
 use crate::questioning::Answer;
 use crate::resume::Redirection;
 use crate::silence::Poke;
@@ -335,7 +336,8 @@ impl DroneSession {
         self.pid
     }
 
-    /// Whether the Drone has exited, **and reap it if it has**.
+    /// Whether the Drone has exited, **and reap it if it has** — ending
+    /// whatever it left in its process group first.
     ///
     /// The two halves are one call on purpose. `try_wait` is the thing that
     /// collects a finished child, and a child nobody collects is a zombie that
@@ -348,8 +350,22 @@ impl DroneSession {
     /// does not own, which is the runtime file's question and not this one's.
     /// For a child Fleet is holding, the operating system has an exact answer
     /// and it is here.
+    ///
+    /// **The third half is `#371`.** The incident that filed it was a Drone
+    /// whose run *ended*: it wrote its own terminating row, exited, and the
+    /// tool it had started was there an hour later holding the same pipe.
+    /// Nothing calls [`terminate`](LiveSession::terminate) on an ordinary
+    /// completion, so what is in the group when this answers `true` is an
+    /// orphan by definition — ending it is the reaping this method is named
+    /// for. **Signalled before the child is collected**, because collecting is
+    /// what frees the pid the group is named by.
     pub(crate) async fn exited(&self) -> Result<bool, io::Error> {
         let mut child = self.child.lock().await;
+        if let Some(group) = self.group() {
+            if run_is_over(group) {
+                end_the_group(group);
+            }
+        }
         let ended = child.try_wait()?.is_some();
         if ended {
             // Collecting it hands the pid back to the operating system, so from
@@ -459,35 +475,5 @@ impl LiveSession for DroneSession {
         let ended = child.wait().await;
         self.reaped.store(true, Ordering::Relaxed);
         ended.map(|_| ())
-    }
-}
-
-/// `SIGKILL` to a whole process group.
-///
-/// **The argument is a [`NonZeroU32`] because `killpg`'s dangerous arguments
-/// are the small ones.** Zero means the caller's own group — Fleet, and every
-/// process Fleet has not detached — and a negative one is wider still. Neither
-/// can be spelled at the call site, so what widens this call is a change to
-/// the type rather than a slip in an expression.
-///
-/// **A group that is already gone is not an error.** `killpg` answers `ESRCH`
-/// for a Drone that exited between the read above and this line, which is the
-/// ordinary case rather than a fault, so nothing is returned and nothing is
-/// logged. The caller learns what happened to the process from the `wait` that
-/// follows.
-#[allow(unsafe_code)]
-fn end_the_group(group: NonZeroU32) {
-    // A pid the platform cannot express is not a group, and `try_from` says so
-    // rather than a cast quietly making one up.
-    let Ok(group) = libc::pid_t::try_from(group.get()) else {
-        return;
-    };
-    // SAFETY: `killpg` is a plain system call over two integers, and this one
-    // is the pid `libc::setsid()` in `crate::detach` made a group leader — so
-    // the signal reaches this Drone and what it spawned, and stops there. The
-    // caller holds an unreaped child on that pid, which is what stops it
-    // naming anything else.
-    unsafe {
-        libc::killpg(group, libc::SIGKILL);
     }
 }

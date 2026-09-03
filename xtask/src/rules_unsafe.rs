@@ -44,10 +44,11 @@ const UNSAFE_SITES: &[(&str, &str)] = &[
         "the fork-to-exec closure that puts a Drone in its own session",
     ),
     (
-        "crates/fleet/src/session.rs",
-        "the group signal that ends a Drone and the tools it started — the session that \
-         detach.rs made is the only thing that can be signalled as a whole, and a kill at the \
-         pid alone leaves them running on the Drone's own pipe",
+        "crates/fleet/src/group.rs",
+        "the pair that ends a Drone and the tools it started — a group signal, because a kill \
+         at the pid alone leaves them running on the Drone's own pipe, and the reading that \
+         says the Drone is gone without collecting it, because collecting frees the pid the \
+         group is named by",
     ),
     (
         "crates/checks-runner/src/run.rs",

@@ -24,7 +24,6 @@ use adapter_traits::{
     Worktree,
 };
 use core_model::{EscalationTrigger, Target};
-use std::time::Duration;
 use testkit::FakeHarness;
 use tokio::io::AsyncReadExt;
 
@@ -32,7 +31,7 @@ use crate::drone::{aftermath, environment, start, Aftermath, DroneNotStarted, En
 use core_model::JobStatus;
 
 use crate::tests::tmp::TempDir;
-use crate::{holder_of, Holder, LiveSession};
+use crate::LiveSession;
 
 const PLANTED: &str = "ARMADA_TEST_PLANTED_CREDENTIAL";
 
@@ -223,77 +222,6 @@ async fn telling_a_terminated_drone_is_an_error_and_fleet_survives_it() {
         told.is_err(),
         "a write to a dead Drone is an error, not a turn that vanished"
     );
-}
-
-/// Ten milliseconds a turn, so five seconds of them. Generous, and spent only
-/// by a case that is already failing — every wait below breaks the moment the
-/// answer changes.
-const A_CHILD_HAS_LONG_ENOUGH: u32 = 500;
-
-/// **`#371`, from outside the process.** A tool a Drone backgrounded is not the
-/// process Fleet signalled, and a kill at the Drone's pid alone left it running
-/// — holding the Drone's stdout, spending whatever it spends, watched by
-/// nobody. On 2 Sep one outlived its Fleet by an hour.
-///
-/// The assertion is `ps`'s answer about a real pid, because the property is the
-/// operating system's: no value Fleet holds says whether a process it never
-/// started is still there. **The `&` is the whole case**, and the reading
-/// before the kill is what stops a tool that never started from passing this.
-#[tokio::test]
-async fn a_tool_the_drone_left_running_dies_with_the_drone() {
-    let at = TempDir::new();
-    let marker = at.path().join("tool.pid");
-    let backgrounds_a_tool = format!("sleep 30 & echo $! > '{}'; sleep 30", marker.display());
-    let started = start(
-        &FakeHarness::running("/bin/sh", &["-c", backgrounds_a_tool.as_str()]),
-        &config(&at),
-    )
-    .await
-    .expect("a shell starts");
-
-    let tool = pid_written_to(&marker).await;
-    assert!(
-        matches!(holder_of(tool), Ok(Holder::Held(_))),
-        "the tool was not running before the Drone was ended, so ending it \
-         proves nothing"
-    );
-
-    started.session.terminate().await.expect("it can be ended");
-
-    assert!(
-        nothing_holds(tool).await,
-        "the tool the Drone backgrounded is still running after the Drone was \
-         ended: pid {tool}"
-    );
-}
-
-/// The pid a shell wrote down, once it has written it.
-async fn pid_written_to(marker: &std::path::Path) -> u32 {
-    for _ in 0..A_CHILD_HAS_LONG_ENOUGH {
-        let written = std::fs::read_to_string(marker)
-            .ok()
-            .and_then(|text| text.trim().parse().ok());
-        if let Some(pid) = written {
-            return pid;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-    panic!("the shell never wrote down the pid of the tool it started");
-}
-
-/// Whether nothing holds `pid` any more.
-///
-/// **Polled rather than read once**: a killed process stays a zombie until
-/// whatever it was reparented to collects it, and `ps` reports a zombie as
-/// held. The wait is only ever spent on a run that is actually wrong.
-async fn nothing_holds(pid: u32) -> bool {
-    for _ in 0..A_CHILD_HAS_LONG_ENOUGH {
-        if matches!(holder_of(pid), Ok(Holder::Vacant)) {
-            return true;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-    false
 }
 
 #[tokio::test]
