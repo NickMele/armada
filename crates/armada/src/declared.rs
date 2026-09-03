@@ -102,15 +102,22 @@ pub async fn execute(
     //
     // There is no ledger, because there is one Check: `armada check` twice runs
     // the prerequisite twice, which is what a person typing it twice asked for.
-    if let Some(check) = manifest.check(name) {
-        if let Some(blocked) = first_unmet(check.requires(), root, budget).await {
-            return Ok(Ran {
-                name: name.to_string(),
-                command,
-                destructive,
-                attempt: blocked,
-            });
-        }
+    let requires = manifest
+        .check(name)
+        .map(config::Check::requires)
+        .unwrap_or(&[]);
+    let required = requires
+        .iter()
+        .map(|needed| needed.name().to_string())
+        .collect();
+    if let Some(blocked) = first_unmet(requires, root, budget).await {
+        return Ok(Ran {
+            name: name.to_string(),
+            command,
+            destructive,
+            required,
+            attempt: blocked,
+        });
     }
 
     let attempt = checks_runner::run(&command, root, budget).await;
@@ -118,6 +125,7 @@ pub async fn execute(
         name: name.to_string(),
         command,
         destructive,
+        required,
         attempt,
     })
 }
@@ -159,6 +167,13 @@ pub struct Ran {
     /// the flag pauses a Drone, and the person typing this is already the one
     /// triggering it.
     pub destructive: bool,
+    /// The Commands that ran first, in order. **Said because they wrote to the
+    /// working tree**: `armada check format` reformats before it reads, and a
+    /// person who was not told that reads the changed files as somebody else's.
+    ///
+    /// Empty on a Command, which declares no prerequisites, and on a Check that
+    /// declares none.
+    pub required: Vec<String>,
     pub attempt: Attempt,
 }
 
