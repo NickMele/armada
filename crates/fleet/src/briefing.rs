@@ -389,11 +389,13 @@ impl Stopped {
     /// looking for what was wrong with work that was right, and the second
     /// attempt is then worse than the first for a reason nothing records.
     ///
-    /// **One sentence per trigger, matched exhaustively.** `gate_failure`,
-    /// `evidence_suspect`, `gate_undecided` and `thrashing` are four different
-    /// things to be told and a Drone acts on what it is told, so a trigger
-    /// added to the registry is a compile error here rather than a Drone
-    /// quietly handed the nearest sentence.
+    /// **One sentence per trigger, matched exhaustively**, and no two triggers
+    /// share one. A Drone acts on what it is told, so a trigger added to the
+    /// registry is a compile error here rather than a Drone quietly handed the
+    /// nearest sentence — and the nearest sentence is the trap, not the
+    /// missing one. `drone_killed` sat under `thrashing`'s line for a while
+    /// because both are true of a step stopped mid-run; one of them sends a
+    /// Drone hunting for what was wrong with work nothing had measured.
     ///
     /// Every sentence says what Fleet knows and stops. What the gate could not
     /// read, and what a Judge would make of it, are not Fleet's to speculate
@@ -419,10 +421,20 @@ impl Stopped {
                 "An earlier attempt at this part was never checked. Something the check \
                  needed could not be read, so nothing was decided about the work itself."
             }
-            // A Drone a person ended stopped mid-run with nothing checked too.
-            EscalationTrigger::DroneKilled | EscalationTrigger::Thrashing => {
+            EscalationTrigger::Thrashing => {
                 "An earlier attempt at this part was stopped while it was still running. \
                  Nothing it did was checked."
+            }
+            // **Not `Thrashing`'s line, though it is true of this too.** That
+            // one is a machine finding the work was going nowhere, and a Drone
+            // told it goes looking for what was wrong with what it produced.
+            // Nothing was wrong with it here and nothing was measured; a
+            // person took the process away. Saying who is the whole of the
+            // difference, and it is said without a reason because the record
+            // holds none — why a person did it is theirs and is not in this.
+            EscalationTrigger::DroneKilled => {
+                "An earlier attempt at this part was ended by a person while it was still \
+                 running. Nothing it did was checked, and nothing about it was judged."
             }
             // `Thrashing`'s line is true of this too and leaves out the part
             // this attempt can do differently.

@@ -533,19 +533,22 @@ fn a_restart_after_a_gate_failure_is_told_its_work_did_not_pass() {
     assert!(said.contains("Address this and submit again"), "{said}");
 }
 
-/// **Five stops, five sentences.** A refusal, a thrashing verdict and a report
-/// that never came cannot hand a Drone the same words. **This file sits on the
-/// 900-line ceiling** — a sixth needs room made for it first.
+/// **One stop, one sentence, over every trigger that can reach a step.** A
+/// refusal, a thrashing verdict, a report that never came and a Drone somebody
+/// ended cannot hand a Drone the same words.
+///
+/// **Read off the registry rather than listed.** It was a hand-written five,
+/// and a sixth was added sharing `thrashing`'s line while this still passed —
+/// the list was the thing that went stale, not the rule. A trigger added at
+/// step level now fails here unless somebody writes it a sentence of its own.
 #[test]
 fn no_two_triggers_hand_a_drone_the_same_sentence() {
-    let five = [
-        EscalationTrigger::GateFailure,
-        EscalationTrigger::EvidenceSuspect,
-        EscalationTrigger::GateUndecided,
-        EscalationTrigger::Thrashing,
-        EscalationTrigger::NoReport,
-    ];
-    let mut said: Vec<String> = five
+    let reachable: Vec<EscalationTrigger> = EscalationTrigger::ALL
+        .iter()
+        .copied()
+        .filter(|trigger| StepLevelTrigger::of(*trigger).is_some())
+        .collect();
+    let mut said: Vec<String> = reachable
         .iter()
         .map(|trigger| {
             let block = restarted(&stopped_by(*trigger));
@@ -558,7 +561,11 @@ fn no_two_triggers_hand_a_drone_the_same_sentence() {
         .collect();
     said.sort();
     said.dedup();
-    assert_eq!(said.len(), 5, "one sentence each: {said:#?}");
+    assert_eq!(
+        said.len(),
+        reachable.len(),
+        "one sentence each, over {reachable:?}: {said:#?}"
+    );
 
     for trigger in [
         EscalationTrigger::GateUndecided,
