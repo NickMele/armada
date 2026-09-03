@@ -37,7 +37,7 @@ use crate::footprint::Publishing;
 use crate::questioning::Question;
 use crate::session::{DroneSession, LiveSession, Occasion};
 use crate::transcript::{Tap, Taps};
-use crate::watch::Watching;
+use crate::watch::{Drained, Watching};
 use store::DroneSpend;
 use verification::NotConverging;
 
@@ -235,7 +235,16 @@ pub(crate) struct StoodDown {
     pub(crate) worktree: Worktree,
     /// What the whole run folded to, read after the pipe closed. The last lines
     /// before an exit are in it because the drain waited for them.
+    ///
+    /// **Read [`drained`](StoodDown::drained) beside it.** Over a stream cut
+    /// short this is a fold over a prefix, and the fold has no way to say so.
     pub(crate) ending: Ending,
+    /// Whether the drain reached the end of the pipe or gave up on it.
+    ///
+    /// **Beside the ending rather than inside it**, for the reason `Ending` has
+    /// no `Succeeded`: how a run finished is what the Drone said, and this is
+    /// how much of what it said Fleet managed to hear.
+    pub(crate) drained: Drained,
     /// What the run cost the Job, folded from the same drained stream. **Not
     /// part of [`Ending`]**: how a run finished and what it cost are different
     /// questions, and a Drone that vanished still spent whatever it spent.
@@ -307,9 +316,14 @@ impl Working {
     /// [`Watching`]'s `Drop` aborts the reader over whatever the pipe still
     /// held; and [`Ending::of`] over a stream still being read is a fold over
     /// a prefix, missing the terminating event at the end of it.
+    ///
+    /// **The drain is bounded and its answer is carried out.** Signalling the
+    /// Drone does not close its stdout where a tool it spawned inherited the
+    /// same write end, so the pipe outlives the process and this is on the turn
+    /// loop's own task — see [`Watching::drained`].
     pub(crate) async fn stood_down(mut self, at: &Timestamp) -> StoodDown {
         let terminated = self.session.terminate().await;
-        self.transcript.drained().await;
+        let drained = self.transcript.drained().await;
         let events = self.transcript.events();
         let ending = Ending::of(&events);
         // **Folded after the drain, like the ending is**, and for the same
@@ -323,6 +337,7 @@ impl Working {
             drone: self.drone,
             worktree: self.worktree,
             ending,
+            drained,
             spent,
             terminated,
         }

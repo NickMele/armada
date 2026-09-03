@@ -12,8 +12,8 @@
 //!    assigns straight over the slot, and dropping a [`Working`] drops its
 //!    `DroneSession` without signalling. The child is `setsid`-detached, so it
 //!    survives its parent's handle going away and keeps spending.
-//! 2. **Drain before dropping.** `Watching`'s `Drop` aborts the reader, and
-//!    what a pipe holds at an exit is the last thing the Drone said.
+//! 2. **Drain before dropping, bounded.** `Drop` aborts the reader over the
+//!    Drone's last lines, and a tool it spawned holds the pipe open — `#211`.
 //! 3. **Record the exit before the spawn.** `Job::drone_spawned` refuses over a
 //!    live pointer — `#137`'s `AlreadyAssigned` — so a spawn ordered first is
 //!    refused by the record it had just failed to update.
@@ -34,6 +34,7 @@ use crate::daemon::Fleet;
 use crate::drone::Ending;
 use crate::drone_moves::steps_holding_a_drone;
 use crate::transcript;
+use crate::watch::Drained;
 use crate::working::{StoodDown, Working};
 
 impl<H, V, W> Fleet<H, V, W>
@@ -161,13 +162,29 @@ where
     /// three counts, which is what `Ending` is. Nothing the Drone said is
     /// written here; the transcript holds that, and it now holds the last lines
     /// too, because the drain waited for them.
+    ///
+    /// **Unless it could not, and then the line says so.** A drain that was cut
+    /// short is a `warn` with a sentence of its own, because the `Ending` beside
+    /// it is a fold over a prefix: a Drone whose terminating event was still in
+    /// the pipe reads as one that vanished, which is a different thing for a
+    /// person to do about it. See [`Drained`].
     fn noted_stood_down(&self, stood_down: &StoodDown) {
         let envelope = Envelope::new(
             self.now(),
-            Level::Info,
+            match stood_down.drained {
+                Drained::ToTheEnd => Level::Info,
+                Drained::CutShort { .. } => Level::Warn,
+            },
             Component::Fleet,
             self.run().clone(),
-            "the Drone was ended because its step ended",
+            match stood_down.drained {
+                Drained::ToTheEnd => "the Drone was ended because its step ended",
+                Drained::CutShort { .. } => {
+                    "the Drone was ended because its step ended, and its \
+                     transcript was cut short: something the Drone spawned \
+                     outlived it holding the same output"
+                }
+            },
         )
         .in_job(stood_down.job.as_ulid().clone())
         .at_step(stood_down.step.as_str())
@@ -176,7 +193,8 @@ where
             FieldValue::Str(stood_down.drone.as_str().to_string()),
         )
         .with_field("ending", FieldValue::Str(said(&stood_down.ending)))
-        .with_field("signalled", FieldValue::Bool(stood_down.terminated.is_ok()));
+        .with_field("signalled", FieldValue::Bool(stood_down.terminated.is_ok()))
+        .with_field("transcript", FieldValue::Str(heard(&stood_down.drained)));
         // A log line that will not write does not undo the ending, for
         // `resume::noted_roused`'s reason: the departure is its own record, in
         // the same log, written by `drone_left`.
@@ -197,5 +215,20 @@ fn said(ending: &Ending) -> String {
             called_something,
         } => format!("reported, {refusals} refusal(s), called_something={called_something}"),
         Ending::Vanished => String::from("no terminating event ever arrived"),
+    }
+}
+
+/// How much of the transcript was read, in one phrase, for the same line.
+///
+/// **It qualifies `ending` and is written beside it for that reason.** Cut
+/// short, the ending is a fold over as much as arrived before the bound, and
+/// nothing else on the line would say so.
+fn heard(drained: &Drained) -> String {
+    match drained {
+        Drained::ToTheEnd => String::from("read to the end of the pipe"),
+        Drained::CutShort { waited } => format!(
+            "cut short after {}s: the pipe was still held open",
+            waited.as_secs()
+        ),
     }
 }
