@@ -33,31 +33,14 @@
 // `Outcome` too, and the app draws it where it draws every other one.
 
 import type { Proposal, ProposedJob } from "@armada/components";
-import type { BridgeIdentity, JobSummary, Outcome, WorkflowSummary } from "@armada/protocol";
+import type {
+  BridgeIdentity,
+  JobSummary,
+  Outcome,
+  Proposed,
+  WorkflowSummary,
+} from "@armada/protocol";
 import { refusalFailure } from "@armada/shell";
-
-/**
- * What `window.armada.proposeFromRequest` answers.
- *
- * **Declared here until `@armada/protocol` carries it.** The two halves of this
- * feature were built either side of the seam at once; this is the surface
- * half's reading of the shape, and it is deleted the moment the protocol
- * package exports the same union.
- */
-export type Proposed =
-  /**
-   * Every Job the request became, in dependency order, **already folded onto
-   * the board**. They exist at `awaiting_approval` whether or not this surface
-   * draws them, which is why nothing downstream may read as though approving is
-   * what creates them.
-   */
-  | { ok: true; jobs: JobSummary[] }
-  /** No workflow fits. No Job was created, and `request` is Fleet's echo. */
-  | { ok: false; why: "unresolved"; request: string; outcome: Outcome }
-  /** The call could not be made. Says nothing about the request. */
-  | { ok: false; why: "faulted"; request: string; outcome: Outcome }
-  /** Turned down before sending, or another Fleet refusal. */
-  | { ok: false; why: "refused"; outcome: Outcome };
 
 /** What the surface draws, and what the app has to say somewhere else. */
 export type Answered = {
