@@ -315,6 +315,32 @@ meaning = "A running Job exhausted CPU or memory."
 in_code = "Not yet"
 notes = "Fleet's pre-spawn headroom poll covers only Jobs that have not started; this is what lets a Job that exhausts CPU or memory while already running say so. Job-level, like `interrupted` — the condition belongs to the process, not to any step it happened to be on."
 
+[triggers.run_ended]
+kind = "Trigger"
+level = "Step"
+meaning = "The Drone's own run ended with nothing submitted, so Fleet took the process away and the step stopped where it stood."
+in_code = ""
+notes = """
+**`drone_killed`'s sibling, and the pair is the whole of why this row exists.** That one is a person taking the process away; this is Fleet taking it away because the Drone said its run was over. Both answer "what became of the step underneath" rather than "why did the Job stop", both are therefore step-level, and both leave what the Job stopped *for* — `stalled`, `silent`, `blocked_by_policy` — on the Job's own transition where the reaping road already puts it. A person restarts the step off this row.
+
+Not `interrupted`, for the opposite half of `drone_killed`'s argument. That one is a process that was there and is not, found by Fleet after the fact. Here the process was still there when Fleet acted: `DroneEvent::Ended` is the Drone's own word that its run is over, and Fleet ends a process it can still see rather than discovering one that has gone.
+
+Not `stalled` or `silent`, which is the trap this row is minted to avoid. Those are Job-level by their own rows' reasoning and they name the *classification of the ending* — what the run reported on its way out. This names the ending itself. Collapsing them would put a Job-level trigger on a step, which `StepLevelTrigger::of` refuses, and would leave the step with nothing to carry.
+
+Not `no_report`. That is a Drone that was told to stop and report and answered nothing — still running, still writing. This one has stopped on its own and said so.
+
+**A Drone that reports its run has ended and then keeps working loses that work.** The reap is what makes the record true, and it is not free: anything a Drone does after its own terminating event is outside what it told Fleet, so a Drone that emits `Ended` and carries on has its process ended and whatever it wrote after that point goes unsubmitted. The alternative was leaving the step `running` and waiting, which is the defect this row closes.
+
+`in_code` is empty rather than "Not yet" for `gate_undecided`'s reason — the row was authored here and has no source value to carry.
+"""
+why = """
+The record should say what is true, and a step marked `running` beneath a Drone whose run has ended is false. It is `drone_killed`'s defect one status over: `#313` found a `running` step under an `escalated` Job with no Drone, and corrected the registry rather than sanctioning the state.
+
+Leaving the step `running` was the alternative and it shipped that way for an hour, on the argument that an idle process is still reachable so a redirect is the cheaper recourse and `restart_step` refuses while a Drone holds the slot. It is refused because it buys the cheap act with a false row: the Drone had already said it was done, so what a redirect reaches is a process outside its own contract, and the step it lands on is one the record claims is being worked. Reaping the Drone frees the slot and makes the `stopped` row honest, which is what gives `restart_step` a target.
+
+Stopping the step with no trigger at all was the other, and is refused on `drone_killed`'s own reasoning: a person opening the Job a week later should find a reason rather than an absence, and `Job::stopped_on` answers the step and the trigger together.
+"""
+
 [triggers.silent]
 kind = "Sub-kind"
 meaning = "Sub-kind of stalled. The Drone process exited normally having called no tool at all. A Drone that did call tools and had every one of them refused is blocked_by_policy instead — the two look identical in the result envelope and take opposite remedies, so the boundary is the tool call and not the empty result."

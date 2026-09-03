@@ -169,6 +169,25 @@ pub enum EscalationTrigger {
     /// A running Job exhausted CPU or memory. Belongs to the process, not to
     /// any step it happened to be on.
     ResourceExhausted,
+    /// The Drone's own run ended with nothing submitted, so Fleet took the
+    /// process away and the step stopped where it stood.
+    ///
+    /// **[`DroneKilled`](Self::DroneKilled)'s sibling**, and the pair is why
+    /// this exists. That one is a person taking the process away; this is Fleet
+    /// taking it away on the Drone's own word that its run is over. Both name a
+    /// step and never a Job, and what the Job stopped *for* —
+    /// [`Stalled`](Self::Stalled), [`Silent`](Self::Silent),
+    /// [`BlockedByPolicy`](Self::BlockedByPolicy) — stays on the Job's
+    /// transition, so one Job carries both readings.
+    ///
+    /// **Not [`Interrupted`](Self::Interrupted)**, which is the other half of
+    /// that argument: there a process was there and is not, found after the
+    /// fact. Here the process is still there when Fleet acts, which is what
+    /// makes reaping it a decision rather than a discovery.
+    ///
+    /// Nothing weighed the work, so there is no verdict to disagree with and
+    /// [`StepLevelTrigger::overrulable`] is false.
+    RunEnded,
     /// The Drone process exited normally having called no tool at all. Declared
     /// a sub-kind of [`Stalled`](Self::Stalled): it pauses the Job identically
     /// and differs only in the recommended action — rephrase and redispatch,
@@ -279,6 +298,7 @@ impl StepLevelTrigger {
             | EscalationTrigger::EvidenceTooLarge
             | EscalationTrigger::LoopCap
             | EscalationTrigger::NoReport
+            | EscalationTrigger::RunEnded
             | EscalationTrigger::Thrashing => false,
             EscalationTrigger::DependencyFailed
             | EscalationTrigger::FanOut
@@ -315,6 +335,7 @@ impl EscalationTrigger {
         EscalationTrigger::NotConfigurable,
         EscalationTrigger::NotPrepared,
         EscalationTrigger::ResourceExhausted,
+        EscalationTrigger::RunEnded,
         EscalationTrigger::Silent,
         EscalationTrigger::Stalled,
         EscalationTrigger::Thrashing,
@@ -341,6 +362,7 @@ impl EscalationTrigger {
             EscalationTrigger::NotConfigurable => "not_configurable",
             EscalationTrigger::NotPrepared => "not_prepared",
             EscalationTrigger::ResourceExhausted => "resource_exhausted",
+            EscalationTrigger::RunEnded => "run_ended",
             EscalationTrigger::Silent => "silent",
             EscalationTrigger::Stalled => "stalled",
             EscalationTrigger::Thrashing => "thrashing",
@@ -390,6 +412,7 @@ impl EscalationTrigger {
             | EscalationTrigger::GateUndecided
             | EscalationTrigger::LoopCap
             | EscalationTrigger::NoReport
+            | EscalationTrigger::RunEnded
             | EscalationTrigger::Thrashing => TriggerLevel::Step,
             EscalationTrigger::DependencyFailed
             | EscalationTrigger::FanOut

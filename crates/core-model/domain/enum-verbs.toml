@@ -456,6 +456,14 @@ vocabulary = "Escalation reason"
 in_code = "Not yet"
 notes = "No glyph. Iconography names an icon for every escalation reason it lists, and this trigger is not among them."
 
+[verbs.escalation_reason.run_ended]
+verb = "the Drone's run ended"
+icon = ""
+status_token = "--status-escalated"
+vocabulary = "Escalation reason"
+in_code = ""
+notes = "**The possessive is the whole verb.** `drone_killed` renders as `the Drone was ended by hand` and this is its sibling: there a person took the process away, here the Drone said its own run was over and Fleet took the process away on that word. Both are passive and neither names the actor, because what a person reads off a step badge is what became of the step. Not `stalled`, which is what the *Job* is held for and which the Job's own escalation reason keeps — one Job carries both, the step saying what happened to it and the Job saying what it happened for. No glyph, and no new open question: `[drone-killed-glyph]` on `docs/contracts/iconography.md` is already this exact question, and every candidate it refused is refused here for the same reason — `unplug` is `interrupted`'s and the distinction against a process that merely died is the point, `octagon-alert` is reserved to `stalled` by its own note, and `user-check` is a human silhouette on a row where no person acted. It ships drawing its verb alone beside `blocked_by_policy`, `check_timeout`, `dependency_failed`, `drone_killed`, `evidence_too_large`, `no_report`, `no_worktree`, `not_configurable`, `not_prepared`, `resource_exhausted` and `would_not_start`."
+
 [verbs.escalation_reason.silent]
 verb = "stalled"
 icon = "octagon-alert"
