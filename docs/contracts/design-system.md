@@ -717,9 +717,23 @@ These are constraints on the map, not suggestions.
   `x`, never `k`, because `k` sits against `j` and a mistyped navigation
   keystroke must not be able to end a running job.
 - **Every destructive action confirms**, even from the keyboard. In the
-  confirmation dialog **Cancel holds initial focus**, `Enter` confirms,
-  `Esc` cancels. A destructive action is never one keystroke from a
-  focused row.
+  confirmation dialog **Cancel holds initial focus, so `Enter` cancels**
+  — `Enter` fires whatever holds focus, and Cancel is what holds it. The
+  kbd is drawn on Cancel, where the key actually fires; confirming is a
+  deliberate move to the other control, and `Esc` cancels as well. A
+  destructive action is never one keystroke from a focused row, which is
+  what the two rules together mean.
+  **A dialog that collects a field is the exception**, and it is not a
+  weakening of the rule: the field *is* the confirmation, nothing is
+  destroyed by pressing it, and the kbd is drawn on the confirm because
+  that is where `Enter` fires there. Redirect, Overrule and Report are
+  the three.
+  This line read "**Cancel holds initial focus**, `Enter` confirms,
+  `Esc` cancels" until 2026-09-02. Both halves were true of something
+  and the sentence did not say which won, so the implementation guessed
+  — it bound `Enter` on the window and confirmed past the focused
+  Cancel, which is exactly the one-keystroke destruction the rule above
+  refuses.
 - **Single-key shortcuts are suppressed whenever a text input holds
   focus.** Typing "axe" into a filter box must not approve, kill, and
   open something.
@@ -796,6 +810,10 @@ it compete with the label.
   400ms delay stands.
 - **Dropdown-menu items gain a right-aligned kbd.** Item height is
   unchanged by it.
+- **A confirmation's buttons gain a trailing kbd**, on the one control
+  `Enter` fires — Cancel on a plain confirmation, the confirm on a
+  dialog carrying a field. One per dialog, because two would be the
+  ambiguity the safety rule above was rewritten to remove.
 - **The 48px sidebar rail is more usable than it looks**, because the
   ⌘-digit bindings reach every surface without labels.
 
